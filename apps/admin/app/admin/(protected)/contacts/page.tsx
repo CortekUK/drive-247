@@ -1,5 +1,10 @@
 'use client';
 
+import { Badge } from '@/components/ui/badge';
+import { Check, ChevronDown } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { EnquiriesEmptyArt } from '@/components/admin/illustrations/scenes/enquiries';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
@@ -19,6 +24,14 @@ interface ContactRequest {
   notes: string | null;
   created_at: string;
 }
+
+const CONTACT_STATUSES = ['pending', 'contacted', 'converted', 'rejected'] as const;
+const CONTACT_STATUS_TONE: Record<string, 'warning' | 'info' | 'success' | 'destructive'> = {
+  pending: 'warning',
+  contacted: 'info',
+  converted: 'success',
+  rejected: 'destructive',
+};
 
 export default function ContactRequestsPage() {
   const [requests, setRequests] = useState<ContactRequest[]>([]);
@@ -130,35 +143,35 @@ export default function ContactRequestsPage() {
           to reach them. Any non-visible overflow still rounds the corners. */}
       <div className="overflow-x-auto rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10">
         <table className="min-w-full divide-y divide-dark-border">
-          <thead className="bg-dark-bg">
+          <thead className="bg-card/95">
             <tr>
-              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Company
               </th>
-              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Contact
               </th>
-              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Email
               </th>
-              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Phone
               </th>
-              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Status
               </th>
-              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Submitted
               </th>
-              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Actions
               </th>
             </tr>
           </thead>
           <tbody className="bg-dark-card divide-y divide-dark-border">
             {requests.map((request) => (
-              <tr key={request.id} className="hover:bg-dark-hover">
-                <td className="px-6 py-4">
+              <tr key={request.id} className="hover:bg-[hsl(var(--v2-row-hover,var(--muted)_/_0.5))]">
+                <td className="px-3 py-3">
                   <div className="text-sm font-medium text-foreground">{request.company_name}</div>
                   {request.message && (
                     <div className="text-xs text-muted-foreground mt-1 max-w-xs truncate">
@@ -166,38 +179,47 @@ export default function ContactRequestsPage() {
                     </div>
                   )}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-3 py-3 whitespace-nowrap">
                   <div className="text-sm text-muted-foreground">{request.contact_name}</div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-3 py-3 whitespace-nowrap">
                   <a href={`mailto:${request.email}`} className="text-sm text-primary hover:text-primary">
                     {request.email}
                   </a>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-3 py-3 whitespace-nowrap">
                   <div className="text-sm text-muted-foreground">{request.phone || '-'}</div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <select
-                    value={request.status}
-                    onChange={(e) => handleUpdateStatus(request.id, e.target.value)}
-                    className={`text-xs rounded-full px-3 py-1 font-semibold bg-dark-bg border ${
-                      request.status === 'pending' ? 'border-yellow-700 text-yellow-600' :
-                      request.status === 'contacted' ? 'border-blue-700 text-blue-600' :
-                      request.status === 'converted' ? 'border-green-700 text-green-600' :
-                      'border-red-700 text-red-600'
-                    }`}
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="contacted">Contacted</option>
-                    <option value="converted">Converted</option>
-                    <option value="rejected">Rejected</option>
-                  </select>
+                <td className="px-3 py-3 whitespace-nowrap">
+{/* Coloured text, not a boxed select — the status reads like every
+                      other status in a table; it opens its own menu. */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button type="button" className="group/pill inline-flex items-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/30">
+                        <Badge variant={CONTACT_STATUS_TONE[request.status] ?? 'destructive'} className="cursor-pointer gap-1 capitalize">
+                          {request.status}
+                          <ChevronDown className="h-3 w-3 opacity-60 transition-opacity group-hover/pill:opacity-100" />
+                        </Badge>
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-40">
+                      {CONTACT_STATUSES.map((status) => (
+                        <DropdownMenuItem
+                          key={status}
+                          onClick={() => handleUpdateStatus(request.id, status)}
+                          className="cursor-pointer capitalize"
+                        >
+                          <span className="flex-1">{status}</span>
+                          {request.status === status && <Check className="h-4 w-4 text-primary" />}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                <td className="px-3 py-3 whitespace-nowrap text-sm text-muted-foreground">
                   {new Date(request.created_at).toLocaleDateString('en-US')}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                <td className="px-3 py-3 whitespace-nowrap text-sm">
                   <button className="text-primary hover:text-primary">View Details</button>
                 </td>
               </tr>
@@ -206,9 +228,11 @@ export default function ContactRequestsPage() {
         </table>
 
         {requests.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">No contact requests found.</p>
-          </div>
+          <EmptyState
+            illustration={<EnquiriesEmptyArt />}
+            headline="No contact requests yet"
+            body="When someone fills in the contact form on drive-247.com, their message lands here."
+          />
         )}
       </div>
     </div>

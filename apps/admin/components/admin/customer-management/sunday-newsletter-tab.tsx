@@ -20,6 +20,8 @@
  * exactly what goes out.
  */
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { EmailsEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CalendarDays,
@@ -678,7 +680,12 @@ export function SundayNewsletterTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         <CardContent>
           {issues.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">No issues yet. Create the first one.</p>
+            <EmptyState
+              size="section"
+              illustration={<EmailsEmptyArt />}
+              headline="No issues yet"
+              body="Each Sunday issue you write is listed here, with when it went out and to how many operators."
+            />
           ) : (
             <Table>
               <TableHeader>
@@ -992,7 +999,7 @@ export function SundayNewsletterTab({ canEdit }: { canEdit: boolean }) {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="overflow-hidden rounded-lg border bg-white">
+              <div data-keep-light className="overflow-hidden rounded-lg border bg-white">
                 {preview.loading || !preview.html ? (
                   <div className="flex h-[480px] items-center justify-center">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

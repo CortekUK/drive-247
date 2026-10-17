@@ -14,6 +14,8 @@
  * that is a tenant who is paused in Drive247 but may still be billed.
  */
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { RetentionLeavingArt } from '@/components/admin/illustrations/scenes/retention';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, PauseCircle, RefreshCw } from 'lucide-react';
 
@@ -171,10 +173,7 @@ export function PausingAccountsTab({ canEdit }: { canEdit: boolean }) {
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-          <PauseCircle className="h-5 w-5" />
-          Pausing Accounts
-        </h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Pausing Accounts</h1>
         <p className="text-sm text-muted-foreground">
           Let V2 tenants pause their subscription for 1 or 2 months from Billing → Pause.
         </p>
@@ -246,7 +245,12 @@ export function PausingAccountsTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         <CardContent>
           {pauses.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">No tenant has paused yet.</p>
+            <EmptyState
+              size="section"
+              illustration={<RetentionLeavingArt />}
+              headline="No paused accounts"
+              body="When an operator pauses instead of cancelling, they show up here until they come back."
+            />
           ) : (
             <Table>
               <TableHeader>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Key, Loader2, Mail, ShieldCheck, User } from "lucide-react";
+import { Camera, Key, Loader2, ShieldCheck } from "lucide-react";
 
 import { useAuth, useAuthStore } from "@/stores/auth-store";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,27 +9,26 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui-v2/avatar";
 import { Badge } from "@/components/ui-v2/badge";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
+import { CodeInput } from "@/components/ui-v2/code-input";
 import { Label } from "@/components/ui-v2/label";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui-v2/sheet";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui-v2/dialog";
 import { toast } from "@/hooks/use-toast";
-import { AvatarCropDialog } from "./avatar-crop-dialog";
+import { AvatarCropDialogV2 } from "./avatar-crop-dialog-v2";
 
 /**
- * The v2 profile — photo, display name, email and password, in a sheet that
- * comes down from the TOP of the window.
+ * The v2 profile — photo, display name, email and password, in a centred
+ * dialog.
  *
- * ── WHY A TOP SHEET AND NOT THE CENTRED DIALOG IT REPLACED ────────────────
- * "Profile opens from the top, not the side" (team lead, Sep 20 2026). It was
- * a centred `Dialog`; this is `ui-v2/sheet` with `side="top"`, which is the
- * same Radix primitive family and needed no new component. The menu it opens
- * from is at the BOTTOM-LEFT of the rail, so a panel that arrives from the top
- * also stops the sheet covering the control that opened it.
+ * ── A DIALOG, NOT A SHEET ─────────────────────────────────────────────────
+ * It was briefly a full-width sheet from the top (Sep 20 2026). That stretched
+ * a four-field form across the whole window, so it is back to a centred
+ * `ui-v2/dialog` (Ghulam, Oct 16 2026): pop-ups in v2 are dialogs.
  *
  * ── WHY IT IS ITS OWN FILE ────────────────────────────────────────────────
  * It lived inside `user-menu-v2.tsx`, which was carrying a dropdown, a profile
@@ -57,32 +56,31 @@ import { AvatarCropDialog } from "./avatar-crop-dialog";
  * admin contact, and a super admin looking at a tenant must not rename theirs
  * at all.
  *
- * ── EMAIL AND PASSWORD: WHAT VERIFIES THEM ────────────────────────────────
- * EMAIL goes through Supabase's own confirmation flow —
- * `auth.updateUser({ email })` sends a link to the new address (and, with
- * Secure email change on, to the old one too) and the address does not change
- * until it is opened. Nothing here writes `auth.users` directly and no edge
- * function was invented for it; the branded template for this already exists
- * (`custom-auth-email`, case `email_change`).
+ * ── EMAIL AND PASSWORD: SIX-DIGIT CODES, CHECKED BY SUPABASE ─────────────
+ * Every confirmation here is a code typed into this dialog, never a link
+ * (Ghulam, Oct 16 2026). The codes are Supabase's own OTPs; `custom-auth-email`
+ * only formats them — a `redirect_to` carrying `otp=1` asks it for a code
+ * instead of a button.
  *
- * `app_users.email` is a SEPARATE copy of that address, and it is what the
- * portal displays. Nothing tells the browser when the link is finally opened,
- * so this panel reconciles on open: if Supabase's own user record disagrees
- * with `app_users`, the row is corrected. That makes the confirmation land in
- * the UI the next time the person opens their profile, rather than never.
+ * EMAIL — `auth.updateUser({ email })` emails ONE code, to the NEW address,
+ * and the address changes once it is checked with
+ * `verifyOtp({ type: "email_change", email: <new address>, token })`.
+ * "Secure email change" (a code to the old address as well) was switched off
+ * in Supabase on purpose (Ghulam, Oct 16 2026): an operator whose old inbox
+ * is gone could otherwise never move their account. Turning it back on means
+ * restoring the second code box here.
  *
- * PASSWORD keeps the direct change and adds the code step ONLY when Supabase
- * asks for it. If the project's "Secure password change" is on and the session
- * is older than 24h, `updateUser({ password })` fails with a reauthentication
- * error; the panel then calls `auth.reauthenticate()`, takes the six-digit
- * code and resubmits with it as the `nonce`.
+ * PASSWORD — proven with a sign-in code to the account's own address
+ * (`signInWithOtp`, `shouldCreateUser: false`), checked with
+ * `verifyOtp({ type: "email" })`, and only then `updateUser({ password })`.
+ * Supabase's own reauthentication nonce was not used: with "Secure password
+ * change" it is only enforced for sessions older than 24h, so a code asked for
+ * every time would go unchecked most of the time. This one is always checked.
+ * It also works for someone who signed up with Google and has no password yet.
  *
- * It is not asked for unconditionally, and that is a judgement worth stating:
- * `custom-auth-email` — an existing edge function, which V2_PLAN §7 says not
- * to change — has no `reauthentication` case, so that email falls to its
- * default branch and renders a "Confirm" button rather than the code. Forcing
- * every password change through a code we cannot be sure is delivered would
- * take away a flow that works today. Handling the demand when it comes cannot.
+ * `app_users.email` is a SEPARATE copy of the auth address, and it is what the
+ * portal displays. It is written the moment the change completes here, and the
+ * panel still reconciles on open in case a change finished somewhere else.
  */
 export function ProfileSheetV2({
   open,
@@ -91,20 +89,23 @@ export function ProfileSheetV2({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { appUser, updatePassword } = useAuth();
+  const { appUser } = useAuth();
 
   const [name, setName] = useState("");
   const [savingName, setSavingName] = useState(false);
 
   const [email, setEmail] = useState("");
   const [savingEmail, setSavingEmail] = useState(false);
+  /** The address a change was requested to; set once its code is out. */
   const [emailSentTo, setEmailSentTo] = useState<string | null>(null);
+  const [newEmailCode, setNewEmailCode] = useState("");
+  const [verifyingEmail, setVerifyingEmail] = useState(false);
 
   const [showPassword, setShowPassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
-  /** Set once Supabase has demanded reauthentication and a code has been sent. */
+  /** Set once the confirmation code has gone to the account's address. */
   const [codeSent, setCodeSent] = useState(false);
   const [code, setCode] = useState("");
 
@@ -119,7 +120,7 @@ export function ProfileSheetV2({
     if (!open) return;
     setName(appUser?.name ?? "");
     setEmail(appUser?.email ?? "");
-    setEmailSentTo(null);
+    resetEmailChange();
     setShowPassword(false);
     setNewPassword("");
     setConfirmPassword("");
@@ -143,10 +144,9 @@ export function ProfileSheetV2({
         if (error || !authEmail || cancelled) return;
         if (authEmail.toLowerCase() === (appUser.email ?? "").toLowerCase()) return;
 
-        const { error: writeError } = await (supabase as any)
-          .from("app_users")
-          .update({ email: authEmail })
-          .eq("id", appUser.id);
+        // The verified address, copied by the server — app_users.email is not
+        // a column a user may write (migration 20261016170000).
+        const { error: writeError } = await (supabase as any).rpc("sync_my_app_user_email");
         if (writeError || cancelled) return;
 
         useAuthStore.setState({
@@ -277,6 +277,14 @@ export function ProfileSheetV2({
     }
   };
 
+  /** `?otp=1` asks custom-auth-email for a code instead of a link. */
+  const codeRedirect = () => `${window.location.origin}/?otp=1`;
+
+  function resetEmailChange() {
+    setEmailSentTo(null);
+    setNewEmailCode("");
+  }
+
   const saveEmail = async () => {
     const next = email.trim();
     if (!next || next.toLowerCase() === (appUser?.email ?? "").toLowerCase()) return;
@@ -287,14 +295,18 @@ export function ProfileSheetV2({
 
     setSavingEmail(true);
     try {
-      // Supabase's own confirmation flow. The address does not change until
-      // the link in that email is opened, so nothing is written here.
-      const { error } = await supabase.auth.updateUser({ email: next });
+      // Supabase emails a code to the new address. Nothing changes until it
+      // is checked below.
+      const { error } = await supabase.auth.updateUser(
+        { email: next },
+        { emailRedirectTo: codeRedirect() },
+      );
       if (error) throw error;
+      setNewEmailCode("");
       setEmailSentTo(next);
       toast({
-        title: "Check your inbox",
-        description: `We've sent a confirmation link to ${next}.`,
+        title: "Check your new inbox",
+        description: `I've sent a six-digit code to ${next}.`,
       });
     } catch (error: any) {
       toast({
@@ -307,73 +319,105 @@ export function ProfileSheetV2({
     }
   };
 
-  /** Does this error mean "prove it's you first"? */
-  const needsReauth = (error: any) => {
-    const code = String(error?.code ?? "");
-    const message = String(error?.message ?? "").toLowerCase();
-    return (
-      code === "reauthentication_needed" ||
-      code === "reauth_nonce_missing" ||
-      message.includes("reauthentication")
-    );
+  const verifyEmailChange = async () => {
+    if (!emailSentTo || !appUser?.id) return;
+    setVerifyingEmail(true);
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        type: "email_change",
+        email: emailSentTo,
+        token: newEmailCode.trim(),
+      });
+      if (error) throw new Error(`That code didn't work. ${error.message}`);
+
+      // The code passed: the auth address has moved. Bring the portal's own
+      // copy along now rather than at the next open.
+      const { data } = await supabase.auth.getUser();
+      const confirmed = data?.user?.email ?? emailSentTo;
+      await (supabase as any).rpc("sync_my_app_user_email");
+      useAuthStore.setState({ appUser: { ...appUser, email: confirmed } });
+      setEmail(confirmed);
+      resetEmailChange();
+      toast({ title: "Email updated", description: `You now sign in with ${confirmed}.` });
+    } catch (error: any) {
+      toast({
+        title: "Couldn't confirm your email",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setVerifyingEmail(false);
+    }
   };
 
-  const savePassword = async () => {
-    if (newPassword !== confirmPassword) {
-      toast({ title: "Error", description: "Passwords do not match", variant: "destructive" });
-      return;
-    }
-    if (newPassword.length < 12) {
-      toast({
-        title: "Error",
-        description: "Password must be at least 12 characters long",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/\d/.test(newPassword)) {
-      toast({
-        title: "Error",
-        description: "Password must contain uppercase, lowercase, and numeric characters",
-        variant: "destructive",
-      });
-      return;
-    }
+  /** The address the account signs in with — where the password code goes. */
+  const authEmail = async () => {
+    const { data } = await supabase.auth.getUser();
+    return data?.user?.email ?? appUser?.email ?? "";
+  };
 
+  const passwordProblem = (): string | null => {
+    if (newPassword !== confirmPassword) return "Passwords do not match";
+    if (newPassword.length < 12) return "Password must be at least 12 characters long";
+    if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/\d/.test(newPassword)) {
+      return "Password must contain uppercase, lowercase, and numeric characters";
+    }
+    return null;
+  };
+
+  /** Step one: check the new password, then email the code. Nothing changes yet. */
+  const sendPasswordCode = async () => {
+    const problem = passwordProblem();
+    if (problem) {
+      toast({ title: "Error", description: problem, variant: "destructive" });
+      return;
+    }
     setSavingPassword(true);
     try {
-      if (codeSent) {
-        // The verified path: the code Supabase emailed is the nonce.
-        const { error } = await supabase.auth.updateUser({
-          password: newPassword,
-          nonce: code.trim(),
-        });
-        if (error) throw error;
+      const address = await authEmail();
+      const { error } = await supabase.auth.signInWithOtp({
+        email: address,
+        options: { shouldCreateUser: false, emailRedirectTo: codeRedirect() },
+      });
+      if (error) throw error;
+      setCodeSent(true);
+      toast({ title: "Check your inbox", description: `I've sent a six-digit code to ${address}.` });
+    } catch (error: any) {
+      toast({
+        title: "Couldn't send the code",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingPassword(false);
+    }
+  };
 
-        if (appUser?.id) {
-          await (supabase as any)
-            .from("app_users")
-            .update({ must_change_password: false })
-            .eq("id", appUser.id);
-          useAuthStore.setState({ appUser: { ...appUser, must_change_password: false } });
-        }
-      } else {
-        const { error } = await updatePassword(newPassword);
-        if (error) {
-          if (needsReauth(error)) {
-            // Ask Supabase to email the six-digit code, then let the person
-            // finish. Nothing has changed yet.
-            const { error: sendError } = await supabase.auth.reauthenticate();
-            if (sendError) throw sendError;
-            setCodeSent(true);
-            toast({
-              title: "One more step",
-              description: "We've emailed you a six-digit code to confirm it's you.",
-            });
-            return;
-          }
-          throw error;
-        }
+  /** Step two: check the code, then set the password. */
+  const savePassword = async () => {
+    const problem = passwordProblem();
+    if (problem) {
+      toast({ title: "Error", description: problem, variant: "destructive" });
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      const { error: codeError } = await supabase.auth.verifyOtp({
+        type: "email",
+        email: await authEmail(),
+        token: code.trim(),
+      });
+      if (codeError) throw new Error(`That code didn't work. ${codeError.message}`);
+
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+
+      if (appUser?.id) {
+        await (supabase as any)
+          .from("app_users")
+          .update({ must_change_password: false })
+          .eq("id", appUser.id);
+        useAuthStore.setState({ appUser: { ...appUser, must_change_password: false } });
       }
 
       toast({ title: "Password updated", description: "Your new password is live." });
@@ -399,25 +443,31 @@ export function ProfileSheetV2({
 
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        {/* From the top. `max-h` + `overflow-y-auto` so a small laptop screen
-            still reaches the password section rather than clipping it. */}
-        <SheetContent
-          side="top"
-          className="max-h-[92vh] overflow-y-auto rounded-b-3xl"
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        {/* `max-h` + `overflow-y-auto` so a small laptop screen still reaches
+            the password section rather than clipping it. */}
+        <DialogContent
+          className="max-h-[90vh] overflow-y-auto sm:max-w-lg"
           data-testid="profile-sheet"
         >
-          <SheetHeader className="pb-2">
-            <SheetTitle>Your profile</SheetTitle>
-            <SheetDescription>
+          <DialogHeader>
+            <DialogTitle>Your profile</DialogTitle>
+            <DialogDescription>
               Your photo, your name, and how you sign in.
-            </SheetDescription>
-          </SheetHeader>
+            </DialogDescription>
+          </DialogHeader>
 
-          <div className="mx-auto grid w-full max-w-3xl gap-6 px-6 pb-8">
-            {/* Photo + name */}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <div className="flex items-center gap-4">
+          <div className="grid w-full gap-6">
+            {/* Photo — the avatar itself is the control: hover shows a camera,
+                click picks a file. No separate "Change photo" button. */}
+            <div className="flex items-center">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                aria-label="Change photo"
+                className="group relative h-16 w-16 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-wait"
+              >
                 <Avatar className="h-16 w-16 overflow-hidden rounded-full ring-2 ring-border/50">
                   <AvatarImage
                     src={appUser.avatar_url || undefined}
@@ -428,38 +478,31 @@ export function ProfileSheetV2({
                     {initials}
                   </AvatarFallback>
                 </Avatar>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fileRef.current?.click()}
-                  disabled={uploading}
+                <span
+                  className={
+                    "absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-white " +
+                    "[transition:opacity_200ms_ease-in] group-hover:[transition:opacity_200ms_ease-out] motion-reduce:transition-none " +
+                    (uploading ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100")
+                  }
                 >
-                  {uploading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Camera className="mr-2 h-4 w-4" />
-                      Change photo
-                    </>
-                  )}
-                </Button>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) pickFile(file);
-                    e.target.value = "";
-                  }}
-                />
-              </div>
+                  {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
+                </span>
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) pickFile(file);
+                  e.target.value = "";
+                }}
+              />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="profile-name">
-                <User className="mr-1.5 inline h-3.5 w-3.5 text-muted-foreground" />
                 Display name
               </Label>
               <div className="flex gap-2">
@@ -482,7 +525,6 @@ export function ProfileSheetV2({
             {/* Email */}
             <div className="space-y-2">
               <Label htmlFor="profile-email">
-                <Mail className="mr-1.5 inline h-3.5 w-3.5 text-muted-foreground" />
                 Email
               </Label>
               <div className="flex gap-2">
@@ -496,29 +538,60 @@ export function ProfileSheetV2({
                 <Button
                   variant="outline"
                   onClick={saveEmail}
-                  disabled={!emailChanged || savingEmail}
+                  disabled={!emailChanged || savingEmail || !!emailSentTo}
                 >
                   {savingEmail ? "Sending…" : "Confirm change"}
                 </Button>
               </div>
-              <p className="text-[12px] text-muted-foreground">
-                {emailSentTo ? (
-                  <span className="text-foreground">
-                    <ShieldCheck className="mr-1 inline h-3.5 w-3.5" />
-                    Open the link we sent to {emailSentTo} to finish. Until then you
-                    sign in with your current address.
-                  </span>
-                ) : (
-                  "Changing this sends a confirmation link to the new address. Your email only changes once you open it."
-                )}
-              </p>
+              {emailSentTo ? (
+                <div className="space-y-3 rounded-xl border border-border p-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="code-new-email">Code sent to {emailSentTo}</Label>
+                    <CodeInput
+                      id="code-new-email"
+                      value={newEmailCode}
+                      onChange={setNewEmailCode}
+                      disabled={verifyingEmail}
+                      autoFocus
+                    />
+                    <p className="text-[12px] text-muted-foreground">
+                      <ShieldCheck className="mr-1 inline h-3.5 w-3.5" />
+                      Until you enter it, you sign in with {appUser.email}.
+                    </p>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        resetEmailChange();
+                        setEmail(appUser.email ?? "");
+                      }}
+                      disabled={verifyingEmail}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={verifyEmailChange}
+                      disabled={verifyingEmail || newEmailCode.length < 6}
+                    >
+                      {verifyingEmail ? "Checking…" : "Confirm email"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[12px] text-muted-foreground">
+                  Changing this sends a six-digit code to the new address. Your email
+                  only changes once you enter it.
+                </p>
+              )}
             </div>
 
             {/* Password */}
             {!appUser.is_super_admin && (
               <div className="space-y-2">
                 <Label>
-                  <Key className="mr-1.5 inline h-3.5 w-3.5 text-muted-foreground" />
                   Password
                 </Label>
                 {!showPassword ? (
@@ -565,16 +638,23 @@ export function ProfileSheetV2({
                     {codeSent && (
                       <div className="space-y-1.5">
                         <Label htmlFor="reauth-code">Six-digit code</Label>
-                        <Input
+                        <CodeInput
                           id="reauth-code"
-                          inputMode="numeric"
-                          autoComplete="one-time-code"
                           value={code}
-                          onChange={(e) => setCode(e.target.value)}
-                          placeholder="123456"
+                          onChange={setCode}
+                          disabled={savingPassword}
+                          autoFocus
                         />
                         <p className="text-[12px] text-muted-foreground">
-                          We emailed this to {appUser.email} to confirm it&apos;s you.
+                          I emailed this to {appUser.email} to confirm it&apos;s you.{" "}
+                          <button
+                            type="button"
+                            className="font-medium text-foreground underline-offset-2 hover:underline"
+                            onClick={sendPasswordCode}
+                            disabled={savingPassword}
+                          >
+                            Send a new code
+                          </button>
                         </p>
                       </div>
                     )}
@@ -606,7 +686,7 @@ export function ProfileSheetV2({
                       </Button>
                       <Button
                         size="sm"
-                        onClick={savePassword}
+                        onClick={codeSent ? savePassword : sendPasswordCode}
                         disabled={
                           !newPassword ||
                           !confirmPassword ||
@@ -615,10 +695,12 @@ export function ProfileSheetV2({
                         }
                       >
                         {savingPassword
-                          ? "Updating…"
+                          ? codeSent
+                            ? "Updating…"
+                            : "Sending code…"
                           : codeSent
                             ? "Confirm and update"
-                            : "Update password"}
+                            : "Send code"}
                       </Button>
                     </div>
                   </div>
@@ -626,10 +708,10 @@ export function ProfileSheetV2({
               </div>
             )}
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
-      <AvatarCropDialog
+      <AvatarCropDialogV2
         open={showCrop}
         onOpenChange={(next) => {
           setShowCrop(next);

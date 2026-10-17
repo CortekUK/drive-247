@@ -377,16 +377,39 @@ Deno.serve(async (req) => {
       // count and hide a failure.
       const key = column === 'tenant_id' ? table : `${table}.${column}`;
       try {
-        const { data, error } = await supabaseAdmin
-          .from(table)
-          .delete()
-          .eq(column, tenant_id)
-          .select('id');
+        // Before deleting this tenant's users, release every row elsewhere that
+        // points at them (audit_logs.actor_id, payments.verified_by, …). The
+        // database function reads that list from the catalog, so a new "…_by"
+        // column cannot block a delete again (migration 20261017150000).
+        if (table === 'app_users' && appUsers && appUsers.length > 0) {
+          const { data: released, error: releaseError } = await supabaseAdmin.rpc('admin_release_app_users', {
+            p_ids: appUsers.map((u: { id: string }) => u.id),
+          });
+          deletionResults['app_users.references'] = releaseError ? releaseError.message : (released ?? {});
+        }
 
-        deletionResults[key] = error ? error.message : (data?.length || 0);
+        // A row count, not `.select('id')`: several of these tables have no
+        // `id` column (referral_subscription_scans, referral_tier_state), and
+        // asking for one made the delete fail outright.
+        const { count, error } = await supabaseAdmin
+          .from(table)
+          .delete({ count: 'exact' })
+          .eq(column, tenant_id);
+
+        deletionResults[key] = error ? error.message : (count ?? 0);
       } catch (err) {
         deletionResults[key] = `Error: ${err}`;
       }
+    }
+
+    // Anything still pointing at the tenant through a foreign key that would
+    // refuse the delete — a table the list above has not caught up with —
+    // is removed here, read from the catalog (migration 20261017160000).
+    {
+      const { data: released, error: releaseError } = await supabaseAdmin.rpc('admin_release_tenant', {
+        p_tenant: tenant_id,
+      });
+      deletionResults['tenants.references'] = releaseError ? releaseError.message : (released ?? {});
     }
 
     // Finally delete the tenant

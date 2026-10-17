@@ -16,13 +16,14 @@
  *   keys       two keys on a ring, one tagged "spare"
  *   listing    the car's card on the booking site
  *   photos     three photos fanned, the front one the cover
+ *   added      the car, done: one soft glow under it, a tick, sparkles
  *
  * Illustration guide §4a: ink lines, white cards, the accent only where it
  * matters; the car only on the screen that is about the car. Static art from
  * the scene kit only; nothing user-supplied is interpolated.
  */
 import { carSvg, MONO_PAINT } from '../car-art';
-import { ground, makeEmptyArt, pal, stroke, tick, txt, type Pal } from '../scene-kit';
+import { ground, makeEmptyArt, pal, sparkle, stroke, tick, txt, type Pal } from '../scene-kit';
 
 const VIEW = '0 0 264 132';
 
@@ -244,6 +245,20 @@ function photosArt(dark: boolean): string {
  ${ground(132, 124, 104, dark)}`;
 }
 
+function addedArt(dark: boolean): string {
+  const p = pal(dark);
+  const tw = 'v2-twinkle';
+  return `
+ <ellipse cx="132" cy="108" rx="96" ry="14" fill="${p.acc}" opacity="${dark ? 0.22 : 0.14}"/>
+ <g transform="translate(30 24) scale(.62)">${carSvg(MONO_PAINT, `vadd-done-${dark ? 'd' : 'l'}`)}</g>
+ ${sparkle(26, 30, 7, p.acc, tw, 0)}
+ ${sparkle(46, 12, 4, p.acc, tw, 0.25)}
+ ${sparkle(196, 10, 5, p.acc, tw, 0.15)}
+ ${sparkle(252, 60, 5, p.acc, tw, 0.4)}
+ ${sparkle(14, 74, 4, p.mut, tw, 0.55)}
+ <circle cx="240" cy="20" r="14" fill="${p.acc}" stroke="${p.card}" stroke-width="3"/>${tick(233, 20.5, p.onAcc, 2.6)}`;
+}
+
 export const AddVehicleCarArt = makeEmptyArt(carArt, VIEW);
 export const AddVehiclePlateArt = makeEmptyArt(plateArt, VIEW);
 export const AddVehicleOwnedArt = makeEmptyArt(ownedArt, VIEW);
@@ -255,3 +270,5 @@ export const AddVehiclePapersArt = makeEmptyArt(papersArt, VIEW);
 export const AddVehicleKeysArt = makeEmptyArt(keysArt, VIEW);
 export const AddVehicleListingArt = makeEmptyArt(listingArt, VIEW);
 export const AddVehiclePhotosArt = makeEmptyArt(photosArt, VIEW);
+/** The car, added — the dialog's last screen. Sparkles carry `v2-twinkle`. */
+export const AddVehicleAddedArt = makeEmptyArt(addedArt, VIEW);

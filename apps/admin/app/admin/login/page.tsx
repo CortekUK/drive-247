@@ -1,41 +1,63 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+/**
+ * The super-admin sign-in, drawn as Northwind's portal login
+ * (apps/portal/src/components/auth-v2/login-v2.tsx): a split hero with the
+ * Drive247 wash on the left — wordmark at the top, a typed headline in the
+ * middle, the copyright at the foot — and the form sitting straight on the
+ * page on the right, no card.
+ *
+ * Where the portal's headline sells features, this one types live facts about
+ * the whole platform (components/admin/login/platform-facts.tsx).
+ *
+ * The sign-in itself is unchanged: the same `login` from the same store, the
+ * same error, the same redirect to the dashboard.
+ */
+
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, ArrowLeft, Loader2, Lock, Mail } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
 
 import { PasswordInput } from '@/components/ui/password-input';
-import { cn } from '@/lib/utils';
+import { PlatformFactsHeadline } from '@/components/admin/login/platform-facts';
 import { useAuthStore } from '@/store/authStore';
 
 /**
- * One shell for both fields. It owns the border, the surface and the focus
- * ring (through `focus-within`, so the ring wraps the icon and the reveal
- * toggle too rather than just the text box).
- *
- * The split matters beyond looks: the input inside stays fully transparent,
- * which is the precondition for `.autofill-tamed` in app/globals.css — that
- * rule clips Chrome's autofill slab to the glyphs, and `background-clip` would
- * clip a background painted on the input itself right along with it.
+ * The Drive247 brand, through the portal's `brandSurface` / `brandInk` rules
+ * for #6366f1 on a light page: the wash is the brand hue at 58% saturation and
+ * 88% lightness, the ink the same hue held down to 42% lightness so it reads
+ * on that wash. Written out rather than computed — this page has one brand.
  */
-// Hover moves the surface, focus moves the border and the ring — deliberately
-// different properties. Tailwind emits `hover:` AFTER `focus-within:`, so any
-// property both states claim is won by hover, and a focused field would
-// visibly lose its focus treatment the moment the pointer crossed it.
-const FIELD_SHELL =
-  'group flex items-center gap-3 rounded-3xl border border-border bg-muted/60 ' +
-  'transition-[border-color,background-color,box-shadow] duration-200 ' +
-  'hover:bg-muted ' +
-  'focus-within:border-primary/40 focus-within:ring-3 focus-within:ring-primary/15';
+const HERO_WASH = 'hsl(239 58% 88%)';
+const ACCENT_INK = 'hsl(239 84% 42%)';
 
-/** The input: no surface, no border, no ring of its own — the shell has those. */
-const FIELD_INPUT =
-  'autofill-tamed h-12 w-full bg-transparent text-sm text-foreground ' +
-  'placeholder:text-muted-foreground/70 ' +
-  'focus-visible:border-transparent focus-visible:ring-0';
+/** The portal login's masks: the wash dissolves into the form side with no seam. */
+const WASH_MASK = `linear-gradient(to right,
+  rgb(0 0 0) 0%,
+  rgb(0 0 0) 34%,
+  rgb(0 0 0 / 0.96) 42%,
+  rgb(0 0 0 / 0.88) 49%,
+  rgb(0 0 0 / 0.74) 56%,
+  rgb(0 0 0 / 0.56) 63%,
+  rgb(0 0 0 / 0.38) 70%,
+  rgb(0 0 0 / 0.22) 77%,
+  rgb(0 0 0 / 0.10) 84%,
+  rgb(0 0 0 / 0.03) 92%,
+  rgb(0 0 0 / 0) 100%)`;
 
-const FIELD_ICON =
-  'h-4 w-4 shrink-0 text-muted-foreground transition-colors group-focus-within:text-primary';
+const MOBILE_WASH_MASK = `linear-gradient(to bottom,
+  rgb(0 0 0) 0%,
+  rgb(0 0 0) 18%,
+  rgb(0 0 0 / 0.88) 34%,
+  rgb(0 0 0 / 0.68) 48%,
+  rgb(0 0 0 / 0.44) 62%,
+  rgb(0 0 0 / 0.22) 76%,
+  rgb(0 0 0 / 0.08) 88%,
+  rgb(0 0 0 / 0) 100%)`;
+
+/** The portal login's fields: 48px, white, a border that holds on the wash and on white. */
+const FIELD_CLASS =
+  'h-12 w-full rounded-2xl border border-slate-900/20 bg-white px-4 text-[15px] text-slate-900 shadow-[0_1px_2px_rgb(15_23_42/0.04)] outline-none transition-colors placeholder:text-slate-400 hover:border-slate-900/30 focus-visible:border-primary/50 focus-visible:ring-3 focus-visible:ring-primary/20 disabled:opacity-60';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -68,74 +90,75 @@ export default function AdminLoginPage() {
   };
 
   return (
-    // `m-auto` on the child rather than `items-center` here: auto margins still
-    // centre, but they leave the top of a too-tall card reachable instead of
-    // clipping it off-screen, which is what `justify-content: center` does on a
-    // short phone viewport.
-    <div className="relative flex min-h-screen flex-col overflow-hidden bg-muted bg-app-gradient px-4 py-10">
-      {/* Halo behind the card, so it reads as lifted off the canvas rather than
-          floating on nothing. Static — nothing here animates on its own. */}
+    // Always light, as Northwind's login is: the wash and the slate inks are
+    // drawn for a light page. `data-keep-light` holds it there in dark mode.
+    <div data-keep-light className="relative min-h-screen overflow-hidden bg-white lg:grid lg:grid-cols-2">
+      {/* Spans the whole page and is dissolved by the mask, so the two halves
+          read as one surface with no seam down the middle. */}
       <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-1/2 h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-3xl"
+        aria-hidden
+        className="absolute inset-y-0 left-0 hidden w-full lg:block"
+        style={{ backgroundColor: HERO_WASH, maskImage: WASH_MASK, WebkitMaskImage: WASH_MASK }}
       />
 
-      <div className="relative z-10 m-auto w-full max-w-md motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-3 motion-safe:duration-200 motion-safe:ease-out">
-        {/* The product's own mark, a tinted eyebrow chip, then ink-and-muted
-            copy inside the card.
+      {/* Below `lg` the hero column is hidden; the tint comes down from the top
+          edge instead and fades out above the fields. */}
+      <div
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-[42vh] lg:hidden"
+        style={{ backgroundColor: HERO_WASH, maskImage: MOBILE_WASH_MASK, WebkitMaskImage: MOBILE_WASH_MASK }}
+      />
 
-            The mark used to be a generic shield in a gradient tile with the
-            word CORTEK under it. "CORTEK" appeared in exactly one place in
-            this app — right here — while the tab title is "Drive247 Admin
-            Portal" and the sidebar's own wordmark is "Drive247", so the login
-            screen was the one surface disagreeing with the rest of the app
-            about what this is. It now carries the real wordmark, the same file
-            the landing site and the operator portal's sign-in use
-            (`apps/web/public/logo-light.png`), rather than a second drawing of
-            the brand that has to be kept in step by hand. */}
-        <header className="mb-7 flex flex-col items-center text-center">
+      {/* ---------- Left: the hero (lg and up) ---------- */}
+      <aside className="relative hidden overflow-hidden p-12 text-slate-900 lg:flex lg:flex-col lg:justify-between">
+        <div className="relative z-10">
           <img
             src="/drive247-logo-light.png"
             alt="Drive247"
             width={855}
             height={195}
-            className="mb-5 h-9 w-auto object-contain sm:h-10"
+            className="h-14 w-auto max-w-[220px] object-contain"
           />
+        </div>
 
-          {/* Plain Manrope, the app's own typeface, at the same weight and
-              tracking idiom as the "Sign in" heading below it.
+        <div className="relative z-10">
+          <PlatformFactsHeadline accentInk={ACCENT_INK} />
+        </div>
 
-              It previously carried `gradient-text` plus `tracking-[0.14em]`.
-              Neither is house style here: `gradient-text` appears in NO other
-              file in apps/admin, and the only other wide-tracking use in the
-              app (signup-plan-preview.tsx:117) is on an 11px uppercase eyebrow,
-              where wide tracking is correct. Extrabold and letter-spaced on a
-              4xl wordmark reads as a generic template rather than as this
-              product — and letterspacing changes the perceived typeface enough
-              that it looked like a different font from the rest of the app.
-              The real wordmark elsewhere is the sidebar's "Drive247":
-              font-semibold, no gradient, no tracking. */}
-          <p className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
-            Super Admin Portal
-          </p>
-        </header>
+        <p className="relative z-10 text-xs text-slate-900/50">
+          © {new Date().getFullYear()} Drive247. All rights reserved.
+        </p>
+      </aside>
 
-        <div className="rounded-4xl bg-card p-6 shadow-xl shadow-foreground/[0.06] ring-1 ring-foreground/10 sm:p-8">
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold tracking-tight text-foreground">Sign in</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Sign in to access the platform dashboard.
-            </p>
+      {/* Phone: the mark pinned near the top edge, in the wash. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center pt-8 lg:hidden">
+        <img
+          src="/drive247-logo-light.png"
+          alt="Drive247"
+          width={855}
+          height={195}
+          className="h-8 w-auto max-w-[180px] object-contain"
+        />
+      </div>
+
+      {/* ---------- Right: sign-in form ---------- */}
+      <main className="relative flex min-h-screen items-start justify-center px-6 pb-10 pt-[104px] sm:px-10 lg:items-center lg:py-12">
+        <div className="w-full max-w-[480px]">
+          {/* The same facts at a phone scale, where the hero column is gone. */}
+          <div className="mb-7 lg:hidden">
+            <PlatformFactsHeadline accentInk={ACCENT_INK} compact />
           </div>
 
-          <form className="space-y-5" onSubmit={handleSubmit}>
+          <div className="mb-6 space-y-1.5">
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Sign in</h1>
+            <p className="text-sm text-slate-500">Enter your email and password to access the Drive247 admin.</p>
+          </div>
+
+          <form className="space-y-4" onSubmit={handleSubmit}>
             {error && (
-              // A tinted surface with coloured ink, the same treatment
-              // components/ui/button.tsx gives `destructive` — legible as a
-              // failure without turning the card into a red slab.
               <div
                 role="alert"
-                className="flex items-start gap-3 rounded-2xl border border-destructive/20 bg-destructive/[0.06] px-4 py-3 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-3 motion-safe:duration-200 motion-safe:ease-out"
+                className="flex items-start gap-3 rounded-2xl border border-destructive/20 bg-destructive/[0.06] px-4 py-3"
               >
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
                 <p className="text-sm leading-snug text-destructive">{error}</p>
@@ -143,89 +166,72 @@ export default function AdminLoginPage() {
             )}
 
             <div className="space-y-2">
-              <label htmlFor="email" className="block text-sm font-medium text-foreground">
-                Email address
+              <label htmlFor="email" className="block text-sm font-medium text-slate-900">
+                Email Address
               </label>
-              <div className={cn(FIELD_SHELL, 'px-4')}>
-                <Mail className={FIELD_ICON} aria-hidden="true" />
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  autoFocus
-                  required
-                  disabled={loading}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className={cn(FIELD_INPUT, 'px-0 outline-none')}
-                  placeholder="admin@example.com"
-                />
-              </div>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                autoFocus
+                required
+                disabled={loading}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={FIELD_CLASS}
+                placeholder="Enter your email"
+              />
             </div>
 
-            {/* pb-1 plus the form's 20px rhythm leaves 24px under the shell —
-                the room the out-of-flow Caps Lock notice needs, reserved up
-                front so it cannot shove the submit button mid-password. */}
+            {/* pb-1 leaves room under the field for the out-of-flow Caps Lock
+                notice, so it cannot shove the button mid-password. */}
             <div className="space-y-2 pb-1">
-              <label htmlFor="password" className="block text-sm font-medium text-foreground">
+              <label htmlFor="password" className="block text-sm font-medium text-slate-900">
                 Password
               </label>
-              <div className={cn(FIELD_SHELL, 'pl-4 pr-2')}>
-                <Lock className={FIELD_ICON} aria-hidden="true" />
-                <PasswordInput
-                  id="password"
-                  name="password"
-                  autoComplete="current-password"
-                  required
-                  disabled={loading}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={cn(FIELD_INPUT, 'px-0 pr-11 outline-none')}
-                  placeholder="Enter your password"
-                />
-              </div>
+              <PasswordInput
+                id="password"
+                name="password"
+                autoComplete="current-password"
+                required
+                disabled={loading}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={`${FIELD_CLASS} pr-11`}
+                placeholder="Enter your password"
+              />
             </div>
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !email || !password}
               aria-busy={loading}
-              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-4xl bg-primary text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all duration-200 hover:bg-[hsl(var(--primary-hover))] hover:shadow-xl hover:shadow-primary/30 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card active:bg-[hsl(var(--primary-hover))] active:shadow-md motion-safe:active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70 disabled:shadow-none"
+              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-base font-medium text-primary-foreground transition-colors hover:bg-primary/85 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? (
                 <>
-                  {/* Slowed rather than stopped under reduced motion: a frozen
-                      spinner would say the sign-in had died. */}
-                  <Loader2
-                    className="h-4 w-4 animate-spin motion-reduce:[animation-duration:1.5s]"
-                    aria-hidden="true"
-                  />
-                  Signing in…
+                  <Loader2 className="h-4 w-4 animate-spin motion-reduce:[animation-duration:1.5s]" aria-hidden="true" />
+                  Signing in...
                 </>
               ) : (
-                'Sign in'
+                'Sign In'
               )}
             </button>
           </form>
-        </div>
 
-        <div className="mt-6 flex flex-col items-center gap-2 text-center">
-          <a
-            href="/"
-            className="group inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-          >
-            <ArrowLeft
-              className="h-3.5 w-3.5 transition-transform motion-safe:group-hover:-translate-x-0.5"
-              aria-hidden="true"
-            />
-            Back to landing page
-          </a>
-          <p className="text-xs text-muted-foreground/70">
-            Restricted to Drive247 super admins and sales agents.
-          </p>
+          <div className="mt-6 flex flex-col items-center gap-2 text-center">
+            <a
+              href="/"
+              className="group inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-slate-500 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              <ArrowLeft className="h-3.5 w-3.5 transition-transform motion-safe:group-hover:-translate-x-0.5" aria-hidden="true" />
+              Back to landing page
+            </a>
+            <p className="text-xs text-slate-400">Restricted to Drive247 super admins and sales agents.</p>
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

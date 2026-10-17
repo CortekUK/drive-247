@@ -1,5 +1,8 @@
 'use client';
 
+import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton } from '@/components/admin/header-buttons';
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { FeedbackEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
@@ -453,18 +456,16 @@ export default function FeedbacksPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <MessageSquareText className="h-6 w-6 text-primary" />
-            Feedbacks
-          </h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Feedbacks</h1>
           <p className="text-sm text-muted-foreground mt-1">
             What rental operators are telling us about the software.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
-          <Settings2 className="h-4 w-4 mr-2" />
-          Settings
-        </Button>
+        <div className={HEADER_ACTIONS}>
+          <HeaderIconButton label="Feedback settings" onClick={() => setSettingsOpen(true)}>
+            <Settings2 />
+          </HeaderIconButton>
+        </div>
       </div>
 
       {/* Stats */}
@@ -586,6 +587,7 @@ export default function FeedbacksPage() {
           Every value below is still this page's own `useState` and every
           handler is unchanged — the controls simply moved onto the panel. */}
       <FilterSearch
+        scopeLabel="Feedbacks"
         value={search}
         onChange={setSearch}
         placeholder="Search message text..."
@@ -689,22 +691,38 @@ export default function FeedbacksPage() {
         {loading ? (
           <TableSkeleton />
         ) : items.length === 0 ? (
-          <div className="p-10 text-center">
-            <MessageSquareText className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">No feedback matches these filters.</p>
-          </div>
+          categoryFilter === 'all' && tenantFilter === 'all' && !search.trim() ? (
+            <EmptyState
+              illustration={<FeedbackEmptyArt />}
+              headline={statusFilter === 'all' ? 'No feedback yet' : `No ${statusFilter} feedback`}
+              body={
+                statusFilter === 'open'
+                  ? 'Every note from an operator has been dealt with. New ones land here as they are sent.'
+                  : 'When operators send feedback from their portal, it lands here to triage and answer.'
+              }
+            />
+          ) : (
+            <NoMatchState
+              noun="feedback"
+              onClear={() => {
+                setCategoryFilter('all');
+                setTenantFilter('all');
+                setSearch('');
+              }}
+            />
+          )
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-dark-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="px-4 py-3 font-medium">Tenant</th>
-                  <th className="px-4 py-3 font-medium">Submitter</th>
-                  <th className="px-4 py-3 font-medium">Category</th>
-                  <th className="px-4 py-3 font-medium">Message</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium text-right">Actions</th>
+                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Tenant</th>
+                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Submitter</th>
+                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Category</th>
+                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Message</th>
+                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Date</th>
+                  <th className="h-10 whitespace-nowrap px-3 align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -717,14 +735,14 @@ export default function FeedbacksPage() {
                       onClick={() => openDetail(f)}
                       className="border-b border-dark-border last:border-0 cursor-pointer hover:bg-secondary/40 transition-colors"
                     >
-                      <td className="px-4 py-3 text-foreground">{tenantName(f)}</td>
-                      <td className="px-4 py-3 text-muted-foreground">
+                      <td className="px-3 py-3 text-foreground">{tenantName(f)}</td>
+                      <td className="px-3 py-3 text-muted-foreground">
                         <div>{f.submitter_name || f.submitter_email || 'Unknown'}</div>
                         {f.submitter_role && (
                           <div className="text-xs text-muted-foreground">{f.submitter_role}</div>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3">
                         <span
                           className="inline-flex items-center gap-1.5 text-xs font-medium"
                           style={{ color: meta.color }}
@@ -733,7 +751,7 @@ export default function FeedbacksPage() {
                           {meta.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground max-w-[320px]">
+                      <td className="px-3 py-3 text-muted-foreground max-w-[320px]">
                         <div className="flex items-center gap-2">
                           {f.screenshot_path && (
                             <ImageIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -741,7 +759,7 @@ export default function FeedbacksPage() {
                           <span className="truncate">{f.message}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3">
                         <span
                           className={
                             f.status === 'open'
@@ -752,10 +770,10 @@ export default function FeedbacksPage() {
                           {f.status === 'open' ? 'Open' : 'Resolved'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                      <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
                         {new Date(f.created_at).toLocaleDateString()}
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-3 py-3 text-right">
                         <Button
                           variant="outline"
                           size="sm"

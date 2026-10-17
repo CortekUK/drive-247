@@ -1,5 +1,7 @@
 'use client';
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { ModeRequestsEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { FilterChip, FilterSearch, FilterSection, FilterShell } from '@/components/admin/filter-primitives';
 import { OverviewFlip } from '@/components/admin/overview-flip';
 import { useEffect, useState } from 'react';
@@ -227,9 +229,6 @@ export default function RequestsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center h-10 w-10 rounded-xl bg-primary/15 glow-purple-sm">
-            <Rocket className="h-5 w-5 text-primary" />
-          </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Mode Requests</h1>
             <p className="text-sm text-muted-foreground">
@@ -249,6 +248,7 @@ export default function RequestsPage() {
           second surface underneath, so the stats and the filters never compete
           for the same eye at the same time. */}
       <FilterSearch
+        scopeLabel="Mode requests"
         value={searchQuery}
         onChange={setSearchQuery}
         placeholder="Search by tenant, requester, or integration..."
@@ -372,30 +372,19 @@ export default function RequestsPage() {
               ))}
             </div>
           ) : filteredRequests.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Rocket className="h-10 w-10 text-muted-foreground/40 mb-3" />
-              <p className="text-sm text-muted-foreground">
-                {filter !== 'all'
-                  ? `No ${filter} requests found`
-                  : searchQuery
-                  ? 'No requests match your search'
-                  : 'No mode requests yet'}
-              </p>
-              {(filter !== 'all' || searchQuery) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => { setFilter('all'); setSearchQuery(''); }}
-                  className="mt-2"
-                >
-                  Clear filters
-                </Button>
-              )}
-            </div>
+            filter !== 'all' || searchQuery ? (
+              <NoMatchState noun="requests" onClear={() => { setFilter('all'); setSearchQuery(''); }} />
+            ) : (
+              <EmptyState
+                illustration={<ModeRequestsEmptyArt />}
+                headline="No mode requests yet"
+                body="When an operator asks to move from test to live, the request waits here for your approval."
+              />
+            )
           ) : (
             <Table>
               <TableHeader>
-                <TableRow className="bg-primary/5 hover:bg-primary/5">
+                <TableRow>
                   <TableHead>Tenant</TableHead>
                   <TableHead className="w-[160px]">Integration</TableHead>
                   <TableHead className="w-[180px]">Requested By</TableHead>

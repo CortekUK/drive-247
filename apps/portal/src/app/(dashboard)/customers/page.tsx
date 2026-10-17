@@ -24,6 +24,7 @@ import { CustomerFormModal } from "@/components/customers/customer-form-modal";
 import { CustomerFormDialogV2 } from "@/components/customers-v2/customer-form-dialog-v2";
 import { CustomerCsvImportDialog } from "@/components/customers/customer-csv-import-dialog";
 import { GenerateInviteDialog } from "@/components/customers/generate-invite-dialog";
+import { InviteLinkDialogV2 } from "@/components/customers-v2/invite-link-dialog-v2";
 import { CustomerBalanceChip } from "@/components/customers/customer-balance-chip";
 import { CustomerSummaryCards } from "@/components/customers/customer-summary-cards";
 import { RejectCustomerDialog } from "@/components/customers/reject-customer-dialog";
@@ -1542,11 +1543,15 @@ const CustomersList = () => {
         isLoading={statusActionLoading}
       />
 
-      {/* Generate Invite Link Dialog */}
-      <GenerateInviteDialog
-        open={inviteDialogOpen}
-        onOpenChange={setInviteDialogOpen}
-      />
+      {/* Generate Invite Link Dialog — v2 (northwind): the redesigned dialog, same call. */}
+      {v2Chrome ? (
+        <InviteLinkDialogV2 open={inviteDialogOpen} onOpenChange={setInviteDialogOpen} />
+      ) : (
+        <GenerateInviteDialog
+          open={inviteDialogOpen}
+          onOpenChange={setInviteDialogOpen}
+        />
+      )}
 
       {/* Start Verification Dialog */}
       {verificationCustomer && (

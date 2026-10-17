@@ -59,7 +59,7 @@ for (const [spec, file] of [['tailwindcss', tailwindIndex], ['tw-animate-css', t
   css = css.replace(re, `@import "${file}";`);
 }
 // Class names come from the design's code and its routes, nothing else.
-css = `@source "../../app/(northwind)";\n${css}`;
+css = `@source "../../app/(northwind)";\n@source "../../app/(northwind-v2)";\n${css}`;
 
 const result = await postcss([
   tailwind({ base: path.join(BOOKING, 'src/northwind-site'), optimize: { minify: true } }),

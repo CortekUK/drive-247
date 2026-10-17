@@ -9,6 +9,8 @@
  * reason whenever it decides not to send, and this is where the reason is read.
  */
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { EmailsEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 
@@ -103,10 +105,12 @@ export function SendLog({ automation }: { automation: AutomationId }) {
             The log table does not exist yet.
           </p>
         ) : rows.length === 0 && !loading ? (
-          <p className="text-sm text-muted-foreground">
-            Nothing yet. Use &ldquo;Preview what would send&rdquo; above to see what the next run
-            would do without sending it.
-          </p>
+          <EmptyState
+            size="section"
+            illustration={<EmailsEmptyArt />}
+            headline="Nothing sent yet"
+            body="Use “Preview what would send” above to see what the next run would do, without sending it."
+          />
         ) : (
           <div className="overflow-x-auto">
             <Table>

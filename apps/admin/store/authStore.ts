@@ -5,6 +5,8 @@ interface SuperAdmin {
   id: string;
   email: string;
   name: string;
+  /** The profile photo, uploaded from Profile. */
+  avatar_url?: string | null;
   is_primary_super_admin: boolean;
   is_super_admin?: boolean;
   is_sales_agent?: boolean;
@@ -35,7 +37,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     // Cast to any: is_sales_agent is not yet in the generated Supabase types.
     const { data: userData, error: userError } = await (supabase as any)
       .from('app_users')
-      .select('id, email, name, is_active, is_super_admin, is_primary_super_admin, is_sales_agent')
+      .select('id, email, name, avatar_url, is_active, is_super_admin, is_primary_super_admin, is_sales_agent')
       .eq('auth_user_id', data.user.id)
       .single();
 
@@ -78,7 +80,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     // Cast to any: is_sales_agent is not yet in the generated Supabase types.
     const { data: userData, error } = await (supabase as any)
       .from('app_users')
-      .select('id, email, name, is_active, is_super_admin, is_primary_super_admin, is_sales_agent')
+      .select('id, email, name, avatar_url, is_active, is_super_admin, is_primary_super_admin, is_sales_agent')
       .eq('auth_user_id', session.user.id)
       .single();
 

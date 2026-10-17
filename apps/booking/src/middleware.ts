@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { routeBookingRequest } from '@/lib/booking-design';
+import { routeBookingRequest, usesNewDesign, type SiteVersion } from '@/lib/booking-design';
 import { customSitePathFor, isCustomSiteOn } from '@/lib/custom-site-routing';
 
 /** Set for the new design's visual-editor mode (read by src/app/(northwind)/layout.tsx). */
@@ -78,8 +78,13 @@ export async function middleware(request: NextRequest) {
   }
 
   // Which design this tenant gets — see src/lib/booking-design.ts. Every tenant
-  // except Northwind resolves to 'original' and continues exactly as before.
-  const route = routeBookingRequest(tenantSlug, pathname);
+  // except Northwind resolves to 'original' and continues exactly as before, and
+  // never waits on the site-version read below.
+  const sitePreview = parseSitePreview(request.nextUrl.searchParams.get(SITE_PREVIEW_PARAM));
+  const siteVersion: SiteVersion = usesNewDesign(tenantSlug)
+    ? sitePreview ?? parseSitePreview(request.cookies.get(SITE_PREVIEW_COOKIE)?.value) ?? (await fetchNorthwindSiteVersion())
+    : 'v1';
+  const route = routeBookingRequest(tenantSlug, pathname, siteVersion);
 
   if (route.action === 'new-design') {
     // The portal's visual editor opens the site with ?cms-edit=1. Stripped
@@ -90,7 +95,13 @@ export async function middleware(request: NextRequest) {
     }
     const url = request.nextUrl.clone();
     url.pathname = route.path;
-    return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
+    const response = NextResponse.rewrite(url, { request: { headers: requestHeaders } });
+    // A ?site=v1|v2 preview sticks for the rest of the browser session, so
+    // clicking around stays on the version being looked at.
+    if (sitePreview) {
+      response.cookies.set(SITE_PREVIEW_COOKIE, sitePreview, { path: '/', sameSite: 'lax' });
+    }
+    return response;
   }
 
   if (route.action === 'not-found') {
@@ -159,6 +170,38 @@ function extractSubdomain(hostname: string): string | null {
   }
 
   return null;
+}
+
+// Northwind's booking-site version: the super admin's Developer-tab switch
+// (admin_settings.northwind_site_version), read through the anon-callable
+// public.northwind_site_version(). `?site=v1|v2` previews either version for
+// the browser session without flipping it for everyone.
+const SITE_PREVIEW_PARAM = 'site';
+const SITE_PREVIEW_COOKIE = 'nw_site_version';
+const SITE_VERSION_TTL_MS = 10_000;
+const SITE_VERSION_TIMEOUT_MS = 1500;
+let siteVersionCache: { version: SiteVersion; at: number } | null = null;
+
+function parseSitePreview(value: string | null | undefined): SiteVersion | null {
+  return value === 'v1' || value === 'v2' ? value : null;
+}
+
+/** FAILS TO v1: an error, a timeout or anything but a literal "v2" serves the current site. */
+async function fetchNorthwindSiteVersion(): Promise<SiteVersion> {
+  if (siteVersionCache && Date.now() - siteVersionCache.at < SITE_VERSION_TTL_MS) {
+    return siteVersionCache.version;
+  }
+  try {
+    const { data, error } = await supabase
+      .rpc('northwind_site_version')
+      .abortSignal(AbortSignal.timeout(SITE_VERSION_TIMEOUT_MS));
+    if (error) return 'v1';
+    const version: SiteVersion = data === 'v2' ? 'v2' : 'v1';
+    siteVersionCache = { version, at: Date.now() };
+    return version;
+  } catch {
+    return 'v1';
+  }
 }
 
 // The custom-site switch per tenant, held briefly: this runs on every old-site

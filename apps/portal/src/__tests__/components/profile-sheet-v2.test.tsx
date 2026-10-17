@@ -140,10 +140,11 @@ async function click(el: HTMLElement) {
 }
 
 describe("where it opens from", () => {
-  it("is a sheet from the TOP, not a centred dialog or a side panel", async () => {
+  it("is a centred dialog, not a sheet", async () => {
     await open();
     expect(sheet()).not.toBeNull();
-    expect(sheet().getAttribute("data-side")).toBe("top");
+    expect(sheet().getAttribute("data-slot")).toBe("dialog-content");
+    expect(sheet().getAttribute("data-side")).toBeNull();
   });
 
   it("seeds the fields from the signed-in user", async () => {

@@ -14,6 +14,8 @@
  * live, or stuck — so a stuck one can be spotted without asking the tenant.
  */
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { CustomDomainArt } from '@/components/admin/illustrations/scenes/custom-domain';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Globe, Loader2, RefreshCw } from 'lucide-react';
 
@@ -148,10 +150,7 @@ export function CustomDomainTab({ canEdit }: { canEdit: boolean }) {
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-          <Globe className="h-5 w-5" />
-          Custom Domain
-        </h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Custom Domain</h1>
         <p className="text-sm text-muted-foreground">
           Let V2 tenants connect their own domain themselves: they add two DNS records, and we add the domain to
           our hosting, check it and issue the certificate automatically.
@@ -207,7 +206,12 @@ export function CustomDomainTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         <CardContent>
           {withDomain.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">No tenant has a custom domain yet.</p>
+            <EmptyState
+              size="section"
+              illustration={<CustomDomainArt />}
+              headline="No custom domains yet"
+              body="Operators who put their booking site on their own address show up here, with its status."
+            />
           ) : (
             <Table>
               <TableHeader>

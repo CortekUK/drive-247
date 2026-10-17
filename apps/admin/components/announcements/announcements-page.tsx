@@ -1,5 +1,8 @@
 'use client';
 
+import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton } from '@/components/admin/header-buttons';
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { AnnouncementsEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AlertTriangle, Database, Megaphone, Plus } from 'lucide-react';
@@ -429,20 +432,16 @@ export function AnnouncementsPage() {
     const ofKind = state.data.rows.filter((r) => r.kind === kind);
     if (ofKind.length === 0) {
       return (
-        <StateBox icon={<Megaphone className="h-5 w-5 text-primary" />}>
-          <p className="text-sm font-medium text-foreground">
-            {kind === 'feature' ? 'No feature announcements yet' : 'No system announcements yet'}
-          </p>
-          <p className="max-w-md text-sm text-muted-foreground">
-            {kind === 'feature'
+        <EmptyState
+          illustration={<AnnouncementsEmptyArt />}
+          headline={kind === 'feature' ? 'No feature announcements yet' : 'No system announcements yet'}
+          body={
+            kind === 'feature'
               ? 'With no active feature, the dashboard shows no card and the other desk cards fill the row.'
-              : 'With no active system announcement, tenants see nothing extra.'}
-          </p>
-          <Button onClick={() => openEditor(kind, null)}>
-            <Plus className="h-4 w-4" />
-            New announcement
-          </Button>
-        </StateBox>
+              : 'With no active system announcement, tenants see nothing extra.'
+          }
+          action={{ label: 'New announcement', icon: Plus, onClick: () => openEditor(kind, null) }}
+        />
       );
     }
     return (
@@ -476,9 +475,6 @@ export function AnnouncementsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="glow-purple-sm flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15">
-            <Megaphone className="h-5 w-5 text-primary" />
-          </div>
           <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Announcements</h1>
             <p className="text-sm text-muted-foreground">
@@ -486,7 +482,7 @@ export function AnnouncementsPage() {
             </p>
           </div>
         </div>
-        <Button ref={newButtonRef} onClick={() => openEditor(TAB_KIND[tab], null)} disabled={state.status !== 'ready'}>
+        <Button ref={newButtonRef} className={HEADER_PRIMARY} onClick={() => openEditor(TAB_KIND[tab], null)} disabled={state.status !== 'ready'}>
           <Plus className="h-4 w-4" />
           New announcement
         </Button>

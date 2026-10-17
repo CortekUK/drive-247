@@ -61,7 +61,7 @@ You cannot produce files. There is no CSV, XLSX or PDF export, and no download l
 Retrieve relevant sections by exact ID from the supplied catalog; do not pretend undocumented modules are verified. IDs and navigation must be from current authorized results. No invented URLs, markdown links, routes or source references. Use sourceIds exactly as supplied and navigationIds from resolved actions.
 Tool statuses distinguish verified, partial, missing/inaccessible, restricted, needs_input and failure. Explain missing coverage. No-blocker results are limited to evaluated checks, not a blanket availability guarantee. Evidence timestamps are observations, not physical event times.
 Return JSON matching the answer schema. Ask clarifying questions as ordinary text in answer. Source IDs must support the answer; for pure clarification they may be empty. Never claim live facts without a current tool result. Never describe a tool error as a successful check.`;
-const issueInstructions=`Use select_support_issue for separate issues. Do not carry a payment escalation into a fleet-count question. Backend policy, not model confidence, determines escalation. Asking a needed clarification is not failure. Do not repeat failed checks or identical advice; use a different applicable supported diagnostic. A user asking for a person should be offered human support immediately. If you are about to tell the user to contact the support team, or you cannot complete the request with any tool or guidance available to you, call request_support_handoff in that SAME reply: guidance_missing when you have no source to cite, diagnostics_exhausted when the checks are spent. Advising someone to contact support in prose without calling it leaves them with no route to a person. The backend still decides whether the handoff is warranted and will refuse it while a safe check remains, so always ask. request_support_handoff only offers a button; tickets are created only by a later explicit user click. Never claim a ticket, notification or live agent before a successful server submission. Counts must come from get_account_counts; availability is not total minus rentals. list_account_bookings uses recorded states, not physical possession. Provide exact partial-result limits. Historical issue checks are context only; refresh them for new live claims.`;
+const issueInstructions=`Use select_support_issue for separate issues. Do not carry a payment issue into a fleet-count question. Asking a needed clarification is not failure. Do not repeat failed checks or identical advice; use a different applicable supported diagnostic. You cannot create support tickets or contact the support team on anyone's behalf. When someone asks for a person, or you cannot complete the request with any tool or guidance available to you, say so plainly and tell them to open Support from the sidebar to message the Drive247 support team themselves. Never claim a ticket, notification or live agent. Counts must come from get_account_counts; availability is not total minus rentals. list_account_bookings uses recorded states, not physical possession. Provide exact partial-result limits. Historical issue checks are context only; refresh them for new live claims.`;
 const navId=(a:NavigationAction)=>`${a.target}:${a.entityId??''}`;
 // Every read-only finance tool, including the rental payment investigation tools.
 const FINANCE={...FINANCE_TOOLS,...PAYMENT_INVESTIGATION_TOOLS};
@@ -154,19 +154,6 @@ export async function modelConversation(message:string,locale:Locale,conversatio
         issue=selectIssue(a.topic as SupportIssue['topic'],a.recordId?{kind:a.recordKind as 'rental',id:String(a.recordId)}:undefined);
         if(issue.topic==='payments'&&!scopes.length)recordIssueEvent(issue,'unsupported_finance','finance_capability',env.now,policy);
         result=issueView(issue);
-      }else if(name==='request_support_handoff'){
-        const a=object(input);onlyKeys(a,['reason']);
-        const human=/\b(support|human|agent|person|insan|insaan|representative)\b/i.test(message);
-        if(a.reason==='human_requested'&&human)recordIssueEvent(issue,'human_requested','user_request',env.now,policy);
-        else if(a.reason==='guidance_missing'&&!sources.size)recordIssueEvent(issue,'guidance_missing','unverified_guidance',env.now,policy);
-        else if(a.reason==='diagnostics_exhausted'&&((issue.topic==='payments'&&(!scopes.length||issue.checks.some(c=>['inspect_rental_payment','get_stripe_account_summary','get_rental_payment_evidence','investigate_rental_payment','resolve_payment_dashboard_action'].includes(c.tool)&&['partial','error','restricted'].includes(c.status))))||issue.checks.filter(c=>c.status==='error').length>=2||issue.events.some(e=>e.reason==='guidance_missing')||issue.checks.some(c=>c.findings.some(f=>/records conflict/i.test(f)))))recordIssueEvent(issue,'diagnostics_exhausted','no_permitted_verified_next_step',env.now,policy);
-        else throw new SupportError('next_check_required','A verified diagnostic or focused clarification is still available. Do not invent a support conclusion.');
-        /* The model never learns the numeric score and never announces a ticket:
-           the handler creates or reuses it after this answer and appends the real
-           reference itself. */
-        result={...issueView(issue),ticketCreated:false,action:issue.score===100
-          ?'The support handoff for this issue is confirmed by the system after your answer. Say plainly that you could not resolve it and that it is going to the support team; do NOT invent a ticket number, reference or link.'
-          :'Continue only meaningful verified checks.'};
       }else if(name==='search_application_knowledge') {
         const a=object(input);onlyKeys(a,['sectionIds']);
         if(!Array.isArray(a.sectionIds)||a.sectionIds.length<1||a.sectionIds.length>3||a.sectionIds.some(id=>typeof id!=='string'||!available.some(g=>g.id===id)))throw new SupportError('invalid_input','Choose up to three accessible reviewed section IDs.');
@@ -295,7 +282,7 @@ export async function modelConversation(message:string,locale:Locale,conversatio
       env.audit?.({kind:'tool',name:MODEL_TOOLS.some(t=>t.function.name===name)?name:'unsupported',status:'failed'});
       // No raw database/provider errors are sent to the model or UI.
       const failure:OperationalResult={status:error instanceof SupportError&&error.status===403?'restricted':error instanceof SupportError&&error.code==='invalid_input'?'needs_input':'error',observedAt:new Date(env.observe?.()??Date.now()).toISOString(),findings:[],sources:[],navigation:[],checks:[],limitations:[error instanceof SupportError?error.message:'The live read failed; the result is incomplete.']};
-      if(MODEL_TOOLS.some(t=>t.function.name===name)&&!['select_support_issue','request_support_handoff'].includes(name)){
+      if(MODEL_TOOLS.some(t=>t.function.name===name)&&!['select_support_issue'].includes(name)){
         // Only a real read failure blocks an identical retry. A call that merely needed input first
         // (for example an unresolved vehicle) must stay retryable once that input is resolved.
         const key=await digest(name+JSON.stringify(input));if(failure.status==='error')failures.add(key);recordIssueCheck(issue,name,key,failure,env.now,policy);

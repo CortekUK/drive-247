@@ -24,6 +24,7 @@ import { HeaderSearch } from "@/components/shared/layout/header-search";
 import { UserMenu } from "@/components/shared/layout/user-menu";
 import { AppSidebar } from "@/components/shared/layout/app-sidebar";
 import { useV2 } from "@/lib/v2-context";
+import { customerIdFromPath } from "@/components/customers-v2/customer-detail/sections";
 import { GenericFrameSkeleton, ShapeSkeleton, useShapeRecorder } from "@/components/skeleton-v2/shape-snapshot";
 import { AppSidebarV2 } from "@/components/shared/layout/app-sidebar-v2";
 import { TopBarV2 } from "@/components/shared/layout/top-bar-v2";
@@ -224,6 +225,12 @@ export default function DashboardLayout({
   const isRentalDetailV2 =
     rentalsV2 &&
     /^\/rentals\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(pathname ?? "");
+  /* The v2 customer record (`/customers/<uuid>`, northwind) drops the top bar
+     on desktop for the same reason (Oct 8 2026, Ghulam: "the rental detail
+     page has no top bar, so why does the customer one?"). Same area flag as
+     the page and its rail. */
+  const customersV2 = useV2("customers");
+  const isCustomerDetailV2 = customersV2 && !!customerIdFromPath(pathname);
   /* A rental's Overview (`/rentals/<id>?overview=1`): the stage rail steps
      aside so the rail's space and the pane read as one area (Oct 2 2026). */
   const isRentalOverviewV2 = isRentalDetailV2 && layoutSearchParams?.get("overview") === "1";
@@ -759,7 +766,7 @@ export default function DashboardLayout({
               Not on /messages either: the workspace takes the whole window,
               and its rail header already carries the way back to the portal. */}
           {v2Chrome && !isTraxWorkspace && !isMessagesWorkspace && !isRentalsCalendarV2 && (
-            isRentalDetailV2 ? (
+            isRentalDetailV2 || isCustomerDetailV2 ? (
               <div className="contents md:hidden">
                 <TopBarV2 showNavTrigger />
               </div>

@@ -1,5 +1,7 @@
 'use client';
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { ReferralsEmptyArt } from '@/components/admin/illustrations/scenes/referrals';
 import { useCallback, useEffect, useState } from 'react';
 import { Eye, Link2, Loader2, Pencil, Power, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -87,6 +89,7 @@ export function ReferralLinksTab({
       {/* Same surface as the Codes tab beside it, and as every list page. */}
       <div className="flex flex-wrap items-center gap-3">
         <FilterSearch
+        scopeLabel="Referral links"
           value={search}
           onChange={setSearch}
           placeholder="NORTHWIND, KEYWAY…"
@@ -145,7 +148,18 @@ export function ReferralLinksTab({
               {loading ? (
                 <TableRow><TableCell colSpan={6} className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" /></TableCell></TableRow>
               ) : codes.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">No referral links match.</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent"><TableCell colSpan={6} className="p-0">
+                  {search.trim() ? (
+                    <NoMatchState size="section" noun="referral links" onClear={() => setSearch('')} />
+                  ) : (
+                    <EmptyState
+                      size="section"
+                      illustration={<ReferralsEmptyArt />}
+                      headline="No referral links yet"
+                      body="Each subscribed operator gets a link to share with other operators. They are listed here."
+                    />
+                  )}
+                </TableCell></TableRow>
               ) : codes.map(c => (
                 <TableRow key={c.id}>
                   <TableCell className="min-w-[220px]">

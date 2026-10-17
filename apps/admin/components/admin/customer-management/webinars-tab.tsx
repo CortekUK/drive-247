@@ -16,6 +16,8 @@
  * register with one click (`webinar-register`, which sends the confirmation).
  */
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { WebinarsEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CalendarDays,
@@ -402,7 +404,12 @@ export function WebinarsTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         <CardContent>
           {webinars.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">No webinars yet. Schedule one to invite your operators.</p>
+            <EmptyState
+              size="section"
+              illustration={<WebinarsEmptyArt />}
+              headline="No webinars yet"
+              body="Schedule one to invite your operators. Sign-ups and attendance are tracked here."
+            />
           ) : (
             <div className="space-y-3">
               {webinars.map((w) => {

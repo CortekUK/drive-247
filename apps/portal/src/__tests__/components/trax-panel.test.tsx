@@ -14,6 +14,9 @@ vi.mock('@/components/trax/support/trax-support-context', () => ({ useTraxSuppor
 vi.mock('@/components/trax/support/TraxSupportThread', () => ({
   TraxSupportThread: (p: any) => createElement('div', { 'data-testid': 'thread', 'data-support': String(!!p.onOpenSupport) }),
 }));
+vi.mock('@/components/support/portal-support', () => ({
+  PortalSupport: (p: any) => createElement('div', { 'data-testid': 'portal-support', 'data-embedded': String(!!p.embedded), 'data-ticket': p.initialTicketId ?? '' }),
+}));
 vi.mock('@/components/trax/trax-greeting', () => ({ TraxMark: () => createElement('span', { 'data-testid': 'mark' }) }));
 vi.mock('@/components/ui-v2/tooltip', () => ({
   Tooltip: ({ children }: any) => children,
@@ -83,14 +86,25 @@ describe('the floating Trax panel', () => {
     expect(mocks.push).not.toHaveBeenCalled();
   });
 
-  it('keeps the five header controls, Support among them, and leaves for the Support section', () => {
+  it('opens Support in its own tab inside the panel', () => {
     render();
-    for (const label of ['Conversation history', 'New conversation', 'Open Support', 'Expand panel', 'Close Trax']) {
+    for (const label of ['Conversation history', 'New conversation', 'Support', 'Expand panel', 'Close Trax']) {
       expect(button(label), label).not.toBeNull();
     }
-    act(() => button('Open Support')!.click());
-    expect(mocks.push).toHaveBeenCalledWith('/support');
-    expect(mocks.trax.closeSheet).toHaveBeenCalled();
+    // Support mounts the first time its tab is shown.
+    expect(document.querySelector('[data-testid="portal-support"]')).toBeNull();
+    act(() => button('Support')!.click());
+    expect(button('Support')!.getAttribute('aria-selected')).toBe('true');
+    expect(document.querySelector('[data-testid="portal-support"]')?.getAttribute('data-embedded')).toBe('true');
+    // Nothing navigated and the panel stayed open.
+    expect(mocks.push).not.toHaveBeenCalled();
+    expect(mocks.trax.closeSheet).not.toHaveBeenCalled();
+    // The Trax-only controls step aside, and there is no full-page link.
+    expect(button('Conversation history')).toBeNull();
+    expect(button('Open the Support page')).toBeNull();
+    expect(button('Expand panel')).toBeNull();
+    // New ticket lives in the panel header, beside Close.
+    expect(button('New ticket')).not.toBeNull();
     expect(document.querySelector('[data-testid="thread"]')?.getAttribute('data-support')).toBe('true');
   });
 

@@ -84,7 +84,7 @@ export default function TraxPage() {
   const { view, setView, startNew } = useTraxSupportWorkspace();
   const router = useRouter();
   /* Human support is the portal's Support section, not a view in here. */
-  const openSupport = (target: { ticketId?: string; issueId?: string }) => router.push(supportHref(target));
+  const openSupport = (target: { ticketId?: string }) => router.push(supportHref(target));
 
   /* The conversation's first question, as its title. Empty for a fresh thread. */
   const title = support.messages.find((m) => m.role === "user")?.content ?? "";

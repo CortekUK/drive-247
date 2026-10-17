@@ -1,5 +1,7 @@
 'use client';
 
+import { usePageSearch } from '@/components/admin/page-search-slot';
+import { headerIconButtonClass } from '@/components/admin/header-buttons';
 import { useEffect, useState, type ReactNode } from 'react';
 import { RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -178,11 +180,16 @@ export function FilterToggle({
       aria-label={open ? 'Hide filters' : 'Show filters'}
       aria-pressed={open}
       onClick={() => onOpenChange(!open)}
-      className={cn(
-        'flex size-7 cursor-pointer items-center justify-center rounded-lg transition-colors',
-        standalone ? 'relative shrink-0' : 'absolute right-1.5 top-1/2 -translate-y-1/2',
-        open ? 'bg-primary text-primary-foreground' : 'bg-primary/10 text-primary hover:bg-primary/20',
-      )}
+      className={
+        // Standalone, it sits in a page header beside the other round header
+        // buttons, so it is one of them (header-buttons.tsx); filled while open.
+        standalone
+          ? headerIconButtonClass('relative')
+          : cn(
+              'absolute right-1.5 top-1/2 flex size-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-lg transition-colors',
+              open ? 'bg-primary text-primary-foreground' : 'bg-primary/10 text-primary hover:bg-primary/20',
+            )
+      }
     >
       <SlidersHorizontal className="size-4" />
       {!open && activeCount > 0 && (
@@ -221,6 +228,7 @@ export function FilterSearch({
   onOpenChange,
   activeCount = 0,
   debounceMs = 0,
+  scopeLabel,
   className,
 }: {
   value: string;
@@ -230,8 +238,22 @@ export function FilterSearch({
   onOpenChange?: (open: boolean) => void;
   activeCount?: number;
   debounceMs?: number;
+  /** What the top bar's field says it is searching: "in Rental companies". */
+  scopeLabel?: string;
   className?: string;
 }) {
+  /* Lent to the top bar (components/admin/page-search-slot.tsx), the way
+     Northwind's list pages lend theirs: one search field on screen, never two.
+     Only where there is no top bar (the standalone preview) is it drawn here. */
+  const inTopBar = usePageSearch({
+    placeholder,
+    value,
+    onChange,
+    scopeLabel,
+    debounceMs,
+    filters: onOpenChange ? { open, onOpenChange, activeCount } : undefined,
+  });
+
   const [draft, setDraft] = useState(value);
 
   // Keeps the box in step when the page resets search from outside (a Reset
@@ -248,6 +270,8 @@ export function FilterSearch({
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, debounceMs]);
+
+  if (inTopBar) return null;
 
   return (
     <div className={cn('group relative w-full sm:max-w-md', className)}>

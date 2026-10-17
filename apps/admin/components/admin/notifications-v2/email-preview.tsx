@@ -121,6 +121,7 @@ export function EmailPreview({ subject, html, fromName, fromAddress, toAddress, 
         referrerPolicy="no-referrer"
         onLoad={handleLoad}
         data-email-body=""
+        data-keep-light
         className="w-full border-0 bg-white"
         style={{ height }}
       />

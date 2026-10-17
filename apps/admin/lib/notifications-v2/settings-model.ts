@@ -448,9 +448,11 @@ export const PLATFORM_SENDER_DEFAULT_LOCAL_PART = "noreply";
  */
 export const PLATFORM_EMAIL_BRAND: EmailBrand = {
   companyName: "Drive 247",
-  logoUrl: null,
-  primaryColor: "#1a1a1a",
-  accentColor: "#C5A572",
+  // Drive247's own theme (Oct 17 2026): the white wordmark on the dark header,
+  // indigo buttons and links. Twin: notification-test-v2 PLATFORM_EMAIL_BRAND.
+  logoUrl: "https://www.drive-247.com/logo-dark.png",
+  primaryColor: "#0f172a",
+  accentColor: "#6366f1",
   contactEmail: "support@drive-247.com",
   contactPhone: null,
 };

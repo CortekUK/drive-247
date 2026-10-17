@@ -14,6 +14,7 @@
  *    can be staged before it goes out.
  */
 
+import { HEADER_PRIMARY } from '@/components/admin/header-buttons';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
@@ -312,7 +313,6 @@ export default function WelcomePackAdminPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <BookOpen className="h-6 w-6 text-primary" />
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Welcome Pack</h1>
           <p className="text-sm text-muted-foreground">
@@ -327,7 +327,7 @@ export default function WelcomePackAdminPage() {
         {/* --------------------------------------------------------- pages */}
         <TabsContent value="sections" className="mt-4 space-y-4">
           <div className="flex justify-end">
-            <Button onClick={() => setEditingSection({ is_published: true, sort_order: 0 })}>
+            <Button className={HEADER_PRIMARY} onClick={() => setEditingSection({ is_published: true, sort_order: 0 })}>
               <Plus className="mr-2 h-4 w-4" /> New page
             </Button>
           </div>

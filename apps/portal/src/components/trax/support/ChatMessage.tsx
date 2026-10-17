@@ -1,6 +1,6 @@
 'use client';
 
-import { User, Copy, Check, LifeBuoy, RotateCcw } from 'lucide-react';
+import { User, Copy, Check } from 'lucide-react';
 import { TraxIcon } from '@/components/chat/TraxIcon';
 import { useAuthStore } from '@/stores/auth-store';
 import { useState } from 'react';
@@ -24,10 +24,6 @@ interface ChatMessageProps {
   isLoading?: boolean;
   onVerifyNavigation?: (action: TraxNavigation) => Promise<boolean>;
   onCheckAgain?: () => Promise<void>;
-  /** Open the ticket the server created for this issue, in the portal's Support section. */
-  onOpenSupport?: (target: { ticketId?: string; issueId?: string }) => void;
-  /** Retry an automatic handoff that did not persist. */
-  onRetryTicket?: () => void;
 }
 
 /**
@@ -42,7 +38,7 @@ interface ChatMessageProps {
  * portal with "The portal didn't load". Evidence that cannot be read is now
  * skipped, and so is navigation that is not an array.
  */
-export function ChatMessage({ message, onConfirmAction, onRejectAction, onNavigate, onVerifyNavigation, onCheckAgain, onOpenSupport, onRetryTicket, isLoading }: ChatMessageProps) {
+export function ChatMessage({ message, onConfirmAction, onRejectAction, onNavigate, onVerifyNavigation, onCheckAgain, isLoading }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
   const { branding } = useTenantBranding();
@@ -211,30 +207,6 @@ export function ChatMessage({ message, onConfirmAction, onRejectAction, onNaviga
             {chartable((result.data as {answer?:{groups?:AnswerGroup[]}} | undefined)?.answer?.groups) && <AnswerChart groups={(result.data as unknown as {answer:{groups:AnswerGroup[]}}).answer.groups} caption={(result.data as unknown as {answer?:{definition?:string}}).answer?.definition?.split(". ")[0]} />}
           </div>
         ))}
-        {/* The reference and the destination are the server's; nothing here is composed
-            by the model, and there is no ticket interface inside TRAX. */}
-        {!isUser && message.ticket && onOpenSupport && (
-          <button
-            type="button"
-            onClick={() => onOpenSupport({ ticketId: message.ticket!.id })}
-            className={cn("inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2", SIDEBAR_HIGHLIGHT_HOVER, SIDEBAR_HIGHLIGHT_FOCUS)}
-          >
-            <LifeBuoy className="h-3.5 w-3.5 text-primary" aria-hidden />
-            Open support ticket
-            <span className="text-muted-foreground">#{message.ticket.reference}</span>
-          </button>
-        )}
-        {!isUser && message.ticketRetry && onRetryTicket && (
-          <button
-            type="button"
-            disabled={isLoading}
-            onClick={onRetryTicket}
-            className={cn("inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium focus-visible:outline focus-visible:outline-2 disabled:opacity-50", SIDEBAR_HIGHLIGHT_HOVER, SIDEBAR_HIGHLIGHT_FOCUS)}
-          >
-            <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-            Try creating the ticket again
-          </button>
-        )}
         {!isUser && message.canRecheck && onCheckAgain && <button type="button" disabled={isLoading} onClick={()=>void onCheckAgain()} className={cn("rounded-lg border border-border px-3 py-2 text-xs font-medium focus-visible:outline focus-visible:outline-2 disabled:opacity-50", SIDEBAR_HIGHLIGHT_HOVER, SIDEBAR_HIGHLIGHT_FOCUS)}>Check Again</button>}
         {!isUser && onVerifyNavigation && Array.isArray(message.navigation) && !!message.navigation.length && (
           <div className="flex flex-wrap gap-2">

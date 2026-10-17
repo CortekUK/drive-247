@@ -27,7 +27,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Ellipsis, FileText, LayoutGrid, Users, type LucideIcon } from "lucide-react";
-import { CarMark } from "@/components/ui/car-mark";
+import { NavVehicles } from "@/components/icons/nav-icons";
 import { cn } from "@/lib/utils";
 import { useMobileNavStore } from "@/stores/mobile-nav-store";
 import { MobileMoreScreen } from "@/components/shared/layout/mobile-more-screen";
@@ -42,7 +42,7 @@ interface Tab {
 const TABS: Tab[] = [
   { label: "Home", href: "/", icon: LayoutGrid },
   { label: "Rentals", href: "/rentals", icon: FileText },
-  { label: "Vehicles", href: "/vehicles", icon: CarMark },
+  { label: "Vehicles", href: "/vehicles", icon: NavVehicles as unknown as LucideIcon },
   { label: "Customers", href: "/customers", icon: Users },
 ];
 

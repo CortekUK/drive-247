@@ -19,7 +19,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ArrowLeft, FileText, Save, AlertTriangle, MapPin, Clock, Shield, Upload, CheckCircle2, XCircle, Loader2, RefreshCw, QrCode, Smartphone, Copy, Check, Plus, Minus, Receipt, ImageIcon, ExternalLink, Info, CalendarDays, StickyNote, ChevronsUpDown, Link2, Star, ShieldCheck, Lock, Banknote, CreditCard, Zap } from "lucide-react";
-import { GenerateInviteDialog } from "@/components/customers/generate-invite-dialog";
+import { InviteLinkDialogV2 } from "@/components/customers-v2/invite-link-dialog-v2";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -3119,7 +3119,7 @@ export const RentalCreateV2 = () => {
             form's combobox does, so an operator is never sent back to the form
             just to add someone.
           */}
-          <GenerateInviteDialog
+          <InviteLinkDialogV2
             open={inviteDialogOpen}
             onOpenChange={setInviteDialogOpen}
           />
@@ -6625,7 +6625,7 @@ export const RentalCreateV2 = () => {
       </Dialog>
 
       {/* Generate Invite Link Dialog */}
-      <GenerateInviteDialog
+      <InviteLinkDialogV2
         open={inviteDialogOpen}
         onOpenChange={setInviteDialogOpen}
       />

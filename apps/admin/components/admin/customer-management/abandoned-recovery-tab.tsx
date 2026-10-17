@@ -15,6 +15,8 @@
  * and a box to try the FAQ guardrail against any tenant.
  */
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { PendingBookingsEmptyArt } from '@/components/admin/illustrations/scenes/pending-bookings';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Bot,
@@ -556,9 +558,16 @@ export function AbandonedRecoveryTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         <CardContent>
           {filtered.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              {sessions.length === 0 ? 'No booking attempts tracked in this period yet.' : 'Nothing matches these filters.'}
-            </p>
+            sessions.length === 0 ? (
+              <EmptyState
+                size="section"
+                illustration={<PendingBookingsEmptyArt />}
+                headline="No abandoned bookings in this period"
+                body="When a renter starts a booking on an operator's site and leaves before paying, it shows up here."
+              />
+            ) : (
+              <NoMatchState size="section" noun="booking attempts" />
+            )
           ) : (
             <Table>
               <TableHeader>

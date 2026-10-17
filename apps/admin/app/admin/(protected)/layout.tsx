@@ -1,5 +1,6 @@
 'use client';
 
+import { PageSearchProvider } from '@/components/admin/page-search-slot';
 import { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useRouter, usePathname } from 'next/navigation';
@@ -114,6 +115,8 @@ export default function ProtectedLayout({
     <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <AdminNavProvider>
+      {/* A list page lends its search to the top bar (page-search-slot.tsx). */}
+      <PageSearchProvider>
       {/* A page's own sections render in the sidebar rather than as tabs
           across the top; this is what carries them there. */}
       <SidebarSectionsProvider>
@@ -125,7 +128,9 @@ export default function ProtectedLayout({
         {/* On Support a phone keeps the navigation sheet behind the top bar's menu. */}
         {isSupport ? <><AdminSupportRail /><Sidebar desktop={false} /></> : <Sidebar />}
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <TopBar />
+          {/* Support is its own workspace: no top bar on a desktop (the rail has
+              Back to dashboard). A phone keeps it for the navigation menu. */}
+          {isSupport ? <div className="md:hidden"><TopBar /></div> : <TopBar />}
           {/* `data-scrollport` is what the house scrollbar rule in globals.css
               hooks onto. The top bar already gives the page its breathing room
               on a desktop, so the page starts close under it, as in Northwind. */}
@@ -133,7 +138,7 @@ export default function ProtectedLayout({
             data-scrollport
             className={isSupport ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'min-h-0 flex-1 overflow-y-auto overflow-x-hidden'}
           >
-            <div className={isSupport ? 'flex min-h-0 flex-1 flex-col p-3 pt-0 sm:p-4 sm:pt-0' : 'p-4 pt-1 sm:p-6 sm:pt-2'}>
+            <div className={isSupport ? 'flex min-h-0 flex-1 flex-col p-3 pt-0 sm:p-4 sm:pt-0 md:pt-4' : 'p-4 pt-1 sm:p-6 sm:pt-2'}>
               {children}
             </div>
           </main>
@@ -141,6 +146,7 @@ export default function ProtectedLayout({
       </SidebarProvider>
       </SupportRailProvider>
       </SidebarSectionsProvider>
+      </PageSearchProvider>
       </AdminNavProvider>
     </TooltipProvider>
     </QueryClientProvider>

@@ -365,10 +365,10 @@ function ThinkingIndicator({ accentColor }: { accentColor: string }) {
 function TraxSupportDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (open: boolean) => void }) {
   /* One conversation per app: the shared TRAX conversation (TraxSupportProvider),
      never a second instance of the hook. */
-  const { messages, isLoading, error, sendMessage, confirmAction, rejectAction, clearChat, navigate, capabilities, checkAgain, supportRequest, requestTicket, recentConversations, contextKey } = useTraxSupportChat();
+  const { messages, isLoading, error, sendMessage, confirmAction, rejectAction, clearChat, navigate, capabilities, checkAgain, supportRequest, recentConversations, contextKey } = useTraxSupportChat();
   const router = useRouter();
   /* Human support is the portal's Support section; this dialog closes behind it. */
-  const openSupport = (target: { ticketId?: string; issueId?: string }) => { router.push(supportHref(target)); setIsOpen(false); };
+  const openSupport = (target: { ticketId?: string }) => { router.push(supportHref(target)); setIsOpen(false); };
   const { branding } = useTenantBranding();
   const { appUser } = useAuth();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -488,8 +488,6 @@ function TraxSupportDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsO
                   onNavigate={() => setIsOpen(false)}
                   onVerifyNavigation={navigate}
                   onCheckAgain={message.id===messages.at(-1)?.id?checkAgain:undefined}
-                  onOpenSupport={openSupport}
-                  onRetryTicket={requestTicket && (() => void requestTicket())}
                   isLoading={isLoading}
                 />
               ))

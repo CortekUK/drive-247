@@ -20,6 +20,9 @@
  * the edge function at approval time (a reviewer can override one deliberately).
  */
 
+import { FilterSearch } from '@/components/admin/filter-primitives';
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { MilestonesEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
@@ -29,7 +32,6 @@ import {
   Loader2,
   RefreshCw,
   RotateCcw,
-  Search,
   Settings2,
   Trash2,
   Video,
@@ -387,15 +389,7 @@ export function CreatorRewardsTab({ canEdit }: { canEdit: boolean }) {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Submissions</CardTitle>
           <div className="flex flex-wrap items-center gap-2 pt-2">
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search operator or link"
-                className="h-9 pl-8"
-              />
-            </div>
+            <FilterSearch scopeLabel="Creator rewards" value={search} onChange={setSearch} placeholder="Search operator or link" />
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as Status | 'all')}>
               <SelectTrigger className="h-9 w-[160px]">
                 <SelectValue />
@@ -411,9 +405,16 @@ export function CreatorRewardsTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         <CardContent>
           {shown.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">
-              {rows.length === 0 ? 'No submissions yet.' : 'Nothing matches.'}
-            </p>
+            rows.length === 0 ? (
+              <EmptyState
+                size="section"
+                illustration={<MilestonesEmptyArt />}
+                headline="No submissions yet"
+                body="Operators who post about Drive247 send their link from the portal. Each one waits here for review."
+              />
+            ) : (
+              <NoMatchState size="section" noun="submissions" />
+            )
           ) : (
             <div className="overflow-x-auto">
               <Table>

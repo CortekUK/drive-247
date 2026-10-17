@@ -4,6 +4,7 @@ import NextTopLoader from 'nextjs-toploader';
 import './globals.css';
 import { Toaster } from '@/components/ui/sonner';
 import { ServiceWorkerRegistrar } from '@/components/push/service-worker-registrar';
+import { THEME_SCRIPT } from '@/lib/theme-script';
 
 /**
  * The v2 design's typeface, matching the portal canary. Self-hosted by
@@ -48,6 +49,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={manrope.variable} suppressHydrationWarning>
+      <head>
+        {/* Dark mode before first paint — see lib/theme.ts. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body suppressHydrationWarning>
         {/* Indigo, matching --primary (248 68% 51%) — the loader sits above the
             page so it cannot read a CSS variable from it. */}

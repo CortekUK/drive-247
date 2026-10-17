@@ -1,38 +1,50 @@
 "use client";
 
 /**
- * The invite registration flow, new booking design.
+ * The invite registration page, new booking design.
  *
- * Layout: a split card on desktop — a deep-forest welcome panel (who invited
- * you, what happens next) beside a stepped form — that collapses to a single
- * column with a compact header on a phone. Three steps:
+ * Oct 7 2026 — a full page of the operator's site (see page.tsx for the
+ * navbar and footer around it), top to bottom:
  *
- *   1. Your details   name, email, phone, and "I drive for Uber/Lyft…"
- *   2. Verify          optional ID check by QR on the phone, or skip
- *   3. Done
+ *   hero            "You're invited by …", the headline, three reasons, the
+ *                   site's own hero car with a small "your invite" card
+ *   sign-up card    a three-step tracker across the top, then the step:
+ *                     1. Your details   name, email, phone, gig driver
+ *                     2. Verify          optional ID check by QR, or skip
+ *                     3. Done
+ *   why an account  three cards
+ *   quick answers   three questions people ask before starting
  *
- * Behaviour is the original page's, call for call (see page.tsx). The only
- * thing it does not keep is a toast for every message: errors sit next to what
- * caused them, which is how the rest of this design reports them.
+ * Behaviour is the original page's, call for call. The only thing it does not
+ * keep is a toast for every message: errors sit next to what caused them, and
+ * the identity poll is scoped to the tenant as well as the session.
+ *
+ * Motion is the app standard: 200ms, ease-out, opacity + a 12px lift, the
+ * hero's pieces a beat apart; the tracker's bar fills by transform.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import {
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
   BadgeCheck,
   Briefcase,
+  CalendarCheck,
   Check,
   CheckCircle2,
   Clock,
   Copy,
   ImagePlus,
+  LayoutDashboard,
   Loader2,
   ScanFace,
   ShieldCheck,
   Smartphone,
   X,
   XCircle,
+  Zap,
 } from "lucide-react-nw";
 import { toast } from "sonner-nw";
 
@@ -91,9 +103,20 @@ function fmtExpiry(iso: string | undefined) {
   return d.toLocaleDateString(undefined, { day: "numeric", month: "long" });
 }
 
-/* ──────────────────────────────── shell ─────────────────────────────────── */
+/* ──────────────────────────────── page ──────────────────────────────────── */
 
-export function InviteRegistration({ token }: { token: string }) {
+export function InviteRegistration({
+  token,
+  companyFallback,
+  heroImage,
+  heroImageAlt,
+}: {
+  token: string;
+  /** The site's own name, from the server — shown before the invite resolves. */
+  companyFallback?: string | null;
+  heroImage: string;
+  heroImageAlt: string;
+}) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [invalidReason, setInvalidReason] = useState("");
   const [tenant, setTenant] = useState<TenantInfo | null>(null);
@@ -113,6 +136,7 @@ export function InviteRegistration({ token }: { token: string }) {
   const [verified, setVerified] = useState<null | "GREEN" | "RED" | "REVIEW">(null);
   const [verifiedSessionId, setVerifiedSessionId] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const errors = useMemo(() => validate(values), [values]);
   const docLabel = DOC_LABEL[tenant?.acceptedVerificationDocument ?? "drivers_license"];
@@ -185,12 +209,14 @@ export function InviteRegistration({ token }: { token: string }) {
   }, [session]);
 
   const check = useCallback(async () => {
-    if (!polling || !session) return;
+    if (!polling || !session || !tenant) return;
     try {
+      // Scoped to this tenant as well as the session (V2_PLAN §5).
       const { data, error } = await supabase
         .from("identity_verifications")
         .select("status, review_status, review_result")
         .eq("session_id", session.sessionId)
+        .eq("tenant_id", tenant.tenantId)
         .single();
       if (error || !data) return;
       const row = data as { status: string; review_result: string | null };
@@ -202,7 +228,7 @@ export function InviteRegistration({ token }: { token: string }) {
     } catch {
       /* keep polling */
     }
-  }, [polling, session]);
+  }, [polling, session, tenant]);
 
   useEffect(() => {
     if (!polling || !session) return;
@@ -257,195 +283,348 @@ export function InviteRegistration({ token }: { token: string }) {
     setStep(1);
   };
 
+  const scrollToCard = () => cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+
   /* ── render ──────────────────────────────────────────────────────────── */
 
-  if (phase === "loading") {
-    return (
-      <Center>
-        <Loader2 className="size-7 animate-spin text-brand-forest" aria-hidden />
-        <p className="mt-3 text-sm text-brand-text-soft">Opening your invite…</p>
-      </Center>
-    );
-  }
-
-  if (phase === "invalid") {
-    return (
-      <Center>
-        <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-danger-subtle">
-          <XCircle className="size-7 text-danger" aria-hidden />
-        </div>
-        <h1 className="mt-5 text-2xl font-medium tracking-[-0.02em] text-brand-text">This invite can't be used</h1>
-        <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-brand-text-soft">
-          {invalidReason} Ask the rental company to send you a new link.
-        </p>
-      </Center>
-    );
-  }
-
-  const company = tenant?.tenantName ?? "your rental company";
+  const company = tenant?.tenantName ?? companyFallback ?? "your rental company";
+  const expires = fmtExpiry(tenant?.expiresAt);
+  const at = phase === "done" ? 2 : step;
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-brand-cream px-4 py-8 sm:px-6 sm:py-14">
-      <div className="grid w-full max-w-[980px] overflow-hidden rounded-[22px] border border-brand-border-soft bg-white md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <WelcomePanel tenant={tenant} company={company} step={phase === "done" ? 2 : step} docLabel={docLabel} />
+    <>
+      <Hero
+        company={company}
+        expires={expires}
+        docLabel={docLabel}
+        heroImage={heroImage}
+        heroImageAlt={heroImageAlt}
+        invalid={phase === "invalid"}
+        onStart={scrollToCard}
+      />
 
-        <div className="flex min-h-[560px] flex-col px-5 py-7 sm:px-10 sm:py-10">
-          {phase === "done" ? (
-            <Done company={company} verified={verified} />
-          ) : phase === "submitting" ? (
-            <div className="m-auto flex flex-col items-center text-center">
-              <Loader2 className="size-8 animate-spin text-brand-forest" aria-hidden />
-              <p className="mt-4 text-base font-medium text-brand-text">Setting up your account…</p>
-              <p className="mt-1 text-sm text-brand-text-soft">This only takes a moment.</p>
+      {/* The sign-up card. */}
+      <section className="bg-brand-cream pb-16 sm:pb-24">
+        <div className="container-page">
+          <div
+            ref={cardRef}
+            id="register"
+            className="mx-auto w-full max-w-[760px] scroll-mt-24 overflow-hidden rounded-[28px] border border-brand-border-soft bg-white"
+          >
+            {phase === "loading" ? (
+              <CardState>
+                <Loader2 className="size-7 animate-spin text-brand-forest" aria-hidden />
+                <p className="mt-3 text-sm text-brand-text-soft">Opening your invite…</p>
+              </CardState>
+            ) : phase === "invalid" ? (
+              <CardState>
+                <span className="flex size-14 items-center justify-center rounded-full bg-danger-subtle">
+                  <XCircle className="size-7 text-danger" aria-hidden />
+                </span>
+                <h2 className="mt-5 text-2xl font-medium tracking-[-0.02em] text-brand-text">This invite can't be used</h2>
+                <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-brand-text-soft">
+                  {invalidReason} Ask {company} to send you a new link.
+                </p>
+                <Button asChild variant="brand-outline" className="mt-7 h-11 rounded-full px-6">
+                  <a href="/">Visit {company}</a>
+                </Button>
+              </CardState>
+            ) : (
+              <>
+                <Tracker at={at} />
+                <div className="px-5 pb-7 pt-6 sm:px-10 sm:pb-10 sm:pt-8">
+                  {phase === "done" ? (
+                    <div className="flex min-h-[420px] items-center justify-center">
+                      <Done company={company} verified={verified} />
+                    </div>
+                  ) : phase === "submitting" ? (
+                    <div className="flex min-h-[420px] flex-col items-center justify-center text-center">
+                      <Loader2 className="size-8 animate-spin text-brand-forest" aria-hidden />
+                      <p className="mt-4 text-base font-medium text-brand-text">Setting up your account…</p>
+                      <p className="mt-1 text-sm text-brand-text-soft">This only takes a moment.</p>
+                    </div>
+                  ) : (
+                    <div
+                      key={step}
+                      className="flex min-h-[420px] flex-col animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none"
+                    >
+                      {step === 0 ? (
+                        <DetailsStep
+                          values={values}
+                          errors={errors}
+                          touched={touched}
+                          onChange={(k, v) => setValues((p) => ({ ...p, [k]: v }))}
+                          onBlur={(k) => setTouched((t) => ({ ...t, [k]: true }))}
+                          isGig={isGig}
+                          setIsGig={(v) => {
+                            setIsGig(v);
+                            if (!v) setGigFiles([]);
+                          }}
+                          gigFiles={gigFiles}
+                          setGigFiles={setGigFiles}
+                          onNext={goVerify}
+                        />
+                      ) : (
+                        <VerifyStep
+                          docLabel={docLabel}
+                          session={session}
+                          creating={creating}
+                          remaining={remaining}
+                          polling={polling}
+                          verified={verified}
+                          onStart={startVerification}
+                          onCancel={() => {
+                            setPolling(false);
+                            setSession(null);
+                          }}
+                          onBack={() => setStep(0)}
+                          onSubmit={submit}
+                          submitError={submitError}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+                <p className="flex items-center justify-center gap-2 border-t border-brand-border-soft px-6 py-4 text-center text-xs text-brand-text-subtle">
+                  <ShieldCheck className="size-3.5 shrink-0 text-brand-forest" aria-hidden />
+                  Your details go only to {company}.{expires ? ` This invite is open until ${expires}.` : ""}
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <Benefits company={company} docLabel={docLabel} />
+      <QuickAnswers company={company} docLabel={docLabel} />
+    </>
+  );
+}
+
+/* ────────────────────────────── sections ────────────────────────────────── */
+
+/** Staggered entrance: the motion standard's fade + 12px lift, a beat apart. */
+const RISE = "animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out [animation-fill-mode:both] motion-reduce:animate-none";
+
+function Hero({
+  company,
+  expires,
+  docLabel,
+  heroImage,
+  heroImageAlt,
+  invalid,
+  onStart,
+}: {
+  company: string;
+  expires: string | null;
+  docLabel: string;
+  heroImage: string;
+  heroImageAlt: string;
+  invalid: boolean;
+  onStart: () => void;
+}) {
+  const points = [
+    { icon: Zap, title: "Book in a few taps", body: "Your details are filled in every time." },
+    { icon: ScanFace, title: "Verify once", body: `Your ${docLabel} and a selfie, then never again.` },
+    { icon: ShieldCheck, title: "Kept private", body: `Shared with ${company} and no one else.` },
+  ];
+  return (
+    <section className="relative overflow-hidden bg-brand-cream">
+      <div className="container-page grid grid-cols-1 items-center gap-x-10 gap-y-8 pb-12 pt-8 sm:pb-16 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)] lg:pb-20 lg:pt-16">
+        <div className="flex flex-col">
+          <span className={cn("inline-flex w-fit items-center gap-2 rounded-full border border-brand-border-soft bg-brand-card px-3.5 py-1.5 text-xs font-medium text-brand-text", RISE)}>
+            <span className="size-1.5 rounded-full bg-brand-amber" aria-hidden />
+            {invalid ? "Invite link" : `You're invited by ${company}`}
+          </span>
+
+          <h1 className={cn("mt-5 text-4xl leading-[1.05] tracking-tight text-brand-text sm:text-5xl lg:text-6xl", RISE, "[animation-delay:60ms]")}>
+            Your {company} account, ready in two minutes.
+          </h1>
+          <p className={cn("mt-5 max-w-[480px] text-base leading-relaxed text-brand-text-soft", RISE, "[animation-delay:120ms]")}>
+            Set it up once and every booking after this one is quicker — no forms at the counter, no waiting on paperwork.
+          </p>
+
+          {!invalid && (
+            <div className={cn("mt-7 flex flex-wrap items-center gap-3", RISE, "[animation-delay:180ms]")}>
+              <Button type="button" variant="brand" className="h-12 rounded-full px-7 text-[15px] font-medium" onClick={onStart}>
+                Get started
+                <ArrowDown className="size-4" aria-hidden />
+              </Button>
+              {expires && (
+                <span className="inline-flex items-center gap-1.5 text-sm text-brand-text-subtle">
+                  <Clock className="size-4" aria-hidden />
+                  Open until {expires}
+                </span>
+              )}
             </div>
-          ) : (
-            <>
-              <StepMeter step={step} />
-              <div key={step} className="flex flex-1 flex-col animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
-                {step === 0 ? (
-                  <DetailsStep
-                    values={values}
-                    errors={errors}
-                    touched={touched}
-                    onChange={(k, v) => setValues((p) => ({ ...p, [k]: v }))}
-                    onBlur={(k) => setTouched((t) => ({ ...t, [k]: true }))}
-                    isGig={isGig}
-                    setIsGig={(v) => {
-                      setIsGig(v);
-                      if (!v) setGigFiles([]);
-                    }}
-                    gigFiles={gigFiles}
-                    setGigFiles={setGigFiles}
-                    onNext={goVerify}
-                  />
-                ) : (
-                  <VerifyStep
-                    docLabel={docLabel}
-                    session={session}
-                    creating={creating}
-                    remaining={remaining}
-                    polling={polling}
-                    verified={verified}
-                    onStart={startVerification}
-                    onCancel={() => {
-                      setPolling(false);
-                      setSession(null);
-                    }}
-                    onBack={() => setStep(0)}
-                    onSubmit={submit}
-                    submitError={submitError}
-                  />
-                )}
-              </div>
-            </>
+          )}
+
+          <ul className={cn("mt-10 grid gap-5 sm:grid-cols-3 lg:mt-14", RISE, "[animation-delay:240ms]")}>
+            {points.map((p) => {
+              const Icon = p.icon;
+              return (
+                <li key={p.title} className="flex flex-col gap-2">
+                  <span className="flex size-9 items-center justify-center rounded-xl bg-brand-forest text-white">
+                    <Icon className="size-[18px]" aria-hidden />
+                  </span>
+                  <span className="text-sm font-medium text-brand-text">{p.title}</span>
+                  <span className="text-xs leading-relaxed text-brand-text-soft">{p.body}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        <div className={cn("relative min-h-[220px] sm:min-h-[320px] lg:min-h-[520px]", RISE, "[animation-delay:120ms]")}>
+          <div className="absolute inset-x-[-4%] inset-y-0 flex items-center lg:inset-x-[-12%]">
+            <Image
+              src={heroImage}
+              alt={heroImageAlt}
+              width={2600}
+              height={1207}
+              priority
+              sizes="(min-width: 1024px) 55vw, 100vw"
+              className="h-auto w-full drop-shadow-[0px_25px_30px_rgba(0,0,0,0.12)]"
+            />
+          </div>
+          {!invalid && (
+            <div className="absolute bottom-2 right-0 z-10 hidden w-[240px] rounded-2xl border border-brand-border-soft bg-brand-card p-4 sm:block lg:bottom-6">
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-brand-text-subtle">Your invite</p>
+              <p className="mt-1.5 text-sm font-medium text-brand-text">From {company}</p>
+              <ol className="mt-3 space-y-2">
+                {["Your details", "Verify your ID", "You're set"].map((t, i) => (
+                  <li key={t} className="flex items-center gap-2.5 text-xs text-brand-text-soft">
+                    <span className="flex size-5 items-center justify-center rounded-full bg-brand-stone text-[10px] font-semibold text-brand-text">{i + 1}</span>
+                    {t}
+                  </li>
+                ))}
+              </ol>
+            </div>
           )}
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
-/* ────────────────────────────── pieces ──────────────────────────────────── */
+function CardState({ children }: { children: React.ReactNode }) {
+  return <div className="flex min-h-[520px] flex-col items-center justify-center px-6 py-12 text-center">{children}</div>;
+}
 
-function Center({ children }: { children: React.ReactNode }) {
+/** The three steps across the top of the card. The bar fills by transform. */
+function Tracker({ at }: { at: number }) {
+  const steps = ["Your details", "Verify your ID", "All set"];
   return (
-    <div className="flex min-h-svh items-center justify-center bg-brand-cream px-6">
-      <div className="flex flex-col items-center text-center">{children}</div>
-    </div>
+    <ol className="grid grid-cols-3 border-b border-brand-border-soft" aria-label="Sign-up progress">
+      {steps.map((title, i) => {
+        const done = i < at;
+        const now = i === at;
+        return (
+          <li key={title} className="relative flex items-center justify-center gap-2.5 px-3 py-4 sm:justify-start sm:px-6" aria-current={now ? "step" : undefined}>
+            <span
+              className={cn(
+                "flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold transition-colors duration-200",
+                done ? "bg-brand-forest text-white" : now ? "bg-brand-amber text-brand-text" : "bg-brand-stone text-brand-text-subtle",
+              )}
+            >
+              {done ? <Check className="size-3.5" strokeWidth={2.5} aria-hidden /> : i + 1}
+            </span>
+            <span className={cn("hidden text-sm sm:inline", now ? "font-medium text-brand-text" : done ? "text-brand-text" : "text-brand-text-subtle")}>
+              {title}
+            </span>
+            <span aria-hidden className="absolute inset-x-0 bottom-0 h-0.5 overflow-hidden">
+              <span
+                className={cn(
+                  "block h-full origin-left bg-brand-forest transition-transform duration-500 ease-out motion-reduce:transition-none",
+                  done || now ? "scale-x-100" : "scale-x-0",
+                )}
+              />
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
-function WelcomePanel({
-  tenant,
-  company,
-  step,
-  docLabel,
-}: {
-  tenant: TenantInfo | null;
-  company: string;
-  step: number;
-  docLabel: string;
-}) {
-  const expires = fmtExpiry(tenant?.expiresAt);
-  const steps = [
-    { title: "Your details", body: "Name, email and phone — nothing else." },
-    { title: "Verify your ID", body: `Optional: photograph your ${docLabel} and a selfie on your phone.` },
-    { title: "You're all set", body: "Next time you book, everything's already filled in." },
+function Benefits({ company, docLabel }: { company: string; docLabel: string }) {
+  const items = [
+    {
+      icon: CalendarCheck,
+      title: "Faster bookings",
+      body: `Pick a car and dates, and the rest is already filled in. Your next ${company} booking takes a minute.`,
+    },
+    {
+      icon: BadgeCheck,
+      title: "Verified ahead of time",
+      body: `Check your ${docLabel} from your phone now, and pickup is just keys in hand — no queue, no paperwork.`,
+    },
+    {
+      icon: LayoutDashboard,
+      title: "Everything in one place",
+      body: "Your bookings, receipts, agreements and messages with the team, in your own account.",
+    },
   ];
   return (
-    <aside className="relative overflow-hidden bg-brand-forest-deep px-6 py-7 text-white sm:px-10 sm:py-10">
-      {/* soft light in the corner */}
-      <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full bg-white/[0.06] blur-2xl" />
-      <div aria-hidden className="pointer-events-none absolute -bottom-32 -left-16 size-80 rounded-full bg-brand-amber/[0.08] blur-3xl" />
-
-      <div className="relative flex h-full flex-col">
-        <div className="flex items-center gap-3">
-          {tenant?.tenantLogo ? (
-            <span className="inline-flex rounded-xl bg-white px-2.5 py-1.5">
-              <img src={tenant.tenantLogo} alt="" className="h-7 w-auto max-w-[140px] object-contain" />
-            </span>
-          ) : null}
-          <span className="text-sm font-medium text-white/85">{company}</span>
+    <section className="bg-white">
+      <div className="container-page py-14 sm:py-20 lg:py-24">
+        <div className="max-w-[560px]">
+          <p className="text-xs font-medium uppercase tracking-[0.14em] text-brand-gold">Why set up an account</p>
+          <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight text-brand-text sm:text-4xl">
+            Less admin, more driving.
+          </h2>
         </div>
-
-        <div className="mt-8 md:mt-14">
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-brand-amber">You're invited</p>
-          <h1 className="mt-3 text-[28px] font-medium leading-[1.15] tracking-[-0.02em] sm:text-[34px]">
-            Rent with {company} in a couple of minutes.
-          </h1>
-          <p className="mt-3 max-w-sm text-sm leading-relaxed text-white/70">
-            Set up your account once, and every booking after this one is quicker.
-          </p>
-        </div>
-
-        <ol className="mt-8 hidden space-y-5 md:block">
-          {steps.map((s, i) => {
-            const done = i < step;
-            const now = i === step;
+        <div className="mt-10 grid gap-4 sm:grid-cols-3">
+          {items.map((it) => {
+            const Icon = it.icon;
             return (
-              <li key={s.title} className="flex gap-3.5">
-                <span
-                  className={cn(
-                    "flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors duration-200",
-                    done ? "bg-brand-amber text-brand-text" : now ? "bg-white text-brand-forest-deep" : "bg-white/10 text-white/60",
-                  )}
-                >
-                  {done ? <Check className="size-3.5" strokeWidth={2.5} aria-hidden /> : i + 1}
+              <div key={it.title} className="flex flex-col rounded-[22px] border border-brand-border-soft bg-brand-card p-6">
+                <span className="flex size-11 items-center justify-center rounded-2xl bg-brand-stone text-brand-forest">
+                  <Icon className="size-5" aria-hidden />
                 </span>
-                <span>
-                  <span className={cn("block text-sm font-medium", now || done ? "text-white" : "text-white/60")}>{s.title}</span>
-                  <span className="mt-0.5 block text-xs leading-relaxed text-white/55">{s.body}</span>
-                </span>
-              </li>
+                <h3 className="mt-5 text-lg font-medium text-brand-text">{it.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-brand-text-soft">{it.body}</p>
+              </div>
             );
           })}
-        </ol>
-
-        <div className="mt-auto hidden items-center gap-2 pt-10 text-xs text-white/55 md:flex">
-          <ShieldCheck className="size-4 text-brand-amber" aria-hidden />
-          <span>
-            Your details go only to {company}.{expires ? ` This invite is open until ${expires}.` : ""}
-          </span>
         </div>
       </div>
-    </aside>
+    </section>
   );
 }
 
-function StepMeter({ step }: { step: Step }) {
+function QuickAnswers({ company, docLabel }: { company: string; docLabel: string }) {
+  const qa = [
+    {
+      q: "Do I have to verify my ID now?",
+      a: `No. It's optional here — you can skip it and ${company} will check your ${docLabel} at pickup instead. Doing it now just saves time on the day.`,
+    },
+    {
+      q: "Who sees my details?",
+      a: `Only ${company}. They use them to confirm your bookings and to reach you about your rental.`,
+    },
+    {
+      q: "My link has expired. What now?",
+      a: `Ask ${company} to send you a new one. Nothing you entered on an expired link is saved.`,
+    },
+  ];
   return (
-    <div className="mb-7 flex items-center gap-3">
-      <span className="text-xs font-medium text-brand-text-subtle">Step {step + 1} of 2</span>
-      <div className="flex flex-1 gap-1.5">
-        {[0, 1].map((i) => (
-          <span key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-brand-stone">
-            <span
-              className={cn("block h-full rounded-full bg-brand-forest transition-[width] duration-500 ease-out", i <= step ? "w-full" : "w-0")}
-            />
-          </span>
-        ))}
+    <section className="bg-brand-cream">
+      <div className="container-page grid gap-10 py-14 sm:py-20 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:gap-16 lg:py-24">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[0.14em] text-brand-gold">Quick answers</p>
+          <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight text-brand-text sm:text-4xl">Before you start</h2>
+        </div>
+        <dl className="divide-y divide-brand-border-soft border-y border-brand-border-soft">
+          {qa.map((x) => (
+            <div key={x.q} className="py-5">
+              <dt className="text-base font-medium text-brand-text">{x.q}</dt>
+              <dd className="mt-1.5 text-sm leading-relaxed text-brand-text-soft">{x.a}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
-    </div>
+    </section>
   );
 }
 

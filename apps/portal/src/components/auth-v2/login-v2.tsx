@@ -41,6 +41,7 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useRateLimiting } from "@/hooks/use-rate-limiting";
 import { supabase } from "@/integrations/supabase/client";
+import { ForgotPasswordDialogV2 } from "./forgot-password-dialog-v2";
 import { HeroTypedHeadline } from "@/components/shared/layout/hero-typed-headline";
 import {
   brandInk,
@@ -144,7 +145,7 @@ function LoginV2Content() {
   const reportsHidden = useIsAreaHidden("reports");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [resetEmail, setResetEmail] = useState("");
+  const [forgotOpen, setForgotOpen] = useState(false);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -441,56 +442,15 @@ function LoginV2Content() {
     }
   };
 
-  const handleForgotPassword = async () => {
-    const email = form.getValues("email");
-    if (!email) {
-      setError("Please enter your email address first.");
-      return;
-    }
-
-    const emailValidation = loginSchema.shape.email.safeParse(email);
-    if (!emailValidation.success) {
-      setError("Please enter a valid email address.");
-      return;
-    }
-
-    // Send an email-verified recovery link instead of letting the visitor type a
-    // new password on the spot.
-    //
-    // This used to jump straight to a "choose a new password" step and POST it to
-    // emergency-password-reset, which performed no authorization at all — so
-    // anyone who knew a staff member's email address could set their password and
-    // take the account. Proving control of the mailbox is the whole point of a
-    // password reset.
-    setResetEmail(email);
+  // Forgot password is a six-digit code in a dialog (forgot-password-dialog-v2),
+  // checked by Supabase itself. It used to POST a new password to
+  // emergency-password-reset, which checked nothing — anyone who knew a staff
+  // address could take the account. Proving control of the mailbox is the
+  // whole point of a reset, and the code does exactly that.
+  const handleForgotPassword = () => {
     setError("");
-    setIsSubmitting(true);
-    try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-      if (resetError) throw resetError;
-      // Always report success: revealing whether an address exists lets anyone
-      // enumerate staff accounts.
-      toast({
-        title: "Check your email",
-        description:
-          "If that address belongs to an account, we've sent a link to reset your password.",
-      });
-    } catch {
-      toast({
-        title: "Check your email",
-        description:
-          "If that address belongs to an account, we've sent a link to reset your password.",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
+    setForgotOpen(true);
   };
-
-  // handleSetNewPassword was removed with the "type a new password here" step.
-  // Setting a password now happens on /reset-password, which is only reachable
-  // with a valid recovery session from the emailed link.
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background lg:grid lg:grid-cols-2">
@@ -759,6 +719,11 @@ function LoginV2Content() {
                   >
                     Forgot password?
                   </Button>
+                  <ForgotPasswordDialogV2
+                    open={forgotOpen}
+                    onOpenChange={setForgotOpen}
+                    initialEmail={form.getValues("email") ?? ""}
+                  />
                 </div>
 
                 {requiresPolicyAcceptance && (

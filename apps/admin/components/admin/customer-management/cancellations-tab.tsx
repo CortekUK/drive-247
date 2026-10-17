@@ -14,6 +14,7 @@
  * overrides every inferred one.
  */
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -297,7 +298,7 @@ export function CancellationsTab({ canEdit }: { canEdit: boolean }) {
         </CardContent>
       </Card>
 
-      {/* Stat cards, in the Platform Rentals idiom. */}
+      {/* Stat cards, in the list-page idiom. */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Left"
@@ -438,9 +439,9 @@ export function CancellationsTab({ canEdit }: { canEdit: boolean }) {
                   </TableRow>
                 ))
               ) : tableRows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
-                    No companies match.
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={7} className="p-0">
+                    <NoMatchState size="section" noun="companies" />
                   </TableCell>
                 </TableRow>
               ) : (

@@ -40,7 +40,8 @@ import { useForm, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ImagePlus, Plus, Star, X } from "lucide-react";
+import { ArrowRight, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -57,8 +58,9 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import { useTraxPrice } from "@/hooks/use-trax-price";
 import { TraxIcon } from "@/components/chat/TraxIcon";
-import { Cell, CONTROL, Segmented, StepFooter, ToggleTile } from "@/components/shared/form-grid-v2";
+import { Cell, CONTROL, FORM_DIALOG_WASH, Segmented, StepFooter, ToggleTile, TWINKLE_CSS } from "@/components/shared/form-grid-v2";
 import {
+  AddVehicleAddedArt,
   AddVehicleBookingArt,
   AddVehicleCarArt,
   AddVehicleKeysArt,
@@ -71,7 +73,10 @@ import {
   AddVehicleRatesArt,
   AddVehicleUpkeepArt,
 } from "@/components/illustrations-v2/scenes/add-vehicle";
+import { VehiclePhotosPickerV2 } from "@/components/vehicles-v2/vehicle-photos-picker-v2";
 import { BonzahDateField } from "@/app/(dashboard)/integrations/_panels/bonzah-date-field";
+import { DevAutofillButton } from "@/components/dev/dev-autofill-button";
+import { randomVehicle, sampleCarPhotos, samplePhoto } from "@/lib/dev-autofill";
 
 type Values = AddVehicleDialogFormValues;
 
@@ -232,6 +237,9 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
   const setOpen = (o: boolean) => (onOpenChange ? onOpenChange(o) : setIsOpen(o));
 
   const [step, setStep] = useState(0);
+  // After a save: the "it's in your fleet" screen, in the same frame.
+  const [added, setAdded] = useState<{ id: string; name: string; reg: string } | null>(null);
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [photos, setPhotos] = useState<{ file: File; url: string }[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -334,6 +342,26 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
     setPhotos([]);
     setPhotoError(null);
     if (fileRef.current) fileRef.current.value = "";
+  };
+
+  /** Developer autofill (Northwind only — see lib/dev-autofill.ts): every
+   *  field, and a fresh set of 3–5 demo car photos in place of whatever is there. */
+  const autofill = async () => {
+    const { values, hex } = randomVehicle(activeLocations.map((l) => l.id));
+    for (const [k, val] of Object.entries(values)) {
+      form.setValue(k as FieldPath<Values>, val as never, { shouldDirty: true });
+    }
+    form.clearErrors();
+    let files = await sampleCarPhotos();
+    if (files.length === 0) {
+      const drawn = await samplePhoto(`${values.make} ${values.model}`, hex);
+      files = drawn ? [drawn] : [];
+    }
+    if (files.length) {
+      photos.forEach((p) => URL.revokeObjectURL(p.url));
+      setPhotos(files.map((file) => ({ file, url: URL.createObjectURL(file) })));
+      setPhotoError(null);
+    }
   };
 
   /* ── navigation ─────────────────────────────────────────────────────── */
@@ -494,9 +522,8 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
         if (data.mot_due_date) await remind(data.mot_due_date, "MOT");
         if (data.tax_due_date) await remind(data.tax_due_date, "TAX");
 
-        toast({ title: "Vehicle added", description: `${data.make} ${data.model} (${reg}) is now in your fleet.` });
         reset();
-        setOpen(false);
+        setAdded({ id: inserted.id, name: `${data.make} ${data.model}`, reg });
         for (const key of ["reminders", "reminder-stats", "vehicles-list", "vehicles-pl", "vehicle-count", "vehicle-pl-entries"]) {
           queryClient.invalidateQueries({ queryKey: [key] });
         }
@@ -531,7 +558,10 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
       open={currentOpen}
       onOpenChange={(o) => {
         setOpen(o);
-        if (!o) setStep(0);
+        if (!o) {
+          setStep(0);
+          setAdded(null);
+        }
       }}
     >
       {open === undefined && (
@@ -543,7 +573,8 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
         </DialogTrigger>
       )}
       <DialogContent
-        className="gap-0 overflow-hidden p-0 sm:max-w-[600px]"
+        className="gap-0 overflow-hidden p-0 sm:max-w-[720px]"
+        style={FORM_DIALOG_WASH}
         showCloseButton={false}
         // Open on the first field to type in, not on the first button —
         // focusing the first toggle drew a focus ring round it.
@@ -553,8 +584,42 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
         }}
       >
         <DialogTitle className="sr-only">Add a vehicle</DialogTitle>
-        <DialogDescription className="sr-only">{screen.title}</DialogDescription>
+        <DialogDescription className="sr-only">{added ? `${added.name} added` : screen.title}</DialogDescription>
 
+        {added ? (
+          /* Done: the car is in. A moment of it, then where to next. */
+          <div className="flex flex-col">
+            <style>{TWINKLE_CSS}</style>
+            <div className="flex h-[500px] flex-col items-center justify-center px-10 text-center">
+              <div className="w-full max-w-[320px] duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none">
+                <AddVehicleAddedArt />
+              </div>
+              <div className="duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 [animation-delay:120ms] [animation-fill-mode:both] motion-reduce:animate-none">
+                <h3 className="mt-6 text-2xl font-medium text-foreground [text-wrap:balance]">{added.name} is in your fleet.</h3>
+                <p className="mx-auto mt-2 max-w-[26rem] text-sm leading-relaxed text-muted-foreground [text-wrap:balance]">
+                  {added.reg} is ready to rent, with its rates and photos saved. Open it to fine-tune anything.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-4 px-8 py-4">
+              <Button type="button" variant="outline" className="h-10 rounded-full px-5" onClick={() => setAdded(null)}>
+                <Plus className="size-4" /> Add another
+              </Button>
+              <Button
+                type="button"
+                className="h-10 rounded-full px-5"
+                onClick={() => {
+                  const id = added.id;
+                  setAdded(null);
+                  setOpen(false);
+                  router.push(`/vehicles/${id}`);
+                }}
+              >
+                Open it <ArrowRight className="size-4" />
+              </Button>
+            </div>
+          </div>
+        ) : (
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -563,13 +628,14 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
           }}
           className="flex flex-col"
         >
+          <DevAutofillButton onFill={() => void autofill()} />
           {/* One screen: picture, what Trax is asking, two rows of fields.
               Same height on every step, so nothing jumps and nothing scrolls. */}
           <div
             key={step}
-            className="flex h-[456px] flex-col items-center overflow-hidden px-10 pt-8 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none"
+            className="flex h-[500px] flex-col items-center overflow-hidden px-10 pt-8 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none"
           >
-            <screen.art className="max-w-[240px]" />
+            <screen.art className="max-w-[280px]" />
             <h3 className="mt-4 text-center text-xl font-medium leading-snug text-foreground [text-wrap:balance]">{screen.title}</h3>
             <p className="mx-auto mt-1.5 min-h-[2lh] max-w-[24rem] text-center text-sm leading-relaxed text-muted-foreground [text-wrap:balance]">
               {screen.line}
@@ -780,68 +846,17 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
               )}
 
               {step === 10 && (
-                <div className="col-span-2 flex flex-col gap-1.5">
-                  <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => addPhotos(e.target.files)} />
-                  {photos.length === 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => fileRef.current?.click()}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        addPhotos(e.dataTransfer.files);
-                      }}
-                      className={cn(
-                        "flex h-[168px] flex-col items-center justify-center gap-2 rounded-2xl border-[1.5px] border-dashed bg-muted/20 transition-colors duration-200 hover:border-primary/50 hover:bg-primary/[0.03] motion-reduce:transition-none",
-                        photoError ? "border-destructive/50" : "border-foreground/20",
-                      )}
-                    >
-                      <span className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
-                        <ImagePlus className="size-5" />
-                      </span>
-                      <span className="text-sm font-medium text-foreground">Drop photos here, or click to choose</span>
-                      <span className="text-xs text-muted-foreground">JPG, PNG or WebP, up to 5 MB each</span>
-                    </button>
-                  ) : (
-                    <div className="grid h-[168px] grid-cols-5 grid-rows-2 gap-2">
-                      {photos.slice(0, 9).map((p, i) => (
-                        <div
-                          key={p.url}
-                          className="group relative overflow-hidden rounded-xl border border-foreground/10 bg-muted/30 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={p.url} alt="" className="size-full object-cover" />
-                          {i === 0 && (
-                            <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-0.5 rounded-full bg-background/90 px-1.5 py-0.5 text-[9px] font-medium text-foreground">
-                              <Star className="size-2.5 fill-current text-amber-500" /> Cover
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            aria-label="Remove photo"
-                            onClick={() => {
-                              URL.revokeObjectURL(p.url);
-                              setPhotos((ps) => ps.filter((x) => x.url !== p.url));
-                            }}
-                            className="absolute right-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-background/90 text-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none"
-                          >
-                            <X className="size-3" />
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => fileRef.current?.click()}
-                        className="flex flex-col items-center justify-center gap-1 rounded-xl border-[1.5px] border-dashed border-foreground/20 text-[11px] text-muted-foreground transition-colors duration-200 hover:border-primary/50 hover:text-foreground motion-reduce:transition-none"
-                      >
-                        <Plus className="size-4" />
-                        {photos.length > 9 ? `+${photos.length - 9}` : "Add"}
-                      </button>
-                    </div>
-                  )}
-                  <span className={cn("min-h-[18px] px-0.5 text-[11px] leading-[18px]", photoError ? "text-destructive" : "text-muted-foreground")}>
-                    {photoError ?? (photos.length ? `${photos.length} photo${photos.length === 1 ? "" : "s"} · the first is the cover` : "")}
-                  </span>
+                <div className="col-span-2">
+                  <VehiclePhotosPickerV2
+                    photos={photos}
+                    error={photoError}
+                    onAdd={addPhotos}
+                    onRemove={(url) => {
+                      URL.revokeObjectURL(url);
+                      setPhotos((ps) => ps.filter((x) => x.url !== url));
+                    }}
+                    onReorder={setPhotos}
+                  />
                 </div>
               )}
             </div>
@@ -858,6 +873,7 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
             busyLabel="Adding…"
           />
         </form>
+        )}
       </DialogContent>
     </Dialog>
   );

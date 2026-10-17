@@ -9,6 +9,8 @@
  */
 'use client';
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { PaymentsEmptyArt } from '@/components/admin/illustrations/scenes/payments';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Activity, ExternalLink } from 'lucide-react';
@@ -117,9 +119,12 @@ export function FinanceEventsTab({ tenantId }: { tenantId: string }) {
         </CardHeader>
         <CardContent>
           {events.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No financial events yet. Once this tenant processes a payment, refund, or damage charge, events will appear here.
-            </p>
+            <EmptyState
+              size="section"
+              illustration={<PaymentsEmptyArt />}
+              headline="No financial events yet"
+              body="Once this company takes a payment, issues a refund or charges for damage, it appears here."
+            />
           ) : (
             <>
               {/* Summary */}

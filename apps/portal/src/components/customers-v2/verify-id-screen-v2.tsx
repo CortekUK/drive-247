@@ -21,6 +21,11 @@
  *             (hovering the code brings it back, if they need to rescan)
  *   result    verified / couldn't verify / needs a closer look / expired
  *
+ * Sharing the link: "Email link" opens a small box with the customer's email
+ * filled in and sends through `send-verification-link-v2`, which rebuilds the
+ * link itself from the session (the browser never sends a URL). "Copy link"
+ * sits beside it for anything else — a text, a chat.
+ *
  * Motion is the app standard (200ms, ease-out in, opacity + 12px lift). The
  * scan line and the progress ring are loaders — the standard's stated
  * exception — and both stop under reduced motion.
@@ -32,6 +37,7 @@ import {
   Copy,
   CreditCard,
   IdCard,
+  Mail,
   Loader2,
   RotateCcw,
   ScanFace,
@@ -46,6 +52,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui-v2/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui-v2/popover";
+import { CONTROL } from "@/components/shared/form-grid-v2";
 
 export interface VerifySession {
   sessionId: string;
@@ -98,9 +106,111 @@ function formatLeft(s: number) {
   return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
 }
 
+/** "Email link": a small box, the customer's address filled in, one Send. */
+function EmailLink({ sessionId, defaultEmail, sentTo }: { sessionId: string; defaultEmail?: string | null; sentTo?: string | null }) {
+  const { tenant } = useTenant();
+  const [open, setOpen] = useState(false);
+  const [to, setTo] = useState(defaultEmail ?? "");
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">(sentTo ? "sent" : "idle");
+  const [message, setMessage] = useState<string | null>(sentTo ? `Sent to ${sentTo}` : null);
+
+  const send = async () => {
+    const email = to.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setState("error");
+      setMessage("That email address doesn't look right.");
+      return;
+    }
+    setState("sending");
+    setMessage(null);
+    const { data, error } = await supabase.functions.invoke("send-verification-link-v2", {
+      body: { sessionId, email, tenantSlug: tenant?.slug },
+    });
+    if (error || !data?.success) {
+      let why = (data as { error?: string } | null)?.error;
+      if (!why && error && "context" in error) {
+        try {
+          why = (await (error as { context: Response }).context.json())?.error;
+        } catch {
+          /* keep the generic line */
+        }
+      }
+      setState("error");
+      setMessage(why || "I couldn't send the email. Try again, or copy the link instead.");
+      return;
+    }
+    setState("sent");
+    setMessage(`Sent to ${data.to}`);
+    setTimeout(() => setOpen(false), 1400);
+  };
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (o && state !== "sending") {
+          setState("idle");
+          setMessage(null);
+        }
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="h-10 rounded-full px-5">
+          {state === "sent" ? <Check className="size-4" /> : <Mail className="size-4" />}
+          {state === "sent" ? "Emailed" : "Email link"}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" side="top" sideOffset={10} className="w-[340px] p-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void send();
+          }}
+          className="flex flex-col gap-3"
+        >
+          <div>
+            <p className="text-sm font-medium text-foreground">Email them the link</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">They open it on their phone and I take it from there.</p>
+          </div>
+          <input
+            type="email"
+            inputMode="email"
+            value={to}
+            autoFocus
+            placeholder="name@example.com"
+            onChange={(e) => {
+              setTo(e.target.value);
+              if (state === "error") setState("idle");
+            }}
+            aria-invalid={state === "error" || undefined}
+            className={CONTROL}
+          />
+          <div className="flex items-center justify-between gap-3">
+            <span
+              className={cn(
+                "min-h-[18px] truncate text-[11px] leading-[18px]",
+                state === "error" ? "text-destructive" : state === "sent" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground",
+              )}
+            >
+              {message ?? ""}
+            </span>
+            <Button type="submit" className="h-9 shrink-0 rounded-full px-4" disabled={state === "sending" || state === "sent"}>
+              {state === "sending" ? <Loader2 className="size-4 animate-spin" /> : state === "sent" ? <Check className="size-4" /> : <Mail className="size-4" />}
+              {state === "sending" ? "Sending…" : state === "sent" ? "Sent" : "Send"}
+            </Button>
+          </div>
+        </form>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function VerifyIdScreenV2({
   session,
   name,
+  email,
+  emailedTo,
   onDone,
   onRetry,
   onComplete,
@@ -109,6 +219,10 @@ export function VerifyIdScreenV2({
   session: VerifySession;
   /** The customer's name, for the copy. */
   name: string;
+  /** Their email on file, filled into "Email link". */
+  email?: string | null;
+  /** Set when the link was already emailed on the way in. */
+  emailedTo?: string | null;
   onDone: () => void;
   /** Start a fresh session (expired, or a failed check). */
   onRetry: () => void;
@@ -215,7 +329,7 @@ export function VerifyIdScreenV2({
     const canRetry = outcome === "RED" || outcome === "EXPIRED";
     return (
       <div className="flex flex-col">
-        <div className="flex h-[456px] flex-col items-center justify-center px-10 text-center">
+        <div className="flex h-[500px] flex-col items-center justify-center px-10 text-center">
           <span
             className={cn(
               "flex size-20 items-center justify-center rounded-full duration-200 ease-out animate-in fade-in-0 zoom-in-90 motion-reduce:animate-none",
@@ -229,7 +343,7 @@ export function VerifyIdScreenV2({
             <p className="mx-auto mt-2 max-w-[24rem] text-sm leading-relaxed text-muted-foreground [text-wrap:balance]">{r.line}</p>
           </div>
         </div>
-        <div className="flex items-center justify-between gap-4 border-t px-8 py-4">
+        <div className="flex items-center justify-between gap-4 px-8 py-4">
           {canRetry ? (
             <Button variant="outline" className="h-10 rounded-full px-5" onClick={onRetry} disabled={retrying}>
               {retrying ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
@@ -260,7 +374,7 @@ export function VerifyIdScreenV2({
       {/* The scan line's travel. Scoped name; a loader. */}
       <style>{`@keyframes v2-verify-scan{0%{transform:translateY(0);opacity:0}12%{opacity:1}88%{opacity:1}100%{transform:translateY(204px);opacity:0}}`}</style>
 
-      <div className="flex h-[456px] flex-col items-center justify-center px-10">
+      <div className="flex h-[500px] flex-col items-center justify-center px-10">
         {/* The code, in a viewfinder. Everything this screen says lives here. */}
         <div className="group relative p-4 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none">
           {(["left-0 top-0 border-l-2 border-t-2 rounded-tl-2xl", "right-0 top-0 border-r-2 border-t-2 rounded-tr-2xl", "left-0 bottom-0 border-l-2 border-b-2 rounded-bl-2xl", "right-0 bottom-0 border-r-2 border-b-2 rounded-br-2xl"] as const).map((c) => (
@@ -334,7 +448,7 @@ export function VerifyIdScreenV2({
         </div>
 
         <h3 className="mt-6 text-center text-xl font-medium leading-snug text-foreground [text-wrap:balance]">
-          {scanned ? `Verifying ${first}` : `Scan to verify ${first}`}
+          {scanned ? `Verifying ${first}` : emailedTo ? `Link sent to ${first}` : `Scan to verify ${first}`}
         </h3>
         {/* What Trax is waiting for — swaps as they move through the steps. */}
         <p
@@ -342,21 +456,34 @@ export function VerifyIdScreenV2({
           aria-live="polite"
           className="mx-auto mt-1.5 min-h-[2lh] max-w-[24rem] text-center text-sm leading-relaxed text-muted-foreground duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 [text-wrap:balance] motion-reduce:animate-none"
         >
-          {NODES[current].line}
+          {current === 0 && emailedTo
+            ? `I've emailed the link to ${emailedTo}. Waiting for them to open it.`
+            : NODES[current].line}
         </p>
       </div>
 
-      <div className="flex items-center justify-between gap-4 border-t px-8 py-4">
-        <Button variant="outline" className="h-10 rounded-full px-5" onClick={onDone}>
+      {/* Three equal tracks, so the expiry line sits at the true centre
+          whatever is on either side of it. */}
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-8 py-4">
+        <Button variant="outline" className="h-10 justify-self-start rounded-full px-5" onClick={onDone}>
           Later
         </Button>
         <span className={cn("text-xs tabular-nums", left < 60 ? "text-destructive" : "text-muted-foreground")}>
           Code expires in {formatLeft(left)}
         </span>
-        <Button variant="outline" className="h-10 w-[128px] rounded-full px-5" onClick={copy}>
-          {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-          {copied ? "Copied" : "Copy link"}
-        </Button>
+        <div className="flex items-center gap-2 justify-self-end">
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-10 rounded-full"
+            onClick={copy}
+            aria-label={copied ? "Link copied" : "Copy link"}
+            title={copied ? "Copied" : "Copy link"}
+          >
+            {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+          </Button>
+          <EmailLink key={session.sessionId} sessionId={session.sessionId} defaultEmail={email} sentTo={emailedTo} />
+        </div>
       </div>
     </div>
   );

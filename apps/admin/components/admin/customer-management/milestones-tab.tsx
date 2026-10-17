@@ -15,6 +15,8 @@
  * The page also shows each v2 tenant's progress and the full history.
  */
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { MilestonesEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Eye, Loader2, Pencil, Plus, RefreshCw, Send, Trash2, Trophy } from 'lucide-react';
 
@@ -298,7 +300,12 @@ export function MilestonesTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         <CardContent className="space-y-5">
           {grouped.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">No milestones yet. Add one to start celebrating.</p>
+            <EmptyState
+              size="section"
+              illustration={<MilestonesEmptyArt />}
+              headline="No milestones yet"
+              body="Add one to start celebrating: a first booking, a hundredth rental, a year on Drive247."
+            />
           ) : (
             grouped.map(({ metric, items }) => (
               <div key={metric.id} className="space-y-2">
@@ -486,7 +493,11 @@ export function MilestonesTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         <CardContent>
           {shownHistory.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Nothing yet.</p>
+            <EmptyState
+              size="section"
+              headline="Nothing celebrated yet"
+              body="Each milestone an operator reaches is recorded here."
+            />
           ) : (
             <Table>
               <TableHeader>

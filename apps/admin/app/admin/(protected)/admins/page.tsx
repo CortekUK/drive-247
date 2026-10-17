@@ -234,7 +234,7 @@ export default function ManageAdminsPage() {
           to reach them. Any non-visible overflow still rounds the corners. */}
       <div className="overflow-x-auto rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10">
         <table className="min-w-full divide-y divide-dark-border">
-          <thead className="bg-dark-bg">
+          <thead className="bg-card/95">
             <tr>
               {['Name', 'Email', 'Role', 'Password', 'Created', 'Actions'].map((h) => (
                 <th key={h} className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
@@ -247,8 +247,8 @@ export default function ManageAdminsPage() {
               const self = admin.id === user?.id;
               const busy = busyId === admin.id;
               return (
-                <tr key={admin.id} className={`hover:bg-dark-hover ${admin.is_active ? '' : 'opacity-60'}`}>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                <tr key={admin.id} className={`hover:bg-[hsl(var(--v2-row-hover,var(--muted)_/_0.5))] ${admin.is_active ? '' : 'opacity-60'}`}>
+                  <td className="px-3 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                       {admin.name}
                       {self && <span className="text-xs font-normal text-muted-foreground">(you)</span>}
@@ -257,17 +257,17 @@ export default function ManageAdminsPage() {
                       )}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-3 py-3 whitespace-nowrap">
                     <div className="text-sm text-muted-foreground">{admin.email}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-3 py-3 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full border ${role === 'super_admin'
                       ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/25'
                       : 'bg-[hsl(var(--chart-3))]/10 text-[hsl(var(--chart-3))] border-blue-500/25'}`}>
                       {ROLE_LABEL[role]}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-3 py-3 whitespace-nowrap">
                     {admin.password ? (
                       <div className="flex items-center gap-1.5">
                         <span className="font-mono text-sm text-foreground">{admin.password}</span>
@@ -277,10 +277,10 @@ export default function ManageAdminsPage() {
                       <span className="text-sm text-muted-foreground">Not stored</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                  <td className="px-3 py-3 whitespace-nowrap text-sm text-muted-foreground">
                     {new Date(admin.created_at).toLocaleDateString('en-US')}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-3 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-1">
                       <RowAction label="Edit" onClick={() => openEdit(admin)} disabled={busy}>
                         <Pencil className="h-4 w-4" />
@@ -336,7 +336,7 @@ export default function ManageAdminsPage() {
                       onClick={() => setFormData({ ...formData, role: r.value })}
                       className={`rounded-md border px-3 py-2 text-sm transition-colors duration-200 ease-out motion-reduce:transition-none ${formData.role === r.value
                         ? 'border-primary bg-primary/10 font-medium text-primary'
-                        : 'border-dark-border text-foreground hover:bg-dark-hover'}`}>
+                        : 'border-dark-border text-foreground hover:bg-[hsl(var(--v2-row-hover,var(--muted)_/_0.5))]'}`}>
                       {r.label}
                     </button>
                   ))}
@@ -375,7 +375,7 @@ export default function ManageAdminsPage() {
 
               <div className="flex space-x-3 mt-6">
                 <button type="button" onClick={closeModal}
-                  className="flex-1 px-4 py-2 border border-dark-border rounded-md text-muted-foreground hover:bg-dark-hover">
+                  className="flex-1 px-4 py-2 border border-dark-border rounded-md text-muted-foreground hover:bg-[hsl(var(--v2-row-hover,var(--muted)_/_0.5))]">
                   Cancel
                 </button>
                 <button type="submit" disabled={creating || mismatch || tooShort}
@@ -398,7 +398,7 @@ export default function ManageAdminsPage() {
             </p>
             <div className="flex space-x-3 mt-6">
               <button type="button" onClick={() => setDeleting(null)} disabled={busyId === deleting.id}
-                className="flex-1 px-4 py-2 border border-dark-border rounded-md text-muted-foreground hover:bg-dark-hover">
+                className="flex-1 px-4 py-2 border border-dark-border rounded-md text-muted-foreground hover:bg-[hsl(var(--v2-row-hover,var(--muted)_/_0.5))]">
                 Cancel
               </button>
               <button type="button" disabled={busyId === deleting.id}

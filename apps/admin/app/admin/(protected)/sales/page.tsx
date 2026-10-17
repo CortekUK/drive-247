@@ -1,5 +1,8 @@
 'use client';
 
+import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton } from '@/components/admin/header-buttons';
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { LeadsEmptyArt } from '@/components/admin/illustrations/scenes/leads';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
@@ -142,15 +145,12 @@ export default function SalesPage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center h-10 w-10 rounded-xl bg-primary/15 glow-purple-sm">
-            <TrendingUp className="h-5 w-5 text-primary" />
-          </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Sales</h1>
             <p className="text-sm text-muted-foreground">Onboard new rental companies</p>
           </div>
         </div>
-        <Button onClick={() => setShowCreate(true)}>
+        <Button className={HEADER_PRIMARY} onClick={() => setShowCreate(true)}>
           <Plus className="h-4 w-4" />
           Create Onboarding
         </Button>
@@ -176,16 +176,16 @@ export default function SalesPage() {
               </Button>
             </div>
           ) : rows.length === 0 ? (
-            <div className="text-center py-16">
-              <TrendingUp className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">
-                No onboardings yet. Click &quot;Create Onboarding&quot; to provision your first rental company.
-              </p>
-            </div>
+            <EmptyState
+              illustration={<LeadsEmptyArt />}
+              headline="No onboardings yet"
+              body="Provision a rental company for a client you have signed, and follow it here until it goes live."
+              action={{ label: 'Create onboarding', onClick: () => setShowCreate(true) }}
+            />
           ) : (
             <Table>
               <TableHeader>
-                <TableRow className="bg-primary/5 hover:bg-primary/5">
+                <TableRow>
                   <TableHead className="min-w-[180px]">Business</TableHead>
                   <TableHead>Slug</TableHead>
                   <TableHead>Amount</TableHead>

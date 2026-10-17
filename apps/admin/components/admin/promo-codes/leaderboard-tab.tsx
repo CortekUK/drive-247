@@ -1,5 +1,7 @@
 'use client';
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { ReferralsEmptyArt } from '@/components/admin/illustrations/scenes/referrals';
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,7 +29,14 @@ export function LeaderboardTab({ onOpen }: { onOpen: (t: TenantLite) => void }) 
   }, []);
 
   if (!rows) return <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />;
-  if (rows.length === 0) return <p className="text-sm text-muted-foreground">No referrers yet.</p>;
+  if (rows.length === 0)
+    return (
+      <EmptyState
+        illustration={<ReferralsEmptyArt />}
+        headline="No referrers yet"
+        body="Operators who bring in other operators with their referral link are ranked here."
+      />
+    );
 
   return (
     <Card className="overflow-hidden">

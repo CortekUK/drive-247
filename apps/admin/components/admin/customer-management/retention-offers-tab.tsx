@@ -20,6 +20,8 @@
  * "Allow again", which deletes one on purpose.
  */
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { RetentionDiscountArt } from '@/components/admin/illustrations/scenes/retention';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BadgePercent, Gift, Loader2, Pencil, Plus, RefreshCw, RotateCcw, Trash2, Users } from 'lucide-react';
 
@@ -437,7 +439,12 @@ export function RetentionOffersTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         <CardContent>
           {redemptions.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">No tenant has used an offer yet.</p>
+            <EmptyState
+              size="section"
+              illustration={<RetentionDiscountArt />}
+              headline="No offers used yet"
+              body="When an operator about to cancel takes an offer to stay, it is recorded here."
+            />
           ) : (
             <Table>
               <TableHeader>

@@ -70,11 +70,16 @@ export default async function NorthwindRootLayout({
   const editMode = requestHeaders.get(CMS_EDIT_HEADER) === "1";
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    // The font's variable goes on <html>, not <body>: site.css defines
+    // `--typeface-family: var(--font-dm-sans), …` on :root, and a custom
+    // property that references an undefined variable is invalid at the element
+    // that declares it — so with the variable only on <body>, the whole token
+    // resolved to nothing and every northwind page fell back to Times.
+    <html lang="en" className={dmSans.variable} suppressHydrationWarning>
       <head>
         <link rel="stylesheet" href={NORTHWIND_SITE_CSS} />
       </head>
-      <body className={`${dmSans.variable} font-sans`}>
+      <body className="font-sans">
         <Providers tenantSlug={tenantSlug}>
           {children}
           {editMode && <CmsEditOverlay />}

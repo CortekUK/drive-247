@@ -17,6 +17,8 @@
  * "Started" is the tenant's first subscription, else account creation.
  */
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { PollsEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Gauge, Loader2, MessageSquareText, Plus, RefreshCw, Save, Search, Users, X } from 'lucide-react';
 
@@ -540,7 +542,12 @@ export function NpsProgramTab({ canEdit }: { canEdit: boolean }) {
           </CardHeader>
           <CardContent className="space-y-4">
             {summary.answered === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">No scores in this range yet.</p>
+              <EmptyState
+                size="section"
+                illustration={<PollsEmptyArt />}
+                headline="No scores in this range"
+                body="Scores arrive as operators answer the survey. Try a wider date range."
+              />
             ) : (
               <>
                 <div className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full" role="img" aria-label="Share of promoters, passives and detractors">
@@ -584,7 +591,11 @@ export function NpsProgramTab({ canEdit }: { canEdit: boolean }) {
           </CardHeader>
           <CardContent>
             {summary.answered === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">No scores in this range yet.</p>
+              <EmptyState
+                size="section"
+                headline="No scores in this range"
+                body="The spread of 0 to 10 appears once operators answer."
+              />
             ) : (
               <div className="flex h-36 items-end gap-0.5" role="img" aria-label="Number of responses for each score from 0 to 10">
                 {distribution.map((n, score) => (
@@ -614,7 +625,11 @@ export function NpsProgramTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         <CardContent>
           {perTenant.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">No responses in this range yet.</p>
+            <EmptyState
+              size="section"
+              headline="No responses in this range"
+              body="Each operator who answers gets a row here, with their score."
+            />
           ) : (
             <Table>
               <TableHeader>
@@ -684,7 +699,11 @@ export function NpsProgramTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         <CardContent>
           {listed.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Nothing here yet.</p>
+            <EmptyState
+              size="section"
+              headline="Nothing here yet"
+              body="Survey sends and their answers are listed here as they happen."
+            />
           ) : (
             <Table>
               <TableHeader>

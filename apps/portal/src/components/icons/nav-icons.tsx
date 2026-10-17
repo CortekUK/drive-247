@@ -1,4 +1,4 @@
-import { forwardRef, type ReactNode, type SVGProps } from "react";
+import { forwardRef, useId, type ReactNode, type SVGProps } from "react";
 import "./nav-icons.css";
 
 /**
@@ -58,38 +58,53 @@ export const NavDashboard = makeIcon("NavDashboard", () => (
   </>
 ), 2.2);
 
-/** Two people. Hover: the second steps out from behind, the first nods. */
+/**
+ * Three people — one in front, two behind: the whole customer base rather than
+ * one person (Oct 7 2026; picked from six on a sheet, replacing two people).
+ *
+ * Hover: a CAROUSEL — the people change places. The crowd slides one place to
+ * the right and fades as an identical crowd slides in from the left and fades
+ * up, so everyone appears to move along one seat. It ends on exactly the
+ * picture it started from (the incoming copy holds the frame), so nothing has
+ * to animate back on leave.
+ */
+function Crowd() {
+  return (
+    <>
+      <path d="M5.2 6.2a2.6 2.6 0 0 0 0 5M2 17.8c0-2.3 1.2-4 3-4.6" />
+      <circle cx="12" cy="8" r="3.2" />
+      <path d="M6.5 20c0-3.3 2.4-5.6 5.5-5.6s5.5 2.3 5.5 5.6" />
+      <path d="M18.8 6.2a2.6 2.6 0 0 1 0 5M22 17.8c0-2.3-1.2-4-3-4.6" />
+    </>
+  );
+}
+
 export const NavCustomers = makeIcon("NavCustomers", () => (
   <>
-    <g data-m="front">
-      <circle cx="9" cy="7.5" r="3.6" />
-      <path d="M2.5 20.5c0-3.9 2.9-6.5 6.5-6.5s6.5 2.6 6.5 6.5" />
+    <g data-m="crowd-out">
+      <Crowd />
     </g>
-    <g data-m="behind">
-      <path d="M16 3.9a3.6 3.6 0 0 1 0 7.2" />
-      <path d="M18 13.9c2.2.8 3.5 3 3.5 6.6" />
+    <g data-m="crowd-in">
+      <Crowd />
     </g>
   </>
 ));
 
 /**
- * The brand coupe. Hover: it rocks back, surges forward and settles, with
- * two speed lines flashing behind it. A touch lighter than the set (2.0):
- * at full weight the glass line and the roof run together at 18px.
+ * A steering wheel — the fleet without drawing a car (Oct 8 2026; Ghulam did
+ * not want a car, so option A of the no-car sheet). The rim, a hub, three
+ * spokes and a short "rally stripe" at twelve o'clock so a turn reads at 17px.
+ * Hover: a lane change — the wheel turns left, swings right, and settles back
+ * to centre. Ends at rest.
  */
 export const NavVehicles = makeIcon("NavVehicles", () => (
-  <>
-    <path data-m="speed" d="M2.2 9.6H.6M2.6 12.4H.2" />
-    <g data-m="car">
-      <g transform="translate(0 -1.5)">
-        <path d="M4.5 16.5H3Q2 16.5 2 15.5V14Q2 12.9 3.1 12.6L7.5 11.6Q10.8 8.8 14 8.8Q17 8.8 19.2 11.4L21 12Q22 12.4 22 13.5V15.5Q22 16.5 21 16.5H19.5M15.5 16.5H8.5" />
-        <path d="M10 11.6H18" />
-        <circle cx="6.5" cy="16.5" r="2" />
-        <circle cx="17.5" cy="16.5" r="2" />
-      </g>
-    </g>
-  </>
-), 2.0);
+  <g data-m="wheel">
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="12" cy="12.6" r="2.5" />
+    <path d="M9.6 12 3.1 11.1M14.4 12l6.5-.9M12 15.1V21" />
+    <path d="M12 3v2.2" strokeWidth={3} />
+  </g>
+));
 
 /** A car key — a rental is the keys changing hands. Hover: it goes in and turns. */
 export const NavRentals = makeIcon("NavRentals", () => (
@@ -176,12 +191,59 @@ export const NavIntegrations = makeIcon("NavIntegrations", () => (
   </>
 ), 2.2);
 
-/** The plan: a crown on its band. Hover: the crown hops up, tilts, and lands askew. */
-export const NavBilling = makeIcon("NavBilling", () => (
-  <>
-    <g data-m="crown">
-      <path d="m3 7 4.5 3.8L12 4l4.5 6.8L21 7l-2 10H5Z" />
-    </g>
-    <path d="M5 20.5h14" />
-  </>
-));
+/**
+ * A wallet with its clasp — where the money for the plan comes from (Oct 7
+ * 2026; replaced the crown, picked from six on a sheet).
+ *
+ * Hover, in order: the wallet's FLAP OPENS (it swings up on its hinge at the
+ * left), then ONE CARD rises out of the opening in front of it, arcs up and
+ * settles tilted above the wallet. On leave the card goes back in first and
+ * the flap closes after it (the flap's return is delayed in the CSS).
+ *
+ * A line drawing has no fill to hide one part behind another, so two masks do
+ * the occluding:
+ *   - `inWallet` hides everything below the wallet's top edge — the card is
+ *     invisible at rest and shows only as it clears the opening;
+ *   - `behindCard` cuts the card's silhouette out of the flap, so the card
+ *     passes IN FRONT of the open flap instead of tangling with its lines.
+ * The card's silhouette inside that mask carries the same `data-m` as the
+ * card, so the hover CSS moves both in step. Mask ids come from useId so two
+ * wallets on one page (sidebar and the phone's More screen) never share one.
+ */
+const WALLET_FLAP = "M19 7.5V5.8A1.8 1.8 0 0 0 17.2 4H5.5a2.5 2.5 0 0 0 0 5H19";
+const WALLET_CARD = "M7 10.4h10a2 2 0 0 1 2 2v4.6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-4.6a2 2 0 0 1 2-2Z";
+
+function BillingArt() {
+  const uid = useId().replace(/:/g, "");
+  const inWallet = `nav-wallet-in-${uid}`;
+  const behindCard = `nav-wallet-card-${uid}`;
+  return (
+    <>
+      <defs>
+        <mask id={inWallet} maskUnits="userSpaceOnUse" x="-6" y="-16" width="36" height="44">
+          <rect x="-6" y="-16" width="36" height="44" fill="#fff" stroke="none" />
+          <rect x="-6" y="7.9" width="36" height="22" fill="#000" stroke="none" />
+        </mask>
+        <mask id={behindCard} maskUnits="userSpaceOnUse" x="-6" y="-16" width="36" height="44">
+          <rect x="-6" y="-16" width="36" height="44" fill="#fff" stroke="none" />
+          <g mask={`url(#${inWallet})`}>
+            <path data-m="card-a" d={WALLET_CARD} fill="#000" stroke="#000" strokeWidth={4.6} />
+          </g>
+        </mask>
+      </defs>
+      <g mask={`url(#${behindCard})`}>
+        <path data-m="flap" d={WALLET_FLAP} />
+      </g>
+      <g mask={`url(#${inWallet})`}>
+        <g data-m="card-a">
+          <path d={WALLET_CARD} />
+          <path d="M5 13.8h14" />
+        </g>
+      </g>
+      <path d="M5.5 9H19a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5.5A2.5 2.5 0 0 1 3 17.5v-11" />
+      <path d="M16.5 14.5h.01" strokeWidth={3.2} />
+    </>
+  );
+}
+
+export const NavBilling = makeIcon("NavBilling", () => <BillingArt />);

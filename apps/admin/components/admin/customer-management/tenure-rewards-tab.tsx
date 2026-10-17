@@ -15,6 +15,8 @@
  * asks it what it would do without writing anything.
  */
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { MilestonesEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarClock, CheckCircle2, Eye, Gift, Loader2, Pencil, Play, Plus, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
 
@@ -434,7 +436,12 @@ export function TenureRewardsTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         <CardContent>
           {milestones.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">No milestones yet.</p>
+            <EmptyState
+              size="section"
+              illustration={<MilestonesEmptyArt />}
+              headline="No milestones yet"
+              body="Set how long an operator has to stay to earn each reward, and they are listed here."
+            />
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -610,7 +617,11 @@ export function TenureRewardsTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         <CardContent>
           {grants.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">No rewards given yet.</p>
+            <EmptyState
+              size="section"
+              headline="No rewards given yet"
+              body="Each reward an operator earns for staying is recorded here."
+            />
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -712,7 +723,11 @@ export function TenureRewardsTab({ canEdit }: { canEdit: boolean }) {
             </DialogDescription>
           </DialogHeader>
           {plan && plan.plan.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Nothing to do — no operator has reached a new milestone.</p>
+            <EmptyState
+              size="section"
+              headline="Nothing to give out"
+              body="No operator has reached a new milestone since the last run."
+            />
           ) : (
             <Table>
               <TableHeader>

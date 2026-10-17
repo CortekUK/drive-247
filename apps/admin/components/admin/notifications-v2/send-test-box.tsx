@@ -15,6 +15,10 @@
  * carrying a plain sentence (the template has a problem): that sentence is
  * shown and nothing is sent.
  *
+ * `compact` (the full-screen Notifications view): the button is a 32px icon
+ * circle beside the preview's controls and the box opens above it in a
+ * popover, as the portal's does.
+ *
  * Unlike the portal's, this one sends at PLATFORM scope: the From is
  * "Drive 247 <noreply@drive-247.com>", the mail carries our branding rather
  * than any operator's, and no tenant is resolved at all.
@@ -24,6 +28,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { Loader2, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { usePlatformNotificationTest } from '@/hooks/use-platform-notification-test';
 import { isValidEmail } from '@/lib/notifications-v2/settings-model';
 import type { NotificationTestRequest, NotificationTestResponse } from '@/lib/notifications-v2/types';
@@ -121,6 +126,8 @@ export interface SendTestBoxProps {
   canSend?: boolean;
   /** Why it cannot, shown beside the button. */
   disabledReason?: string | null;
+  /** An icon button with the box in a popover above it, for a toolbar. */
+  compact?: boolean;
   className?: string;
 }
 
@@ -131,6 +138,7 @@ export function SendTestBox({
   defaultEmail,
   canSend = true,
   disabledReason,
+  compact = false,
   className,
 }: SendTestBoxProps) {
   const { sendTest, isSending } = usePlatformNotificationTest();
@@ -188,6 +196,49 @@ export function SendTestBox({
     }
   };
 
+  if (compact) {
+    return (
+      <Popover
+        open={open}
+        onOpenChange={(next) => {
+          if (next) setResult(null);
+          setOpen(next);
+        }}
+      >
+        <div className={cn('flex items-center gap-2', className)}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              disabled={!canSend}
+              data-send-test={channel}
+              aria-label={SEND_TEST_COPY.button}
+              title={SEND_TEST_COPY.button}
+              className="flex size-8 items-center justify-center rounded-full border border-border bg-background/60 text-foreground transition-colors duration-200 ease-out hover:bg-primary/10 hover:text-primary disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none"
+            >
+              <Send aria-hidden="true" className="size-3.5" />
+            </button>
+          </PopoverTrigger>
+          {!canSend && disabledReason && (
+            <span className="max-w-[260px] truncate text-xs text-muted-foreground" title={disabledReason} data-test-blocked="">
+              {disabledReason}
+            </span>
+          )}
+        </div>
+        <PopoverContent
+          side="top"
+          align="start"
+          sideOffset={8}
+          className="w-80 p-3"
+          onOpenAutoFocus={(e) => {
+            if (channel !== 'email') e.preventDefault();
+          }}
+        >
+          {renderBox('space-y-2')}
+        </PopoverContent>
+      </Popover>
+    );
+  }
+
   if (!open) {
     return (
       <div className={cn('flex flex-wrap items-center justify-end gap-2', className)}>
@@ -214,9 +265,12 @@ export function SendTestBox({
     );
   }
 
+  return renderBox(cn('w-full max-w-sm space-y-2 rounded-xl border border-border bg-card p-3', className));
+
+  function renderBox(boxClassName: string) {
   return (
     <div
-      className={cn('w-full max-w-sm space-y-2 rounded-xl border border-border bg-card p-3', className)}
+      className={boxClassName}
       data-send-test-box={channel}
     >
       {channel === 'email' ? (
@@ -268,6 +322,7 @@ export function SendTestBox({
       </p>
     </div>
   );
+  }
 }
 
 export default SendTestBox;

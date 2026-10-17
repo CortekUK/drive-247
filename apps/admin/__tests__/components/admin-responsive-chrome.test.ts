@@ -546,7 +546,6 @@ describe("every filtering surface uses the shared primitives", () => {
 describe("list pages fold their filters", () => {
   const folded = [
     "app/admin/(protected)/feedbacks/page.tsx",
-    "app/admin/(protected)/platform-rentals/page.tsx",
     "app/admin/(protected)/audit-logs/page.tsx",
     "app/admin/(protected)/requests/page.tsx",
     "app/admin/(protected)/rentals/page.tsx",

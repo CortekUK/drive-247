@@ -142,7 +142,7 @@ export default function AdminPreviewPage() {
         <Card className="overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow className="bg-primary/5 hover:bg-primary/5">
+              <TableRow>
                 <TableHead>Company</TableHead>
                 <TableHead>Owner</TableHead>
                 <TableHead>Type</TableHead>

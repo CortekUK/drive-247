@@ -1,5 +1,7 @@
 'use client';
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { BonzahReviewArt } from '@/components/admin/illustrations/scenes/bonzah';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
@@ -220,6 +222,7 @@ export default function BonzahSubmissions() {
           face is the filter panel. The status buttons and the search box used
           to sit in a Card of their own below the stats, permanently on screen. */}
       <FilterSearch
+        scopeLabel="Bonzah"
         value={searchQuery}
         onChange={setSearchQuery}
         placeholder="Search by business name, contact email, EIN, or tenant..."
@@ -296,17 +299,15 @@ export default function BonzahSubmissions() {
               ))}
             </div>
           ) : filteredSubmissions.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="mx-auto h-12 w-12 rounded-full bg-muted/40 flex items-center justify-center mb-3">
-                <FileText className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <p className="text-sm font-medium">No submissions found</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {filter === 'all'
-                  ? 'Tenants will appear here once they submit their Bonzah onboarding form.'
-                  : `No ${filter} submissions match your filters.`}
-              </p>
-            </div>
+            filter === 'all' ? (
+              <EmptyState
+                illustration={<BonzahReviewArt />}
+                headline="No Bonzah applications yet"
+                body="Operators appear here once they submit their Bonzah onboarding form, ready for review."
+              />
+            ) : (
+              <NoMatchState noun="submissions" onClear={() => setFilter('all')} />
+            )
           ) : (
             <Table>
               <TableHeader>

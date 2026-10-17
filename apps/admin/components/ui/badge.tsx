@@ -8,7 +8,11 @@ const badgeVariants = cva(
   // pinned to the -400 end of each ramp, which is the value that reads on a
   // near-black canvas and washes out on a light one; each now takes the theme
   // token, so the pills follow :root and .dark like the rest of the app.
-  "inline-flex items-center rounded-3xl border border-transparent px-2.5 py-0.5 text-[11px] font-semibold transition-all focus:outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30",
+  "inline-flex items-center rounded-3xl border border-transparent px-2.5 py-0.5 text-[11px] font-semibold transition-all focus:outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 " +
+    // Inside a table cell a status is coloured TEXT, not a pill — Northwind's
+    // list tables (ListStatusText) and the design rule "text-only status".
+    // The variant still picks the colour; only the pill's ground goes.
+    "[td_&]:rounded-none [td_&]:border-transparent [td_&]:bg-transparent [td_&]:px-0 [td_&]:py-0 [td_&]:text-sm [td_&]:font-medium dark:[td_&]:bg-transparent",
   {
     variants: {
       variant: {

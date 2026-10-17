@@ -46,9 +46,6 @@ export default function PromoCodesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 glow-purple-sm">
-          <TicketPercent className="h-5 w-5 text-primary" />
-        </div>
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Promo Codes</h1>
           <p className="mt-0.5 max-w-3xl text-sm text-muted-foreground">

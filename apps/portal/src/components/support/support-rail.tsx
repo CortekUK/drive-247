@@ -27,13 +27,14 @@ import { skeletonRows } from "@/lib/skeleton-data";
 import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 import { useSupportRail } from "../../../../../shared/trax-support/support-rail";
 import { RetentionDialog } from "./retention-dialog";
+import { useSupportStates } from "./support-inbox";
 
 /**
  * The Support rail — what the app sidebar BECOMES on `/support`, the same move it
  * makes for Trax, Settings and the record pages: a destination gets a scoped rail
  * in the sidebar's slot instead of a second column beside the navigation. Here the
  * rail is the ticket list, so the page is free to be the conversation and its
- * Details | TRAX Summary panel. Leaving Support brings the navigation back; nothing
+ * Details panel. Leaving Support brings the navigation back; nothing
  * about the sidebar changes on any other route.
  *
  * Anatomy follows the other rails: an h-16 back row, a title block (Support and
@@ -73,6 +74,7 @@ export function SupportRail() {
     closeMobile();
   };
   const canStartNew = !!inbox && !inbox.busy && !inbox.creating;
+  const supportStates = useSupportStates();
   // Before the page lends its inbox, or while the first page of tickets loads,
   // placeholder tickets render through the real rows under <AutoSkeleton>. Only
   // the unfiltered first load: a search that comes back empty keeps its box
@@ -135,7 +137,7 @@ export function SupportRail() {
       {/* The list scrolls inside itself, so the content area must not scroll too. */}
       <SidebarContent className="gap-0 overflow-hidden">
         {inbox && !ticketsLoading ? (
-          <TicketList inbox={inbox} onChosen={closeMobile} />
+          <TicketList inbox={inbox} onChosen={closeMobile} states={supportStates} />
         ) : inbox ? (
           /* The real list, search and filter included, fed placeholder tickets. */
           <AutoSkeleton loading>

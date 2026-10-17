@@ -12,6 +12,8 @@
  */
 'use client';
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { AuditLogEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -227,7 +229,12 @@ export function TenantTimelineTab({ tenantId }: { tenantId: string }) {
         </div>
 
         {months.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">Nothing here yet.</p>
+          <EmptyState
+            size="section"
+            illustration={<AuditLogEmptyArt />}
+            headline="Nothing on the timeline yet"
+            body="Signups, plan changes, payments and messages for this company line up here as they happen."
+          />
         ) : (
           months.map((m) => (
             <section key={m.label} className="space-y-1">

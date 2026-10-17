@@ -24,7 +24,6 @@ export const MODEL_TOOLS:ModelTool[]=[
   tool('resolve_payment_dashboard_action','Fresh, verified Open in Stripe or View receipt action for one payment from the rental, or the reason no dashboard link is available. Read-only; never creates links, logins or payments.',{rentalId:str,paymentId:str}),
   tool('get_stripe_account_summary','Fresh available/pending funds for the authorized tenant’s exclusive connected account. Separate currencies. Not a rental balance. Requires an explicit account-finance grant.',{}),
   tool('select_support_issue','Select the current issue before investigation. Reuse a matching issue for follow-ups; unrelated questions must use a separate topic/record. No score can be supplied.',{topic:{type:'string',enum:['vehicle_availability','fleet_counts','bookings','payments','workflow','other']},recordKind:{type:['string','null'],enum:['vehicle','rental','customer',null]},recordId:nullable}),
-  tool('request_support_handoff','Ask the backend to assess whether safe options are exhausted or the user explicitly requested a person. This only offers Contact Support. It never creates a ticket.',{reason:{type:'string',enum:['human_requested','guidance_missing','diagnostics_exhausted']}}),
   /*
    * generate_report is WITHDRAWN from the model's tools.
    *

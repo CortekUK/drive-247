@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { usePathname, useRouter } from "next/navigation";
-import { runThroughLeaveGuard } from "@/lib/leave-guard";
-import { History, LifeBuoy, Maximize2, Minimize2, SquarePen, X } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { ArrowLeft, History, LifeBuoy, Maximize2, Minimize2, Plus, SquarePen, X } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { SIDEBAR_HIGHLIGHT_ACTIVE, SIDEBAR_HIGHLIGHT_FOCUS, SIDEBAR_HIGHLIGHT_HOVER } from "@/components/ui-v2/sidebar";
 import { cn } from "@/lib/utils";
@@ -13,7 +12,7 @@ import { TraxSupportThread } from "./support/TraxSupportThread";
 import { useTraxSupportOptional } from "./support/trax-support-context";
 import { TraxMark } from "./trax-greeting";
 import { isTraxPath, useTraxOptional } from "./trax-provider";
-import { supportHref } from "@/lib/support-route";
+import { PortalSupport } from "@/components/support/portal-support";
 
 /**
  * Trax as a FLOATING panel — a chat window above the page, bottom right.
@@ -81,6 +80,13 @@ import { supportHref } from "@/lib/support-route";
  * floating copy over it would be the same thread twice.
  */
 /** One header control: compact, labelled for assistive tech, pressed when its view is open. */
+/* The Trax | Support layers: one fills the body, the other waits beside it. */
+const TAB_LAYER = "absolute inset-0 flex min-h-0 flex-col motion-reduce:transition-none";
+const TAB_IN =
+  "visible translate-x-0 opacity-100 [transition:transform_200ms_ease-out,opacity_200ms_ease-out]";
+const TAB_OUT =
+  "pointer-events-none invisible opacity-0 [transition:transform_200ms_ease-in,opacity_200ms_ease-in,visibility_0s_linear_200ms]";
+
 function PanelAction({
   label,
   tip,
@@ -131,7 +137,6 @@ export function TraxPanel() {
   const workspace = useTraxSupportOptional();
   const support = workspace?.support ?? null;
   const pathname = usePathname();
-  const router = useRouter();
   const onFullPage = isTraxPath(pathname);
   const open = !!trax?.sheetOpen && !onFullPage;
 
@@ -144,11 +149,41 @@ export function TraxPanel() {
   /* Floating or the larger focused overlay. Remembered while the session lasts,
      so reopening Trax gives back the size the operator chose. */
   const [expanded, setExpanded] = useState(false);
+  /* Trax | Support. Both live in here: Support is the portal's own Support
+     section (the same inbox as /support) in one narrow pane. Remembered while
+     the session lasts, like the size. Support mounts the first time it is
+     shown and is kept, so a half-typed reply survives switching back. */
+  const [tab, setTab] = useState<"trax" | "support">("trax");
+  const [supportMounted, setSupportMounted] = useState(false);
+  if (tab === "support" && !supportMounted) setSupportMounted(true);
+  /* A ticket to open in the Support tab. `key` remounts the
+     inbox so it opens exactly that — the inbox reads its target on mount. */
+  /* What the header's Back does in the Support tab: back to the list from an
+     open ticket, or out of a new one. Null on the list itself, so no Back. */
+  const [supportNav, setSupportNav] = useState<{ back: (() => void) | null; creating: boolean }>({ back: null, creating: false });
+  const onSupportNav = useCallback((nav: { back: (() => void) | null; creating: boolean }) => {
+    setSupportNav((old) => (old.back === nav.back && old.creating === nav.creating ? old : nav));
+  }, []);
+  /* The header's New ticket button, counted into the Support tab. */
+  const [newTicketRequest, setNewTicketRequest] = useState(0);
+  const [supportTarget, setSupportTarget] = useState<{ ticketId?: string; key: number }>({ key: 0 });
 
   /* The portal host. Set in an effect so the server and the first client render
      agree; the panel is closed on that frame anyway. */
   const [host, setHost] = useState<HTMLElement | null>(null);
   useEffect(() => setHost(document.body), []);
+
+  /* The switch's thumb, measured off the selected tab. */
+  const traxTabRef = useRef<HTMLButtonElement>(null);
+  const supportTabRef = useRef<HTMLButtonElement>(null);
+  const [thumb, setThumb] = useState<{ left: number; width: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = (tab === "trax" ? traxTabRef : supportTabRef).current;
+    if (!el) return;
+    setThumb((old) =>
+      old && old.left === el.offsetLeft && old.width === el.offsetWidth ? old : { left: el.offsetLeft, width: el.offsetWidth },
+    );
+  }, [tab, host, hasOpened, onFullPage]);
 
   /* Arriving back from `/trax` mounts the panel already open. Hold it in the
      closed position for two frames so it animates in instead of snapping. */
@@ -241,22 +276,27 @@ export function TraxPanel() {
 
   const { closeSheet } = trax;
   const view = workspace?.view ?? "conversation";
-  // Asks a v2 page with unsaved edits before opening Support, and closes the
-  // panel only once leaving is agreed: staying keeps Trax open where it was.
-  // With no guard installed this is a plain push and close.
-  const openSupport = (target: { ticketId?: string; issueId?: string }) => {
-    const href = supportHref(target);
-    runThroughLeaveGuard(href, () => {
-      router.push(href);
-      closeSheet();
-    });
+  // Support opens here, in its tab — nothing navigates, so no leave guard.
+  const openSupport = (target: { ticketId?: string }) => {
+    if (target.ticketId) {
+      setSupportTarget((previous) => ({ ...target, key: previous.key + 1 }));
+    }
+    setTab("support");
   };
+
   const viewLabel =
     view === "history"
       ? "Conversation history"
       : support?.capabilities?.modelReady
         ? "Assistant · reads your records"
         : "Prepared guidance";
+
+  const headerBack =
+    tab === "support"
+      ? supportNav.back && { label: "Back to tickets", run: supportNav.back }
+      : view === "history" && workspace
+        ? { label: "Back to conversation", run: () => workspace.setView("conversation") }
+        : null;
 
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     /* Escape steps back one level — expanded to floating, floating to closed —
@@ -291,7 +331,7 @@ export function TraxPanel() {
         data-size={expanded ? "expanded" : "floating"}
         onKeyDown={onKeyDown}
         /* Never taller than the visible viewport, keyboard included. */
-        style={visualHeight ? { maxHeight: `${Math.round(visualHeight) - 24}px` } : undefined}
+        style={visualHeight ? { maxHeight: `${Math.round(visualHeight)}px` } : undefined}
         className={[
           "fixed z-40 flex flex-col overflow-hidden text-foreground",
           /* A card that floats: its own ground, a defined edge, and elevation
@@ -302,8 +342,8 @@ export function TraxPanel() {
              `bg-app-gradient` as a background COLOUR and drops `bg-background`
              as its conflict, which leaves the panel see-through. */
           "rounded-2xl border border-border/70 bg-background bg-app-gradient shadow-[0_28px_70px_-28px_rgb(0_0_0/0.45)]",
-          /* Phone: a near-full-screen overlay, still inset from the edges. */
-          "inset-3",
+          /* Phone: end to end — the whole screen, no inset, corners or edge. */
+          "inset-0 max-md:rounded-none max-md:border-0 max-md:shadow-none max-md:pt-[env(safe-area-inset-top)] max-md:pb-[env(safe-area-inset-bottom)]",
           /* Desktop: pinned to the bottom-right corner, clear of both edges. */
           expanded
             ? "md:inset-auto md:bottom-8 md:right-8 md:h-[var(--trax-expanded-height,min(900px,calc(100dvh-7rem)))] md:w-[var(--trax-expanded-width,min(1100px,calc(100vw-4rem)))]"
@@ -322,51 +362,159 @@ export function TraxPanel() {
         ].join(" ")}
       >
         {/* 64px, the top bar's height, so the two read as one band across the
-            screen. The five controls are the whole workspace: history, a fresh
-            thread, the portal's Support section, the larger overlay and close. */}
-        <header className="flex h-16 shrink-0 items-center gap-2.5 pl-4 pr-2">
-          <TraxMark size="sm" animated={false} />
-          <div className="min-w-0">
-            <p className="truncate text-[14px] font-semibold leading-tight tracking-tight">Trax</p>
-            <p className="truncate text-[11px] leading-tight text-muted-foreground">{viewLabel}</p>
+            screen. Trax | Support are the panel's two tabs: Trax is this
+            conversation; Support is the portal's human-support section, which
+            TRAX closes behind (the conversation and the unsent draft are kept).
+            The controls on the right belong to the Trax conversation. */}
+        <header className="flex h-16 shrink-0 items-center gap-2 pl-3 pr-2">
+          {/* Back sits where back always sits — the far left, ahead of the
+              switch — and only when there is somewhere to go back to: an open
+              ticket or a new one in Support, the history list in Trax. */}
+          {headerBack && (
+            <span className="-mr-1 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-left-1 motion-safe:duration-200">
+              <PanelAction label={headerBack.label} tip={headerBack.label} icon={<ArrowLeft />} onClick={headerBack.run} />
+            </span>
+          )}
+          {/* A small segmented switch, each tab only as wide as its label. The
+              thumb is measured off the selected tab and slides and resizes to
+              the other — 200ms ease-out, the Trax motion. */}
+          <div
+            role="tablist"
+            aria-label="Trax or Support"
+            className="relative inline-flex rounded-full bg-primary/[0.07] p-0.5"
+          >
+            <span
+              aria-hidden
+              style={thumb ? { transform: `translateX(${thumb.left}px)`, width: thumb.width } : undefined}
+              className={cn(
+                "absolute inset-y-0.5 left-0 rounded-full bg-primary/[0.14]",
+                "[transition:transform_200ms_ease-out,width_200ms_ease-out] motion-reduce:transition-none",
+                !thumb && "opacity-0",
+              )}
+            />
+            <button
+              type="button"
+              role="tab"
+              ref={traxTabRef}
+              aria-selected={tab === "trax"}
+              title={viewLabel}
+              onClick={() => setTab("trax")}
+              className={cn(
+                "relative inline-flex h-6 items-center gap-1 rounded-full px-2 text-[12px] font-medium transition-colors duration-200",
+                "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40",
+                tab === "trax" ? "text-primary" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <TraxMark size="xs" animated={false} />
+              Trax
+            </button>
+            <button
+              type="button"
+              role="tab"
+              ref={supportTabRef}
+              aria-selected={tab === "support"}
+              aria-label="Support"
+              onClick={() => setTab("support")}
+              className={cn(
+                "relative inline-flex h-6 items-center gap-1 rounded-full px-2 text-[12px] font-medium transition-colors duration-200",
+                "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40",
+                tab === "support" ? "text-primary" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <LifeBuoy className="size-3" aria-hidden />
+              Support
+            </button>
           </div>
 
           <div className="ml-auto flex items-center gap-0.5">
-            <PanelAction
-              label="Conversation history"
-              tip="Conversation history"
-              icon={<History />}
-              active={view === "history"}
-              disabled={!workspace}
-              onClick={() => workspace?.setView(view === "history" ? "conversation" : "history")}
-            />
-            <PanelAction
-              label="New conversation"
-              tip="New conversation"
-              icon={<SquarePen />}
-              /* Not mid-reply: a new conversation discards the pending answer. */
-              disabled={!workspace || support!.isLoading || (support!.messages.length === 0 && view === "conversation")}
-              onClick={() => workspace?.startNew()}
-            />
-            {/* Human support lives in the portal's Support section. TRAX closes
-                behind it; the conversation and the unsent draft are kept. */}
-            <PanelAction label="Open Support" tip="Open Support" icon={<LifeBuoy />} onClick={() => openSupport({})} />
-            {/* Bigger, over the same page — not a route, so the page underneath
-                keeps its layout and its scroll position. */}
-            <PanelAction
-              label={expanded ? "Restore panel size" : "Expand panel"}
-              tip={expanded ? "Restore size" : "Expand"}
-              icon={expanded ? <Minimize2 /> : <Maximize2 />}
-              active={expanded}
-              onClick={() => setExpanded((previous) => !previous)}
-            />
+            {/* History and a fresh thread belong to the Trax conversation only. */}
+            {tab === "trax" && (
+              <>
+                <PanelAction
+                  label="Conversation history"
+                  tip="Conversation history"
+                  icon={<History />}
+                  active={view === "history"}
+                  disabled={!workspace}
+                  onClick={() => workspace?.setView(view === "history" ? "conversation" : "history")}
+                />
+                <PanelAction
+                  label="New conversation"
+                  tip="New conversation"
+                  icon={<SquarePen />}
+                  /* Not mid-reply: a new conversation discards the pending answer. */
+                  disabled={!workspace || support!.isLoading || (support!.messages.length === 0 && view === "conversation")}
+                  onClick={() => workspace?.startNew()}
+                />
+              </>
+            )}
+            {/* The Trax conversation only: Support keeps the panel's size. */}
+            {tab === "trax" && (
+              <>
+              {/* Bigger, over the same page — not a route, so the page underneath
+                  keeps its layout and its scroll position. */}
+              <PanelAction
+                label={expanded ? "Restore panel size" : "Expand panel"}
+                tip={expanded ? "Restore size" : "Expand"}
+                icon={expanded ? <Minimize2 /> : <Maximize2 />}
+                active={expanded}
+                onClick={() => setExpanded((previous) => !previous)}
+              />
+              </>
+            )}
+            {tab === "support" && !supportNav.creating && (
+              /* Labelled, but quiet: grey with no fill, like the icons beside it,
+                 so the indigo Trax | Support switch stays the one thing that
+                 stands out in the header. */
+              <button
+                type="button"
+                aria-label="New ticket"
+                onClick={() => setNewTicketRequest((count) => count + 1)}
+                className={cn(
+                  "inline-flex h-7 items-center gap-1 rounded-md pl-1.5 pr-2 text-[12px] font-medium text-muted-foreground transition-colors duration-200",
+                  SIDEBAR_HIGHLIGHT_HOVER,
+                  SIDEBAR_HIGHLIGHT_FOCUS,
+                )}
+              >
+                <Plus className="size-3.5" aria-hidden />
+                New ticket
+              </button>
+            )}
             <PanelAction label="Close Trax" tip="Close · ⌘J" icon={<X />} onClick={closeSheet} />
           </div>
         </header>
 
-        {/* Mounted once opened and kept: closing Trax must not lose the thread
-            or a half-typed question. Nothing polls from here. */}
-        {hasOpened && <TraxSupportThread density="sheet" autoFocus={shown} onOpenSupport={openSupport} />}
+        {/* The two tabs, stacked. The one going away fades and drifts 12px
+            toward its side of the switch while the other arrives from its own —
+            200ms, ease-out in / ease-in out, the Trax motion. `visibility`
+            flips off only after the fade, so the hidden tab leaves the tab
+            order without cutting the animation short. */}
+        <div className="relative min-h-0 flex-1">
+          <div
+            data-slot="trax-tab-trax"
+            aria-hidden={tab !== "trax"}
+            className={cn(TAB_LAYER, tab === "trax" ? TAB_IN : cn(TAB_OUT, "-translate-x-3"))}
+          >
+            {/* Mounted once opened and kept: closing Trax must not lose the thread
+                or a half-typed question. Nothing polls from here. */}
+            {hasOpened && <TraxSupportThread density="sheet" autoFocus={shown && tab === "trax"} onOpenSupport={openSupport} backInHeader />}
+          </div>
+          <div
+            data-slot="trax-tab-support"
+            aria-hidden={tab !== "support"}
+            className={cn(TAB_LAYER, tab === "support" ? TAB_IN : cn(TAB_OUT, "translate-x-3"))}
+          >
+            {supportMounted && (
+              <PortalSupport
+                key={supportTarget.key}
+                embedded
+                newTicketRequest={newTicketRequest}
+                onNavChange={onSupportNav}
+                initialTicketId={supportTarget.ticketId}
+              />
+            )}
+          </div>
+        </div>
       </aside>
     </>,
     host,

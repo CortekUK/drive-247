@@ -7,20 +7,27 @@
  *
  *   org row (mark · name · open-the-site arrow)
  *   quick rows, a rule, the fingertip rows
- *   "More": flat rows, then drill-in sections that take the rail over
+ *   "More": flat rows, then every section open under its own caption
  *   footer: the profile row, with Settings and the account menu at its end
  *
  * and it collapses to a 48px icon rail on ⌘B or the hairline at its edge.
+ *
+ * Under the org row, Northwind's sliding pill switches the rail between its
+ * two sides — Admin and Retention (Northwind: Portal | Website). Retention is
+ * Customer Management, and its rail is that page's own sections. The side is
+ * read from the URL (`viewOf`), never stored, so a reload or a shared link
+ * always shows the side the page belongs to. ⌥1 / ⌥2 switch it. (It was
+ * Admin | DevKit until Oct 17 2026; the DevKit pages are in Settings now.)
  *
  * A page that registers sections (`useRegisterSidebarSections`) takes the
  * whole rail, as a Northwind record does: a way back at the top, the record's
  * name, then its sections.
  */
 
-import { Fragment, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { ArrowLeft, Check, ChevronRight, ChevronsUpDown, ExternalLink, LogOut } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { ArrowLeft, Check, ChevronsUpDown, ExternalLink, LayoutGrid, LogOut, MailCheck, Moon, SlidersHorizontal, Sun, User } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
 import {
@@ -37,7 +44,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,7 +53,19 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useSidebarSections } from '@/components/admin/sidebar-sections';
-import { isNavActive, useAdminNav, type AdminNavGroup, type AdminNavItem } from '@/components/admin/admin-nav';
+import { DevSection } from '@/components/admin/dev-section';
+import { ProfileDialog } from '@/components/admin/profile-dialog';
+import { SidebarCustomizerDialog } from '@/components/admin/sidebar-customizer-dialog';
+import { Switch } from '@/components/ui/switch';
+import { useThemeMode } from '@/lib/theme';
+import {
+  RETENTION_ROOT,
+  isNavActive,
+  useAdminNav,
+  viewOf,
+  type AdminNavItem,
+  type AdminView,
+} from '@/components/admin/admin-nav';
 
 /** Northwind's NAV_ROW: 44px rows and a 15px label in the phone sheet, the rail's own 32px/13px from `md`. */
 const NAV_ROW =
@@ -67,16 +86,23 @@ const MARKETING_SITE = 'https://drive-247.com';
 
 // ─── Org row ────────────────────────────────────────────────────────────────
 
+/** The Drive247 mark — the same file the dashboard installs as its app icon. */
 function OrgMark() {
   return (
-    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-[12px] font-semibold text-primary-foreground">
-      D
-    </div>
+    <img
+      src="/icons/icon-192.png"
+      alt=""
+      aria-hidden="true"
+      width={32}
+      height={32}
+      className="h-8 w-8 shrink-0 rounded-lg object-contain"
+    />
   );
 }
 
 function OrgRow({ collapsed, salesOnly }: { collapsed: boolean; salesOnly: boolean }) {
   const label = salesOnly ? 'Sales' : 'Super Admin';
+  const [customizeOpen, setCustomizeOpen] = useState(false);
 
   if (collapsed) {
     return (
@@ -92,6 +118,7 @@ function OrgRow({ collapsed, salesOnly }: { collapsed: boolean; salesOnly: boole
   }
 
   return (
+    <>
     <div data-slot="org-row" className="group/site flex items-center rounded-lg transition-colors hover:bg-primary/10">
       <Link
         href={salesOnly ? '/admin/sales' : '/admin/dashboard'}
@@ -104,6 +131,18 @@ function OrgRow({ collapsed, salesOnly }: { collapsed: boolean; salesOnly: boole
         </span>
       </Link>
       <span aria-hidden className="flex-1" />
+      {/* Customise sidebar — where Northwind's org row carries it. */}
+      {!salesOnly && (
+        <button
+          type="button"
+          onClick={() => setCustomizeOpen(true)}
+          aria-label="Customise sidebar"
+          title="Customise sidebar"
+          className={ROW_CONTROL}
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
+        </button>
+      )}
       <a
         href={MARKETING_SITE}
         target="_blank"
@@ -115,6 +154,8 @@ function OrgRow({ collapsed, salesOnly }: { collapsed: boolean; salesOnly: boole
         <ExternalLink className="h-3.5 w-3.5" aria-hidden />
       </a>
     </div>
+    {!salesOnly && <SidebarCustomizerDialog open={customizeOpen} onOpenChange={setCustomizeOpen} />}
+    </>
   );
 }
 
@@ -140,6 +181,8 @@ function UserRow({
 }) {
   const { user, logout } = useAuthStore();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const { isDark, setDark } = useThemeMode();
   // A record page (e.g. a rental company) offers its own actions here —
   // suspend, delete, reset password… They have no other home on the page.
   const registration = useSidebarSections();
@@ -147,23 +190,25 @@ function UserRow({
   if (!user) return null;
 
   const initials = initialsOf(user.name, user.email);
-  const role = user.is_primary_super_admin
-    ? 'Primary Admin'
-    : user.is_super_admin
-      ? 'Super Admin'
-      : 'Sales Agent';
 
   const avatar = (
     <Avatar className="h-8 w-8 shrink-0 overflow-hidden rounded-full">
+      <AvatarImage src={user.avatar_url || undefined} alt={user.name || 'Admin'} className="object-cover" />
       <AvatarFallback className="bg-primary/10 text-xs font-medium text-primary">{initials}</AvatarFallback>
     </Avatar>
   );
 
+  /* Northwind's account menu (apps/portal/src/components/shared/layout/
+     user-menu-v2.tsx), item for item: the person, then Profile · Dark Mode,
+     then Sign Out. Its Feedback and Replay tour are left out on purpose. A
+     record page's own actions (suspend, delete…) sit in the middle group,
+     where those two were. */
   const menu = (
     <DropdownMenuContent align="start" side={collapsed ? 'right' : 'top'} sideOffset={8} className="w-64 overflow-hidden rounded-xl p-0">
       <div className="p-2.5 pb-2">
         <div className="flex items-center gap-2.5">
           <Avatar className="h-9 w-9 overflow-hidden rounded-full ring-2 ring-border/50">
+            <AvatarImage src={user.avatar_url || undefined} alt={user.name || 'Admin'} className="object-cover" />
             <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">{initials}</AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
@@ -171,13 +216,35 @@ function UserRow({
             <div className="truncate text-[11px] leading-tight text-muted-foreground/70">{user.email}</div>
           </div>
         </div>
-        <span className="mt-2 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-          {role}
-        </span>
       </div>
+
       <DropdownMenuSeparator className="m-0" />
+
+      <div className="p-1.5">
+        <DropdownMenuItem onClick={() => setProfileOpen(true)} className="cursor-pointer rounded-lg px-2.5 py-1.5 text-[13px]">
+          <User className="mr-2.5 h-4 w-4 text-muted-foreground" />
+          <span>Profile</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(e) => {
+            e.preventDefault();
+            setDark(!isDark);
+          }}
+          className="cursor-pointer rounded-lg px-2.5 py-1.5 text-[13px]"
+        >
+          {isDark ? (
+            <Sun className="mr-2.5 h-4 w-4 text-muted-foreground" />
+          ) : (
+            <Moon className="mr-2.5 h-4 w-4 text-muted-foreground" />
+          )}
+          <span>Dark Mode</span>
+          <Switch checked={isDark} tabIndex={-1} aria-hidden className="pointer-events-none ml-auto" />
+        </DropdownMenuItem>
+      </div>
+
       {actions.length > 0 && (
         <>
+          <DropdownMenuSeparator className="m-0" />
           <div className="p-1.5">
             {actions.map((action) => (
               <DropdownMenuItem
@@ -193,9 +260,11 @@ function UserRow({
               </DropdownMenuItem>
             ))}
           </div>
-          <DropdownMenuSeparator className="m-0" />
         </>
       )}
+
+      <DropdownMenuSeparator className="m-0" />
+
       <div className="p-1.5">
         <DropdownMenuItem
           onClick={() => void logout()}
@@ -207,6 +276,8 @@ function UserRow({
       </div>
     </DropdownMenuContent>
   );
+
+  const profile = <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />;
 
   if (collapsed) {
     return (
@@ -234,11 +305,13 @@ function UserRow({
           </DropdownMenuTrigger>
           {menu}
         </DropdownMenu>
+        {profile}
       </div>
     );
   }
 
   return (
+    <>
     <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
       {/* Hover and open states on the CONTAINER, so the highlight covers the
           gear and the caret too — Northwind's profile row. */}
@@ -283,6 +356,8 @@ function UserRow({
       </div>
       {menu}
     </DropdownMenu>
+    {profile}
+    </>
   );
 }
 
@@ -335,6 +410,7 @@ function NavRow({
         <Link
           href={item.href}
           onClick={onNavigate}
+          {...(item.newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
           aria-label={count > 0 ? `${item.name}, ${count} unread` : undefined}
         >
           <Icon className="h-4 w-4 shrink-0" />
@@ -447,6 +523,51 @@ function SectionRail({
   );
 }
 
+// ─── Admin | Retention switch ───────────────────────────────────────────────
+
+const VIEWS = [
+  { key: 'admin', label: 'Admin', kbd: '⌥1' },
+  { key: 'retention', label: 'Retention', kbd: '⌥2' },
+] as const;
+
+/** Northwind's Portal | Website pill, verbatim in its classes. */
+function ViewSwitch({ view, onSwitch }: { view: AdminView; onSwitch: (v: AdminView) => void }) {
+  return (
+    <div className="px-1.5 pb-1 pt-0.5">
+      <div className="relative grid grid-cols-2 rounded-full p-1">
+        {/* Sliding active pill */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-full bg-background shadow-sm ring-1 ring-primary/20 transition-transform duration-300 ease-out motion-reduce:transition-none"
+          style={{ transform: view === 'retention' ? 'translateX(100%)' : 'translateX(0)' }}
+        />
+        {VIEWS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => onSwitch(tab.key)}
+            aria-pressed={view === tab.key}
+            className={cn(
+              'relative z-10 flex h-10 cursor-pointer items-center justify-center gap-1.5 rounded-full px-3 text-[14px] font-medium transition-colors md:h-auto md:justify-between md:px-2.5 md:py-1 md:text-[12px]',
+              view === tab.key ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <span>{tab.label}</span>
+            <kbd
+              className={cn(
+                'hidden rounded-full px-1.5 py-0.5 font-mono text-[10px] font-semibold transition-colors md:inline-block',
+                view === tab.key ? 'bg-primary/15 text-primary' : 'bg-foreground/10 text-foreground/70',
+              )}
+            >
+              {tab.kbd}
+            </kbd>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── The sidebar ────────────────────────────────────────────────────────────
 
 /** `desktop={false}`: the phone sheet only — Support's rail has the desktop slot. */
@@ -463,8 +584,41 @@ export default function Sidebar({ desktop = true }: { desktop?: boolean } = {}) 
     if (isMobile) setOpenMobile(false);
   };
 
-  const [drillGroup, setDrillGroup] = useState<AdminNavGroup | null>(null);
   const [showNav, setShowNav] = useState(false);
+
+  const router = useRouter();
+  // Customer Management is super admin only, so its side is too.
+  const canRetention = nav.all.some((i) => i.href === RETENTION_ROOT);
+  const view: AdminView = canRetention ? viewOf(pathname) : 'admin';
+
+  /* Switching side always lands on that side's first page, as Northwind's
+     does — a rail describing one side over a page from the other reads as
+     broken. */
+  const switchView = useCallback(
+    (next: AdminView) => {
+      if (next === 'retention' && !canRetention) return;
+      if (isMobile) setOpenMobile(false);
+      router.push(next === 'retention' ? RETENTION_ROOT : '/admin/dashboard');
+    },
+    [router, canRetention, isMobile, setOpenMobile],
+  );
+
+  // ⌥1 / ⌥2, as in Northwind (Alt avoids the browser's own Cmd/Ctrl+number).
+  useEffect(() => {
+    if (!canRetention) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.altKey || e.metaKey || e.ctrlKey) return;
+      if (e.code === 'Digit1') {
+        e.preventDefault();
+        switchView('admin');
+      } else if (e.code === 'Digit2') {
+        e.preventDefault();
+        switchView('retention');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [canRetention, switchView]);
 
   /* Leaving a page takes its sections with it, and a drill-in section opened
      on one page should not still be open over the next. */
@@ -476,7 +630,7 @@ export default function Sidebar({ desktop = true }: { desktop?: boolean } = {}) 
 
   if (!desktop && !isMobile) return null;
 
-  if (sections && !showNav) {
+  if (sections && !showNav && view !== 'retention') {
     return (
       <SidebarRoot collapsible="icon" className="transition-all duration-300 ease-in-out">
         <SectionRail collapsed={collapsed} onShowNav={() => setShowNav(true)} onNavigate={closeMobileOnNav} />
@@ -492,7 +646,7 @@ export default function Sidebar({ desktop = true }: { desktop?: boolean } = {}) 
     );
   }
 
-  const hasMore = nav.more.length > 0 || nav.groups.length > 0;
+  const hasMore = nav.more.length > 0;
 
   return (
     <SidebarRoot collapsible="icon" className="transition-all duration-300 ease-in-out">
@@ -501,6 +655,63 @@ export default function Sidebar({ desktop = true }: { desktop?: boolean } = {}) 
       </SidebarHeader>
 
       <SidebarContent className="gap-0 pt-1 transition-all duration-300 ease-in-out">
+        {canRetention && !collapsed && <ViewSwitch view={view} onSwitch={switchView} />}
+
+        {/* Collapsed rail: one button that flips to the other side. */}
+        {canRetention && collapsed && (
+          <SidebarGroup className="p-1.5 pb-1">
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => switchView(view === 'retention' ? 'admin' : 'retention')}
+                    isActive={view === 'retention'}
+                    tooltip={view === 'retention' ? 'Back to Admin' : 'Retention'}
+                    className={NAV_ROW}
+                  >
+                    {view === 'retention' ? <LayoutGrid className="h-4 w-4 shrink-0" /> : <MailCheck className="h-4 w-4 shrink-0" />}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {view === 'retention' ? (
+          /* Customer Management's own sections, registered by the page —
+             nothing from the Admin side, as Northwind's Website side shows
+             only the site. */
+          <SidebarGroup className="p-1.5 pb-0">
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {(sections?.sections ?? []).map((section) => {
+                  const current = section.id === sections?.active;
+                  return (
+                    <SidebarMenuItem key={section.id}>
+                      <SidebarMenuButton
+                        isActive={current}
+                        aria-current={current ? 'page' : undefined}
+                        tooltip={collapsed ? section.label : undefined}
+                        onClick={() => {
+                          sections?.onSelect(section.id);
+                          closeMobileOnNav();
+                        }}
+                        className="h-11 font-medium transition-all duration-200 ease-in-out md:h-8"
+                      >
+                        {collapsed ? (
+                          <span className="text-[11px] font-semibold">{section.label.slice(0, 2)}</span>
+                        ) : (
+                          <span className="truncate text-[15px] md:text-[13px]">{section.label}</span>
+                        )}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ) : (
+        <>
         {nav.quick.length > 0 && (
           <>
             <SidebarGroup className="p-1.5 pb-0">
@@ -523,35 +734,7 @@ export default function Sidebar({ desktop = true }: { desktop?: boolean } = {}) 
           </>
         )}
 
-        {drillGroup ? (
-          /* Drill-in: the section replaces the nav, with its name as the way back. */
-          <SidebarGroup className="p-1.5 pb-0">
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setDrillGroup(null)}
-                    tooltip={collapsed ? 'Back' : undefined}
-                    className={NAV_ROW}
-                  >
-                    <ArrowLeft className="h-4 w-4 shrink-0" />
-                    <span className={cn(labelClass(collapsed), 'font-medium')}>{drillGroup.label}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                {drillGroup.items.map((item) => (
-                  <NavRow
-                    key={item.href}
-                    item={item}
-                    active={isActive(item.href)}
-                    collapsed={collapsed}
-                    onNavigate={closeMobileOnNav}
-                  />
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ) : (
-          <>
+        <>
             <SidebarGroup className="p-1.5 pb-0">
               <SidebarGroupContent>
                 <SidebarMenu>
@@ -586,45 +769,42 @@ export default function Sidebar({ desktop = true }: { desktop?: boolean } = {}) 
                         onNavigate={closeMobileOnNav}
                       />
                     ))}
-                    {nav.groups.map((group) => {
-                      const GroupIcon = group.icon;
-                      const hasActive = group.items.some((i) => isActive(i.href));
-                      const totalBadge = group.items.reduce((s, i) => s + (i.badge || 0), 0);
-                      return (
-                        <SidebarMenuItem key={group.label} className="relative">
-                          <SidebarMenuButton
-                            onClick={() => setDrillGroup(group)}
-                            isActive={hasActive}
-                            tooltip={collapsed ? group.label : undefined}
-                            className={NAV_ROW_WIDE}
-                          >
-                            {collapsed ? (
-                              <GroupIcon className="h-4 w-4 shrink-0" />
-                            ) : (
-                              <Fragment>
-                                <div className="flex min-w-0 items-center gap-2">
-                                  <GroupIcon className="h-4 w-4 shrink-0" />
-                                  <span className="truncate text-[15px] md:text-[13px]">{group.label}</span>
-                                </div>
-                                <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                                  {totalBadge > 0 && <span className="h-1.5 w-1.5 rounded-full bg-destructive" />}
-                                  <ChevronRight className="h-4 w-4 text-muted-foreground/60" />
-                                </div>
-                              </Fragment>
-                            )}
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      );
-                    })}
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
             )}
-          </>
+
+            {/* Every section open, one caption each — no drill-in, no arrows
+                (Ghulam, Oct 7 2026: every page reachable in one click). */}
+            {nav.groups.map((group) => (
+              <SidebarGroup key={group.label} className="p-1.5 pb-2 pt-1">
+                {!collapsed && (
+                  <p className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    {group.label}
+                  </p>
+                )}
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {group.items.map((item) => (
+                      <NavRow
+                        key={item.href}
+                        item={item}
+                        active={isActive(item.href)}
+                        collapsed={collapsed}
+                        onNavigate={closeMobileOnNav}
+                      />
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ))}
+        </>
+        </>
         )}
       </SidebarContent>
 
       <SidebarFooter className="p-1.5">
+        {!collapsed && <DevSection onNavigate={closeMobileOnNav} />}
         <SidebarMenu>
           <SidebarMenuItem>
             <UserRow collapsed={collapsed} settings={nav.settings} onNavigate={closeMobileOnNav} />

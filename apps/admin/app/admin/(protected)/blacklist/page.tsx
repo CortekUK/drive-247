@@ -1,5 +1,7 @@
 'use client';
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { BlockedCustomersEmptyArt } from '@/components/admin/illustrations/scenes/blocked-customers';
 import { Fragment, useEffect, useState } from 'react';
 import { supabase, supabaseUrl } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
@@ -258,6 +260,7 @@ export default function BlacklistPage() {
           a toggle that opened an empty panel would be a button that lies. */}
       <div className="mb-6">
         <FilterSearch
+        scopeLabel="Blacklist"
           value={searchQuery}
           onChange={setSearchQuery}
           placeholder="Search by name, email, or tenant..."
@@ -286,25 +289,25 @@ export default function BlacklistPage() {
           to reach them. Any non-visible overflow still rounds the corners. */}
       <div className="overflow-x-auto rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10">
         <table className="min-w-full divide-y divide-dark-border">
-          <thead className="bg-dark-bg">
+          <thead className="bg-card/95">
             <tr>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-8" />
-              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-8" />
+              <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Customer
               </th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Tenant
               </th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Reason
               </th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Blocked At
               </th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Status
               </th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Actions
               </th>
             </tr>
@@ -313,30 +316,30 @@ export default function BlacklistPage() {
             {filteredCustomers.map((customer) => (
               <Fragment key={customer.id}>
                 <tr
-                  className="hover:bg-dark-hover cursor-pointer"
+                  className="hover:bg-[hsl(var(--v2-row-hover,var(--muted)_/_0.5))] cursor-pointer"
                   onClick={() => toggleRow(customer.id)}
                 >
-                  <td className="px-4 py-4 text-muted-foreground text-sm">
+                  <td className="px-3 py-3 text-muted-foreground text-sm">
                     {expandedRows.has(customer.id) ? '▼' : '▶'}
                   </td>
-                  <td className="px-4 py-4">
+                  <td className="px-3 py-3">
                     <div>
                       <p className="text-sm font-medium text-foreground">{customer.name}</p>
                       <p className="text-xs text-muted-foreground">{customer.email}</p>
                     </div>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                  <td className="px-3 py-3 whitespace-nowrap text-sm text-muted-foreground">
                     {customer.tenant_name}
                   </td>
-                  <td className="px-4 py-4 text-sm text-muted-foreground max-w-[200px] truncate">
+                  <td className="px-3 py-3 text-sm text-muted-foreground max-w-[200px] truncate">
                     {customer.blocked_reason || '—'}
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                  <td className="px-3 py-3 whitespace-nowrap text-sm text-muted-foreground">
                     {customer.blocked_at
                       ? new Date(customer.blocked_at).toLocaleDateString('en-US')
                       : '—'}
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
+                  <td className="px-3 py-3 whitespace-nowrap">
                     <div className="flex flex-col gap-1">
                       {customer.is_tenant_blocked && (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-destructive/10 text-destructive border border-red-700 w-fit">
@@ -355,7 +358,7 @@ export default function BlacklistPage() {
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
+                  <td className="px-3 py-3 whitespace-nowrap">
                     {customer.is_globally_blacklisted && !customer.is_whitelisted && (
                       <button
                         onClick={(e) => {
@@ -384,7 +387,7 @@ export default function BlacklistPage() {
                 {/* Expanded Row — blocked identities */}
                 {expandedRows.has(customer.id) && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-4 bg-dark-bg/50">
+                    <td colSpan={7} className="px-3 py-3 bg-dark-bg/50">
                       <div className="ml-8">
                         {customer.blocked_identities.length > 0 ? (
                           <>
@@ -430,13 +433,15 @@ export default function BlacklistPage() {
         </table>
 
         {filteredCustomers.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">
-              {searchQuery
-                ? 'No blocked customers match your search.'
-                : 'No blocked customers found.'}
-            </p>
-          </div>
+          searchQuery ? (
+            <NoMatchState noun="blocked customers" onClear={() => setSearchQuery('')} />
+          ) : (
+            <EmptyState
+              illustration={<BlockedCustomersEmptyArt />}
+              headline="Nobody on the global blacklist"
+              body="A customer blocked here is refused by every operator on Drive247, not just the one who flagged them."
+            />
+          )
         )}
       </div>
 
@@ -485,7 +490,7 @@ export default function BlacklistPage() {
               <button
                 onClick={() => setDialogOpen(false)}
                 disabled={actionLoading}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground bg-dark-bg border border-dark-border hover:bg-dark-hover transition-colors disabled:opacity-50"
+                className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground bg-dark-bg border border-dark-border hover:bg-[hsl(var(--v2-row-hover,var(--muted)_/_0.5))] transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>

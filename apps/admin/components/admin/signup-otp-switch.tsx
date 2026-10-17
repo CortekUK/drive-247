@@ -4,9 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
-import { cn } from '@/lib/utils';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { SettingsRow } from '@/components/admin/settings/settings-kit';
 
 /**
  * "Verify the email address during signup": the switch for the emailed code.
@@ -82,56 +81,29 @@ export function SignupOtpSwitch() {
   const busy = enabled === null || saving;
 
   return (
-    <Card>
-      <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
-        <div className="min-w-0 max-w-2xl">
-          <p className="text-sm font-semibold">Verify the email address during signup</p>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Sends a 6-digit code after the name and password, and holds the signup there until
-            it is entered. Turn it off if verification emails stop arriving &mdash; signups
-            then continue straight to the company details, as they did before.
-          </p>
-          {loadError && (
-            <p className="mt-1 text-sm text-destructive">Could not read this setting: {loadError}</p>
-          )}
-        </div>
-        <label className={cn('flex shrink-0 items-center', busy ? 'cursor-wait' : 'cursor-pointer')}>
-          <div className="relative">
-            <input
-              type="checkbox"
-              role="switch"
-              aria-label="Verify the email address during signup"
-              checked={enabled === true}
-              disabled={busy}
-              onChange={(e) => void toggle(e.target.checked)}
-              className="peer sr-only"
-            />
-            <div
-              className={cn(
-                'h-6 w-11 rounded-full transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-ring',
-                enabled ? 'bg-emerald-500' : 'bg-muted',
-                busy && 'opacity-70',
-              )}
-            >
-              <div
-                className={cn(
-                  'absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-md ring-1 ring-black/5 transition-transform',
-                  enabled && 'translate-x-5',
-                )}
-              />
-            </div>
-          </div>
-          <Badge variant={enabled ? 'success' : 'outline'} className="ml-2 whitespace-nowrap">
-            {enabled === null ? (
-              loadError ? 'Unknown' : <Loader2 className="h-3 w-3 animate-spin" />
-            ) : enabled ? (
-              'On'
-            ) : (
-              'Off'
-            )}
-          </Badge>
-        </label>
-      </CardContent>
-    </Card>
+    <SettingsRow
+      label="Verify the email address during signup"
+      htmlFor="signup-otp-enabled"
+      description={
+        <>
+          Sends a 6-digit code after the name and password, and holds the signup there until it is
+          entered. Turn it off if verification emails stop arriving: signups then continue straight
+          to the company details, as they did before.
+          {loadError && <span className="mt-1 block text-destructive">Could not read this setting: {loadError}</span>}
+        </>
+      }
+    >
+      {enabled === null && !loadError ? (
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      ) : (
+        <Switch
+          id="signup-otp-enabled"
+          aria-label="Verify the email address during signup"
+          checked={enabled === true}
+          disabled={busy}
+          onCheckedChange={(v) => void toggle(v)}
+        />
+      )}
+    </SettingsRow>
   );
 }

@@ -1,5 +1,8 @@
 'use client';
 
+import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton } from '@/components/admin/header-buttons';
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { UsageEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -205,9 +208,6 @@ export default function OpenAIUsagePage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center h-10 w-10 rounded-xl bg-primary/15 glow-purple-sm">
-            <Sparkles className="h-5 w-5 text-primary" />
-          </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">OpenAI Usage</h1>
             <p className="text-sm text-muted-foreground">
@@ -226,10 +226,9 @@ export default function OpenAIUsagePage() {
             activeCount={range !== '7d' ? 1 : 0}
             standalone
           />
-          <Button variant="outline" size="sm" onClick={fetchLogs} disabled={loading} className="gap-1.5">
-            <RotateCcw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          <HeaderIconButton label="Refresh" onClick={fetchLogs} disabled={loading}>
+            <RotateCcw className={loading ? 'animate-spin' : ''} />
+          </HeaderIconButton>
         </div>
       </div>
 
@@ -328,13 +327,12 @@ export default function OpenAIUsagePage() {
           {loading ? (
             <Skeleton className="h-[280px] w-full" />
           ) : dailyChart.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Sparkles className="h-10 w-10 text-muted-foreground/40 mb-3" />
-              <p className="text-sm text-muted-foreground">No OpenAI usage in this range yet</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">
-                Once edge functions make AI calls, they'll show up here within seconds
-              </p>
-            </div>
+            <EmptyState
+              size="section"
+              illustration={<UsageEmptyArt />}
+              headline="No AI usage in this range"
+              body="Once edge functions make OpenAI calls, their tokens and cost show up here within seconds."
+            />
           ) : (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={dailyChart} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
@@ -374,7 +372,7 @@ export default function OpenAIUsagePage() {
           ) : (
             <Table>
               <TableHeader>
-                <TableRow className="bg-primary/5 hover:bg-primary/5">
+                <TableRow>
                   <TableHead>Function</TableHead>
                   <TableHead className="text-right">Calls</TableHead>
                   <TableHead className="text-right">Tokens</TableHead>
@@ -386,8 +384,8 @@ export default function OpenAIUsagePage() {
               <TableBody>
                 {byFunction.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
-                      No data yet
+                    <TableCell colSpan={6} className="p-0">
+                      <EmptyState size="section" headline="No calls in this range" body="Each edge function that calls OpenAI gets a row here." />
                     </TableCell>
                   </TableRow>
                 ) : byFunction.map((f) => (
@@ -426,7 +424,7 @@ export default function OpenAIUsagePage() {
             ) : (
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-primary/5 hover:bg-primary/5">
+                  <TableRow>
                     <TableHead>Tenant</TableHead>
                     <TableHead className="text-right">Calls</TableHead>
                     <TableHead className="text-right">Cost</TableHead>
@@ -466,7 +464,7 @@ export default function OpenAIUsagePage() {
             ) : (
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-primary/5 hover:bg-primary/5">
+                  <TableRow>
                     <TableHead>Model</TableHead>
                     <TableHead className="text-right">Calls</TableHead>
                     <TableHead className="text-right">Tokens</TableHead>
@@ -508,7 +506,7 @@ export default function OpenAIUsagePage() {
           ) : (
             <Table>
               <TableHeader>
-                <TableRow className="bg-primary/5 hover:bg-primary/5">
+                <TableRow>
                   <TableHead className="w-[160px]">Time</TableHead>
                   <TableHead>Function</TableHead>
                   <TableHead>Tenant</TableHead>

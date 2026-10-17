@@ -12,8 +12,11 @@
  * nothing is sent or automated when a tenant is added.
  */
 
+import { FilterSearch } from '@/components/admin/filter-primitives';
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { UsersEmptyArt } from '@/components/admin/illustrations/scenes/users';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Award, Loader2, RefreshCw, Search, UserMinus, UserPlus } from 'lucide-react';
+import { Award, Loader2, RefreshCw, UserMinus, UserPlus } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
@@ -22,7 +25,6 @@ import { toast } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -233,7 +235,12 @@ export function AdvisoryBoardTab({ canEdit }: { canEdit: boolean }) {
             />
           </div>
           {boardTenants.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No one on the board yet — use “Put in Advisory Board” on a row below.</p>
+            <EmptyState
+              size="section"
+              illustration={<UsersEmptyArt />}
+              headline="No one on the board yet"
+              body="Use “Put in Advisory Board” on an operator below to invite them in."
+            />
           ) : (
             <div className="flex flex-wrap gap-2">
               {boardTenants.map((t) => (
@@ -257,10 +264,7 @@ export function AdvisoryBoardTab({ canEdit }: { canEdit: boolean }) {
             {rows.length} of {tenants.length} tenants · “With us” counts from account creation.
           </CardDescription>
           <div className="flex flex-wrap items-center gap-2 pt-2">
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search operators" className="h-9 pl-8" />
-            </div>
+            <FilterSearch scopeLabel="Advisory board" value={search} onChange={setSearch} placeholder="Search operators" />
             <Select value={portal} onValueChange={(v) => setPortal(v as PortalFilter)}>
               <SelectTrigger className="h-9 w-[130px]">
                 <SelectValue />
@@ -302,7 +306,7 @@ export function AdvisoryBoardTab({ canEdit }: { canEdit: boolean }) {
             <p className="pb-3 text-sm text-muted-foreground">Read-only: changing the board needs a super admin account.</p>
           )}
           {rows.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">No operators match.</p>
+            <NoMatchState size="section" noun="operators" />
           ) : (
             <div className="overflow-x-auto">
               <Table>

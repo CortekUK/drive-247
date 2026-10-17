@@ -751,7 +751,7 @@ export function SignupPlanCard({
  * Changing it never touches anyone already signed up — each trial lives on
  * that customer's own Stripe subscription.
  */
-function TrialSection({
+export function TrialSection({
   plan,
   busy,
   saving,

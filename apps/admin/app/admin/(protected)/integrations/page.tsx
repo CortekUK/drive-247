@@ -26,6 +26,8 @@
  * hand), so a missing table is reported as a setup instruction.
  */
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { IntegrationsEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Crown, Loader2, Plug, Save } from 'lucide-react';
 
@@ -287,9 +289,6 @@ export default function IntegrationsAdminPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <header className="flex items-center gap-3">
-        <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <Plug className="size-5" />
-        </span>
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Integrations</h1>
           <p className="text-sm text-muted-foreground">
@@ -347,13 +346,13 @@ export default function IntegrationsAdminPage() {
             <table className="w-full min-w-[860px] text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  <th className="px-4 py-3">Integration</th>
-                  <th className="px-3 py-3">Premium</th>
-                  <th className="px-3 py-3">Monthly price (USD)</th>
-                  <th className="px-3 py-3">First month free</th>
-                  <th className="px-3 py-3">Beta</th>
-                  <th className="px-3 py-3">Not available</th>
-                  <th className="px-3 py-3">Hidden</th>
+                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Integration</th>
+                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Premium</th>
+                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Monthly price (USD)</th>
+                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">First month free</th>
+                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Beta</th>
+                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Not available</th>
+                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Hidden</th>
                 </tr>
               </thead>
               <tbody>
@@ -361,7 +360,7 @@ export default function IntegrationsAdminPage() {
                   const problem = r.is_premium ? premiumPriceProblem(r.price) : null;
                   return (
                     <tr key={r.key} className="border-b border-border last:border-0">
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3">
                         <div className="flex items-center gap-2 font-medium text-foreground">
                           {r.name}
                           {r.is_premium && <Crown className="size-3.5 text-amber-500" aria-label="Premium" />}
@@ -463,27 +462,32 @@ export default function IntegrationsAdminPage() {
           <section className="space-y-3">
             <h2 className="text-lg font-semibold">Subscribers</h2>
             {live.length === 0 ? (
-              <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-                No operator has subscribed to a premium integration yet.
-              </p>
+              <div className="rounded-4xl bg-card ring-1 ring-foreground/10">
+                <EmptyState
+                  size="section"
+                  illustration={<IntegrationsEmptyArt />}
+                  headline="No subscribers yet"
+                  body="When an operator subscribes to a premium integration, they show up here with what they pay."
+                />
+              </div>
             ) : (
               <div className="overflow-x-auto rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10">
                 <table className="w-full min-w-[720px] text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/40 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      <th className="px-4 py-3">Company</th>
-                      <th className="px-3 py-3">Integration</th>
-                      <th className="px-3 py-3">Price</th>
-                      <th className="px-3 py-3">Status</th>
-                      <th className="px-3 py-3">Subscribed</th>
-                      <th className="px-3 py-3">First bill</th>
-                      <th className="px-3 py-3" />
+                      <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Company</th>
+                      <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Integration</th>
+                      <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Price</th>
+                      <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                      <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Subscribed</th>
+                      <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">First bill</th>
+                      <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground" />
                     </tr>
                   </thead>
                   <tbody>
                     {live.map((s) => (
                       <tr key={s.id} className="border-b border-border last:border-0">
-                        <td className="px-4 py-3 font-medium">{s.tenants?.company_name || s.tenants?.slug || s.tenant_id}</td>
+                        <td className="px-3 py-3 font-medium">{s.tenants?.company_name || s.tenants?.slug || s.tenant_id}</td>
                         <td className="px-3 py-3">
                           {ADMIN_INTEGRATIONS.find((i) => i.key === s.integration_key)?.name ?? s.integration_key}
                         </td>

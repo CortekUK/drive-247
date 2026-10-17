@@ -43,7 +43,7 @@ import { useEffect, useState } from "react";
 import { useForm, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, Mail, QrCode } from "lucide-react";
 import type { ComponentType } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -55,19 +55,21 @@ import { cn } from "@/lib/utils";
 import { customerFormModalSchema, type CustomerFormModalFormValues } from "@/client-schemas/customers/customer-form-modal";
 import { Button } from "@/components/ui-v2/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui-v2/dialog";
-import { Cell, CONTROL, Segmented, StepFooter, ToggleTile } from "@/components/shared/form-grid-v2";
+import { Cell, CONTROL, FORM_DIALOG_WASH, Segmented, StepFooter, ToggleTile, TWINKLE_CSS } from "@/components/shared/form-grid-v2";
 import {
+  AddCustomerAddedArt,
   AddCustomerContactArt,
   AddCustomerEmergencyArt,
   AddCustomerEmergencyReachArt,
   AddCustomerExtrasArt,
   AddCustomerLicenceArt,
-  AddCustomerVerifyArt,
   AddCustomerWhoArt,
 } from "@/components/illustrations-v2/scenes/add-customer";
 import { BonzahDateField } from "@/app/(dashboard)/integrations/_panels/bonzah-date-field";
 import { VerifyIdScreenV2 } from "@/components/customers-v2/verify-id-screen-v2";
 import GigDriverUploadDialog from "@/components/customers/gig-driver-upload-dialog";
+import { DevAutofillButton } from "@/components/dev/dev-autofill-button";
+import { randomCustomer } from "@/lib/dev-autofill";
 
 type Values = CustomerFormModalFormValues;
 
@@ -96,11 +98,18 @@ type Step = {
   title: string;
   line: string;
   fields: FieldPath<Values>[];
+  /**
+   * The fields stack one per row. A lone field across the whole 720px dialog
+   * reads as stretched (Ghulam, Oct 7), so these screens use a narrower,
+   * centred column instead.
+   */
+  narrow?: boolean;
 };
 
 const STEPS: Step[] = [
   {
     name: "Who",
+    narrow: true,
     art: AddCustomerWhoArt,
     title: "Who's renting?",
     line: "Their name and date of birth, as they appear on their licence.",
@@ -108,6 +117,7 @@ const STEPS: Step[] = [
   },
   {
     name: "Contact",
+    narrow: true,
     art: AddCustomerContactArt,
     title: "How do I reach them?",
     line: "Email or phone. I need at least one to send their bookings and receipts.",
@@ -115,6 +125,7 @@ const STEPS: Step[] = [
   },
   {
     name: "Licence",
+    narrow: true,
     art: AddCustomerLicenceArt,
     title: "Their licence",
     line: "I check every number against your blocklist the moment you enter it.",
@@ -122,6 +133,7 @@ const STEPS: Step[] = [
   },
   {
     name: "Details",
+    narrow: true,
     art: AddCustomerExtrasArt,
     title: "A couple more things",
     line: "If they drive for Uber, Lyft or DoorDash, I'll ask for their proof next.",
@@ -129,6 +141,7 @@ const STEPS: Step[] = [
   },
   {
     name: "Emergency contact",
+    narrow: true,
     art: AddCustomerEmergencyArt,
     title: "Who do I call if something happens?",
     line: "All optional, but it's the first person I'll want if there's trouble on the road.",
@@ -182,8 +195,11 @@ export function CustomerFormDialogV2({
   const [loading, setLoading] = useState(false);
   const [blocked, setBlocked] = useState<{ reason?: string; type?: string } | null>(null);
   // After a create: the follow-up screen, then the QR / gig upload dialogs.
-  const [created, setCreated] = useState<{ id: string; name: string } | null>(null);
-  const [startingVerification, setStartingVerification] = useState(false);
+  const [created, setCreated] = useState<{ id: string; name: string; email: string | null } | null>(null);
+  // Which way is starting ("qr" | "email"), so only that card shows a spinner.
+  const [startingVerification, setStartingVerification] = useState<false | "qr" | "email">(false);
+  // Set when the link went out by email: the waiting screen says so.
+  const [emailedTo, setEmailedTo] = useState<string | null>(null);
   const [qr, setQr] = useState<{ sessionId: string; qrUrl: string; expiresAt: Date } | null>(null);
   const [gigCustomerId, setGigCustomerId] = useState<string | null>(null);
 
@@ -396,10 +412,10 @@ export function CustomerFormDialogV2({
         const { data: row, error } = await supabase.from("customers").insert(payload as never).select("id").single();
         if (error) throw error;
         logAction({ action: "customer_created", entityType: "customer", entityId: row.id, details: { customer_name: data.name } });
-        toast({ title: "Customer added", description: `${data.name} is now in your customers.` });
+        // No toast: the dialog itself turns into the "{name} is in." screen.
         refresh();
         if (data.is_gig_driver) setGigCustomerId(row.id);
-        setCreated({ id: row.id, name: data.name });
+        setCreated({ id: row.id, name: data.name, email: data.email || null });
         form.reset(EMPTY);
       } catch {
         fail("Couldn't save", `Failed to ${isEditing ? "update" : "add"} the customer. Please try again.`);
@@ -413,16 +429,36 @@ export function CustomerFormDialogV2({
     },
   );
 
-  const startVerification = async () => {
+  /**
+   * Start the ID check. "qr" shows the code; "email" also sends the link
+   * through send-verification-link-v2 and lands on the same waiting screen,
+   * which then says it was emailed. Anything else (a click event, from the
+   * waiting screen's "New code") is "qr".
+   */
+  const startVerification = async (how?: unknown) => {
+    const mode = how === "email" ? "email" : "qr";
     if (!created || !tenant?.id || !tenant?.slug) return;
-    setStartingVerification(true);
+    setStartingVerification(mode);
     try {
       const { data, error } = await supabase.functions.invoke("create-ai-verification-session", {
         body: { customerId: created.id, tenantId: tenant.id, tenantSlug: tenant.slug },
       });
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || "Failed to create verification session");
-      setQr({ sessionId: data.sessionId, qrUrl: data.qrUrl, expiresAt: new Date(data.expiresAt) });
+      const session = { sessionId: data.sessionId, qrUrl: data.qrUrl, expiresAt: new Date(data.expiresAt) };
+      setEmailedTo(null);
+      if (mode === "email" && created.email) {
+        const sent = await supabase.functions.invoke("send-verification-link-v2", {
+          body: { sessionId: session.sessionId, email: created.email, tenantSlug: tenant.slug },
+        });
+        if (sent.error || !sent.data?.success) {
+          // The session exists either way: fall back to the code, and say so.
+          fail("Couldn't email the link", "I've opened the QR code instead. You can try Email link again from there.");
+        } else {
+          setEmailedTo(sent.data.to as string);
+        }
+      }
+      setQr(session);
     } catch (e: any) {
       fail("Couldn't start verification", e?.message || "Failed to start verification.");
     } finally {
@@ -434,9 +470,19 @@ export function CustomerFormDialogV2({
     if (!o) {
       setCreated(null);
       setQr(null);
+      setEmailedTo(null);
       setStep(0);
     }
     onOpenChange(o);
+  };
+
+  /** Developer autofill (Northwind only — see lib/dev-autofill.ts). */
+  const autofill = () => {
+    setBlocked(null);
+    for (const [k, val] of Object.entries(randomCustomer())) {
+      form.setValue(k as FieldPath<Values>, val as never, { shouldDirty: true });
+    }
+    form.clearErrors();
   };
 
   const last = step === STEPS.length - 1;
@@ -447,7 +493,8 @@ export function CustomerFormDialogV2({
     <>
       <Dialog open={open} onOpenChange={close}>
         <DialogContent
-          className="gap-0 overflow-hidden p-0 sm:max-w-[600px]"
+          className="gap-0 overflow-hidden p-0 sm:max-w-[720px]"
+          style={FORM_DIALOG_WASH}
           showCloseButton={false}
           // The ID check is waiting on the customer's phone: a stray click
           // outside must not throw the QR away. "Later" closes it.
@@ -467,30 +514,69 @@ export function CustomerFormDialogV2({
             <VerifyIdScreenV2
               session={qr}
               name={created.name}
+              email={created.email}
+              emailedTo={emailedTo}
               onDone={() => close(false)}
               onRetry={startVerification}
-              retrying={startingVerification}
+              retrying={!!startingVerification}
               onComplete={() => queryClient.invalidateQueries({ queryKey: ["customers-list"] })}
             />
           ) : created ? (
-            /* The follow-up after a create: verify now, or later. */
+            /* The follow-up after a create: two ways to verify, side by side
+               (a choice between two peers — the one place cards sit side by
+               side), and "later" as a quiet link. */
             <div className="flex flex-col">
-              <div className="flex h-[456px] flex-col items-center justify-center px-10 text-center duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none">
-                <AddCustomerVerifyArt className="max-w-[264px]" />
-                <h3 className="mt-6 text-xl font-medium text-foreground [text-wrap:balance]">{created.name} is in.</h3>
-                <p className="mx-auto mt-2 max-w-[24rem] text-sm leading-relaxed text-muted-foreground [text-wrap:balance]">
-                  Want me to verify their ID now? I&rsquo;ll show a QR code they scan to photograph their licence and take a
-                  selfie.
+              <div className="flex h-[500px] flex-col items-center justify-center px-10 text-center duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none">
+                <style>{TWINKLE_CSS}</style>
+                <AddCustomerAddedArt className="max-w-[230px]" />
+                <h3 className="mt-5 text-2xl font-medium text-foreground [text-wrap:balance]">{created.name} is in.</h3>
+                <p className="mx-auto mt-1.5 max-w-[26rem] text-sm leading-relaxed text-muted-foreground [text-wrap:balance]">
+                  How should I check their ID? Either way they photograph their licence and take a selfie.
                 </p>
+
+                <div className="mt-6 grid w-full max-w-[520px] grid-cols-2 gap-3">
+                  {(
+                    [
+                      { mode: "qr", icon: QrCode, title: "Show the QR code", line: "They're here with you", disabled: false },
+                      {
+                        mode: "email",
+                        icon: Mail,
+                        title: "Email them the link",
+                        line: created.email ? `To ${created.email}` : "No email on file",
+                        disabled: !created.email,
+                      },
+                    ] as const
+                  ).map((o) => {
+                    const Icon = o.icon;
+                    const busy = startingVerification === o.mode;
+                    return (
+                      <button
+                        key={o.mode}
+                        type="button"
+                        disabled={o.disabled || !!startingVerification}
+                        onClick={() => void startVerification(o.mode)}
+                        className="group relative flex flex-col items-center gap-2.5 overflow-hidden rounded-2xl border border-foreground/10 bg-background/80 px-4 py-5 text-center transition-colors duration-200 ease-in hover:border-primary/40 hover:ease-out disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+                      >
+                        {/* Hover wash: its own layer, faded — a gradient can't be transitioned. */}
+                        <span aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-primary/[0.07] to-transparent opacity-0 transition-opacity duration-200 ease-in group-hover:opacity-100 group-hover:ease-out group-disabled:opacity-0 motion-reduce:transition-none" />
+                        <span className="relative flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
+                          {busy ? <Loader2 className="size-5 animate-spin" /> : <Icon className="size-5" strokeWidth={1.75} />}
+                        </span>
+                        <span className="relative text-sm font-medium text-foreground">{busy ? "Starting…" : o.title}</span>
+                        <span className="relative w-full truncate text-xs text-muted-foreground">{o.line}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="flex items-center justify-between gap-4 border-t px-8 py-4">
-                <Button variant="outline" className="h-10 rounded-full px-5" onClick={() => close(false)}>
-                  Later
-                </Button>
-                <Button className="h-10 rounded-full px-5" onClick={startVerification} disabled={startingVerification}>
-                  {startingVerification ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
-                  {startingVerification ? "Starting…" : "Verify ID now"}
-                </Button>
+              <div className="flex items-center justify-center px-8 py-4">
+                <button
+                  type="button"
+                  onClick={() => close(false)}
+                  className="h-10 text-sm text-muted-foreground underline-offset-4 transition-colors duration-200 hover:text-foreground hover:underline motion-reduce:transition-none"
+                >
+                  I&rsquo;ll do it later
+                </button>
               </div>
             </div>
           ) : (
@@ -502,13 +588,14 @@ export function CustomerFormDialogV2({
               }}
               className="flex flex-col"
             >
+              {!isEditing && <DevAutofillButton onFill={autofill} />}
               {/* One screen: picture, what Trax is asking, a few fields. Same
                   height on every step, so nothing jumps and nothing scrolls. */}
               <div
                 key={step}
-                className="flex h-[456px] flex-col items-center overflow-hidden px-10 pt-8 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none"
+                className="flex h-[500px] flex-col items-center overflow-hidden px-10 pt-8 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none"
               >
-                <screen.art className="max-w-[240px]" />
+                <screen.art className="max-w-[280px]" />
                 <h3 className="mt-4 text-center text-xl font-medium leading-snug text-foreground [text-wrap:balance]">
                   {screen.title}
                 </h3>
@@ -516,7 +603,7 @@ export function CustomerFormDialogV2({
                   {screen.line}
                 </p>
 
-                <div className="mt-5 grid w-full grid-cols-2 gap-x-5 gap-y-1">
+                <div className={cn("mt-5 grid grid-cols-2 gap-x-5 gap-y-1", screen.narrow ? "mx-auto w-full max-w-[420px]" : "w-full")}>
                   {step === 0 && (
                     <>
                       <Cell label="Full name" required className="col-span-2" error={err("name")}>

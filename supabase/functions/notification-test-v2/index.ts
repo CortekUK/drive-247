@@ -144,9 +144,11 @@ export const PLATFORM_SENDER_LOCAL_PART = 'noreply';
  */
 export const PLATFORM_EMAIL_BRAND: EmailLayoutBrand = {
   companyName: 'Drive 247',
-  logoUrl: null,
-  primaryColor: '#1a1a1a',
-  accentColor: '#C5A572',
+  // Drive247's own theme (Oct 17 2026): the white wordmark on the dark header,
+  // indigo buttons and links.
+  logoUrl: 'https://www.drive-247.com/logo-dark.png',
+  primaryColor: '#0f172a',
+  accentColor: '#6366f1',
   contactEmail: 'support@drive-247.com',
   contactPhone: null,
 };
@@ -278,20 +280,28 @@ export function senderFrom(sender: Partial<SenderRow> | null | undefined, tenant
   return { name, address, header, replyTo };
 }
 
+/** The platform sender a super admin set (admin_settings, Notifications › Setups › Email sender). */
+export interface PlatformSenderRow {
+  platform_sender_name: string | null;
+  platform_sender_local_part: string | null;
+  platform_reply_to: string | null;
+}
+
 /**
- * Who a PLATFORM email is from. Fixed, not read from a table: a system email is
- * from us, there is nothing per-tenant to look up, and nothing an operator could
- * make it impersonate. The admin page shows the same line
- * (settings-model.ts senderAddress() with nothing saved).
+ * Who a PLATFORM email is from: the admin's settings-model senderAddress().
+ * A saved name or local part is used only when it is valid; otherwise today's
+ * default "Drive 247 <noreply@drive-247.com>".
  */
-export function platformSender(): SenderIdentity {
-  const address = `${PLATFORM_SENDER_LOCAL_PART}@${EMAIL_SENDER_DOMAIN}`;
-  return {
-    name: PLATFORM_SENDER_NAME,
-    address,
-    header: `${PLATFORM_SENDER_NAME} <${address}>`,
-    replyTo: null,
-  };
+export function platformSender(row?: Partial<PlatformSenderRow> | null): SenderIdentity {
+  const name = cleanDisplayName(row?.platform_sender_name) || PLATFORM_SENDER_NAME;
+  const wanted = String(row?.platform_sender_local_part ?? '').trim();
+  const customLocal =
+    wanted && LOCAL_PART_PATTERN.test(wanted) && !wanted.includes('..') && !wanted.endsWith('.') ? wanted : '';
+  const address = `${customLocal || PLATFORM_SENDER_LOCAL_PART}@${EMAIL_SENDER_DOMAIN}`;
+  const atext = /^[A-Za-z0-9 !#$%&'*+\-/=?^_`{|}~]+$/;
+  const header = (atext.test(name) ? name : `"${name.replace(/\\/g, '\\\\')}"`) + ` <${address}>`;
+  const replyTo = isValidEmailAddress(row?.platform_reply_to) ? String(row?.platform_reply_to).trim() : null;
+  return { name, address, header, replyTo };
 }
 
 /**
@@ -619,7 +629,17 @@ async function sendEmailTest(
     }
     from = senderFrom(sender, target.tenant);
   } else {
-    from = platformSender();
+    // The first admin_settings row, the one the dashboard's Settings reads.
+    // Unreadable or missing columns: today's default sender.
+    const { data: settingsRows, error: settingsError } = await supabase
+      .from('admin_settings')
+      .select('platform_sender_name, platform_sender_local_part, platform_reply_to')
+      .order('created_at', { ascending: true })
+      .limit(1);
+    if (settingsError) {
+      console.warn('[NOTIFICATION-TEST-V2] Could not read the platform sender; using the default sender:', settingsError.message);
+    }
+    from = platformSender(settingsError ? null : ((settingsRows?.[0] ?? null) as PlatformSenderRow | null));
   }
 
   // The same call the preview makes. bodyHtml is passed as received:

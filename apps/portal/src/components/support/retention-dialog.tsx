@@ -47,7 +47,7 @@ export function RetentionDialog({ compact = false }: { compact?: boolean } = {})
           <DialogHeader>
             <DialogTitle>Support retention</DialogTitle>
             <DialogDescription>
-              Only TRAX conversations and support tickets are affected. Open tickets remain stored; ticket handoffs survive ordinary conversation cleanup.
+              Only TRAX conversations and support tickets are affected. Open tickets remain stored.
             </DialogDescription>
           </DialogHeader>
           {!policy ? (
@@ -71,7 +71,7 @@ export function RetentionDialog({ compact = false }: { compact?: boolean } = {})
               )}
               <div className="space-y-2 border-t border-border pt-4">
                 <h3 className="text-sm font-semibold">Approved conversation exception</h3>
-                <p className="text-xs text-muted-foreground">Use the conversation reference from a support handoff to preserve its original context. The ticket already retains its own redacted handoff independently.</p>
+                <p className="text-xs text-muted-foreground">Enter a TRAX conversation reference to keep that conversation beyond normal retention.</p>
                 <Label htmlFor="trax-hold-id">Conversation reference</Label>
                 <Input id="trax-hold-id" value={holdId} onChange={(e) => { setHoldId(e.target.value); setHoldResult(null); }} />
                 <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={hold} onChange={(e) => setHold(e.target.checked)} />Keep this conversation beyond normal retention</label>

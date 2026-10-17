@@ -1,5 +1,7 @@
 'use client';
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { PaymentsEmptyArt } from '@/components/admin/illustrations/scenes/payments';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
@@ -204,19 +206,24 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
           <table className="w-full">
             <thead>
               <tr className="border-b border-dark-border">
-                <th className="text-left py-2.5 px-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Date</th>
-                <th className="text-left py-2.5 px-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Type</th>
-                <th className="text-left py-2.5 px-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Description</th>
-                <th className="text-left py-2.5 px-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Category</th>
-                <th className="text-right py-2.5 px-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Amount</th>
-                <th className="text-right py-2.5 px-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Balance</th>
+                <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Date</th>
+                <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Type</th>
+                <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Description</th>
+                <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Category</th>
+                <th className="h-10 whitespace-nowrap px-3 align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-right">Amount</th>
+                <th className="h-10 whitespace-nowrap px-3 align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-right">Balance</th>
               </tr>
             </thead>
             <tbody>
               {transactions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-8 text-sm text-dark-text-secondary">
-                    No transactions yet
+                  <td colSpan={6} className="p-0">
+                    <EmptyState
+                      size="section"
+                      illustration={<PaymentsEmptyArt />}
+                      headline="No credit transactions yet"
+                      body="Credits this company buys or spends are listed here, newest first."
+                    />
                   </td>
                 </tr>
               ) : (

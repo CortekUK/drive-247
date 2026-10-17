@@ -1,5 +1,7 @@
 'use client';
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { AuditLogEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { FilterSearch, FilterSection, FilterShell } from '@/components/admin/filter-primitives';
 import { FilterReveal } from '@/components/admin/overview-flip';
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -699,9 +701,6 @@ export default function AuditLogsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center h-10 w-10 rounded-xl bg-primary/15 glow-purple-sm">
-            <ScrollText className="h-5 w-5 text-primary" />
-          </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Audit Logs</h1>
             <p className="text-sm text-muted-foreground">
@@ -731,6 +730,7 @@ export default function AuditLogsPage() {
 
       {/* Search, with the filter toggle inside the field. */}
       <FilterSearch
+        scopeLabel="Audit logs"
         value={searchQuery}
         onChange={setSearchQuery}
         placeholder="Search logs..."
@@ -826,20 +826,20 @@ export default function AuditLogsPage() {
               ))}
             </div>
           ) : filteredLogs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <ScrollText className="h-10 w-10 text-muted-foreground/40 mb-3" />
-              <p className="text-sm text-muted-foreground">No audit logs found</p>
-              {hasActiveFilters && (
-                <Button variant="ghost" size="sm" onClick={resetFilters} className="mt-2">
-                  Clear filters
-                </Button>
-              )}
-            </div>
+            hasActiveFilters ? (
+              <NoMatchState noun="log entries" onClear={resetFilters} />
+            ) : (
+              <EmptyState
+                illustration={<AuditLogEmptyArt />}
+                headline="Nothing logged yet"
+                body="Every meaningful action, by an operator or by you, lands here with who did it and when."
+              />
+            )
           ) : (
             <>
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-primary/5 hover:bg-primary/5">
+                  <TableRow>
                     <TableHead className="w-[160px]">Date & Time</TableHead>
                     <TableHead className="w-[180px]">Action</TableHead>
                     <TableHead className="w-[120px]">Entity</TableHead>

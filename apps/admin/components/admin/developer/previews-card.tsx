@@ -141,10 +141,26 @@ export function PreviewsCard({ initial }: { initial: PortalPreviews | null }) {
           {saving && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
         </CardTitle>
         <CardDescription>
-          For the Northwind portal running on your machine (localhost). The live portal ignores these.
+          For the Northwind portal running on your machine (localhost). The live portal ignores these, except Autofill.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium">Autofill buttons</p>
+            <p className="text-sm text-muted-foreground">
+              Puts a wand on Northwind&rsquo;s add-customer and add-vehicle dialogs that fills every field with random
+              sample data. Works on the live Northwind portal as well as localhost.
+            </p>
+          </div>
+          <Switch
+            checked={previews.autofillForms === true}
+            onCheckedChange={(v) => void update({ autofillForms: v })}
+            disabled={saving}
+            aria-label="Autofill buttons"
+          />
+        </div>
+
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-medium">Hold skeletons</p>

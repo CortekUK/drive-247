@@ -11,13 +11,16 @@
  *   emergency  the customer and the one person to call, linked
  *   reach      that person's phone ringing, and where they live
  *   verify     a phone showing the QR, the licence and selfie that follow
+ *   added      the new customer's card, done: a tick, one soft glow, sparkles
+ *   invite     a link travelling into a phone showing the sign-up form
+ *   inviteDone the link itself, ready: a tick, one soft glow, sparkles
  *
  * Illustration guide §4a: ink lines, white cards, the accent only where it
  * matters, no car (none of these screens are about a car). All drawn on the
  * same 264 × 132 canvas so the picture never changes size between screens.
  * Static art from the scene kit only; nothing user-supplied is interpolated.
  */
-import { avatar, ground, makeEmptyArt, pal, stroke, tick, type Pal } from '../scene-kit';
+import { avatar, ground, makeEmptyArt, pal, sparkle, stroke, tick, type Pal } from '../scene-kit';
 
 const VIEW = '0 0 264 132';
 
@@ -160,6 +163,50 @@ function emergencyReachArt(dark: boolean): string {
  ${ground(134, 124, 104, dark)}`;
 }
 
+function inviteArt(dark: boolean): string {
+  const p = pal(dark);
+  const S = stroke(p);
+  const link = (x: number, y: number) =>
+    `<g transform="translate(${x} ${y}) rotate(-30)"><rect x="-18" y="-7" width="22" height="14" rx="7" fill="none" stroke="${p.acc}" stroke-width="3"/><rect x="-4" y="-7" width="22" height="14" rx="7" fill="none" stroke="${p.acc}" stroke-width="3"/></g>`;
+  return `
+ <g transform="translate(36 30)">
+  <rect width="64" height="64" rx="16" fill="${p.card}" ${S}/>
+  ${link(32, 32)}
+ </g>
+ ${dash(p, 'M106 62 H134')}
+ <path d="M128 56 L135 62 L128 68" fill="none" stroke="${p.acc}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+ <g transform="translate(146 10)">
+  <rect width="66" height="112" rx="14" fill="${p.card}" ${S}/>
+  <rect x="24" y="7" width="18" height="4" rx="2" fill="${p.ink}"/>
+  ${avatar(33, 32, 11, p)}
+  <rect x="11" y="50" width="44" height="9" rx="4.5" fill="none" stroke="${p.lite}" stroke-width="1.6"/>
+  <rect x="11" y="64" width="44" height="9" rx="4.5" fill="none" stroke="${p.lite}" stroke-width="1.6"/>
+  <rect x="11" y="78" width="44" height="9" rx="4.5" fill="none" stroke="${p.acc}" stroke-width="1.6"/>
+  <rect x="11" y="94" width="44" height="10" rx="5" fill="${p.acc}"/>
+ </g>
+ ${ground(132, 126, 104, dark)}`;
+}
+
+function inviteDoneArt(dark: boolean): string {
+  const p = pal(dark);
+  const S = stroke(p);
+  const tw = 'v2-twinkle';
+  return `
+ <ellipse cx="132" cy="104" rx="92" ry="12" fill="${p.acc}" opacity="${dark ? 0.22 : 0.14}"/>
+ <g transform="translate(46 44)">
+  <rect width="172" height="44" rx="22" fill="${p.card}" ${S}/>
+  <g transform="translate(26 22) rotate(-30)"><rect x="-13" y="-5" width="16" height="10" rx="5" fill="none" stroke="${p.acc}" stroke-width="2.4"/><rect x="-3" y="-5" width="16" height="10" rx="5" fill="none" stroke="${p.acc}" stroke-width="2.4"/></g>
+  <rect x="46" y="15" width="70" height="6" rx="3" fill="${p.ink}"/>
+  <rect x="46" y="26" width="46" height="4.5" rx="2.25" fill="${p.lite}"/>
+  <circle cx="150" cy="22" r="12" fill="${p.acc}"/>${tick(144, 22.5, p.onAcc, 2.4)}
+ </g>
+ ${sparkle(34, 30, 7, p.acc, tw, 0)}
+ ${sparkle(54, 14, 4, p.acc, tw, 0.25)}
+ ${sparkle(230, 30, 6, p.acc, tw, 0.4)}
+ ${sparkle(240, 92, 4, p.mut, tw, 0.15)}
+ ${sparkle(28, 100, 5, p.acc, tw, 0.55)}`;
+}
+
 function verifyArt(dark: boolean): string {
   const p = pal(dark);
   const S = stroke(p);
@@ -200,6 +247,26 @@ function verifyArt(dark: boolean): string {
  ${ground(134, 124, 112, dark)}`;
 }
 
+function addedArt(dark: boolean): string {
+  const p = pal(dark);
+  const S = stroke(p);
+  const tw = 'v2-twinkle';
+  return `
+ <ellipse cx="132" cy="116" rx="84" ry="12" fill="${p.acc}" opacity="${dark ? 0.22 : 0.14}"/>
+ <g transform="translate(70 14)">
+  <rect width="124" height="96" rx="16" fill="${p.card}" ${S}/>
+  ${avatar(62, 38, 22, p)}
+  <rect x="32" y="68" width="60" height="7" rx="3.5" fill="${p.ink}"/>
+  <rect x="42" y="81" width="40" height="5" rx="2.5" fill="${p.lite}"/>
+ </g>
+ <circle cx="190" cy="20" r="14" fill="${p.acc}" stroke="${p.card}" stroke-width="3"/>${tick(183, 20.5, p.onAcc, 2.6)}
+ ${sparkle(50, 26, 7, p.acc, tw, 0)}
+ ${sparkle(66, 8, 4, p.acc, tw, 0.25)}
+ ${sparkle(222, 52, 6, p.acc, tw, 0.4)}
+ ${sparkle(212, 92, 4, p.mut, tw, 0.15)}
+ ${sparkle(40, 82, 5, p.acc, tw, 0.55)}`;
+}
+
 export const AddCustomerWhoArt = makeEmptyArt(whoArt, VIEW);
 export const AddCustomerContactArt = makeEmptyArt(contactArt, VIEW);
 export const AddCustomerLicenceArt = makeEmptyArt(licenceArt, VIEW);
@@ -207,3 +274,8 @@ export const AddCustomerExtrasArt = makeEmptyArt(extrasArt, VIEW);
 export const AddCustomerEmergencyArt = makeEmptyArt(emergencyArt, VIEW);
 export const AddCustomerEmergencyReachArt = makeEmptyArt(emergencyReachArt, VIEW);
 export const AddCustomerVerifyArt = makeEmptyArt(verifyArt, VIEW);
+/** The customer, added. Sparkles carry `v2-twinkle`. */
+export const AddCustomerAddedArt = makeEmptyArt(addedArt, VIEW);
+/** The registration link: make one, and the link ready. Sparkles carry `v2-twinkle`. */
+export const InviteLinkArt = makeEmptyArt(inviteArt, VIEW);
+export const InviteLinkReadyArt = makeEmptyArt(inviteDoneArt, VIEW);

@@ -278,19 +278,21 @@ interface NavGroup {
  * this component renders as the rail instead.
  */
 /*
- * HOVER GROWS THE ROW'S CONTENT BY A PIXEL (Oct 6 2026): the icon and the label
- * each scale up by about 1px (17→18, 13→14) and go a step bolder, over 200ms.
+ * HOVER GROWS THE LABEL BY A PIXEL (Oct 6 2026): it scales up by about 1px
+ * (13→14) and goes a step bolder, over 200ms. The ICON does neither (Oct 7
+ * 2026: it grew and thickened too, and only its own gesture should move it —
+ * the way the wallet behaves).
  * Scaled rather than resized so nothing in the row reflows — the label grows
- * from its left edge, the icon from its centre. The weight change rides on the
- * v2 face (Manrope) being a variable font, so it eases instead of snapping; the icon's
- * stroke thickens with it. Desktop only (`md:`): a phone has no hover.
+ * from its left edge. The weight change rides on the
+ * v2 face (Manrope) being a variable font, so it eases instead of snapping.
+ * Desktop only (`md:`): a phone has no hover. Targets the row's LABEL — the
+ * `truncate` span — wherever it sits (some rows wrap icon and label in a div),
+ * so badges and other spans in the row are left alone.
  */
 const NAV_HOVER =
-  "md:[&>span]:origin-left md:[&>span]:[transition:transform_200ms_ease-out,font-weight_200ms_ease-out] " +
-  "md:hover:[&>span]:scale-[1.077] md:hover:[&>span]:font-semibold " +
-  "md:[&>svg]:[transition:transform_200ms_ease-out,stroke-width_200ms_ease-out] " +
-  "md:hover:[&>svg]:scale-[1.06] md:hover:[&>svg]:[stroke-width:2.5] " +
-  "motion-reduce:[&>span]:transition-none motion-reduce:[&>svg]:transition-none ";
+  "md:[&_span.truncate]:origin-left md:[&_span.truncate]:[transition:transform_200ms_ease-out,font-weight_200ms_ease-out] " +
+  "md:hover:[&_span.truncate]:scale-[1.077] md:hover:[&_span.truncate]:font-semibold " +
+  "motion-reduce:[&_span.truncate]:transition-none ";
 
 const NAV_ROW =
   NAV_HOVER +

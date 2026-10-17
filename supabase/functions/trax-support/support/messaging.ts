@@ -1,6 +1,8 @@
 import { authorize } from './auth.ts';
 import { redactSupportText } from './issues.ts';
 import { object, onlyKeys, SupportError, UUID, type SupportReads } from './types.ts';
+import { replyNudgeEmail } from './ticket-email.ts';
+import { assistChat, assistSuggest, assistTurns, type AssistConfig } from './assist.ts';
 
 export interface MessagingDatabase {rpc(name:string,args:Record<string,unknown>):PromiseLike<{data:unknown;error:unknown}>}
 /** Private storage for support attachments. The FILE never passes through this API:
@@ -14,6 +16,11 @@ export interface MessagingStorage {
  *  authorized to open. See `ticketSourceReader`. */
 export interface TicketSources {traxLinked:boolean;generated:number[]}
 export interface MessagingDependencies {reads:SupportReads;db:MessagingDatabase;enabled:boolean;storage?:MessagingStorage;
+  /** Optional: TRAX in the platform inbox (assist.ts). Without it `assist`/`suggest` answer 503. */
+  assist?:AssistConfig;
+  /** Optional: "Email the tenant" (`notify`). Without it the action answers 503. */
+  nudges?:NudgeStore;
+  sendEmail?:(email:ReturnType<typeof replyNudgeEmail>)=>Promise<{success:boolean;messageId?:string;simulated?:boolean}>;
   /** Optional: a deployment without it returns the thread unmarked, exactly as before. */
   sources?:(ticketId:string)=>Promise<TicketSources|null>;
   /** Optional: without it a requester's `count` carries no `unreadMessages`, and no badge is shown. */
@@ -53,8 +60,51 @@ export function ticketSourceReader(client:SourceClient){
     return {traxLinked,generated:(messages.data as {seq:number}[]).map(m=>m.seq).filter(Number.isSafeInteger)};
   };
 }
+/** Time between two emails to the same ticket's requester. */
+export const NUDGE_COOLDOWN_MS=10*60*1000;
+interface NudgeClient {from(table:string):{select(columns:string):SourceQuery;insert(row:Record<string,unknown>):PromiseLike<{error:unknown}>}}
+export interface NudgeStore {
+  /** Who to email for a ticket, and where their conversation is. Server's own client. */
+  target(ticketId:string):Promise<{email:string;name:string;reference:string;subject:string;link:string}|null>;
+  last(ticketId:string):Promise<string|null>;
+  record(row:{ticket_id:string;sent_by:string;recipient:string;provider_id:string|null;simulated:boolean}):Promise<void>;
+}
+/**
+ * The "Email the tenant" storage. Runs only after `trax_messaging_request` has
+ * authorized the same ticket for an active super admin. The link is the
+ * requester's own portal (a live custom portal domain, else
+ * {slug}.portal.drive-247.com), through /login so a signed-out tenant lands on
+ * the conversation after signing in.
+ */
+export function nudgeStore(client:NudgeClient,portalOrigin?:(slug:string)=>string):NudgeStore{
+  return {
+    async target(ticketId){
+      const t=await client.from('trax_support_tickets').select('id,reference,summary,user_id,tenant_id').eq('id',ticketId).maybeSingle();
+      const ticket=t.data as {id:string;reference:string;summary:string;user_id:string;tenant_id:string}|null;
+      if(t.error||!ticket)return null;
+      const [u,tn]=await Promise.all([
+        client.from('app_users').select('email,name').eq('auth_user_id',ticket.user_id).maybeSingle(),
+        client.from('tenants').select('slug,custom_portal_domain,custom_domain_live_at').eq('id',ticket.tenant_id).maybeSingle()]);
+      const user=u.data as {email:string|null;name:string|null}|null,tenant=tn.data as {slug:string;custom_portal_domain:string|null;custom_domain_live_at:string|null}|null;
+      if(!user?.email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user.email)||!tenant?.slug)return null;
+      const custom=tenant.custom_domain_live_at&&tenant.custom_portal_domain&&/^[a-z0-9.-]+$/i.test(tenant.custom_portal_domain)?`https://${tenant.custom_portal_domain}`:null;
+      const origin=portalOrigin?.(tenant.slug)??custom??`https://${tenant.slug}.portal.drive-247.com`;
+      const link=`${origin}/login?from=${encodeURIComponent(`/support?ticket=${ticket.id}`)}`;
+      return {email:user.email,name:user.name??'',reference:ticket.reference,subject:ticket.summary,link};
+    },
+    async last(ticketId){
+      const r=await client.from('trax_support_email_nudges').select('created_at').eq('ticket_id',ticketId);
+      if(r.error||!Array.isArray(r.data))throw new Error('nudge history unavailable');
+      return (r.data as {created_at:string}[]).map(x=>x.created_at).sort().pop()??null;
+    },
+    async record(row){const r=await client.from('trax_support_email_nudges').insert(row);if(r.error)throw new Error('nudge not recorded');},
+  };
+}
+
 /* `status` still accepts a `body` from older clients and ignores it: the server writes that note. */
-const fields:Record<string,string[]>={count:[],list:['search','status','offset'],detail:['id','before'],read:['id','through'],send:['id','nonce','body'],status:['id','nonce','body','status'],create:['nonce','body','subject'],attach:['id','nonce','name','mime','size']};
+const fields:Record<string,string[]>={count:[],list:['search','status','offset','statuses','tenants','requesters','reference','createdFrom','createdTo','unread','starred'],facets:[],star:['id','starred'],detail:['id','before'],read:['id','through'],send:['id','nonce','body'],status:['id','nonce','body','status'],create:['nonce','body','subject'],attach:['id','nonce','name','mime','size'],react:['id','seq','emoji'],assist:['id','turns'],suggest:['id','notes'],notify:['id','nonce'],targets:['tenant'],open:['nonce','tenant','requester','subject','body']};
+/** The five reactions. The SQL holds the same list; anything else is refused. */
+export const SUPPORT_REACTIONS=['👍','❤️','😂','😮','🙏'];
 const STATUS_LABEL:Record<string,string>={open:'Open',in_progress:'In progress',closed:'Resolved'};
 
 /**
@@ -179,7 +229,7 @@ export async function handleMessaging(req:Request,deps:MessagingDependencies):Pr
     const reader=req.body?.getReader();if(!reader)throw new SupportError('invalid_input','Missing request.');
     const chunks:Uint8Array[]=[];let size=0;let timer:ReturnType<typeof setTimeout>|undefined;
     const timeout=new Promise<never>((_,reject)=>{timer=setTimeout(()=>{void reader.cancel();reject(new SupportError('request_timeout','Request timed out. Please retry.',408));},5000);});
-    try{for(;;){const part=await Promise.race([reader.read(),timeout]);if(part.done)break;size+=part.value.length;if(size>24000){void reader.cancel();throw new SupportError('invalid_input','Message is too long.');}chunks.push(part.value);}}finally{clearTimeout(timer);reader.releaseLock();}
+    try{for(;;){const part=await Promise.race([reader.read(),timeout]);if(part.done)break;size+=part.value.length;if(size>64000){void reader.cancel();throw new SupportError('invalid_input','Message is too long.');}chunks.push(part.value);}}finally{clearTimeout(timer);reader.releaseLock();}
     const bytes=new Uint8Array(size);let offset=0;for(const part of chunks){bytes.set(part,offset);offset+=part.length;}
     let body;try{body=object(JSON.parse(new TextDecoder().decode(bytes)));}catch{throw new SupportError('invalid_input','Invalid request.');}
     onlyKeys(body,['action','data','tenantId','admin']);
@@ -209,6 +259,25 @@ export async function handleMessaging(req:Request,deps:MessagingDependencies):Pr
     for(const key of ['offset','before','through'])if(data[key]!=null&&(!Number.isSafeInteger(data[key])||Number(data[key])<0||Number(data[key])>2147483646))throw new SupportError('invalid_input','Invalid conversation page.');
     if(data.search!=null&&(typeof data.search!=='string'||data.search.length>120))throw new SupportError('invalid_input','Search is too long.');
     if(data.status!=null&&!['','open','in_progress','closed'].includes(String(data.status)))throw new SupportError('invalid_input','Invalid support status.');
+    /* The list's combinable filters (platform queue). Shape-checked here; the SQL
+       applies them inside the same authorized set. */
+    if(body.action==='list'){
+      const ids=(key:string,max:number)=>{const v=data[key];if(v==null)return;if(!Array.isArray(v)||v.length>max||v.some(x=>typeof x!=='string'||!UUID.test(x)))throw new SupportError('invalid_input','Invalid support filter.');};
+      ids('tenants',200);ids('requesters',200);
+      if(data.statuses!=null&&(!Array.isArray(data.statuses)||data.statuses.length>3||data.statuses.some(x=>!['open','in_progress','closed'].includes(String(x)))))throw new SupportError('invalid_input','Invalid support filter.');
+      if(data.reference!=null&&(typeof data.reference!=='string'||data.reference.length>40))throw new SupportError('invalid_input','Invalid support filter.');
+      for(const key of ['createdFrom','createdTo'])if(data[key]!=null&&data[key]!==''&&(typeof data[key]!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(data[key] as string)))throw new SupportError('invalid_input','Invalid support filter.');
+      for(const key of ['unread','starred'])if(data[key]!=null&&typeof data[key]!=='boolean')throw new SupportError('invalid_input','Invalid support filter.');
+    }
+    /* Platform support opening a ticket for a tenant user: the company and person are ids. */
+    for(const key of ['tenant','requester'])if(fields[body.action].includes(key)&&data[key]!=null&&(typeof data[key]!=='string'||!UUID.test(data[key] as string)))throw new SupportError('invalid_input','Choose a company and a person.');
+    if(body.action==='open'&&(data.tenant==null||data.requester==null))throw new SupportError('invalid_input','Choose a company and a person.');
+    if(body.action==='star'&&typeof data.starred!=='boolean')throw new SupportError('invalid_input','Invalid support request.');
+    if(body.action==='react'){
+      if(!Number.isSafeInteger(data.seq)||Number(data.seq)<0||Number(data.seq)>2147483646)throw new SupportError('invalid_input','Invalid support message.');
+      // null clears the caller's reaction.
+      if(data.emoji!==null&&!SUPPORT_REACTIONS.includes(String(data.emoji)))throw new SupportError('invalid_input','Choose one of the five reactions.');
+    }
     let userId:string,staffId:string,tenantId:string|null;
     if(body.admin===true){
       if(body.tenantId!=null)throw new SupportError('invalid_input','The platform inbox does not accept a tenant override.');
@@ -220,6 +289,53 @@ export async function handleMessaging(req:Request,deps:MessagingDependencies):Pr
       const ctx=await authorize(deps.reads,bearer,body.tenantId);userId=ctx.userId;staffId=ctx.staffId;tenantId=ctx.tenant.id;
     }
     if(!deps.enabled)throw new SupportError('support_unavailable','Support messaging is not configured in this environment. No message has been sent.',503);
+    if(body.action==='targets'||body.action==='open'){
+      /* "New ticket" in the platform inbox: who it can be for, then the ticket itself,
+         filed under the chosen tenant user with support's message first. */
+      if(body.admin!==true)throw new SupportError('forbidden','Only platform support can open a ticket for a tenant.',403);
+      const result=body.action==='targets'
+        ?await deps.db.rpc('trax_support_admin_targets',{p_user:userId,p_staff:staffId,p_tenant:data.tenant??null})
+        :await deps.db.rpc('trax_support_admin_open',{p_user:userId,p_staff:staffId,p_data:data});
+      if(result.error){
+        const message=(result.error as {message?:string}).message??'';
+        if(message.includes('support_access_denied'))throw new SupportError('forbidden','Platform support access is required.',403);
+        if(message.includes('invalid_support_target'))throw new SupportError('invalid_input','That person is no longer an active member of this company.',422);
+        if(message.includes('support_rate_limited'))throw new SupportError('rate_limited','Please wait a minute before sending again. Your draft is preserved.',429);
+        throw new SupportError('support_unavailable','Support could not confirm this request. Retry with the same draft; duplicate tickets are prevented.',503);
+      }
+      return respond(result.data);
+    }
+    if(body.action==='notify'){
+      /* "Email the tenant": a no-reply email pointing the requester back to this
+         conversation. Platform support only, the ticket authorized first. */
+      if(body.admin!==true)throw new SupportError('forbidden','Only platform support can email the tenant.',403);
+      if(!deps.nudges||!deps.sendEmail)throw new SupportError('support_unavailable','Email is not configured in this environment.',503);
+      const loaded=await deps.db.rpc('trax_messaging_request',{p_user:userId,p_staff:staffId,p_tenant:null,p_admin:true,p_action:'detail',p_data:{id:data.id}});
+      if(loaded.error||!loaded.data)throw new SupportError('forbidden','This support conversation is not available with your current access.',403);
+      const last=await deps.nudges.last(String(data.id));
+      if(last&&Date.now()-new Date(last).getTime()<NUDGE_COOLDOWN_MS)throw new SupportError('rate_limited','The tenant was emailed a few minutes ago. Try again later.',429);
+      const target=await deps.nudges.target(String(data.id));
+      if(!target)throw new SupportError('invalid_input','This requester has no email address on record.',422);
+      const sent=await deps.sendEmail(replyNudgeEmail({to:target.email,name:target.name,reference:target.reference,subject:target.subject,link:target.link,ticketId:String(data.id),nonce:String(data.nonce)})).catch(()=>({success:false}) as {success:boolean;messageId?:string;simulated?:boolean});
+      if(!sent.success)throw new SupportError('support_unavailable','The email could not be sent. Nothing was delivered; try again.',503);
+      const sentAt=new Date().toISOString();
+      await deps.nudges.record({ticket_id:String(data.id),sent_by:userId,recipient:target.email,provider_id:sent.messageId??null,simulated:!!sent.simulated}).catch(()=>{});
+      return respond({sentAt,to:target.email,simulated:!!sent.simulated});
+    }
+    if(body.action==='assist'||body.action==='suggest'){
+      /* TRAX for platform support only. The ticket comes through the same
+         authorized `detail` request as the conversation on screen. */
+      if(body.admin!==true)throw new SupportError('forbidden','TRAX assist is for platform support.',403);
+      if(!deps.assist)throw new SupportError('assist_unavailable','TRAX is not connected to an AI model in this environment.',503);
+      const turns=assistTurns(body.action==='assist'?data.turns:data.notes,40);
+      if(body.action==='assist'&&(!turns.length||turns[turns.length-1].role!=='user'))throw new SupportError('invalid_input','Ask TRAX something first.');
+      const loaded=await deps.db.rpc('trax_messaging_request',{p_user:userId,p_staff:staffId,p_tenant:null,p_admin:true,p_action:'detail',p_data:{id:data.id}});
+      if(loaded.error||!loaded.data||typeof loaded.data!=='object')throw new SupportError('forbidden','This support conversation is not available with your current access.',403);
+      let detail=loaded.data as {messages?:{seq:number;author_kind:string;body:string;created_at:string;source?:string}[]}&Record<string,unknown>;
+      const sources=deps.sources?await deps.sources(String(data.id)).catch(()=>null):null;
+      if(sources)detail={...detail,messages:(detail.messages??[]).map(m=>sources.generated.includes(m.seq)?{...m,source:'trax_handoff'}:m)};
+      return respond(body.action==='assist'?await assistChat(deps.assist,deps.db,detail,turns):await assistSuggest(deps.assist,deps.db,detail,turns));
+    }
     if(body.action==='attach'){
       if(!deps.storage)throw new SupportError('support_unavailable','Attachments are not configured in this environment. Your message can still be sent without one.',503);
       const reserved=await deps.db.rpc('trax_support_attachment_reserve',{p_user:userId,p_staff:staffId,p_tenant:tenantId,p_admin:body.admin===true,
@@ -235,6 +351,16 @@ export async function handleMessaging(req:Request,deps:MessagingDependencies):Pr
       const upload=await deps.storage.signUpload(row.storagePath);
       // The reserved row is claimed by the message that follows, by nonce.
       return respond({attachment:{id:row.id,path:row.storagePath,name:row.fileName,mime:row.mimeType,size:row.sizeBytes},upload});
+    }
+    if(body.action==='react'){
+      const reacted=await deps.db.rpc('trax_support_react',{p_user:userId,p_staff:staffId,p_tenant:tenantId,p_admin:body.admin===true,p_ticket:data.id,p_seq:data.seq,p_emoji:data.emoji??null});
+      if(reacted.error){
+        const message=(reacted.error as {message?:string}).message??'';
+        if(message.includes('support_access_denied'))throw new SupportError('forbidden','This support conversation is not available with your current access.',403);
+        if(message.includes('invalid_support_reaction'))throw new SupportError('invalid_input','That reaction could not be saved.');
+        throw new SupportError('support_unavailable','The reaction could not be saved. Try again.',503);
+      }
+      return respond({reactions:Array.isArray(reacted.data)?reacted.data:[]});
     }
     // RPC rechecks active membership and the dedicated support grant atomically.
     const result=await deps.db.rpc('trax_messaging_request',{p_user:userId,p_staff:staffId,p_tenant:tenantId,p_admin:body.admin===true,p_action:body.action,p_data:data});
@@ -284,6 +410,15 @@ export async function handleMessaging(req:Request,deps:MessagingDependencies):Pr
             messages:(detail.messages??[]).map(message=>sources.generated.includes(message.seq)?{...message,source:'trax_handoff'}:message)};
         }
       }
+      /* When the requester was last emailed about this ticket (platform view). */
+      if(body.admin===true&&deps.nudges){
+        const emailedAt=await deps.nudges.last(String(data.id)).catch(()=>null);
+        if(emailedAt)detail={...detail,ticket:{...(detail.ticket??{}),emailedAt}};
+      }
+      /* Reactions on this thread's messages, under the same access rule. A
+         deployment without the function answers without them, not with an error. */
+      const reactions=await deps.db.rpc('trax_support_reactions',{p_user:userId,p_staff:staffId,p_tenant:tenantId,p_admin:body.admin===true,p_ticket:data.id});
+      if(!reactions.error&&Array.isArray(reactions.data))detail={...detail,reactions:reactions.data};
       if(deps.storage){
         /* The conversation's files, with a short-lived read URL each. The list comes
            from the database under the same access rule as the thread itself; a URL

@@ -50,6 +50,13 @@ export function avatar(x: number, y: number, r: number, p: Pal, skin = '#d9a88a'
   return `<g transform="translate(${x} ${y})"><circle r="${r}" fill="${p.soft}"/><circle cy="${-r * 0.18}" r="${r * 0.38}" fill="${skin}"/><path d="M${-r * 0.65} ${r * 0.72} Q0 ${r * 0.05} ${r * 0.65} ${r * 0.72}" fill="${p.acc}" opacity=".9"/><path d="M${-r * 0.38} ${-r * 0.3} Q${-r * 0.36} ${-r * 0.66} 0 ${-r * 0.66} Q${r * 0.36} ${-r * 0.66} ${r * 0.38} ${-r * 0.3} Q${r * 0.18} ${-r * 0.48} 0 ${-r * 0.48} Q${-r * 0.18} ${-r * 0.48} ${-r * 0.38} ${-r * 0.3}Z" fill="${hair}"/></g>`;
 }
 
+/**
+ * A four-point sparkle, for "done" moments. `cls` lets a screen animate it
+ * (e.g. a one-off twinkle); without it the sparkle is static.
+ */
+export const sparkle = (x: number, y: number, r: number, fill: string, cls = '', delay = 0) =>
+  `<path class="${cls}" style="animation-delay:${delay}s;transform-box:fill-box;transform-origin:center" d="M${x} ${y - r} Q${x + r * 0.18} ${y - r * 0.18} ${x + r} ${y} Q${x + r * 0.18} ${y + r * 0.18} ${x} ${y + r} Q${x - r * 0.18} ${y + r * 0.18} ${x - r} ${y} Q${x - r * 0.18} ${y - r * 0.18} ${x} ${y - r} Z" fill="${fill}"/>`;
+
 /** Soft ground shadow under the scene. */
 export const ground = (cx: number, cy: number, rx: number, dark: boolean) =>
   `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="6" fill="#000" opacity="${dark ? 0.35 : 0.05}"/>`;

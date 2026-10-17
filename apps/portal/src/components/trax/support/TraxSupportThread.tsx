@@ -21,7 +21,7 @@ import { useTraxSupportChat, useTraxSupportWorkspace } from "./trax-support-cont
  * The conversation keeps trax-thread.tsx's shape — greeting and composer
  * centred while empty, then a scrolling thread with the composer pinned — with
  * useTraxSupport behind it: verified answers, Check again, payment cards,
- * issues and the explicit Communicate with Support handoff. Attachments stay
+ * and issues. TRAX never raises support tickets. Attachments stay
  * off: the support endpoint takes text only.
  */
 
@@ -42,7 +42,7 @@ export interface TraxSupportThreadProps {
   density?: "sheet" | "page";
   autoFocus?: boolean;
   /** Open the portal's Support section (and leave TRAX). */
-  onOpenSupport?: (target: { ticketId?: string; issueId?: string }) => void;
+  onOpenSupport?: (target: { ticketId?: string }) => void;
   className?: string;
   /** Replaces the default starter prompts (a record's own surface asks about that record). */
   suggestions?: Array<{ icon: LucideIcon; label: string; prompt: string }>;
@@ -54,12 +54,14 @@ export interface TraxSupportThreadProps {
    * top, and the composer pinned to the bottom like a chat, flat (no glow).
    */
   compact?: boolean;
+  /** The Trax panel: Back from history is the panel header's arrow. */
+  backInHeader?: boolean;
 }
 
-export function TraxSupportThread({ density = "page", autoFocus = false, onOpenSupport, className, suggestions: ownSuggestions, intro, compact = false }: TraxSupportThreadProps) {
+export function TraxSupportThread({ density = "page", autoFocus = false, onOpenSupport, className, suggestions: ownSuggestions, intro, compact = false, backInHeader = false }: TraxSupportThreadProps) {
   const {
     messages, isLoading, error, sendMessage, confirmAction, rejectAction, navigate, capabilities,
-    checkAgain, supportRequest, requestTicket, recentConversations, contextKey,
+    checkAgain, supportRequest, recentConversations, contextKey,
   } = useTraxSupportChat();
   const { view, setView } = useTraxSupportWorkspace();
   const endRef = useRef<HTMLDivElement>(null);
@@ -93,6 +95,7 @@ export function TraxSupportThread({ density = "page", autoFocus = false, onOpenS
         onOpenSupport={onOpenSupport}
         view={view}
         onView={setView}
+        backInHeader={backInHeader}
       >
         <div className={cn("flex min-h-0 flex-1 flex-col", empty && "no-scrollbar overflow-y-auto")}>
           {/* 1 — the greeting, or the conversation. */}
@@ -152,8 +155,6 @@ export function TraxSupportThread({ density = "page", autoFocus = false, onOpenS
                     onRejectAction={rejectAction}
                     onVerifyNavigation={navigate}
                     onCheckAgain={m.id === messages.at(-1)?.id ? checkAgain : undefined}
-                    onOpenSupport={onOpenSupport}
-                    onRetryTicket={requestTicket && (() => void requestTicket())}
                     isLoading={isLoading}
                   />
                 ))}

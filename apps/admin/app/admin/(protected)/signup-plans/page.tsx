@@ -1,13 +1,12 @@
 'use client';
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { PlansEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { LandingPricingSwitch } from '@/components/admin/landing-pricing-switch';
-import { SignupOtpSwitch } from '@/components/admin/signup-otp-switch';
-import { SignupTrialGrants } from '@/components/admin/signup-trial-grants';
 import { toast } from '@/components/ui/sonner';
-import { cn } from '@/lib/utils';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -22,25 +21,19 @@ import {
   AlertTriangle,
   BadgeDollarSign,
   Loader2,
-  RefreshCw,
   RotateCcw,
 } from 'lucide-react';
 import {
-  SignupPlanCard,
   buildPatch,
   draftFromPlan,
   formatMoney,
   hasContentErrors,
-  isDirty,
   parsePriceToCents,
   validateContent,
   type PlanDraft,
   type SignupPlan,
 } from '@/components/admin/signup-plan-card';
-import {
-  SignupPlanPreviewPanel,
-  usePreviewPinning,
-} from '@/components/admin/signup-plan-preview';
+import { SignupPlanEditableCard } from '@/components/admin/signup-plan-editable-card';
 
 /* -------------------------------------------------------------------------- */
 /*  Types local to the page                                                    */
@@ -210,18 +203,12 @@ export default function SignupPlansPage() {
   const [staleWrite, setStaleWrite] = useState<string | null>(null);
   const [status, setStatus] = useState('');
 
-  /** Which plan the preview rail mirrors. Never stored as a fallback — see `activePlan`. */
-  const [activePlanId, setActivePlanId] = useState<string | null>(null);
-
   /** `${planId}:${action}` while a mutation is in flight. Blocks every mutating control. */
   const [pending, setPending] = useState<string | null>(null);
   const busy = pending !== null;
 
   const [pricePlanId, setPricePlanId] = useState<string | null>(null);
   const cancelPriceRef = useRef<HTMLButtonElement>(null);
-
-  /** Pins the rail while it fits the scrollport; never introduces a scroll region. */
-  const { railRef, pinned } = usePreviewPinning<HTMLElement>();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -262,15 +249,6 @@ export default function SignupPlansPage() {
   const pricePlan = useMemo(
     () => plans.find((plan) => plan.id === pricePlanId) ?? null,
     [plans, pricePlanId],
-  );
-
-  /**
-   * Resolved rather than stored, so a reload that renames or drops a plan can never
-   * leave the rail pointing at an id that no longer exists.
-   */
-  const activePlan = useMemo(
-    () => plans.find((plan) => plan.id === activePlanId) ?? plans[0] ?? null,
-    [plans, activePlanId],
   );
 
   /** Replace one row in place, leaving every other plan's unsaved draft untouched. */
@@ -549,8 +527,6 @@ export default function SignupPlansPage() {
   const priceDraft = pricePlan ? drafts[pricePlan.id] : undefined;
   const priceParsed = priceDraft ? parsePriceToCents(priceDraft.price) : null;
 
-  const activeDraft = activePlan ? drafts[activePlan.id] : undefined;
-  const activePrice = activeDraft ? parsePriceToCents(activeDraft.price) : null;
 
   return (
     /*
@@ -566,9 +542,6 @@ export default function SignupPlansPage() {
       {/* ------------------------------- Header ------------------------------ */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 glow-purple-sm">
-            <BadgeDollarSign className="h-5 w-5 text-primary" />
-          </div>
           <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Signup Plans</h1>
             {/*
@@ -585,24 +558,10 @@ export default function SignupPlansPage() {
             </p>
           </div>
         </div>
-        <Button variant="outline" onClick={() => void load()} disabled={loading || busy}>
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4" />
-          )}
-          Refresh
-        </Button>
       </div>
 
-      {/* Whether drive-247.com shows these plans at all (team lead, Sep 2026). */}
-      <LandingPricingSwitch />
-
-      {/* Whether a new signup has to prove its email address before paying. */}
-      <SignupOtpSwitch />
-
-      {/* Who gets a free trial: everyone on a plan, or people chosen by email. */}
-      <SignupTrialGrants plans={plans} />
+      {/* The landing page version, the pricing switch and signup email
+          verification live in Settings now (Website and Signup). */}
 
       {/* Async status for screen readers */}
       <p role="status" aria-live="polite" className="sr-only">
@@ -645,44 +604,30 @@ export default function SignupPlansPage() {
 
       {/* Loading — mirrors the real two-column shape so nothing jumps when data lands */}
       {loading && (
-        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="min-w-0 space-y-4">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <Card key={index}>
-                <CardHeader className="pb-4">
-                  <Skeleton className="h-6 w-40" />
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Skeleton className="h-10 w-56" />
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-24 w-full" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <Card className="hidden xl:block">
-            <CardHeader className="pb-4">
-              <Skeleton className="h-6 w-32" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-[360px] w-full rounded-2xl" />
-            </CardContent>
-          </Card>
+        <div className="grid items-start gap-6 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="space-y-3">
+              <Skeleton className="h-7 w-48 rounded-full" />
+              <Skeleton className="h-[440px] w-full rounded-3xl" />
+              <Skeleton className="h-28 w-full rounded-3xl" />
+            </div>
+          ))}
         </div>
       )}
 
       {/* Empty */}
       {!loading && !loadError && plans.length === 0 && (
         <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-sm text-muted-foreground">
-              No signup plans found. They are seeded in the database &mdash; check
-              <code className="mx-1 rounded bg-secondary px-1 py-0.5 text-xs">
-                public.signup_plans
-              </code>
-              .
-            </p>
-          </CardContent>
+          <EmptyState
+            illustration={<PlansEmptyArt />}
+            headline="No signup plans yet"
+            body={
+              <>
+                The plans a new operator chooses from at signup. They are seeded in the database, in{' '}
+                <code className="rounded bg-secondary px-1 py-0.5 text-xs">public.signup_plans</code>.
+              </>
+            }
+          />
         </Card>
       )}
 
@@ -698,28 +643,30 @@ export default function SignupPlansPage() {
         Nothing here sets `overflow`, `max-height` or a viewport-relative height,
         so the layout's <main> stays the only scrollport on the screen.
       */}
-      {!loading && plans.length > 0 && activePlan && activeDraft && (
-        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="min-w-0 space-y-4">
-            <p id="highlight-help" className="text-xs text-muted-foreground">
-              One plan at a time can carry the Most popular badge. Picking another moves
-              it; clicking the plan that has it removes the badge altogether.
-            </p>
-
+      {/*
+        --------------------------- Plans -----------------------------------
+        The cards themselves, side by side as the public pricing page shows
+        them, each edited in place (signup-plan-editable-card.tsx). The card
+        is its own preview, so there is no separate preview rail.
+      */}
+      {!loading && plans.length > 0 && (
+        <div className="space-y-4">
+          <p id="highlight-help" className="text-xs text-muted-foreground">
+            Click any text on a card to change it. The gear on each card holds Most popular,
+            visibility, max vehicles and the free trial.
+          </p>
+          <div className="grid items-start gap-6 md:grid-cols-2 xl:grid-cols-3">
             {plans.map((plan) => {
               const draft = drafts[plan.id];
               if (!draft) return null;
-
               return (
-                <SignupPlanCard
+                <SignupPlanEditableCard
                   key={plan.id}
                   plan={plan}
                   draft={draft}
-                  active={plan.id === activePlan.id}
                   busy={busy}
                   pending={pending}
                   lastVisible={plan.is_visible && visibleCount <= 1}
-                  onActivate={() => setActivePlanId(plan.id)}
                   onDraftChange={(patch) => updateDraft(plan.id, patch)}
                   onSaveContent={() => void handleSaveContent(plan)}
                   onDiscard={() =>
@@ -736,24 +683,6 @@ export default function SignupPlansPage() {
               );
             })}
           </div>
-
-          <aside
-            ref={railRef}
-            aria-label="Live preview"
-            className={cn('min-w-0', pinned && 'xl:sticky xl:top-6')}
-          >
-            <SignupPlanPreviewPanel
-              planName={activePlan.name || activePlan.plan_key}
-              draft={activeDraft}
-              currency={activePlan.currency}
-              interval={activePlan.interval}
-              highlighted={activePlan.is_highlighted}
-              visible={activePlan.is_visible}
-              dirty={isDirty(activePlan, activeDraft)}
-              priceCents={activePrice?.ok ? activePrice.cents : null}
-              trialDays={activePlan.trial_days}
-            />
-          </aside>
         </div>
       )}
 

@@ -29,6 +29,30 @@ export const CONTROL =
   "focus-visible:ring-3 focus-visible:ring-primary/15 aria-invalid:border-destructive/60 " +
   "disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none";
 
+/**
+ * The accent wash behind an "add" dialog (Ghulam, Oct 7 2026). The same layers
+ * as the integrations dialogs' wash (integrations-board.tsx → SCREEN_LED_WASH),
+ * which is itself the app's page wash scaled to a dialog: brand-derived only,
+ * so it follows the tenant's colour and its dark mode. Pass as `style`.
+ */
+export const FORM_DIALOG_WASH = {
+  backgroundImage: [
+    "radial-gradient(40rem 26rem at 105% -10%, hsl(var(--v2-wash) / 0.30), transparent 62%)",
+    "radial-gradient(34rem 24rem at -8% -6%, hsl(var(--chart-3) / 0.24), transparent 58%)",
+    "radial-gradient(36rem 22rem at 50% 118%, hsl(var(--v2-wash) / 0.20), transparent 62%)",
+    "linear-gradient(180deg, hsl(var(--v2-wash) / 0.08) 0%, transparent 45%)",
+  ].join(", "),
+} as const;
+
+/**
+ * The "done" screens' sparkles (`v2-twinkle` in the illustrations): each pops
+ * in ONCE, staggered by its own delay, then holds still. Mount in a <style>.
+ */
+export const TWINKLE_CSS =
+  "@keyframes v2-twinkle{0%{opacity:0;transform:scale(.3)}55%{opacity:1;transform:scale(1.15)}100%{opacity:1;transform:scale(1)}}" +
+  ".v2-twinkle{animation:v2-twinkle .6s ease-out both;animation-delay:inherit}" +
+  "@media (prefers-reduced-motion:reduce){.v2-twinkle{animation:none}}";
+
 /** The grid a screen is laid out on: three columns, rows as tall as their fields, centred. */
 export const SCREEN_GRID = "grid grid-cols-3 content-center gap-x-6 gap-y-3";
 
@@ -147,7 +171,7 @@ export function StepFooter({
 }) {
   const last = step === steps.length - 1;
   return (
-    <div className={cn("flex items-center justify-between gap-4 border-t", compact ? "px-8 py-4" : "mt-6 px-10 py-5")}>
+    <div className={cn("flex items-center justify-between gap-4", compact ? "px-8 py-4" : "mt-6 border-t px-10 py-5")}>
       <Button
         type="button"
         variant="outline"

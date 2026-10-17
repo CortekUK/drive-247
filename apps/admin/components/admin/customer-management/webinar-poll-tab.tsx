@@ -15,6 +15,8 @@
  * per poll — enforced by the database, not just the portal.
  */
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { PollsEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CheckSquare,
@@ -313,7 +315,12 @@ export function WebinarPollTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         <CardContent>
           {polls.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">No polls yet. Create one to ask your operators something.</p>
+            <EmptyState
+              size="section"
+              illustration={<PollsEmptyArt />}
+              headline="No polls yet"
+              body="Create one to ask your operators something. Their answers come back here."
+            />
           ) : (
             <div className="space-y-3">
               {polls.map((p) => {
@@ -680,7 +687,11 @@ function PollResults({
       )}
 
       {total === 0 ? (
-        <p className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">No answers yet.</p>
+        <EmptyState
+          size="section"
+          headline="No answers yet"
+          body="Answers appear here as operators reply to the poll."
+        />
       ) : (
         <Table>
           <TableHeader>

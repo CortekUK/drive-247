@@ -43,3 +43,20 @@ export async function processTicketEmails(db:MessagingDatabase,config:EmailConfi
   }
   return {accepted,failed};
 }
+
+/**
+ * "Email the tenant": a no-reply email that sends the requester back to the
+ * conversation. It carries NO message content — the conversation lives in the
+ * portal, behind sign-in — only the ticket number, its subject and the link.
+ */
+export interface ReplyNudge {to:string;name:string;reference:string;subject:string;link:string;ticketId:string;nonce:string}
+export function replyNudgeEmail(n:ReplyNudge):Email {
+  const first=emailPreview(n.name,60).split(' ')[0]||'there';
+  const ref=emailPreview(n.reference,40),subject=emailPreview(n.subject,120);
+  const lines=[`Hi ${first},`,`The Drive247 support team has an update for you on ticket ${ref}${subject?` (“${subject}”)`:''}.`,'Open the conversation in your portal to read it and reply. Our team answers there.'];
+  const button=`<a href="${escape(n.link)}" style="display:inline-block;background:#6366f1;color:#ffffff;text-decoration:none;font-weight:600;padding:11px 20px;border-radius:10px">Open the conversation</a>`;
+  const note='This is an automated email from a no-reply address. Replies to it are not read — please reply in the conversation instead.';
+  return {to:n.to,subject:`Update on your support ticket ${ref}`,fromName:'Drive247 Support',idempotencyKey:`trax-reply-nudge/${n.ticketId}/${n.nonce}`,
+    text:`${lines.join('\n\n')}\n\n${n.link}\n\n${note}`,
+    html:`<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#080812;line-height:1.6;font-size:15px">${lines.map(l=>`<p style="margin:0 0 14px">${escape(l)}</p>`).join('')}<p style="margin:22px 0">${button}</p><p style="margin:0 0 6px;font-size:13px;color:#737373">Or paste this link into your browser:<br><a href="${escape(n.link)}" style="color:#6366f1;word-break:break-all">${escape(n.link)}</a></p><hr style="border:none;border-top:1px solid #f1f5f9;margin:22px 0"><p style="margin:0;font-size:12px;color:#737373">${escape(note)}</p></div>`};
+}

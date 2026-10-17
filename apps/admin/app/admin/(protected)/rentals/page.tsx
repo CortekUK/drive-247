@@ -1,5 +1,6 @@
 'use client';
 
+import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton } from '@/components/admin/header-buttons';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -19,7 +20,18 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import CreateTenantDialog from '@/components/admin/CreateTenantDialog';
-import { Plus, Star, Building2, AlertTriangle, Boxes, Activity, Eye } from 'lucide-react';
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { CompaniesEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
+import { Plus, Star, Building2, AlertTriangle, Boxes, Activity, Eye, Check, ChevronDown, Trash2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { DeleteTenantDialog } from '@/components/admin/delete-tenant-dialog';
+import { toast } from '@/components/ui/sonner';
+import { setTenantStatus, setTenantType, type TenantStatus, type TenantType } from '@/lib/tenant-actions';
 
 interface Tenant {
   id: string;
@@ -349,6 +361,8 @@ export default function RentalCompaniesPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  /** The company the Delete dialog is open for (from a row's ⋯ menu). */
+  const [deleting, setDeleting] = useState<{ id: string; company_name: string } | null>(null);
   const [typeFilter, setTypeFilter] = useState<'all' | 'production' | 'test'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended'>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('default');
@@ -830,6 +844,38 @@ export default function RentalCompaniesPage() {
     );
   }
 
+  /* Status and type, changed from the row. Shared with the company page
+     (lib/tenant-actions.ts); the row repaints at once and rolls back if the
+     write is refused. */
+  const changeStatus = async (tenant: { id: string; company_name: string; status: string }, status: TenantStatus) => {
+    if (tenant.status === status) return;
+    const previous = tenant.status;
+    setTenants((rows) => rows.map((t) => (t.id === tenant.id ? { ...t, status } : t)));
+    try {
+      await setTenantStatus(tenant.id, status);
+      toast.success(`${tenant.company_name} ${status === 'active' ? 'activated' : 'suspended'}`);
+    } catch (error: any) {
+      setTenants((rows) => rows.map((t) => (t.id === tenant.id ? { ...t, status: previous } : t)));
+      toast.error(`Error updating status: ${error.message}`);
+    }
+  };
+
+  const changeType = async (
+    tenant: { id: string; company_name: string; tenant_type: TenantType | null },
+    tenantType: TenantType,
+  ) => {
+    if (tenant.tenant_type === tenantType) return;
+    const previous = tenant.tenant_type;
+    setTenants((rows) => rows.map((t) => (t.id === tenant.id ? { ...t, tenant_type: tenantType } : t)));
+    try {
+      await setTenantType(tenant.id, tenantType);
+      toast.success(`${tenant.company_name} marked as ${tenantType}`);
+    } catch (error: any) {
+      setTenants((rows) => rows.map((t) => (t.id === tenant.id ? { ...t, tenant_type: previous } : t)));
+      toast.error(`Error updating tenant type: ${error.message}`);
+    }
+  };
+
   /* What the Filters button counts: every axis that is currently narrowing the
      list, read off the same state the filter below uses. */
   const activeFilterCount =
@@ -843,9 +889,6 @@ export default function RentalCompaniesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center h-10 w-10 rounded-xl bg-primary/15 glow-purple-sm">
-            <Building2 className="h-5 w-5 text-primary" />
-          </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Rental Companies</h1>
             <p className="text-sm text-muted-foreground">
@@ -853,7 +896,7 @@ export default function RentalCompaniesPage() {
             </p>
           </div>
         </div>
-        <Button onClick={() => setShowCreateModal(true)}>
+        <Button className={HEADER_PRIMARY} onClick={() => setShowCreateModal(true)}>
           <Plus className="h-4 w-4" />
           Add New Rental
         </Button>
@@ -871,6 +914,7 @@ export default function RentalCompaniesPage() {
           same piece of state with the same setter it had inline; only where
           you press to change it has moved. */}
       <FilterSearch
+        scopeLabel="Rental companies"
         value={searchQuery}
         onChange={setSearchQuery}
         placeholder="Search by name, slug, or email..."
@@ -1114,7 +1158,7 @@ export default function RentalCompaniesPage() {
       <Card className="overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="bg-primary/5 hover:bg-primary/5">
+            <TableRow>
               <TableHead className="w-10"></TableHead>
               <TableHead>Company</TableHead>
               <TableHead>Owner</TableHead>
@@ -1134,6 +1178,7 @@ export default function RentalCompaniesPage() {
                 </>
               )}
               {!isSubscriptionView && <TableHead>Created</TableHead>}
+              <TableHead className="w-12"><span className="sr-only">Actions</span></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1146,7 +1191,7 @@ export default function RentalCompaniesPage() {
                 <TableCell className="pr-0">
                   <button
                     onClick={(e) => { e.stopPropagation(); toggleFavorite(tenant.id); }}
-                    className="p-1 rounded hover:bg-accent transition-colors"
+                    className="-my-1 rounded p-0.5 transition-colors hover:bg-accent"
                     title={favorites.has(tenant.id) ? 'Remove from favorites' : 'Add to favorites'}
                   >
                     <Star
@@ -1159,26 +1204,67 @@ export default function RentalCompaniesPage() {
                     />
                   </button>
                 </TableCell>
-                <TableCell className="font-medium">{tenant.company_name}</TableCell>
-                <TableCell className="text-muted-foreground whitespace-nowrap">
+                <TableCell className="font-semibold text-foreground">{tenant.company_name}</TableCell>
+                <TableCell className="whitespace-nowrap font-medium text-foreground">
                   {tenant.admin_name || '—'}
                 </TableCell>
                 {!isSubscriptionView && (
-                  <TableCell>
-                    {tenant.tenant_type ? (
-                      <Badge variant={tenant.tenant_type === 'production' ? 'info' : 'warning'} className="capitalize whitespace-nowrap">
-                        {tenant.tenant_type}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" className="group/pill inline-flex items-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/30">
+                          {tenant.tenant_type ? (
+                            // Northwind's meta chip (ListMetaChip): a quiet grey tag,
+                            // not a colour — the type is a fact, not a state.
+                            <span className="inline-flex cursor-pointer items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground transition-colors group-hover/pill:bg-primary/10 group-hover/pill:text-primary">
+                              {tenant.tenant_type}
+                              <ChevronDown className="hidden h-2.5 w-2.5 group-hover/pill:inline" />
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-40">
+                        {(['production', 'test'] as const).map((type) => (
+                          <DropdownMenuItem
+                            key={type}
+                            onClick={() => void changeType(tenant, type)}
+                            className="cursor-pointer capitalize"
+                          >
+                            <span className="flex-1">{type}</span>
+                            {tenant.tenant_type === type && <Check className="h-4 w-4 text-primary" />}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 )}
                 {!isSubscriptionView && (
-                  <TableCell>
-                    <Badge variant={tenant.status === 'active' ? 'success' : 'destructive'} className="capitalize whitespace-nowrap">
-                      {tenant.status}
-                    </Badge>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    {/* The pill is the switch: pick a status from it. */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" className="group/pill inline-flex items-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/30">
+                          <Badge variant={tenant.status === 'active' ? 'success' : 'destructive'} className="cursor-pointer gap-1 whitespace-nowrap capitalize">
+                            {tenant.status}
+                            <ChevronDown className="ml-0.5 hidden h-3 w-3 group-hover/pill:inline" />
+                          </Badge>
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-40">
+                        {(['active', 'suspended'] as const).map((status) => (
+                          <DropdownMenuItem
+                            key={status}
+                            onClick={() => void changeStatus(tenant, status)}
+                            className="cursor-pointer capitalize"
+                          >
+                            <span className="flex-1">{status}</span>
+                            {tenant.status === status && <Check className="h-4 w-4 text-primary" />}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 )}
                 {viewMode === 'migration' && (() => {
@@ -1391,28 +1477,62 @@ export default function RentalCompaniesPage() {
                   );
                 })()}
                 {!isSubscriptionView && (
-                  <TableCell className="text-muted-foreground tabular-nums">
+                  <TableCell className="font-medium tabular-nums text-foreground">
                     {new Date(tenant.created_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </TableCell>
                 )}
+                <TableCell className="w-12 pl-0 text-right" onClick={(e) => e.stopPropagation()}>
+                  {/* Just delete: status and type are changed from their own pills. */}
+                  <button
+                    type="button"
+                    onClick={() => setDeleting({ id: tenant.id, company_name: tenant.company_name })}
+                    aria-label={`Delete ${tenant.company_name}`}
+                    title="Delete company"
+                    className="-my-1.5 inline-flex size-8 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:ring-3 focus-visible:ring-destructive/30"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
 
-        {visibleTenants.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Building2 className="h-10 w-10 text-muted-foreground/40 mb-3" />
-            <p className="text-sm text-muted-foreground">
-              {showFavoritesOnly
-                ? 'No favorite companies yet. Star a company to add it here.'
-                : searchQuery
-                ? 'No companies match your search.'
-                : 'No rental companies yet. Create one to get started.'}
-            </p>
-          </div>
-        )}
+        {visibleTenants.length === 0 &&
+          (tenants.length === 0 ? (
+            <EmptyState
+              illustration={<CompaniesEmptyArt />}
+              headline="No rental companies yet"
+              body="Every operator on Drive247 shows up here, with their plan, their health and their bookings."
+              action={{ label: 'Create rental company', icon: Plus, onClick: () => setShowCreateModal(true) }}
+            />
+          ) : showFavoritesOnly && !searchQuery ? (
+            <EmptyState
+              illustration={<CompaniesEmptyArt />}
+              headline="No favourites yet"
+              body="Star a company from its row to keep it here, a click away from everything else."
+              action={{ label: 'Show all companies', onClick: () => setShowFavoritesOnly(false) }}
+            />
+          ) : (
+            <NoMatchState
+              noun="companies"
+              onClear={() => {
+                setSearchQuery('');
+                setShowFavoritesOnly(false);
+                setTypeFilter('all');
+                setStatusFilter('all');
+                setViewMode('default' as ViewMode);
+                setSubStatusFilter(null);
+              }}
+            />
+          ))}
       </Card>
+
+      <DeleteTenantDialog
+        tenant={deleting}
+        onOpenChange={(open) => !open && setDeleting(null)}
+        onDeleted={() => void loadTenants()}
+      />
 
       <CreateTenantDialog
         open={showCreateModal}

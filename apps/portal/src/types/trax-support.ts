@@ -86,10 +86,6 @@ export interface ChatMessage {
   provenance?: TraxProvenance;
   evidence?: TraxEvidence[];
   canRecheck?: boolean;
-  /** The support ticket the server created or reused for this issue. */
-  ticket?: { id: string; reference: string };
-  /** The automatic handoff failed; offer the retry rather than a false success. */
-  ticketRetry?: boolean;
 }
 /** Server-built, allowlisted destinations only. The model never supplies these. */
 export interface TraxPaymentAction { kind:'stripe_dashboard'|'receipt'; label:'Open in Stripe'|'View receipt'; href:string; note:string }
@@ -142,7 +138,6 @@ export interface ChatApiResponse {
   canRecheck?: boolean;
   issues?:TraxIssue[];
   activeIssueId?:string;
-  ticketRetry?:boolean;
   recentConversations?:{id:string;lastActivityAt:string;summary:string}[];
   /** A reopened conversation replays what each answer carried, not only its text. */
   resumedMessages?:{role:'user'|'assistant';content:string;at:string;sources?:ChatMessageSource[];provenance?:TraxProvenance;evidence?:TraxEvidence[];navigation?:TraxNavigation[];canRecheck?:boolean;ticket?:{id:string;reference:string}}[];
@@ -164,8 +159,6 @@ export interface UseChatReturn {
   navigate: (action: TraxNavigation) => Promise<boolean>;
   capabilities?: TraxCapabilities;
   checkAgain?: () => Promise<void>;
-  /** Retry the automatic support handoff for an issue whose ticket did not persist. */
-  requestTicket?: (issueId?: string) => Promise<ChatApiResponse | null>;
   issues?:TraxIssue[];
   activeIssueId?:string;
   recentConversations?:ChatApiResponse['recentConversations'];

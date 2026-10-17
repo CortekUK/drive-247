@@ -1,5 +1,7 @@
 'use client';
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { ReferralsEmptyArt } from '@/components/admin/illustrations/scenes/referrals';
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -42,7 +44,14 @@ export function ClaimsTab({ canEdit }: { canEdit: boolean }) {
   };
 
   if (loading) return <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />;
-  if (claims.length === 0) return <p className="text-sm text-muted-foreground">No claims yet. Operators send these from their Referrals page.</p>;
+  if (claims.length === 0)
+    return (
+      <EmptyState
+        illustration={<ReferralsEmptyArt />}
+        headline="No claims yet"
+        body="Operators send these from their Referrals page when someone they referred has paid."
+      />
+    );
 
   return (
     <div className="space-y-3">

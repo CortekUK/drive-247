@@ -1,7 +1,13 @@
 /**
  * Resend Email Service - Multi-tenant aware
  * Replaces AWS SES with Resend for email delivery
+ *
+ * Every send attempt is recorded in public.email_send_log (sent / failed), the
+ * record the super-admin "Emails (Resend)" monitor and support read. Logging is
+ * best effort: a failed log write never fails or delays the send's result.
  */
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 interface EmailOptions {
   to: string | string[];
@@ -14,6 +20,50 @@ interface EmailOptions {
   tenantId?: string;
   /** Resend keeps a successful result for this key for 24 hours. */
   idempotencyKey?: string;
+  /** The sending edge function's name, for the send log. */
+  source?: string;
+  /** The notification catalogue key, for the send log. */
+  notificationKey?: string;
+}
+
+interface SendLogEntry {
+  status: 'sent' | 'failed';
+  recipients: string[];
+  subject: string;
+  tenantId?: string;
+  source?: string;
+  notificationKey?: string;
+  providerMessageId?: string;
+  httpStatus?: number;
+  error?: string;
+}
+
+/**
+ * Best-effort write to email_send_log with a service-role client (the table is
+ * closed to every other role). Never throws.
+ */
+async function recordSend(entry: SendLogEntry): Promise<void> {
+  try {
+    const url = Deno.env.get('SUPABASE_URL');
+    const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!url || !key) return;
+    const admin = createClient(url, key, { auth: { persistSession: false } });
+    const rows = entry.recipients.map((recipient) => ({
+      status: entry.status,
+      recipient,
+      subject: (entry.subject || '(no subject)').slice(0, 500),
+      tenant_id: entry.tenantId ?? null,
+      source: entry.source ?? null,
+      notification_key: entry.notificationKey ?? null,
+      provider_message_id: entry.providerMessageId ?? null,
+      http_status: entry.httpStatus ?? null,
+      error: entry.status === 'failed' ? (entry.error || 'unknown error').slice(0, 1000) : null,
+    }));
+    const { error } = await admin.from('email_send_log').insert(rows);
+    if (error) console.warn('email_send_log write failed:', error.message);
+  } catch (e) {
+    console.warn('email_send_log write threw:', (e as Error)?.message);
+  }
 }
 
 interface EmailResult {
@@ -306,6 +356,15 @@ export async function sendResendEmail(
 
     if (!isLocalDev) {
       console.error('RESEND_API_KEY is not configured — email was not sent');
+      await recordSend({
+        status: 'failed',
+        recipients: Array.isArray(options.to) ? options.to : [options.to],
+        subject: options.subject,
+        tenantId: options.tenantId,
+        source: options.source,
+        notificationKey: options.notificationKey,
+        error: 'RESEND_API_KEY missing',
+      });
       return {
         success: false,
         error: 'Email service is not configured (RESEND_API_KEY missing) — no email was delivered',
@@ -372,18 +431,30 @@ export async function sendResendEmail(
       body: JSON.stringify(emailData),
     });
 
-    const responseData = await response.json();
+    const responseData = await response.json().catch(() => ({}));
     console.log('Resend API Response Status:', response.status);
+
+    const logBase = {
+      recipients: toAddresses,
+      subject: options.subject,
+      tenantId: options.tenantId,
+      source: options.source,
+      notificationKey: options.notificationKey,
+      httpStatus: response.status,
+    };
 
     if (!response.ok) {
       console.error('Resend API rejected an email request', { status: response.status });
+      const error = responseData.message || 'Unknown error from Resend';
+      await recordSend({ ...logBase, status: 'failed', error });
       return {
         success: false,
-        error: responseData.message || 'Unknown error from Resend',
+        error,
       };
     }
 
     console.log('Email sent successfully via Resend');
+    await recordSend({ ...logBase, status: 'sent', providerMessageId: responseData.id });
 
     return {
       success: true,
@@ -391,9 +462,18 @@ export async function sendResendEmail(
     };
   } catch (error) {
     console.error('Resend API request failed');
+    await recordSend({
+      status: 'failed',
+      recipients: toAddresses,
+      subject: options.subject,
+      tenantId: options.tenantId,
+      source: options.source,
+      notificationKey: options.notificationKey,
+      error: (error as Error)?.message || 'network error',
+    });
     return {
       success: false,
-      error: error.message,
+      error: (error as Error)?.message,
     };
   }
 }

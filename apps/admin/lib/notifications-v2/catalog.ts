@@ -29,8 +29,8 @@
  * ---------------------------------------------------------------------------
  * NOT REBUILT, DELIBERATELY
  * ---------------------------------------------------------------------------
- * The three broadcast items carry `managedElsewhere`. Announcements and the
- * maintenance banner are finished products with their own authoring screens,
+ * The broadcast items carry `managedElsewhere`. Announcements are a finished
+ * product with their own authoring screens,
  * their own targeting and their own dismissal rules; they are listed so a super
  * admin can find them from here, not so this page can re-implement them. Their
  * tooltips say which screen to open.
@@ -1085,35 +1085,6 @@ export const SYSTEM_NOTIFICATION_CATALOG: SystemNotificationItem[] = [
       "NO authoring screen: nothing under apps/admin references feature_announcements — only apps/booking, the generated types files, and the portal's removal guard",
       "the portal stopped reading this table on Sep 16 2026: apps/portal/src/__tests__/lib/announcements-legacy-removed.test.ts",
       "left untouched by ops/portal_announcements.sql on purpose, so operator content cannot leak to renters",
-    ],
-  },
-  {
-    key: "maintenance_banner",
-    category: "announcements",
-    direction: "super_admin_to_everyone",
-    name: "Maintenance banner",
-    tooltip:
-      "The one message that reaches both audiences at once: every operator portal and every booking site. Switched on from your Settings page.",
-    when: "When you turn the global maintenance banner on.",
-    side: "admin dashboard",
-    recipient: "Every operator portal and every booking site",
-    variables: ["banner_message"],
-    link: "/admin/settings",
-    managedElsewhere: { screen: "Settings", href: "/admin/settings" },
-    channels: {
-      in_app: spec(
-        "sends",
-        inApp("Maintenance", "{{banner_message}}"),
-        "A banner, not a bell row. It appears within about a minute of being switched on, and an operator's own banner takes priority over yours.",
-      ),
-    },
-    evidence: [
-      "authored: apps/admin/app/admin/(protected)/settings/page.tsx:260 ('across all tenant portals and booking sites')",
-      "columns: admin_settings.maintenance_banner_enabled / _message / _type (settings/page.tsx:31-33)",
-      "operator side: apps/portal/src/hooks/use-maintenance-banner.ts:24 → apps/portal/src/components/dashboard/maintenance-banner.tsx:7",
-      "renter side: apps/booking/src/hooks/use-maintenance-banner.ts:18 → apps/booking/src/components/MaintenanceBanner.tsx:7",
-      "polled: staleTime 30s, refetchInterval 60s on both sides",
-      "a tenant's own banner wins over the global one (use-maintenance-banner.ts:55)",
     ],
   },
 ];

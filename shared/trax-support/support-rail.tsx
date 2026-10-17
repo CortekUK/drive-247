@@ -38,9 +38,14 @@ export function SupportRailProvider({ children }: { children: React.ReactNode })
   );
 }
 
-/** The page: hands its inbox to the rail. True when the rail is showing the list. */
-export function useSupportRailHost(inbox: SupportInboxState): boolean {
-  const control = React.useContext(ControlContext);
+/**
+ * The page: hands its inbox to the rail. True when the rail is showing the list.
+ * `enabled: false` (the Trax panel's Support tab) lends nothing and reports no rail,
+ * so a second inbox never takes over the sidebar.
+ */
+export function useSupportRailHost(inbox: SupportInboxState, enabled = true): boolean {
+  const context = React.useContext(ControlContext);
+  const control = enabled ? context : null;
   const publish = control?.publishInbox;
   React.useEffect(() => { publish?.(inbox); }, [publish, inbox]);
   React.useEffect(() => () => publish?.(null), [publish]);

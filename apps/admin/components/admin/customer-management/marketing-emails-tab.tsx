@@ -13,6 +13,8 @@
  *     hourly `marketing-emails-run` does the sending
  */
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { EmailsEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useCallback, useEffect, useState } from 'react';
 import { BookOpen, Eye, GraduationCap, Loader2, Pencil, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
 
@@ -288,7 +290,12 @@ export function MarketingEmailsTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         <CardContent>
           {lessons.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">No lessons yet. Add one to start the course.</p>
+            <EmptyState
+              size="section"
+              illustration={<EmailsEmptyArt />}
+              headline="No lessons yet"
+              body="Add the first lesson to start the course. Operators get one email per lesson, in order."
+            />
           ) : (
             <ol className="space-y-3">
               {lessons.map((l) => (
@@ -400,7 +407,11 @@ export function MarketingEmailsTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         <CardContent>
           {runs.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Nothing yet.</p>
+            <EmptyState
+              size="section"
+              headline="Nothing sent yet"
+              body="Each lesson that goes out to an operator is recorded here."
+            />
           ) : (
             <Table>
               <TableHeader>

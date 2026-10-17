@@ -24,9 +24,10 @@ export default async function SupportPage() {
 
   /* The dashboard layout bounds this route's height (isSupportWorkspace) and
      drops main's padding, so the section supplies its own and fills what is
-     left: the list and the conversation scroll, the page itself does not. */
+     left: the list and the conversation scroll, the page itself does not.
+     On a phone it runs end to end, like the Trax panel. */
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col p-3 sm:p-4">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col md:p-4">
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading Support…</p>}>
         <SupportView />
       </Suspense>

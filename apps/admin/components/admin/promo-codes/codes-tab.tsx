@@ -1,5 +1,8 @@
 'use client';
 
+import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton } from '@/components/admin/header-buttons';
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { PromotionsEmptyArt } from '@/components/admin/illustrations/scenes/promotions';
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Pencil, Plus, Power, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -75,6 +78,7 @@ export function CodesTab({ canEdit }: { canEdit: boolean }) {
           here permanently as two labelled controls. */}
       <div className="flex flex-wrap items-center gap-3">
         <FilterSearch
+        scopeLabel="Campaign codes"
           value={search}
           onChange={setSearch}
           placeholder="SUNSET, LAUNCH50…"
@@ -83,9 +87,9 @@ export function CodesTab({ canEdit }: { canEdit: boolean }) {
           activeCount={activeFilterCount}
           className="min-w-[200px] flex-1"
         />
-        <Button variant="outline" size="icon" onClick={load} aria-label="Reload"><RefreshCw className="h-4 w-4" /></Button>
+        <HeaderIconButton label="Reload" onClick={load}><RefreshCw /></HeaderIconButton>
         {canEdit && (
-          <Button className="gap-1.5" onClick={() => setEditing('new')}><Plus className="h-4 w-4" /> New campaign code</Button>
+          <Button className={HEADER_PRIMARY} onClick={() => setEditing('new')}><Plus className="h-4 w-4" /> New campaign code</Button>
         )}
       </div>
 
@@ -132,7 +136,18 @@ export function CodesTab({ canEdit }: { canEdit: boolean }) {
               {loading ? (
                 <TableRow><TableCell colSpan={5} className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" /></TableCell></TableRow>
               ) : codes.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">No campaign codes match.</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent"><TableCell colSpan={5} className="p-0">
+                  {search.trim() ? (
+                    <NoMatchState size="section" noun="campaign codes" onClear={() => setSearch('')} />
+                  ) : (
+                    <EmptyState
+                      size="section"
+                      illustration={<PromotionsEmptyArt />}
+                      headline="No campaign codes yet"
+                      body="Codes that take money off a Drive247 subscription, for a launch or a partner, live here."
+                    />
+                  )}
+                </TableCell></TableRow>
               ) : codes.map(c => (
                 <TableRow key={c.id}>
                   <TableCell className="min-w-[220px]">

@@ -5,8 +5,10 @@
  * ({slug}.drive-247.com; {slug}.localhost:3000 in development). It holds two
  * designs:
  *
- *   original  src/app/(legacy)/...                 every tenant, unchanged
- *   new       src/app/(northwind)/northwind-site/... NEW_DESIGN_TENANTS only
+ *   original  src/app/(legacy)/...                       every tenant, unchanged
+ *   new       src/app/(northwind)/northwind-site/...       NEW_DESIGN_TENANTS only
+ *   new v2    src/app/(northwind-v2)/northwind-site-v2/... NEW_DESIGN_TENANTS, when the
+ *             super admin's Developer-tab switch (or a ?site=v2 preview) says v2
  *
  * For a new-design tenant the middleware REWRITES (not redirects) the request
  * into the new design's routes, so the address in the browser never changes:
@@ -25,6 +27,32 @@ export const NEW_DESIGN_TENANTS: readonly string[] = ['northwind'];
 
 /** Where the new design's routes live inside the booking app. Never shown to a visitor. */
 export const NEW_DESIGN_PREFIX = '/northwind-site';
+
+/** Where the new design's v2 (the redesign of the redesign) lives. Never shown to a visitor. */
+export const NEW_DESIGN_V2_PREFIX = '/northwind-site-v2';
+
+/**
+ * 'v1' = the new design as it is today; 'v2' = its redesign, being built beside
+ * it. Chosen by the super admin's Developer tab (admin_settings.northwind_site_version)
+ * or a `?site=v1|v2` preview. Anything unreadable is 'v1'.
+ */
+export type SiteVersion = 'v1' | 'v2';
+
+/**
+ * First path segments v2 has a page for. v2 is built page by page; a page it
+ * does not have yet is served by v1, so switching to v2 never leaves a visitor
+ * on a dead link. '' is the home page. Add a segment here when its page lands
+ * in (northwind-v2)/northwind-site-v2/.
+ */
+export const V2_BUILT_SEGMENTS: readonly string[] = [''];
+
+/**
+ * First path segments that exist ONLY in v2 and so open from v2 whatever the
+ * Developer-tab switch says — v2's own addresses, which have no v1 page to fall
+ * back to. `portal-v2` is the customer portal v2, built at its own link beside
+ * the current `/portal` until it is ready to take that address over.
+ */
+export const V2_ONLY_SEGMENTS: readonly string[] = ['portal-v2'];
 
 /**
  * Pages only the original booking app has, which a new-design tenant still
@@ -73,16 +101,24 @@ const isUnder = (pathname: string, prefix: string): boolean =>
 export function routeBookingRequest(
   tenantSlug: string | null | undefined,
   pathname: string,
+  siteVersion: SiteVersion = 'v1',
 ): BookingDesignRoute {
   if (usesNewDesign(tenantSlug)) {
     // Already inside the new design (an internal request, or someone who typed it).
     if (isUnder(pathname, NEW_DESIGN_PREFIX)) return { action: 'original' };
+    if (isUnder(pathname, NEW_DESIGN_V2_PREFIX)) return { action: 'original' };
     if (ORIGINAL_ONLY_SEGMENTS.includes(firstSegment(pathname))) return { action: 'original' };
-    return { action: 'new-design', path: pathname === '/' ? NEW_DESIGN_PREFIX : `${NEW_DESIGN_PREFIX}${pathname}` };
+    const prefix =
+      V2_ONLY_SEGMENTS.includes(firstSegment(pathname)) ||
+      (siteVersion === 'v2' && V2_BUILT_SEGMENTS.includes(firstSegment(pathname)))
+        ? NEW_DESIGN_V2_PREFIX
+        : NEW_DESIGN_PREFIX;
+    return { action: 'new-design', path: pathname === '/' ? prefix : `${prefix}${pathname}` };
   }
 
   // Every other tenant, and requests with no tenant at all.
   if (isUnder(pathname, NEW_DESIGN_PREFIX)) return { action: 'not-found' };
+  if (isUnder(pathname, NEW_DESIGN_V2_PREFIX)) return { action: 'not-found' };
   // Moved here from next.config.ts `redirects()`, which runs before the
   // middleware and so could not tell tenants apart. Same paths, same 307.
   if (isUnder(pathname, '/booking')) return { action: 'redirect-home' };

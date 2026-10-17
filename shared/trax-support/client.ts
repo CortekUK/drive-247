@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-export type MessagingCall=(action:string,data?:Record<string,unknown>)=>Promise<any>;
+export type MessagingCall=(action:string,data?:Record<string,unknown>,options?:{timeout?:number})=>Promise<any>;
 export class MessagingError extends Error {constructor(message:string,public code:string){super(message);}}
 export function useMessagingClient({scope,token,tenantId,admin=false,url,anonKey}:{scope:string;token:()=>Promise<string|null>;tenantId?:string;admin?:boolean;url?:string;anonKey?:string}){
   const generation=useRef({scope,controller:new AbortController()});
   if(generation.current.scope!==scope){generation.current.controller.abort();generation.current={scope,controller:new AbortController()};}
   useEffect(()=>{if(generation.current.controller.signal.aborted)generation.current={scope,controller:new AbortController()};const state=generation.current;return()=>state.controller.abort();},[scope]);
-  return useCallback<MessagingCall>(async(action,data={})=>{
+  return useCallback<MessagingCall>(async(action,data={},options={})=>{
     const state=generation.current;if(state.scope!==scope||state.controller.signal.aborted)throw new MessagingError('Account changed. Reload support.','context_changed');
     const bearer=await token();if(!bearer)throw new MessagingError('Sign in to view support.','unauthorized');
     const endpoint=process.env.NODE_ENV==='development'?'/api/trax-messaging':`${url}/functions/v1/trax-messaging`;
-    const response=await fetch(endpoint,{method:'POST',cache:'no-store',signal:AbortSignal.any([state.controller.signal,AbortSignal.timeout(15000)]),
+    const response=await fetch(endpoint,{method:'POST',cache:'no-store',signal:AbortSignal.any([state.controller.signal,AbortSignal.timeout(options.timeout??15000)]),
       headers:{'Content-Type':'application/json',Authorization:`Bearer ${bearer}`,...(anonKey?{apikey:anonKey}:{})},body:JSON.stringify({action,data,admin,...(!admin?{tenantId}:{})})});
     let result;
     try{result=await response.json();}catch{throw new MessagingError('Support could not be reached. Your draft is preserved for retry.','unavailable');}

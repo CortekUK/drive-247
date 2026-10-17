@@ -1,16 +1,16 @@
 'use client';
 import React from 'react';
 import { type MessagingCall } from './client';
-import { useSupportInbox, type SupportCompose, type SupportInboxOptions } from './use-support-inbox';
+import { useSupportInbox, type SupportInboxOptions } from './use-support-inbox';
 import { useSupportRailHost } from './support-rail';
 import { SupportWorkspace } from './support-workspace';
 
-export type { HumanTicket, SupportCompose } from './use-support-inbox';
+export type { HumanTicket } from './use-support-inbox';
 
 /**
  * The PLATFORM support inbox, in the admin app: the cross-tenant queue on the
  * left (the Support rail, or a column here when the rail is not showing it), one
- * ticket's conversation in the centre, and Details | TRAX Summary on the right,
+ * ticket's conversation in the centre, and Details on the right,
  * where the status control lives.
  *
  * It is the tenant's Support section with the role's differences — which company a
@@ -25,11 +25,11 @@ export type { HumanTicket, SupportCompose } from './use-support-inbox';
  * `admin={false}` is kept for the isolated messaging fixture, which drives a
  * requester's side through this same component.
  */
-export function SupportInbox({ call, admin = false, initialId, compose, scope, uploadAttachment }: {
-  call: MessagingCall; admin?: boolean; initialId?: string; compose?: SupportCompose; scope: string;
+export function SupportInbox({ call, admin = false, initialId, scope, uploadAttachment }: {
+  call: MessagingCall; admin?: boolean; initialId?: string; scope: string;
   uploadAttachment?: SupportInboxOptions['uploadAttachment'];
 }) {
-  const inbox = useSupportInbox({ call, admin, initialId, compose, scope, uploadAttachment });
+  const inbox = useSupportInbox({ call, admin, initialId, scope, uploadAttachment });
   const listInRail = useSupportRailHost(inbox);
   const listHeader = admin ? (
     <header className="shrink-0 border-b border-border/70 px-3 py-2.5">

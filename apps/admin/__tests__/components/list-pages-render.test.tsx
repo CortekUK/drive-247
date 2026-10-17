@@ -76,7 +76,6 @@ vi.mock('@/components/admin/promo-codes/api', async () => {
 
 import { SidebarSectionsProvider } from '@/components/admin/sidebar-sections';
 import FeedbacksPage from '@/app/admin/(protected)/feedbacks/page';
-import PlatformRentalsPage from '@/app/admin/(protected)/platform-rentals/page';
 import AuditLogsPage from '@/app/admin/(protected)/audit-logs/page';
 import RequestsPage from '@/app/admin/(protected)/requests/page';
 import RentalCompaniesPage from '@/app/admin/(protected)/rentals/page';
@@ -89,7 +88,6 @@ import { ReferralLinksTab } from '@/components/admin/promo-codes/referral-links-
 
 const PAGES: [string, React.ComponentType][] = [
   ['feedbacks', FeedbacksPage],
-  ['platform-rentals', PlatformRentalsPage],
   ['audit-logs', AuditLogsPage],
   ['requests', RequestsPage],
   ['rentals', RentalCompaniesPage],

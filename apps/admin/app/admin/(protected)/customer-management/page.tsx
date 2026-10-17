@@ -16,8 +16,14 @@
  * courtesy, not the control.
  */
 
+import { Suspense } from 'react';
 import { CustomerManagementPage } from '@/components/admin/customer-management/customer-management-page';
 
 export default function AdminCustomerManagementRoute() {
-  return <CustomerManagementPage />;
+  // The page reads `?section=`, which needs a Suspense boundary.
+  return (
+    <Suspense fallback={null}>
+      <CustomerManagementPage />
+    </Suspense>
+  );
 }

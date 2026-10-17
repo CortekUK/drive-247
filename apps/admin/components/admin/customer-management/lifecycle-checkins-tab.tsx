@@ -16,6 +16,8 @@
  * is_super_admin()); preview / run now / test send call the edge function.
  */
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { RemindersEmptyArt } from '@/components/admin/illustrations/scenes/reminders';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarClock, CheckCircle2, ClipboardList, Eye, Loader2, Mail, Pencil, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
 
@@ -467,7 +469,12 @@ export function LifecycleCheckinsTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         <CardContent>
           {runs.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Nothing yet.</p>
+            <EmptyState
+              size="section"
+              illustration={<RemindersEmptyArt />}
+              headline="No check-ins sent yet"
+              body="Each check-in email an operator receives is recorded here, with when it went."
+            />
           ) : (
             <Table>
               <TableHeader>

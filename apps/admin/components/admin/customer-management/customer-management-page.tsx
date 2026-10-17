@@ -25,6 +25,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Loader2, MailCheck } from 'lucide-react';
 
 import { useAuthStore } from '@/store/authStore';
@@ -57,13 +58,27 @@ import { CreatorRewardsTab } from './creator-rewards-tab';
 import { TenureRewardsTab } from './tenure-rewards-tab';
 import { CustomDomainTab } from './custom-domain-tab';
 import { ScopeCard } from './scope-card';
+import { CustomerHealthTab } from './customer-health-tab';
+
+type Section = AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory' | 'pausing' | 'testimonials' | 'rewards' | 'tenure' | 'domain' | 'health';
+
+const SECTION_IDS = new Set<string>([
+  'health', 'cancellations', 'retention', 'lifecycle', 'poll', 'marketing', 'webinars', 'milestones',
+  'abandoned', 'nps', 'newsletter', 'advisory', 'pausing', 'testimonials', 'rewards', 'tenure', 'domain',
+  ...AUTOMATIONS.map((a) => a.id),
+]);
 
 export function CustomerManagementPage() {
   const { user } = useAuthStore();
   const canEdit = !!user?.is_super_admin;
 
   /** The three automations, the Cancellations report and the retention offers. */
-  const [tab, setTab] = useState<AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory' | 'pausing' | 'testimonials' | 'rewards' | 'tenure' | 'domain'>('signup');
+  // `?section=` opens one section directly (the old /admin/customer-health
+  // route redirects to `?section=health`).
+  const requested = useSearchParams().get('section');
+  const [tab, setTab] = useState<Section>(
+    requested && SECTION_IDS.has(requested) ? (requested as Section) : 'signup',
+  );
   const [settings, setSettings] = useState<CustomerManagementSettings | null>(null);
   const [steps, setSteps] = useState<CustomerManagementStep[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +88,8 @@ export function CustomerManagementPage() {
   useRegisterSidebarSections(
     '/admin/customer-management',
     [
+      // 0–100 per company: who might leave, so someone calls them first.
+      { id: 'health', label: 'Customer Health Score' },
       ...AUTOMATIONS.map((a) => ({ id: a.id, label: a.label })),
       { id: 'cancellations', label: 'Cancellations' },
       { id: 'retention', label: 'Tiered retention offers' },
@@ -92,7 +109,7 @@ export function CustomerManagementPage() {
       { id: 'domain', label: 'Custom Domain' },
     ],
     tab,
-    (id) => setTab(id as AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory' | 'pausing' | 'testimonials' | 'rewards' | 'tenure' | 'domain'),
+    (id) => setTab(id as Section),
   );
 
   const load = useCallback(async () => {
@@ -125,6 +142,9 @@ export function CustomerManagementPage() {
 
   // The report needs none of the email settings, so it never waits on them
   // (or on the module being installed).
+  if (tab === 'health') {
+    return <CustomerHealthTab />;
+  }
   if (tab === 'cancellations') {
     return <CancellationsTab canEdit={canEdit} />;
   }
@@ -260,10 +280,7 @@ export function CustomerManagementPage() {
 function Header() {
   return (
     <div className="space-y-1">
-      <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-        <MailCheck className="h-5 w-5" />
-        Customer Management Service
-      </h1>
+      <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Customer Management Service</h1>
       <p className="text-sm text-muted-foreground">
         The scheduled emails Drive247 sends its operators: onboarding, renewal warnings and
         payment confirmations.

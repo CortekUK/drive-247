@@ -12,6 +12,8 @@
  * `highlight` is a phrase copied from inside the quote that the site bolds.
  */
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { TestimonialsEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, ExternalLink, Loader2, MessageSquareQuote, Pencil, Plus, RefreshCw, Star, Trash2 } from 'lucide-react';
 
@@ -310,9 +312,12 @@ export function TestimonialsTab({ canEdit }: { canEdit: boolean }) {
       <Card>
         <CardContent className="pt-6">
           {rows.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">
-              No testimonials yet — the section is hidden on the site. Use “Add testimonial” to create one.
-            </p>
+            <EmptyState
+              size="section"
+              illustration={<TestimonialsEmptyArt />}
+              headline="No testimonials yet"
+              body="The section stays hidden on drive-247.com until there is one. Use “Add testimonial” to create it."
+            />
           ) : (
             <div className="overflow-x-auto">
               <Table>

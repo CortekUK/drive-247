@@ -15,21 +15,23 @@ import { cn } from '@/lib/utils';
  * dropdown, "Investigating this issue", the support level and its checks
  * counter, "This is resolved" and "Request human support" — are gone: support
  * policy state is the server's (issues.ts:issueView no longer sends a score),
- * and the handoff is automatic, so the conversation itself carries the ticket
- * confirmation instead of a control strip. The messages get that space.
+ * and TRAX no longer raises tickets at all (removed 2026-10-16). The messages
+ * get that space.
  *
  * Human support is deliberately NOT here either. Tickets, ticket conversations
  * and the reply composer live in the portal's own Support section (`/support`),
- * which the header and a confirmed ticket open through `onOpenSupport`.
+ * which the header opens through `onOpenSupport`.
  */
 type Request=(type:string,payload?:Record<string,unknown>)=>Promise<ChatApiResponse|null>;
 interface Props {children:ReactNode;request?:Request;capabilities?:TraxCapabilities;recent?:ChatApiResponse['recentConversations'];busy:boolean;
-  /** Open the portal's Support section: an existing ticket, or a new request for this issue. */
-  onOpenSupport?:(target:{ticketId?:string;issueId?:string})=>void;
+  /** Open the portal's Support section (optionally at an existing ticket). */
+  onOpenSupport?:(target:{ticketId?:string})=>void;
   /** Controlled by the panel header. Without it the workspace draws its own row (standalone dialog). */
-  view?:TraxSupportView;onView?:(view:TraxSupportView)=>void}
+  view?:TraxSupportView;onView?:(view:TraxSupportView)=>void;
+  /** The Trax panel draws Back in its own header, so the history row leaves it out. */
+  backInHeader?:boolean}
 const stamp=(value:string)=>{const date=new Date(value);return Number.isNaN(date.getTime())?'':date.toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});};
-export function SupportWorkspace({children,request,capabilities,recent=[],busy,onOpenSupport,view,onView}:Props){
+export function SupportWorkspace({children,request,capabilities,recent=[],busy,onOpenSupport,view,onView,backInHeader=false}:Props){
   const [ownView,setOwnView]=useState<TraxSupportView>('conversation');
   const current=view??ownView;
   const show=(next:TraxSupportView)=>{if(onView)onView(next);else setOwnView(next);};
@@ -51,7 +53,7 @@ export function SupportWorkspace({children,request,capabilities,recent=[],busy,o
     </div>}
     {current==='history'?<>
       {onView&&<div className="flex shrink-0 items-center gap-2 border-b border-border/50 px-3 py-2.5 sm:px-4">
-        <Button size="sm" variant="ghost" aria-label="Back to conversation" className={cn("-ml-2 h-8 shrink-0 gap-1.5 px-2 text-xs text-muted-foreground",SIDEBAR_HIGHLIGHT_HOVER,SIDEBAR_HIGHLIGHT_FOCUS)} onClick={()=>show('conversation')}><ArrowLeft className="h-3.5 w-3.5"/>Conversation</Button>
+        {!backInHeader&&<Button size="sm" variant="ghost" aria-label="Back to conversation" className={cn("-ml-2 h-8 shrink-0 gap-1.5 px-2 text-xs text-muted-foreground",SIDEBAR_HIGHLIGHT_HOVER,SIDEBAR_HIGHLIGHT_FOCUS)} onClick={()=>show('conversation')}><ArrowLeft className="h-3.5 w-3.5"/>Conversation</Button>}
         <div className="min-w-0 flex-1"><p className="truncate text-[13px] font-semibold tracking-tight">Conversation history</p><p className="truncate text-[11px] text-muted-foreground">Reopening re-checks your access first</p></div>
       </div>}
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4" aria-label="Previous TRAX conversations">

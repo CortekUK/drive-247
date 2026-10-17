@@ -339,14 +339,6 @@ export const SYSTEM_NOTIFICATION_VARIABLES: SystemNotificationVariable[] = [
     group: "event",
     example: "Coastline Car Rentals LLC",
   },
-  {
-    // admin_settings.maintenance_banner_message.
-    key: "banner_message",
-    label: "Banner message",
-    description: "The maintenance wording everyone sees.",
-    group: "event",
-    example: "We're performing scheduled maintenance. Some features may be briefly unavailable.",
-  },
 
   /* Links ------------------------------------------------------------------- */
   {

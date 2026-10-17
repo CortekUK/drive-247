@@ -17,9 +17,6 @@ export default function BonzahOnboardingPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <div className="flex items-center justify-center h-10 w-10 rounded-xl bg-primary/15 glow-purple-sm">
-          <ShieldCheck className="h-5 w-5 text-primary" />
-        </div>
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Bonzah Onboarding</h1>
           <p className="text-sm text-muted-foreground">

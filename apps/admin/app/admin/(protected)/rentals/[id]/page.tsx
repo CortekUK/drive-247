@@ -1,5 +1,11 @@
 'use client';
 
+import { HeaderIconButton } from '@/components/admin/header-buttons';
+import { setTenantStatus, setTenantType, type TenantStatus, type TenantType } from '@/lib/tenant-actions';
+import { DeleteTenantDialog } from '@/components/admin/delete-tenant-dialog';
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { PlansEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
+import { DocumentsEmptyArt } from '@/components/admin/illustrations/scenes/documents';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -63,6 +69,8 @@ import {
   LayoutTemplate,
   KeyRound,
   Copy,
+  Globe,
+  LayoutDashboard,
 } from 'lucide-react';
 
 interface Tenant {
@@ -1429,8 +1437,6 @@ export default function TenantDetailsPage() {
   /* Restored Sep 26 2026: the controls moved into the account menu rather
      than being dropped. The dialog they open is unchanged. */
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteConfirmName, setDeleteConfirmName] = useState('');
-  const [deleting, setDeleting] = useState(false);
   const [tab, setTab] = useState(() =>
     typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('tab') === 'payments'
@@ -1445,17 +1451,12 @@ export default function TenantDetailsPage() {
    * operator's own portal is a separate application (`apps/portal`) and is
    * untouched, so nothing a tenant sees or uses changes.
    */
-  const handleUpdateStatus = async (newStatus: string) => {
+  // Status, type and delete are shared with the Rental Companies list
+  // (lib/tenant-actions.ts, components/admin/delete-tenant-dialog.tsx).
+  const handleUpdateStatus = async (newStatus: TenantStatus) => {
     if (!tenant) return;
-
     try {
-      const { error } = await supabase
-        .from('tenants')
-        .update({ status: newStatus })
-        .eq('id', tenant.id);
-
-      if (error) throw error;
-
+      await setTenantStatus(tenant.id, newStatus);
       setTenant({ ...tenant, status: newStatus });
       toast.success(`Tenant ${newStatus === 'active' ? 'activated' : 'suspended'} successfully!`);
     } catch (error: any) {
@@ -1463,70 +1464,14 @@ export default function TenantDetailsPage() {
     }
   };
 
-  const handleUpdateType = async (newType: 'production' | 'test') => {
+  const handleUpdateType = async (newType: TenantType) => {
     if (!tenant) return;
-
     try {
-      const { error } = await supabase
-        .from('tenants')
-        .update({ tenant_type: newType })
-        .eq('id', tenant.id);
-
-      if (error) throw error;
-
+      await setTenantType(tenant.id, newType);
       setTenant({ ...tenant, tenant_type: newType });
       toast.success(`Tenant marked as ${newType}!`);
     } catch (error: any) {
       toast.error(`Error updating tenant type: ${error.message}`);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!tenant || deleteConfirmName !== tenant.company_name) {
-      toast.error('Company name does not match');
-      return;
-    }
-
-    setDeleting(true);
-
-    try {
-      const { data, error } = await supabase.functions.invoke('admin-delete-tenant', {
-        body: { tenant_id: tenant.id }
-      });
-
-      // supabase-js collapses ANY non-2xx into a generic FunctionsHttpError
-      // ("Edge Function returned a non-2xx status code") and hides the response
-      // body — which is exactly where admin-delete-tenant puts the actionable
-      // reason (invalid session / not a super admin / the Postgres error, plus
-      // per-table deletionResults). Read it back instead of throwing the useless
-      // generic message.
-      if (error) {
-        let detail = error.message;
-        const res = (error as any)?.context;
-        if (res && typeof res.json === 'function') {
-          try {
-            const body = await res.clone().json();
-            if (body?.error) detail = String(body.error);
-            const failed = Object.entries(body?.deletionResults ?? {})
-              .filter(([, v]) => typeof v === 'string')
-              .map(([table, v]) => `${table}: ${v}`);
-            if (failed.length) detail += ` — failed: ${failed.join('; ')}`;
-          } catch {
-            // body wasn't JSON (e.g. a boot failure) — keep the generic message
-          }
-        }
-        throw new Error(detail);
-      }
-
-      if (data?.error) {
-        throw new Error(data.error);
-      }
-
-      toast.success('Tenant and all associated data deleted successfully!');
-      router.push('/admin/rentals');
-    } catch (error: any) {
-      toast.error(`Error deleting tenant: ${error.message}`);
-      setDeleting(false);
     }
   };
 
@@ -1649,18 +1594,12 @@ export default function TenantDetailsPage() {
             the title still REPORT type and status, which is what this page is
             read for; only the controls that change them moved. */}
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" asChild>
-            <a href={tenantPortalUrl(tenant.slug)} target="_blank" rel="noopener noreferrer">
-              Portal
-              <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
-            </a>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <a href={tenantBookingUrl(tenant.slug)} target="_blank" rel="noopener noreferrer">
-              Booking Site
-              <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
-            </a>
-          </Button>
+          <HeaderIconButton label="Open portal" href={tenantPortalUrl(tenant.slug)} external>
+            <LayoutDashboard />
+          </HeaderIconButton>
+          <HeaderIconButton label="Open booking site" href={tenantBookingUrl(tenant.slug)} external>
+            <Globe />
+          </HeaderIconButton>
         </div>
       </div>
 
@@ -1810,12 +1749,17 @@ export default function TenantDetailsPage() {
                   <Skeleton className="h-10 w-full" />
                 </div>
               ) : policyAcceptances.length === 0 ? (
-                <p className="text-muted-foreground text-center py-6 text-sm">No policy acceptances recorded</p>
+                <EmptyState
+                  size="section"
+                  illustration={<DocumentsEmptyArt />}
+                  headline="No policy acceptances yet"
+                  body="When this company's staff accept the privacy policy and terms, each acceptance is recorded here."
+                />
               ) : (
                 <div className="overflow-hidden rounded-2xl border border-border/40">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-primary/5 hover:bg-primary/5">
+                      <TableRow>
                         <TableHead>User</TableHead>
                         <TableHead>Policy</TableHead>
                         <TableHead>Version</TableHead>
@@ -2121,7 +2065,7 @@ export default function TenantDetailsPage() {
                       tenant.subscription_gate_disabled ? 'bg-emerald-500' : 'bg-muted'
                     )}>
                       <div className={cn(
-                        "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md ring-1 ring-black/5 transition-transform",
+                        "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md ring-1 ring-black/5 transition-transform dark:bg-white",
                         tenant.subscription_gate_disabled && 'translate-x-5'
                       )} />
                     </div>
@@ -2248,7 +2192,7 @@ export default function TenantDetailsPage() {
                           tenant.booking_v2_enabled ? 'bg-violet-500' : 'bg-muted'
                         )}>
                           <div className={cn(
-                            "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md ring-1 ring-black/5 transition-transform",
+                            "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md ring-1 ring-black/5 transition-transform dark:bg-white",
                             tenant.booking_v2_enabled && 'translate-x-5'
                           )} />
                         </div>
@@ -2638,12 +2582,18 @@ export default function TenantDetailsPage() {
                   <Skeleton className="h-10 w-full" />
                 </div>
               ) : plans.length === 0 ? (
-                <p className="text-muted-foreground text-center py-6 text-sm">No plans configured. Add a plan to enable subscriptions.</p>
+                <EmptyState
+                  size="section"
+                  illustration={<PlansEmptyArt />}
+                  headline="No plans for this company"
+                  body="Add a plan to let this company subscribe. They choose from the plans listed here."
+                  action={{ label: 'Add plan', onClick: openAddPlan }}
+                />
               ) : (
                 <div className="overflow-hidden rounded-2xl border border-border/40">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-primary/5 hover:bg-primary/5">
+                      <TableRow>
                         <TableHead>Name</TableHead>
                         <TableHead>Amount</TableHead>
                         <TableHead>Interval</TableHead>
@@ -2757,7 +2707,7 @@ export default function TenantDetailsPage() {
                   <div className="overflow-hidden rounded-2xl border border-border/40">
                     <Table>
                       <TableHeader>
-                        <TableRow className="bg-primary/5 hover:bg-primary/5">
+                        <TableRow>
                           <TableHead>Invoice</TableHead>
                           <TableHead>Date</TableHead>
                           <TableHead>Amount</TableHead>
@@ -3125,41 +3075,11 @@ export default function TenantDetailsPage() {
       </Dialog>
 
       {/* Delete Confirmation */}
-      <Dialog open={showDeleteConfirm} onOpenChange={(open) => { if (!open) { setShowDeleteConfirm(false); setDeleteConfirmName(''); } }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete Tenant</DialogTitle>
-          </DialogHeader>
-          <div className="rounded-lg px-4 py-3 text-sm bg-destructive/10 text-destructive ring-1 ring-destructive/25 space-y-2">
-            <p>
-              This will permanently delete <strong>{tenant.company_name}</strong> and ALL associated data including vehicles, customers, rentals, payments, and users.
-            </p>
-            <p className="font-semibold">This action cannot be undone!</p>
-          </div>
-          <div className="space-y-2">
-            <Label>
-              Type <strong className="text-foreground">{tenant.company_name}</strong> to confirm:
-            </Label>
-            <Input
-              value={deleteConfirmName}
-              onChange={(e) => setDeleteConfirmName(e.target.value)}
-              placeholder="Enter company name"
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmName(''); }}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={deleting || deleteConfirmName !== tenant.company_name}
-            >
-              {deleting ? 'Deleting...' : 'Delete Permanently'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DeleteTenantDialog
+        tenant={showDeleteConfirm ? tenant : null}
+        onOpenChange={setShowDeleteConfirm}
+        onDeleted={() => router.push('/admin/rentals')}
+      />
     </div>
   );
 }

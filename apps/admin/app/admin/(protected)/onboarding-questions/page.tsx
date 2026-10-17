@@ -224,9 +224,6 @@ export default function OnboardingQuestionsAdmin() {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <header className="flex items-center gap-3">
-        <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <ListChecks className="size-5" />
-        </span>
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Onboarding Questions</h1>
           <p className="text-sm text-muted-foreground">

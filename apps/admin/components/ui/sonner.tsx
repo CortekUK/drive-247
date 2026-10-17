@@ -1,13 +1,17 @@
 "use client";
 
 import { Toaster as Sonner, toast } from "sonner";
+import { useThemeMode } from "@/lib/theme";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
 const Toaster = ({ ...props }: ToasterProps) => {
+  // Follows the app's light/dark switch; the surfaces below are tokens, so a
+  // toast is a popover in either mode.
+  const { isDark } = useThemeMode();
   return (
     <Sonner
-      theme="dark"
+      theme={isDark ? "dark" : "light"}
       className="toaster group"
       toastOptions={{
         classNames: {

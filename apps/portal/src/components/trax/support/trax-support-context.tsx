@@ -20,7 +20,7 @@ import type { UseChatReturn } from "@/types/trax-support";
  * component — and the choice must survive going full screen and back. Human
  * support is NOT a view here: it is the portal's own Support section, which
  * TRAX navigates to. `activate()` lets that section load this conversation so
- * an escalation handoff can be submitted with its recorded context.
+ * Support can read the conversation's capabilities (retention management).
  */
 export type TraxSupportView = "conversation" | "history";
 

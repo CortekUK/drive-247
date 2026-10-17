@@ -448,3 +448,126 @@
 .cms-image-frame:has(.cms-image-btn:hover) {
   outline-color: var(--brand-progress-bar);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Customer portal v2 (/portal-v2) — the operator portal v2's design language
+   (apps/portal/src/styles/v2-theme.css), scoped to `.pv2` so nothing else on
+   the Northwind site changes. The brand arrives as three HSL parameters that
+   the shell writes inline from the tenant's primary colour; the defaults are
+   the v2 indigo. Utilities: bg-pv-primary, text-pv-muted, border-pv-border …
+   `.pv2-tokens` is the same token set on <body> (the shell adds it while the
+   portal is mounted) so dialogs, sheets and popovers — which portal to <body>,
+   outside `.pv2` — get it too.
+   ───────────────────────────────────────────────────────────────────────── */
+.pv2,
+.pv2-tokens {
+  --brand-h: 248;
+  --brand-s: 68%;
+  --brand-l: 51%;
+
+  --pv-bg: hsl(0 0% 100%);
+  --pv-fg: hsl(0 0% 3.9%);
+  --pv-card: hsl(0 0% 100%);
+  --pv-muted: hsl(0 0% 96%);
+  --pv-muted-fg: hsl(0 0% 45%);
+  --pv-border: hsl(0 0% 90%);
+  --pv-primary: hsl(var(--brand-h) var(--brand-s) var(--brand-l));
+  --pv-primary-fg: hsl(226 100% 97%);
+  --pv-primary-hover: hsl(var(--brand-h) var(--brand-s) calc(var(--brand-l) - 6%));
+  --pv-tint: hsl(var(--brand-h) var(--brand-s) 95%);
+  --pv-row: hsl(var(--brand-h) var(--brand-s) 97.5%);
+  --pv-chart-3: hsl(calc(var(--brand-h) - 1) calc(var(--brand-s) + 24%) 60%);
+  --pv-chart-5: hsl(calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42%);
+  --pv-wash: hsl(var(--brand-h) var(--brand-s) 51%);
+  --pv-success: hsl(142 76% 36%);
+  --pv-success-light: hsl(142 76% 94%);
+  --pv-warning: hsl(41 92% 40%);
+  --pv-warning-light: hsl(41 92% 94%);
+  --pv-danger: hsl(357 100% 45%);
+  --pv-danger-light: hsl(0 84% 94%);
+
+  font-family: var(--font-manrope), var(--font-dm-sans), system-ui, sans-serif;
+  color: var(--pv-fg);
+  background-color: var(--pv-bg);
+  isolation: isolate;
+}
+
+/* The page wash: four brand-derived radial gradients behind everything. */
+.pv2::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(70rem 50rem at 105% -10%, color-mix(in srgb, var(--pv-wash) 20%, transparent), transparent 55%),
+    radial-gradient(60rem 48rem at -8% -6%, color-mix(in srgb, var(--pv-chart-3) 16%, transparent), transparent 52%),
+    radial-gradient(55rem 45rem at 50% 115%, color-mix(in srgb, var(--pv-wash) 12%, transparent), transparent 55%),
+    linear-gradient(180deg, color-mix(in srgb, var(--pv-wash) 7%, transparent) 0%, transparent 45%);
+  background-repeat: no-repeat;
+}
+
+/* Trax motion: a screen arrives with opacity + a 12px lift, 200ms ease-out. */
+@keyframes pv2-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+.pv2-enter { animation: pv2-enter 200ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .pv2-enter { animation: none; }
+}
+
+@theme inline {
+  --color-pv-bg: var(--pv-bg);
+  --color-pv-fg: var(--pv-fg);
+  --color-pv-card: var(--pv-card);
+  --color-pv-muted: var(--pv-muted);
+  --color-pv-muted-fg: var(--pv-muted-fg);
+  --color-pv-border: var(--pv-border);
+  --color-pv-primary: var(--pv-primary);
+  --color-pv-primary-fg: var(--pv-primary-fg);
+  --color-pv-primary-hover: var(--pv-primary-hover);
+  --color-pv-tint: var(--pv-tint);
+  --color-pv-row: var(--pv-row);
+  --color-pv-chart-3: var(--pv-chart-3);
+  --color-pv-chart-5: var(--pv-chart-5);
+  --color-pv-success: var(--pv-success);
+  --color-pv-success-light: var(--pv-success-light);
+  --color-pv-warning: var(--pv-warning);
+  --color-pv-warning-light: var(--pv-warning-light);
+  --color-pv-danger: var(--pv-danger);
+  --color-pv-danger-light: var(--pv-danger-light);
+}
+
+/* Inside portal v2 the Northwind site's own brand tokens point at the v2 set,
+   so every shared piece the v1 screens use (Button `brand*` variants, inputs,
+   dialogs, chips) repaints in the v2 language without being edited. */
+.pv2,
+.pv2-tokens {
+  --brand-forest: var(--pv-primary);
+  --brand-forest-deep: var(--pv-primary-hover);
+  --brand-forest-darker: var(--pv-primary-hover);
+  --brand-progress-fill: var(--pv-primary);
+  --brand-progress-bar: var(--pv-primary);
+  --brand-cream: hsl(var(--brand-h) calc(var(--brand-s) - 24%) 98%);
+  --brand-stone: var(--pv-tint);
+  --brand-card: var(--pv-card);
+  --brand-text: var(--pv-fg);
+  --brand-text-soft: hsl(0 0% 32%);
+  --brand-text-muted: hsl(0 0% 40%);
+  --brand-text-subtle: var(--pv-muted-fg);
+  --brand-placeholder: hsl(0 0% 60%);
+  --brand-border-soft: var(--pv-border);
+  --brand-border: hsl(0 0% 86%);
+  --brand-ring-dark: var(--pv-fg);
+  --main-primary: var(--pv-primary);
+}
+.pv2-tokens {
+  font-family: var(--font-manrope), var(--font-dm-sans), system-ui, sans-serif;
+}
+/* v2 buttons are soft rectangles, not the site's pills. Unlayered, so it wins
+   over the `rounded-full` utility the Button's brand variants carry. */
+.pv2 [data-slot="button"][data-variant^="brand"],
+.pv2-tokens [data-slot="button"][data-variant^="brand"] {
+  border-radius: 0.625rem;
+}

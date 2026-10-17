@@ -9,6 +9,8 @@
  * it comes from the catalogue rather than from a branch in here.
  */
 
+import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { EmailsEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronRight, Clock, Loader2, Zap } from 'lucide-react';
 
@@ -161,7 +163,12 @@ export function AutomationTab({
       <div className="space-y-3">
         <h3 className="text-sm font-medium text-muted-foreground">Timeline</h3>
         {mine.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No steps yet.</p>
+          <EmptyState
+            size="section"
+            illustration={<EmailsEmptyArt />}
+            headline="No steps yet"
+            body="Add the emails this automation sends, and when each one goes."
+          />
         ) : (
           mine.map((step) => (
             <StepEditor

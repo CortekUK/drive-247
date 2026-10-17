@@ -43,7 +43,6 @@ import {
   Minus,
   Smartphone,
   Star,
-  Waypoints,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -52,8 +51,7 @@ import type { Drift } from "./kit";
 import { ledgerTotals, moneyIn, readinessOf, reviewAverage } from "./derive";
 import type { CustomerRecord } from "./types";
 import type { SectionId } from "./sections";
-import { ContextTabs, type ContextTab } from "@/components/timeline-v2/context-rail";
-import { ConnectedTimeline } from "@/components/timeline-v2/connected-timeline";
+import type { ContextTab } from "@/components/timeline-v2/context-rail";
 
 /**
  * Tints for the moment a value changes, then fades out.
@@ -152,21 +150,19 @@ const MARK = {
 } as const;
 
 /**
- * This record's context views, as data.
+ * This record's context view, as data — for the dock on narrow screens.
  *
- * The desktop column renders them as a tab strip; on a phone the dock renders
- * one icon per entry, each opening that view directly. Both read this, so a
- * view cannot exist in one place and not the other.
+ * Oct 8 2026 (Ghulam): the rail is one fixed overview with no tabs, like the
+ * rental screen's right column. The timeline moved to the Activity section.
  */
 export function customerRailTabs(props: React.ComponentProps<typeof CustomerOverview>): ContextTab[] {
   return [
     { id: "overview", label: "At a glance", icon: LayoutDashboard, scroll: false, padded: false, content: <CustomerOverview {...props} /> },
-    { id: "timeline", label: "Timeline", icon: Waypoints, content: <ConnectedTimeline scope={{ kind: "customer", id: props.c.id }} compact heading="Customer timeline" /> },
   ];
 }
 
 export function OverviewRail(props: React.ComponentProps<typeof CustomerOverview>) {
-  return <ContextTabs label="Customer context" defaultValue="overview" tabs={customerRailTabs(props)} />;
+  return <CustomerOverview {...props} />;
 }
 
 function CustomerOverview({

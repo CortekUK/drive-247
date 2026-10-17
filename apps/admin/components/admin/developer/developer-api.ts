@@ -21,6 +21,8 @@ export interface PortalPreviews {
   billingScenario?: string;
   billingSampleData?: boolean;
   emptyStates?: string[];
+  /** The wand on Northwind's add-customer / add-vehicle dialogs. Works on the live portal too. */
+  autofillForms?: boolean;
 }
 
 export interface DeveloperStatus {

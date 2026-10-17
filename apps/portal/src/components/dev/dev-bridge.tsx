@@ -18,6 +18,9 @@
  *   portal_previews  copied into lib/dev-overrides.ts's storage. Those setters
  *                    are no-ops outside `next dev`, so on the live portal this
  *                    half does nothing at all.
+ *                    The one exception is `autofillForms` (the wand on the
+ *                    add-customer / add-vehicle dialogs, lib/dev-autofill.ts),
+ *                    which works on the live canary too.
  *
  * THE GATE is `tenant.slug === NORTHWIND`, the row that actually came back —
  * the same gate the old page used. Every other tenant renders nothing and
@@ -31,6 +34,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { supabaseUntyped } from "@/integrations/supabase/client";
 import { NORTHWIND } from "@/lib/v2";
 import { clearChecklistState, clearTourSeenFlags, replayTour } from "@/lib/dev-actions";
+import { readAutofill, setAutofill } from "@/lib/dev-autofill";
 import {
   BILLING_SCENARIOS,
   EMPTY_STATE_PAGES,
@@ -61,6 +65,7 @@ type Previews = {
   billingScenario?: unknown;
   billingSampleData?: unknown;
   emptyStates?: unknown;
+  autofillForms?: unknown;
 } | null;
 
 function storage(kind: "local" | "session"): Storage | null {
@@ -154,6 +159,9 @@ export function DevBridge() {
           .eq("id", 1)
           .maybeSingle();
         if (stopped || error || !data) return;
+        // Not behind the NODE_ENV guard in applyPreviews: autofill is wanted on the live canary too.
+        const autofill = (data.portal_previews as Previews)?.autofillForms === true;
+        if (autofill !== readAutofill()) setAutofill(autofill);
         applyPreviews(data.portal_previews as Previews);
         applyCommand(data.portal_command as Command, tenantId);
       } catch {
