@@ -39,7 +39,10 @@ export interface SyncItem {
   id: string;
   tenant_id: string;
   provider: Provider;
-  source_type: "invoice" | "payment" | "refund";
+  /** invoice: a rental's charges · charge: one charge with no rental (a fine, an
+   *  account adjustment) · refund: a payment's refund · rental_refund: refund money
+   *  recorded only in the rental's ledger (no payment carries it). */
+  source_type: "invoice" | "payment" | "refund" | "charge" | "rental_refund";
   source_id: string;
   operation: "sync" | "delete";
   occurred_at: string;
@@ -280,8 +283,24 @@ export class Engine {
   /* ── what each item does ── */
 
   async process(item: SyncItem): Promise<Outcome> {
+    const outcome = await this.route(item);
+    // A delete whose work a sibling item already did (its allocation changed
+    // first, saw the row gone and took it out of the books) still belongs in the
+    // Sync history as "Deleted · Sent" — dropped only if the source never synced.
+    if (item.operation === "delete" && outcome.outcome === "drop") {
+      const { data } = await this.db.from("accounting_sync_items").select("id")
+        .eq("tenant_id", this.conn.tenant_id).eq("provider", this.conn.provider).eq("source_type", item.source_type)
+        .eq("source_id", item.source_id).eq("operation", "sync").eq("status", "sent").limit(1);
+      if (data?.length) return { outcome: "sent", externalId: null };
+    }
+    return outcome;
+  }
+
+  private async route(item: SyncItem): Promise<Outcome> {
     if (item.source_type === "invoice") return this.syncInvoice(item.source_id, item);
+    if (item.source_type === "charge") return this.syncInvoice(item.source_id, item, true);
     if (item.source_type === "payment") return this.syncPayment(item.source_id, item);
+    if (item.source_type === "rental_refund") return this.syncRentalRefund(item.source_id, item);
     return this.syncRefund(item.source_id, item);
   }
 
@@ -295,30 +314,46 @@ export class Engine {
 
   /* ── invoice: a rental's charges ── */
 
-  private async writeChargeMaps(rentalId: string, applied: { chargeId: string; category: string; current: number; invoice: string | null; mapId: string | null }[], docId: string) {
+  private async writeChargeMaps(rentalId: string, applied: { chargeId: string; category: string; current: number; invoice: string | null; mapId: string | null }[], docId: string, customerId: string | null = null, reference: string | null = null) {
     for (const a of applied) {
       await this.putMap("charge", a.chargeId, "", a.mapId ?? `${docId}#${a.chargeId.slice(0, 8)}`, {
         amount: a.current,
         // invoice_external_id: the invoice a payment for this charge is applied to — where it first landed.
-        meta: { rental_id: rentalId, category: a.category, invoice_external_id: a.invoice ?? null },
+        // rental_id: the BILL the charge belongs to — the rental, or for a charge with
+        // no rental the charge itself (billed on its own). customer_id / reference
+        // let a deleted standalone charge still be credited to the right contact.
+        meta: { rental_id: rentalId, category: a.category, invoice_external_id: a.invoice ?? null, customer_id: customerId, reference },
       });
     }
   }
 
-  async syncInvoice(rentalId: string, item: SyncItem | null = null): Promise<Outcome> {
+  /**
+   * A bill: a rental's charges (`standalone` false), or ONE charge that has no
+   * rental — a fine, an account adjustment — billed on its own (`standalone`
+   * true, `rentalId` = the charge id). Both converge the same way.
+   */
+  async syncInvoice(rentalId: string, item: SyncItem | null = null, standalone = false): Promise<Outcome> {
     const tenantId = this.conn.tenant_id;
     const replay = async (m: MapRow, found: DocResult) => {
       const applied = (m.meta?.applied ?? []) as any[];
-      await this.writeChargeMaps(rentalId, applied.map((a) => ({ ...a, invoice: a.invoice ?? (m.entity_type === "invoice" ? found.id : null) })), found.id);
+      await this.writeChargeMaps(rentalId, applied.map((a) => ({ ...a, invoice: a.invoice ?? (m.entity_type === "invoice" ? found.id : null) })),
+        found.id, m.meta?.customer_id ?? null, m.meta?.reference ?? null);
     };
     await this.resolvePending("invoice", rentalId, replay);
     await this.resolvePending("credit_note", rentalId, replay);
+    const chargeCols = "id, category, amount, entry_date, due_date, customer_id, reference";
+    const none = Promise.resolve({ data: null as any });
     const [{ data: rental }, { data: inv }, { data: charges }, { data: chargeMapsRaw }, invoiceMaps, creditMaps] = await Promise.all([
-      this.db.from("rentals").select("id, customer_id, rental_number").eq("id", rentalId).eq("tenant_id", tenantId).maybeSingle(),
-      this.db.from("invoices").select("id, invoice_number, invoice_date, due_date, customer_id").eq("rental_id", rentalId)
-        .eq("tenant_id", tenantId).order("created_at").limit(1).maybeSingle(),
-      this.db.from("ledger_entries").select("id, category, amount, entry_date, due_date").eq("rental_id", rentalId)
-        .eq("tenant_id", tenantId).eq("type", "Charge"),
+      standalone
+        ? none
+        : this.db.from("rentals").select("id, customer_id, rental_number").eq("id", rentalId).eq("tenant_id", tenantId).maybeSingle(),
+      standalone
+        ? none
+        : this.db.from("invoices").select("id, invoice_number, invoice_date, due_date, customer_id").eq("rental_id", rentalId)
+          .eq("tenant_id", tenantId).order("created_at").limit(1).maybeSingle(),
+      standalone
+        ? this.db.from("ledger_entries").select(chargeCols).eq("id", rentalId).eq("tenant_id", tenantId).eq("type", "Charge").is("rental_id", null)
+        : this.db.from("ledger_entries").select(chargeCols).eq("rental_id", rentalId).eq("tenant_id", tenantId).eq("type", "Charge"),
       this.db.from("accounting_entity_map").select("id, entity_type, drive_id, part, external_id, external_number, amount, meta")
         .eq("tenant_id", tenantId).eq("provider", this.conn.provider).eq("entity_type", "charge").eq("meta->>rental_id", rentalId),
       this.maps("invoice", rentalId),
@@ -329,7 +364,14 @@ export class Engine {
     if (!this.inScope(item, hasUpstream)) return { outcome: "drop" };
 
     const byId = new Map(chargeMaps.map((m) => [m.drive_id, m]));
-    const number = (inv?.invoice_number as string) || `R-${rental?.rental_number ?? rentalId.slice(0, 8)}`;
+    const only = standalone ? (charges ?? [])[0] : null;
+    const billCustomer = (inv?.customer_id as string) ?? (rental?.customer_id as string) ?? (only?.customer_id as string)
+      ?? (chargeMaps.find((m) => m.meta?.customer_id)?.meta?.customer_id as string) ?? null;
+    const billReference = (only?.reference as string) ?? (chargeMaps[0]?.meta?.reference as string) ?? null;
+    // A fine reads by its notice (FINE-…), an account adjustment as ADJ-….
+    const number = standalone
+      ? (/^FINE-/i.test(billReference ?? "") ? `FINE-${String(billReference).slice(5, 13)}` : `ADJ-${rentalId.slice(0, 8)}`)
+      : (inv?.invoice_number as string) || `R-${rental?.rental_number ?? rentalId.slice(0, 8)}`;
 
     type Delta = { chargeId: string; category: string; current: number; delta: number; map?: MapRow; date: string };
     const deltas: Delta[] = [];
@@ -352,7 +394,7 @@ export class Engine {
       return hasUpstream ? { outcome: "sent", externalId: main?.external_id ?? null } : { outcome: "drop" };
     }
 
-    const contactId = await this.contact((inv?.customer_id as string) ?? (rental?.customer_id as string) ?? null);
+    const contactId = await this.contact(billCustomer);
     const sum = round2(deltas.reduce((s, d) => s + d.delta, 0));
     const mainExists = invoiceMaps.some((m) => m.part === "0" && !m.external_id.startsWith("pending:"));
     const lines: Line[] = deltas.map((d) => ({
@@ -382,8 +424,8 @@ export class Engine {
           this.key("inv", rentalId, part, item?.generation ?? 0, attempt)),
         {
           amount: sum,
-          meta: { applied },
-          afterCreate: (d) => this.writeChargeMaps(rentalId, applied.map((a) => ({ ...a, invoice: a.invoice ?? d.id })), d.id),
+          meta: { applied, customer_id: billCustomer, reference: billReference },
+          afterCreate: (d) => this.writeChargeMaps(rentalId, applied.map((a) => ({ ...a, invoice: a.invoice ?? d.id })), d.id, billCustomer, billReference),
         });
     } else {
       const part = `adj-${creditMaps.length + 1}`;
@@ -394,8 +436,8 @@ export class Engine {
           this.key("cn", rentalId, part, item?.generation ?? 0, attempt)),
         {
           amount: -sum,
-          meta: { applied },
-          afterCreate: (d) => this.writeChargeMaps(rentalId, applied, d.id),
+          meta: { applied, customer_id: billCustomer, reference: billReference },
+          afterCreate: (d) => this.writeChargeMaps(rentalId, applied, d.id, billCustomer, billReference),
         });
     }
     this.syncedRentals.add(rentalId);
@@ -442,9 +484,11 @@ export class Engine {
         ? await this.db.from("ledger_entries").select("id, rental_id, category").in("id", chargeIds).eq("tenant_id", this.conn.tenant_id)
         : { data: [] as any[] };
       const rentals = new Set<string>((charges ?? []).map((c) => c.rental_id).filter(Boolean));
+      const loose = (charges ?? []).filter((c) => !c.rental_id).map((c) => c.id as string);
       if (rentals.size === 0 && p.rental_id) rentals.add(p.rental_id);
       // The invoice must exist upstream before money can be applied to it.
       for (const r of rentals) if (!this.syncedRentals.has(r)) await this.syncInvoice(r, null);
+      for (const c of loose) if (!this.syncedRentals.has(c)) await this.syncInvoice(c, null, true);
 
       const { data: cmaps } = chargeIds.length
         ? await this.db.from("accounting_entity_map").select("drive_id, meta").eq("tenant_id", this.conn.tenant_id)
@@ -461,8 +505,18 @@ export class Engine {
         applied += amt;
       }
       const rest = round2(Number(p.amount ?? 0) - applied);
-      if (rest > EPS) desired.set("prepay", round2((desired.get("prepay") ?? 0) + rest));
       const rentalId = [...rentals][0] ?? p.rental_id;
+      if (rest > EPS) {
+        // Money for a rental that Drive never split over its charges is still
+        // that rental's money: it pays the rental's invoice (anything above what
+        // the invoice owes spills to a prepayment below). A "Credit" payment is
+        // account credit on purpose and stays a prepayment.
+        const main = rentalId && p.status !== "Credit"
+          ? (await this.maps("invoice", rentalId)).find((m) => m.part === "0" && !m.external_id.startsWith("pending:"))
+          : undefined;
+        const k = main?.external_id ?? "prepay";
+        desired.set(k, round2((desired.get(k) ?? 0) + rest));
+      }
       if (rentalId) {
         const { data: inv } = await this.db.from("invoices").select("invoice_number").eq("rental_id", rentalId)
           .eq("tenant_id", this.conn.tenant_id).order("created_at").limit(1).maybeSingle();
@@ -628,6 +682,67 @@ export class Engine {
       firstId ??= cn.id;
     }
     return { outcome: "sent", externalId: firstId };
+  }
+
+  /**
+   * Refund money recorded only in the rental's ledger: its `Refund` rows minus
+   * what the rental's payments already carry as `refund_amount` (those sync as
+   * `refund` items). A deposit handed back, a fine refunded from the dialog, a
+   * manual remainder past what Stripe would refund — money out all the same.
+   * Booked as a credit note plus a cash refund from the manual account. The gap
+   * is worked out by `accounting_v2_describe`, the same figure the outbox shows.
+   */
+  async syncRentalRefund(rentalId: string, item: SyncItem | null = null): Promise<Outcome> {
+    const tenantId = this.conn.tenant_id;
+    await this.resolvePending("refund", rentalId);
+    const existing = (await this.maps("refund", rentalId)).filter((m) => m.part.startsWith("ledger"));
+    if (!this.inScope(item, existing.length > 0)) return { outcome: "drop" };
+
+    const [{ data: rows }, { data: rental }, { data: inv }, { data: described, error: dErr }] = await Promise.all([
+      this.db.from("ledger_entries").select("category, amount, created_at").eq("rental_id", rentalId)
+        .eq("tenant_id", tenantId).eq("type", "Refund"),
+      this.db.from("rentals").select("customer_id").eq("id", rentalId).eq("tenant_id", tenantId).maybeSingle(),
+      this.db.from("invoices").select("invoice_number").eq("rental_id", rentalId).eq("tenant_id", tenantId)
+        .order("created_at").limit(1).maybeSingle(),
+      this.db.rpc("accounting_v2_describe", { p_tenant: tenantId, p_source_type: "rental_refund", p_source_id: rentalId, p_row: null }),
+    ]);
+    if (dErr) throw new Error(dErr.message);
+    const gap = round2(Number((described as any[])?.[0]?.amount ?? 0));
+    const by = new Map<string, number>();
+    for (const r of rows ?? []) {
+      const c = (r.category as string) ?? "Rental";
+      by.set(c, (by.get(c) ?? 0) - Number(r.amount ?? 0));
+    }
+    const cats = [...by.entries()].filter(([, w]) => w > EPS).map(([category, weight]) => ({ category, weight }));
+    const date = day((rows ?? []).map((r) => String(r.created_at)).sort().pop() ?? null);
+    const sig = JSON.stringify({ g: gap, date });
+
+    if (gap <= EPS && existing.length === 0) return { outcome: "drop" };
+    if (existing.length > 0 && existing.every((m) => m.meta?.sig === sig && !m.external_id.startsWith("pending:"))) {
+      return { outcome: "sent", externalId: existing[0].external_id };
+    }
+    await this.undoRefunds(existing);
+    if (gap <= EPS) return { outcome: "sent", externalId: null };
+
+    const contactId = await this.contact((rental?.customer_id as string) ?? null);
+    const number = (inv?.invoice_number as string) ?? `R-${rentalId.slice(0, 8)}`;
+    // A fresh part per re-post: a voided credit note keeps its number upstream.
+    const n = item?.generation ?? 1;
+    const part = `ledger-${n}`;
+    const reference = `${number} · RFL-${n}`;
+    const attempt = item?.attempts ?? 0;
+    const lines = this.splitLines(cats.length ? cats : [{ category: "Rental", weight: 1 }], gap, number);
+    const cn = await this.once("refund", rentalId, part, "credit_note", reference,
+      () => this.adapter.createCreditNote({ contactId, number: `${number}-RFL${n}`, reference, date, currency: this.currency, lines },
+        this.key("rflcn", rentalId, n, attempt)),
+      { amount: gap, meta: { kind: "credit_note" } });
+    const refund = await this.adapter.refundCreditNote(
+      { creditNoteId: cn.id, amount: gap, date, account: this.settings.manual_account, reference, method: "other" },
+      this.key("rflcash", rentalId, n, attempt));
+    await this.putMap("refund", rentalId, part, cn.id, {
+      number: cn.number, amount: gap, meta: { sig, kind: "credit_note", refund_id: refund.id },
+    });
+    return { outcome: "sent", externalId: cn.id };
   }
 
   /** What the refunded payment paid for, by category and weight. */

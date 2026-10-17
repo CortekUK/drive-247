@@ -58,7 +58,7 @@ export interface AccountingConnection {
 export interface SyncItemRow {
   id: string;
   provider: AccountingProvider;
-  source_type: "invoice" | "payment" | "refund";
+  source_type: "invoice" | "payment" | "refund" | "charge" | "rental_refund";
   source_id: string;
   operation: "sync" | "delete";
   direction: "in" | "out" | "none";
