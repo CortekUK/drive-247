@@ -1,4 +1,4 @@
--- NOT YET APPLIED — apply on go-ahead: this is what starts sending to Xero / Zoho.
+-- APPLIED to production 2026-10-17 (on go-ahead: "complete it")
 --
 -- Accounting sync v2 schedules.
 --   accounting-sync-v2       every minute: sends waiting/due items (edge function)
