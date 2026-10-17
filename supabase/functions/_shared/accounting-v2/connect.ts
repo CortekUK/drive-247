@@ -31,6 +31,25 @@ export class OrgTakenError extends Error {
 
 const LIVE = ["connected", "needs_reauth", "error"];
 
+/**
+ * One accounting integration per company: Xero OR Zoho Books, never both. The
+ * other provider counts as taken while it is live or mid-connect (pending_org);
+ * the company disconnects it first to switch.
+ */
+export class OtherProviderError extends Error {
+  constructor(public other: Provider) {
+    super(`${other === "xero" ? "Xero" : "Zoho Books"} is already connected. A company uses one accounting integration — disconnect ${other === "xero" ? "Xero" : "Zoho Books"} first to switch.`);
+  }
+}
+
+/** The OTHER provider this tenant already has live or mid-connect, if any. */
+export async function otherProviderLive(db: SupabaseClient, tenantId: string, provider: Provider): Promise<Provider | null> {
+  const { data, error } = await db.from("accounting_v2_connections").select("provider")
+    .eq("tenant_id", tenantId).neq("provider", provider).in("status", [...LIVE, "pending_org"]).limit(1);
+  if (error) throw new Error(`Could not check the other integration: ${error.message}`);
+  return ((data ?? [])[0]?.provider as Provider | undefined) ?? null;
+}
+
 /** Which of these organisations are already live on ANOTHER tenant. */
 export async function takenOrgIds(db: SupabaseClient, provider: Provider, tenantId: string, orgIds: string[]): Promise<Set<string>> {
   if (!orgIds.length) return new Set();
@@ -84,6 +103,12 @@ export async function finalizeOrg(db: SupabaseClient, connectionId: string, org:
   const now = new Date().toISOString();
   const sameOrg = !!conn.external_org_id && conn.external_org_id === org.id;
 
+  const other = await otherProviderLive(db, conn.tenant_id, conn.provider);
+  if (other) {
+    const err = new OtherProviderError(other);
+    await rejectGrant(db, connectionId, err.message);
+    throw err;
+  }
   if ((await takenOrgIds(db, conn.provider, conn.tenant_id, [org.id])).has(org.id)) {
     const err = new OrgTakenError();
     await rejectGrant(db, connectionId, err.message);
@@ -141,9 +166,12 @@ export async function finalizeOrg(db: SupabaseClient, connectionId: string, org:
     paused_until: null,
     updated_at: now,
   }).eq("id", connectionId);
-  // The unique index is the last word if two tenants race for the same books.
+  // The unique indexes are the last word on a race: the same books for two
+  // tenants, or a second provider for one tenant.
   if (error?.code === "23505") {
-    const err = new OrgTakenError();
+    const other = /one_provider_per_tenant/.test(error.message ?? "")
+      ? await otherProviderLive(db, conn.tenant_id, conn.provider) : null;
+    const err = other ? new OtherProviderError(other) : new OrgTakenError();
     await rejectGrant(db, connectionId, err.message);
     throw err;
   }

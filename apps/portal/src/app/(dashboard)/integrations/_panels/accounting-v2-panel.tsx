@@ -39,6 +39,7 @@ import {
   PROVIDER_NAME,
   type SyncItemRow,
   useAccountingConnection,
+  useAccountingConnections,
   useAccountingInvalidate,
   useAccountingOptions,
   useSyncItems,
@@ -72,6 +73,7 @@ const OAUTH_REASONS: Record<string, string> = {
   organisations_lookup_failed: "You signed in, but the provider would not list your organisations — usually a permission missing on the app.",
   no_organisations: "That account has no organisation to connect. Create one, then connect again.",
   persist_failed: "The connection was authorised but could not be saved. Try again.",
+  other_provider: "This company already has its other accounting integration connected. A company uses one — disconnect it first to switch.",
   org_taken: "That organisation is already connected to another company on Drive247. Each company connects its own books — sign in with your company's own organisation.",
 };
 
@@ -162,6 +164,11 @@ export function AccountingPanel({ tenant, onBack, fromIntro, provider }: Integra
   const status = useAccountingConnection(tenant.id, provider);
   const conn = status.data ?? null;
   const live = !!conn && conn.status !== "disconnected";
+  // One accounting integration per company: the other provider, if it is live
+  // or mid-connect, blocks this one until it is disconnected.
+  const allConns = useAccountingConnections(tenant.id);
+  const otherConn = (allConns.data ?? []).find((c) => c.provider !== provider && c.status !== "disconnected") ?? null;
+  const otherName = otherConn ? PROVIDER_NAME[otherConn.provider] : null;
   const usable = conn?.status === "connected";
 
   const [screen, setScreen] = useState<Screen>("home");
@@ -188,10 +195,10 @@ export function AccountingPanel({ tenant, onBack, fromIntro, provider }: Integra
   // needs its data centre first, so it lands on the picker instead.
   const [autoStarted, setAutoStarted] = useState(false);
   useEffect(() => {
-    if (provider !== "xero" || !fromIntro || autoStarted || live || !canManage || status.isLoading || status.isError) return;
+    if (provider !== "xero" || !fromIntro || autoStarted || live || otherConn || !canManage || status.isLoading || status.isError || allConns.isLoading) return;
     setAutoStarted(true);
     void startConnect();
-  }, [provider, fromIntro, autoStarted, live, canManage, status.isLoading, status.isError, startConnect]);
+  }, [provider, fromIntro, autoStarted, live, otherConn, canManage, status.isLoading, status.isError, allConns.isLoading, startConnect]);
 
   const run = async (label: string, fn: () => Promise<unknown>, done?: string) => {
     setBusy(true);
@@ -315,6 +322,20 @@ export function AccountingPanel({ tenant, onBack, fromIntro, provider }: Integra
         onBack={onBack}
         onPick={(orgId) => void run("Could not finish connecting", () => accountingAction("select_org", provider, tenant.slug, { orgId }), `${short} connected`)}
       />
+    );
+  }
+
+  /* ── the other integration is connected: one per company ───────────────── */
+
+  if (!live && otherConn && otherName) {
+    return (
+      <>
+        <Hero art={provider === "xero" ? InvoicesEmptyArt : ExpensesEmptyArt} title={`${otherName} is already connected.`}>
+          A company uses one accounting integration, so every transaction lands in one set of books. To move to {name},
+          disconnect {otherName} first — everything already in {otherName} stays there.
+        </Hero>
+        <ScreenNav className="mt-8" onBack={onBack} />
+      </>
     );
   }
 

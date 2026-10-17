@@ -14,7 +14,7 @@
  */
 import { XERO, redirectUri } from "../_shared/accounting-v2/config.ts";
 import { serviceClient } from "../_shared/accounting-v2/caller.ts";
-import { finalizeOrg, OrgTakenError, saveGrant, takenOrgIds } from "../_shared/accounting-v2/connect.ts";
+import { finalizeOrg, OrgTakenError, OtherProviderError, otherProviderLive, saveGrant, takenOrgIds } from "../_shared/accounting-v2/connect.ts";
 import { requestToken } from "../_shared/accounting-v2/tokens.ts";
 
 const plain = (msg: string, status = 400) =>
@@ -61,6 +61,8 @@ Deno.serve(async (req) => {
     if (orgs.length === 0) return back("error", "no_organisations");
     // Books already connected to another company are not offered. If that
     // leaves nothing, this tenant's existing connection is left untouched.
+    // One accounting integration per company: the other one must be disconnected first.
+    if (await otherProviderLive(db, state.tenant_id as string, "xero")) return back("error", "other_provider");
     const taken = await takenOrgIds(db, "xero", state.tenant_id as string, orgs.map((o) => o.id));
     const free = orgs.filter((o) => !taken.has(o.id));
     if (free.length === 0) return back("error", "org_taken");
@@ -74,6 +76,7 @@ Deno.serve(async (req) => {
     return back("connected");
   } catch (e) {
     if (e instanceof OrgTakenError) return back("error", "org_taken");
+    if (e instanceof OtherProviderError) return back("error", "other_provider");
     console.error("xero-oauth-callback-v2:", e);
     return back("error", e instanceof Error && /Token request rejected/.test(e.message) ? "token_exchange_failed" : "persist_failed");
   }
