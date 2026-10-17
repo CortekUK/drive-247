@@ -21,7 +21,7 @@ import { resolveCaller } from "../_shared/accounting-v2/caller.ts";
 import {
   clientCreds, isAllowedRedirect, type Provider, redirectUri, XERO, ZOHO, zohoAccountsServer, ZOHO_REGIONS,
 } from "../_shared/accounting-v2/config.ts";
-import { finalizeOrg, type OrgChoice } from "../_shared/accounting-v2/connect.ts";
+import { finalizeOrg, OrgTakenError, type OrgChoice } from "../_shared/accounting-v2/connect.ts";
 import { pickDefaults, resolveSettings } from "../_shared/accounting-v2/engine.ts";
 import { buildAdapter, CONNECTION_COLUMNS, processItems } from "../_shared/accounting-v2/runner.ts";
 import type { AccountSettings, Connection } from "../_shared/accounting-v2/types.ts";
@@ -84,7 +84,12 @@ Deno.serve(async (req) => {
       if (conn.status !== "pending_org") return errorResponse("There is no organisation choice waiting.", 409);
       const org = (conn.available_orgs ?? []).find((o) => o.id === body.orgId);
       if (!org) return errorResponse("That organisation was not one you authorised.", 400);
-      await finalizeOrg(db, conn.id, org);
+      try {
+        await finalizeOrg(db, conn.id, org);
+      } catch (e) {
+        if (e instanceof OrgTakenError) return errorResponse(e.message, 409);
+        throw e;
+      }
       return jsonResponse({ ok: true });
     }
 

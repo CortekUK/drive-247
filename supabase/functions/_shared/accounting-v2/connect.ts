@@ -18,6 +18,41 @@ import type { Connection } from "./types.ts";
 
 export interface OrgChoice { id: string; name: string; connection_id?: string | null }
 
+/**
+ * One set of books, one company. An organisation already live on another
+ * tenant's connection cannot be connected again: two tenants writing into the
+ * same Xero / Zoho books would mix their customers and money.
+ */
+export class OrgTakenError extends Error {
+  constructor() {
+    super("That organisation is already connected to another company on Drive247.");
+  }
+}
+
+const LIVE = ["connected", "needs_reauth", "error"];
+
+/** Which of these organisations are already live on ANOTHER tenant. */
+export async function takenOrgIds(db: SupabaseClient, provider: Provider, tenantId: string, orgIds: string[]): Promise<Set<string>> {
+  if (!orgIds.length) return new Set();
+  const { data, error } = await db.from("accounting_v2_connections").select("external_org_id")
+    .eq("provider", provider).neq("tenant_id", tenantId).in("status", LIVE).in("external_org_id", orgIds);
+  if (error) throw new Error(`Could not check the organisation: ${error.message}`);
+  return new Set((data ?? []).map((r) => r.external_org_id as string));
+}
+
+/**
+ * A grant for an organisation that turned out to be taken: forget its tokens
+ * and leave the connection disconnected. Nothing is revoked or deleted at the
+ * provider — the same Xero user may hold the OTHER tenant's live connection to
+ * that organisation, and deleting it would cut that tenant off.
+ */
+async function rejectGrant(db: SupabaseClient, connectionId: string, message: string) {
+  await db.rpc("accounting_v2_clear_tokens", { p_connection_id: connectionId });
+  await db.from("accounting_v2_connections").update({
+    status: "disconnected", available_orgs: null, last_error: message, updated_at: new Date().toISOString(),
+  }).eq("id", connectionId);
+}
+
 /** Save the grant (tokens to Vault) and return the connection id. */
 export async function saveGrant(db: SupabaseClient, p: {
   tenantId: string; provider: Provider; tokens: TokenSet; userId: string | null; scopes: string;
@@ -48,6 +83,12 @@ export async function finalizeOrg(db: SupabaseClient, connectionId: string, org:
   const conn = before as unknown as Connection & { available_orgs: OrgChoice[] | null };
   const now = new Date().toISOString();
   const sameOrg = !!conn.external_org_id && conn.external_org_id === org.id;
+
+  if ((await takenOrgIds(db, conn.provider, conn.tenant_id, [org.id])).has(org.id)) {
+    const err = new OrgTakenError();
+    await rejectGrant(db, connectionId, err.message);
+    throw err;
+  }
 
   if (conn.external_org_id && !sameOrg) {
     // New books: the old ids mean nothing there.
@@ -100,6 +141,12 @@ export async function finalizeOrg(db: SupabaseClient, connectionId: string, org:
     paused_until: null,
     updated_at: now,
   }).eq("id", connectionId);
+  // The unique index is the last word if two tenants race for the same books.
+  if (error?.code === "23505") {
+    const err = new OrgTakenError();
+    await rejectGrant(db, connectionId, err.message);
+    throw err;
+  }
   if (error) throw new Error(`Could not finish the connection: ${error.message}`);
 
   // Anything that moved while disconnected is queued now.

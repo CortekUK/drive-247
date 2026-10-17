@@ -10,7 +10,7 @@
  */
 import { redirectUri, ZOHO, zohoAccountsServer, zohoRegionFromAccountsServer } from "../_shared/accounting-v2/config.ts";
 import { serviceClient } from "../_shared/accounting-v2/caller.ts";
-import { finalizeOrg, saveGrant } from "../_shared/accounting-v2/connect.ts";
+import { finalizeOrg, OrgTakenError, saveGrant, takenOrgIds } from "../_shared/accounting-v2/connect.ts";
 import { requestToken } from "../_shared/accounting-v2/tokens.ts";
 
 const LOCATION_TO_REGION: Record<string, string> = { us: "com", eu: "eu", in: "in", au: "com.au", jp: "jp", sa: "sa", ca: "ca" };
@@ -64,15 +64,21 @@ Deno.serve(async (req) => {
     if (!res.ok || !json || (typeof json.code === "number" && json.code !== 0)) return back("error", "organisations_lookup_failed");
     const orgs = (json.organizations ?? []).map((o) => ({ id: o.organization_id, name: o.name }));
     if (orgs.length === 0) return back("error", "no_organisations");
+    // Books already connected to another company are not offered. If that
+    // leaves nothing, this tenant's existing connection is left untouched.
+    const taken = await takenOrgIds(db, "zoho", state.tenant_id as string, orgs.map((o) => o.id));
+    const free = orgs.filter((o) => !taken.has(o.id));
+    if (free.length === 0) return back("error", "org_taken");
 
     const connectionId = await saveGrant(db, {
       tenantId: state.tenant_id as string, provider: "zoho", tokens, userId: (state.initiated_by as string) ?? null,
-      scopes: ZOHO.scopes, region, apiDomain, accountsServer, orgs,
+      scopes: ZOHO.scopes, region, apiDomain, accountsServer, orgs: free,
     });
     if (orgs.length > 1) return back("choose");
-    await finalizeOrg(db, connectionId, orgs[0]);
+    await finalizeOrg(db, connectionId, free[0]);
     return back("connected");
   } catch (e) {
+    if (e instanceof OrgTakenError) return back("error", "org_taken");
     console.error("zoho-oauth-callback-v2:", e);
     return back("error", e instanceof Error && /Token request rejected/.test(e.message) ? "token_exchange_failed" : "persist_failed");
   }

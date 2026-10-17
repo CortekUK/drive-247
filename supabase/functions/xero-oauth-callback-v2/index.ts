@@ -14,7 +14,7 @@
  */
 import { XERO, redirectUri } from "../_shared/accounting-v2/config.ts";
 import { serviceClient } from "../_shared/accounting-v2/caller.ts";
-import { finalizeOrg, saveGrant } from "../_shared/accounting-v2/connect.ts";
+import { finalizeOrg, OrgTakenError, saveGrant, takenOrgIds } from "../_shared/accounting-v2/connect.ts";
 import { requestToken } from "../_shared/accounting-v2/tokens.ts";
 
 const plain = (msg: string, status = 400) =>
@@ -59,15 +59,21 @@ Deno.serve(async (req) => {
     const orgs = conns.filter((c) => c.tenantType === "ORGANISATION")
       .map((c) => ({ id: c.tenantId, name: c.tenantName, connection_id: c.id }));
     if (orgs.length === 0) return back("error", "no_organisations");
+    // Books already connected to another company are not offered. If that
+    // leaves nothing, this tenant's existing connection is left untouched.
+    const taken = await takenOrgIds(db, "xero", state.tenant_id as string, orgs.map((o) => o.id));
+    const free = orgs.filter((o) => !taken.has(o.id));
+    if (free.length === 0) return back("error", "org_taken");
 
     const connectionId = await saveGrant(db, {
       tenantId: state.tenant_id as string, provider: "xero", tokens, userId: (state.initiated_by as string) ?? null,
-      scopes: XERO.scopes, orgs,
+      scopes: XERO.scopes, orgs: free,
     });
     if (orgs.length > 1) return back("choose");
-    await finalizeOrg(db, connectionId, orgs[0]);
+    await finalizeOrg(db, connectionId, free[0]);
     return back("connected");
   } catch (e) {
+    if (e instanceof OrgTakenError) return back("error", "org_taken");
     console.error("xero-oauth-callback-v2:", e);
     return back("error", e instanceof Error && /Token request rejected/.test(e.message) ? "token_exchange_failed" : "persist_failed");
   }

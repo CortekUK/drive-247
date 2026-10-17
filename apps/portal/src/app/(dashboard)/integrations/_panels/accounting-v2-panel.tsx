@@ -72,6 +72,7 @@ const OAUTH_REASONS: Record<string, string> = {
   organisations_lookup_failed: "You signed in, but the provider would not list your organisations — usually a permission missing on the app.",
   no_organisations: "That account has no organisation to connect. Create one, then connect again.",
   persist_failed: "The connection was authorised but could not be saved. Try again.",
+  org_taken: "That organisation is already connected to another company on Drive247. Each company connects its own books — sign in with your company's own organisation.",
 };
 
 type Verdict = { state: IntegrationState; label?: string };
