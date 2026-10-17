@@ -8,6 +8,7 @@ interface SuperAdmin {
   is_primary_super_admin: boolean;
   is_super_admin?: boolean;
   is_sales_agent?: boolean;
+  is_active?: boolean;
 }
 
 interface AuthState {
@@ -34,14 +35,15 @@ export const useAuthStore = create<AuthState>((set) => ({
     // Cast to any: is_sales_agent is not yet in the generated Supabase types.
     const { data: userData, error: userError } = await (supabase as any)
       .from('app_users')
-      .select('id, email, name, is_super_admin, is_primary_super_admin, is_sales_agent')
+      .select('id, email, name, is_active, is_super_admin, is_primary_super_admin, is_sales_agent')
       .eq('auth_user_id', data.user.id)
       .single();
 
     if (userError) throw userError;
 
     // Verify user is a super admin or a sales agent
-    if (!userData.is_super_admin && !userData.is_sales_agent) {
+    // A deactivated team member (Manage Admins) is refused even with a valid password.
+    if (userData.is_active === false || (!userData.is_super_admin && !userData.is_sales_agent)) {
       await supabase.auth.signOut();
       throw new Error('Access denied. Super admin or sales agent privileges required.');
     }
@@ -76,11 +78,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     // Cast to any: is_sales_agent is not yet in the generated Supabase types.
     const { data: userData, error } = await (supabase as any)
       .from('app_users')
-      .select('id, email, name, is_super_admin, is_primary_super_admin, is_sales_agent')
+      .select('id, email, name, is_active, is_super_admin, is_primary_super_admin, is_sales_agent')
       .eq('auth_user_id', session.user.id)
       .single();
 
-    if (userData && (userData.is_super_admin || userData.is_sales_agent)) {
+    if (userData && userData.is_active !== false && (userData.is_super_admin || userData.is_sales_agent)) {
       set({ user: userData as SuperAdmin, loading: false });
       return;
     }

@@ -6,6 +6,9 @@ import { useAuthStore } from '@/store/authStore';
 import { useRouter } from 'next/navigation';
 import { toast } from '@/components/ui/sonner';
 import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
+import { Copy, Eye, EyeOff, Pencil, Power, Trash2 } from 'lucide-react';
+
+type TeamRole = 'super_admin' | 'manager' | 'sales' | 'support';
 
 interface Admin {
   id: string;
@@ -13,7 +16,71 @@ interface Admin {
   name: string;
   is_primary_super_admin: boolean;
   created_at: string;
+  is_active: boolean;
+  platform_role: TeamRole | null;
+  /** The password a super admin set for this member (Vault, decrypted server-side). */
+  password: string | null;
 }
+
+const ROLES: { value: TeamRole; label: string }[] = [
+  { value: 'super_admin', label: 'Super Admin' },
+  { value: 'manager', label: 'Manager' },
+  { value: 'sales', label: 'Sales' },
+  { value: 'support', label: 'Support' },
+];
+const ROLE_LABEL: Record<TeamRole, string> = { super_admin: 'Super Admin', manager: 'Manager', sales: 'Sales', support: 'Support' };
+
+/**
+ * The `admin-team` endpoint (supabase/functions/admin-team): the dev server's own
+ * route on localhost, the edge function everywhere else. It refuses anyone who is
+ * not a super admin, so the passwords never reach anyone else's browser.
+ */
+async function callTeam(body: Record<string, unknown>) {
+  if (process.env.NODE_ENV === 'development') {
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/admin-team', {
+      method: 'POST', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? 'Request failed');
+    return data;
+  }
+  const { data, error } = await supabase.functions.invoke('admin-team', { body });
+  if (error) {
+    const detail = await (error as { context?: Response }).context?.json?.().catch(() => null);
+    throw new Error(detail?.error ?? error.message);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+function EyeButton({ shown, onClick }: { shown: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} aria-label={shown ? 'Hide password' : 'Show password'} title={shown ? 'Hide password' : 'Show password'}
+      className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground transition-colors duration-200 ease-out hover:text-foreground motion-reduce:transition-none">
+      {shown ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+    </button>
+  );
+}
+
+function CopyButton({ value }: { value: string }) {
+  return (
+    <button type="button" aria-label="Copy password" title="Copy password"
+      onClick={() => { void navigator.clipboard.writeText(value).then(() => toast.success('Password copied')); }}
+      className="rounded-md p-1 text-muted-foreground transition-colors duration-200 ease-out hover:text-foreground motion-reduce:transition-none">
+      <Copy className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
+function roleOf(admin: Admin): TeamRole {
+  return admin.platform_role ?? (admin.is_primary_super_admin ? 'super_admin' : 'manager');
+}
+
+const FIELD = 'w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30';
+const EMPTY_FORM = { name: '', email: '', role: 'manager' as TeamRole, password: '', confirm: '' };
 
 export default function ManageAdminsPage() {
   const router = useRouter();
@@ -21,22 +88,17 @@ export default function ManageAdminsPage() {
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-  });
+  const [formData, setFormData] = useState(EMPTY_FORM);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [showSalesModal, setShowSalesModal] = useState(false);
-  const [salesFormData, setSalesFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-  });
-  const [creatingSales, setCreatingSales] = useState(false);
+  /** Set while editing: the member being changed (the form is shared with Add). */
+  const [editing, setEditing] = useState<Admin | null>(null);
+  const [deleting, setDeleting] = useState<Admin | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Only primary super admin can access this page
+    // Only a super admin can access this page
     if (user && !user.is_primary_super_admin) {
       router.push('/admin/dashboard');
     }
@@ -50,92 +112,92 @@ export default function ManageAdminsPage() {
 
   const loadAdmins = async () => {
     try {
-      const { data, error } = await supabase
-        .from('app_users')
-        .select('id, email, name, is_primary_super_admin, created_at')
-        .eq('is_super_admin', true)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setAdmins(data || []);
-    } catch (error) {
+      const data = await callTeam({ action: 'list' });
+      setAdmins(data.members || []);
+    } catch (error: any) {
       console.error('Error loading admins:', error);
+      toast.error(`Could not load the team: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCreateAdmin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCreating(true);
+  const mismatch = formData.password !== formData.confirm && (!!formData.confirm || (!!editing && !!formData.password));
+  const tooShort = !!formData.password && formData.password.length < 8;
 
+  const openEdit = (admin: Admin) => {
+    setEditing(admin);
+    setFormData({ name: admin.name ?? '', email: admin.email ?? '', role: roleOf(admin), password: '', confirm: '' });
+    setShowCreateModal(true);
+  };
+
+  /** Deactivate / reactivate / delete: one request, then the list from the server. */
+  const runAction = async (admin: Admin, action: 'deactivate' | 'reactivate' | 'delete', done: string) => {
+    setBusyId(admin.id);
     try {
-      // Create Supabase auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-      });
-
-      if (authError) throw authError;
-
-      // Create app_users record
-      const { error: userError } = await supabase
-        .from('app_users')
-        .insert([
-          {
-            auth_user_id: authData.user?.id,
-            email: formData.email,
-            name: formData.name,
-            is_super_admin: true,
-            is_primary_super_admin: false,
-            tenant_id: null,
-          }
-        ]);
-
-      if (userError) throw userError;
-
-      setShowCreateModal(false);
-      setFormData({ name: '', email: '', password: '' });
-      loadAdmins();
-      toast.success('Super admin created successfully!');
+      await callTeam({ action, id: admin.id });
+      toast.success(done);
+      setDeleting(null);
+      await loadAdmins();
     } catch (error: any) {
-      toast.error(`Error creating admin: ${error.message}`);
+      toast.error(error.message);
     } finally {
-      setCreating(false);
+      setBusyId(null);
     }
   };
 
-  const handleCreateSalesAgent = async (e: React.FormEvent) => {
+  const closeModal = () => {
+    setEditing(null);
+    setShowCreateModal(false);
+    setFormData(EMPTY_FORM);
+    setShowPassword(false);
+    setShowConfirm(false);
+  };
+
+  const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setCreatingSales(true);
+    if (formData.password !== formData.confirm) {
+      toast.error('The passwords do not match.');
+      return;
+    }
+    setCreating(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('admin-create-sales-agent', {
-        body: {
-          email: salesFormData.email,
-          name: salesFormData.name,
-          password: salesFormData.password,
-        },
+      if (editing) {
+        await callTeam({
+          action: 'update',
+          id: editing.id,
+          name: formData.name,
+          email: formData.email,
+          role: formData.role,
+          ...(formData.password ? { password: formData.password } : {}),
+        });
+        closeModal();
+        loadAdmins();
+        toast.success('Changes saved');
+        return;
+      }
+      await callTeam({
+        action: 'create',
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        role: formData.role,
       });
-
-      if (error) throw new Error(error.message);
-      if (data?.error) throw new Error(data.error);
-
-      setShowSalesModal(false);
-      setSalesFormData({ name: '', email: '', password: '' });
+      closeModal();
       loadAdmins();
-      toast.success('Sales agent created successfully!');
+      toast.success(`${ROLE_LABEL[formData.role]} added`);
     } catch (error: any) {
-      toast.error(`Error creating sales agent: ${error.message}`);
+      toast.error(`${editing ? 'Could not save' : 'Error creating account'}: ${error.message}`);
     } finally {
-      setCreatingSales(false);
+      setCreating(false);
     }
   };
 
   if (!user?.is_primary_super_admin) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-xl text-red-600">Access denied. Primary super admin only.</div>
+        <div className="text-xl text-red-600">Access denied. Super admins only.</div>
       </div>
     );
   }
@@ -145,8 +207,8 @@ export default function ManageAdminsPage() {
       <TableSkeleton
         rows={3}
         columns={5}
-        title="Manage Super Admins"
-        subtitle="Add and manage super admin accounts"
+        title="Manage Admins"
+        subtitle="Your team on the Drive247 dashboard"
       />
     );
   }
@@ -155,24 +217,16 @@ export default function ManageAdminsPage() {
     <div>
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Manage Super Admins</h1>
-          <p className="mt-2 text-muted-foreground">Add and manage super admin accounts</p>
-          <p className="mt-1 text-sm text-red-600">Primary super admin access only</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Manage Admins</h1>
+          <p className="mt-2 text-muted-foreground">Your team on the Drive247 dashboard</p>
+          <p className="mt-1 text-sm text-red-600">Super admins only</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowSalesModal(true)}
-            className="px-6 py-3 bg-dark-card border border-dark-border text-foreground rounded-lg hover:bg-dark-hover font-medium"
-          >
-            + Add Sales Agent
-          </button>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/80 font-medium"
-          >
-            + Add Super Admin
-          </button>
-        </div>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/80 font-medium"
+        >
+          + Add Team Member
+        </button>
       </div>
 
       {/* `overflow-x-auto`, not `overflow-hidden`: this table is wider than a
@@ -182,129 +236,151 @@ export default function ManageAdminsPage() {
         <table className="min-w-full divide-y divide-dark-border">
           <thead className="bg-dark-bg">
             <tr>
-              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Name
-              </th>
-              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Email
-              </th>
-              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Role
-              </th>
-              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Created
-              </th>
-              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Actions
-              </th>
+              {['Name', 'Email', 'Role', 'Password', 'Created', 'Actions'].map((h) => (
+                <th key={h} className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
+              ))}
             </tr>
           </thead>
           <tbody className="bg-dark-card divide-y divide-dark-border">
-            {admins.map((admin) => (
-              <tr key={admin.id} className="hover:bg-dark-hover">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-foreground">{admin.name}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-muted-foreground">{admin.email}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {admin.is_primary_super_admin ? (
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-500/10 text-yellow-600 border border-yellow-500/25">
-                      Primary Admin
+            {admins.map((admin) => {
+              const role = roleOf(admin);
+              const self = admin.id === user?.id;
+              const busy = busyId === admin.id;
+              return (
+                <tr key={admin.id} className={`hover:bg-dark-hover ${admin.is_active ? '' : 'opacity-60'}`}>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                      {admin.name}
+                      {self && <span className="text-xs font-normal text-muted-foreground">(you)</span>}
+                      {!admin.is_active && (
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full border border-red-500/25 bg-red-500/10 text-red-600">Inactive</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-muted-foreground">{admin.email}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full border ${role === 'super_admin'
+                      ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/25'
+                      : 'bg-[hsl(var(--chart-3))]/10 text-[hsl(var(--chart-3))] border-blue-500/25'}`}>
+                      {ROLE_LABEL[role]}
                     </span>
-                  ) : (
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-[hsl(var(--chart-3))]/10 text-[hsl(var(--chart-3))] border border-blue-500/25">
-                      Super Admin
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                  {new Date(admin.created_at).toLocaleDateString('en-US')}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  {!admin.is_primary_super_admin && (
-                    <button className="text-red-600 hover:text-red-600">
-                      Deactivate
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {admin.password ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-sm text-foreground">{admin.password}</span>
+                        <CopyButton value={admin.password} />
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">Not stored</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                    {new Date(admin.created_at).toLocaleDateString('en-US')}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-1">
+                      <RowAction label="Edit" onClick={() => openEdit(admin)} disabled={busy}>
+                        <Pencil className="h-4 w-4" />
+                      </RowAction>
+                      {/* Never yourself: you would lock yourself out. */}
+                      {!self && (
+                        <RowAction label={admin.is_active ? 'Deactivate' : 'Reactivate'} disabled={busy}
+                          tone={admin.is_active ? 'warn' : 'ok'}
+                          onClick={() => void runAction(admin, admin.is_active ? 'deactivate' : 'reactivate', admin.is_active ? `${admin.name} deactivated` : `${admin.name} reactivated`)}>
+                          <Power className="h-4 w-4" />
+                        </RowAction>
+                      )}
+                      {!self && (
+                        <RowAction label="Delete" tone="danger" disabled={busy} onClick={() => setDeleting(admin)}>
+                          <Trash2 className="h-4 w-4" />
+                        </RowAction>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
-      {/* Create Admin Modal */}
+      {/* Add Team Member Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none">
           <div className="w-full max-w-md rounded-4xl bg-card p-8 shadow-sm ring-1 ring-foreground/10 animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
-            <h2 className="text-2xl font-bold text-foreground mb-4">Add Super Admin</h2>
+            <h2 className="text-2xl font-bold text-foreground mb-4">{editing ? 'Edit Team Member' : 'Add Team Member'}</h2>
 
             <form onSubmit={handleCreateAdmin} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Full Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
+                <label className="block text-sm font-medium text-muted-foreground mb-1">Full Name *</label>
+                <input type="text" required value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  placeholder="John Doe"
-                />
+                  className={FIELD} placeholder="John Doe" />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Email *
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={formData.email}
+                <label className="block text-sm font-medium text-muted-foreground mb-1">Email *</label>
+                <input type="email" required value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  placeholder="admin@example.com"
-                />
+                  className={FIELD} placeholder="name@example.com" />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Password *
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  placeholder="Minimum 8 characters"
-                  minLength={8}
-                />
+                <span className="block text-sm font-medium text-muted-foreground mb-1">Role *</span>
+                <div role="radiogroup" aria-label="Role" className="grid grid-cols-2 gap-2">
+                  {ROLES.map((r) => (
+                    <button key={r.value} type="button" role="radio" aria-checked={formData.role === r.value}
+                      onClick={() => setFormData({ ...formData, role: r.value })}
+                      className={`rounded-md border px-3 py-2 text-sm transition-colors duration-200 ease-out motion-reduce:transition-none ${formData.role === r.value
+                        ? 'border-primary bg-primary/10 font-medium text-primary'
+                        : 'border-dark-border text-foreground hover:bg-dark-hover'}`}>
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-1">{editing ? 'New Password' : 'Password *'}</label>
+                <div className="relative">
+                  <input type={showPassword ? 'text' : 'password'} required={!editing} minLength={8} maxLength={72} value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className={`${FIELD} pr-10`} placeholder={editing ? 'Leave blank to keep the current one' : 'Minimum 8 characters'} autoComplete="new-password" />
+                  <EyeButton shown={showPassword} onClick={() => setShowPassword((v) => !v)} />
+                </div>
+                {tooShort && <p className="mt-1 text-xs text-red-600">At least 8 characters.</p>}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-1">{editing ? 'Confirm New Password' : 'Confirm Password *'}</label>
+                <div className="relative">
+                  <input type={showConfirm ? 'text' : 'password'} required={!editing || !!formData.password} value={formData.confirm}
+                    onChange={(e) => setFormData({ ...formData, confirm: e.target.value })}
+                    className={`${FIELD} pr-10 ${mismatch ? 'border-red-500' : ''}`} placeholder="Type it again" autoComplete="new-password" />
+                  <EyeButton shown={showConfirm} onClick={() => setShowConfirm((v) => !v)} />
+                </div>
+                {mismatch && <p className="mt-1 text-xs text-red-600">The passwords do not match.</p>}
               </div>
 
               <div className="bg-yellow-500/10 border border-yellow-700 rounded-md p-3">
                 <p className="text-xs text-yellow-600">
-                  This will create a super admin with full platform access (except primary admin functions).
+                  {formData.role === 'super_admin'
+                    ? 'Super admins have full access and can add other team members.'
+                    : 'Full dashboard access. Only super admins can add team members.'}
                 </p>
               </div>
 
               <div className="flex space-x-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 border border-dark-border rounded-md text-muted-foreground hover:bg-dark-hover"
-                >
+                <button type="button" onClick={closeModal}
+                  className="flex-1 px-4 py-2 border border-dark-border rounded-md text-muted-foreground hover:bg-dark-hover">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/80 disabled:opacity-50"
-                >
-                  {creating ? 'Creating...' : 'Create Admin'}
+                <button type="submit" disabled={creating || mismatch || tooShort}
+                  className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/80 disabled:opacity-50">
+                  {creating ? (editing ? 'Saving...' : 'Creating...') : (editing ? 'Save Changes' : 'Create Account')}
                 </button>
               </div>
             </form>
@@ -312,82 +388,43 @@ export default function ManageAdminsPage() {
         </div>
       )}
 
-      {/* Create Sales Agent Modal */}
-      {showSalesModal && (
+      {/* Delete confirmation */}
+      {deleting && (
         <div className="fixed inset-0 bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none">
           <div className="w-full max-w-md rounded-4xl bg-card p-8 shadow-sm ring-1 ring-foreground/10 animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
-            <h2 className="text-2xl font-bold text-foreground mb-4">Add Sales Agent</h2>
-
-            <form onSubmit={handleCreateSalesAgent} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Full Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={salesFormData.name}
-                  onChange={(e) => setSalesFormData({ ...salesFormData, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  placeholder="George Sales"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Email *
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={salesFormData.email}
-                  onChange={(e) => setSalesFormData({ ...salesFormData, email: e.target.value })}
-                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  placeholder="george@example.com"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Password *
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={salesFormData.password}
-                  onChange={(e) => setSalesFormData({ ...salesFormData, password: e.target.value })}
-                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  placeholder="Minimum 8 characters"
-                  minLength={8}
-                />
-              </div>
-
-              <div className="bg-blue-500/10 border border-blue-700 rounded-md p-3">
-                <p className="text-xs text-blue-600">
-                  Sales agents can only access the Sales onboarding tab — no platform or tenant data.
-                </p>
-              </div>
-
-              <div className="flex space-x-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowSalesModal(false)}
-                  className="flex-1 px-4 py-2 border border-dark-border rounded-md text-muted-foreground hover:bg-dark-hover"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creatingSales}
-                  className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/80 disabled:opacity-50"
-                >
-                  {creatingSales ? 'Creating...' : 'Create Sales Agent'}
-                </button>
-              </div>
-            </form>
+            <h2 className="text-2xl font-bold text-foreground mb-2">Delete {deleting.name}?</h2>
+            <p className="text-sm text-muted-foreground">
+              {deleting.email} loses access straight away and is removed from the team. This cannot be undone. To keep the account for later, deactivate it instead.
+            </p>
+            <div className="flex space-x-3 mt-6">
+              <button type="button" onClick={() => setDeleting(null)} disabled={busyId === deleting.id}
+                className="flex-1 px-4 py-2 border border-dark-border rounded-md text-muted-foreground hover:bg-dark-hover">
+                Cancel
+              </button>
+              <button type="button" disabled={busyId === deleting.id}
+                onClick={() => void runAction(deleting, 'delete', `${deleting.name} deleted`)}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-600/85 disabled:opacity-50">
+                {busyId === deleting.id ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+function RowAction({ label, onClick, disabled, tone, children }: {
+  label: string; onClick: () => void; disabled?: boolean; tone?: 'warn' | 'ok' | 'danger'; children: React.ReactNode;
+}) {
+  const color = tone === 'danger' ? 'hover:text-red-600 hover:bg-red-500/10'
+    : tone === 'warn' ? 'hover:text-yellow-600 hover:bg-yellow-500/10'
+    : tone === 'ok' ? 'text-green-600 hover:bg-green-500/10'
+    : 'hover:text-primary hover:bg-primary/10';
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} aria-label={label} title={label}
+      className={`rounded-md p-1.5 text-muted-foreground transition-colors duration-200 ease-out motion-reduce:transition-none disabled:opacity-40 ${color}`}>
+      {children}
+    </button>
   );
 }
