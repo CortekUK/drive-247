@@ -48,6 +48,8 @@ export interface SyncItem {
   occurred_at: string;
   /** Latest of the business date and when Drive recorded it: what the start point is checked against. */
   scope_at?: string | null;
+  /** Set once the item has been sent: it then never leaves the Sync history. */
+  sent_at?: string | null;
   generation: number;
   attempts: number;
   idempotency_key: string;
@@ -284,10 +286,14 @@ export class Engine {
 
   async process(item: SyncItem): Promise<Outcome> {
     const outcome = await this.route(item);
+    if (outcome.outcome !== "drop") return outcome;
+    // "Nothing to send" never erases history: an item that was sent before
+    // stays in the Sync table as sent.
+    if (item.sent_at) return { outcome: "sent", externalId: null };
     // A delete whose work a sibling item already did (its allocation changed
     // first, saw the row gone and took it out of the books) still belongs in the
     // Sync history as "Deleted · Sent" — dropped only if the source never synced.
-    if (item.operation === "delete" && outcome.outcome === "drop") {
+    if (item.operation === "delete") {
       const { data } = await this.db.from("accounting_sync_items").select("id")
         .eq("tenant_id", this.conn.tenant_id).eq("provider", this.conn.provider).eq("source_type", item.source_type)
         .eq("source_id", item.source_id).eq("operation", "sync").eq("status", "sent").limit(1);
