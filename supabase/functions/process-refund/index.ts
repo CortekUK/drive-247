@@ -264,7 +264,17 @@ serve(async (req) => {
       if (tenant) {
         tenantData = tenant;
         stripeMode = (tenant.stripe_mode as StripeMode) || 'test';
-        stripeAccountId = getConnectAccountId(tenant);
+        // A tenant on Own Stripe with no live account connected yet makes this
+        // throw. That must not block a refund of a cash / manual payment, which
+        // never touches Stripe. The Stripe path below resolves the account again
+        // for the payment it refunds — and still fails loudly there if a real
+        // Stripe refund has no account to go through.
+        try {
+          stripeAccountId = getConnectAccountId(tenant);
+        } catch (e) {
+          console.warn("Refund - no Stripe account for tenant (fine for a manual refund):", e instanceof Error ? e.message : e);
+          stripeAccountId = null;
+        }
         if (tenant.currency_code) {
           currencyCode = tenant.currency_code;
         }
