@@ -52,7 +52,7 @@ import {
 } from "./finance-data";
 
 /** Show this preview instead of the database. One switch; flip to false to go back. */
-export const FINANCES_PREVIEW = true;
+export const FINANCES_PREVIEW = false;
 
 type Provider = "stripe" | "square" | "manual";
 type Channel = "link" | "booking" | "auto" | "manual";

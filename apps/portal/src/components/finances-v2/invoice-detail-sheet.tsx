@@ -325,8 +325,14 @@ export function InvoiceDetailSheet({
                 {canEdit("invoices") && (
                   <div className="flex shrink-0 items-center gap-2">
                     {/* Pay: on an issued invoice that still owes money. */}
-                    {FINANCES_PREVIEW && canEdit("payments") && !isDraft && !isCancelled && owes > EPS && (
-                      <Button size="sm" className="h-8 rounded-full px-3.5 text-[13px]" onClick={() => setPayFor({})}>
+                    {canEdit("payments") && !isDraft && !isCancelled && owes > EPS && (
+                      <Button
+                        size="sm"
+                        className="h-8 rounded-full px-3.5 text-[13px]"
+                        // Live: the real Add Payment dialog, so the money lands in
+                        // `payments` (and from there in Xero / Zoho).
+                        onClick={() => (FINANCES_PREVIEW ? setPayFor({}) : setPayTarget({ amount: owes }))}
+                      >
                         Pay {money(owes)}
                       </Button>
                     )}
