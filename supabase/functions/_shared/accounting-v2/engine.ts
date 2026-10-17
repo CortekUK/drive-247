@@ -43,6 +43,8 @@ export interface SyncItem {
   source_id: string;
   operation: "sync" | "delete";
   occurred_at: string;
+  /** Latest of the business date and when Drive recorded it: what the start point is checked against. */
+  scope_at?: string | null;
   generation: number;
   attempts: number;
   idempotency_key: string;
@@ -286,7 +288,9 @@ export class Engine {
   private inScope(item: SyncItem | null, hasMaps: boolean): boolean {
     if (!item || hasMaps) return true;
     const from = this.conn.sync_from ?? this.conn.connected_at;
-    return !from || new Date(item.occurred_at).getTime() >= new Date(from).getTime() - 1000;
+    // Recorded after connecting counts, whatever date it carries (a back-dated
+    // manual payment is still new money in the books).
+    return !from || new Date(item.scope_at ?? item.occurred_at).getTime() >= new Date(from).getTime() - 1000;
   }
 
   /* ── invoice: a rental's charges ── */
