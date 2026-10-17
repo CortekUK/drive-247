@@ -65,6 +65,7 @@ import { useRentalPaymentLinks } from "@/hooks/use-payment-links";
 import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
 import { useRentalTotals } from "@/hooks/use-rental-ledger-data";
 import { PaymentSourceIcon } from "@/components/finances-v2/payment-source-icon";
+import { AccountingSyncMarks, SyncMark } from "@/components/finances-v2/accounting-sync-mark";
 import { ReceiptView } from "@/components/finances-v2/receipt-view";
 import { paymentLabel, receiptNumber, refundOf, type FinancePayment } from "@/components/finances-v2/finance-data";
 import { SHOW_MULTI_PERIOD } from "./multi-period";
@@ -130,6 +131,9 @@ export function StagePayments({ detail, refetch }: StageProps) {
   const [receiptOpen, setReceiptOpen] = useState<string | null>(null);
   /* The full view open over the stage, if any. */
   const [listOpen, setListOpen] = useState<"charges" | "payments" | null>(null);
+
+  // Xero / Zoho marks: one query for every payment on the rental.
+  const syncPaymentIds = useMemo(() => (ledger?.payments ?? []).filter(counts).map((p) => p.id), [ledger?.payments]);
 
   const onChanged = () => {
     void refetchLedger();
@@ -202,6 +206,7 @@ export function StagePayments({ detail, refetch }: StageProps) {
   const openReceipt = receiptOpen ? ledger.payments.find((p) => p.id === receiptOpen) ?? null : null;
 
   return (
+    <AccountingSyncMarks paymentIds={syncPaymentIds}>
     <Panel
       fill
       title="Payments"
@@ -472,6 +477,7 @@ export function StagePayments({ detail, refetch }: StageProps) {
       />
       </div>
     </Panel>
+    </AccountingSyncMarks>
   );
 }
 
@@ -557,6 +563,7 @@ function PaymentLine({
       <span className="flex min-w-0 flex-1 items-center gap-1.5 text-muted-foreground">
         <PaymentSourceIcon provider={providerOf(p)} />
         <span className="truncate">{label}</span>
+        {landed && <SyncMark kind="payment" sourceId={p.id} />}
         {exception && (
           <span className={cn("ml-1.5 shrink-0 text-xs font-medium", p.status === "failed" ? "text-destructive" : "text-warning")}>
             {exception}
@@ -605,7 +612,19 @@ function PaymentLine({
 }
 
 /** A refund, under the payment it gave back: money OUT, in red, "−". */
-function RefundLine({ provider, cents, at, pending }: { provider: "stripe" | "square" | "manual"; cents: number; at: string | null; pending: boolean }) {
+function RefundLine({
+  paymentId,
+  provider,
+  cents,
+  at,
+  pending,
+}: {
+  paymentId: string;
+  provider: "stripe" | "square" | "manual";
+  cents: number;
+  at: string | null;
+  pending: boolean;
+}) {
   return (
     <div className="flex h-7 items-center gap-3 px-2 text-sm">
       <span className="flex min-w-0 flex-1 items-center gap-1.5 pl-3 text-muted-foreground">
@@ -615,6 +634,7 @@ function RefundLine({ provider, cents, at, pending }: { provider: "stripe" | "sq
           {provider === "manual" ? "Manual refund" : "Refund · to card"}
           {at && ` · ${shortDay(at)}`}
         </span>
+        {!pending && <SyncMark kind="refund" sourceId={paymentId} />}
         {pending && <span className="ml-1.5 text-xs font-medium text-warning">Processing</span>}
       </span>
       <span className="w-28 shrink-0 text-right font-medium tabular-nums text-destructive">− {usd(cents)}</span>
@@ -818,7 +838,7 @@ function ChargesTree({
                         onReceipt={onReceipt ? () => onReceipt(p.id) : undefined}
                       />
                       {refundCents > 0 && (
-                        <RefundLine provider={refund!.provider} cents={refundCents} at={p.refundedAt} pending={refund!.pending} />
+                        <RefundLine paymentId={p.id} provider={refund!.provider} cents={refundCents} at={p.refundedAt} pending={refund!.pending} />
                       )}
                     </li>
                   );
@@ -877,7 +897,7 @@ function PaymentsList({
                 onRefund && counts(p) && p.amountCents - p.refundedCents > 0 ? () => onRefund(p.id) : undefined
               }
             />
-            {refund && <RefundLine provider={refund.provider} cents={p.refundedCents} at={p.refundedAt} pending={refund.pending} />}
+            {refund && <RefundLine paymentId={p.id} provider={refund.provider} cents={p.refundedCents} at={p.refundedAt} pending={refund.pending} />}
             {detailed && (
               <p className="truncate pl-[2.1rem] pr-2 text-xs text-muted-foreground">
                 {counts(p) ? (went ? `Paid ${went}` : "Not applied to a charge yet") : p.status === "pending" ? "Nothing is applied until it is paid" : "No money moved"}
