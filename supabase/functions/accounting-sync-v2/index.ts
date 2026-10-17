@@ -1,7 +1,7 @@
 // accounting-sync-v2 — sends queued transactions to Xero / Zoho Books.
 //
-// Called every minute by the pg_cron job `accounting-sync-v2` with the service
-// role key (migration 20261017130000). Nobody else may call it. The portal's
+// Called every 10 seconds by the pg_cron job `accounting-sync-v2` with the service
+// role key (20261017130000, 20261017160000). Nobody else may call it. The portal's
 // "Sync now" uses the same runner for one tenant (accounting-v2 sync_now).
 import { handleCors, errorResponse, jsonResponse } from "../_shared/cors.ts";
 import { serviceClient } from "../_shared/accounting-v2/caller.ts";
