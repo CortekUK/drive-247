@@ -36,6 +36,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { SidebarProvider } from '@/components/admin/SidebarContext';
 import { SidebarSectionsProvider, useRegisterSidebarSections } from '@/components/admin/sidebar-sections';
 import { useState } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -48,7 +49,11 @@ export default function AdminPreviewPage() {
      providers the protected layout gives it. No session, so it shows the
      signed-out navigation; that is enough to judge the surface, the active
      pill, the group behaviour and the sub-rows. */
+  // AdminNavProvider reads the signed-in admin's saved sidebar order through
+  // React Query; signed out it never fetches, but it still needs a client.
+  const [queryClient] = useState(() => new QueryClient());
   return (
+    <QueryClientProvider client={queryClient}>
     <TooltipProvider>
     <AdminNavProvider>
     <SidebarProvider>
@@ -179,6 +184,7 @@ export default function AdminPreviewPage() {
     </SidebarProvider>
     </AdminNavProvider>
     </TooltipProvider>
+    </QueryClientProvider>
   );
 }
 
