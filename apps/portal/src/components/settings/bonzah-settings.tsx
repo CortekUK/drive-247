@@ -383,8 +383,11 @@ export function BonzahSettings() {
         </CardContent>
       </Card>}
 
-      {/* Card 3: Onboarding multi-step form (shown when not yet connected) */}
-      {!isConnected && <BonzahOnboardingForm />}
+      {/* Card 3: Onboarding multi-step form. Shown until the tenant is live: a
+          saved Bonzah login in test mode is not an application, and hiding the
+          form then left operators with no way to apply. Once submitted, the
+          form renders its own status instead of the fields. */}
+      {(!isConnected || isTestMode) && <BonzahOnboardingForm />}
 
       {/* Card 4: Credentials */}
       <Card>
