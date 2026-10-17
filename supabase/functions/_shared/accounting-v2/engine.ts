@@ -677,7 +677,12 @@ export class Engine {
       // No `sig` until the cash refund is also out: a run that dies between the
       // two leaves a credit note without a sig, which the next run re-does.
       const cn = await this.once("refund", paymentId, s.part, "credit_note", reference,
-        () => this.adapter.createCreditNote({ contactId, number: `${number}-RF${i}`, reference, date, currency: this.currency, lines },
+        // Unique per payment (and per re-post): Xero keeps a voided credit note's
+        // number, and an invoice can carry refunds of several payments.
+        () => this.adapter.createCreditNote({
+          contactId, reference, date, currency: this.currency, lines,
+          number: `${number}-RF-${short.slice(0, 6)}${i > 1 ? `-${i}` : ""}${(item?.generation ?? 1) > 1 ? `.${item!.generation}` : ""}`,
+        },
           this.key("rfcn", paymentId, s.part, item?.generation ?? 0, attempt)),
         { amount: s.amount, meta: { kind: "credit_note" } });
       const refund = await this.adapter.refundCreditNote({ creditNoteId: cn.id, amount: s.amount, date, account, reference, method },
