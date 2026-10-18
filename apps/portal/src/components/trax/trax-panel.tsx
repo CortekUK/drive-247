@@ -82,8 +82,12 @@ import { PortalSupport } from "@/components/support/portal-support";
 /** One header control: compact, labelled for assistive tech, pressed when its view is open. */
 /* The Trax | Support layers: one fills the body, the other waits beside it. */
 const TAB_LAYER = "absolute inset-0 flex min-h-0 flex-col motion-reduce:transition-none";
+/* No `visible` here: the arriving tab INHERITS visibility from the panel. An
+   explicit `visible` overrides a hidden parent, which left this empty layer
+   painted-but-transparent and clickable over the page's bottom-right corner
+   while Trax was closed — it swallowed clicks meant for the page beneath. */
 const TAB_IN =
-  "visible translate-x-0 opacity-100 [transition:transform_200ms_ease-out,opacity_200ms_ease-out]";
+  "translate-x-0 opacity-100 [transition:transform_200ms_ease-out,opacity_200ms_ease-out]";
 const TAB_OUT =
   "pointer-events-none invisible opacity-0 [transition:transform_200ms_ease-in,opacity_200ms_ease-in,visibility_0s_linear_200ms]";
 
@@ -357,7 +361,7 @@ export function TraxPanel() {
              `visibility` by the 200ms so the panel stays painted while it goes. */
           shown
             ? "visible translate-y-0 opacity-100 [transition:transform_200ms_ease-out,opacity_200ms_ease-out]"
-            : "invisible translate-y-3 opacity-0 [transition:transform_200ms_ease-in,opacity_200ms_ease-in,visibility_0s_linear_200ms]",
+            : "pointer-events-none invisible translate-y-3 opacity-0 [transition:transform_200ms_ease-in,opacity_200ms_ease-in,visibility_0s_linear_200ms]",
           "motion-reduce:transition-none",
         ].join(" ")}
       >
