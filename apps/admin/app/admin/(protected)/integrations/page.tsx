@@ -43,6 +43,7 @@ import {
   parseDollarsToCents,
   premiumPriceProblem,
 } from '@/lib/integration-pricing';
+import { confirmDialog } from '@/components/ui/confirm';
 
 /* ── the board's cards, as northwind lists them ─────────────────────────── */
 
@@ -340,9 +341,12 @@ export default function IntegrationsAdminPage() {
   const cancelSubscription = async (row: SubscriberRow) => {
     const name = ADMIN_INTEGRATIONS.find((i) => i.key === row.integration_key)?.name ?? row.integration_key;
     const company = row.tenants?.company_name || row.tenants?.slug || 'this company';
-    const ok = window.confirm(
-      `Remove ${name} from ${company}'s Drive247 bill?\n\nIt comes off their next bill and every bill after. Nothing is refunded for the current month, and their ${name} panel becomes read-only.`,
-    );
+    const ok = await confirmDialog({
+      title: `Remove ${name} from ${company}'s bill?`,
+      description: `It comes off their next bill and every bill after. Nothing is refunded for the current month, and their ${name} panel becomes read-only.`,
+      confirmLabel: 'Remove',
+      destructive: true,
+    });
     if (!ok) return;
     const { data, error } = await supabase.functions.invoke('integration-billing', {
       body: { action: 'cancel', tenantId: row.tenant_id, integrationKey: row.integration_key },

@@ -1,19 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Moon, Sun, Sunrise } from "lucide-react-nw";
+import { ChevronLeft, ChevronRight } from "lucide-react-nw";
 
 import { formatClockLabel, localDateToIso } from "@nw/components/booking/time-utils";
-import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@nw/components/ui/popover";
 import { cn } from "@nw/lib/utils";
 
+import { TimeClockDialog } from "./time-clock";
 import type { QuickBook } from "./use-quick-book";
 
 /**
  * The quick book's dates: a real month calendar — boxed days, weekends
  * shaded, today marked — that you DRAG across from the pickup day to the
  * return day. Pickup and return are circled in pen with their times under
- * them (tap a time to change it); the days between are shaded.
+ * them; choosing a day opens a clock to set its time (a drag asks pickup,
+ * then return). The days between are shaded.
  * Tapping works too: tap the pickup, then the return; while a pickup is
  * waiting, hovering shows the range it would make. The rules (lead time,
  * minimum and maximum rental) live in `use-quick-book`.
@@ -61,7 +62,7 @@ export function TripPicker({ qb }: { qb: QuickBook }) {
   /** A pickup tapped on its own, waiting for its return. */
   const [pending, setPending] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
-  /** Which time the pop-over by the chosen day is asking for, if any. */
+  /** Which time the clock dialog is asking for, if any; a drag asks both in turn. */
   const [askTime, setAskTime] = useState<{ which: Target; thenReturn: boolean } | null>(null);
 
   const today = new Date();
@@ -249,19 +250,9 @@ export function TripPicker({ qb }: { qb: QuickBook }) {
                           {d.getDate() === 1 && !inMonth ? `1 ${SHORT_MONTHS[d.getMonth()]}` : d.getDate()}
                           {isFrom || isTo ? <PenLoop key={`${iso}-loop`} /> : null}
                         </span>
-                        {askTime && ((askTime.which === "pickup" && isFrom) || (askTime.which === "return" && isTo)) ? (
-                          <AskTime
-                            qb={qb}
-                            which={askTime.which}
-                            iso={iso}
-                            onDone={() => setAskTime(askTime.thenReturn ? { which: "return", thenReturn: false } : null)}
-                            onClose={() => setAskTime(null)}
-                          />
-                        ) : null}
                         {isFrom || isTo ? (
                           <TimeButton
-                            qb={qb}
-                            which={isFrom ? "pickup" : "return"}
+                            onOpen={() => setAskTime({ which: isFrom ? "pickup" : "return", thenReturn: false })}
                             className="mt-auto mb-1 hidden whitespace-nowrap text-[9.5px] font-bold uppercase leading-none tracking-[0.04em] sm:inline-flex"
                           >
                             {isFrom ? "Pickup" : "Return"} {formatClockLabel(isFrom ? qb.trip.pickupTime : qb.trip.dropoffTime)}
@@ -280,11 +271,30 @@ export function TripPicker({ qb }: { qb: QuickBook }) {
 
       {/* On a phone the day boxes are too small for the times: they sit here. */}
       <div className="flex justify-center gap-5 text-[13px] font-semibold sm:hidden">
-        <TimeButton qb={qb} which="pickup">Pickup {formatClockLabel(qb.trip.pickupTime)}</TimeButton>
-        <TimeButton qb={qb} which="return">Return {formatClockLabel(qb.trip.dropoffTime)}</TimeButton>
+        <TimeButton onOpen={() => setAskTime({ which: "pickup", thenReturn: false })}>
+          Pickup {formatClockLabel(qb.trip.pickupTime)}
+        </TimeButton>
+        <TimeButton onOpen={() => setAskTime({ which: "return", thenReturn: false })}>
+          Return {formatClockLabel(qb.trip.dropoffTime)}
+        </TimeButton>
       </div>
 
       <StatusLine qb={qb} pending={pending !== null} dragging={drag?.moved === true} />
+
+      <TimeClockDialog
+        open={askTime !== null}
+        onOpenChange={(open) => !open && setAskTime(null)}
+        title={askTime?.which === "return" ? "Return time" : "Pickup time"}
+        dateIso={askTime?.which === "return" ? qb.trip.dropoffDate : qb.trip.pickupDate}
+        value={askTime?.which === "return" ? qb.trip.dropoffTime : qb.trip.pickupTime}
+        slots={qb.rules.timeSlots}
+        confirmLabel={askTime?.which === "return" ? "Set return time" : askTime?.thenReturn ? "Next: return time" : "Set pickup time"}
+        onSet={(time) => {
+          if (!askTime) return;
+          qb.updateTrip(askTime.which === "pickup" ? { pickupTime: time } : { dropoffTime: time });
+          setAskTime(askTime.thenReturn ? { which: "return", thenReturn: false } : null);
+        }}
+      />
     </div>
   );
 }
@@ -305,80 +315,22 @@ function StatusLine({ qb, pending, dragging }: { qb: QuickBook; pending: boolean
   );
 }
 
-/** The pop-over that opens by a day you just chose, asking what time. */
-function AskTime({
-  qb,
-  which,
-  iso,
-  onDone,
-  onClose,
-}: {
-  qb: QuickBook;
-  which: Target;
-  iso: string;
-  onDone: () => void;
-  onClose: () => void;
-}) {
+/** A time you can change: tap it and the clock opens. */
+function TimeButton({ onOpen, className, children }: { onOpen: () => void; className?: string; children: React.ReactNode }) {
   return (
-    <Popover open onOpenChange={(open) => !open && onClose()}>
-      <PopoverAnchor asChild>
-        <span aria-hidden className="pointer-events-none absolute inset-0" />
-      </PopoverAnchor>
-      <PopoverContent
-        side="bottom"
-        align="center"
-        sideOffset={6}
-        collisionPadding={12}
-        className="pv2-tokens qb-rise-in w-[min(360px,calc(100vw-1.5rem))] rounded-[28px] border-0 bg-pv-card p-0 text-pv-fg shadow-xl ring-1 ring-black/5"
-      >
-        <p className="px-5 pt-4 text-center text-[15px] font-semibold text-pv-fg">
-          {which === "pickup" ? "Pickup time" : "Return time"}
-          <span className="font-normal text-pv-muted-fg"> · {pretty(iso)}</span>
-        </p>
-        <TimeChips qb={qb} target={which} onDone={onDone} />
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-/** A time you can change: tap it, pick a time chip in the pop-over. */
-function TimeButton({
-  qb,
-  which,
-  className,
-  children,
-}: {
-  qb: QuickBook;
-  which: "pickup" | "return";
-  className?: string;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          // Marked so a press here opens the times instead of starting a drag.
-          data-time
-          className={cn(
-            "inline-flex cursor-pointer items-center gap-0.5 rounded-full text-pv-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30",
-            className,
-          )}
-        >
-          {children}
-          <ChevronRight aria-hidden className="size-3 shrink-0 rotate-90" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="center"
-        sideOffset={8}
-        collisionPadding={12}
-        className="pv2-tokens w-[min(360px,calc(100vw-1.5rem))] rounded-[28px] border-0 bg-pv-card p-0 text-pv-fg shadow-xl ring-1 ring-black/5"
-      >
-        <TimeChips qb={qb} target={which} onDone={() => setOpen(false)} />
-      </PopoverContent>
-    </Popover>
+    <button
+      type="button"
+      // Marked so a press here opens the clock instead of starting a drag.
+      data-time
+      onClick={onOpen}
+      className={cn(
+        "inline-flex cursor-pointer items-center gap-0.5 rounded-full text-pv-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30",
+        className,
+      )}
+    >
+      {children}
+      <ChevronRight aria-hidden className="size-3 shrink-0 rotate-90" />
+    </button>
   );
 }
 
@@ -427,66 +379,3 @@ function NavButton({
     </button>
   );
 }
-
-/* ── times ──────────────────────────────────────────────────────────────── */
-
-const PARTS_OF_DAY = [
-  { key: "morning", label: "Morning", icon: Sunrise, test: (t: string) => t < "12:00" },
-  { key: "afternoon", label: "Afternoon", icon: Sun, test: (t: string) => t >= "12:00" && t < "17:00" },
-  { key: "evening", label: "Evening", icon: Moon, test: (t: string) => t >= "17:00" },
-] as const;
-type PartKey = (typeof PARTS_OF_DAY)[number]["key"];
-
-const partOf = (time: string): PartKey => PARTS_OF_DAY.find((p) => p.test(time))?.key ?? "morning";
-
-function TimeChips({ qb, target, onDone }: { qb: QuickBook; target: "pickup" | "return"; onDone: () => void }) {
-  const time = target === "pickup" ? qb.trip.pickupTime : qb.trip.dropoffTime;
-  const [dayPart, setDayPart] = useState<PartKey>(() => partOf(time));
-  const slots = qb.rules.timeSlots.filter(PARTS_OF_DAY.find((p) => p.key === dayPart)!.test);
-
-  return (
-    <div className="p-4">
-      <div className="flex justify-center gap-1">
-        {PARTS_OF_DAY.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setDayPart(key)}
-            aria-pressed={dayPart === key}
-            className={cn(
-              "inline-flex cursor-pointer items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-medium transition-all duration-200",
-              dayPart === key ? "bg-pv-muted text-pv-fg" : "text-pv-muted-fg hover:text-pv-fg",
-            )}
-          >
-            <Icon aria-hidden className="size-4" strokeWidth={2} />
-            {label}
-          </button>
-        ))}
-      </div>
-      {slots.length === 0 ? (
-        <p className="py-4 text-center text-[13px] text-pv-muted-fg">No times then. Try another part of the day.</p>
-      ) : (
-        <div className="mt-3 flex flex-wrap justify-center gap-2">
-          {slots.map((slot) => (
-            <button
-              key={slot}
-              type="button"
-              aria-pressed={slot === time}
-              onClick={() => {
-                qb.updateTrip(target === "pickup" ? { pickupTime: slot } : { dropoffTime: slot });
-                onDone();
-              }}
-              className={cn(
-                "h-11 shrink-0 cursor-pointer rounded-full px-5 text-[14px] font-medium tabular-nums transition-all duration-200 ease-out active:scale-95",
-                slot === time ? "qb-pop-text bg-pv-fg text-pv-card" : "bg-pv-card text-pv-fg ring-1 ring-pv-border hover:ring-pv-primary/50",
-              )}
-            >
-              {formatClockLabel(slot)}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-

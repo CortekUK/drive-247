@@ -47,9 +47,10 @@ import { TenantCreditsTab } from '@/components/admin/tenant-credits-tab';
 import { TenantTimelineTab } from '@/components/admin/tenant-timeline-tab';
 import { LinkPromoPicker } from '@/components/admin/promo-codes/link-promo-picker';
 import { InvoiceStatusBadge, SubscriptionTrail } from '@/components/admin/subscription-trail';
-import { FeedbackPanel, TenantInsights } from '@/components/admin/tenant-insights';
+import { HealthFeedbackPanel, OnboardingAnswers } from '@/components/admin/tenant-insights';
 import { NotesPanel } from '@/components/admin/tenant-notes';
 import { EditCompanyDialog } from '@/components/admin/edit-company-dialog';
+import { ForceLogoutDialog } from '@/components/admin/force-logout-dialog';
 import { bookingUrlFor, portalUrlFor } from '@/lib/sales-credentials';
 import { useAdminSupport } from '@/lib/use-support-messaging';
 import {
@@ -86,7 +87,13 @@ import {
   LayoutDashboard,
   Globe,
   Signature,
+  ArrowUpRight,
+  LayoutGrid,
+  ListChecks,
+  Ban,
+  CircleCheck,
 } from 'lucide-react';
+import { confirmDialog } from '@/components/ui/confirm';
 
 interface Tenant {
   id: string;
@@ -388,9 +395,8 @@ export default function TenantDetailsPage() {
   const [isEditing, setIsEditing] = useState(false);
   // Support tickets still open for this company, behind the header button.
   const [openTickets, setOpenTickets] = useState<{ id: string; reference: string; summary: string | null; status: string; created_at: string }[]>([]);
-  const [showTickets, setShowTickets] = useState(false);
-  const [showConsent, setShowConsent] = useState(false);
-  const [showTimeline, setShowTimeline] = useState(false);
+  // The right column's open tab.
+  const [railTab, setRailTab] = useState<'overview' | 'tickets' | 'onboarding' | 'consent' | 'timeline'>('overview');
 
   // Delete state
 
@@ -1156,9 +1162,11 @@ export default function TenantDetailsPage() {
     if (!tenant) return;
 
     if (plan.is_active && plan.active_subscriptions > 0) {
-      const confirmed = confirm(
-        `"${plan.name}" has ${plan.active_subscriptions} active subscriber${plan.active_subscriptions > 1 ? 's' : ''}.\n\nDeactivating will hide this plan from new signups, but existing subscribers will continue to be billed.\n\nContinue?`
-      );
+      const confirmed = await confirmDialog({
+        title: `Deactivate "${plan.name}"?`,
+        description: `It has ${plan.active_subscriptions} active subscriber${plan.active_subscriptions > 1 ? 's' : ''}. Deactivating hides it from new signups, but existing subscribers keep being billed.`,
+        confirmLabel: 'Deactivate',
+      });
       if (!confirmed) return;
     }
 
@@ -1191,7 +1199,7 @@ export default function TenantDetailsPage() {
       return;
     }
 
-    if (!confirm(`Permanently delete "${plan.name}"? This cannot be undone.`)) return;
+    if (!(await confirmDialog({ title: `Delete "${plan.name}"?`, description: 'This cannot be undone.', confirmLabel: 'Delete', destructive: true }))) return;
 
     try {
       const { data, error } = await supabase.functions.invoke('manage-subscription-plans', {
@@ -1218,9 +1226,12 @@ export default function TenantDetailsPage() {
     if (newMode === tenant.subscription_stripe_mode) return;
 
     if (newMode === 'live') {
-      const confirmed = confirm(
-        'Switch to LIVE Stripe mode for this tenant?\n\nReal charges will be made. Make sure live Stripe keys are configured.'
-      );
+      const confirmed = await confirmDialog({
+        title: 'Switch to live Stripe mode?',
+        description: 'Real charges will be made. Make sure live Stripe keys are configured.',
+        confirmLabel: 'Switch to live',
+        destructive: true,
+      });
       if (!confirmed) return;
     }
 
@@ -1331,11 +1342,12 @@ export default function TenantDetailsPage() {
     if (!tenant) return;
 
     if (enabled) {
-      const ok = window.confirm(
-        `Allow ${tenant.company_name} to sell Bonzah insurance while in TEST mode?\n\n` +
-        `Policies issued will be SANDBOX policies — not real cover — even though the ` +
-        `customer can still be charged. Only do this for internal or demo tenants.`
-      );
+      const ok = await confirmDialog({
+        title: `Allow ${tenant.company_name} to sell Bonzah insurance in test mode?`,
+        description: 'Policies issued will be sandbox policies, not real cover, even though the customer can still be charged. Only do this for internal or demo tenants.',
+        confirmLabel: 'Allow',
+        destructive: true,
+      });
       if (!ok) return;
     }
 
@@ -1409,7 +1421,6 @@ export default function TenantDetailsPage() {
       if (data.failCount > 0) {
         toast.error(`${data.failCount} user${data.failCount !== 1 ? 's' : ''} could not be logged out`);
       }
-      setShowForceLogoutConfirm(false);
     } catch (error: any) {
       toast.error(`Failed to force logout: ${error.message}`);
     } finally {
@@ -1592,10 +1603,10 @@ export default function TenantDetailsPage() {
   return (
     /* One screen (Ghulam, Oct 17 2026): the five sections that were rail rows
        — Details, Subscriptions, Integrations, Consent, Timeline — sit on one
-       page. On a desktop it is bounded to the viewport under the top bar, the
+       page. On a desktop it is bounded to the viewport (no top bar here), the
        Timeline runs down the right as its own scrolling column, and the main
        pane only scrolls if a tall subscription panel overflows it. */
-    <div className="flex flex-col gap-5 lg:h-[calc(100svh-6rem)]">
+    <div className="flex flex-col gap-5 lg:h-[calc(100svh-3rem)]">
       {/* No back button, and no breadcrumb above it — both removed Sep 26
           2026 ("remove all breadcrumbs globally").
 
@@ -1611,55 +1622,26 @@ export default function TenantDetailsPage() {
           circled in red. */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{tenant.company_name}</h1>
+          {/* The name is the way into their portal. */}
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+            <a
+              href={portalUrlFor(tenant.slug)}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Open ${tenant.company_name}'s portal`}
+              className="group inline-flex items-center gap-1.5 rounded-md outline-none transition-colors hover:text-primary focus-visible:ring-3 focus-visible:ring-ring/30"
+            >
+              {tenant.company_name}
+              {/* Says it's a link that opens a new tab. */}
+              <ArrowUpRight
+                className="size-5 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary sm:size-6"
+                aria-hidden="true"
+              />
+            </a>
+          </h1>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          {/* Edit, any support ticket still open, consent and the timeline.
-              Login, links, notes and feedback are in the right column. */}
-          {/* Icon-only buttons carry their name as the tooltip. */}
-          {openTickets.length > 0 && (
-            <Button
-              size="icon"
-              variant="outline"
-              className="relative size-8 rounded-lg"
-              onClick={() => setShowTickets(true)}
-              title={`${openTickets.length} open support ${openTickets.length === 1 ? 'ticket' : 'tickets'}`}
-              aria-label={`${openTickets.length} open support tickets`}
-            >
-              <LifeBuoy className="size-3.5" />
-              <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-warning px-1 text-[10px] font-semibold tabular-nums text-white">
-                {openTickets.length > 99 ? '99+' : openTickets.length}
-              </span>
-            </Button>
-          )}
-          {/* Health score and onboarding answers, each opening a dialog. */}
-          <TenantInsights tenantId={tenant.id} companyName={tenant.company_name} />
-          <Button
-            size="icon"
-            variant="outline"
-            className="size-8 rounded-lg"
-            onClick={() => setShowConsent(true)}
-            title={policyLoading ? 'Consent' : `Consent · ${policyAcceptances.length} accepted`}
-            aria-label="Consent"
-          >
-            <Signature className="size-3.5" />
-          </Button>
-          <Button size="icon" variant="outline" className="size-8 rounded-lg" onClick={() => setShowTimeline(true)} title="Timeline" aria-label="Timeline">
-            <History className="size-3.5" />
-          </Button>
-          <Button size="icon" variant="outline" className="size-8 rounded-lg" asChild>
-            <a href={portalUrlFor(tenant.slug)} target="_blank" rel="noopener noreferrer" title="Open portal" aria-label="Open portal">
-              <LayoutDashboard className="size-3.5" />
-            </a>
-          </Button>
-          <Button size="icon" variant="outline" className="size-8 rounded-lg" asChild>
-            <a href={bookingUrlFor(tenant.slug)} target="_blank" rel="noopener noreferrer" title="Open booking site" aria-label="Open booking site">
-              <Globe className="size-3.5" />
-            </a>
-          </Button>
-          <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
-            {/* Type and status are buttons: a click flips them. Suspending
-                locks the company out, so that one asks first. */}
+            {/* Type is a button: a click flips it. */}
             <Button
               size="sm"
               variant="outline"
@@ -1672,11 +1654,22 @@ export default function TenantDetailsPage() {
             >
               {tenant.tenant_type || 'Not set'}
             </Button>
+            {/* The current state; a click flips it. Suspending locks their
+                team out, so that one asks first. */}
             <Button
               size="sm"
               variant="outline"
-              onClick={() => {
-                if (tenant.status === 'active' && !window.confirm(`Suspend ${tenant.company_name}? Their team loses access until reactivated.`)) return;
+              onClick={async () => {
+                if (
+                  tenant.status === 'active' &&
+                  !(await confirmDialog({
+                    title: `Suspend ${tenant.company_name}?`,
+                    description: 'Their team loses access until reactivated.',
+                    confirmLabel: 'Suspend',
+                    destructive: true,
+                  }))
+                )
+                  return;
                 void handleUpdateStatus(tenant.status === 'active' ? 'suspended' : 'active');
               }}
               title={tenant.status === 'active' ? 'Active. Click to suspend' : 'Suspended. Click to activate'}
@@ -1687,9 +1680,13 @@ export default function TenantDetailsPage() {
             >
               {tenant.status}
             </Button>
-          <Button size="icon" variant="outline" className="size-8 rounded-lg text-destructive hover:text-destructive" onClick={() => setShowDeleteConfirm(true)} title="Delete company" aria-label="Delete company">
-            <Trash2 className="size-3.5" />
-          </Button>
+            {/* Edit and delete: icons, named in the tooltip. */}
+            <Button size="icon" variant="outline" className="size-8 rounded-lg" onClick={() => setIsEditing(true)} title="Edit company and login" aria-label="Edit company and login">
+              <Pencil className="size-3.5" />
+            </Button>
+            <Button size="icon" variant="outline" className="size-8 rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setShowDeleteConfirm(true)} title="Delete company" aria-label="Delete company">
+              <Trash2 className="size-3.5" />
+            </Button>
         </div>
       </div>
 
@@ -1697,24 +1694,44 @@ export default function TenantDetailsPage() {
         {/* Left: the company, its billing, its integrations, its consent log,
             each a compact full-width strip. */}
         <div className="flex min-h-0 flex-col gap-4 lg:-m-1.5 lg:overflow-y-auto lg:p-1.5">
-          <div className="shrink-0 space-y-4">
-            {/* Details */}
-            <div>
-          {/* Single column, and Company Information leads it.
+          {/* The company's facts, in one row. Its name is the page title, so
+              only what the title doesn't say. Edit is in the header. */}
+          <Card className="shrink-0">
+            <CardContent className="px-7 py-6">
+              <div className="flex items-center gap-6">
+                {/* Who: the admin, and the address to reach them, in full. */}
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold uppercase text-primary">
+                    {(tenant.admin_name || tenant.company_name).charAt(0)}
+                  </span>
+                  <div className="min-w-0">
+                    <p className={cn('text-base font-medium', tenant.admin_name ? 'text-foreground' : 'text-muted-foreground')}>
+                      {tenant.admin_name || 'No admin name'}
+                    </p>
+                    <a href={`mailto:${tenant.contact_email}`} className="block break-all text-sm text-muted-foreground hover:text-primary">
+                      {tenant.contact_email}
+                    </a>
+                  </div>
+                </div>
+                {/* What: its slug and when it joined. */}
+                <dl className="flex shrink-0 gap-8">
+                  {[
+                    { label: 'Slug', value: tenant.slug },
+                    {
+                      label: 'Created',
+                      value: new Date(tenant.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
+                    },
+                  ].map((item) => (
+                    <div key={item.label} className="space-y-0.5">
+                      <dt className="text-[13px] text-muted-foreground">{item.label}</dt>
+                      <dd className="text-base font-medium text-foreground">{item.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            </CardContent>
+          </Card>
 
-              The right rail (Access URLs, Recent Activity) and the Email
-              Contact / Maintenance Banner actions were removed from Super
-              Admin on Sep 26 2026. The whole Quick Actions card went with
-              them: its two links moved to the header without the word
-              'Open', and Force Logout moved into Rental Settings, which
-              left a card whose only remaining job was to hold a heading.
-
-              So the first thing on the page is now what the page is
-              about — the company — rather than a row of buttons. */}
-          <div className="min-w-0 space-y-6">
-          </div>
-        </div>
-          </div>
           {/* Integrations: one row of tiles; the rest behind See all. */}
           <section className="shrink-0 space-y-2.5">
             <div className="flex items-center justify-between px-1">
@@ -2225,47 +2242,152 @@ export default function TenantDetailsPage() {
           />
         </div>
         {/* Right: how to get in, what they told us, and the team's sticky note. */}
-        <aside className="flex min-h-0 flex-col gap-4 lg:-m-1.5 lg:overflow-y-auto lg:p-1.5">
-          {/* The company's facts. Its name is the page title, so only what
-              the title doesn't say; the pencil edits them and the login. */}
-          <section className="shrink-0 rounded-3xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-base font-semibold tracking-tight">Company</h2>
-              {/* Edit (details, login email and password) and sign everyone
-                  out: icons only, named in the tooltip. */}
-              <div className="-my-1 flex items-center gap-1">
-                <Button size="icon" variant="outline" className="size-8 rounded-lg" onClick={() => setIsEditing(true)} title="Edit company and login" aria-label="Edit company and login">
-                  <Pencil className="size-3.5" />
-                </Button>
-                <Button size="icon" variant="outline" className="size-8 rounded-lg" onClick={() => setShowForceLogoutConfirm(true)} title="Force logout" aria-label="Force logout">
-                  <LogOut className="size-3.5" />
-                </Button>
-              </div>
+        {/* Right: tabs. Overview (health, feedback, the team's sticky note),
+            then support tickets, onboarding answers, consent and the
+            timeline, each shown in place. */}
+        <aside className="flex min-h-0 flex-col gap-3">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl bg-card shadow-sm ring-1 ring-foreground/10">
+          <div role="tablist" aria-label="Company panels" className="flex shrink-0 items-center gap-0.5 border-b border-border/60 p-1.5">
+            {(
+              [
+                { id: 'overview', name: 'Overview', label: 'Overview', icon: <LayoutGrid className="size-4" /> },
+                { id: 'tickets', name: 'Tickets', label: `Support tickets${openTickets.length ? ` · ${openTickets.length} open` : ''}`, icon: <LifeBuoy className="size-4" />, badge: openTickets.length },
+                { id: 'onboarding', name: 'Onboarding', label: 'Onboarding answers', icon: <ListChecks className="size-4" /> },
+                { id: 'consent', name: 'Consent', label: `Consent${policyLoading ? '' : ` · ${policyAcceptances.length} accepted`}`, icon: <Signature className="size-4" /> },
+                { id: 'timeline', name: 'Timeline', label: 'Timeline', icon: <History className="size-4" /> },
+              ] as const
+            ).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={railTab === t.id}
+                aria-label={t.label}
+                title={t.label}
+                onClick={() => setRailTab(t.id)}
+                className={cn(
+                  // The open tab grows and names itself; the rest stay icons.
+                  // Together they always fill the bar.
+                  'relative flex h-9 items-center justify-center gap-1.5 rounded-xl text-[13px] font-medium outline-none transition-all duration-200 focus-visible:ring-3 focus-visible:ring-ring/30',
+                  railTab === t.id
+                    ? 'min-w-0 flex-1 bg-primary/10 px-3 text-primary'
+                    : 'w-10 shrink-0 text-muted-foreground hover:bg-muted hover:text-foreground',
+                )}
+              >
+                {t.icon}
+                {railTab === t.id && <span className="truncate">{t.name}</span>}
+                {'badge' in t && t.badge > 0 && (
+                  railTab === t.id ? (
+                    <span className="rounded-full bg-destructive px-1.5 text-[10px] font-semibold leading-4 tabular-nums text-white">
+                      {t.badge > 99 ? '99+' : t.badge}
+                    </span>
+                  ) : (
+                    <span className="absolute -right-0.5 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold tabular-nums text-white ring-2 ring-card">
+                      {t.badge > 99 ? '99+' : t.badge}
+                    </span>
+                  )
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* One card: the tabs on top, the open tab's content under them. */}
+          {railTab === 'overview' ? (
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+              <HealthFeedbackPanel tenantId={tenant.id} className="shrink-0" />
+              <NotesPanel tenantId={tenant.id} className="flex-1" />
             </div>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
-              {[
-                { label: 'Admin', value: tenant.admin_name || null },
-                { label: 'Slug', value: tenant.slug },
-                { label: 'Contact email', value: tenant.contact_email },
-                {
-                  label: 'Created',
-                  value: new Date(tenant.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
-                },
-              ].map((item) => (
-                <div key={item.label} className="min-w-0">
-                  <dt className="text-[13px] text-muted-foreground">{item.label}</dt>
-                  <dd
-                    title={item.value || undefined}
-                    className={cn('truncate text-sm font-medium', item.value ? 'text-foreground' : 'text-muted-foreground')}
-                  >
-                    {item.value || 'Not set'}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-          <FeedbackPanel tenantId={tenant.id} className="shrink-0" />
-          <NotesPanel tenantId={tenant.id} className="flex-1" />
+          ) : railTab === 'timeline' ? (
+            <div className="min-h-0 flex-1 overflow-y-auto [&>div]:rounded-none [&>div]:border-0 [&>div]:bg-transparent [&>div]:shadow-none [&>div]:ring-0">
+              <TenantTimelineTab tenantId={tenant.id} />
+            </div>
+          ) : (
+            <section className="min-h-0 flex-1 overflow-y-auto p-5">
+              {railTab === 'tickets' ? (
+                <>
+                  <h2 className="mb-2 text-base font-semibold tracking-tight">Open support tickets</h2>
+                  {openTickets.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">Nothing open.</p>
+                  ) : (
+                    <ul className="-mx-2">
+                      {openTickets.map((t) => (
+                        <li key={t.id}>
+                          <a
+                            href={`/admin/support?ticket=${t.id}`}
+                            className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-muted"
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium text-foreground">{t.summary || 'No summary'}</span>
+                              <span className="block text-xs text-muted-foreground">
+                                {t.reference} · {formatDate(t.created_at)}
+                              </span>
+                            </span>
+                            <span className={cn('text-xs font-medium', t.status === 'open' ? 'text-warning' : 'text-primary')}>
+                              {t.status === 'open' ? 'Open' : 'In progress'}
+                            </span>
+                            <ChevronRight className="size-4 text-muted-foreground" />
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              ) : railTab === 'onboarding' ? (
+                <>
+                  <h2 className="mb-1 text-base font-semibold tracking-tight">Onboarding answers</h2>
+                  <OnboardingAnswers tenantId={tenant.id} companyName={tenant.company_name} />
+                </>
+              ) : (
+                <>
+                  <h2 className="mb-1 text-base font-semibold tracking-tight">Consent</h2>
+                  <p className="mb-2 text-xs text-muted-foreground">Who accepted the privacy policy and terms. Hover a row for its IP.</p>
+                      {policyLoading ? (
+                        <div className="space-y-2">
+                          <Skeleton className="h-8 w-full" />
+                          <Skeleton className="h-8 w-full" />
+                        </div>
+                      ) : policyAcceptances.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          No one has accepted the privacy policy or terms yet.
+                        </p>
+                      ) : (
+                        <ul className="divide-y divide-border/60">
+                          {policyAcceptances.map((entry) => (
+                            <li
+                              key={entry.id}
+                              className="flex items-baseline justify-between gap-3 py-2"
+                              title={entry.ip_address ? `IP ${entry.ip_address}` : undefined}
+                            >
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-foreground">
+                                  {entry.policy_type === 'privacy_policy' ? 'Privacy Policy' : 'Terms & Conditions'}
+                                  <span className="ml-1.5 text-xs font-normal tabular-nums text-muted-foreground">v{entry.version}</span>
+                                </p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {entry.user_name || entry.user_email || 'No name'}
+                                </p>
+                              </div>
+                              <span className="shrink-0 text-xs text-muted-foreground">{formatDate(entry.accepted_at)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                </>
+              )}
+            </section>
+          )}
+
+        </div>
+
+          {/* Under the card, its full width, whatever tab is open. */}
+          <Button
+            variant="ghost"
+            className="h-10 w-full shrink-0 gap-1.5 rounded-2xl bg-destructive/10 text-[13px] text-destructive shadow-none hover:bg-destructive/20 hover:text-destructive"
+            onClick={() => setShowForceLogoutConfirm(true)}
+          >
+            <LogOut className="size-3.5" />
+            Force logout all users
+          </Button>
         </aside>
       </div>
 
@@ -2275,85 +2397,6 @@ export default function TenantDetailsPage() {
         tenant={tenant}
         onSaved={(patch) => setTenant((t) => (t ? ({ ...t, ...patch } as Tenant) : t))}
       />
-
-      {/* Consent and Timeline: behind header buttons since Oct 19 2026, so
-          the page body is one full-width column. */}
-      <Dialog open={showConsent} onOpenChange={setShowConsent}>
-        <DialogContent className="max-w-lg rounded-3xl p-7">
-          <DialogHeader>
-            <DialogTitle>Consent</DialogTitle>
-            <DialogDescription>Who at {tenant.company_name} accepted the privacy policy and terms. Hover a row for its IP.</DialogDescription>
-          </DialogHeader>
-          {policyLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-8 w-full" />
-            </div>
-          ) : policyAcceptances.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No one has accepted the privacy policy or terms yet.
-            </p>
-          ) : (
-            <ul className="divide-y divide-border/60">
-              {policyAcceptances.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="flex items-baseline justify-between gap-3 py-2"
-                  title={entry.ip_address ? `IP ${entry.ip_address}` : undefined}
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground">
-                      {entry.policy_type === 'privacy_policy' ? 'Privacy Policy' : 'Terms & Conditions'}
-                      <span className="ml-1.5 text-xs font-normal tabular-nums text-muted-foreground">v{entry.version}</span>
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {entry.user_name || entry.user_email || 'No name'}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-xs text-muted-foreground">{formatDate(entry.accepted_at)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </DialogContent>
-      </Dialog>
-      <Dialog open={showTimeline} onOpenChange={setShowTimeline}>
-        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto rounded-3xl p-2">
-          <DialogTitle className="sr-only">Timeline</DialogTitle>
-          <TenantTimelineTab tenantId={tenant.id} />
-        </DialogContent>
-      </Dialog>
-
-      {/* Open support tickets for this company; each opens in Support. */}
-      <Dialog open={showTickets} onOpenChange={setShowTickets}>
-        <DialogContent className="flex max-h-[85vh] max-w-lg flex-col gap-0 rounded-3xl p-7">
-          <DialogHeader className="mb-3">
-            <DialogTitle>Open support tickets</DialogTitle>
-            <DialogDescription>{tenant.company_name}&rsquo;s tickets that are still open or in progress.</DialogDescription>
-          </DialogHeader>
-          <ul className="-mx-2 min-h-0 flex-1 overflow-y-auto">
-            {openTickets.map((t) => (
-              <li key={t.id}>
-                <a
-                  href={`/admin/support?ticket=${t.id}`}
-                  className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-muted"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-foreground">{t.summary || 'No summary'}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {t.reference} · {formatDate(t.created_at)}
-                    </span>
-                  </span>
-                  <span className={cn('text-xs font-medium', t.status === 'open' ? 'text-warning' : 'text-primary')}>
-                    {t.status === 'open' ? 'Open' : 'In progress'}
-                  </span>
-                  <ChevronRight className="size-4 text-muted-foreground" />
-                </a>
-              </li>
-            ))}
-          </ul>
-        </DialogContent>
-      </Dialog>
 
       {/* Soft / hard subscription block for this tenant. */}
       <Dialog open={showGateDialog} onOpenChange={setShowGateDialog}>
@@ -2913,30 +2956,13 @@ export default function TenantDetailsPage() {
       </Dialog>
 
       {/* Force Logout Confirmation */}
-      <Dialog open={showForceLogoutConfirm} onOpenChange={setShowForceLogoutConfirm}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Force Logout All Users</DialogTitle>
-            <DialogDescription>
-              This will immediately sign out all portal staff and booking customers
-              for <strong className="text-foreground">{tenant.company_name}</strong>.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="rounded-2xl bg-warning/10 px-4 py-3 text-sm text-warning ring-1 ring-warning/25">
-            Users will need to sign in again to access their accounts.
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForceLogoutConfirm(false)}>Cancel</Button>
-            <Button
-              variant="destructive"
-              onClick={handleForceLogout}
-              disabled={forceLogoutLoading}
-            >
-              {forceLogoutLoading ? 'Logging out...' : 'Yes, Force Logout'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ForceLogoutDialog
+        open={showForceLogoutConfirm}
+        onOpenChange={setShowForceLogoutConfirm}
+        tenantId={tenant.id}
+        companyName={tenant.company_name}
+        onLogoutAll={handleForceLogout}
+      />
 
       {/* Password reset — the super-admin way back in for a locked-out operator. */}
       <Dialog open={showPasswordReset} onOpenChange={(open) => { if (!open) { setShowPasswordReset(false); setPwResult(null); } }}>

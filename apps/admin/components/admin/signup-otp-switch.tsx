@@ -24,7 +24,7 @@ import { SettingsRow } from '@/components/admin/settings/settings-kit';
  * redeploy, no secret.
  *
  * Stored as `admin_settings.signup_otp_enabled` on every row and read as "true
- * if any row is true", the same way `landing_pricing_enabled` works.
+ * if any row is true", the same way `landing_version` is read.
  * `signup-begin` reads it the same way, and that agreement matters: a flag this
  * page shows as on while the function reads it off is worse than either value.
  * The function reads it fresh per signup, so a flip takes effect immediately —

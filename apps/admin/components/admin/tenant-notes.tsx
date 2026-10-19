@@ -8,8 +8,7 @@
  * freely and saved as you type; a blank canary one when there is none. Its
  * corner icons start a fresh sticky, remove this one, or open the board — a
  * dialog of every note, where the author can pin, edit or delete their own.
- * Saved notes take one of a few pastel colours picked from their id, so a
- * note keeps its colour without the table storing one.
+ * Every sticky is a soft tint of the app's accent.
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -20,6 +19,7 @@ import { toast } from '@/components/ui/sonner';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { confirmDialog } from '@/components/ui/confirm';
 
 interface Note {
   id: string;
@@ -33,16 +33,9 @@ interface Note {
 
 /* ---------------------------------------------------------------- the look */
 
-/** The pastel pad a saved note can come from. Dark mode keeps the hue, faint. */
-const PAPERS = [
-  'bg-[#ffe3ec] dark:bg-[#ff8fb1]/[0.12]', // blush
-  'bg-[#dcf5e6] dark:bg-[#6ee7a8]/[0.11]', // mint
-  'bg-[#dcecff] dark:bg-[#7cb8ff]/[0.12]', // sky
-  'bg-[#ece4ff] dark:bg-[#b49cff]/[0.13]', // lilac
-  'bg-[#ffe9d4] dark:bg-[#ffb36b]/[0.12]', // peach
-];
-/** The blank pad a new note is written on: the classic canary. */
-const CANARY = 'bg-[#fff3a6] dark:bg-[#ffe066]/[0.12]';
+/** Every sticky is on the app's accent, a soft tint of it. */
+const PAPERS = ['bg-primary/10 dark:bg-primary/15'];
+const CANARY = PAPERS[0];
 
 /** A note's colour, from its id: stable without storing it. */
 function paperFor(id: string): string {
@@ -225,7 +218,7 @@ function ScratchSticky({
         }}
         readOnly={!mine}
         placeholder="Jot an internal note… Only the Drive247 team sees it."
-        className="min-h-0 flex-1 resize-none bg-transparent px-4 pb-10 pt-5 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-[#8a7a2a]/60 dark:placeholder:text-[#ffe680]/40"
+        className="min-h-0 flex-1 resize-none bg-transparent px-4 pb-10 pt-5 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-primary/45"
       />
       <div className="absolute inset-x-3 bottom-2 flex items-center gap-1 text-[11px]">
         <span className="min-w-0 flex-1 truncate opacity-55">
@@ -303,7 +296,7 @@ function NewSticky({
         }}
         placeholder="Jot an internal note… Only the Drive247 team sees it."
         disabled={saving}
-        className="min-h-0 flex-1 resize-none bg-transparent px-3.5 pb-9 pt-4 text-[13px] leading-snug text-foreground outline-none placeholder:text-[#8a7a2a]/60 dark:placeholder:text-[#ffe680]/40"
+        className="min-h-0 flex-1 resize-none bg-transparent px-3.5 pb-9 pt-4 text-[13px] leading-snug text-foreground outline-none placeholder:text-primary/45"
       />
       {body.trim() && (
         <button
@@ -342,7 +335,7 @@ function BoardSticky({ note, tilt, mine, onChanged }: { note: Note; tilt: string
   };
 
   const remove = async () => {
-    if (!window.confirm('Delete this note?')) return;
+    if (!(await confirmDialog({ title: 'Delete this note?', confirmLabel: 'Delete', destructive: true }))) return;
     setBusy(true);
     const { error } = await (supabase as any).from('tenant_admin_notes').delete().eq('id', note.id);
     setBusy(false);

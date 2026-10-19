@@ -31,7 +31,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import type {
   OnboardingError,
   PaymentStepProps,
@@ -39,6 +38,8 @@ import type {
 import { SIGNUP_ERROR_COPY } from "@/components/onboarding/onboarding-types";
 import type { PromoOffer } from "@/lib/promo-offer";
 import { readReferralCodeFromDocument } from "@/lib/referral-cookie";
+import { CardArt } from "@/components/onboarding/signup-art";
+import { ScreenHead, SIGNUP_ENTER } from "@/components/onboarding/signup-ui";
 
 /** "13 Oct 2026" — the day a trial ends and the card is first charged. */
 function formatDay(iso: string | null): string | null {
@@ -136,6 +137,8 @@ export function PaymentStep({
   trialDays = 0,
   trialEndsAt = null,
   onApplyPromo,
+  ownerName = "",
+  companyName = "",
 }: PaymentStepProps) {
   const isTrial = intentType === "setup";
   const chargeDate = formatDay(trialEndsAt);
@@ -238,12 +241,12 @@ export function PaymentStep({
         colorTextSecondary: dark ? "#a1a1aa" : "#52525b",
         colorTextPlaceholder: dark ? "#71717a" : "#a1a1aa",
         colorDanger: dark ? "#f87171" : "#dc2626",
-        colorBackground: dark ? "#18181b" : "#ffffff",
+        colorBackground: dark ? "#13131d" : "#ffffff",
         fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif",
-        fontSizeBase: "14px",
+        fontSizeBase: "15px",
         fontWeightNormal: "400",
         fontWeightMedium: "500",
-        borderRadius: "10px",
+        borderRadius: "12px",
         spacingUnit: "4px",
       },
       rules: {
@@ -251,7 +254,7 @@ export function PaymentStep({
         ".Input": {
           border: `1px solid ${dark ? "#3f3f46" : "#e4e4e7"}`,
           boxShadow: "none",
-          padding: "11px 12px",
+          padding: "13px 16px",
         },
         ".Input:focus": {
           border: `1px solid ${brand}`,
@@ -311,9 +314,19 @@ export function PaymentStep({
     !error;
 
   return (
-    <div className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
+    <div className={SIGNUP_ENTER}>
+      <ScreenHead
+        art={<CardArt price={isTrial ? "$0" : promo && typeof amountDueCents === "number" ? formatCents(amountDueCents) : `$${plan.priceUsd}`} />}
+        title={ownerName.trim() ? `Last step, ${ownerName.trim().split(/\s+/)[0]}` : "Last step"}
+        lead={
+          isTrial
+            ? `Add a card for later. Nothing is charged today, and I'll start building ${companyName.trim() || "your portal"} the moment it's saved.`
+            : `Add a card and I'll start building ${companyName.trim() || "your portal"} the moment the payment goes through.`
+        }
+      />
+
       {/* Order summary — the last place the price is shown before it is taken. */}
-      <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+      <div className="mt-5 flex items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-white px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]">
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
             {plan.name}
@@ -384,7 +397,7 @@ export function PaymentStep({
       )}
 
       {isTrial ? (
-        <div className="mt-3 rounded-lg border border-indigo-600/20 bg-indigo-600/5 p-3 text-xs leading-relaxed text-foreground/80 dark:border-indigo-400/20 dark:bg-indigo-400/5">
+        <div className="mt-3 rounded-xl border border-indigo-600/15 bg-indigo-600/[0.04] p-3.5 text-[13px] leading-relaxed text-foreground/80 dark:border-indigo-400/20 dark:bg-indigo-400/5">
           <p className="flex items-center gap-1.5 font-medium text-indigo-700 dark:text-indigo-300">
             <Gift className="h-3.5 w-3.5" aria-hidden="true" />
             {trialDays}-day free trial — full access, nothing charged today
@@ -399,7 +412,7 @@ export function PaymentStep({
           </p>
         </div>
       ) : (
-      <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+      <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
         You&apos;re starting a monthly subscription. Today&apos;s payment covers
         your first month; it renews on the same date each month and you can
         manage it from your portal.
@@ -409,7 +422,7 @@ export function PaymentStep({
       </p>
       )}
 
-      <Separator className="my-4" />
+      <div className="mt-4" />
 
       {isConfigError || isUnexplainedGap ? (
         <ConfigurationErrorPanel />
@@ -436,7 +449,7 @@ export function PaymentStep({
         </Elements>
       )}
 
-      <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+      <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
         <Lock className="h-3 w-3" />
         Payments are processed by Stripe. We never see your card details.
       </p>

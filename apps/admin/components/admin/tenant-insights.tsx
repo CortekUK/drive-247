@@ -19,13 +19,14 @@
  */
 
 import { useEffect, useState, type ReactNode } from 'react';
+import { Area, AreaChart, YAxis } from 'recharts';
 import Link from 'next/link';
-import { ArrowRight, HeartPulse, ListChecks } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { loadScoredTenants } from '@/lib/customer-health/load';
+import { loadHealthTrend, loadScoredTenants } from '@/lib/customer-health/load';
 import type { HealthResult } from '@/lib/customer-health/score';
 import { BAND, HealthBreakdown } from '@/components/admin/customer-management/health-parts';
 import { CATEGORY_META, type Category } from '@/components/admin/feedback-category';
@@ -96,31 +97,15 @@ function SampleTag() {
   );
 }
 
-/** A header button: icon, then a short value. */
-function HeaderButton({ icon, children, onClick, title }: { icon: ReactNode; children: ReactNode; onClick: () => void; title: string }) {
-  return (
-    <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-lg px-3 text-[13px] [&_svg]:size-3.5" onClick={onClick} title={title}>
-      {icon}
-      {children}
-    </Button>
-  );
-}
-
 /* ------------------------------------------------------------------ main */
 
-export function TenantInsights({ tenantId, companyName }: { tenantId: string; companyName: string }) {
-  const [open, setOpen] = useState<'health' | 'onboarding' | null>(null);
-
-  const [health, setHealth] = useState<HealthResult | null>(null);
-  const [healthError, setHealthError] = useState(false);
+/** Their first-run answers, inline (a tab of the company page's right column). */
+export function OnboardingAnswers({ tenantId, companyName }: { tenantId: string; companyName: string }) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [firstRun, setFirstRun] = useState<FirstRun | null | undefined>(undefined);
 
   useEffect(() => {
     const db = supabase as any;
-    loadScoredTenants(tenantId)
-      .then((rows) => setHealth(rows[0]?.health ?? null))
-      .catch(() => setHealthError(true));
     db.from('first_run_questions')
       .select('question_key, kind, prompt, options')
       .order('sort_order')
@@ -132,85 +117,36 @@ export function TenantInsights({ tenantId, companyName }: { tenantId: string; co
       .then(({ data }: { data: FirstRun | null }) => setFirstRun(data));
   }, [tenantId]);
 
-  const onboardingIsSample = firstRun === null;
-  const onboardingShown = onboardingIsSample ? MOCK_ONBOARDING : firstRun ?? null;
+  if (firstRun === undefined) return <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>;
+  const shown = firstRun ?? MOCK_ONBOARDING;
 
   return (
-    <>
-      <HeaderButton icon={<HeartPulse />} title="Health score" onClick={() => setOpen('health')}>
-        {health ? (
-          <span className={cn('tabular-nums', BAND[health.band].text)}>Health {health.score}</span>
-        ) : (
-          <span className="text-muted-foreground">Health {healthError ? '—' : '…'}</span>
-        )}
-      </HeaderButton>
-      <Button
-        size="icon"
-        variant="outline"
-        className="size-8 rounded-lg"
-        onClick={() => setOpen('onboarding')}
-        title={onboardingShown?.was_skipped ? 'Onboarding answers (skipped)' : 'Onboarding answers'}
-        aria-label="Onboarding answers"
-      >
-        <ListChecks className="size-3.5" />
-      </Button>
-
-      {/* Health */}
-      <Dialog open={open === 'health'} onOpenChange={(o) => !o && setOpen(null)}>
-        <DialogContent className="max-w-lg rounded-3xl p-7">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              Health score
-              {health && <span className={cn('tabular-nums', BAND[health.band].text)}>{health.score}</span>}
-            </DialogTitle>
-            <DialogDescription>Worked out from logins, bookings, payment and setup, the same way Customer Health does.</DialogDescription>
-          </DialogHeader>
-          {health ? (
-            <div className="space-y-4 text-sm">
-              <HealthBreakdown health={health} />
-              <Link href="/admin/customer-management?section=health" className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
-                All companies&rsquo; health <ArrowRight className="size-3.5" />
-              </Link>
+    <div>
+      <p className="mb-2 text-xs text-muted-foreground">
+        {shown.was_skipped
+          ? `${companyName} skipped the first-run questions.`
+          : shown.completed_at
+            ? `Answered ${day(shown.completed_at)}, the first time they opened the portal.`
+            : `${companyName} hasn't answered yet.`}
+      </p>
+      {!shown.was_skipped && (
+        <dl className="divide-y divide-border/60">
+          {/* Every question asked, in order, then any answer to a question
+              that has since been removed. */}
+          {[
+            ...questions.map((q) => ({ key: q.question_key, q })),
+            ...Object.keys(shown.answers)
+              .filter((k) => !questions.some((q) => q.question_key === k))
+              .map((k) => ({ key: k, q: undefined })),
+          ].map(({ key, q }) => (
+            <div key={key} className="py-2.5">
+              <dt className="text-xs text-muted-foreground">{q?.prompt ?? key.replace(/_/g, ' ')}</dt>
+              <dd className="mt-0.5 text-sm font-medium text-foreground">{answerText(q, shown.answers[key])}</dd>
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">{healthError ? 'The score could not be worked out right now.' : 'Working it out…'}</p>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Onboarding answers */}
-      <Dialog open={open === 'onboarding'} onOpenChange={(o) => !o && setOpen(null)}>
-        <DialogContent className="flex max-h-[85vh] max-w-xl flex-col gap-0 rounded-3xl p-7">
-          <DialogHeader className="mb-4">
-            <DialogTitle className="flex items-center gap-2">Onboarding answers {onboardingIsSample && <SampleTag />}</DialogTitle>
-            <DialogDescription>
-              {onboardingShown?.was_skipped
-                ? `${companyName} skipped the first-run questions.`
-                : onboardingShown?.completed_at
-                  ? `What ${companyName} told us the first time they opened the portal, on ${day(onboardingShown.completed_at)}.`
-                  : `${companyName} hasn't answered the first-run questions yet.`}
-            </DialogDescription>
-          </DialogHeader>
-          {onboardingShown && !onboardingShown.was_skipped && (
-            <dl className="-mx-1 min-h-0 flex-1 divide-y divide-border/60 overflow-y-auto px-1">
-              {/* Every question asked, in order, then any answer to a question
-                  that has since been removed. */}
-              {[
-                ...questions.map((q) => ({ key: q.question_key, q })),
-                ...Object.keys(onboardingShown.answers)
-                  .filter((k) => !questions.some((q) => q.question_key === k))
-                  .map((k) => ({ key: k, q: undefined })),
-              ].map(({ key, q }) => (
-                <div key={key} className="py-3">
-                  <dt className="text-xs text-muted-foreground">{q?.prompt ?? key.replace(/_/g, ' ')}</dt>
-                  <dd className="mt-0.5 text-sm font-medium text-foreground">{answerText(q, onboardingShown.answers[key])}</dd>
-                </div>
-              ))}
-            </dl>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
+          ))}
+        </dl>
+      )}
+    </div>
   );
 }
 
@@ -295,14 +231,73 @@ function FeedbackCard({ f }: { f: FeedbackItem }) {
 }
 
 /**
- * The latest thing the company told us, their average star rating, and
- * All, which opens everything they sent in a dialog.
+ * shadcn's "Area Chart - Linear", stripped down: a value over time as a
+ * line over a soft fill in one colour, no axes, no grid. Used for the weekly
+ * health score and the running star rating.
  */
-export function FeedbackPanel({ tenantId, className }: { tenantId: string; className?: string }) {
+function TrendLine({
+  points,
+  color,
+  domain,
+  id,
+}: {
+  points: { date: string; value: number }[];
+  color: string;
+  domain: [number, number];
+  id: string;
+}) {
+  return (
+    <AreaChart width={150} height={64} data={points} margin={{ top: 4, right: 2, bottom: 2, left: 2 }}>
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="5%" stopColor={color} stopOpacity={0.35} />
+          <stop offset="95%" stopColor={color} stopOpacity={0.02} />
+        </linearGradient>
+      </defs>
+      <YAxis hide domain={domain} />
+      <Area dataKey="value" type="monotone" stroke={color} strokeWidth={2} fill={`url(#${id})`} dot={false} isAnimationActive />
+    </AreaChart>
+  );
+}
+
+/**
+ * The average star rating as it moved: one point per rating, oldest first,
+ * each the average of every rating up to and including it.
+ */
+function ratingTrend(items: FeedbackItem[]): { date: string; value: number }[] {
+  const rated = items
+    .filter((f) => f.rating !== null)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  let sum = 0;
+  return rated.map((f, i) => {
+    sum += f.rating ?? 0;
+    return { date: f.created_at, value: sum / (i + 1) };
+  });
+}
+
+const TILE =
+  'group flex min-w-0 flex-col rounded-2xl p-3 text-left outline-none transition-colors hover:bg-muted/60 focus-visible:ring-[3px] focus-visible:ring-ring/50';
+
+/**
+ * How the company is doing, at a glance: its health score as a ring and
+ * the part of it that is weakest, and what they think of us — the average
+ * star rating, how their stars spread, and how much is still open. Each
+ * half opens its own dialog: the score's breakdown, or everything they sent.
+ */
+export function HealthFeedbackPanel({ tenantId, className }: { tenantId: string; className?: string }) {
+  const [health, setHealth] = useState<HealthResult | null>(null);
+  const [healthError, setHealthError] = useState(false);
+  const [trend, setTrend] = useState<{ date: string; score: number }[]>([]);
   const [feedback, setFeedback] = useState<FeedbackItem[] | null>(null);
-  const [showAll, setShowAll] = useState(false);
+  const [open, setOpen] = useState<'health' | 'feedback' | null>(null);
 
   useEffect(() => {
+    loadScoredTenants(tenantId)
+      .then((rows) => setHealth(rows[0]?.health ?? null))
+      .catch(() => setHealthError(true));
+    loadHealthTrend(tenantId)
+      .then(setTrend)
+      .catch(() => setTrend([]));
     (supabase as any)
       .from('tenant_feedback')
       .select('id, category, message, submitter_name, submitter_email, status, rating, created_at')
@@ -313,55 +308,96 @@ export function FeedbackPanel({ tenantId, className }: { tenantId: string; class
 
   const isSample = feedback !== null && feedback.length === 0;
   const shown = isSample ? MOCK_FEEDBACK : feedback ?? [];
-  const open = shown.filter((f) => f.status === 'open').length;
+  const openCount = shown.filter((f) => f.status === 'open').length;
   const rated = shown.filter((f) => f.rating !== null);
   const average = rated.length ? rated.reduce((sum, f) => sum + (f.rating ?? 0), 0) / rated.length : null;
+  const ratingPoints = ratingTrend(shown);
 
-  const summary = average !== null && (
-    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground" title={`Average of ${rated.length} ${rated.length === 1 ? 'rating' : 'ratings'}`}>
-      <Stars value={average} className="text-[13px]" />
-      <span className="font-medium tabular-nums text-foreground">{average.toFixed(1)}</span>
-    </span>
-  );
 
-  // The whole card opens everything; the dialog sits outside it so a click
-  // inside the dialog never bubbles back into the card and reopens it.
   return (
     <>
-    <Panel
-      title="Feedback"
-      className={className}
-      onOpen={shown.length > 0 ? () => setShowAll(true) : undefined}
-      count={
-        <>
-          {summary}
-          {shown.length > 0 && <span className="ml-auto text-xs font-medium text-muted-foreground">All {shown.length}</span>}
-        </>
-      }
-    >
-      {feedback === null ? (
-        <p className="py-3 text-center text-sm text-muted-foreground">Loading…</p>
-      ) : shown.length === 0 ? (
-        <p className="py-3 text-center text-sm text-muted-foreground">Nothing sent yet.</p>
-      ) : (
-        <FeedbackCard f={shown[0]} />
-      )}
-    </Panel>
+      {/* Two graphs, no words: the score ring, and the star rating with how
+          the stars spread. Each opens its dialog. */}
+      <section className={cn('grid grid-cols-2 gap-1', className)}>
+        <button
+          type="button"
+          className={TILE}
+          onClick={() => setOpen('health')}
+          disabled={!health}
+          title={health ? `Health ${health.score} · ${BAND[health.band].label}, over the last 8 weeks` : 'Health'}
+          aria-label="Health score"
+        >
+          <span className="flex items-baseline gap-1.5">
+            <span className="text-2xl font-semibold tabular-nums leading-none text-foreground">{health ? health.score : healthError ? '—' : '…'}</span>
+            <span className="text-[13px] text-muted-foreground">/ 100</span>
+          </span>
+          <span className="mt-2 block h-16">
+            {health && trend.length > 1 && (
+              <TrendLine id="trend-health" points={trend.map((p) => ({ date: p.date, value: p.score }))} color="hsl(var(--primary))" domain={[0, 100]} />
+            )}
+          </span>
+          <span className="mt-auto pt-2 text-[11px] text-muted-foreground">
+            Health{health && <span className={BAND[health.band].text}> · {BAND[health.band].label}</span>}
+          </span>
+        </button>
 
-      <Dialog open={showAll} onOpenChange={setShowAll}>
+        <button
+          type="button"
+          className={TILE}
+          onClick={() => setOpen('feedback')}
+          disabled={shown.length === 0}
+          title={average !== null ? `Feedback ${average.toFixed(1)} from ${rated.length} ratings` : 'Feedback'}
+          aria-label="Feedback"
+        >
+          <span className="flex items-baseline gap-1.5">
+            <span className="text-2xl font-semibold tabular-nums leading-none text-foreground">{average !== null ? average.toFixed(1) : '—'}</span>
+            <Stars value={average ?? 0} className="text-[13px]" />
+          </span>
+          <span className="mt-2 block h-16">
+            {ratingPoints.length > 1 && <TrendLine id="trend-rating" points={ratingPoints} color="hsl(var(--primary))" domain={[1, 5]} />}
+          </span>
+          <span className="mt-auto pt-2 text-[11px] text-muted-foreground">
+            Feedback · {shown.length} {shown.length === 1 ? 'reply' : 'replies'}
+            {openCount > 0 && <span className="text-warning"> · {openCount} open</span>}
+          </span>
+        </button>
+      </section>
+
+      <Dialog open={open === 'health'} onOpenChange={(o) => !o && setOpen(null)}>
+        <DialogContent className="max-w-lg rounded-3xl p-7">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              Health score
+              {health && <span className={cn('tabular-nums', BAND[health.band].text)}>{health.score}</span>}
+            </DialogTitle>
+            <DialogDescription>Worked out from logins, bookings, payment and setup, the same way Customer Health does.</DialogDescription>
+          </DialogHeader>
+          {health && (
+            <div className="space-y-4 text-sm">
+              <HealthBreakdown health={health} />
+              <Link href="/admin/customer-management?section=health" className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
+                All companies&rsquo; health <ArrowRight className="size-3.5" />
+              </Link>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={open === 'feedback'} onOpenChange={(o) => !o && setOpen(null)}>
         <DialogContent className="flex max-h-[85vh] max-w-xl flex-col gap-0 rounded-3xl p-7">
           <DialogHeader className="mb-4">
             <DialogTitle>Feedback</DialogTitle>
             <DialogDescription asChild>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                {summary && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                {average !== null && (
                   <span className="inline-flex items-center gap-1.5">
-                    {summary}
-                    <span className="text-xs">from {rated.length} {rated.length === 1 ? 'rating' : 'ratings'}</span>
+                    <Stars value={average} className="text-[13px]" />
+                    <span className="font-medium text-foreground">{average.toFixed(1)}</span>
+                    from {rated.length} {rated.length === 1 ? 'rating' : 'ratings'}
                   </span>
                 )}
-                <span className="text-xs">
-                  {shown.length} sent{open > 0 && <span className="text-warning"> · {open} open</span>}
+                <span>
+                  {shown.length} sent{openCount > 0 && <span className="text-warning"> · {openCount} open</span>}
                 </span>
               </div>
             </DialogDescription>

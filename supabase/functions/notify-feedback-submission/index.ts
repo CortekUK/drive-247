@@ -1,6 +1,7 @@
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendResendEmail } from "../_shared/resend-service.ts";
+import { getVapidKeys, sendWebPush } from "../_shared/web-push.ts";
 
 const CATEGORY_LABELS: Record<string, string> = {
   bug: "🐛 Bug",
@@ -87,23 +88,27 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, alreadyNotified: true });
     }
 
-    const { data: recipients, error: recipientsError } = await supabase
-      .from("tenant_feedback_recipients")
-      .select("email");
+    // Every active super admin and manager on the platform team hears about it
+    // (Ghulam, 2026-10-19) — no separate recipient list to keep up to date.
+    const { data: team, error: recipientsError } = await supabase
+      .from("platform_team_members")
+      .select("app_user_id, platform_role, app_users!inner(email, is_active)")
+      .in("platform_role", ["super_admin", "manager"])
+      .eq("app_users.is_active", true);
 
     if (recipientsError) {
       console.error("Failed to load feedback recipients:", recipientsError);
       return errorResponse("Failed to load recipients", 500);
     }
 
-    // No recipients configured is a valid state, not an error.
-    if (!recipients || recipients.length === 0) {
-      await supabase
-        .from("tenant_feedback")
-        .update({ notified_at: new Date().toISOString() })
-        .eq("id", feedbackId);
-      return jsonResponse({ success: true, skipped: true, reason: "no recipients configured" });
-    }
+    const recipients = [
+      ...new Set(
+        (team ?? [])
+          .map((m: { app_users: { email: string | null } | { email: string | null }[] }) =>
+            (Array.isArray(m.app_users) ? m.app_users[0]?.email : m.app_users?.email)?.trim().toLowerCase())
+          .filter((e): e is string => !!e),
+      ),
+    ].map((email) => ({ email }));
 
     // `company_name`, NOT `name` — the tenants table has no bare `name`
     // column, and selecting one 400s the whole query.
@@ -152,11 +157,26 @@ Deno.serve(async (req) => {
     // One send with every recipient rather than a loop — sendResendEmail takes
     // an array, and N sequential sends is N chances to trip a rate limit and
     // leave the list half-notified.
-    const result = await sendResendEmail({
-      to: recipients.map((r: { email: string }) => r.email),
-      subject: `[${categoryLabel}] ${tenantName} — portal feedback`,
-      html,
-      text,
+    const result = recipients.length
+      ? await sendResendEmail({
+        to: recipients.map((r: { email: string }) => r.email),
+        subject: `[${categoryLabel}] ${tenantName} — portal feedback`,
+        html,
+        text,
+      })
+      : { success: true as const, error: undefined };
+
+    // Push, for the super admins and managers who picked "New feedback" in
+    // their own phone alerts (platform_activity_prefs). Best-effort: a push
+    // failure never blocks the email or its stamp.
+    const pushed = await pushToTeam(
+      supabase,
+      (team ?? []).map((m: { app_user_id: string }) => m.app_user_id),
+      { title: `${tenantName} · New feedback`, body: excerpt, url: "/admin/feedbacks", tag: `feedback-${feedback.id}` },
+      feedback.tenant_id,
+    ).catch((error) => {
+      console.error("Feedback push failed:", error);
+      return 0;
     });
 
     if (!result.success) {
@@ -171,7 +191,7 @@ Deno.serve(async (req) => {
       .update({ notified_at: new Date().toISOString() })
       .eq("id", feedbackId);
 
-    return jsonResponse({ success: true, recipients: recipients.length });
+    return jsonResponse({ success: true, recipients: recipients.length, pushed });
   } catch (error) {
     console.error("notify-feedback-submission error:", error);
     return errorResponse(
@@ -180,3 +200,69 @@ Deno.serve(async (req) => {
     );
   }
 });
+
+const FEEDBACK_ACTION = "portal_feedback_received";
+
+/** Pushes to the platform devices of the given admins who opted in to feedback alerts. */
+async function pushToTeam(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  appUserIds: string[],
+  payload: { title: string; body: string; url: string; tag: string },
+  tenantId: string | null,
+): Promise<number> {
+  if (appUserIds.length === 0) return 0;
+
+  const { data: prefs } = await supabase
+    .from("platform_activity_prefs")
+    .select("app_user_id, actions")
+    .eq("is_enabled", true)
+    .in("app_user_id", appUserIds);
+  const wanting = (prefs ?? [])
+    .filter((p: { actions: string[] | null }) => (p.actions ?? []).includes(FEEDBACK_ACTION))
+    .map((p: { app_user_id: string }) => p.app_user_id);
+  if (wanting.length === 0) return 0;
+
+  const { data: subs } = await supabase
+    .from("push_subscriptions")
+    .select("id, endpoint, p256dh, auth")
+    .eq("audience", "platform")
+    .eq("is_active", true)
+    .in("app_user_id", wanting);
+  if (!subs?.length) return 0;
+
+  const vapid = getVapidKeys();
+  const results = await Promise.all(
+    subs.map(async (sub: { id: string; endpoint: string; p256dh: string; auth: string }) => ({
+      sub,
+      result: await sendWebPush({ endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth }, payload, vapid),
+    })),
+  );
+
+  const nowIso = new Date().toISOString();
+  const expired = results.filter((r) => r.result.expired).map((r) => r.sub.id);
+  await Promise.allSettled([
+    supabase.from("push_notification_log").insert(
+      results.map(({ sub, result }) => ({
+        tenant_id: tenantId,
+        subscription_id: sub.id,
+        endpoint: sub.endpoint,
+        audience: "platform",
+        title: payload.title,
+        body: payload.body,
+        url: payload.url,
+        status: result.ok ? "sent" : result.expired ? "expired" : "failed",
+        http_status: result.status || null,
+        error: result.error ?? null,
+        source: `activity:${FEEDBACK_ACTION}`,
+      })),
+    ),
+    expired.length
+      ? supabase.from("push_subscriptions")
+        .update({ is_active: false, revoked_at: nowIso, last_error: "Subscription expired at push service" })
+        .in("id", expired)
+      : Promise.resolve(),
+  ]);
+
+  return results.filter((r) => r.result.ok).length;
+}

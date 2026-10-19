@@ -28,7 +28,7 @@
  */
 
 import * as React from "react";
-import { Building2, Check, Circle, Loader2, UserRound, Zap } from "lucide-react";
+import { Check, Circle, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,6 +68,21 @@ import {
   PasswordResetSuccessNote,
   type PasswordResetView,
 } from "@/components/onboarding/steps/password-reset-panel";
+import {
+  KeyArt,
+  PasswordArt,
+  SiteArt,
+  WelcomeArt,
+} from "@/components/onboarding/signup-art";
+import {
+  FieldError,
+  ScreenHead,
+  SIGNUP_ENTER,
+  SIGNUP_INPUT,
+  SIGNUP_LABEL,
+  SIGNUP_PRIMARY,
+  SIGNUP_QUIET,
+} from "@/components/onboarding/signup-ui";
 
 /**
  * Server error codes that belong under a specific input rather than in the
@@ -118,6 +133,27 @@ export interface AccountStepShellProps extends AccountStepProps {
    * updated" note when they come back.
    */
   onClearError?(): void;
+  /**
+   * Which page of the create-account form is on screen (0 who you are,
+   * 1 password, 2 business). Held by the shell, which draws the progress and
+   * the Back button for it; the step falls back to its own state when it is
+   * rendered without one.
+   */
+  page?: number;
+  onPageChange?(page: number): void;
+}
+
+/** The create-account form's pages, and which page owns each field. */
+export const ACCOUNT_PAGE_COUNT = 3;
+const LAST_ACCOUNT_PAGE = ACCOUNT_PAGE_COUNT - 1;
+const PAGE_FIELDS: readonly (readonly AccountField[])[] = [
+  ["fullName", "email"],
+  ["password"],
+  ["companyName", "slug", "acceptedTerms"],
+];
+function pageOf(field: AccountField): number {
+  const index = PAGE_FIELDS.findIndex((fields) => fields.includes(field));
+  return index === -1 ? LAST_ACCOUNT_PAGE : index;
 }
 
 export function AccountStep({
@@ -139,7 +175,12 @@ export function AccountStep({
   onSignInInstead,
   onResetStateChange,
   onClearError,
+  page: pageProp,
+  onPageChange,
 }: AccountStepShellProps) {
+  const [ownPage, setOwnPage] = React.useState(0);
+  const page = pageProp ?? ownPage;
+  const setPage = onPageChange ?? setOwnPage;
   const [fullName, setFullName] = React.useState(initialValues.fullName);
   const [email, setEmail] = React.useState(initialValues.email);
   const [password, setPassword] = React.useState("");
@@ -261,25 +302,47 @@ export function AccountStep({
     return Object.keys(found).length > 0 ? found : null;
   };
 
-  /** Focus whichever field the first error belongs to. */
+  const refFor = (field: AccountField) =>
+    field === "fullName"
+      ? fullNameRef.current
+      : field === "email"
+        ? emailRef.current
+        : field === "password"
+          ? passwordRef.current
+          : field === "companyName"
+            ? companyNameRef.current
+            : field === "slug"
+              ? slugRef.current
+              : termsRef.current;
+
+  /**
+   * A field to focus once its page has rendered. Set when an error belongs to a
+   * page that is not on screen: the page changes first, then this effect finds
+   * the field that now exists and puts the caret in it.
+   */
+  const pendingFocusRef = React.useRef<AccountField | null>(null);
+  React.useEffect(() => {
+    const field = pendingFocusRef.current;
+    if (!field) return;
+    pendingFocusRef.current = null;
+    refFor(field)?.focus();
+    // refFor reads refs only; the page is what makes the target exist.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
+  /** Focus whichever field the first error belongs to, changing page if needed. */
   const focusFirst = (
     found: FieldErrors<AccountField>,
     order: readonly AccountField[],
   ) => {
     const first = firstErrorField(found, order);
-    const target =
-      first === "fullName"
-        ? fullNameRef.current
-        : first === "email"
-          ? emailRef.current
-          : first === "password"
-            ? passwordRef.current
-            : first === "companyName"
-              ? companyNameRef.current
-              : first === "slug"
-                ? slugRef.current
-                : termsRef.current;
-    target?.focus();
+    if (!first) return;
+    if (mode !== "tenant" && !signInPrompt && pageOf(first) !== page) {
+      pendingFocusRef.current = first;
+      setPage(pageOf(first));
+      return;
+    }
+    refFor(first)?.focus();
   };
 
   const clearFieldError = React.useCallback((field: AccountField) => {
@@ -346,6 +409,23 @@ export function AccountStep({
       : null;
   }, [error, staleServerError]);
 
+  /**
+   * The server answers only after page 2 is submitted, but its verdict can be
+   * about page 0 ("that email is disposable") or page 1 ("weak password").
+   * Take the operator to the page the error is about, with the caret in it.
+   */
+  React.useEffect(() => {
+    if (mode === "tenant" || signInPrompt) return;
+    const field =
+      (Object.keys(serverFieldError)[0] as AccountField | undefined) ?? validationField;
+    if (field && pageOf(field) !== page) {
+      pendingFocusRef.current = field;
+      setPage(pageOf(field));
+    }
+    // Only a NEW server verdict should move the page, never the page itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverFieldError, validationField]);
+
   const fieldError = (field: AccountField): string | undefined =>
     errors[field] ??
     serverFieldError[field] ??
@@ -370,6 +450,23 @@ export function AccountStep({
     if (busy) return;
 
     const tenantValue = tenantValues();
+
+    // Pages 0 and 1 check only their own fields, then move on. Nothing is sent.
+    if (page < LAST_ACCOUNT_PAGE) {
+      const all = validateAccount({ fullName, email, password, ...tenantValue });
+      const pageErrors: FieldErrors<AccountField> = {};
+      for (const field of PAGE_FIELDS[page]) {
+        if (all[field]) pageErrors[field] = all[field];
+      }
+      setErrors(pageErrors);
+      if (Object.keys(pageErrors).length > 0) {
+        focusFirst(pageErrors, ACCOUNT_FIELD_ORDER);
+        return;
+      }
+      setPage(page + 1);
+      return;
+    }
+
     const nextErrors: FieldErrors<AccountField> = {
       ...validateAccount({ fullName, email, password, ...tenantValue }),
       ...(tenantErrors() ?? {}),
@@ -464,28 +561,19 @@ export function AccountStep({
 
   if (isStaffEmail) {
     return (
-      <div className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
-        <div className="flex size-10 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/40">
-          <UserRound className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-        </div>
-        <h3 className="mt-4 text-lg font-semibold tracking-tight">
-          You already have a Drive247 portal
-        </h3>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          This email is already set up as an operator account. Sign in at your
-          portal, or use a different email address to start a new one.
-        </p>
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-          <Button
-            type="button"
-            onClick={onUseDifferentEmail}
-            className="bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
-          >
+      <div className={SIGNUP_ENTER}>
+        <ScreenHead
+          art={<KeyArt />}
+          title="You already have a portal"
+          lead="That email already runs a Drive247 portal. Sign in there, or give me a different email and I'll start a new one."
+        />
+        <div className="mt-6 space-y-3">
+          <Button type="button" onClick={onUseDifferentEmail} className={SIGNUP_PRIMARY}>
             Use a different email
           </Button>
-          <Button asChild variant="ghost">
-            <a href="/strategy-call">Talk to us</a>
-          </Button>
+          <a href="/strategy-call" className={cn(SIGNUP_QUIET, "block text-center")}>
+            Talk to us
+          </a>
         </div>
       </div>
     );
@@ -531,25 +619,16 @@ export function AccountStep({
         : null);
 
     return (
-      <form
-        id="signup-account-form"
-        onSubmit={handleSignIn}
-        noValidate
-        className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none"
-      >
-        <div className="flex size-10 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/40">
-          <UserRound className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-        </div>
-        <h3 className="mt-4 text-lg font-semibold tracking-tight">{title}</h3>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          {body}
-        </p>
+      <form id="signup-account-form" onSubmit={handleSignIn} noValidate className={SIGNUP_ENTER}>
+        <ScreenHead art={<KeyArt />} title={title} lead={body} />
 
         {resetDoneFor === promptEmail && <PasswordResetSuccessNote />}
 
-        <div className="mt-5 space-y-4">
+        <div className="mt-6 space-y-3.5">
           <div>
-            <Label htmlFor="signup-signin-email">Email</Label>
+            <Label htmlFor="signup-signin-email" className={SIGNUP_LABEL}>
+              Email
+            </Label>
             <Input
               id="signup-signin-email"
               name="email"
@@ -558,12 +637,14 @@ export function AccountStep({
               value={signInPrompt.email}
               readOnly
               disabled
-              className="mt-1.5 h-10"
+              className={cn(SIGNUP_INPUT, "mt-1.5")}
             />
           </div>
 
           <div>
-            <Label htmlFor="signup-signin-password">Password</Label>
+            <Label htmlFor="signup-signin-password" className={SIGNUP_LABEL}>
+              Password
+            </Label>
             <div className="relative mt-1.5">
               <Input
                 ref={signInPasswordRef}
@@ -583,7 +664,7 @@ export function AccountStep({
                   setSignInError(null);
                   markDirty();
                 }}
-                className="h-10 pr-10"
+                className={cn(SIGNUP_INPUT, "pr-12")}
               />
               <PasswordToggle
                 shown={showPassword}
@@ -591,23 +672,13 @@ export function AccountStep({
               />
             </div>
             {inlineSignInError && (
-              <p
-                id="signup-signin-password-error"
-                role="alert"
-                className="mt-1.5 text-sm text-red-600 dark:text-red-400"
-              >
-                {inlineSignInError}
-              </p>
+              <FieldError id="signup-signin-password-error">{inlineSignInError}</FieldError>
             )}
           </div>
         </div>
 
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Button
-            type="submit"
-            disabled={busy}
-            className="bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
-          >
+        <div className="mt-6 space-y-3.5">
+          <Button type="submit" disabled={busy} className={SIGNUP_PRIMARY}>
             {busy ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -617,24 +688,14 @@ export function AccountStep({
               "Continue"
             )}
           </Button>
-          <Button
-            type="button"
-            variant="link"
-            disabled={busy}
-            onClick={onUseDifferentEmail}
-            className="text-indigo-600 dark:text-indigo-400"
-          >
-            Use a different email
-          </Button>
-          <Button
-            type="button"
-            variant="link"
-            disabled={busy}
-            onClick={openReset}
-            className="text-muted-foreground"
-          >
-            Forgot password?
-          </Button>
+          <div className="flex items-center justify-between gap-3">
+            <button type="button" disabled={busy} onClick={onUseDifferentEmail} className={SIGNUP_QUIET}>
+              Use a different email
+            </button>
+            <button type="button" disabled={busy} onClick={openReset} className={SIGNUP_QUIET}>
+              Forgot password?
+            </button>
+          </div>
         </div>
       </form>
     );
@@ -646,24 +707,14 @@ export function AccountStep({
   // -------------------------------------------------------------------------
   if (mode === "tenant") {
     return (
-      <form
-        id="signup-account-form"
-        onSubmit={handleTenantSubmit}
-        noValidate
-        className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none"
-      >
-        <div className="flex size-10 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/40">
-          <Building2 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-        </div>
-        <h3 className="mt-4 text-lg font-semibold tracking-tight">
-          One last thing
-        </h3>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Your {plan.name} subscription is active. Tell us what to call your
-          portal and we&apos;ll build it now.
-        </p>
+      <form id="signup-account-form" onSubmit={handleTenantSubmit} noValidate className={SIGNUP_ENTER}>
+        <ScreenHead
+          art={<SiteArt company={tenant.companyName} slug={tenant.slug} />}
+          title="One last thing"
+          lead={`Your ${plan.name} plan is active. Tell me what to call your business and I'll build your portal now.`}
+        />
 
-        <div className="mt-5 space-y-4">
+        <div className="mt-6 space-y-4">
           <TenantIdentityFields
             value={tenant}
             busy={busy}
@@ -687,63 +738,30 @@ export function AccountStep({
   }
 
   // -------------------------------------------------------------------------
-  // Default: create the account.
+  // Default: create the account — three pages of one form.
+  //
+  //   0  who you are   (Google, or name + email)
+  //   1  a password
+  //   2  the business  (name, web address, terms)
+  //
+  // Only page 2 submits to the server; pages 0 and 1 check their own fields
+  // and move on. The values live in this component, so going Back loses
+  // nothing, and an error the server sends back for a field on an earlier page
+  // takes the operator straight to that page (see the effect above).
   // -------------------------------------------------------------------------
   const nameError = fieldError("fullName");
   const emailError = fieldError("email");
   const passwordError = fieldError("password");
+  const firstName = fullName.trim().split(/\s+/)[0] ?? "";
 
   return (
-    <form
-      id="signup-account-form"
-      onSubmit={handleCreateAccount}
-      noValidate
-      className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none"
-    >
-      {/* Plan reminder — the user picked a card several scroll-lengths ago. */}
-      <div className="flex items-center gap-2.5 rounded-lg border border-indigo-200/60 bg-indigo-50/30 p-3 dark:border-indigo-800/30 dark:bg-indigo-950/20">
-        <Zap className="h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-400" />
-        <p className="text-sm">
-          <span className="font-medium">{plan.name}</span>
-          <span className="text-muted-foreground">
-            {" · "}${plan.priceUsd}/month · {plan.fleetBand}
-          </span>
-        </p>
-      </div>
-
-      {googleEnabled && (
-        <>
-          {/*
-            Placed ABOVE the fields, but it still needs the business name and
-            web address below it — those are ours to collect whichever way the
-            operator signs in, and they have to be captured before the redirect
-            takes the page away. `handleGoogle` validates them and focuses the
-            first empty one rather than leaving for Google without them.
-          */}
-          <Button
-            type="button"
-            variant="outline"
-            disabled={busy}
-            onClick={handleGoogle}
-            className="mt-5 h-10 w-full"
-          >
-            <GoogleMark />
-            Continue with Google
-          </Button>
-
-          <div className="mt-5 flex items-center gap-3">
-            <Separator className="flex-1" />
-            <span className="text-xs text-muted-foreground">or</span>
-            <Separator className="flex-1" />
-          </div>
-        </>
-      )}
-
+    <form id="signup-account-form" onSubmit={handleCreateAccount} noValidate>
       {/*
         Honeypot. Positioned off-screen rather than `display: none` — a fair
         number of crawlers skip inputs that are display:none or hidden, which
         defeats the entire trap. `tabIndex={-1}` and `aria-hidden` keep it away
-        from keyboard and screen-reader users.
+        from keyboard and screen-reader users. Rendered on every page so the
+        value read at submit is the one a bot filled in on page 0.
       */}
       <input
         ref={honeypotRef}
@@ -755,274 +773,289 @@ export function AccountStep({
         className="pointer-events-none absolute left-[-9999px] h-0 w-0 opacity-0"
       />
 
-      <div className="mt-5 space-y-4">
-        <div>
-          <Label htmlFor="signup-full-name">
-            Full name
-            <span className="text-indigo-600 dark:text-indigo-400">*</span>
-          </Label>
-          <Input
-            ref={fullNameRef}
-            id="signup-full-name"
-            name="fullName"
-            type="text"
-            autoComplete="name"
-            autoFocus
-            placeholder="Jordan Miller"
-            value={fullName}
-            disabled={busy}
-            maxLength={FIELD_MAX.fullName}
-            aria-invalid={Boolean(nameError)}
-            aria-describedby={nameError ? "signup-full-name-error" : undefined}
-            onChange={(e) => {
-              setFullName(e.target.value);
-              setErrors((prev) => ({ ...prev, fullName: undefined }));
-              markDirty();
-            }}
-            className="mt-1.5 h-10"
+      {page === 0 && (
+        <div key="page-0" className={SIGNUP_ENTER}>
+          <ScreenHead
+            art={<WelcomeArt />}
+            title="Let's get you on the road"
+            lead="I'm Trax. Tell me who you are and I'll have your portal and booking site ready in a few minutes."
           />
-          {nameError && (
-            <p
-              id="signup-full-name-error"
-              role="alert"
-              className="mt-1.5 text-sm text-red-600 dark:text-red-400"
-            >
-              {nameError}
-            </p>
-          )}
-        </div>
 
-        <div>
-          <Label htmlFor="signup-email">
-            Work email
-            <span className="text-indigo-600 dark:text-indigo-400">*</span>
-          </Label>
-          <Input
-            ref={emailRef}
-            id="signup-email"
-            name="email"
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            autoCapitalize="off"
-            spellCheck={false}
-            placeholder="you@yourcompany.com"
-            value={email}
-            disabled={busy}
-            aria-invalid={Boolean(emailError)}
-            aria-describedby={
-              emailError
-                ? "signup-email-error"
-                : emailSuggestion
-                  ? "signup-email-suggestion"
-                  : "signup-email-help"
-            }
-            onChange={(e) => {
-              setEmail(e.target.value);
-              setErrors((prev) => ({ ...prev, email: undefined }));
-              setEmailSuggestion(null);
-              markDirty();
-            }}
-            // Suggest on blur, not on every keystroke: "did you mean gmail.com"
-            // while someone is still typing "gm" is noise.
-            onBlur={() => setEmailSuggestion(suggestEmailCorrection(email))}
-            className="mt-1.5 h-10"
-          />
-          {emailError ? (
-            <p
-              id="signup-email-error"
-              role="alert"
-              className="mt-1.5 text-sm text-red-600 dark:text-red-400"
-            >
-              {emailError}
-            </p>
-          ) : emailSuggestion ? (
-            <p
-              id="signup-email-suggestion"
-              aria-live="polite"
-              className="mt-1.5 text-sm text-muted-foreground"
-            >
-              Did you mean{" "}
-              <button
+          {googleEnabled && (
+            <>
+              <Button
                 type="button"
-                onClick={() => {
-                  setEmail(emailSuggestion);
-                  setEmailSuggestion(null);
-                  emailRef.current?.focus();
-                }}
-                className="font-semibold text-indigo-600 underline-offset-4 hover:underline dark:text-indigo-400"
+                variant="outline"
+                disabled={busy}
+                onClick={handleGoogle}
+                className="mt-6 h-11 w-full rounded-xl border-zinc-200 text-[15px] font-medium shadow-none transition-colors duration-200 dark:border-white/10"
               >
-                {emailSuggestion}
-              </button>
-              ?
-            </p>
-          ) : (
-            <p
-              id="signup-email-help"
-              className="mt-1.5 text-xs text-muted-foreground"
-            >
-              This becomes the owner login for your portal.
-            </p>
-          )}
-        </div>
+                <GoogleMark />
+                Continue with Google
+              </Button>
 
-        <div>
-          <Label htmlFor="signup-password">
-            Password
-            <span className="text-indigo-600 dark:text-indigo-400">*</span>
-          </Label>
-          <div className="relative mt-1.5">
-            <Input
-              ref={passwordRef}
-              id="signup-password"
-              name="password"
-              type={showPassword ? "text" : "password"}
-              autoComplete="new-password"
-              value={password}
-              disabled={busy}
-              aria-invalid={Boolean(passwordError)}
-              aria-describedby="signup-password-rules signup-password-help"
-              onChange={(e) => {
-                setPassword(e.target.value);
-                setErrors((prev) => ({ ...prev, password: undefined }));
-                markDirty();
-              }}
-              className="h-10 pr-10"
-            />
-            <PasswordToggle
-              shown={showPassword}
-              onToggle={() => setShowPassword((v) => !v)}
-            />
+              <div className="mt-5 flex items-center gap-3">
+                <Separator className="flex-1" />
+                <span className="text-xs text-muted-foreground">or with email</span>
+                <Separator className="flex-1" />
+              </div>
+            </>
+          )}
+
+          <div className={cn("space-y-3.5", googleEnabled ? "mt-5" : "mt-6")}>
+            <div>
+              <Label htmlFor="signup-full-name" className={SIGNUP_LABEL}>
+                Your name
+              </Label>
+              <Input
+                ref={fullNameRef}
+                id="signup-full-name"
+                name="fullName"
+                type="text"
+                autoComplete="name"
+                autoFocus
+                placeholder="Jordan Miller"
+                value={fullName}
+                disabled={busy}
+                maxLength={FIELD_MAX.fullName}
+                aria-invalid={Boolean(nameError)}
+                aria-describedby={nameError ? "signup-full-name-error" : undefined}
+                onChange={(e) => {
+                  setFullName(e.target.value);
+                  setErrors((prev) => ({ ...prev, fullName: undefined }));
+                  markDirty();
+                }}
+                className={cn(SIGNUP_INPUT, "mt-1.5")}
+              />
+              {nameError && <FieldError id="signup-full-name-error">{nameError}</FieldError>}
+            </div>
+
+            <div>
+              <Label htmlFor="signup-email" className={SIGNUP_LABEL}>
+                Work email
+              </Label>
+              <Input
+                ref={emailRef}
+                id="signup-email"
+                name="email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                autoCapitalize="off"
+                spellCheck={false}
+                placeholder="you@yourcompany.com"
+                value={email}
+                disabled={busy}
+                aria-invalid={Boolean(emailError)}
+                aria-describedby={
+                  emailError
+                    ? "signup-email-error"
+                    : emailSuggestion
+                      ? "signup-email-suggestion"
+                      : "signup-email-help"
+                }
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setErrors((prev) => ({ ...prev, email: undefined }));
+                  setEmailSuggestion(null);
+                  markDirty();
+                }}
+                // Suggest on blur, not on every keystroke: "did you mean gmail.com"
+                // while someone is still typing "gm" is noise.
+                onBlur={() => setEmailSuggestion(suggestEmailCorrection(email))}
+                className={cn(SIGNUP_INPUT, "mt-1.5")}
+              />
+              {emailError ? (
+                <FieldError id="signup-email-error">{emailError}</FieldError>
+              ) : emailSuggestion ? (
+                <p
+                  id="signup-email-suggestion"
+                  aria-live="polite"
+                  className={cn("mt-1.5 text-[13px] text-muted-foreground", SIGNUP_ENTER)}
+                >
+                  Did you mean{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail(emailSuggestion);
+                      setEmailSuggestion(null);
+                      emailRef.current?.focus();
+                    }}
+                    className="font-semibold text-indigo-600 underline-offset-4 hover:underline dark:text-indigo-400"
+                  >
+                    {emailSuggestion}
+                  </button>
+                  ?
+                </p>
+              ) : (
+                <p id="signup-email-help" className="mt-1.5 text-[13px] text-muted-foreground">
+                  This becomes the owner login for your portal.
+                </p>
+              )}
+            </div>
           </div>
 
           {/*
-            Live requirement checklist + strength meter. The checklist is the
-            gate (it is exactly what signup-begin enforces); the meter is
-            advisory and never blocks. Both are inside one polite live region so
-            a screen reader hears the state change without a separate
-            announcement per keystroke.
+            A deliberate way back in for someone who has already started.
+
+            Without this the sign-in panel was reachable only by ACCIDENT: fill in
+            the whole form, submit, and have the server answer "that email already
+            exists". A returning operator whose session had expired had no way to
+            say "that's me, I have a password" — so the honest-looking action was
+            the wrong one, and taking it burned a throttle slot to be told something
+            they already knew.
           */}
-          <div
-            id="signup-password-rules"
-            aria-live="polite"
-            className="mt-2.5 space-y-1.5"
-          >
-            {ruleState.map(({ rule, met }) => (
-              <p
-                key={rule.id}
-                className={cn(
-                  "flex items-center gap-2 text-xs",
-                  met
-                    ? "text-indigo-600 dark:text-indigo-400"
-                    : "text-muted-foreground",
-                )}
-              >
-                {met ? (
-                  <Check className="h-3.5 w-3.5 shrink-0" />
-                ) : (
-                  <Circle className="h-3.5 w-3.5 shrink-0 opacity-50" />
-                )}
-                {rule.label}
-                <span className="sr-only">{met ? " — met" : " — not met"}</span>
-              </p>
-            ))}
-
-            {password.length > 0 && (
-              <div className="flex items-center gap-2 pt-0.5">
-                <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all duration-300",
-                      STRENGTH_BAR_CLASS[strength.score],
-                    )}
-                    style={{ width: `${strength.percent}%` }}
-                  />
-                </div>
-                <span className="text-xs text-muted-foreground">
-                  {strength.label}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {passwordError && (
-            <p role="alert" className="mt-1.5 text-sm text-red-600 dark:text-red-400">
-              {passwordError}
-            </p>
-          )}
-
-          <p
-            id="signup-password-help"
-            className="mt-1.5 text-xs text-muted-foreground"
-          >
-            You&apos;ll use this to sign in to your portal.
+          <p className="mt-4 text-center text-[13px] text-muted-foreground">
+            Already started?{" "}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                const typed = normalizeEmail(email);
+                if (!typed) {
+                  // Nothing to sign in AS. Point at the field rather than opening
+                  // a panel with an empty, read-only address.
+                  setErrors((prev) => ({
+                    ...prev,
+                    email: "Enter your email address to sign in.",
+                  }));
+                  emailRef.current?.focus();
+                  return;
+                }
+                onSignInInstead(typed);
+              }}
+              className="font-semibold text-indigo-600 underline-offset-4 hover:underline disabled:opacity-50 dark:text-indigo-400"
+            >
+              Sign in
+            </button>
           </p>
         </div>
+      )}
 
-        {/*
-          The tenant half. It sits on THIS step, before payment, because a web
-          address that turns out to be taken has to be fixable while changing it
-          is still free — the previous design asked for it after the card was
-          charged, which made a collision a dead end.
-        */}
-        <Separator className="!my-6" />
+      {page === 1 && (
+        <div key="page-1" className={SIGNUP_ENTER}>
+          <ScreenHead
+            art={<PasswordArt length={password.length} ready={ruleState.every((r) => r.met)} name={fullName} />}
+            title={firstName ? `Nice to meet you, ${firstName}` : "Choose a password"}
+            lead={
+              <>
+                Pick a password. You&apos;ll use it with{" "}
+                <span className="font-medium text-foreground">{normalizeEmail(email)}</span> to sign in to your portal.
+              </>
+            }
+          />
 
-        <TenantIdentityFields
-          value={tenant}
-          busy={busy}
-          errors={{
-            companyName: fieldError("companyName"),
-            slug: fieldError("slug"),
-            acceptedTerms: fieldError("acceptedTerms"),
-          }}
-          onChange={onTenantChange}
-          onClearError={clearFieldError}
-          onCheckSlug={onCheckSlug}
-          onSlugStateChange={setSlugState}
-          companyNameRef={companyNameRef}
-          slugRef={slugRef}
-          termsRef={termsRef}
-        />
-      </div>
+          <div className="mt-6">
+            <Label htmlFor="signup-password" className={SIGNUP_LABEL}>
+              Password
+            </Label>
+            <div className="relative mt-1.5">
+              <Input
+                ref={passwordRef}
+                id="signup-password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                autoFocus
+                value={password}
+                disabled={busy}
+                aria-invalid={Boolean(passwordError)}
+                aria-describedby="signup-password-rules"
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setErrors((prev) => ({ ...prev, password: undefined }));
+                  markDirty();
+                }}
+                className={cn(SIGNUP_INPUT, "pr-12")}
+              />
+              <PasswordToggle
+                shown={showPassword}
+                onToggle={() => setShowPassword((v) => !v)}
+              />
+            </div>
 
-      {/*
-        A deliberate way back in for someone who has already started.
+            {/*
+              Live requirement checklist + strength meter. The checklist is the
+              gate (it is exactly what signup-begin enforces); the meter is
+              advisory and never blocks. Both are inside one polite live region so
+              a screen reader hears the state change without a separate
+              announcement per keystroke.
+            */}
+            <div id="signup-password-rules" aria-live="polite" className="mt-3">
+              <div className="flex flex-wrap gap-2">
+                {ruleState.map(({ rule, met }) => (
+                  <span
+                    key={rule.id}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors duration-200 ease-out motion-reduce:transition-none",
+                      met
+                        ? "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-400/30 dark:bg-indigo-400/10 dark:text-indigo-300"
+                        : "border-zinc-200 text-muted-foreground dark:border-white/10",
+                    )}
+                  >
+                    {met ? <Check className="h-3 w-3 shrink-0" /> : <Circle className="h-3 w-3 shrink-0 opacity-50" />}
+                    {rule.label}
+                    <span className="sr-only">{met ? " — met" : " — not met"}</span>
+                  </span>
+                ))}
+              </div>
 
-        Without this the sign-in panel was reachable only by ACCIDENT: fill in
-        the whole form, submit, and have the server answer "that email already
-        exists". A returning operator whose session had expired was shown this
-        create-account form with their own name and email pre-filled and no way
-        to say "that's me, I have a password" — so the honest-looking action was
-        the wrong one, and taking it burned a throttle slot to be told something
-        they already knew.
-      */}
-      <div className="mt-6 border-t pt-4 text-center">
-        <p className="text-sm text-muted-foreground">
-          Already started?{" "}
-          <Button
-            type="button"
-            variant="link"
-            disabled={busy}
-            onClick={() => {
-              const typed = normalizeEmail(email);
-              if (!typed) {
-                // Nothing to sign in AS. Point at the field rather than opening
-                // a panel with an empty, read-only address.
-                setErrors((prev) => ({
-                  ...prev,
-                  email: "Enter your email address to sign in.",
-                }));
-                emailRef.current?.focus();
-                return;
-              }
-              onSignInInstead(typed);
-            }}
-            className="h-auto p-0 text-sm text-indigo-600 dark:text-indigo-400"
-          >
-            Sign in to continue where you left off
-          </Button>
-        </p>
-      </div>
+              <div className="mt-3 flex h-4 items-center gap-2">
+                <div className="h-1 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-white/10">
+                  <div
+                    className={cn(
+                      "h-full origin-left rounded-full transition-[width,background-color] duration-200 ease-out motion-reduce:transition-none",
+                      STRENGTH_BAR_CLASS[strength.score],
+                    )}
+                    style={{ width: password.length > 0 ? `${strength.percent}%` : "0%" }}
+                  />
+                </div>
+                <span className="w-14 text-right text-xs text-muted-foreground">
+                  {password.length > 0 ? strength.label : ""}
+                </span>
+              </div>
+            </div>
+
+            {passwordError && <FieldError>{passwordError}</FieldError>}
+          </div>
+        </div>
+      )}
+
+      {page === 2 && (
+        <div key="page-2" className={SIGNUP_ENTER}>
+          {/*
+            The tenant half. It sits BEFORE payment because a web address that
+            turns out to be taken has to be fixable while changing it is still
+            free — the previous design asked for it after the card was charged,
+            which made a collision a dead end.
+          */}
+          <ScreenHead
+            art={<SiteArt company={tenant.companyName} slug={tenant.slug} />}
+            title="What's your business called?"
+            lead="I'll build your booking site under this name. The web address is yours for good."
+          />
+
+          <div className="mt-6 space-y-4">
+            <TenantIdentityFields
+              value={tenant}
+              busy={busy}
+              errors={{
+                companyName: fieldError("companyName"),
+                slug: fieldError("slug"),
+                acceptedTerms: fieldError("acceptedTerms"),
+              }}
+              onChange={onTenantChange}
+              onClearError={clearFieldError}
+              onCheckSlug={onCheckSlug}
+              onSlugStateChange={setSlugState}
+              companyNameRef={companyNameRef}
+              slugRef={slugRef}
+              termsRef={termsRef}
+              autoFocusCompanyName
+            />
+          </div>
+        </div>
+      )}
     </form>
   );
 }

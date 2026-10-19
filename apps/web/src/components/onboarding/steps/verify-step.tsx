@@ -20,12 +20,14 @@
  */
 
 import * as React from "react";
-import { Loader2, MailCheck } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { MailArt } from "@/components/onboarding/signup-art";
+import { ScreenHead, SIGNUP_PRIMARY, SIGNUP_QUIET } from "@/components/onboarding/signup-ui";
 
 /** Mirrors OTP_RESEND_COOLDOWN_MS in supabase/functions/_shared/signup-otp.ts. */
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -107,21 +109,19 @@ export function VerifyStep({
   };
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
-          <MailCheck className="size-4 text-primary" aria-hidden />
-        </div>
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold">Check your email</h2>
-          <p className="text-sm text-muted-foreground">
-            We sent a 6-digit code to <span className="font-medium text-foreground">{email}</span>.
-          </p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <ScreenHead
+        art={<MailArt />}
+        title="Check your inbox"
+        lead={
+          <>
+            I sent a 6-digit code to <span className="font-medium text-foreground">{email}</span>. Type it in and we&apos;re through.
+          </>
+        }
+      />
 
       <div className="space-y-2">
-        <Label htmlFor="signup-otp">Verification code</Label>
+        <Label htmlFor="signup-otp" className="sr-only">Verification code</Label>
 
         {/*
           SIX BOXES, ONE INPUT.
@@ -172,10 +172,11 @@ export function VerifyStep({
                 <div
                   key={i}
                   className={cn(
-                    "flex h-14 flex-1 items-center justify-center rounded-lg border text-xl font-medium tabular-nums transition-colors",
-                    "border-input bg-background text-foreground",
+                    "flex h-14 flex-1 items-center justify-center rounded-xl border text-2xl font-semibold tabular-nums transition-colors duration-200 ease-out motion-reduce:transition-none",
+                    "border-zinc-200 bg-white text-foreground dark:border-white/10 dark:bg-white/[0.03]",
+                    char && "border-zinc-300 dark:border-white/20",
                     error && "border-destructive",
-                    active && !error && "border-primary ring-2 ring-primary/30",
+                    active && !error && "border-indigo-500 ring-[3px] ring-indigo-500/20 dark:border-indigo-400",
                     (busy || submitting) && "opacity-60",
                   )}
                 >
@@ -201,7 +202,7 @@ export function VerifyStep({
       */}
       <Button
         type="button"
-        className="w-full bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 disabled:opacity-60 disabled:shadow-none dark:bg-indigo-500 dark:hover:bg-indigo-600"
+        className={SIGNUP_PRIMARY}
         disabled={code.length !== 6 || busy || submitting}
         onClick={() => void submit(code)}
       >
@@ -220,7 +221,7 @@ export function VerifyStep({
           type="button"
           onClick={() => void resend()}
           disabled={cooldown > 0 || busy || submitting}
-          className="text-primary underline-offset-4 hover:underline disabled:text-muted-foreground disabled:no-underline"
+          className="font-medium text-indigo-600 underline-offset-4 hover:underline disabled:text-muted-foreground disabled:no-underline dark:text-indigo-400"
         >
           {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
         </button>
@@ -228,7 +229,7 @@ export function VerifyStep({
           type="button"
           onClick={onUseDifferentEmail}
           disabled={busy || submitting}
-          className="text-muted-foreground underline-offset-4 hover:underline"
+          className={SIGNUP_QUIET}
         >
           Use a different email
         </button>

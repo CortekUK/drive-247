@@ -49,7 +49,7 @@ export function PasswordToggle({
       onClick={onToggle}
       aria-pressed={shown}
       aria-label={shown ? `Hide ${fieldLabel}` : `Show ${fieldLabel}`}
-      className="absolute right-1 top-1 text-muted-foreground hover:text-foreground"
+      className="absolute top-1/2 right-1.5 -translate-y-1/2 text-muted-foreground hover:text-foreground"
     >
       {shown ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
     </Button>

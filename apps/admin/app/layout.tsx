@@ -3,6 +3,7 @@ import { Manrope } from 'next/font/google';
 import NextTopLoader from 'nextjs-toploader';
 import './globals.css';
 import { Toaster } from '@/components/ui/sonner';
+import { ConfirmHost } from '@/components/ui/confirm';
 import { ServiceWorkerRegistrar } from '@/components/push/service-worker-registrar';
 import { THEME_SCRIPT } from '@/lib/theme-script';
 
@@ -62,6 +63,7 @@ export default function RootLayout({
         <ServiceWorkerRegistrar />
         {children}
         <Toaster />
+        <ConfirmHost />
       </body>
     </html>
   );

@@ -47,6 +47,7 @@ import {
 } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase';
+import { confirmDialog } from '@/components/ui/confirm';
 
 interface ChecklistItem {
   /** `null` until the row has been saved. */
@@ -370,9 +371,12 @@ export default function SetupChecklistAdmin() {
   const remove = async (i: number) => {
     const row = rows[i];
     if (row.id) {
-      const ok = window.confirm(
-        `Delete "${row.title || row.item_key}"?\n\nIt disappears from every operator's dashboard immediately.`,
-      );
+      const ok = await confirmDialog({
+        title: `Delete "${row.title || row.item_key}"?`,
+        description: "It disappears from every operator's dashboard immediately.",
+        confirmLabel: 'Delete',
+        destructive: true,
+      });
       if (!ok) return;
       const { error } = await supabase.from('setup_checklist_items').delete().eq('id', row.id);
       if (error) {

@@ -55,7 +55,7 @@ import {
   writeLocalTenantDraft,
   writePendingOauth,
 } from "./tenant-draft";
-import { OnboardingDialog } from "./onboarding-dialog";
+import { OnboardingScreen } from "./onboarding-screen";
 import { ProvisioningScreen } from "./provisioning-screen";
 import {
   EMPTY_BUSINESS_DRAFT,
@@ -2218,7 +2218,7 @@ export function OnboardingProvider({
     <OnboardingContext.Provider value={value}>
       <OnboardingShellContext.Provider value={shellValue}>
         {children}
-        <OnboardingDialog />
+        <OnboardingScreen />
         {overlayMounted && <ProvisioningScreen />}
       </OnboardingShellContext.Provider>
     </OnboardingContext.Provider>

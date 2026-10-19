@@ -27,6 +27,7 @@ import {
   X,
   CheckCircle2,
 } from 'lucide-react';
+import { confirmDialog } from '@/components/ui/confirm';
 
 interface TrainingVideo {
   id: string;
@@ -76,7 +77,7 @@ export default function BonzahContentEditor() {
   }, []);
 
   const removeVideo = async (id: string) => {
-    if (!confirm('Delete this training video?')) return;
+    if (!(await confirmDialog({ title: 'Delete this training video?', confirmLabel: 'Delete', destructive: true }))) return;
     const { error } = await supabase.from('bonzah_training_videos').delete().eq('id', id);
     if (error) return toast.error(error.message);
     toast.success('Deleted');
@@ -84,7 +85,7 @@ export default function BonzahContentEditor() {
   };
 
   const removeQuestion = async (id: string) => {
-    if (!confirm('Delete this quiz question?')) return;
+    if (!(await confirmDialog({ title: 'Delete this quiz question?', confirmLabel: 'Delete', destructive: true }))) return;
     const { error } = await supabase.from('bonzah_quiz_questions').delete().eq('id', id);
     if (error) return toast.error(error.message);
     toast.success('Deleted');

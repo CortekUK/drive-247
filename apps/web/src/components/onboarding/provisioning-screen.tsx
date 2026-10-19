@@ -1,13 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import {
   ArrowRight,
   Circle,
   CircleCheck,
-  CircleCheckBig,
   ExternalLink,
   Info,
   Loader2,
@@ -20,11 +18,12 @@ import {
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
 import { useOnboarding } from "./onboarding-provider";
 import { TenantIdentityFields } from "./tenant-identity-fields";
+import { BuildArt } from "./signup-art";
+import { ArtStage, SignupWash, SIGNUP_CARD, SIGNUP_ENTER, SIGNUP_PRIMARY } from "./signup-ui";
 import {
   MILESTONE_COPY,
   PROVISION_MILESTONES,
@@ -190,52 +189,43 @@ export function ProvisioningScreen() {
             there is not, so a tall failure panel on a small phone stays
             reachable.
           */
-          className="fixed inset-0 z-[300] flex items-start justify-center overflow-y-auto bg-background px-4 py-10 outline-none"
+          className="fixed inset-0 z-[300] flex items-start justify-center overflow-y-auto bg-white px-5 py-10 outline-none dark:bg-[#0e0e14]"
         >
+          {/* The same wash the signup screens wear, so the hand-off is seamless. */}
+          <SignupWash />
+
           {!running && (
             <button
               type="button"
               onClick={requestClose}
               aria-label="Close"
-              className="absolute top-4 right-4 rounded-md p-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+              className="absolute top-4 right-5 z-10 flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-out hover:bg-zinc-100 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none motion-reduce:transition-none dark:hover:bg-white/10 sm:right-8"
             >
               <X className="h-4 w-4" />
             </button>
           )}
 
-          <div className="my-auto w-full max-w-md animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
-            <div className="flex justify-center">
-              <Image
-                src="/logo-light.png"
-                alt="Drive247"
-                width={855}
-                height={195}
-                className="h-7 w-auto dark:hidden"
-                priority
+          <div className={cn("relative my-auto w-full max-w-[480px] px-6 py-8 sm:px-10", SIGNUP_CARD, SIGNUP_ENTER)}>
+            <ArtStage className="-mx-6 -mt-8 sm:-mx-10">
+              <BuildArt
+                progress={succeeded ? 1 : percent / 100}
+                company={companyName === "your portal" ? "" : companyName}
+                slug={business.slug}
               />
-              <Image
-                src="/logo-dark.png"
-                alt="Drive247"
-                width={855}
-                height={195}
-                className="hidden h-7 w-auto dark:block"
-                priority
-              />
-            </div>
+            </ArtStage>
 
             {succeeded && result ? (
               /* ── success ─────────────────────────────────────────────────── */
-              <div className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
-                <CircleCheckBig className="mx-auto mt-8 h-12 w-12 text-indigo-600 dark:text-indigo-400" />
+              <div className={SIGNUP_ENTER}>
                 {/* asChild so the visible heading IS the accessible name of the
                     dialog — exactly one Title renders in either branch. */}
                 <DialogPrimitive.Title asChild>
-                  <h2 className="mt-6 text-center text-2xl font-bold tracking-tighter">
+                  <h2 className="mt-6 text-center text-[30px] leading-tight font-semibold tracking-[-0.02em]">
                     You&apos;re live.
                   </h2>
                 </DialogPrimitive.Title>
-                <p className="mt-2 text-center text-sm text-muted-foreground">
-                  {companyName} is set up. Your portal and your booking site are both ready.
+                <p className="mx-auto mt-2.5 max-w-[380px] text-center text-[15px] leading-relaxed text-muted-foreground">
+                  {companyName} is ready. Your portal and your booking site are both up, and I&apos;ll meet you inside.
                 </p>
 
                 {result.contentSeeded === false && (
@@ -251,9 +241,9 @@ export function ProvisioningScreen() {
                 <Button
                   size="lg"
                   onClick={() => window.location.assign(portalHref)}
-                  className="mt-8 w-full bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+                  className={cn(SIGNUP_PRIMARY, "mt-8")}
                 >
-                  Go to portal
+                  Go to my portal
                   <ArrowRight className="h-4 w-4" />
                 </Button>
 
@@ -287,23 +277,29 @@ export function ProvisioningScreen() {
               /* ── running / failed ────────────────────────────────────────── */
               <>
                 <DialogPrimitive.Title asChild>
-                  <h1 className="mt-8 text-center text-2xl font-bold tracking-tighter">
-                    Setting up {companyName}
+                  <h1 className="mt-6 text-center text-[30px] leading-tight font-semibold tracking-[-0.02em] text-balance">
+                    Building {companyName}
                   </h1>
                 </DialogPrimitive.Title>
                 {running && (
-                  <p className="mt-2 text-center text-sm text-muted-foreground">
-                    This usually takes under a minute. Please keep this tab open.
+                  <p className="mx-auto mt-2.5 max-w-[380px] text-center text-[15px] leading-relaxed text-muted-foreground">
+                    Give me under a minute. Keep this tab open and I&apos;ll take you straight in.
                   </p>
                 )}
 
                 {running && (
                   <>
-                    <Progress
-                      value={percent}
-                      aria-label="Setup progress"
-                      className="mt-8 h-1.5"
-                    />
+                    <div className="mt-8 h-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-white/10">
+                      <div
+                        role="progressbar"
+                        aria-label="Setup progress"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={Math.round(percent)}
+                        className="h-full origin-left rounded-full bg-indigo-600 transition-transform duration-700 ease-out motion-reduce:transition-none dark:bg-indigo-400"
+                        style={{ transform: `scaleX(${percent / 100})` }}
+                      />
+                    </div>
                     <div className="mt-2 flex justify-between text-xs text-muted-foreground">
                       <span>
                         {doneCount} of {total} complete
@@ -319,7 +315,7 @@ export function ProvisioningScreen() {
                   wording (present tense while running, past tense when done), which
                   is what makes this legible with prefers-reduced-motion on.
                 */}
-                <ul className="mt-6 space-y-3" aria-live="polite">
+                <ul className="mt-6 space-y-2.5" aria-live="polite">
                   {PROVISION_MILESTONES.map((milestone, index) => {
                     const isDone = completedSet.has(milestone);
                     const isActive = running && index === activeIndex;
@@ -387,7 +383,7 @@ export function ProvisioningScreen() {
                     <div className="mt-6 flex flex-col gap-2 sm:flex-row">
                       <Button
                         onClick={() => void retryProvision()}
-                        className="bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+                        className={cn(SIGNUP_PRIMARY, "sm:w-auto sm:px-6")}
                       >
                         <RotateCcw className="h-4 w-4" />
                         Try again

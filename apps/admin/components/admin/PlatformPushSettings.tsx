@@ -89,6 +89,12 @@ export const ACTION_GROUPS: ActionGroup[] = [
     ],
   },
   {
+    label: 'Support',
+    actions: [
+      { key: 'portal_feedback_received', label: 'New feedback' },
+    ],
+  },
+  {
     label: 'Security',
     hint: 'Can be chatty — 292 failed logins on record',
     actions: [

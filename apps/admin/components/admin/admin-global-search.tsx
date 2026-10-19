@@ -582,7 +582,6 @@ const SETTING_STATS: Partial<Record<string, () => Promise<Stat[]>>> = {
     const rows = await adminSettings();
     return [
       { label: 'Live landing page', value: anyRow(rows, 'landing_version', 'v2') ? 'v2' : 'v1' },
-      { label: 'Pricing', value: anyRow(rows, 'landing_pricing_enabled', true) ? 'Showing' : 'Hidden' },
     ];
   },
   '/admin/settings?tab=booking-site': async () => {

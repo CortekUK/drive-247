@@ -95,6 +95,7 @@ import {
   useSystemNotificationsSelection,
 } from './system-notifications-selection-store';
 import { TraxNotificationChat } from './trax-notification-chat';
+import { confirmDialog } from '@/components/ui/confirm';
 
 /** Where Esc and Back go. */
 const EXIT_HREF = '/admin/dashboard';
@@ -209,8 +210,12 @@ export function SystemNotificationsPage({ className }: SystemNotificationsPagePr
 
   /* ------------------------------ Leaving -------------------------------- */
 
-  const leave = useCallback((): void => {
-    if (dirty && !window.confirm('You have unsaved changes. Leave without saving?')) return;
+  const leave = useCallback(async (): Promise<void> => {
+    if (
+      dirty &&
+      !(await confirmDialog({ title: 'Leave without saving?', description: 'You have unsaved changes.', confirmLabel: 'Leave', destructive: true }))
+    )
+      return;
     router.push(EXIT_HREF);
   }, [dirty, router]);
 
@@ -227,7 +232,7 @@ export function SystemNotificationsPage({ className }: SystemNotificationsPagePr
         return;
       const target = e.target as HTMLElement | null;
       if (target?.isContentEditable) return;
-      leave();
+      void leave();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

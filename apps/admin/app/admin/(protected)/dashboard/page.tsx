@@ -5,25 +5,13 @@
  * (Oct 7 2026). The previous page (live/test toggle, seven metric cards) is in
  * git history before 5735bf3c.
  *
- *   greeting
- *   revenue running total ........................ MRR card (320px)
- *   Needs you  ·  New companies  ·  Latest activity
- *   the platform in four figures
- *
- * Live companies only: test tenants and the Northwind canary are left out of
- * every figure (lib/dashboard/use-admin-dashboard.ts).
+ * Emptied to the greeting on Oct 19 2026 (Ghulam), ready for what comes next.
+ * The revenue card, MRR card, Needs you / New companies / Latest activity and
+ * the platform figures still live in components/admin/dashboard/ if wanted back.
  */
 
 import { useAuthStore } from '@/store/authStore';
-import { DASH_PALETTE, Eyebrow } from '@/components/admin/dashboard/kit';
-import { RevenueCard } from '@/components/admin/dashboard/revenue-card';
-import {
-  ActivityCard,
-  NeedsYouCard,
-  NewCompaniesCard,
-  PlatformFigures,
-  SubscriptionsCard,
-} from '@/components/admin/dashboard/cards';
+import { DASH_PALETTE } from '@/components/admin/dashboard/kit';
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -46,22 +34,6 @@ export default function AdminDashboard() {
         </h1>
         <p className="mt-1.5 text-[13px] text-[var(--pv-ink-3)]">{today}</p>
       </header>
-
-      <section aria-label="Revenue" className="flex flex-col items-stretch gap-5 lg:flex-row">
-        <RevenueCard className="flex-1" />
-        <SubscriptionsCard className="shrink-0 lg:w-[320px]" />
-      </section>
-
-      <section aria-label="Operations" className="grid grid-cols-1 items-stretch gap-5 md:grid-cols-2 xl:grid-cols-3">
-        <NeedsYouCard />
-        <NewCompaniesCard />
-        <ActivityCard />
-      </section>
-
-      <section aria-label="The platform" className="space-y-3">
-        <Eyebrow>The platform</Eyebrow>
-        <PlatformFigures />
-      </section>
     </div>
   );
 }

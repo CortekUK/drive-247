@@ -145,7 +145,7 @@ export function isSignupPlanId(value: unknown): value is SignupPlanId {
  * read with the anon key, which RLS restricts to `is_visible = true`, so a plan
  * that was hidden five minutes ago simply is not in `catalogue`. Without the
  * second lookup `getSignupPlan` would return undefined, the provider's `plan`
- * would be null, and `onboarding-dialog.tsx` (`if (!plan) return null`) would
+ * would be null, and `onboarding-screen.tsx` (`if (!plan || !dialogStep) return null`) would
  * render nothing at all — stranding someone whose card is already charged.
  *
  * Showing them the last known copy for their plan is safe: this catalogue is

@@ -38,6 +38,7 @@ import {
 } from "@/lib/signup-validation";
 
 import type { BusinessDraft, SlugCheckResult } from "./onboarding-types";
+import { FieldError, SIGNUP_INPUT, SIGNUP_LABEL } from "./signup-ui";
 
 /**
  * Long enough that a normal typist finishes a word first, short enough that the
@@ -183,9 +184,8 @@ export function TenantIdentityFields({
   return (
     <>
       <div>
-        <Label htmlFor="signup-company-name">
+        <Label htmlFor="signup-company-name" className={SIGNUP_LABEL}>
           Business name
-          <span className="text-indigo-600 dark:text-indigo-400">*</span>
         </Label>
         <Input
           ref={companyNameRef}
@@ -203,27 +203,20 @@ export function TenantIdentityFields({
             errors.companyName ? "signup-company-name-error" : "signup-company-name-help"
           }
           onChange={(e) => setCompanyName(e.target.value)}
-          className="mt-1.5 h-10"
+          className={cn(SIGNUP_INPUT, "mt-1.5")}
         />
         {errors.companyName ? (
-          <p
-            id="signup-company-name-error"
-            role="alert"
-            className="mt-1.5 text-sm text-red-600 dark:text-red-400"
-          >
-            {errors.companyName}
-          </p>
+          <FieldError id="signup-company-name-error">{errors.companyName}</FieldError>
         ) : (
-          <p id="signup-company-name-help" className="mt-1.5 text-xs text-muted-foreground">
-            How your business appears to customers. You can change it later.
+          <p id="signup-company-name-help" className="mt-1.5 text-[13px] text-muted-foreground">
+            How customers will see you. You can change it later.
           </p>
         )}
       </div>
 
       <div>
-        <Label htmlFor="signup-slug">
-          Your web address
-          <span className="text-indigo-600 dark:text-indigo-400">*</span>
+        <Label htmlFor="signup-slug" className={SIGNUP_LABEL}>
+          Web address
         </Label>
 
         {/*
@@ -234,8 +227,8 @@ export function TenantIdentityFields({
         */}
         <div
           className={cn(
-            "mt-1.5 flex h-10 items-center rounded-md border bg-transparent shadow-xs transition-[color,box-shadow]",
-            "focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50",
+            "mt-1.5 flex h-11 items-center rounded-xl border border-zinc-200 bg-white transition-[color,box-shadow] dark:border-white/10 dark:bg-white/[0.03]",
+            "focus-within:border-indigo-500 focus-within:ring-[3px] focus-within:ring-indigo-500/20 dark:focus-within:border-indigo-400",
             (slugError || slugState.kind === "unavailable") &&
               "border-destructive focus-within:border-destructive focus-within:ring-destructive/20",
             busy && "opacity-50",
@@ -257,9 +250,9 @@ export function TenantIdentityFields({
             aria-invalid={Boolean(slugError) || slugState.kind === "unavailable"}
             aria-describedby="signup-slug-status"
             onChange={(e) => setSlug(e.target.value)}
-            className="h-full min-w-0 flex-1 rounded-l-md bg-transparent px-3 py-1 text-base outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed md:text-sm"
+            className="h-full min-w-0 flex-1 rounded-l-xl bg-transparent pl-4 pr-1 text-[15px] outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
           />
-          <span className="shrink-0 pr-3 pl-0 text-sm text-muted-foreground select-none">
+          <span className="shrink-0 pr-4 pl-0 text-[15px] text-muted-foreground select-none">
             {SLUG_SUFFIX}
           </span>
         </div>
@@ -272,22 +265,22 @@ export function TenantIdentityFields({
         */}
         <div id="signup-slug-status" aria-live="polite" className="mt-1.5">
           {slugError ? (
-            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            <p role="alert" className="text-[13px] text-red-600 dark:text-red-400">
               {slugError}
             </p>
           ) : slugState.kind === "checking" ? (
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <p className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Checking availability…
             </p>
           ) : slugState.kind === "available" ? (
-            <p className="flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400">
+            <p className="flex items-center gap-1.5 text-[13px] font-medium text-indigo-600 dark:text-indigo-400">
               <Check className="h-3.5 w-3.5 shrink-0" />
               {slugState.slug}
               {SLUG_SUFFIX} is available
             </p>
           ) : slugState.kind === "unavailable" ? (
-            <p className="flex items-center gap-1.5 text-sm text-red-600 dark:text-red-400">
+            <p className="flex items-center gap-1.5 text-[13px] text-red-600 dark:text-red-400">
               <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
               {slugState.reason === "taken"
                 ? "That web address is already taken."
@@ -299,12 +292,12 @@ export function TenantIdentityFields({
             // Deliberately not a green tick: we did not verify anything. The
             // provision re-checks, and reports a fixable SLUG_TAKEN if we were
             // wrong, so this does not block the operator.
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[13px] text-muted-foreground">
               We couldn&apos;t check this address just now. You can carry on — we&apos;ll
               confirm it when we build your portal.
             </p>
           ) : (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[13px] text-muted-foreground">
               This is your booking site. Your portal will be at{" "}
               {value.slug || "your-address"}.portal.drive-247.com. It can&apos;t be
               changed later.
@@ -312,7 +305,7 @@ export function TenantIdentityFields({
           )}
 
           {showSuggestions && (
-            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted-foreground">
               <span>Try:</span>
               {(slugState as Extract<SlugState, { kind: "unavailable" }>).suggestions.map(
                 (suggestion) => (
@@ -353,7 +346,7 @@ export function TenantIdentityFields({
           />
           <Label
             htmlFor="signup-terms"
-            className="flex-wrap gap-1 text-sm leading-relaxed font-normal"
+            className="flex-wrap gap-1 text-[14px] leading-relaxed font-normal text-muted-foreground"
           >
             <span>
               I agree to the{" "}
@@ -379,13 +372,7 @@ export function TenantIdentityFields({
           </Label>
         </div>
         {errors.acceptedTerms && (
-          <p
-            id="signup-terms-error"
-            role="alert"
-            className="mt-1.5 text-sm text-red-600 dark:text-red-400"
-          >
-            {errors.acceptedTerms}
-          </p>
+          <FieldError id="signup-terms-error">{errors.acceptedTerms}</FieldError>
         )}
       </div>
     </>

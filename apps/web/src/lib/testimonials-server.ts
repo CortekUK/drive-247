@@ -4,7 +4,7 @@
 // `operator_testimonials`; anon can read the published rows (RLS), so this is a
 // plain PostgREST GET with the public key.
 //
-// READ FRESH ON EVERY REQUEST, like the pricing switch: the landing page already
+// READ FRESH ON EVERY REQUEST: the landing page already
 // renders per request, and an admin who edits a quote expects to see it on the
 // next reload.
 //

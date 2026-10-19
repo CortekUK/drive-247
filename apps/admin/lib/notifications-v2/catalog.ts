@@ -830,7 +830,7 @@ export const SYSTEM_NOTIFICATION_CATALOG: SystemNotificationItem[] = [
       "A bug, an idea or a note an operator's staff filed about our software from inside their portal.",
     when: "When someone on an operator's team submits feedback from their portal.",
     side: "portal",
-    recipient: "The feedback recipient list, which is platform-wide",
+    recipient: "Every super admin and manager on the platform team (push: those who picked New feedback)",
     variables: unique(TENANT_VARS, REQUESTER_VARS, [
       "feedback_category",
       "feedback_message",
@@ -850,13 +850,14 @@ export const SYSTEM_NOTIFICATION_CATALOG: SystemNotificationItem[] = [
         "Sent once per submission and stamped, so a retry or a double-click cannot re-mail the list.",
       ),
       push: pushSpec(
-        "not_sent",
-        push("{{tenant_name}} · {{feedback_category}}", "{{feedback_message}}"),
+        "sends",
+        push("{{tenant_name}} · New feedback", "{{feedback_message}}"),
+        "Pushed to the super admins and managers who picked New feedback in their phone alerts.",
       ),
     },
     evidence: [
       "email sender: supabase/functions/notify-feedback-submission/index.ts:155 (subject :157)",
-      "recipients: tenant_feedback_recipients — platform-wide, with no tenant column (supabase/migrations/20260803120000_add_tenant_feedback.sql:144)",
+      "recipients: active platform_team_members with platform_role super_admin or manager; push filtered by platform_activity_prefs (portal_feedback_received)",
       "trigger: apps/portal/src/hooks/use-tenant-feedback.ts:176, from apps/portal/src/components/feedback/feedback-dialog.tsx:219",
       "idempotent on tenant_feedback.notified_at (notify-feedback-submission/index.ts:84), stamped only after a successful send (:167)",
       "review screen: apps/admin/app/admin/(protected)/feedbacks/page.tsx:135",

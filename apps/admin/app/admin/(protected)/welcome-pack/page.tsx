@@ -52,6 +52,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   BookOpen, ChevronDown, ChevronUp, Eye, EyeOff, Pencil, Plus, Trash2, Users,
 } from 'lucide-react';
+import { confirmDialog } from '@/components/ui/confirm';
 
 /* ------------------------------------------------------------------ types */
 
@@ -238,7 +239,7 @@ export default function WelcomePackAdminPage() {
   };
 
   const remove = async (table: string, id: string, label: string) => {
-    if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) return;
+    if (!(await confirmDialog({ title: `Delete "${label}"?`, description: 'This cannot be undone.', confirmLabel: 'Delete', destructive: true }))) return;
     const { error } = await supabase.from(table).delete().eq('id', id);
     if (error) return toast.error(error.message);
     toast.success('Deleted');

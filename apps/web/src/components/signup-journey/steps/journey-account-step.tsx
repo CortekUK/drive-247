@@ -538,7 +538,7 @@ export function JourneyAccountStep({
           type="submit"
           size="lg"
           /* Greyed out until the Terms box is ticked, matching the real dialog
-             (onboarding-dialog.tsx `consentPending`). The journey is what a new
+             (onboarding-screen.tsx `consentPending`). The journey is what a new
              operator is SHOWN the signup looks like, so a button that looks
              pressable here and refuses there would teach the wrong thing. */
           disabled={!tenant.acceptedTerms}

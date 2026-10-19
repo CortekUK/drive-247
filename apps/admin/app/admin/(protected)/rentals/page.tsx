@@ -36,6 +36,7 @@ import {
 import { DeleteTenantDialog } from '@/components/admin/delete-tenant-dialog';
 import { toast } from '@/components/ui/sonner';
 import { setTenantStatus, setTenantType, type TenantStatus, type TenantType } from '@/lib/tenant-actions';
+import { promptDialog } from '@/components/ui/confirm';
 
 interface Tenant {
   id: string;
@@ -663,16 +664,14 @@ export default function RentalCompaniesPage() {
     // authorises writing off real money, and hardcoding 'usd' rendered a £300 or
     // AED 300 invoice as "$300.00" — the admin then confirmed one amount while
     // the audit log recorded another.
-    const reason = window.prompt(
-      `Mark ${company}'s ${formatMinor(invoice.amount_due, invoice.currency || 'usd')} invoice as paid?\n\n` +
-        `This settles it in Stripe as paid out of band and is recorded against your account.\n` +
-        `Give a reason (min 10 characters) — e.g. "paid by bank transfer ref 12345":`,
-    );
+    const reason = await promptDialog({
+      title: `Mark ${company}'s ${formatMinor(invoice.amount_due, invoice.currency || 'usd')} invoice as paid?`,
+      description: 'This settles it in Stripe as paid out of band and is recorded against your account.',
+      placeholder: 'Reason, e.g. "paid by bank transfer ref 12345"',
+      minLength: 10,
+      confirmLabel: 'Mark as paid',
+    });
     if (reason === null) return;
-    if (reason.trim().length < 10) {
-      alert('A reason of at least 10 characters is required.');
-      return;
-    }
 
     setSettlingInvoiceId(invoice.id);
     try {
@@ -680,10 +679,9 @@ export default function RentalCompaniesPage() {
         body: { invoiceId: invoice.id, reason: reason.trim() },
       });
       if (error) throw error;
-      alert(
-        `Settled in Stripe (${data?.stripeStatus ?? 'paid'}).\n\n` +
-          `The dashboard updates once Stripe's invoice.paid webhook lands.`,
-      );
+      toast.success(`Settled in Stripe (${data?.stripeStatus ?? 'paid'})`, {
+        description: "The dashboard updates once Stripe's invoice.paid webhook lands.",
+      });
       // Force a refetch of subscription data on next open.
       setSubsLoaded(false);
     } catch (e: any) {
@@ -693,7 +691,7 @@ export default function RentalCompaniesPage() {
       // distinguished 403 / 404 / 409 already-paid / 409 void / 502 Stripe
       // errors all surfaced to the admin as the same useless sentence.
       const body = await e?.context?.json?.().catch(() => null);
-      alert(`Could not settle this invoice:\n\n${body?.error ?? e?.message ?? e}`);
+      toast.error('Could not settle this invoice', { description: String(body?.error ?? e?.message ?? e) });
     } finally {
       setSettlingInvoiceId(null);
     }

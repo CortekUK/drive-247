@@ -81,9 +81,9 @@ export const ADMIN_SETTINGS_SECTIONS: SettingsIndexSection[] = [
       {
         title: 'Landing page',
         description:
-          'Which drive-247.com landing page is live, and whether it shows pricing and with it the self-serve signup.',
+          'Which drive-247.com landing page is live. Pricing follows the plan switches on Signup Plans.',
         tab: 'landing',
-        keywords: 'landing version v1 v2 pricing self-serve signup',
+        keywords: 'landing version v1 v2',
       },
       {
         title: 'Northwind booking site',

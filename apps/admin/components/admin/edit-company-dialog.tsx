@@ -63,10 +63,10 @@ function generatePassword(length = 14): string {
 
 function Field({ label, hint, children }: { label: string; hint?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="space-y-1.5">
-      <Label className="text-[13px]">{label}</Label>
+    <div className="min-w-0 space-y-1">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
       {children}
-      {hint && <p className="text-xs leading-snug text-muted-foreground">{hint}</p>}
+      {hint && <p className="truncate text-[11px] leading-snug text-muted-foreground">{hint}</p>}
     </div>
   );
 }
@@ -161,16 +161,15 @@ export function EditCompanyDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
-      <DialogContent className="flex max-h-[88vh] max-w-2xl flex-col gap-0 rounded-3xl p-7">
-        <DialogHeader className="mb-5">
+      <DialogContent className="flex max-w-3xl flex-col gap-0 rounded-3xl p-7 [&_input]:h-9 [&_input]:text-sm">
+        <DialogHeader className="mb-4">
           <DialogTitle>Edit company</DialogTitle>
           <DialogDescription>Details, and how their head admin signs in.</DialogDescription>
         </DialogHeader>
 
-        <div className="-mx-1 min-h-0 flex-1 space-y-6 overflow-y-auto px-1">
+        <div className="space-y-5">
           <section className="space-y-3">
-            <h3 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Company</h3>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-3">
               <Field label="Company name">
                 <Input value={form.company_name} onChange={set('company_name')} />
               </Field>
@@ -198,15 +197,15 @@ export function EditCompanyDialog({
             </div>
           </section>
 
-          <section className="space-y-3">
+          <section className="space-y-2 border-t border-border/60 pt-4">
             <h3 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Login</h3>
             {login === undefined ? (
               <p className="text-sm text-muted-foreground">Loading their login…</p>
             ) : login === null ? (
               <p className="text-sm text-muted-foreground">This company has no login that can be changed from here.</p>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Login email" hint="What they sign in to the portal with.">
+              <div className="grid gap-x-4 gap-y-3 sm:grid-cols-3">
+                <Field label="Login email">
                   <Input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} />
                 </Field>
                 <Field
@@ -215,9 +214,9 @@ export function EditCompanyDialog({
                     passwordTooShort ? (
                       <span className="text-destructive">At least 8 characters.</span>
                     ) : password ? (
-                      'They will be asked to choose their own at sign-in.'
+                      'They choose their own at sign-in.'
                     ) : (
-                      'Leave empty to keep their current one.'
+                      'Empty keeps their current one.'
                     )
                   }
                 >
@@ -260,7 +259,7 @@ export function EditCompanyDialog({
           </section>
         </div>
 
-        <div className="mt-6 flex justify-end gap-2">
+        <div className="mt-5 flex justify-end gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>

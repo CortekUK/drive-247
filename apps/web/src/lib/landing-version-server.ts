@@ -3,7 +3,7 @@
 // Controlled by the super-admin switch on the Signup Plans tab
 // (`admin_settings.landing_version`), read through `public.landing_version()`,
 // a security-definer function that returns that one value — same shape and
-// reasons as landing-pricing-server.ts.
+// reasons as the other landing-page reads.
 //
 // FAILS TO v1. Missing env, an HTTP error, a timeout or anything but a literal
 // "v2" serves the current page, so an outage can never put an unfinished

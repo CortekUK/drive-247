@@ -558,3 +558,9 @@ verify_jwt = false
 # unsubscribe link (GET ?unsubscribe=<delivery id>).
 [functions.sunday-newsletter-run]
 verify_jwt = false
+
+[functions.lead-webhook-google]
+verify_jwt = false
+
+[functions.lead-webhook-meta]
+verify_jwt = false

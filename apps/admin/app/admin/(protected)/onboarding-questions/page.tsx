@@ -45,6 +45,7 @@ import {
   type QuestionKind,
 } from '@/components/admin/onboarding-question-card';
 import { cn } from '@/lib/utils';
+import { confirmDialog } from '@/components/ui/confirm';
 
 const COLUMNS = 'id,question_key,kind,prompt,help,placeholder,options,is_required,sort_order,is_published';
 
@@ -179,9 +180,12 @@ export default function OnboardingQuestionsAdmin() {
   };
 
   const remove = async (q: OnboardingQuestion) => {
-    const ok = window.confirm(
-      `Delete "${q.prompt || q.question_key}"?\n\nAnswers already collected under "${q.question_key}" stay in the database, but nothing will read them again.`,
-    );
+    const ok = await confirmDialog({
+      title: `Delete "${q.prompt || q.question_key}"?`,
+      description: `Answers already collected under "${q.question_key}" stay in the database, but nothing will read them again.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
     if (!ok) return;
     setPending(`${q.id}:delete`);
     const { error } = await supabase.from('first_run_questions').delete().eq('id', q.id);

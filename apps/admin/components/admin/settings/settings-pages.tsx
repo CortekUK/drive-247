@@ -17,7 +17,6 @@ import { toast } from '@/components/ui/sonner';
 import { ForceLogoutAllControl } from '@/components/admin/ForceLogoutAllControl';
 import { PlatformPushSettings } from '@/components/admin/PlatformPushSettings';
 import { LandingVersionSwitch } from '@/components/admin/landing-version-switch';
-import { LandingPricingSwitch } from '@/components/admin/landing-pricing-switch';
 import { SignupOtpSwitch } from '@/components/admin/signup-otp-switch';
 import { NorthwindSiteVersionCard } from '@/components/admin/developer/northwind-site-version-card';
 import { cn } from '@/lib/utils';
@@ -288,7 +287,6 @@ export function LandingSettingsPage() {
     >
       <SettingsSection title="drive-247.com">
         <LandingVersionSwitch />
-        <LandingPricingSwitch />
       </SettingsSection>
     </InstantPage>
   );

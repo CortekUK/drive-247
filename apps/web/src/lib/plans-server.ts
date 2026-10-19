@@ -12,9 +12,10 @@
 //   1. **It never throws.** The page is statically prerendered, so a throw here
 //      is a failed `next build`, i.e. a Supabase outage taking down the marketing
 //      site. Every failure path returns the hardcoded `SIGNUP_PLANS` instead.
-//   2. **It never returns empty.** No rows, all rows unusable, no env pair — all
-//      of them fall back to the hardcoded catalogue. An empty pricing grid is
-//      worse than a stale one.
+//   2. **It returns empty only on purpose.** Zero visible rows means a super
+//      admin switched every plan off, and the page hides pricing. Every
+//      failure — unusable rows, no env pair, an HTTP error — falls back to the
+//      hardcoded catalogue, because an empty grid is worse than a stale one.
 //
 // Freshness comes from ISR: the page declares `revalidate`, and this fetch is
 // tagged with the same window, so a super admin's edit appears within ~a minute
@@ -244,13 +245,19 @@ export async function fetchSignupPlans(): Promise<readonly SignupPlan[]> {
       return SIGNUP_PLANS;
     }
 
+    // Every plan switched off on the admin Signup Plans page: that is the
+    // admin hiding pricing, not a failure, so return nothing and the landing
+    // page leaves the section out. (There is no separate master switch — the
+    // plan toggles are the only control.)
+    if (body.length === 0) return [];
+
     const plans = body
       .map(toSignupPlan)
       .filter((plan): plan is SignupPlan => plan !== null);
 
     if (plans.length === 0) {
-      // Either the table is empty, every row was hidden, or every row was
-      // unusable. All three read the same to a visitor: no plans to buy.
+      // Rows came back but none of them parse. An empty grid is worse than a
+      // stale one here, so serve the hardcoded catalogue.
       console.error(
         `[plans] signup_plans returned ${body.length} row(s) but none were usable — ` +
           "serving the hardcoded catalogue."

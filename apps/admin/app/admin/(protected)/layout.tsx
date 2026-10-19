@@ -88,6 +88,9 @@ export default function ProtectedLayout({
      navigation's slot on a desktop (AdminSupportRail) instead of a fourth column,
      and the page bounds its own height so each column scrolls inside itself. */
   const isSupport = pathname === '/admin/support' || pathname.startsWith('/admin/support/');
+  /* A rental company's own page is a one-screen workspace: no top bar on a
+     desktop either (a phone keeps it for the navigation menu). */
+  const isCompanyPage = /^\/admin\/rentals\/[^/]+$/.test(pathname);
 
   if (loading) {
     return <LoadingScreen />;
@@ -130,7 +133,7 @@ export default function ProtectedLayout({
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {/* Support is its own workspace: no top bar on a desktop (the rail has
               Back to dashboard). A phone keeps it for the navigation menu. */}
-          {isSupport ? <div className="md:hidden"><TopBar /></div> : <TopBar />}
+          {isSupport || isCompanyPage ? <div className="md:hidden"><TopBar /></div> : <TopBar />}
           {/* `data-scrollport` is what the house scrollbar rule in globals.css
               hooks onto. The top bar already gives the page its breathing room
               on a desktop, so the page starts close under it, as in Northwind. */}
@@ -138,7 +141,7 @@ export default function ProtectedLayout({
             data-scrollport
             className={isSupport ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'min-h-0 flex-1 overflow-y-auto overflow-x-hidden'}
           >
-            <div className={isSupport ? 'flex min-h-0 flex-1 flex-col p-3 pt-0 sm:p-4 sm:pt-0 md:pt-4' : 'p-4 pt-1 sm:p-6 sm:pt-2'}>
+            <div className={isSupport ? 'flex min-h-0 flex-1 flex-col p-3 pt-0 sm:p-4 sm:pt-0 md:pt-4' : isCompanyPage ? 'p-4 pt-1 sm:p-6 sm:pt-2 md:pt-6' : 'p-4 pt-1 sm:p-6 sm:pt-2'}>
               {children}
             </div>
           </main>

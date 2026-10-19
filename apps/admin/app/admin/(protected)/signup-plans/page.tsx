@@ -605,7 +605,7 @@ export default function SignupPlansPage() {
         </div>
       </div>
 
-      {/* The landing page version, the pricing switch and signup email
+      {/* The landing page version and signup email
           verification live in Settings now (Website and Signup). */}
 
       {/* Async status for screen readers */}

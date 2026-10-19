@@ -480,6 +480,10 @@ export interface PaymentStepProps {
   trialEndsAt?: string | null;
   /** "Have a promo code?": apply a code, or remove the applied one with null. Resolves to a message, or null. */
   onApplyPromo?(code: string | null): Promise<string | null>;
+  /** The owner's name, so the screen can address them. Display only. */
+  ownerName?: string;
+  /** The business being built, named in the screen's line. Display only. */
+  companyName?: string;
 }
 
 // ---------------------------------------------------------------------------

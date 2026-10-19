@@ -50,12 +50,13 @@ describe("the banner follows the arrival, not the browser", () => {
   });
 });
 
-describe("the admin switch is not overridden by a stale cookie", () => {
-  it("still makes the invite exception, but from a fresh arrival", () => {
-    // An invited operator was sent here to pick a plan, so the grid shows even
-    // while self-serve signup is off. `offer` is now fresh-only, which is what
-    // keeps that exception from outliving the visit.
-    expect(page).toMatch(/const showPricing = \(await fetchLandingPricingEnabled\(\)\) \|\| !!offer;/);
+describe("pricing follows the plan toggles, not a master switch", () => {
+  it("never reads the removed landing-pricing switch", () => {
+    expect(page).not.toMatch(/fetchLandingPricingEnabled/);
+  });
+
+  it("hides the section only when every plan is switched off", () => {
+    expect(page).toMatch(/const plans = catalogue\.length > 0 \? catalogue : null;/);
   });
 });
 
