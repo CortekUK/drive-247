@@ -53,7 +53,14 @@ import { ScreenNav, useNarrowDialog } from "./_screens";
 
 /* ─────────────────────────────── the demo ───────────────────────────────── */
 
-export const TWILIO_DEMO_SLUGS: readonly string[] = ["northwind"];
+/**
+ * Tenants whose Twilio setup is simulated in the browser. EMPTY since
+ * 2026-10-20: northwind connects a real Twilio account (owner decision for Multi
+ * Chat), so every tenant now goes through the real verify / search / buy /
+ * connect calls. The demo code paths stay for a future sales sandbox, reachable
+ * only by adding a slug here deliberately.
+ */
+export const TWILIO_DEMO_SLUGS: readonly string[] = [];
 
 export type TwilioDemoState = {
   live: boolean;
