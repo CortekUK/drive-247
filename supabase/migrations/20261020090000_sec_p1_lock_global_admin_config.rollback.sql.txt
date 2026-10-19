@@ -1,0 +1,8 @@
+-- Rollback for 20261020090000_sec_p1_lock_global_admin_config.sql
+-- WARNING: re-exposes the global master password hashes to the public anon key.
+
+BEGIN;
+ALTER TABLE public.global_admin_config DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON public.global_admin_config TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.verify_global_master_password(text, text) TO PUBLIC, anon, authenticated;
+COMMIT;
