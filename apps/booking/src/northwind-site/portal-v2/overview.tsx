@@ -1,10 +1,12 @@
 'use client';
 
 /**
- * Customer portal v2 — Home. Laid out like the operator portal v2 dashboard:
- * a greeting, a top row of three cards on one brand ramp (the lead booking on
- * the full gradient, what needs the customer on a lighter print of it, where
- * they stand on a plain card), then recent bookings.
+ * Customer portal v2 — Home. Laid out like the operator portal v2 dashboard
+ * (components/dashboard-v2): a page header, a top row of three cards on one
+ * brand ramp — the lead booking on the full gradient, what needs the customer
+ * on a lighter print of it, where they stand on the flat accent tint, exactly
+ * the three strengths `card-surface.tsx` uses — then recent bookings in the
+ * same list table as the Bookings page.
  *
  * Everything comes from the single `useCustomerRentals` fetch (scoped by
  * `customer_id` AND `tenant_id` inside the hook), so a number here can never
@@ -12,49 +14,62 @@
  */
 
 import Link from 'next/link';
-import { ArrowUpRight, CalendarDays, CarFront, CheckCircle2, ChevronRight, CreditCard, MapPin, ShieldCheck } from 'lucide-react-nw';
+import { ArrowRight, ArrowUpRight, CalendarDays, Check, ChevronRight, CreditCard, MapPin, ShieldCheck } from 'lucide-react-nw';
 
-import { formatDateRange } from '@nw/components/portal/format';
+import { relativeDayLabel } from '@nw/components/portal/format';
 import { Skeleton } from '@nw/components/ui/skeleton';
 import { useCustomer } from '@nw/hooks/use-customer';
-import {
-  useCustomerRentals,
-  type CustomerRental,
-  type RentalLifecycle,
-} from '@nw/hooks/use-customer-rentals';
+import { useCustomerRentals, type CustomerRental } from '@nw/hooks/use-customer-rentals';
 import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { cn } from '@nw/lib/utils';
+import { BookingsTable, BookingsTableSkeleton } from '@nw/portal-v2/bookings/bookings-table';
+import { formatBookingDates } from '@nw/portal-v2/bookings/format';
+import { LoadError, PageHeader, Panel } from '@nw/portal-v2/primitives';
+import { QuickBookTrigger } from '@nw/site-v2/quick-book/quick-book-dialog';
 
 /* ─────────────────────────────── pieces ────────────────────────────────── */
 
-const CARD = 'rounded-2xl border border-pv-border bg-pv-card';
+/** A top-row card: the Panel frame (radius, padding rhythm) with the paint behind it. */
+const TOP_CARD = 'relative isolate flex min-h-[180px] flex-col overflow-hidden p-5 lg:min-h-[236px]';
 
-const LIFECYCLE: Record<RentalLifecycle, { label: string; className: string }> = {
-  pending: { label: 'Awaiting confirmation', className: 'text-pv-warning' },
-  upcoming: { label: 'Upcoming', className: 'text-pv-primary' },
-  on_rent: { label: 'On rent', className: 'text-pv-success' },
-  completed: { label: 'Completed', className: 'text-pv-muted-fg' },
-  cancelled: { label: 'Cancelled', className: 'text-pv-danger' },
-};
+/** The card label, as the operator dashboard sets it: 12px, uppercase, wide. */
+const CARD_LABEL = 'text-xs font-semibold uppercase tracking-wider';
 
-/** The brand gradient behind a top-row card. `strength` 1 = full, lower = a lighter print. */
-function BrandSurface({ strength }: { strength: number }) {
+/** Hover = fade only, 200ms, ease-out on / ease-in off (V2_PLAN §12). */
+const HOVER_FADE = 'transition-colors duration-200 ease-in hover:ease-out motion-reduce:transition-none';
+
+type Surface = 'lead' | 'needs-you' | 'where-you-stand';
+
+/**
+ * `card-surface.tsx`'s three strengths, on the `--pv-*` set: the full gradient,
+ * the gradient at 0.88 under 20% white, and a flat accent at 0.45 under 34%
+ * white. Two layers at `-z-10`, so the host needs `relative isolate`.
+ */
+function CardSurface({ surface }: { surface: Surface }) {
+  if (surface === 'where-you-stand') {
+    return (
+      <>
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-pv-primary opacity-45" />
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-white opacity-[0.34]" />
+      </>
+    );
+  }
   return (
     <>
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 bg-linear-to-br from-pv-chart-3 via-pv-primary to-pv-chart-5"
-        style={{ opacity: strength }}
+        style={{ opacity: surface === 'lead' ? 1 : 0.88 }}
       />
-      {strength < 1 ? (
-        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-white" style={{ opacity: 0.2 }} />
+      {surface === 'needs-you' ? (
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-white opacity-20" />
       ) : null}
     </>
   );
 }
 
 function bookingHref(rental: CustomerRental): string {
-  return `/portal-v2/bookings/${rental.id}`;
+  return `/portal/bookings/${rental.id}`;
 }
 
 function useFirstName(): string | null {
@@ -67,7 +82,7 @@ function useFirstName(): string | null {
 /* ──────────────────────────────── page ─────────────────────────────────── */
 
 export function PortalV2Overview() {
-  const { rentals, summary, isLoading, isError, refetch } = useCustomerRentals();
+  const { rentals, summary, isLoading, isError, error, refetch } = useCustomerRentals();
   const firstName = useFirstName();
   const today = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -75,33 +90,29 @@ export function PortalV2Overview() {
   const recent = rentals.filter((rental) => rental.id !== lead?.id).slice(0, 5);
 
   return (
-    <div className="flex flex-col gap-8 pt-1">
-      <header>
-        <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-pv-muted-fg">{today}</p>
-        <h2 className="mt-0.5 text-[28px] font-bold leading-[1.15] tracking-[-0.03em] text-pv-fg md:text-[32px]">
-          {firstName ? `Hi, ${firstName}` : 'Welcome back'}
-        </h2>
-      </header>
+    <div className="flex flex-col gap-8">
+      <PageHeader
+        eyebrow={today}
+        title={firstName ? `Hi, ${firstName}` : 'Welcome back'}
+        description="Your next booking, anything we need from you, and your recent rentals."
+      />
 
       {isError ? (
-        <div className={cn(CARD, 'flex items-center justify-between gap-4 px-5 py-4')}>
-          <p className="text-sm text-pv-fg">We could not load your bookings.</p>
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            className="h-9 cursor-pointer rounded-lg border border-pv-border px-3 text-[13px] font-medium text-pv-fg hover:bg-pv-tint"
-          >
-            Try again
-          </button>
-        </div>
+        <LoadError
+          title="We could not load your bookings"
+          error={error}
+          onRetry={() => {
+            void refetch();
+          }}
+        />
       ) : null}
 
-      <section className="grid gap-4 lg:grid-cols-3">
+      <section aria-label="At a glance" className="grid gap-5 lg:grid-cols-3">
         {isLoading ? (
           <>
-            <Skeleton className="h-[220px] rounded-2xl bg-pv-tint" />
-            <Skeleton className="h-[220px] rounded-2xl bg-pv-tint" />
-            <Skeleton className="h-[220px] rounded-2xl bg-pv-tint" />
+            <Skeleton className="h-[236px] rounded-2xl bg-pv-tint" />
+            <Skeleton className="h-[236px] rounded-2xl bg-pv-tint" />
+            <Skeleton className="h-[236px] rounded-2xl bg-pv-tint" />
           </>
         ) : (
           <>
@@ -118,20 +129,52 @@ export function PortalV2Overview() {
         )}
       </section>
 
-      {!isLoading && recent.length > 0 ? <RecentBookings rentals={recent} /> : null}
+      {isLoading ? (
+        <section className="flex flex-col gap-3">
+          <Skeleton className="h-5 w-40 bg-pv-tint" />
+          <BookingsTableSkeleton rows={3} />
+        </section>
+      ) : recent.length > 0 ? (
+        <section aria-labelledby="recent-bookings" className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-3 px-1">
+            <h2 id="recent-bookings" className="text-[18px] font-semibold tracking-[-0.01em] text-pv-fg">
+              Recent bookings
+            </h2>
+            <Link
+              href="/portal/bookings"
+              className={cn(
+                '-mr-2 inline-flex h-9 items-center gap-1 rounded-full px-3 text-[13px] font-medium text-pv-link hover:bg-pv-hover',
+                HOVER_FADE,
+              )}
+            >
+              See all
+              <ArrowRight aria-hidden className="size-3.5" />
+            </Link>
+          </div>
+          <BookingsTable rentals={recent} />
+        </section>
+      ) : null}
     </div>
   );
 }
 
 /* ──────────────────────────────── cards ────────────────────────────────── */
 
+const WHITE_BUTTON = cn(
+  'inline-flex h-10 items-center gap-1.5 rounded-full bg-white px-4 text-[13px] font-semibold text-pv-primary hover:bg-white/85',
+  HOVER_FADE,
+);
+
 function LeadCard({ lead, isOnRent, hasAny }: { lead: CustomerRental | null; isOnRent: boolean; hasAny: boolean }) {
+  // "Due back in 11 days" while on rent, "Starts tomorrow" before; nothing
+  // when the date is far enough out that a countdown stops being useful.
+  const countdown = lead ? relativeDayLabel(isOnRent ? lead.endDate : lead.startDate) : null;
+  const countdownLabel = countdown ? (isOnRent ? `Due back ${countdown}` : `Starts ${countdown}`) : null;
+
   return (
-    <article className="relative isolate flex min-h-[220px] flex-col overflow-hidden rounded-2xl p-5 text-white">
-      <BrandSurface strength={1} />
-      <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/75">
-        {isOnRent ? 'On rent now' : 'Your next booking'}
-      </p>
+    <Panel className={cn(TOP_CARD, 'border-transparent bg-transparent text-white')}>
+      <CardSurface surface="lead" />
+      <p className={cn(CARD_LABEL, 'text-white/70')}>{isOnRent ? 'On rent now' : 'Your next booking'}</p>
 
       {lead ? (
         <>
@@ -141,21 +184,23 @@ function LeadCard({ lead, isOnRent, hasAny }: { lead: CustomerRental | null; isO
           <div className="mt-3 flex flex-col gap-1.5 text-[13px] text-white/85">
             <span className="flex items-center gap-2">
               <CalendarDays aria-hidden className="size-4 shrink-0" />
-              {formatDateRange(lead.startDate, lead.endDate)}
+              {formatBookingDates(lead.startDate, lead.endDate)}
             </span>
-            {lead.pickupLocation ? (
+            {lead.deliveryAddress ?? lead.pickupLocation ? (
               <span className="flex items-center gap-2">
                 <MapPin aria-hidden className="size-4 shrink-0" />
-                <span className="truncate">{lead.pickupLocation}</span>
+                <span className="truncate">{lead.deliveryAddress ?? lead.pickupLocation}</span>
               </span>
             ) : null}
           </div>
-          <div className="mt-auto flex items-center justify-between gap-3 pt-5">
-            <span className="font-mono text-[12px] text-white/70">{lead.reference}</span>
-            <Link
-              href={bookingHref(lead)}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-white px-3 text-[13px] font-semibold text-pv-primary transition-opacity hover:opacity-90"
-            >
+          <div className="mt-auto flex items-end justify-between gap-3 pt-5">
+            <span className="min-w-0">
+              {countdownLabel ? (
+                <span className="block text-[13px] font-semibold">{countdownLabel}</span>
+              ) : null}
+              <span className="block text-[12px] text-white/70">{lead.reference}</span>
+            </span>
+            <Link href={bookingHref(lead)} className={WHITE_BUTTON}>
               View booking
               <ArrowUpRight aria-hidden className="size-4" />
             </Link>
@@ -172,17 +217,14 @@ function LeadCard({ lead, isOnRent, hasAny }: { lead: CustomerRental | null; isO
               : 'When you book a car it shows here, with your dates and pickup.'}
           </p>
           <div className="mt-auto pt-5">
-            <Link
-              href="/booking"
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-white px-3 text-[13px] font-semibold text-pv-primary transition-opacity hover:opacity-90"
-            >
+            <QuickBookTrigger className={WHITE_BUTTON}>
               Book a car
               <ArrowUpRight aria-hidden className="size-4" />
-            </Link>
+            </QuickBookTrigger>
           </div>
         </>
       )}
-    </article>
+    </Panel>
   );
 }
 
@@ -197,13 +239,13 @@ function NeedsYouCard({ awaitingPayment }: { awaitingPayment: CustomerRental[] }
       href: bookingHref(rental),
       icon: CreditCard,
       label: `Pay for ${rental.reference}`,
-      hint: formatCurrency(rental.total),
+      hint: `${formatCurrency(rental.total)} · ${rental.vehicle?.displayName ?? 'Booking'}`,
     });
   }
   if (!isIdentityVerified) {
     tasks.push({
       key: 'verify',
-      href: '/portal-v2/verification',
+      href: '/portal/verification',
       icon: ShieldCheck,
       label: 'Verify your ID',
       hint: 'Needed before pickup',
@@ -211,36 +253,46 @@ function NeedsYouCard({ awaitingPayment }: { awaitingPayment: CustomerRental[] }
   }
 
   return (
-    <article className="relative isolate flex min-h-[220px] flex-col overflow-hidden rounded-2xl p-5 text-white">
-      <BrandSurface strength={0.88} />
-      <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/80">Needs you</p>
+    <Panel className={cn(TOP_CARD, 'border-transparent bg-transparent text-white')}>
+      <CardSurface surface="needs-you" />
+      <p className={cn(CARD_LABEL, 'flex items-center justify-between gap-2 text-white/70')}>
+        Needs you
+        {tasks.length > 0 ? <span className="tabular-nums">{tasks.length}</span> : null}
+      </p>
 
       {tasks.length === 0 ? (
-        <div className="mt-2 flex flex-1 flex-col">
-          <h3 className="text-[22px] font-bold leading-tight tracking-[-0.02em]">You&apos;re all set</h3>
-          <p className="mt-2 text-[13px] leading-relaxed text-white/85">Nothing to pay and nothing to sign right now.</p>
-          <CheckCircle2 aria-hidden strokeWidth={1.5} className="mt-auto size-9 text-white/70" />
+        <div className="flex flex-1 flex-col items-center justify-center gap-1.5 py-4 text-center">
+          <span className="grid size-10 place-items-center rounded-full bg-white/80 text-pv-success">
+            <Check aria-hidden className="size-5" />
+          </span>
+          <p className="mt-1 text-[15px] font-semibold">You&apos;re all set</p>
+          <p className="text-[13px] text-white/75">Nothing to pay and nothing to sign right now.</p>
         </div>
       ) : (
-        <ul className="mt-3 flex flex-col gap-2">
+        <ul className="-mx-2 mt-2 flex flex-1 flex-col justify-center gap-0.5">
           {tasks.map((task) => (
             <li key={task.key}>
               <Link
                 href={task.href}
-                className="flex items-center gap-3 rounded-xl bg-white/15 px-3 py-2.5 transition-colors hover:bg-white/25"
+                className={cn('group flex items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-white/15', HOVER_FADE)}
               >
-                <task.icon aria-hidden className="size-4 shrink-0" />
+                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white/20">
+                  <task.icon aria-hidden className="size-4" />
+                </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-semibold">{task.label}</span>
+                  <span className="block truncate text-[14px] font-semibold">{task.label}</span>
                   <span className="block truncate text-[12px] text-white/75">{task.hint}</span>
                 </span>
-                <ChevronRight aria-hidden className="size-4 shrink-0 text-white/70" />
+                <ChevronRight
+                  aria-hidden
+                  className="size-4 shrink-0 text-white/50 transition-colors duration-200 ease-in group-hover:text-white group-hover:ease-out motion-reduce:transition-none"
+                />
               </Link>
             </li>
           ))}
         </ul>
       )}
-    </article>
+    </Panel>
   );
 }
 
@@ -257,83 +309,57 @@ function WhereYouStandCard({
   total: number;
   cancelled: number;
 }) {
-  const stats = [
-    { label: 'On rent', value: onRent, icon: CarFront },
-    { label: 'Upcoming', value: upcoming, icon: CalendarDays },
-    { label: 'Completed', value: completed, icon: CheckCircle2 },
+  // The bar is the operator card's fleet bar: one segment per state that has
+  // any bookings, sized by its share, on a faint track when there are none.
+  const segments = [
+    { key: 'on-rent', label: 'On rent', value: onRent, bar: 'bg-pv-primary', dot: 'bg-pv-primary' },
+    { key: 'upcoming', label: 'Upcoming', value: upcoming, bar: 'bg-pv-primary/45', dot: 'bg-pv-primary/45' },
+    { key: 'completed', label: 'Completed', value: completed, bar: 'bg-pv-fg/20', dot: 'bg-pv-fg/25' },
   ];
+  const counted = onRent + upcoming + completed;
 
   return (
-    <article className={cn(CARD, 'flex min-h-[220px] flex-col p-5')}>
-      <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-pv-muted-fg">Where you stand</p>
-      <p className="mt-2 text-[34px] font-bold leading-none tracking-[-0.03em] text-pv-fg tabular-nums">{total}</p>
-      <p className="mt-1 text-[13px] text-pv-muted-fg">
-        {total === 1 ? 'booking' : 'bookings'} in total{cancelled > 0 ? ` · ${cancelled} cancelled` : ''}
-      </p>
-      <div className="mt-auto grid grid-cols-3 gap-2 pt-5">
-        {stats.map((stat) => (
-          <div key={stat.label} className="rounded-xl bg-pv-tint px-3 py-2.5">
-            <stat.icon aria-hidden className="size-4 text-pv-primary" />
-            <p className="mt-1.5 text-lg font-bold leading-none text-pv-fg tabular-nums">{stat.value}</p>
-            <p className="mt-1 truncate text-[11px] text-pv-muted-fg">{stat.label}</p>
-          </div>
-        ))}
-      </div>
-    </article>
-  );
-}
+    <Panel className={cn(TOP_CARD, 'border-transparent bg-transparent')}>
+      <CardSurface surface="where-you-stand" />
+      <p className={cn(CARD_LABEL, 'text-pv-muted-on-tint')}>Where you stand</p>
 
-/* ─────────────────────────── recent bookings ───────────────────────────── */
+      <Link
+        href="/portal/bookings"
+        className={cn('group -mx-2 my-auto flex flex-col gap-3 rounded-xl px-2 py-2 hover:bg-white/40', HOVER_FADE)}
+      >
+        <span className="flex items-baseline gap-2">
+          <span className="text-[34px] font-semibold leading-none tabular-nums text-pv-fg">{total}</span>
+          <span className="text-[13px] text-pv-muted-on-tint">
+            {total === 1 ? 'booking' : 'bookings'} in total{cancelled > 0 ? ` · ${cancelled} cancelled` : ''}
+          </span>
+          <ArrowUpRight
+            aria-hidden
+            className="ml-auto size-4 shrink-0 self-center text-transparent transition-colors duration-200 ease-in group-hover:text-pv-muted-on-tint group-hover:ease-out motion-reduce:transition-none"
+          />
+        </span>
 
-function RecentBookings({ rentals }: { rentals: CustomerRental[] }) {
-  const { formatCurrency } = useTenantBranding();
+        <span className="flex h-2 gap-0.5 overflow-hidden rounded-full">
+          {counted === 0 ? (
+            <span className="flex-1 rounded-full bg-pv-fg/10" />
+          ) : (
+            segments
+              .filter((segment) => segment.value > 0)
+              .map((segment) => (
+                <span key={segment.key} className={cn('rounded-full', segment.bar)} style={{ flexGrow: segment.value }} />
+              ))
+          )}
+        </span>
 
-  return (
-    <section className="flex flex-col gap-3">
-      <div className="flex items-baseline justify-between gap-3 px-1">
-        <h3 className="text-[15px] font-semibold text-pv-fg">Recent bookings</h3>
-        <Link href="/portal-v2/bookings" className="text-[13px] font-medium text-pv-primary hover:underline">
-          See all
-        </Link>
-      </div>
-
-      <div className={cn(CARD, 'overflow-hidden')}>
-        <div className="hidden grid-cols-[2fr_2fr_1.4fr_1fr_24px] gap-4 bg-pv-tint px-5 py-2.5 text-[12px] font-semibold text-pv-fg/70 md:grid">
-          <span>Vehicle</span>
-          <span>Dates</span>
-          <span>Status</span>
-          <span className="text-right">Total</span>
-          <span />
-        </div>
-        <ul className="divide-y divide-pv-border">
-          {rentals.map((rental) => {
-            const status = LIFECYCLE[rental.lifecycle];
-            return (
-              <li key={rental.id}>
-                <Link
-                  href={bookingHref(rental)}
-                  className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-0.5 px-5 py-3.5 transition-colors hover:bg-pv-row md:grid-cols-[2fr_2fr_1.4fr_1fr_24px]"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-[13px] font-semibold text-pv-fg">
-                      {rental.vehicle?.displayName ?? 'Vehicle'}
-                    </span>
-                    <span className="block font-mono text-[11px] text-pv-muted-fg">{rental.reference}</span>
-                  </span>
-                  <span className="order-3 col-span-2 truncate text-[13px] text-pv-muted-fg md:order-none md:col-span-1">
-                    {formatDateRange(rental.startDate, rental.endDate)}
-                  </span>
-                  <span className={cn('hidden text-[13px] font-medium md:block', status.className)}>{status.label}</span>
-                  <span className="text-right text-[13px] font-semibold text-pv-fg tabular-nums">
-                    {formatCurrency(rental.total)}
-                  </span>
-                  <ChevronRight aria-hidden className="hidden size-4 text-pv-muted-fg md:block" />
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    </section>
+        <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]">
+          {segments.map((segment) => (
+            <span key={segment.key} className="flex items-center gap-1.5">
+              <span className={cn('size-1.5 rounded-full', segment.dot)} />
+              <span className="font-semibold tabular-nums text-pv-fg">{segment.value}</span>
+              <span className="text-pv-muted-on-tint">{segment.label}</span>
+            </span>
+          ))}
+        </span>
+      </Link>
+    </Panel>
   );
 }

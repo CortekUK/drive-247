@@ -80,7 +80,6 @@
  * state — never a confirmation.
  */
 
-import { useCallback, useRef, useState } from 'react';
 import {
   Ban,
   CalendarDays,
@@ -106,21 +105,20 @@ import {
   NoticeScreen,
   ProblemBox,
 } from '@nw/components/booking/documents-shared';
+import { IdentityCapture, IdentityReceivedPanel } from '@nw/components/booking/identity-capture';
+import { InsuranceUpload } from '@nw/components/booking/insurance-upload';
 import {
-  IdentityCapture,
-  IdentityReceivedPanel,
-  type IdentityCaptureHandle,
-} from '@nw/components/booking/identity-capture';
-import {
-  InsuranceUpload,
-  type InsuranceUploadHandle,
-} from '@nw/components/booking/insurance-upload';
+  STEP_LABEL,
+  formatDateRange,
+  missingSentence,
+  useDocumentsErrand,
+  type StepKey,
+} from '@nw/components/booking/use-documents-errand';
 import {
   useBookingDocumentsSession,
   useResendBookingDocumentsLink,
   type BookingDocumentsSession,
 } from '@nw/hooks/use-booking-documents';
-import { parseDateOnly } from '@nw/lib/domain';
 import { cn } from '@nw/lib/utils';
 
 /* ──────────────────────────────── the shell ────────────────────────────── */
@@ -198,13 +196,6 @@ export function BookingDocumentsScreen({ token }: { token: string }) {
 
 /* ─────────────────────────── the two-part errand ───────────────────────── */
 
-type StepKey = 'identity' | 'insurance';
-
-const STEP_LABEL: Record<StepKey, string> = {
-  identity: 'Step 1 of 2',
-  insurance: 'Step 2 of 2',
-};
-
 function ReadyScreen({
   token,
   session,
@@ -215,111 +206,28 @@ function ReadyScreen({
   const operator = session.tenant.companyName ?? 'the rental company';
 
   /*
-    THE SERVER'S WORD IS THE STARTING POINT FOR BOTH PANELS.
-
-    `identityStatus` is `booking_document_links.identity_status`: null (never
-    started), 'pending' (a session was minted but nothing came back), 'submitted'
-    or 'rejected'. Only 'submitted' is done — a rejection is emphatically not,
-    and the identity panel renders its own retry state for it.
-
-    `documentsStatus` is the INSURANCE step, and 'submitted' is what
-    `submit-insurance` writes. ('verified' never reaches here: the server answers
-    `already_complete` and this screen is not rendered at all.)
+    Who is done, what is missing and the one send live in
+    `use-documents-errand.ts` (shared with the v2 screen). The server's word is
+    the starting point for both panels; see that file.
   */
-  const [identitySent, setIdentitySent] = useState(false);
-  const [insuranceSent, setInsuranceSent] = useState(false);
-
-  const identityDone = identitySent || session.identityStatus === 'submitted';
-  const insuranceDone = insuranceSent || session.documentsStatus === 'submitted';
-
-  /*
-    What each panel says about itself. Pushed up rather than pulled, because the
-    panels own the files and the shell owns the decision — and the shell must be
-    able to render the disabled reason without reaching into either one.
-  */
-  const [identityReady, setIdentityReady] = useState(false);
-  const [identityMissing, setIdentityMissing] = useState<readonly string[]>([]);
-  const [insuranceReady, setInsuranceReady] = useState(false);
-
-  const identityRef = useRef<IdentityCaptureHandle>(null);
-  const insuranceRef = useRef<InsuranceUploadHandle>(null);
-
-  const [sending, setSending] = useState(false);
-  const [sendProblem, setSendProblem] = useState<string | null>(null);
-
-  const handleIdentitySubmitted = useCallback(() => {
-    setIdentitySent(true);
-  }, []);
-
-  const handleInsuranceSubmitted = useCallback(() => {
-    setInsuranceSent(true);
-  }, []);
-
-  /*
-    Stable identities. Both are the dependency of an effect inside a panel, so a
-    fresh closure on every shell render would re-fire that effect on every
-    keystroke elsewhere on the page.
-  */
-  const handleIdentityReady = useCallback((ready: boolean) => {
-    setIdentityReady(ready);
-  }, []);
-  const handleIdentityMissing = useCallback((missing: readonly string[]) => {
-    setIdentityMissing(missing);
-  }, []);
-  const handleInsuranceReady = useCallback((ready: boolean) => {
-    setInsuranceReady(ready);
-  }, []);
-
-  const bothDone = identityDone && insuranceDone;
-  const outstanding = (identityDone ? 0 : 1) + (insuranceDone ? 0 : 1);
-
-  /*
-    "Present" is deliberately two different facts joined by OR: the server has
-    already filed it, or the customer has chosen it here. Reading only the
-    server's column would leave the button permanently dead for a first-time
-    customer; reading only the local files would leave it dead for someone
-    coming back to finish the half they did not do last time.
-  */
-  const identityPresent = identityDone || identityReady;
-  const insurancePresent = insuranceDone || insuranceReady;
-  const canSend = identityPresent && insurancePresent && !sending;
-
-  const missing: string[] = [
-    ...(identityDone ? [] : identityMissing),
-    ...(insurancePresent ? [] : ['your insurance document']),
-  ];
-
-  const handleSendEverything = useCallback(async () => {
-    setSendProblem(null);
-    setSending(true);
-    try {
-      /*
-        INSURANCE FIRST — see the file header. It is the call that essentially
-        always works, and putting it behind the AI pass would let an outage in
-        the AI pass block it.
-      */
-      let allWell = true;
-      if (!insuranceDone) {
-        const ok = (await insuranceRef.current?.submit()) ?? false;
-        if (!ok) allWell = false;
-      }
-      if (!identityDone) {
-        const ok = (await identityRef.current?.submit()) ?? false;
-        if (!ok) allWell = false;
-      }
-      if (!allWell) {
-        // Each panel has already rendered the specific reason — the file that
-        // would not store, the rate limit, the "we could not check your photos
-        // just now". This line only says where to look.
-        setSendProblem(
-          'Not everything went through. The part that did not is marked above, ' +
-            'and anything that arrived has been kept — you only need to send the rest.',
-        );
-      }
-    } finally {
-      setSending(false);
-    }
-  }, [identityDone, insuranceDone]);
+  const {
+    identityDone,
+    insuranceDone,
+    bothDone,
+    outstanding,
+    canSend,
+    missing,
+    sending,
+    sendProblem,
+    identityRef,
+    insuranceRef,
+    handleIdentitySubmitted,
+    handleInsuranceSubmitted,
+    handleIdentityReady,
+    handleIdentityMissing,
+    handleInsuranceReady,
+    handleSendEverything,
+  } = useDocumentsErrand(session);
 
   return (
     <div className="flex flex-col gap-5">
@@ -479,12 +387,7 @@ function SendEverythingBar({
   problem: string | null;
   onSend: () => void;
 }) {
-  const missingSentence =
-    missing.length === 0
-      ? null
-      : missing.length === 1
-        ? `Still needed: ${missing[0]}.`
-        : `Still needed: ${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}.`;
+  const stillNeeded = missingSentence(missing);
 
   return (
     <Panel className="px-4 py-4 sm:px-5">
@@ -502,7 +405,7 @@ function SendEverythingBar({
             >
               {sending
                 ? 'Sending everything. Please keep this page open.'
-                : (missingSentence ??
+                : (stillNeeded ??
                   'Both documents are ready to go. Nothing is sent until you press the button.')}
             </p>
             <p className="mt-1 text-xs leading-relaxed text-brand-text-subtle">
@@ -618,24 +521,6 @@ function BookingSummary({ session }: { session: BookingDocumentsSession }) {
       ))}
     </dl>
   );
-}
-
-/**
- * `start_date` and `end_date` are Postgres DATE columns — confirmed against
- * staging's information_schema, not assumed — so they arrive as bare
- * "YYYY-MM-DD". `new Date()` would read them as UTC midnight and render the day
- * BEFORE for every viewer west of Greenwich. `parseDateOnly` is the one parser
- * in v2 that handles this; see the trap note at the top of `lib/domain/date-utils.ts`.
- */
-function formatDateRange(start: string | null, end: string | null): string | null {
-  if (!start) return null;
-  const format = (value: string) =>
-    parseDateOnly(value).toLocaleDateString(undefined, {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  return end ? `${format(start)} — ${format(end)}` : format(start);
 }
 
 /* ──────────────────────────── the other screens ────────────────────────── */

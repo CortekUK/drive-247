@@ -3,10 +3,10 @@
 /**
  * One uploaded document.
  *
- * Same flat recipe as `BookingCard` — 1px hairline on `brand-card`, no shadow —
- * but NOT a link: a document has no detail page, it has two actions. So the
- * card is a plain article and the actions are real buttons, sized h-11 so they
- * clear 44px on a phone.
+ * The operator's document row (customers-v2 section-documents): a tinted tile,
+ * the name, one muted line, the chips, and the actions on the right — pushed
+ * under the text on a phone. NOT a link: a document has no detail page, it has
+ * two actions, so they are real buttons, h-11 so they clear 44px on a phone.
  */
 
 import { Download, FileText, IdCard, Loader2, ShieldCheck, Trash2 } from 'lucide-react-nw';
@@ -16,6 +16,8 @@ import { formatDate, formatTimestamp } from '@nw/components/portal/format';
 import { StatusChip } from '@nw/portal-v2/status-chip';
 import { Button } from '@nw/components/ui/button';
 import type { CustomerDocument, DocumentCategory } from '@nw/hooks/use-customer-documents';
+
+import { IconTile, Meta } from './_components/kit';
 
 const CATEGORY_ICON = {
   insurance: ShieldCheck,
@@ -54,16 +56,6 @@ function ExpiryChip({ document: doc }: { document: CustomerDocument }) {
   return null;
 }
 
-function Meta({ label, value }: { label: string; value: string | null }) {
-  if (!value) return null;
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs text-brand-text-subtle">{label}</dt>
-      <dd className="truncate text-sm text-brand-text">{value}</dd>
-    </div>
-  );
-}
-
 export function DocumentCard({
   document: doc,
   onDownload,
@@ -89,101 +81,89 @@ export function DocumentCard({
         : null;
 
   return (
-    <article className="flex gap-3.5 border-b border-brand-border-soft p-4 last:border-b-0 sm:gap-4 sm:px-5">
-      <span
-        aria-hidden
-        className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-stone"
-      >
-        <Icon strokeWidth={1.75} className="size-5 text-brand-text-soft" />
-      </span>
+    <article className="flex flex-col gap-4 px-5 py-5 last:rounded-b-2xl transition-colors duration-200 ease-out hover:bg-pv-row-hover motion-reduce:transition-none sm:flex-row sm:items-start sm:gap-5 sm:px-6">
+      <div className="flex min-w-0 flex-1 gap-4">
+        <IconTile icon={Icon} tone={doc.category === 'insurance' ? 'success' : 'info'} />
 
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-brand-text sm:text-base">
-            {doc.name}
-          </p>
-          <p className="mt-0.5 truncate text-xs text-brand-text-subtle">
-            {doc.typeLabel}
-            {doc.fileName ? ` · ${doc.fileName}` : ''}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          {doc.isVerified ? (
-            <StatusChip tone="success">Verified</StatusChip>
-          ) : (
-            <StatusChip tone="neutral">Awaiting review</StatusChip>
-          )}
-          <ExpiryChip document={doc} />
-        </div>
-
-        {doc.insuranceProvider || doc.policyNumber || cover ? (
-          <dl className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
-            <Meta label="Insurer" value={doc.insuranceProvider} />
-            <Meta label="Policy number" value={doc.policyNumber} />
-            <Meta label="Cover" value={cover} />
-          </dl>
-        ) : null}
-
-        <p className="text-xs text-brand-text-subtle">
-          {uploaded ? `Added ${uploaded}` : 'Added'}
-          {size ? ` · ${size}` : ''}
-        </p>
-
-        {/*
-          The booking reference is an ACTION, not metadata, so it sits in the
-          action row at the same h-11 as its neighbours. Inline in the line
-          above it was a 14px-tall tap target — legible, but not hittable with
-          a thumb, and it is the one control on this card that navigates.
-        */}
-        <div className="mt-0.5 flex flex-wrap items-center gap-2">
-          {doc.storagePath ? (
-            <Button
-              type="button"
-              variant="brand-outline"
-              className="h-11"
-              onClick={onDownload}
-              disabled={isDownloading}
-            >
-              {isDownloading ? (
-                <Loader2 aria-hidden className="size-4 animate-spin" />
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="truncate text-[15px] font-semibold tracking-[-0.01em] text-pv-fg">{doc.name}</p>
+              {doc.isVerified ? (
+                <StatusChip tone="success">Verified</StatusChip>
               ) : (
-                <Download aria-hidden className="size-4" />
+                <StatusChip tone="neutral">Awaiting review</StatusChip>
               )}
-              {isDownloading ? 'Opening…' : 'Download'}
-            </Button>
+              <ExpiryChip document={doc} />
+            </div>
+            <p className="mt-1 truncate text-[13px] text-pv-muted-fg">
+              {doc.typeLabel}
+              {uploaded ? ` · added ${uploaded}` : ''}
+              {size ? ` · ${size}` : ''}
+            </p>
+          </div>
+
+          {doc.insuranceProvider || doc.policyNumber || cover ? (
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-3">
+              <Meta label="Insurer" value={doc.insuranceProvider} />
+              <Meta label="Policy number" value={doc.policyNumber} />
+              <Meta label="Cover" value={cover} />
+            </dl>
           ) : null}
 
-          {doc.booking ? (
-            <Button asChild variant="brand-ghost" className="h-11">
-              <Link href={`/portal-v2/bookings/${doc.booking.id}`}>
-                Booking {doc.booking.reference}
-              </Link>
-            </Button>
-          ) : null}
-
-          {doc.canDelete ? (
-            <Button
-              type="button"
-              variant="brand-ghost"
-              className="h-11"
-              onClick={onDelete}
-              disabled={isDeleting}
-            >
-              <Trash2 aria-hidden className="size-4" />
-              Remove
-            </Button>
-          ) : (
+          {!doc.canDelete ? (
             // Not a disabled button: a greyed-out control invites the customer
             // to keep pressing it. Say why instead. "a booking" rather than
             // "this booking" — the link beside it is suppressed when the
             // rental does not belong to this customer, and the sentence has to
             // still read correctly on its own.
-            <p className="text-xs text-brand-text-subtle">
-              Part of a booking, so it cannot be removed here.
-            </p>
-          )}
+            <p className="text-xs text-pv-muted-fg">Part of a booking, so it cannot be removed here.</p>
+          ) : null}
         </div>
+      </div>
+
+      {/*
+        The booking reference is an ACTION, not metadata, so it sits with the
+        other actions at h-11 rather than inline in the muted line, where it
+        would be a 14px-tall tap target.
+      */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2 pl-15 sm:pl-0">
+        {doc.booking ? (
+          <Button asChild variant="brand-ghost" className="h-11 px-4">
+            <Link href={`/portal/bookings/${doc.booking.id}`}>Booking {doc.booking.reference}</Link>
+          </Button>
+        ) : null}
+
+        {doc.storagePath ? (
+          <Button
+            type="button"
+            variant="brand-outline"
+            className="h-11 px-4"
+            onClick={onDownload}
+            disabled={isDownloading}
+          >
+            {isDownloading ? (
+              <Loader2 aria-hidden className="size-4 animate-spin" />
+            ) : (
+              <Download aria-hidden className="size-4" />
+            )}
+            {isDownloading ? 'Opening…' : 'Download'}
+          </Button>
+        ) : null}
+
+        {doc.canDelete ? (
+          <Button
+            type="button"
+            variant="brand-ghost"
+            size="icon"
+            className="size-11 text-pv-muted-fg hover:bg-pv-danger-light hover:text-pv-danger"
+            onClick={onDelete}
+            disabled={isDeleting}
+            aria-label={`Remove ${doc.name}`}
+          >
+            <Trash2 aria-hidden className="size-4" />
+          </Button>
+        ) : null}
       </div>
     </article>
   );

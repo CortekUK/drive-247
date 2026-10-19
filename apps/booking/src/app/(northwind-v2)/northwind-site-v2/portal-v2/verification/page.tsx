@@ -63,6 +63,7 @@ import {
   PanelHeader,
 } from '@nw/portal-v2/primitives';
 import { StatusChip } from '@nw/portal-v2/status-chip';
+import { Button } from '@nw/components/ui/button';
 import { Skeleton } from '@nw/components/ui/skeleton';
 import { useTenant } from '@nw/contexts/TenantContext';
 import {
@@ -75,6 +76,7 @@ import {
 import { parseDateOnly } from '@nw/lib/domain';
 import { cn } from '@nw/lib/utils';
 
+import { IconTile, Notice } from '../documents/_components/kit';
 import { DocumentPreview } from './_components/document-preview';
 
 /* ──────────────────────────── outcome vocabulary ───────────────────────── */
@@ -233,7 +235,7 @@ export default function PortalVerificationPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="ID verification"
-        description="Where your identity check stands, and what happens next."
+        description="Where your identity check stands, and what happens next. Nothing here can be edited."
       />
 
       {verification.isError ? (
@@ -269,6 +271,11 @@ function VerificationBody({
         outcome={outcome}
         verifiedByOperator={verifiedByOperator}
         checkedOn={latest?.verification_completed_at ?? latest?.updated_at ?? null}
+        faceMatch={
+          latest && latest.ai_face_match_score !== null && !verifiedByOperator
+            ? Math.round(latest.ai_face_match_score * 100)
+            : null
+        }
       />
 
       {progress ? <ProgressPanel progress={progress} /> : null}
@@ -298,48 +305,36 @@ function VerificationBody({
 
 /* ───────────────────────────────── status ──────────────────────────────── */
 
-const TONE_ICON: Record<Tone, string> = {
-  neutral: 'bg-brand-stone text-brand-text-soft',
-  success: 'bg-success-light text-success',
-  warning: 'bg-warning-light text-warning',
-  danger: 'bg-danger-light text-danger',
-  info: 'bg-info-light text-info',
-};
-
 function StatusPanel({
   copy,
   outcome,
   verifiedByOperator,
   checkedOn,
+  faceMatch,
 }: {
   copy: OutcomeCopy;
   outcome: VerificationOutcome;
   verifiedByOperator: boolean;
   checkedOn: string | null;
+  /** Whole percent, shown big on the right like the operator's verdict card. */
+  faceMatch: number | null;
 }) {
   const { tenant } = useTenant();
   const operator = tenant?.company_name ?? 'your rental company';
   const Icon = copy.icon;
 
   return (
-    <Panel className="px-4 py-5 sm:px-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-        <span
-          className={cn(
-            'grid size-11 shrink-0 place-items-center rounded-full',
-            TONE_ICON[copy.tone],
-          )}
-        >
-          <Icon aria-hidden strokeWidth={1.75} className="size-5" />
-        </span>
+    <Panel className="px-5 py-6 sm:px-7 sm:py-7">
+      <div className="flex items-start gap-4 sm:gap-5">
+        <IconTile icon={Icon} tone={copy.tone} className="size-12 rounded-3xl" />
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-medium text-brand-text">{copy.headline}</h2>
+            <h2 className="text-lg font-semibold tracking-[-0.02em] text-pv-fg">{copy.headline}</h2>
             <StatusChip tone={copy.tone}>{copy.chip}</StatusChip>
           </div>
 
-          <p className="mt-1.5 text-sm leading-relaxed text-brand-text-soft">
+          <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-pv-muted-fg">
             {/*
               A customer the operator vouched for in person has no photos, no
               face-match score and no document on file. Telling them "your ID
@@ -352,18 +347,23 @@ function StatusPanel({
           </p>
 
           {checkedOn && outcome !== 'in_progress' ? (
-            <p className="mt-2 text-xs text-brand-text-subtle">
-              Last updated {formatTimestamp(checkedOn)}
-            </p>
-          ) : null}
-
-          {tenant?.require_identity_verification && outcome !== 'approved' ? (
-            <p className="mt-3 rounded-xl bg-brand-stone px-3 py-2 text-sm leading-relaxed text-brand-text-soft">
-              {operator} requires a verified ID before you can collect a vehicle.
-            </p>
+            <p className="mt-2 text-xs text-pv-muted-fg">Last updated {formatTimestamp(checkedOn)}</p>
           ) : null}
         </div>
+
+        {faceMatch !== null ? (
+          <div className="hidden shrink-0 text-right sm:block">
+            <p className="text-3xl font-bold tracking-[-0.03em] tabular-nums text-pv-fg">{faceMatch}%</p>
+            <p className="text-xs text-pv-muted-fg">face match</p>
+          </div>
+        ) : null}
       </div>
+
+      {tenant?.require_identity_verification && outcome !== 'approved' ? (
+        <Notice tone="info" className="mt-5">
+          {operator} requires a verified ID before you can collect a vehicle.
+        </Notice>
+      ) : null}
     </Panel>
   );
 }
@@ -388,20 +388,20 @@ function ProgressPanel({ progress }: { progress: VerificationProgress }) {
         title="On your phone right now"
         action={
           timeLeft ? (
-            <span className="text-xs text-brand-text-subtle">Link {timeLeft}</span>
+            <span className="text-xs text-pv-muted-fg">Link {timeLeft}</span>
           ) : null
         }
       />
-      <div className="flex flex-col gap-4 px-4 py-4 sm:px-5">
+      <div className="flex flex-col gap-5 px-5 py-5 sm:px-6">
         <div>
           <div className="flex items-baseline justify-between gap-3">
-            <p className="text-sm font-medium text-brand-text">{step.label}</p>
-            <span className="shrink-0 text-xs tabular-nums text-brand-text-subtle">
+            <p className="text-sm font-medium text-pv-fg">{step.label}</p>
+            <span className="shrink-0 text-xs tabular-nums text-pv-muted-fg">
               {step.percent}%
             </span>
           </div>
           <div
-            className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-brand-stone"
+            className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-pv-tint"
             role="progressbar"
             aria-valuenow={step.percent}
             aria-valuemin={0}
@@ -409,29 +409,35 @@ function ProgressPanel({ progress }: { progress: VerificationProgress }) {
             aria-label="Verification progress"
           >
             <div
-              className="h-full rounded-full bg-brand-progress-fill transition-[width] duration-500"
+              className="h-full origin-left rounded-full bg-pv-primary transition-[width] duration-500 motion-reduce:transition-none"
               style={{ width: `${step.percent}%` }}
             />
           </div>
         </div>
 
-        <ul className="flex flex-col gap-2">
+        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           {captured.map((item) => (
-            <li key={item.label} className="flex items-center gap-2 text-sm">
+            <li
+              key={item.label}
+              className={cn(
+                'flex items-center gap-2.5 rounded-2xl px-4 py-3 text-sm ring-1',
+                item.done ? 'bg-pv-success-light/60 ring-pv-success/20' : 'bg-pv-row ring-pv-border',
+              )}
+            >
               {item.done ? (
                 <CircleCheck
                   aria-hidden
                   strokeWidth={1.75}
-                  className="size-4 shrink-0 text-success"
+                  className="size-4 shrink-0 text-pv-success"
                 />
               ) : (
                 <span
                   aria-hidden
-                  className="size-4 shrink-0 rounded-full border border-brand-border"
+                  className="size-4 shrink-0 rounded-full border-[1.5px] border-pv-muted-fg/40"
                 />
               )}
               <span
-                className={item.done ? 'text-brand-text' : 'text-brand-text-subtle'}
+                className={item.done ? 'font-medium text-pv-fg' : 'text-pv-muted-fg'}
               >
                 {item.label}
               </span>
@@ -440,7 +446,7 @@ function ProgressPanel({ progress }: { progress: VerificationProgress }) {
           ))}
         </ul>
 
-        <p className="text-xs leading-relaxed text-brand-text-subtle">
+        <p className="text-xs leading-relaxed text-pv-muted-fg">
           You can close this page — the check carries on. Come back here to see
           the result.
         </p>
@@ -462,35 +468,18 @@ function ExpiryNotice({
   const expired = state === 'expired';
 
   return (
-    <div
-      className={cn(
-        'flex items-start gap-3 rounded-2xl border px-4 py-3.5',
+    <Notice
+      tone={expired ? 'danger' : 'warning'}
+      title={
         expired
-          ? 'border-danger-subtle bg-danger-light'
-          : 'border-warning-med bg-warning-light',
-      )}
+          ? 'The document you verified with has expired'
+          : 'The document you verified with expires soon'
+      }
     >
-      <TriangleAlert
-        aria-hidden
-        strokeWidth={1.75}
-        className={cn(
-          'mt-0.5 size-4 shrink-0',
-          expired ? 'text-danger' : 'text-warning',
-        )}
-      />
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-brand-text">
-          {expired
-            ? 'The document you verified with has expired'
-            : 'The document you verified with expires soon'}
-        </p>
-        <p className="mt-0.5 text-sm leading-relaxed text-brand-text-soft">
-          {date ? `It runs out on ${date}. ` : ''}
-          You will need to verify again with a current document before your next
-          collection.
-        </p>
-      </div>
-    </div>
+      {date ? `It runs out on ${date}. ` : ''}
+      You will need to verify again with a current document before your next
+      collection.
+    </Notice>
   );
 }
 
@@ -543,7 +532,7 @@ function VerificationDetails({
       {hasPersonal ? (
         <Panel>
           <PanelHeader title="What your document says" />
-          <div className="px-4 sm:px-5">
+          <div className="px-5 py-1 sm:px-6">
             <DetailList>
               <DetailRow label="First name" value={row.first_name} />
               <DetailRow label="Last name" value={row.last_name} />
@@ -554,7 +543,7 @@ function VerificationDetails({
               />
             </DetailList>
           </div>
-          <p className="border-t border-brand-border-soft px-4 py-3 text-xs leading-relaxed text-brand-text-subtle sm:px-5">
+          <p className="rounded-b-2xl border-t border-pv-border bg-pv-row px-5 py-3.5 text-xs leading-relaxed text-pv-muted-fg sm:px-6">
             These were read off your document automatically. If anything is
             wrong, tell us and we will correct it — this page cannot be edited.
           </p>
@@ -564,7 +553,7 @@ function VerificationDetails({
       {hasDocument ? (
         <Panel>
           <PanelHeader title="Your document" />
-          <div className="px-4 sm:px-5">
+          <div className="px-5 py-1 sm:px-6">
             <DetailList>
               <DetailRow label="Type" value={documentTypeLabel(row.document_type)} />
               <DetailRow label="Number" value={row.document_number} />
@@ -604,7 +593,7 @@ function VerificationDetails({
 
       <Panel>
         <PanelHeader title="The check itself" />
-        <div className="px-4 sm:px-5">
+        <div className="px-5 py-1 sm:px-6">
           <DetailList>
             <DetailRow label="Method" value={providerLabel(row)} />
             <DetailRow
@@ -637,12 +626,12 @@ function VerificationDetails({
       {images.length > 0 ? (
         <Panel>
           <PanelHeader title="What you sent" />
-          <div className="px-4 py-4 sm:px-5">
-            <p className="mb-4 text-sm leading-relaxed text-brand-text-soft">
+          <div className="px-5 py-5 sm:px-6">
+            <p className="mb-5 text-sm leading-relaxed text-pv-muted-fg">
               Hidden by default, so a document number is not sitting on screen
               when you do not need it. Only you and {operator} can see these.
             </p>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-2 items-start gap-4 lg:grid-cols-4">
               {images.map((image) => (
                 <DocumentPreview
                   key={image.label}
@@ -682,9 +671,9 @@ function NextSteps({
 
   if (outcome === 'in_review') {
     return (
-      <Panel className="px-4 py-4 sm:px-5">
-        <p className="text-sm font-medium text-brand-text">Nothing to do</p>
-        <p className="mt-1 text-sm leading-relaxed text-brand-text-soft">
+      <Panel className="px-5 py-5 sm:px-6">
+        <p className="text-[15px] font-semibold text-pv-fg">Nothing to do</p>
+        <p className="mt-1 text-sm leading-relaxed text-pv-muted-fg">
           {operator} will be in touch once the review is finished. This page
           updates by itself, so you do not need to keep checking it.
         </p>
@@ -694,9 +683,9 @@ function NextSteps({
 
   if (outcome === 'in_progress') {
     return (
-      <Panel className="px-4 py-4 sm:px-5">
-        <p className="text-sm font-medium text-brand-text">Finish on your phone</p>
-        <p className="mt-1 text-sm leading-relaxed text-brand-text-soft">
+      <Panel className="px-5 py-5 sm:px-6">
+        <p className="text-[15px] font-semibold text-pv-fg">Finish on your phone</p>
+        <p className="mt-1 text-sm leading-relaxed text-pv-muted-fg">
           Open the secure link {operator} sent you and keep going. If you have
           lost it, ask for a new one — the link below reaches them.
         </p>
@@ -708,11 +697,11 @@ function NextSteps({
   if (outcome === 'approved') {
     if (verifiedByOperator) return null;
     return (
-      <Panel className="px-4 py-4 sm:px-5">
-        <p className="text-sm font-medium text-brand-text">
+      <Panel className="px-5 py-5 sm:px-6">
+        <p className="text-[15px] font-semibold text-pv-fg">
           Changed document, or something wrong above?
         </p>
-        <p className="mt-1 text-sm leading-relaxed text-brand-text-soft">
+        <p className="mt-1 text-sm leading-relaxed text-pv-muted-fg">
           If you have renewed your licence or changed your name, tell {operator}
           {' '}
           and they will set up a fresh check.
@@ -732,8 +721,8 @@ function NextSteps({
   return (
     <Panel>
       <PanelHeader title={heading} />
-      <div className="flex flex-col gap-4 px-4 py-4 sm:px-5">
-        <ol className="flex flex-col gap-3">
+      <div className="flex flex-col gap-5 px-5 py-5 sm:px-6">
+        <ol className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Step
             index={1}
             icon={Smartphone}
@@ -759,18 +748,13 @@ function NextSteps({
           create the link — saying so plainly beats a button that appears to
           work and leaves them stuck mid-check.
         */}
-        <div className="rounded-xl border border-brand-border-soft bg-brand-stone px-3 py-3">
-          <p className="text-sm font-medium text-brand-text">
-            You cannot start a check from here yet
-          </p>
-          <p className="mt-1 text-sm leading-relaxed text-brand-text-soft">
-            This part of your account is still being connected. Ask {operator}
-            {' '}
-            for a verification link and it will show up on this page as soon as
-            you start it.
-          </p>
+        <Notice tone="info" title="You cannot start a check from here yet">
+          This part of your account is still being connected. Ask {operator}
+          {' '}
+          for a verification link and it will show up on this page as soon as
+          you start it.
           <ContactLinks email={email} phone={phone} />
-        </div>
+        </Notice>
       </div>
     </Panel>
   );
@@ -788,16 +772,19 @@ function Step({
   body: string;
 }) {
   return (
-    <li className="flex gap-3">
-      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-stone">
-        <Icon aria-hidden strokeWidth={1.75} className="size-4 text-brand-text-soft" />
-      </span>
+    <li className="flex flex-col gap-3 rounded-2xl bg-pv-row px-4 py-4 ring-1 ring-pv-border">
+      <div className="flex items-center justify-between">
+        <IconTile icon={Icon} className="size-9 rounded-xl [&>svg]:size-4" />
+        <span aria-hidden className="text-xs font-medium tabular-nums text-pv-muted-fg">
+          {index} of 3
+        </span>
+      </div>
       <div className="min-w-0">
-        <p className="text-sm font-medium text-brand-text">
+        <p className="text-sm font-semibold text-pv-fg">
           <span className="sr-only">Step {index}: </span>
           {title}
         </p>
-        <p className="mt-0.5 text-sm leading-relaxed text-brand-text-soft">{body}</p>
+        <p className="mt-1 text-[13px] leading-relaxed text-pv-muted-fg">{body}</p>
       </div>
     </li>
   );
@@ -820,34 +807,33 @@ function ContactLinks({
 }) {
   if (!email && !phone) {
     return (
-      <Link
-        href="/contact"
-        className="mt-2 inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-brand-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/25"
-      >
-        <Mail aria-hidden strokeWidth={1.75} className="size-4" />
-        Get in touch
-      </Link>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button asChild variant="brand-outline" className="h-11 px-4">
+          <Link href="/contact">
+            <Mail aria-hidden strokeWidth={1.75} className="size-4" />
+            Get in touch
+          </Link>
+        </Button>
+      </div>
     );
   }
   return (
-    <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
+    <div className="mt-3 flex flex-wrap gap-2">
       {email ? (
-        <a
-          href={`mailto:${email}`}
-          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-brand-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/25"
-        >
-          <Mail aria-hidden strokeWidth={1.75} className="size-4" />
-          <span className="break-all">{email}</span>
-        </a>
+        <Button asChild variant="brand-outline" className="h-11 max-w-full px-4">
+          <a href={`mailto:${email}`}>
+            <Mail aria-hidden strokeWidth={1.75} className="size-4" />
+            <span className="truncate">{email}</span>
+          </a>
+        </Button>
       ) : null}
       {phone ? (
-        <a
-          href={`tel:${phone.replace(/\s+/g, '')}`}
-          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-brand-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/25"
-        >
-          <Phone aria-hidden strokeWidth={1.75} className="size-4" />
-          {phone}
-        </a>
+        <Button asChild variant="brand-outline" className="h-11 px-4">
+          <a href={`tel:${phone.replace(/\s+/g, '')}`}>
+            <Phone aria-hidden strokeWidth={1.75} className="size-4" />
+            {phone}
+          </a>
+        </Button>
       ) : null}
     </div>
   );
@@ -868,20 +854,20 @@ function HistoryPanel({ history }: { history: CustomerVerificationRow[] }) {
   return (
     <Panel>
       <PanelHeader title="Earlier attempts" />
-      <ul className="divide-y divide-brand-border-soft">
+      <ul className="divide-y divide-pv-border">
         {earlier.map((row) => {
           const outcome = historyOutcome(row);
           const copy = OUTCOME[outcome];
           return (
             <li
               key={row.id}
-              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-4 py-3 sm:px-5"
+              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-5 py-4 last:rounded-b-2xl transition-colors duration-200 ease-out hover:bg-pv-row-hover motion-reduce:transition-none sm:px-6"
             >
               <div className="min-w-0">
-                <p className="text-sm text-brand-text">
+                <p className="text-sm font-medium text-pv-fg">
                   {formatTimestamp(row.created_at) ?? 'Unknown date'}
                 </p>
-                <p className="text-xs text-brand-text-subtle">
+                <p className="text-xs text-pv-muted-fg">
                   {providerLabel(row) ?? 'Identity check'}
                 </p>
               </div>
@@ -918,18 +904,18 @@ function historyOutcome(row: CustomerVerificationRow): VerificationOutcome {
 function VerificationSkeleton() {
   return (
     <div className="flex flex-col gap-6" aria-hidden>
-      <Panel className="px-4 py-5 sm:px-5">
-        <div className="flex gap-4">
-          <Skeleton className="size-11 shrink-0 rounded-full bg-brand-stone" />
-          <div className="flex flex-1 flex-col gap-2">
-            <Skeleton className="h-5 w-56 max-w-full bg-brand-stone" />
-            <Skeleton className="h-4 w-full max-w-md bg-brand-stone" />
-            <Skeleton className="h-4 w-40 bg-brand-stone" />
+      <Panel className="px-5 py-6 sm:px-7 sm:py-7">
+        <div className="flex gap-5">
+          <Skeleton className="size-12 shrink-0 rounded-3xl bg-pv-tint" />
+          <div className="flex flex-1 flex-col gap-2.5">
+            <Skeleton className="h-5 w-64 max-w-full bg-pv-tint" />
+            <Skeleton className="h-4 w-full max-w-lg bg-pv-tint" />
+            <Skeleton className="h-3 w-40 bg-pv-tint" />
           </div>
         </div>
       </Panel>
-      <Skeleton className="h-44 w-full rounded-2xl bg-brand-stone" />
-      <Skeleton className="h-56 w-full rounded-2xl bg-brand-stone" />
+      <Skeleton className="h-44 w-full rounded-2xl bg-pv-tint/70" />
+      <Skeleton className="h-56 w-full rounded-2xl bg-pv-tint/70" />
     </div>
   );
 }

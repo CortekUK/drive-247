@@ -450,7 +450,7 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Customer portal v2 (/portal-v2) — the operator portal v2's design language
+   Customer portal v2 (served at /portal) — the operator portal v2's design language
    (apps/portal/src/styles/v2-theme.css), scoped to `.pv2` so nothing else on
    the Northwind site changes. The brand arrives as three HSL parameters that
    the shell writes inline from the tenant's primary colour; the defaults are
@@ -486,6 +486,22 @@
   --pv-danger: hsl(357 100% 45%);
   --pv-danger-light: hsl(0 84% 94%);
 
+  /* The operator v2 tokens the frame reads (apps/portal/src/styles/v2-theme.css,
+     same names without the prefix). --pv-hover is the light purple every
+     control hovers with; --pv-row-hover is half of it, for list rows; --pv-link
+     is brand-coloured text; --pv-muted-on-tint is muted text that still reads
+     on one of those tints (45% grey drops under 4.5:1 there, 40% clears it). */
+  --pv-hover: hsl(var(--brand-h) var(--brand-s) 95%);
+  --pv-row-hover: hsl(var(--brand-h) var(--brand-s) 97.5%);
+  --pv-link: hsl(var(--brand-h) var(--brand-s) var(--brand-l));
+  --pv-muted-on-tint: hsl(0 0% 40%);
+  --pv-ring: hsl(0 0% 63%);
+  --pv-sidebar: hsl(var(--brand-h) calc(var(--brand-s) - 24%) 98%);
+  --pv-sidebar-fg: hsl(0 0% 3.9%);
+  --pv-sidebar-accent: hsl(var(--brand-h) calc(var(--brand-s) + 7%) 94%);
+  --pv-sidebar-border: hsl(var(--brand-h) calc(var(--brand-s) - 43%) 92%);
+  --pv-radius: 0.625rem;
+
   font-family: var(--font-manrope), var(--font-dm-sans), system-ui, sans-serif;
   color: var(--pv-fg);
   background-color: var(--pv-bg);
@@ -517,6 +533,35 @@
   .pv2-enter { animation: none; }
 }
 
+/* Quick book (site-v2/quick-book/): soft and a little bouncy — a springy pop
+   on every choice, screens rising in. Off for prefers-reduced-motion. */
+@keyframes qb-pop-soft {
+  0% { transform: scale(.88); }
+  60% { transform: scale(1.06); }
+  100% { transform: none; }
+}
+@keyframes qb-screen {
+  from { opacity: 0; transform: translateY(18px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+.qb-pop-text { animation: qb-pop-soft 380ms cubic-bezier(.34, 1.56, .64, 1) both; }
+.qb-screen { animation: qb-screen 380ms cubic-bezier(.22, 1.2, .36, 1) both; }
+.qb-rise-in { animation: qb-screen 360ms cubic-bezier(.22, 1.2, .36, 1) both; }
+/* The calendar's pen loop round pickup and return draws itself. */
+@keyframes qb-pen { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+.qb-pen path { stroke-dasharray: 1; animation: qb-pen 560ms ease-out 80ms both; }
+.qb-pen path + path { animation-delay: 380ms; }
+@media (prefers-reduced-motion: reduce) {
+  .qb-pop-text, .qb-screen, .qb-rise-in, .qb-pen path { animation: none; }
+}
+
+/* Sign-in v2 hero caret: a hard on/off blink, like a real text cursor. */
+@keyframes pv2-caret {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.pv2-caret { animation: pv2-caret 1.06s linear infinite; }
+
 @theme inline {
   --color-pv-bg: var(--pv-bg);
   --color-pv-fg: var(--pv-fg);
@@ -537,6 +582,15 @@
   --color-pv-warning-light: var(--pv-warning-light);
   --color-pv-danger: var(--pv-danger);
   --color-pv-danger-light: var(--pv-danger-light);
+  --color-pv-hover: var(--pv-hover);
+  --color-pv-row-hover: var(--pv-row-hover);
+  --color-pv-link: var(--pv-link);
+  --color-pv-muted-on-tint: var(--pv-muted-on-tint);
+  --color-pv-ring: var(--pv-ring);
+  --color-pv-sidebar: var(--pv-sidebar);
+  --color-pv-sidebar-fg: var(--pv-sidebar-fg);
+  --color-pv-sidebar-accent: var(--pv-sidebar-accent);
+  --color-pv-sidebar-border: var(--pv-sidebar-border);
 }
 
 /* Inside portal v2 the Northwind site's own brand tokens point at the v2 set,
@@ -565,9 +619,72 @@
 .pv2-tokens {
   font-family: var(--font-manrope), var(--font-dm-sans), system-ui, sans-serif;
 }
-/* v2 buttons are soft rectangles, not the site's pills. Unlayered, so it wins
-   over the `rounded-full` utility the Button's brand variants carry. */
+/* v2 buttons are the operator ui-v2 Button: pills (`rounded-4xl`), primary
+   hovering to primary/80, outline and ghost hovering with the light purple
+   tint and never white. Unlayered, so these win over the brand variants'
+   own utilities without editing the shared Button. */
 .pv2 [data-slot="button"][data-variant^="brand"],
 .pv2-tokens [data-slot="button"][data-variant^="brand"] {
-  border-radius: 0.625rem;
+  border-radius: 9999px;
+  transition: background-color 200ms ease-out, color 200ms ease-out, border-color 200ms ease-out, opacity 200ms ease-out;
+}
+.pv2 [data-slot="button"][data-variant="brand"]:hover,
+.pv2-tokens [data-slot="button"][data-variant="brand"]:hover {
+  opacity: 1;
+  background-color: color-mix(in srgb, var(--pv-primary) 80%, transparent);
+}
+.pv2 [data-slot="button"][data-variant="brand-outline"],
+.pv2-tokens [data-slot="button"][data-variant="brand-outline"] {
+  border-color: var(--pv-border);
+  background-color: transparent;
+}
+.pv2 [data-slot="button"][data-variant="brand-outline"]:hover,
+.pv2-tokens [data-slot="button"][data-variant="brand-outline"]:hover,
+.pv2 [data-slot="button"][data-variant="brand-ghost"]:hover,
+.pv2-tokens [data-slot="button"][data-variant="brand-ghost"]:hover {
+  background-color: var(--pv-hover);
+  color: var(--pv-fg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pv2 [data-slot="button"][data-variant^="brand"],
+  .pv2-tokens [data-slot="button"][data-variant^="brand"] { transition: none; }
+}
+
+/* Dialogs and the phone drawer as the operator ui-v2 ones: a 30% black scrim
+   with a medium blur (the screen behind is dense, so the blur does the
+   separating), and a 2rem-radius panel with a 5% hairline instead of a border.
+   Scoped to `.pv2-tokens`, which only the portal v2 shell puts on <body>. */
+.pv2-tokens [data-slot="dialog-overlay"],
+.pv2-tokens [data-slot="sheet-overlay"] {
+  background-color: rgb(0 0 0 / 0.3);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.pv2-tokens [data-slot="dialog-content"] {
+  border-radius: 2rem;
+  border-color: color-mix(in srgb, var(--pv-fg) 5%, transparent);
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+}
+@media (max-width: 39.99rem) {
+  .pv2-tokens [data-slot="dialog-content"] { border-radius: 1.5rem; }
+}
+
+/* The operator rail's hover: the row's LABEL grows by about a pixel (13 to 14,
+   scale 1.077) from its left edge and goes a step bolder over 200ms, on the
+   variable Manrope face so the weight eases. The icon does neither. Desktop
+   only, since a phone has no hover. Scaled rather than resized so nothing in
+   the row reflows. (app-sidebar-v2.tsx, NAV_HOVER.) */
+@media (min-width: 48rem) {
+  .pv2 .pv2-nav-row .pv2-nav-label {
+    transform-origin: left center;
+    transition: transform 200ms ease-in, font-weight 200ms ease-in;
+  }
+  .pv2 .pv2-nav-row:hover .pv2-nav-label {
+    transform: scale(1.077);
+    font-weight: 600;
+    transition-timing-function: ease-out;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pv2 .pv2-nav-row .pv2-nav-label { transition: none; }
 }

@@ -46,7 +46,7 @@
 
 import { handleCors, errorResponse, jsonResponse } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
-import { getSignupPlan } from "../_shared/signup-plans.ts";
+import { fetchSignupPlan } from "../_shared/signup-plans.ts";
 import { isParkedRow, readRehearsalFor, signupModeFor } from "../_shared/signup-rehearsal.ts";
 import {
   checkThrottle,
@@ -151,7 +151,7 @@ Deno.serve(async (req) => {
       return signupError("INVALID_BODY", "Invalid JSON body", 400);
     }
 
-    const plan = getSignupPlan(body?.planId);
+    const plan = await fetchSignupPlan(supabase, body?.planId);
     if (!plan) return signupError("PLAN_UNKNOWN", "Unknown plan", 400);
 
     // -----------------------------------------------------------------------

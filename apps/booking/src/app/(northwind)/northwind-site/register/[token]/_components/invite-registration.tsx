@@ -23,7 +23,7 @@
  * hero's pieces a beat apart; the tracker's bar fills by transform.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import Image from "next/image";
 import {
   ArrowDown,
@@ -48,7 +48,6 @@ import {
 } from "lucide-react-nw";
 import { toast } from "sonner-nw";
 
-import { supabase } from "@nw/integrations/supabase/client";
 import { Button } from "@nw/components/ui/button";
 import { Checkbox } from "@nw/components/ui/checkbox";
 import { Input } from "@nw/components/ui/input";
@@ -61,47 +60,16 @@ import {
 } from "@nw/components/booking/field-primitives";
 import { cn } from "@nw/lib/utils";
 
-/* ─────────────────────────────── types ──────────────────────────────────── */
-
-interface TenantInfo {
-  tenantId: string;
-  tenantSlug: string;
-  tenantName: string;
-  tenantLogo: string | null;
-  tenantPrimaryColor: string | null;
-  acceptedVerificationDocument: "drivers_license" | "passport" | "id_card";
-  expiresAt: string;
-}
-
-const DOC_LABEL: Record<string, string> = {
-  drivers_license: "driver's license",
-  passport: "passport",
-  id_card: "ID card",
-};
-
-type Phase = "loading" | "invalid" | "form" | "submitting" | "done";
-type Step = 0 | 1;
-
-const QR_LIFETIME_S = 900;
-
-/* ─────────────────────────────── helpers ────────────────────────────────── */
-
-function validate(v: { name: string; email: string; phone: string }) {
-  const e: Partial<Record<"name" | "email" | "phone", string>> = {};
-  if (v.name.trim().length < 2) e.name = "Enter your full name.";
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email.trim())) e.email = "Enter a valid email address.";
-  if (v.phone.replace(/\D/g, "").length < 5) e.phone = "Enter a phone number we can reach you on.";
-  return e;
-}
-
-const fmtClock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-
-function fmtExpiry(iso: string | undefined) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString(undefined, { day: "numeric", month: "long" });
-}
+import {
+  GIG_ACCEPT,
+  QR_LIFETIME_S,
+  fmtClock,
+  fmtExpiry,
+  inviteQrImageUrl,
+  mergeGigFiles,
+  sanitizeInviteInput,
+  useInviteRegistration,
+} from "./use-invite-registration";
 
 /* ──────────────────────────────── page ──────────────────────────────────── */
 
@@ -117,171 +85,36 @@ export function InviteRegistration({
   heroImage: string;
   heroImageAlt: string;
 }) {
-  const [phase, setPhase] = useState<Phase>("loading");
-  const [invalidReason, setInvalidReason] = useState("");
-  const [tenant, setTenant] = useState<TenantInfo | null>(null);
-  const [step, setStep] = useState<Step>(0);
-
-  const [values, setValues] = useState({ name: "", email: "", phone: "" });
-  const [touched, setTouched] = useState<Record<string, boolean>>({});
-  const [isGig, setIsGig] = useState(false);
-  const [gigFiles, setGigFiles] = useState<File[]>([]);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-
-  // Verification (identical mechanics to the original page).
-  const [session, setSession] = useState<{ sessionId: string; qrUrl: string; expiresAt: Date } | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [remaining, setRemaining] = useState(0);
-  const [polling, setPolling] = useState(false);
-  const [verified, setVerified] = useState<null | "GREEN" | "RED" | "REVIEW">(null);
-  const [verifiedSessionId, setVerifiedSessionId] = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Every call, poll and rule lives in `use-invite-registration.ts` (shared
+  // with the v2 page); this file is the v1 markup only.
+  const {
+    phase,
+    invalidReason,
+    tenant,
+    step,
+    setStep,
+    values,
+    setValue,
+    touched,
+    touch,
+    errors,
+    isGig,
+    setIsGig,
+    gigFiles,
+    setGigFiles,
+    submitError,
+    session,
+    creating,
+    remaining,
+    polling,
+    verified,
+    docLabel,
+    startVerification,
+    cancelVerification,
+    submit,
+    goVerify,
+  } = useInviteRegistration({ token, notify: (message) => toast.error(message) });
   const cardRef = useRef<HTMLDivElement>(null);
-
-  const errors = useMemo(() => validate(values), [values]);
-  const docLabel = DOC_LABEL[tenant?.acceptedVerificationDocument ?? "drivers_license"];
-
-  /* ── the invite ──────────────────────────────────────────────────────── */
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke("validate-customer-invite", { body: { token } });
-        if (cancelled) return;
-        if (error || !data?.ok) {
-          setInvalidReason(data?.error || "This invite link is invalid or has expired.");
-          setPhase("invalid");
-          return;
-        }
-        setTenant(data as TenantInfo);
-        setPhase("form");
-      } catch {
-        if (!cancelled) {
-          setInvalidReason("We couldn't check this invite link. Please try again in a moment.");
-          setPhase("invalid");
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
-
-  /* ── verification ────────────────────────────────────────────────────── */
-
-  const startVerification = async () => {
-    if (!tenant) return;
-    setCreating(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("create-ai-verification-session", {
-        body: {
-          customerDetails: { name: values.name.trim(), email: values.email.trim(), phone: values.phone.trim() },
-          tenantId: tenant.tenantId,
-          tenantSlug: tenant.tenantSlug,
-        },
-      });
-      if (error) throw error;
-      if (!data?.ok) throw new Error(data?.error || "Couldn't start verification");
-      setSession({ sessionId: data.sessionId, qrUrl: data.qrUrl, expiresAt: new Date(data.expiresAt) });
-      setPolling(true);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't start verification");
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!session) return;
-    const tick = () => {
-      const left = Math.max(0, Math.floor((session.expiresAt.getTime() - Date.now()) / 1000));
-      setRemaining(left);
-      if (left === 0) {
-        setPolling(false);
-        setSession(null);
-        toast.error("The QR code expired. Start again to get a new one.");
-      }
-    };
-    tick();
-    const t = setInterval(tick, 1000);
-    return () => clearInterval(t);
-  }, [session]);
-
-  const check = useCallback(async () => {
-    if (!polling || !session || !tenant) return;
-    try {
-      // Scoped to this tenant as well as the session (V2_PLAN §5).
-      const { data, error } = await supabase
-        .from("identity_verifications")
-        .select("status, review_status, review_result")
-        .eq("session_id", session.sessionId)
-        .eq("tenant_id", tenant.tenantId)
-        .single();
-      if (error || !data) return;
-      const row = data as { status: string; review_result: string | null };
-      if (row.status === "completed") {
-        setPolling(false);
-        setVerifiedSessionId(session.sessionId);
-        setVerified(row.review_result === "GREEN" ? "GREEN" : row.review_result === "RED" ? "RED" : "REVIEW");
-      }
-    } catch {
-      /* keep polling */
-    }
-  }, [polling, session, tenant]);
-
-  useEffect(() => {
-    if (!polling || !session) return;
-    const first = setTimeout(check, 5000);
-    pollRef.current = setInterval(check, 3000);
-    return () => {
-      clearTimeout(first);
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [polling, session, check]);
-
-  /* ── submit ──────────────────────────────────────────────────────────── */
-
-  const submit = async () => {
-    setSubmitError(null);
-    setPhase("submitting");
-    try {
-      const paths: string[] = [];
-      if (isGig) {
-        for (const file of gigFiles) {
-          const name = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-          const path = `pending/${name}`;
-          const { error } = await supabase.storage
-            .from("gig-driver-images")
-            .upload(path, file, { cacheControl: "3600", upsert: false });
-          if (error) throw new Error(`Couldn't upload ${file.name}`);
-          paths.push(path);
-        }
-      }
-      const { data, error } = await supabase.functions.invoke("submit-customer-registration", {
-        body: {
-          token,
-          name: values.name.trim(),
-          email: values.email.trim(),
-          phone: values.phone.trim(),
-          verificationSessionId: verifiedSessionId || undefined,
-          isGigDriver: isGig || undefined,
-          gigDriverImagePaths: paths.length ? paths : undefined,
-        },
-      });
-      if (error || !data?.ok) throw new Error(data?.error || error?.message || "Registration failed");
-      setPhase("done");
-    } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Registration failed. Please try again.");
-      setPhase("form");
-    }
-  };
-
-  const goVerify = () => {
-    setTouched({ name: true, email: true, phone: true });
-    if (Object.keys(errors).length) return;
-    setStep(1);
-  };
 
   const scrollToCard = () => cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
@@ -353,13 +186,10 @@ export function InviteRegistration({
                           values={values}
                           errors={errors}
                           touched={touched}
-                          onChange={(k, v) => setValues((p) => ({ ...p, [k]: v }))}
-                          onBlur={(k) => setTouched((t) => ({ ...t, [k]: true }))}
+                          onChange={setValue}
+                          onBlur={touch}
                           isGig={isGig}
-                          setIsGig={(v) => {
-                            setIsGig(v);
-                            if (!v) setGigFiles([]);
-                          }}
+                          setIsGig={setIsGig}
                           gigFiles={gigFiles}
                           setGigFiles={setGigFiles}
                           onNext={goVerify}
@@ -373,10 +203,7 @@ export function InviteRegistration({
                           polling={polling}
                           verified={verified}
                           onStart={startVerification}
-                          onCancel={() => {
-                            setPolling(false);
-                            setSession(null);
-                          }}
+                          onCancel={cancelVerification}
                           onBack={() => setStep(0)}
                           onSubmit={submit}
                           submitError={submitError}
@@ -677,7 +504,7 @@ function DetailsStep({
             autoFocus
             value={values.name}
             placeholder="As it appears on your license"
-            onChange={(e) => onChange("name", e.target.value.replace(/\d/g, ""))}
+            onChange={(e) => onChange("name", sanitizeInviteInput("name", e.target.value))}
             onBlur={() => onBlur("name")}
             aria-invalid={err("name") ? true : undefined}
             className={cn(FIELD_INPUT_CLASS, err("name") && "border-danger")}
@@ -715,7 +542,7 @@ function DetailsStep({
               autoComplete="tel"
               value={values.phone}
               placeholder="(555) 123-4567"
-              onChange={(e) => onChange("phone", e.target.value.replace(/[^0-9\s\-()+]/g, ""))}
+              onChange={(e) => onChange("phone", sanitizeInviteInput("phone", e.target.value))}
               onBlur={() => onBlur("phone")}
               aria-invalid={err("phone") ? true : undefined}
               className={cn(FIELD_INPUT_CLASS, err("phone") && "border-danger")}
@@ -768,17 +595,12 @@ function DetailsStep({
                 <input
                   id="inv-gig-files"
                   type="file"
-                  accept=".jpg,.jpeg,.png"
+                  accept={GIG_ACCEPT}
                   multiple
                   className="hidden"
                   onChange={(e) => {
-                    const picked = Array.from(e.target.files ?? []).filter(
-                      (f) => ["image/jpeg", "image/jpg", "image/png"].includes(f.type) && f.size <= 10 * 1024 * 1024,
-                    );
-                    setGigFiles((prev) => {
-                      const names = new Set(prev.map((f) => f.name));
-                      return [...prev, ...picked.filter((f) => !names.has(f.name))];
-                    });
+                    const picked = Array.from(e.target.files ?? []);
+                    setGigFiles((prev) => mergeGigFiles(prev, picked));
                     e.target.value = "";
                   }}
                 />
@@ -864,7 +686,7 @@ function VerifyStep({
           <div className="grid items-center gap-6 rounded-2xl border border-brand-border-soft p-5 sm:grid-cols-[auto_1fr]">
             <div className="mx-auto rounded-2xl border border-brand-border-soft bg-white p-3">
               <img
-                src={`https://quickchart.io/qr?text=${encodeURIComponent(session.qrUrl)}&size=200&margin=1&dark=000000&light=ffffff&ecLevel=M&format=png`}
+                src={inviteQrImageUrl(session.qrUrl)}
                 alt="QR code to verify on your phone"
                 width={168}
                 height={168}

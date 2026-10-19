@@ -68,7 +68,7 @@
  * under review, we will confirm shortly.
  */
 
-import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { CircleCheck, FileText, Loader2, Upload, X } from 'lucide-react-nw';
 
 import { Button } from '@nw/components/ui/button';
@@ -76,30 +76,25 @@ import { Panel, PanelHeader } from '@nw/components/portal/primitives';
 import { StatusChip } from '@nw/components/portal/status-chip';
 import { ProblemBox, formatSize } from '@nw/components/booking/documents-shared';
 import {
+  useInsuranceUpload,
+  type InsurancePick as Pick,
+  type InsuranceUploadHandle,
+} from '@nw/components/booking/use-insurance-upload';
+import {
   INSURANCE_ACCEPT_ATTRIBUTE,
   INSURANCE_FORMATS_LABEL,
-  MAX_INSURANCE_FILES,
-  insuranceObjectName,
-  useSubmitBookingInsurance,
-  validateInsuranceFile,
   type BookingDocumentsSession,
   type InsuranceFileState,
 } from '@nw/hooks/use-booking-documents';
 import { cn } from '@nw/lib/utils';
 
-/** One file in the tray, with where it has got to. */
-interface Pick {
-  file: File;
-  /** The object name it will be stored under. Also this list's identity key. */
-  key: string;
-  state: InsuranceFileState;
-  error: string | null;
-}
+/*
+  The tray, the dedupe, readiness and the send live in `use-insurance-upload.ts`
+  (shared with the v2 panel). This file is the v1 markup only.
+*/
 
 /** The handle the shell's single primary button calls. Never throws. */
-export interface InsuranceUploadHandle {
-  submit: () => Promise<boolean>;
-}
+export type { InsuranceUploadHandle };
 
 /* ──────────────────────────── the upload tray ──────────────────────────── */
 
@@ -132,164 +127,18 @@ export function InsuranceUpload({
   onReadyChange: (ready: boolean) => void;
   ref?: React.Ref<InsuranceUploadHandle>;
 }) {
-  const submit = useSubmitBookingInsurance();
+  const { picks, problem, busy, storedCount, add, remove } = useInsuranceUpload({
+    token,
+    session,
+    alreadySubmitted,
+    onSubmitted,
+    onReadyChange,
+    ref,
+  });
 
-  const [picks, setPicks] = useState<Pick[]>([]);
-  const [problem, setProblem] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  /*
-    `picks` has to be readable from inside the mutation's per-file callback,
-    which is created once per submit and would otherwise close over a stale
-    array. The ref mirrors it; the state is what renders.
-  */
-  const picksRef = useRef<Pick[]>(picks);
-  picksRef.current = picks;
-
-  const busy = submit.isPending;
-
-  const add = useCallback(
-    (list: FileList | null) => {
-      if (!list || list.length === 0) return;
-
-      const incoming = Array.from(list);
-      const rejections: string[] = [];
-
-      /*
-        COMPUTED OUT HERE, NOT INSIDE A setPicks UPDATER, AND THAT MATTERS.
-
-        This loop has a side effect: it fills `rejections`, which is read on the
-        last line to tell the customer what was refused. A state updater is not
-        the place for that. React calls an updater during the RENDER, not at the
-        call site, and only runs it early via an eager-state optimisation it
-        skips whenever the fiber already has pending work. So the moment a
-        second batch arrives while a re-render is still queued, `rejections`
-        would still be empty when `setProblem` read it and the customer's
-        oversized or wrong-type file would disappear with no explanation at all
-        — the one case this message exists for. Reading the ref and setting a
-        plain value keeps the message and the list derived from the same base.
-      */
-      const previous = picksRef.current;
-      const seen = new Set(previous.map((pick) => pick.key));
-      const next = [...previous];
-      let duplicates = 0;
-
-      for (const file of incoming) {
-        const rejection = validateInsuranceFile(file);
-        if (rejection) {
-          rejections.push(rejection);
-          continue;
-        }
-        // Deduped on the OBJECT name rather than the display name: two names
-        // that sanitise to the same object ARE the same object, and letting
-        // both in would silently overwrite one with the other.
-        const key = insuranceObjectName(file.name);
-        if (seen.has(key)) {
-          duplicates += 1;
-          continue;
-        }
-        if (next.length >= MAX_INSURANCE_FILES) {
-          rejections.push(
-            `We can take ${MAX_INSURANCE_FILES} files at a time. “${file.name}” was not added.`,
-          );
-          continue;
-        }
-        seen.add(key);
-        next.push({ file, key, state: 'queued', error: null });
-      }
-
-      if (duplicates > 0) {
-        rejections.push(
-          duplicates === 1
-            ? 'One file was already in the list, so it was not added twice.'
-            : `${duplicates} files were already in the list, so they were not added twice.`,
-        );
-      }
-
-      // Kept in step immediately so two drops in the same tick build on each
-      // other rather than the second discarding the first.
-      picksRef.current = next;
-      setPicks(next);
-
-      // Every rejected file is named, with the limit it hit. A single "some
-      // files were rejected" leaves a customer nothing to change.
-      setProblem(rejections.length > 0 ? rejections.join(' ') : null);
-    },
-    [],
-  );
-
-  const remove = useCallback((key: string) => {
-    setProblem(null);
-    // Ref kept in step for the same reason as `add`: a removal followed by a
-    // drop in the same tick must not resurrect the file that was just removed.
-    const next = picksRef.current.filter((pick) => pick.key !== key);
-    picksRef.current = next;
-    setPicks(next);
-  }, []);
-
-  /* ── readiness, pushed up to the shell ──────────────────────────────── */
-
-  /*
-    A document ALREADY filed by the server counts as present. Without this the
-    single confirm button would sit permanently disabled for a customer coming
-    back to finish step one — the server says `documents_status = 'submitted'`,
-    but this panel's local tray is empty, and "files chosen locally" is not the
-    same fact as "the server has them".
-  */
-  const ready = picks.length > 0 || alreadySubmitted;
-
-  useEffect(() => {
-    onReadyChange(ready);
-  }, [onReadyChange, ready]);
-
-  const handleSubmit = useCallback(async (): Promise<boolean> => {
-    const files = picksRef.current.map((pick) => pick.file);
-    if (files.length === 0) {
-      // Nothing new to send. When the server already has a document that is a
-      // no-op success, not a failure — the shell must not treat it as one.
-      if (alreadySubmitted) return true;
-      setProblem('Please choose at least one file to send.');
-      return false;
-    }
-    setProblem(null);
-    setPicks((previous) =>
-      previous.map((pick) => ({ ...pick, state: 'queued' as const, error: null })),
-    );
-
-    try {
-      const result = await submit.mutateAsync({
-        token,
-        uploadPrefix: session.uploadPrefix,
-        files,
-        onFileState: (index, state, error) => {
-          setPicks((previous) =>
-            previous.map((pick, position) =>
-              position === index ? { ...pick, state, error: error ?? null } : pick,
-            ),
-          );
-        },
-      });
-      picksRef.current = [];
-      setPicks([]);
-      onSubmitted(result.submitted);
-      return true;
-    } catch (caught: unknown) {
-      // The hook has already turned storage and transport failures into
-      // sentences that name the file and what to do next.
-      setProblem(
-        caught instanceof Error
-          ? caught.message
-          : 'Something went wrong sending your files. Please try again.',
-      );
-      return false;
-    }
-  }, [alreadySubmitted, onSubmitted, session.uploadPrefix, submit, token]);
-
-  useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
-
-  const storedCount = picks.filter((pick) => pick.state === 'stored').length;
 
   return (
     <Panel>

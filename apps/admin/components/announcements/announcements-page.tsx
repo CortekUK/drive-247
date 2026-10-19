@@ -2,13 +2,12 @@
 
 import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton } from '@/components/admin/header-buttons';
 import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
-import { AnnouncementsEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
+import { AnnouncementsEmptyArt, FeatureCardArt, SystemNoticeArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { AlertTriangle, Database, Megaphone, Plus } from 'lucide-react';
+import { AlertTriangle, Database, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   deleteAnnouncement,
   loadActiveTenantCount,
@@ -44,29 +43,15 @@ type PageState =
   | { status: 'not-installed' }
   | { status: 'ready'; data: AnnouncementsData };
 
-type TabValue = 'features' | 'system';
-
-const TAB_KIND: Record<TabValue, AnnouncementKind> = { features: 'feature', system: 'system' };
-
-const TAB_HINT: Record<TabValue, string> = {
-  features:
-    'Cards on the new dashboard’s “On your desk” row, each opening a slides dialog. Tenants see them in this order; drag to change it.',
-  system:
-    'Dialogs and banners in every targeted portal, shown before any feature. Hard blockers come first, then soft; drag within a section to change the order.',
-};
-
 /**
- * Super admin Announcements: Features | System tabs over the portal
+ * Super admin Announcements: one list (features, then system messages) over the portal
  * announcement tables. Loads on mount and after every change; a request
  * sequence drops stale responses, so an optimistic change is never overwritten
  * by a read that started before it.
  */
 export function AnnouncementsPage() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const tab: TabValue = searchParams.get('tab') === 'system' ? 'system' : 'features';
-
+  /** "New announcement" asks for the kind first. */
+  const [choosing, setChoosing] = useState(false);
   const [state, setState] = useState<PageState>({ status: 'loading' });
   const [editor, setEditor] = useState<{
     key: number;
@@ -200,10 +185,6 @@ export function AnnouncementsPage() {
     setState((s) => (s.status === 'ready' ? { status: 'ready', data: { ...s.data, rows: fn(s.data.rows) } } : s));
   };
 
-  const setTab = (value: string) => {
-    const next: TabValue = value === 'system' ? 'system' : 'features';
-    router.replace(pathname + '?tab=' + next, { scroll: false });
-  };
 
   // The dialogs here open from code, not a DialogTrigger, so Radix would drop
   // focus on <body> when they close. Remember the opener and hand focus back.
@@ -401,13 +382,8 @@ export function AnnouncementsPage() {
   };
 
   const rows = state.status === 'ready' ? state.data.rows : [];
-  const count = (kind: AnnouncementKind) => {
-    const ofKind = rows.filter((r) => r.kind === kind);
-    return ofKind.filter((r) => r.is_active).length + '/' + ofKind.length;
-  };
 
-  const renderTab = (value: TabValue) => {
-    const kind = TAB_KIND[value];
+  const renderList = () => {
     if (state.status === 'loading') return <ListSkeleton />;
     if (state.status === 'not-installed') {
       return (
@@ -429,42 +405,50 @@ export function AnnouncementsPage() {
         </StateBox>
       );
     }
-    const ofKind = state.data.rows.filter((r) => r.kind === kind);
-    if (ofKind.length === 0) {
+    if (state.data.rows.length === 0) {
       return (
         <EmptyState
           illustration={<AnnouncementsEmptyArt />}
-          headline={kind === 'feature' ? 'No feature announcements yet' : 'No system announcements yet'}
-          body={
-            kind === 'feature'
-              ? 'With no active feature, the dashboard shows no card and the other desk cards fill the row.'
-              : 'With no active system announcement, tenants see nothing extra.'
-          }
-          action={{ label: 'New announcement', icon: Plus, onClick: () => openEditor(kind, null) }}
+          headline="No announcements yet"
+          body="Add a feature card for the dashboard, or a system message as a banner or dialog."
+          action={{ label: 'New announcement', icon: Plus, onClick: () => setChoosing(true) }}
         />
       );
     }
+    const data = state.data;
+    // One page, but each kind keeps its own order: dragging stays within a kind.
     return (
-      <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">{TAB_HINT[value]}</p>
-        <AnnouncementList
-          kind={kind}
-          rows={ofKind}
-          targetsById={state.data.targetsById}
-          statsById={state.data.statsById}
-          statsCountSuperAdmins={state.data.statsCountSuperAdmins}
-          onReorder={(k, ids) => void reorder(k, ids)}
-          pendingById={pendingById}
-          duplicatingId={duplicatingId}
-          onToggleActive={toggleActive}
-          onEdit={(row) => openEditor(row.kind, row)}
-          onDelete={(row) => {
-            rememberOpener();
-            setDeleteTarget(row);
-          }}
-          onShowAgain={askShowAgain}
-          onDuplicate={(row) => void duplicate(row)}
-        />
+      <div className="space-y-8">
+        {(['feature', 'system'] as const).map((kind) => {
+          const ofKind = data.rows.filter((r) => r.kind === kind);
+          if (ofKind.length === 0) return null;
+          return (
+            <div
+              key={kind}
+              // A line between features and system messages: each orders on its own.
+              className="[&:not(:first-child)]:border-t [&:not(:first-child)]:border-border [&:not(:first-child)]:pt-8"
+            >
+              <AnnouncementList
+                kind={kind}
+                rows={ofKind}
+                targetsById={data.targetsById}
+                statsById={data.statsById}
+                statsCountSuperAdmins={data.statsCountSuperAdmins}
+                onReorder={(k, ids) => void reorder(k, ids)}
+                pendingById={pendingById}
+                duplicatingId={duplicatingId}
+                onToggleActive={toggleActive}
+                onEdit={(row) => openEditor(row.kind, row)}
+                onDelete={(row) => {
+                  rememberOpener();
+                  setDeleteTarget(row);
+                }}
+                onShowAgain={askShowAgain}
+                onDuplicate={(row) => void duplicate(row)}
+              />
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -482,26 +466,24 @@ export function AnnouncementsPage() {
             </p>
           </div>
         </div>
-        <Button ref={newButtonRef} className={HEADER_PRIMARY} onClick={() => openEditor(TAB_KIND[tab], null)} disabled={state.status !== 'ready'}>
-          <Plus className="h-4 w-4" />
-          New announcement
-        </Button>
+        <div className={HEADER_ACTIONS}>
+          <Button ref={newButtonRef} className={HEADER_PRIMARY} onClick={() => setChoosing(true)} disabled={state.status !== 'ready'}>
+            <Plus className="h-4 w-4" />
+            New announcement
+          </Button>
+        </div>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="features" className="cursor-pointer">
-            Features
-            {state.status === 'ready' && <span className="ml-1.5 tabular-nums text-muted-foreground">({count('feature')})</span>}
-          </TabsTrigger>
-          <TabsTrigger value="system" className="cursor-pointer">
-            System
-            {state.status === 'ready' && <span className="ml-1.5 tabular-nums text-muted-foreground">({count('system')})</span>}
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="features">{renderTab('features')}</TabsContent>
-        <TabsContent value="system">{renderTab('system')}</TabsContent>
-      </Tabs>
+      {renderList()}
+
+      <KindChooser
+        open={choosing}
+        onCancel={() => setChoosing(false)}
+        onChoose={(kind) => {
+          setChoosing(false);
+          openEditor(kind, null);
+        }}
+      />
 
       {editor && state.status === 'ready' && (
         <AnnouncementEditorDialog
@@ -563,5 +545,59 @@ function StateBox({ icon, children }: { icon: ReactNode; children: ReactNode }) 
       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary">{icon}</div>
       {children}
     </div>
+  );
+}
+
+const KIND_CHOICES: ReadonlyArray<{ kind: AnnouncementKind; title: string; body: string; Art: typeof SystemNoticeArt }> = [
+  {
+    kind: 'system',
+    title: 'System announcement',
+    body: 'A banner or dialog in the portal, for maintenance, updates and anything tenants need to know.',
+    Art: SystemNoticeArt,
+  },
+  {
+    kind: 'feature',
+    title: 'Feature announcement',
+    body: 'A card on the dashboard that opens a slides dialog, to show off something new.',
+    Art: FeatureCardArt,
+  },
+];
+
+function KindChooser({
+  open,
+  onCancel,
+  onChoose,
+}: {
+  open: boolean;
+  onCancel: () => void;
+  onChoose: (kind: AnnouncementKind) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
+      <DialogContent className="max-w-[640px] gap-5 rounded-3xl p-6">
+        <DialogHeader className="text-left">
+          <DialogTitle>New announcement</DialogTitle>
+          <DialogDescription>What kind is it?</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {KIND_CHOICES.map(({ kind, title, body, Art }) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => onChoose(kind)}
+              className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border bg-card text-left transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              <span className="flex h-[150px] items-center justify-center bg-muted/40 px-6 transition-colors group-hover:bg-primary/5">
+                <Art className="max-w-[220px]" />
+              </span>
+              <span className="space-y-1 p-4">
+                <span className="block text-sm font-semibold text-foreground">{title}</span>
+                <span className="block text-xs leading-5 text-muted-foreground">{body}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

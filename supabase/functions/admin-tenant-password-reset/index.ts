@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
       return json({ error: 'Super admin only' }, 403)
     }
 
-    const { action, tenantId, userId, password } = await req.json().catch(() => ({} as any))
+    const { action, tenantId, userId, password, email } = await req.json().catch(() => ({} as any))
 
     // ── list: who can sign in for this tenant ──────────────────────────────
     if (action === 'list') {
@@ -114,6 +114,52 @@ Deno.serve(async (req) => {
           canReset: !!u.auth_user_id && !u.is_super_admin,
         })),
       })
+    }
+
+    // ── update_email: change an operator's login email ─────────────────────
+    // Same guards as a reset (never a super admin, must belong to the tenant).
+    // The address is confirmed on the spot: the super admin is setting it, so
+    // there is nobody to send a confirmation link to.
+    if (action === 'update_email') {
+      if (!userId) return json({ error: 'userId is required' }, 400)
+      const next = typeof email === 'string' ? email.trim().toLowerCase() : ''
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next)) return json({ error: 'Enter a valid email address.' }, 400)
+
+      const { data: target, error: targetError } = await admin
+        .from('app_users')
+        .select('id, email, role, tenant_id, auth_user_id, is_super_admin')
+        .eq('id', userId)
+        .maybeSingle()
+      if (targetError || !target) return json({ error: 'User not found' }, 404)
+      if (target.is_super_admin) return json({ error: 'A super admin login cannot be changed from here.' }, 403)
+      if (!target.auth_user_id) return json({ error: 'This user has no login account.' }, 400)
+      if (tenantId && target.tenant_id !== tenantId) {
+        return json({ error: 'That user does not belong to this company.' }, 400)
+      }
+      if (next === (target.email || '').toLowerCase()) return json({ ok: true, email: target.email })
+
+      const { error: updateError } = await admin.auth.admin.updateUserById(target.auth_user_id, {
+        email: next,
+        email_confirm: true,
+      })
+      if (updateError) {
+        console.error('Login email change failed:', updateError)
+        return json({ error: updateError.message || 'Failed to change the login email' }, 500)
+      }
+      await admin.from('app_users').update({ email: next }).eq('id', target.id)
+
+      await admin.from('audit_logs').insert({
+        actor_id: caller.id,
+        action: 'super_admin_update_login_email',
+        target_user_id: target.id,
+        tenant_id: target.tenant_id,
+        is_super_admin_action: true,
+        entity_type: 'app_user',
+        entity_id: target.id,
+        details: { from: target.email, to: next, target_role: target.role, by: caller.email },
+      })
+
+      return json({ ok: true, email: next })
     }
 
     // ── reset ──────────────────────────────────────────────────────────────

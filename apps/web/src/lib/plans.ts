@@ -26,9 +26,17 @@
 // it keeps the old hardcoded behaviour, which is what makes the DB read a
 // drop-in.
 
-export type SignupPlanId = "starter" | "growth" | "scale";
+/** The three plans this file carries as the fallback. */
+export type BuiltinSignupPlanId = "starter" | "growth" | "scale";
 
-export const SIGNUP_PLAN_IDS: readonly SignupPlanId[] = ["starter", "growth", "scale"] as const;
+/**
+ * A `signup_plans.plan_key`. Since Oct 17 2026 a super admin can create plans,
+ * so this is any lowercase slug, not only the built-in three; the server
+ * prices it from its own row (supabase/functions/_shared/signup-plans.ts).
+ */
+export type SignupPlanId = string;
+
+export const SIGNUP_PLAN_IDS: readonly BuiltinSignupPlanId[] = ["starter", "growth", "scale"] as const;
 
 export interface SignupPlan {
   id: SignupPlanId;
@@ -123,12 +131,9 @@ export const SIGNUP_PLANS: readonly SignupPlan[] = [
   },
 ] as const;
 
-/** True for the three ids the dialog, the edge functions and Stripe all agree on. */
+/** True for anything shaped like a plan_key (the DB's own CHECK). */
 export function isSignupPlanId(value: unknown): value is SignupPlanId {
-  return (
-    typeof value === "string" &&
-    (SIGNUP_PLAN_IDS as readonly string[]).includes(value)
-  );
+  return typeof value === "string" && /^[a-z][a-z0-9_]{1,31}$/.test(value);
 }
 
 /**

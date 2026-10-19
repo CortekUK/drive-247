@@ -6,7 +6,12 @@ import { useTenantBranding } from "@nw/hooks/use-tenant-branding";
 import type { QuoteResult } from "@nw/lib/quote/types";
 import { cn } from "@nw/lib/utils";
 
-import { formatIsoDateLabel } from "./time-utils";
+import {
+  extraLineCaption,
+  groupDateRange,
+  rentalCaption as describeRental,
+  showsRentalGroups,
+} from "./price-lines";
 
 /**
  * The live bill.
@@ -61,15 +66,8 @@ export function PriceSummary({
   }
 
   const { rentalSummary, mileage } = quote;
-  const showGroups =
-    !quote.hideBreakdown &&
-    rentalSummary.kind === "dynamic" &&
-    rentalSummary.groups.length > 0;
-
-  const unitPlural = rentalSummary.quantity === 1 ? "" : "s";
-  const rentalCaption = rentalSummary.quantityIsWhole
-    ? `${rentalSummary.quantity} ${rentalSummary.unitLabel}${unitPlural} × ${formatCurrency(rentalSummary.unitRate)}`
-    : `${rentalSummary.rentalDays} day${rentalSummary.rentalDays === 1 ? "" : "s"} at the ${rentalSummary.tier} rate`;
+  const showGroups = showsRentalGroups(quote);
+  const rentalCaption = describeRental(quote, formatCurrency);
 
   return (
     <div
@@ -96,12 +94,7 @@ export function PriceSummary({
                   <span className="whitespace-nowrap">
                     {group.days} × {formatCurrency(group.rate)}
                   </span>
-                  <span className="block truncate">
-                    {formatIsoDateLabel(group.startDate)}
-                    {group.startDate === group.endDate
-                      ? ""
-                      : ` – ${formatIsoDateLabel(group.endDate)}`}
-                  </span>
+                  <span className="block truncate">{groupDateRange(group)}</span>
                 </span>
                 <span className="shrink-0 tabular-nums">
                   {formatCurrency(group.amount)}
@@ -144,11 +137,7 @@ export function PriceSummary({
           <Row
             key={line.id}
             label={line.name ?? "Extra"}
-            caption={
-              line.perDay
-                ? `${line.quantity} × ${formatCurrency(line.unitPrice)} × ${line.billedDays} day${line.billedDays === 1 ? "" : "s"}`
-                : `${line.quantity} × ${formatCurrency(line.unitPrice)}`
-            }
+            caption={extraLineCaption(line, formatCurrency)}
           >
             {formatCurrency(line.amount)}
           </Row>

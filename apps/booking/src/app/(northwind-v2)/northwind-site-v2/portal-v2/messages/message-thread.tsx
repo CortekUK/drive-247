@@ -3,16 +3,23 @@
 /**
  * The conversation itself: date separators, bubbles, booking attachments.
  *
+ * Drawn as the operator portal v2's thread (`messages-v2/conversation-view` +
+ * `chat/ChatMessageBubble` with its rim stripped, as `timeline-item` does): a
+ * quiet day word with no rules, borderless tinted bubbles at 8px radius, the
+ * time small and bottom-right, and the other side's avatar beside the LAST
+ * bubble of a run. The tint is the operator's in-app one, mirrored: there the
+ * operator's own bubbles are the stronger tint, here the customer's are.
+ *
  * Two visual sides, one rule — `message.isOwn`. Everything else on screen
  * (alignment, fill, timestamp colour, whether a read receipt is drawn at all)
  * follows from it, so there is exactly one place to change if the sides ever
  * need to swap.
  */
 
-import { Car, Check, CheckCheck } from 'lucide-react-nw';
+import { Calendar, Car, Check, CheckCheck } from 'lucide-react-nw';
 
 import { Skeleton } from '@nw/components/ui/skeleton';
-import { formatDateRange } from '@nw/components/portal/format';
+import { formatBookingDates } from '@nw/portal-v2/bookings/format';
 import type {
   CustomerMessage,
   MessageBookingReference,
@@ -62,6 +69,29 @@ export interface MessageDayGroup {
   messages: CustomerMessage[];
 }
 
+/** Where a bubble sits in a run of consecutive messages from one side. */
+export interface MessageRunPosition {
+  isFirstInGroup: boolean;
+  isLastInGroup: boolean;
+}
+
+/**
+ * Runs are per DAY, as in the operator's thread: a day label always opens a
+ * new run, so an avatar never has to stand for messages across a separator.
+ */
+export function runPosition(
+  messages: readonly CustomerMessage[],
+  index: number,
+): MessageRunPosition {
+  const message = messages[index];
+  const previous = messages[index - 1];
+  const next = messages[index + 1];
+  return {
+    isFirstInGroup: !previous || previous.isOwn !== message.isOwn,
+    isLastInGroup: !next || next.isOwn !== message.isOwn,
+  };
+}
+
 /**
  * Split a time-ordered thread into calendar days.
  *
@@ -99,13 +129,46 @@ export function groupMessagesByDay(
 
 /* ──────────────────────────────── pieces ───────────────────────────────── */
 
+/**
+ * The day between messages — a quiet word, no pill and no rules either side.
+ * In the operator's borderless thread the label alone is the divider.
+ */
 export function DaySeparator({ heading }: { heading: string }) {
   return (
-    <div className="my-4 flex items-center justify-center">
-      <span className="rounded-full bg-brand-stone px-3 py-1 text-xs font-medium text-brand-text-subtle">
-        {heading}
-      </span>
+    <div className="my-6 flex justify-center">
+      <span className="text-xs font-medium text-pv-muted-fg">{heading}</span>
     </div>
+  );
+}
+
+/** "NR" for "Northwind Rentals" — the operator's mark when it has no logo. */
+function initials(name: string): string {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((word) => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || '?'
+  );
+}
+
+/**
+ * Initials, not the logo: a tenant logo is a wordmark, and a wordmark squeezed
+ * into a 32px circle is unreadable.
+ */
+export function OperatorAvatar({ name, className }: { name: string; className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'grid size-8 shrink-0 place-items-center rounded-full bg-pv-tint text-xs font-semibold text-pv-primary',
+        className,
+      )}
+    >
+      {initials(name)}
+    </span>
   );
 }
 
@@ -117,45 +180,30 @@ export function DaySeparator({ heading }: { heading: string }) {
  * reader to today's booking page would quietly contradict the message they are
  * reading. The reference number is what they quote; the bookings list is one tap
  * away in the sidebar.
+ *
+ * Laid out as the operator's `BookingReferenceCard`: icon tile, vehicle, then a
+ * calendar line — on a white plate so it reads as an object inside the tint.
  */
-function BookingAttachment({
-  booking,
-  isOwn,
-}: {
-  booking: MessageBookingReference;
-  isOwn: boolean;
-}) {
+function BookingAttachment({ booking }: { booking: MessageBookingReference }) {
   const vehicleName =
     [booking.vehicle.make, booking.vehicle.model].filter(Boolean).join(' ') || 'Vehicle';
 
   return (
-    <div
-      className={cn(
-        'mt-2 flex items-start gap-2.5 rounded-xl border px-3 py-2.5',
-        isOwn ? 'border-white/25 bg-white/10' : 'border-brand-border bg-brand-card',
-      )}
-    >
-      <Car
+    <div className="mb-1.5 flex items-start gap-2.5 rounded-lg bg-pv-card/80 p-2.5 ring-1 ring-pv-primary/10">
+      <span
         aria-hidden
-        strokeWidth={1.75}
-        className={cn('mt-0.5 size-4 shrink-0', isOwn ? 'text-white/70' : 'text-brand-text-subtle')}
-      />
+        className="grid size-8 shrink-0 place-items-center rounded-lg bg-pv-tint text-pv-primary"
+      >
+        <Car strokeWidth={1.75} className="size-4" />
+      </span>
       <div className="min-w-0">
-        <p className={cn('text-sm font-medium', isOwn ? 'text-white' : 'text-brand-text')}>
-          {vehicleName}
-        </p>
-        <p className={cn('text-xs', isOwn ? 'text-white/70' : 'text-brand-text-subtle')}>
-          {formatDateRange(booking.startDate, booking.endDate)}
+        <p className="truncate text-[13px] font-semibold text-pv-fg">{vehicleName}</p>
+        <p className="mt-0.5 flex items-center gap-1 text-xs text-pv-muted-fg">
+          <Calendar aria-hidden className="size-3 shrink-0" />
+          {formatBookingDates(booking.startDate, booking.endDate)}
         </p>
         {booking.rentalNumber ? (
-          <p
-            className={cn(
-              'mt-0.5 text-xs tabular-nums',
-              isOwn ? 'text-white/70' : 'text-brand-text-subtle',
-            )}
-          >
-            {booking.rentalNumber}
-          </p>
+          <p className="mt-0.5 text-xs tabular-nums text-pv-muted-fg">{booking.rentalNumber}</p>
         ) : null}
       </div>
     </div>
@@ -165,11 +213,13 @@ function BookingAttachment({
 export function MessageBubble({
   message,
   senderName,
+  isFirstInGroup = true,
+  isLastInGroup = true,
 }: {
   message: CustomerMessage;
-  /** Who the operator is, shown above their first bubble of a run. */
+  /** Who the operator is — the avatar's initials and its accessible name. */
   senderName: string;
-}) {
+} & Partial<MessageRunPosition>) {
   const { isOwn, booking } = message;
   const clock = formatClock(message.createdAt);
 
@@ -180,38 +230,44 @@ export function MessageBubble({
     booking && message.content.trim() === 'Shared a booking' ? '' : message.content;
 
   return (
-    <div className={cn('flex w-full', isOwn ? 'justify-end' : 'justify-start')}>
+    <div
+      className={cn(
+        'flex w-full min-w-0',
+        isOwn ? 'justify-end' : 'justify-start',
+        isFirstInGroup ? 'mt-4' : 'mt-2',
+      )}
+    >
+      {/* The operator's avatar holds a fixed 32px lane so every bubble in a run
+          starts on the same edge; only the last one actually draws it, as the
+          operator's thread does for the customer. */}
+      {!isOwn ? (
+        <div className="mr-2 flex w-8 shrink-0 items-end">
+          {isLastInGroup ? <OperatorAvatar name={senderName} /> : null}
+        </div>
+      ) : null}
+
       <div
         className={cn(
-          'max-w-[85%] rounded-2xl px-3.5 py-2.5 sm:max-w-[75%]',
-          isOwn
-            ? 'rounded-br-md bg-brand-forest text-white'
-            : 'rounded-bl-md bg-brand-stone text-brand-text',
+          'min-w-0 max-w-[80%] rounded-lg px-4 py-2.5 sm:max-w-[65%]',
+          isOwn ? 'mr-1 bg-pv-primary/15 text-pv-fg' : 'bg-pv-primary/5 text-pv-fg',
         )}
       >
-        {!isOwn ? (
-          <p className="mb-1 text-xs font-medium text-brand-text-soft">{senderName}</p>
+        {!isOwn && isFirstInGroup ? (
+          <p className="mb-0.5 text-xs font-medium text-pv-muted-fg">
+            <span className="sr-only">From </span>
+            {senderName}
+          </p>
         ) : null}
+
+        {booking ? <BookingAttachment booking={booking} /> : null}
 
         {body !== '' ? (
-          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{body}</p>
+          <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{body}</p>
         ) : null}
 
-        {booking ? <BookingAttachment booking={booking} isOwn={isOwn} /> : null}
-
-        <div
-          className={cn(
-            'mt-1 flex items-center gap-1',
-            isOwn ? 'justify-end' : 'justify-start',
-          )}
-        >
+        <div className="mt-0.5 flex items-center justify-end gap-1">
           {clock ? (
-            <span
-              className={cn(
-                'text-[11px] tabular-nums',
-                isOwn ? 'text-white/70' : 'text-brand-text-subtle',
-              )}
-            >
+            <span className="text-[11px] whitespace-nowrap tabular-nums text-pv-muted-fg/80">
               {clock}
             </span>
           ) : null}
@@ -221,12 +277,12 @@ export function MessageBubble({
           {isOwn ? (
             message.isRead ? (
               <>
-                <CheckCheck aria-hidden className="size-3.5 text-white/70" />
+                <CheckCheck aria-hidden className="size-3.5 text-pv-primary" />
                 <span className="sr-only">Read</span>
               </>
             ) : (
               <>
-                <Check aria-hidden className="size-3.5 text-white/70" />
+                <Check aria-hidden className="size-3.5 text-pv-muted-fg/80" />
                 <span className="sr-only">Sent</span>
               </>
             )
@@ -240,8 +296,8 @@ export function MessageBubble({
 /* ────────────────────────────── skeleton ───────────────────────────────── */
 
 /**
- * Sized like a real thread — alternating sides, varying widths — so the panel
- * does not resize under the reader when the messages land.
+ * Sized like a real thread — alternating sides, varying widths, the avatar lane
+ * held on the operator's side — so nothing moves when the messages land.
  */
 export function MessageThreadSkeleton() {
   const rows: ReadonlyArray<{ own: boolean; width: string }> = [
@@ -253,17 +309,22 @@ export function MessageThreadSkeleton() {
   ];
 
   return (
-    <div className="flex flex-col gap-3" aria-hidden>
-      <div className="my-2 flex justify-center">
-        <Skeleton className="h-6 w-20 rounded-full bg-brand-stone" />
+    <div className="flex flex-col" aria-hidden>
+      <div className="mb-2 flex justify-center">
+        <Skeleton className="h-3 w-16 rounded-full bg-pv-muted" />
       </div>
       {rows.map((row, index) => (
         <div
           key={index}
-          className={cn('flex w-full', row.own ? 'justify-end' : 'justify-start')}
+          className={cn('mt-4 flex w-full items-end', row.own ? 'justify-end' : 'justify-start')}
         >
+          {!row.own ? <Skeleton className="mr-2 size-8 shrink-0 rounded-full bg-pv-muted" /> : null}
           <Skeleton
-            className={cn('h-14 max-w-[75%] rounded-2xl bg-brand-stone', row.width)}
+            className={cn(
+              'h-14 max-w-[65%] rounded-lg',
+              row.own ? 'mr-1 bg-pv-primary/10' : 'bg-pv-muted',
+              row.width,
+            )}
           />
         </div>
       ))}

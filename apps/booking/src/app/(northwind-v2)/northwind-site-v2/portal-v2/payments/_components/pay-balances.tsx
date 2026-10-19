@@ -219,7 +219,7 @@ export function PayBalances({
         <PanelHeader title="Pay your balance" />
 
         {payable.length > 0 ? (
-          <ul className="divide-y divide-brand-border-soft">
+          <ul className="divide-y divide-pv-border">
             {payable.map((row) => (
               <li key={row.rentalId}>
                 <PayableRow
@@ -244,15 +244,15 @@ export function PayBalances({
         ) : null}
 
         {unpayable > 0 ? (
-          <div className="border-t border-brand-border-soft px-4 py-3.5 sm:px-5">
-            <p className="text-xs leading-relaxed text-brand-text-subtle">
+          <div className="border-t border-pv-border px-4 py-3.5 sm:px-5">
+            <p className="text-[13px] leading-relaxed text-pv-muted-fg">
               {formatCurrency(unpayable)} of your balance is not linked to a
               booking we can bill against, so it cannot be paid from this page.
               Please get in touch and we will take it directly.
             </p>
             <Link
               href="/contact"
-              className="mt-1 inline-flex min-h-11 w-fit items-center gap-1.5 text-sm font-medium text-brand-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/25"
+              className="mt-1 inline-flex min-h-11 w-fit items-center gap-1.5 text-sm font-medium text-pv-link underline-offset-4 transition-colors duration-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none"
             >
               Contact us
               <ArrowRight aria-hidden className="size-3.5" />
@@ -324,12 +324,12 @@ function PayableRow({
   const when = relativeDayLabel(row.nextDueDate);
 
   return (
-    <div className="flex flex-col gap-3 px-4 py-3.5 sm:px-5">
+    <div className="flex flex-col gap-3 px-4 py-4 sm:px-5">
       <div className="flex items-start gap-3">
         <span
           className={cn(
-            'grid size-9 shrink-0 place-items-center rounded-full',
-            row.isOverdue ? 'bg-danger-light' : 'bg-brand-stone',
+            'grid size-9 shrink-0 place-items-center rounded-xl',
+            row.isOverdue ? 'bg-pv-danger-light' : 'bg-pv-tint',
           )}
         >
           <CreditCard
@@ -337,16 +337,16 @@ function PayableRow({
             strokeWidth={1.75}
             className={cn(
               'size-4',
-              row.isOverdue ? 'text-danger' : 'text-brand-text-subtle',
+              row.isOverdue ? 'text-pv-danger' : 'text-pv-muted-fg',
             )}
           />
         </span>
 
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <p className="truncate text-sm font-medium text-brand-text">
+          <p className="truncate text-sm font-semibold text-pv-fg">
             {vehicle}
           </p>
-          <p className="truncate text-xs text-brand-text-subtle">
+          <p className="truncate text-[13px] text-pv-muted-fg">
             {[reference, row.nextDueDate ? `Due ${formatDate(row.nextDueDate)}` : null]
               .filter((part): part is string => part !== null)
               .join(' · ')}
@@ -356,8 +356,8 @@ function PayableRow({
 
         <p
           className={cn(
-            'shrink-0 text-sm font-medium tabular-nums',
-            row.isOverdue ? 'text-danger' : 'text-brand-text',
+            'shrink-0 text-[15px] font-semibold tabular-nums',
+            row.isOverdue ? 'text-pv-danger' : 'text-pv-fg',
           )}
         >
           {formatCurrency(row.amount)}
@@ -365,7 +365,7 @@ function PayableRow({
       </div>
 
       {row.blockedReason !== null ? (
-        <p className="text-xs leading-relaxed text-brand-text-subtle">
+        <p className="rounded-xl bg-pv-row px-3 py-2.5 text-[13px] leading-relaxed text-pv-muted-fg">
           {row.blockedReason}
         </p>
       ) : watchPhase !== null ? (
@@ -375,8 +375,7 @@ function PayableRow({
           <Button
             type="button"
             variant="brand"
-            size="xl"
-            className="h-11 w-full sm:h-11"
+            className="h-11 w-full px-6 sm:w-auto sm:self-end"
             disabled={disabled || busy}
             onClick={onPay}
           >
@@ -391,14 +390,14 @@ function PayableRow({
           </Button>
 
           {failure !== null ? (
-            <div className="flex items-start gap-2.5 rounded-xl border border-danger-subtle bg-danger-light px-3 py-2.5">
+            <div className="flex items-start gap-2.5 rounded-xl border border-pv-danger/20 bg-pv-danger-light px-3 py-2.5">
               <TriangleAlert
                 aria-hidden
                 strokeWidth={1.75}
-                className="mt-px size-4 shrink-0 text-danger"
+                className="mt-px size-4 shrink-0 text-pv-danger"
               />
               <div className="min-w-0 flex-1">
-                <p className="text-xs leading-relaxed text-brand-text-soft">
+                <p className="text-[13px] leading-relaxed text-pv-fg">
                   {failure.message}
                 </p>
                 {/* No "Try again" button: the Pay button directly above IS the
@@ -406,7 +405,7 @@ function PayableRow({
                     rather than minting a second one. A second button would just
                     be two controls doing one thing. */}
                 {failure.retryable ? (
-                  <p className="mt-1 text-xs text-brand-text-subtle">
+                  <p className="mt-1 text-[13px] text-pv-muted-fg">
                     You can try the button above again.
                   </p>
                 ) : null}

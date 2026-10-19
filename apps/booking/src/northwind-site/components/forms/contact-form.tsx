@@ -3,7 +3,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 
 import {
   Select,
@@ -14,25 +13,13 @@ import {
 } from "@nw/components/ui/select";
 import { Textarea } from "@nw/components/ui/textarea";
 
-const VEHICLE_OPTIONS = [
-  { value: "lexus-rx", label: "Lexus RX" },
-  { value: "porsche-911", label: "Porsche 911 Carrera" },
-  { value: "aston-vanquish", label: "Aston Martin Vanquish" },
-  { value: "rolls-phantom", label: "Rolls-Royce Phantom" },
-  { value: "bmw-m4", label: "BMW M4" },
-  { value: "audi-a4", label: "Audi A4" },
-  { value: "other", label: "Other / Not sure" },
-] as const;
-
-const contactSchema = z.object({
-  fullName: z.string().min(1, "Required"),
-  email: z.string().email("Invalid email"),
-  phone: z.string().min(5, "Required"),
-  vehicleOfInterest: z.string().min(1, "Required"),
-  details: z.string().optional(),
-});
-
-type ContactValues = z.infer<typeof contactSchema>;
+import {
+  CONTACT_DEFAULT_VALUES,
+  VEHICLE_OPTIONS,
+  contactSchema,
+  submitContact,
+  type ContactValues,
+} from "./contact-form-logic";
 
 export function ContactForm() {
   const [submitted, setSubmitted] = useState(false);
@@ -45,18 +32,11 @@ export function ContactForm() {
     formState: { errors, isSubmitting },
   } = useForm<ContactValues>({
     resolver: zodResolver(contactSchema),
-    defaultValues: {
-      fullName: "",
-      email: "",
-      phone: "",
-      vehicleOfInterest: "",
-      details: "",
-    },
+    defaultValues: CONTACT_DEFAULT_VALUES,
   });
 
   async function onSubmit(values: ContactValues) {
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    console.log("contact submission", values);
+    await submitContact(values);
     setSubmitted(true);
   }
 

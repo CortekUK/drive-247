@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { HEADER_ACTIONS, HeaderIconButton } from '@/components/admin/header-buttons';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -708,23 +709,19 @@ export default function AuditLogsPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className={HEADER_ACTIONS}>
           {hasActiveFilters && (
-            <Button variant="ghost" size="sm" onClick={resetFilters} className="gap-1.5">
-              <RotateCcw className="h-3.5 w-3.5" />
-              Reset
-            </Button>
+            <HeaderIconButton label="Reset filters" onClick={resetFilters}>
+              <RotateCcw />
+            </HeaderIconButton>
           )}
-          <Button
-            variant="outline"
-            size="sm"
+          <HeaderIconButton
+            label={exporting ? 'Exporting…' : 'Export CSV'}
             onClick={exportCSV}
             disabled={exporting || totalCount === 0}
-            className="gap-1.5"
           >
-            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            {exporting ? 'Exporting...' : 'Export CSV'}
-          </Button>
+            {exporting ? <Loader2 className="animate-spin" /> : <Download />}
+          </HeaderIconButton>
         </div>
       </div>
 

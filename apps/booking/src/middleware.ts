@@ -111,6 +111,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
   }
 
+  if (route.action === 'redirect') {
+    const url = request.nextUrl.clone();
+    url.pathname = route.path;
+    return NextResponse.redirect(url, 307);
+  }
+
   if (route.action === 'redirect-home') {
     return NextResponse.redirect(new URL('/', request.url), 307);
   }

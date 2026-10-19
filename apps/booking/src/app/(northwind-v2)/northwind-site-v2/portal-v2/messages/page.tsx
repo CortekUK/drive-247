@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { MessageSquare } from 'lucide-react-nw';
+import { Loader2, MessageCircle } from 'lucide-react-nw';
 
 import {
   LoadError,
@@ -25,13 +25,18 @@ import { Button } from '@nw/components/ui/button';
 import { ScrollArea } from '@nw/components/ui/scroll-area';
 import { useCustomerMessages } from '@nw/hooks/use-customer-messages';
 import { useTenant } from '@nw/contexts/TenantContext';
+import { cn } from '@nw/lib/utils';
+
+import { PV_BUTTON_GHOST_SM } from '../settings/_components/pv-kit';
 
 import { MessageComposer } from './message-composer';
 import {
   DaySeparator,
   MessageBubble,
   MessageThreadSkeleton,
+  OperatorAvatar,
   groupMessagesByDay,
+  runPosition,
 } from './message-thread';
 
 export default function PortalMessagesPage() {
@@ -97,24 +102,35 @@ export default function PortalMessagesPage() {
           }}
         />
       ) : (
-        <Panel className="flex h-[calc(100dvh-15rem)] min-h-[26rem] flex-col overflow-hidden sm:h-[calc(100dvh-16rem)] sm:max-h-[46rem]">
-          <div className="flex items-center gap-2.5 border-b border-brand-border-soft px-4 py-3 sm:px-5">
-            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-stone">
-              <MessageSquare
-                aria-hidden
-                strokeWidth={1.75}
-                className="size-4 text-brand-text-subtle"
-              />
-            </span>
+        /* The operator's thread column, held in the portal's card. The page
+           header and the shell's top bar are a known height, so the card takes
+           what is left of the window and the history is the ONLY scroll region
+           — the header above it and the composer below are siblings. */
+        <Panel className="relative isolate flex h-[calc(100dvh-14rem)] min-h-[28rem] flex-col overflow-hidden sm:h-[calc(100dvh-12.5rem)]">
+          {/* The operator's faint line grid behind the conversation, so the
+              thread has a surface rather than reading as an empty box. Its own
+              layer under everything, faded to nothing at the edges by a radial
+              mask so it never meets the card's rim as a hard line. */}
+          <div
+            aria-hidden
+            className={
+              'pointer-events-none absolute inset-0 -z-10 bg-[size:32px_32px] ' +
+              'bg-[linear-gradient(to_right,color-mix(in_srgb,var(--pv-primary)_7%,transparent)_1px,transparent_1px),linear-gradient(to_bottom,color-mix(in_srgb,var(--pv-primary)_7%,transparent)_1px,transparent_1px)] ' +
+              '[mask-image:radial-gradient(ellipse_75%_70%_at_50%_45%,black_35%,transparent_100%)]'
+            }
+          />
+
+          <header className="flex shrink-0 items-center gap-3.5 px-4 py-4 sm:px-6">
+            <OperatorAvatar name={operatorName} className="size-11 text-[13px]" />
             <div className="min-w-0">
-              <h2 className="truncate text-sm font-medium text-brand-text">
+              <h2 className="truncate text-[15px] font-semibold leading-tight text-pv-fg">
                 {operatorName}
               </h2>
-              <p className="truncate text-xs text-brand-text-subtle">
+              <p className="mt-0.5 truncate text-[12px] text-pv-muted-fg">
                 Usually replies during opening hours
               </p>
             </div>
-          </div>
+          </header>
 
           {/* `min-h-0` is load-bearing, not tidying. A flex item defaults to
               `min-height: auto`, so without it the scroll region refuses to
@@ -123,18 +139,24 @@ export default function PortalMessagesPage() {
               of the box entirely. Verified — the send button was unreachable at
               both 360px and 1280px before this. */}
           <ScrollArea viewportRef={viewportRef} className="min-h-0 flex-1">
-            <div className="flex min-h-full flex-col px-4 py-4 sm:px-5">
+            <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col px-4 pb-6 pt-2 sm:px-6">
               {hasMore ? (
-                <div className="flex justify-center pb-2">
+                <div className="mb-2 flex justify-center">
                   <Button
                     type="button"
-                    variant="brand-ghost"
-                    size="sm"
-                    className="h-11"
+                    variant="ghost"
+                    className={PV_BUTTON_GHOST_SM}
                     onClick={loadEarlier}
                     disabled={isLoadingMore}
                   >
-                    {isLoadingMore ? 'Loading…' : 'Load earlier messages'}
+                    {isLoadingMore ? (
+                      <>
+                        <Loader2 aria-hidden className="size-3.5 animate-spin" />
+                        Loading…
+                      </>
+                    ) : (
+                      'Load earlier messages'
+                    )}
                   </Button>
                 </div>
               ) : null}
@@ -142,38 +164,39 @@ export default function PortalMessagesPage() {
               {isLoading ? (
                 <MessageThreadSkeleton />
               ) : isEmpty ? (
-                <div className="flex flex-1 flex-col items-center justify-center gap-3 py-10 text-center">
-                  <span className="grid size-11 place-items-center rounded-full bg-brand-stone">
-                    <MessageSquare
-                      aria-hidden
-                      strokeWidth={1.75}
-                      className="size-5 text-brand-text-subtle"
-                    />
+                <div className="flex flex-1 flex-col items-center justify-center py-10 text-center">
+                  <span className="mb-5 grid size-14 place-items-center rounded-2xl bg-pv-primary/10 text-pv-primary">
+                    <MessageCircle aria-hidden className="size-6" />
                   </span>
-                  <div className="max-w-sm">
-                    <p className="text-base font-medium text-brand-text">
-                      No messages yet
-                    </p>
-                    <p className="mt-1 text-sm leading-relaxed text-brand-text-soft">
-                      Send the first one below. You can attach one of your bookings so
-                      the team knows which car you mean.
-                    </p>
-                  </div>
+                  <p className="text-base font-semibold tracking-tight text-pv-fg">
+                    No messages yet
+                  </p>
+                  <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-pv-muted-fg">
+                    Write the first one below. Attach one of your bookings with the clip
+                    so the team knows which car you mean.
+                  </p>
                 </div>
               ) : (
                 <div className="flex flex-col">
-                  {groups.map((group) => (
-                    <div key={group.key} className="flex flex-col">
+                  {groups.map((group, groupIndex) => (
+                    /* The first day label drops its top margin: the history
+                       starts at the top, as in the operator's thread. */
+                    <div
+                      key={group.key}
+                      className={cn(
+                        'flex flex-col',
+                        groupIndex === 0 && '[&>div:first-child]:mt-0',
+                      )}
+                    >
                       <DaySeparator heading={group.heading} />
-                      <div className="flex flex-col gap-2">
-                        {group.messages.map((message) => (
-                          <MessageBubble
-                            key={message.id}
-                            message={message}
-                            senderName={operatorName}
-                          />
-                        ))}
-                      </div>
+                      {group.messages.map((message, index) => (
+                        <MessageBubble
+                          key={message.id}
+                          message={message}
+                          senderName={operatorName}
+                          {...runPosition(group.messages, index)}
+                        />
+                      ))}
                     </div>
                   ))}
                 </div>
@@ -181,12 +204,14 @@ export default function PortalMessagesPage() {
             </div>
           </ScrollArea>
 
-          <MessageComposer
-            onSend={send}
-            isSending={isSending}
-            sendError={sendError}
-            disabled={isLoading}
-          />
+          <div className="mx-auto w-full max-w-4xl">
+            <MessageComposer
+              onSend={send}
+              isSending={isSending}
+              sendError={sendError}
+              disabled={isLoading}
+            />
+          </div>
         </Panel>
       )}
     </div>

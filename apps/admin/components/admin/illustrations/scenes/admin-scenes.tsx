@@ -303,3 +303,49 @@ function searchArt(dark: boolean): string {
   );
 }
 export const SearchEmptyArt = makeEmptyArt(searchArt, '22 22 330 156');
+
+/* ── System announcement: a portal window, a banner across the top and a notice ── */
+function systemNoticeArt(dark: boolean): string {
+  const p = pal(dark), S = stroke(p);
+  return `
+ <g><rect x="52" y="30" width="264" height="132" rx="14" fill="${p.card}" ${S}/>
+  <path d="M52 52 H316" stroke="${p.ink}" stroke-width="2.2"/>
+  ${[0, 1, 2].map((i) => `<circle cx="${68 + i * 11}" cy="41" r="3.2" fill="${p.lite}"/>`).join('')}
+  <rect x="53.1" y="53.1" width="261.8" height="20" fill="${p.acc}"/>
+  <circle cx="68" cy="63" r="5.5" fill="${p.onAcc}"/>${txt(68, 66.2, '!', 8.5, 800, p.acc, 'middle')}
+  <rect x="80" y="60.5" width="96" height="5" rx="2.5" fill="${p.onAcc}" opacity="0.9"/>
+  <rect x="184" y="60.5" width="56" height="5" rx="2.5" fill="${p.onAcc}" opacity="0.55"/>
+  <rect x="68" y="86" width="56" height="64" rx="8" fill="${p.lite}" opacity="0.6"/>
+  ${line(136, 88, 120, p)}${line(136, 100, 150, p)}${line(136, 112, 96, p)}</g>
+ <g><rect x="176" y="96" width="122" height="72" rx="12" fill="${p.card}" ${S}/>
+  <rect x="177.1" y="97.1" width="119.8" height="5" rx="2.5" fill="${p.acc}"/>
+  <circle cx="194" cy="118" r="7" fill="${p.soft}"/>${txt(194, 121.3, 'i', 9, 800, p.acc, 'middle')}
+  ${title(208, 114, 70, p)}${line(190, 132, 92, p)}
+  <rect x="246" y="146" width="40" height="13" rx="6.5" fill="${p.acc}"/></g>
+ ${sparkle(322, 26, 7, p.acc)}
+ ${ground(186, 172, 150, dark)}`;
+}
+export const SystemNoticeArt = makeEmptyArt(systemNoticeArt, '30 14 310 168');
+
+/* ── Feature announcement: the dashboard card, and the slides it opens ─────── */
+function featureCardArt(dark: boolean): string {
+  const p = pal(dark), S = stroke(p);
+  return `
+ <g><rect x="40" y="44" width="132" height="112" rx="14" fill="${p.card}" ${S}/>
+  <rect x="41.1" y="45.1" width="129.8" height="62" rx="13" fill="${p.soft}"/>
+  ${star(106, 74, 16, p.acc)}
+  <rect x="52" y="52" width="34" height="12" rx="6" fill="${p.card}"/>${txt(69, 61, 'NEW', 8, 800, p.acc, 'middle')}
+  ${title(54, 118, 90, p)}${line(54, 131, 70, p)}
+  <rect x="54" y="141" width="44" height="5" rx="2.5" fill="${p.acc}"/></g>
+ <path d="M182 100 q18 -14 36 0" fill="none" stroke="${p.acc}" stroke-width="2.4" stroke-linecap="round"/>
+ <path d="M212 94 l7 6 -8 4" fill="none" stroke="${p.acc}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+ <g><rect x="242" y="40" width="96" height="104" rx="12" fill="${p.card}" ${S} opacity="0.6"/>
+  <rect x="230" y="50" width="104" height="112" rx="12" fill="${p.card}" ${S}/>
+  <rect x="231.1" y="51.1" width="101.8" height="46" rx="11" fill="${p.lite}" opacity="0.7"/>
+  ${title(242, 108, 70, p)}${line(242, 121, 80, p)}${line(242, 132, 60, p)}
+  <rect x="242" y="146" width="14" height="4" rx="2" fill="${p.acc}"/>
+  <circle cx="263" cy="148" r="2" fill="${p.lite}"/><circle cx="271" cy="148" r="2" fill="${p.lite}"/></g>
+ ${sparkle(176, 36, 7, p.acc)}
+ ${ground(188, 168, 156, dark)}`;
+}
+export const FeatureCardArt = makeEmptyArt(featureCardArt, '24 18 330 160');

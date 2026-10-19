@@ -31,7 +31,6 @@ import {
   RefreshCw,
 } from 'lucide-react';
 
-import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { FilterChip, FilterSearch, FilterSection, FilterShell } from '@/components/admin/filter-primitives';
 import { OverviewFlip } from '@/components/admin/overview-flip';
@@ -40,84 +39,11 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import {
-  BAND_THRESHOLDS,
-  scoreBuckets,
-  scoreTenant,
-  type HealthBand,
-  type HealthResult,
-  type InvoiceFacts,
-  type SubscriptionFacts,
-  type TenantFacts,
-} from '@/lib/customer-health/score';
+import { BAND_THRESHOLDS, scoreBuckets, type HealthBand } from '@/lib/customer-health/score';
+import { loadScoredTenants, type ScoredTenant } from '@/lib/customer-health/load';
+import { BAND, BandChip, HealthBreakdown } from '@/components/admin/customer-management/health-parts';
 
-interface TenantRow extends TenantFacts {
-  tenant_type: string | null;
-  status: string | null;
-}
-
-interface Scored {
-  tenant: TenantRow;
-  health: HealthResult;
-}
-
-const BAND: Record<HealthBand, { label: string; dot: string; text: string; chipBg: string; fill: string }> = {
-  critical: {
-    label: 'Critical',
-    dot: 'bg-red-500',
-    text: 'text-red-600',
-    chipBg: 'bg-destructive/15 border-destructive/30',
-    fill: 'hsl(var(--destructive))',
-  },
-  at_risk: {
-    label: 'At risk',
-    dot: 'bg-amber-500',
-    text: 'text-amber-600',
-    chipBg: 'bg-warning/15 border-warning/30',
-    fill: 'hsl(var(--warning))',
-  },
-  healthy: {
-    label: 'Healthy',
-    dot: 'bg-emerald-500',
-    text: 'text-emerald-600',
-    chipBg: 'bg-success/15 border-success/30',
-    fill: 'hsl(var(--success))',
-  },
-};
-
-const DAY_MS = 86_400_000;
-const PAGE = 1000;
-
-/** PostgREST caps a response, so read in pages until a short one comes back. */
-async function fetchAll<T>(build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await build(from, from + PAGE - 1);
-    if (error) throw new Error(error.message);
-    out.push(...(data ?? []));
-    if (!data || data.length < PAGE) return out;
-  }
-}
-
-function groupBy<T extends { tenant_id: string }>(rows: T[]): Map<string, T[]> {
-  const map = new Map<string, T[]>();
-  for (const r of rows) {
-    const list = map.get(r.tenant_id);
-    if (list) list.push(r);
-    else map.set(r.tenant_id, [r]);
-  }
-  return map;
-}
-
-function BandChip({ band, score }: { band: HealthBand; score?: number }) {
-  const b = BAND[band];
-  return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-semibold', b.chipBg, b.text)}>
-      <span className={cn('h-1.5 w-1.5 rounded-full', b.dot)} />
-      {score !== undefined ? <span className="tabular-nums">{score}</span> : b.label}
-    </span>
-  );
-}
+type Scored = ScoredTenant;
 
 function ScoreBar({ score, band }: { score: number; band: HealthBand }) {
   return (
@@ -139,88 +65,8 @@ export function CustomerHealthTab() {
 
   const load = useCallback(async () => {
     try {
-      const now = new Date();
-      const since90 = new Date(now.getTime() - 90 * DAY_MS).toISOString();
-      const since30 = new Date(now.getTime() - 30 * DAY_MS).toISOString();
-      const db = supabase as any;
-
-      const [tenants, logins, rentals, subs, invoices, bonzah] = await Promise.all([
-        fetchAll<TenantRow>((a, b) =>
-          db
-            .from('tenants')
-            .select(
-              'id, company_name, slug, created_at, tenant_type, status, stripe_onboarding_complete, stripe_account_status, own_stripe_account_id, own_stripe_test_account_id, integration_bonzah',
-            )
-            .order('created_at', { ascending: true })
-            .range(a, b),
-        ),
-        // Operator logins only — a super admin opening the portal as them is
-        // logged as 'super_admin' and must not make a company look active.
-        fetchAll<{ tenant_id: string; created_at: string }>((a, b) =>
-          db
-            .from('audit_logs')
-            .select('tenant_id, created_at')
-            .eq('action', 'login_success')
-            .eq('activity_source', 'tenant_user')
-            .gte('created_at', since90)
-            .not('tenant_id', 'is', null)
-            .order('created_at', { ascending: false })
-            .range(a, b),
-        ),
-        fetchAll<{ tenant_id: string }>((a, b) =>
-          db.from('rentals').select('tenant_id').gte('created_at', since30).order('created_at').range(a, b),
-        ),
-        fetchAll<SubscriptionFacts & { tenant_id: string }>((a, b) =>
-          db
-            .from('tenant_subscriptions')
-            .select('tenant_id, status, cancel_at, current_period_end, trial_end, created_at')
-            .order('created_at')
-            .range(a, b),
-        ),
-        fetchAll<InvoiceFacts & { tenant_id: string }>((a, b) =>
-          db
-            .from('tenant_subscription_invoices')
-            .select('tenant_id, status, attempt_count, created_at')
-            .order('created_at')
-            .range(a, b),
-        ),
-        // Pending or approved counts as sent — same rule as the Customer
-        // Management "submit your Bonzah form" reminder.
-        fetchAll<{ tenant_id: string }>((a, b) =>
-          db
-            .from('bonzah_onboarding_submissions')
-            .select('tenant_id')
-            .in('status', ['pending', 'approved'])
-            .order('tenant_id')
-            .range(a, b),
-        ),
-      ]);
-
-      const lastLogin = new Map<string, string>();
-      for (const l of logins) {
-        const prev = lastLogin.get(l.tenant_id);
-        if (!prev || l.created_at > prev) lastLogin.set(l.tenant_id, l.created_at);
-      }
-      const bookings = new Map<string, number>();
-      for (const r of rentals) bookings.set(r.tenant_id, (bookings.get(r.tenant_id) ?? 0) + 1);
-      const subsBy = groupBy(subs);
-      const invoicesBy = groupBy(invoices);
-      const bonzahSent = new Set(bonzah.map((b) => b.tenant_id));
-
-      const scored = tenants
-        .filter((t) => t.tenant_type !== 'test' && t.status === 'active')
-        .map((tenant) => ({
-          tenant,
-          health: scoreTenant({
-            tenant,
-            lastLoginAt: lastLogin.get(tenant.id) ?? null,
-            bookingsLast30Days: bookings.get(tenant.id) ?? 0,
-            subscriptions: subsBy.get(tenant.id) ?? [],
-            invoices: invoicesBy.get(tenant.id) ?? [],
-            bonzahFormSent: bonzahSent.has(tenant.id),
-            now,
-          }),
-        }))
+      const scored = (await loadScoredTenants())
+        .filter((r) => r.tenant.tenant_type !== 'test' && r.tenant.status === 'active')
         // Worst first: the top of the list is who to call.
         .sort((a, b) => a.health.score - b.health.score);
 
@@ -497,47 +343,7 @@ export function CustomerHealthTab() {
               </DialogHeader>
 
               <div className="space-y-4 text-sm">
-                <div className={cn('rounded-2xl border p-3', BAND[selected.health.band].chipBg)}>
-                  <p className={cn('text-xs font-bold uppercase tracking-wide mb-1', BAND[selected.health.band].text)}>
-                    {BAND[selected.health.band].label}
-                  </p>
-                  <p className="text-foreground/80">
-                    {selected.health.band === 'critical'
-                      ? 'Likely to leave. Call them before they cancel.'
-                      : selected.health.band === 'at_risk'
-                        ? 'Slipping. Worth a check-in.'
-                        : 'Using Drive247 and paying. Nothing to do.'}
-                    {selected.health.ageDays < 14 && ` Signed up ${selected.health.ageDays} days ago, so there is little history yet.`}
-                  </p>
-                </div>
-
-                <div className="rounded-lg border border-border p-3 space-y-3">
-                  <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">How the score is made</p>
-                  {(
-                    [
-                      ['Logins', selected.health.parts.logins],
-                      ['Bookings', selected.health.parts.bookings],
-                      ['Payment', selected.health.parts.payment],
-                      ['Setup', selected.health.parts.setup],
-                    ] as const
-                  ).map(([name, part]) => (
-                    <div key={name} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-medium">{name}</span>
-                        <span className={cn('tabular-nums font-semibold', part.concern ? 'text-red-600' : 'text-emerald-600')}>
-                          {part.points} / {part.max}
-                        </span>
-                      </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                        <div
-                          className={cn('h-full rounded-full', part.concern ? 'bg-red-500' : 'bg-emerald-500')}
-                          style={{ width: `${(part.points / part.max) * 100}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-muted-foreground">{part.label}</p>
-                    </div>
-                  ))}
-                </div>
+                <HealthBreakdown health={selected.health} />
 
                 <Link
                   href={`/admin/rentals/${selected.tenant.id}`}

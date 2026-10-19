@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/table';
 import SalesOnboardingDialog from '@/components/admin/SalesOnboardingDialog';
 import SalesCredentialsDialog, { type SalesCredentialsTarget } from '@/components/admin/SalesCredentialsDialog';
-import { formatAmount } from '@/lib/sales-credentials';
+import { credentialsForSubmission, formatAmount } from '@/lib/sales-credentials';
 import { TrendingUp, Plus, AlertCircle } from 'lucide-react';
 
 /** The embedded tenant row — null once the tenant has been deleted (FK is ON DELETE SET NULL). */
@@ -65,28 +65,9 @@ const statusClass = (status: string | null) => {
   return 'text-sm font-medium text-muted-foreground';
 };
 
-/**
- * A row is only re-openable when the tenant it provisioned still exists — the
- * credentials pane derives the portal/booking URLs and the first-login password
- * from the slug, which is meaningless for a deleted or never-created tenant.
- */
-const credentialsFor = (row: SubmissionRow): SalesCredentialsTarget | null => {
-  const tenant = row.tenants;
-  if (!tenant) return null;
-  // Prefer the submission's slug: the first-login password was derived from it
-  // at provisioning time, so a later rename must not change what we show.
-  const slug = row.slug || tenant.slug;
-  const email = row.generated_email || row.business_email;
-  if (!slug || !email) return null;
-  return {
-    companyName: tenant.company_name || row.business_name || slug,
-    slug,
-    email,
-    firstName: row.first_name,
-    amountCents: row.subscription_amount,
-    currency: row.subscription_currency,
-  };
-};
+/** See credentialsForSubmission (lib/sales-credentials.ts). */
+const credentialsFor = (row: SubmissionRow): SalesCredentialsTarget | null =>
+  credentialsForSubmission(row, row.tenants);
 
 export default function SalesPage() {
   const [rows, setRows] = useState<SubmissionRow[]>([]);
@@ -150,10 +131,12 @@ export default function SalesPage() {
             <p className="text-sm text-muted-foreground">Onboard new rental companies</p>
           </div>
         </div>
-        <Button className={HEADER_PRIMARY} onClick={() => setShowCreate(true)}>
-          <Plus className="h-4 w-4" />
-          Create Onboarding
-        </Button>
+        <div className={HEADER_ACTIONS}>
+          <Button className={HEADER_PRIMARY} onClick={() => setShowCreate(true)}>
+            <Plus className="h-4 w-4" />
+            Create Onboarding
+          </Button>
+        </div>
       </div>
 
       {/* Recent submissions */}

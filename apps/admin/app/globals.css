@@ -771,3 +771,20 @@ html::-webkit-scrollbar-corner,
   color-scheme: light;
 }
 /* <<< DARK SAFETY NET */
+
+/* Switches, OFF — the same rule as the portal's v2 theme. bg-muted under a
+ * bg-background thumb was white on white in light and dark on dark in dark,
+ * so an off switch all but vanished. A deeper track, a thumb that is always
+ * the lighter of the two. */
+.peer[role="switch"][aria-checked="false"] {
+  background-color: hsl(0 0% 80%);
+}
+.dark .peer[role="switch"][aria-checked="false"] {
+  background-color: hsl(0 0% 34%);
+}
+.peer[role="switch"][aria-checked="false"] > span {
+  background-color: hsl(0 0% 100%);
+}
+.dark .peer[role="switch"][aria-checked="false"] > span {
+  background-color: hsl(0 0% 88%);
+}

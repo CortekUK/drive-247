@@ -12,7 +12,7 @@ import {
   type CollisionDetection,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,7 +20,7 @@ import { reorderAfterDrop, sectionOf, type ListSection } from '@/lib/announcemen
 import type { AdminAnnouncementRow, AdminAnnouncementStats, AnnouncementKind } from '@/lib/announcements/contract';
 import type { RowPending } from '@/lib/announcements/row-actions';
 import { cn } from '@/lib/utils';
-import { AnnouncementRow } from './announcement-row';
+import { AnnouncementCard } from './announcement-row';
 
 interface RowActions {
   onToggleActive: (row: AdminAnnouncementRow, next: boolean) => void;
@@ -44,7 +44,7 @@ const rowIdOf = (id: string) => id.slice(id.indexOf(':') + 1);
  */
 export function AnnouncementList({
   kind,
-  rows,
+  rows: rowsInOrder,
   targetsById,
   statsById,
   statsCountSuperAdmins,
@@ -63,6 +63,11 @@ export function AnnouncementList({
   pendingById: Readonly<Record<string, RowPending | undefined>>;
   onReorder: (kind: AnnouncementKind, ids: string[]) => void;
 }) {
+  // Active ones first; each group keeps its saved order (sort is stable).
+  const rows = useMemo(
+    () => [...rowsInOrder].sort((a, b) => Number(b.is_active) - Number(a.is_active)),
+    [rowsInOrder],
+  );
   const [activeId, setActiveId] = useState<string | null>(null);
   const sensors = useSensors(
     // A few pixels of travel before a drag starts, so the grip and the inline
@@ -122,40 +127,26 @@ export function AnnouncementList({
       onDragCancel={() => setActiveId(null)}
       onDragEnd={handleDragEnd}
     >
-      <div className="space-y-6">
-        {sections.map((section) => (
-          <section key={section.id} aria-label={section.title ?? undefined} className="space-y-2.5">
-            {section.title && (
-              <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                {section.title}
-                <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] tabular-nums tracking-normal">
-                  {section.rows.length}
-                </span>
-              </h3>
-            )}
-            {section.rows.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-border px-4 py-3 text-xs text-muted-foreground">
-                {section.id === 'hard' ? 'No hard blockers.' : 'No soft system announcements.'}
-              </p>
-            ) : (
-              <SortableContext items={section.rows.map(sortableId)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-2">
-                  {section.rows.map((row) => (
-                    <SortableAnnouncementRow
-                      key={row.id}
-                      row={row}
-                      selectedTenantCount={targetsById[row.id]?.length ?? 0}
-                      stats={statsById?.[row.id]}
-                      statsAvailable={statsById !== null}
-                      statsCountSuperAdmins={statsCountSuperAdmins}
-                      pending={pendingById[row.id] ?? null}
-                      anyDragging={activeId !== null}
-                      {...actions}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            )}
+      <div className="space-y-4">
+        {sections.filter((section) => section.rows.length > 0).map((section) => (
+          <section key={section.id} aria-label={section.title ?? undefined}>
+            <SortableContext items={section.rows.map(sortableId)} strategy={rectSortingStrategy}>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {section.rows.map((row) => (
+                  <SortableAnnouncementRow
+                    key={row.id}
+                    row={row}
+                    selectedTenantCount={targetsById[row.id]?.length ?? 0}
+                    stats={statsById?.[row.id]}
+                    statsAvailable={statsById !== null}
+                    statsCountSuperAdmins={statsCountSuperAdmins}
+                    pending={pendingById[row.id] ?? null}
+                    anyDragging={activeId !== null}
+                    {...actions}
+                  />
+                ))}
+              </div>
+            </SortableContext>
           </section>
         ))}
       </div>
@@ -188,11 +179,11 @@ function SortableAnnouncementRow({
   return (
     <div
       ref={setNodeRef}
-      // Translate only: rows differ in height, and a scale would squash them.
+      // Translate only: a scale would squash the card.
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={cn(isDragging && 'relative z-10', anyDragging && !isDragging && 'select-none')}
+      className={cn('h-full', isDragging && 'relative z-10', anyDragging && !isDragging && 'select-none')}
     >
-      <AnnouncementRow
+      <AnnouncementCard
         row={row}
         selectedTenantCount={selectedTenantCount}
         stats={stats}
@@ -218,19 +209,18 @@ function SortableAnnouncementRow({
   );
 }
 
-/** Loading state: three row-shaped placeholders. */
+/** Loading state: three card-shaped placeholders. */
 export function ListSkeleton() {
   return (
-    <div className="space-y-2" aria-busy="true" aria-label="Loading announcements">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label="Loading announcements">
       {[0, 1, 2].map((i) => (
-        <div key={i} className="flex items-center gap-3 rounded-2xl border border-border p-3">
-          <Skeleton className="h-9 w-6 rounded-md" />
-          <Skeleton className="h-12 w-12 rounded-lg" />
-          <div className="flex-1 space-y-2">
-            <Skeleton className="h-4 w-1/3" />
-            <Skeleton className="h-3 w-2/3" />
+        <div key={i} className="overflow-hidden rounded-3xl border border-border">
+          <Skeleton className="aspect-[16/9] w-full rounded-none" />
+          <div className="space-y-2 p-4">
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-3 w-5/6" />
+            <Skeleton className="h-5 w-2/3 rounded-full" />
           </div>
-          <Skeleton className="hidden h-6 w-11 rounded-full sm:block" />
         </div>
       ))}
     </div>

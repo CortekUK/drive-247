@@ -215,7 +215,7 @@ export default function OpenAIUsagePage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className={HEADER_ACTIONS}>
           {/* The range picker used to sit here as a 140px Select. It is the one
               thing narrowing this page, so it belongs on the filter panel with
               every other list's filters — and the toggle shows which range is

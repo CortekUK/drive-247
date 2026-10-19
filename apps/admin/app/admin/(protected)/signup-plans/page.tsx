@@ -21,8 +21,11 @@ import {
   AlertTriangle,
   BadgeDollarSign,
   Loader2,
+  Plus,
   RotateCcw,
 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   buildPatch,
   draftFromPlan,
@@ -33,7 +36,9 @@ import {
   type PlanDraft,
   type SignupPlan,
 } from '@/components/admin/signup-plan-card';
+import { HEADER_ACTIONS, HEADER_PRIMARY } from '@/components/admin/header-buttons';
 import { SignupPlanEditableCard } from '@/components/admin/signup-plan-editable-card';
+import { SignupEnterpriseCard } from '@/components/admin/signup-enterprise-card';
 
 /* -------------------------------------------------------------------------- */
 /*  Types local to the page                                                    */
@@ -209,6 +214,10 @@ export default function SignupPlansPage() {
 
   const [pricePlanId, setPricePlanId] = useState<string | null>(null);
   const cancelPriceRef = useRef<HTMLButtonElement>(null);
+
+  /** The New plan dialog. */
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newPlan, setNewPlan] = useState({ name: '', price: '', maxVehicles: '' });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -522,6 +531,38 @@ export default function SignupPlansPage() {
     setPending(null);
   };
 
+  const newPrice = parsePriceToCents(newPlan.price);
+  const newMax = Number(newPlan.maxVehicles);
+  const newName = newPlan.name.trim();
+  const newValid =
+    newName.length >= 2 && newName.length <= 40 && newPrice.ok && Number.isInteger(newMax) && newMax >= 1 && newMax <= 10000;
+
+  /** A new card: Stripe price first, then the row. It arrives switched off. */
+  const handleCreate = async () => {
+    if (busy || !newValid || !newPrice.ok) return;
+    setPending('new:create');
+    setStatus(`Creating ${newName}…`);
+    const { data, failure } = await callPlansFn(
+      { action: 'create', name: newName, amount_cents: newPrice.cents, max_vehicles: newMax },
+      `Could not create "${newName}".`,
+    );
+    setPending(null);
+    if (failure) {
+      setStatus(`Could not create ${newName}. ${failure.message}`);
+      toast.error(failure.message);
+      return;
+    }
+    const created = parsePlan(isRecord(data) ? data.plan : null);
+    if (created) {
+      setPlans((current) => sortPlans([...current, created]));
+      setDrafts((current) => ({ ...current, [created.id]: draftFromPlan(created) }));
+    }
+    setCreateOpen(false);
+    setNewPlan({ name: '', price: '', maxVehicles: '' });
+    setStatus(`${newName} created. It is off until you switch it on.`);
+    toast.success(`"${newName}" created — it stays off the pricing page until you switch it on.`);
+  };
+
   /* ------------------------------- render -------------------------------- */
 
   const priceDraft = pricePlan ? drafts[pricePlan.id] : undefined;
@@ -552,11 +593,15 @@ export default function SignupPlansPage() {
               correctly. Say what actually happens instead.
             */}
             <p className="mt-0.5 max-w-2xl text-sm text-muted-foreground">
-              The self-serve plans on the public pricing page. Saved changes reach
-              drive-247.com in about 10 seconds — the first visit after that window is
-              what triggers the refresh, so you may need to reload twice.
+              Plans on the drive-247.com pricing page
             </p>
           </div>
+        </div>
+        <div className={HEADER_ACTIONS}>
+          <Button className={HEADER_PRIMARY} onClick={() => setCreateOpen(true)} disabled={loading || busy}>
+            <Plus />
+            New plan
+          </Button>
         </div>
       </div>
 
@@ -650,12 +695,11 @@ export default function SignupPlansPage() {
         is its own preview, so there is no separate preview rail.
       */}
       {!loading && plans.length > 0 && (
-        <div className="space-y-4">
-          <p id="highlight-help" className="text-xs text-muted-foreground">
-            Click any text on a card to change it. The gear on each card holds Most popular,
-            visibility, max vehicles and the free trial.
-          </p>
-          <div className="grid items-start gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <div>
+          {/* pt-4: room above the tags that sit on each card's top edge. */}
+          <div className="grid items-start gap-x-6 gap-y-10 pt-4 md:grid-cols-2 xl:grid-cols-3">
+            {/* First here so it is easy to find; last on the pricing page. Never a checkout. */}
+            <SignupEnterpriseCard />
             {plans.map((plan) => {
               const draft = drafts[plan.id];
               if (!draft) return null;
@@ -685,6 +729,74 @@ export default function SignupPlansPage() {
           </div>
         </div>
       )}
+
+      {/* ------------------------------ New plan ------------------------------ */}
+      <Dialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          if (pending !== 'new:create') setCreateOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>New plan</DialogTitle>
+            <DialogDescription>
+              It starts switched off, so you can finish the card before it shows on the pricing page.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void handleCreate();
+            }}
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="new-plan-name">Name</Label>
+              <Input
+                id="new-plan-name"
+                autoFocus
+                maxLength={40}
+                placeholder="e.g. Enterprise"
+                value={newPlan.name}
+                onChange={(e) => setNewPlan((p) => ({ ...p, name: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="new-plan-price">Price per month ($)</Label>
+                <Input
+                  id="new-plan-price"
+                  inputMode="decimal"
+                  placeholder="399"
+                  value={newPlan.price}
+                  onChange={(e) => setNewPlan((p) => ({ ...p, price: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="new-plan-max">Max vehicles</Label>
+                <Input
+                  id="new-plan-max"
+                  inputMode="numeric"
+                  placeholder="80"
+                  value={newPlan.maxVehicles}
+                  onChange={(e) => setNewPlan((p) => ({ ...p, maxVehicles: e.target.value.replace(/\D/g, '') }))}
+                />
+              </div>
+            </div>
+            {newPlan.price && !newPrice.ok && <p className="text-xs text-destructive">{newPrice.error}</p>}
+            <DialogFooter>
+              <Button type="button" variant="outline" disabled={pending === 'new:create'} onClick={() => setCreateOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={busy || !newValid}>
+                {pending === 'new:create' && <Loader2 className="h-4 w-4 animate-spin" />}
+                {pending === 'new:create' ? 'Creating…' : 'Create plan'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* ------------------------- Price confirmation ------------------------- */}
       <Dialog

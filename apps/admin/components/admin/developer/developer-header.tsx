@@ -16,9 +16,11 @@ export function DeveloperHeader({ icon: Icon, title, description }: { icon: Luci
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
-        <HeaderIconButton label="Refresh" onClick={() => void status.refetch()} disabled={status.isFetching}>
-          <RefreshCw className={status.isFetching ? 'animate-spin' : ''} />
-        </HeaderIconButton>
+        <div className={HEADER_ACTIONS}>
+          <HeaderIconButton label="Refresh" onClick={() => void status.refetch()} disabled={status.isFetching}>
+            <RefreshCw className={status.isFetching ? 'animate-spin' : ''} />
+          </HeaderIconButton>
+        </div>
       </header>
       {status.error && (
         <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">

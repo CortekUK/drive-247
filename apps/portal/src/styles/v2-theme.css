@@ -2013,3 +2013,23 @@ html[data-trax-panel] {
 :where(.dark .v2-theme) .\[\&\>button\:hover\]\:text-primary > button:hover { color: hsl(var(--v2-link, var(--primary))); }
 :where(.dark .v2-theme) .\[\&\:focus-visible_svg\]\:text-primary:focus-visible svg { color: hsl(var(--v2-link, var(--primary))); }
 /* <<< THEME NET */
+
+/* Switches, OFF. The off track was --input (90% light / 19% dark) under a
+ * white thumb: near-white on white in light, near-black on near-black in
+ * dark, so an off switch all but vanished. One rule for every switch in v2
+ * (ui-v2's data-slot="switch" and the v1 primitive's .peer[role=switch]; the
+ * hand-rolled role=switch cards and dots are left alone), so no shared
+ * component is touched: a track two steps deeper than any surface,
+ * and a thumb that is always the lighter of the two. */
+:is(.v2-theme [data-slot="switch"], .v2-theme .peer[role="switch"])[aria-checked="false"] {
+  background-color: hsl(0 0% 80%);
+}
+.dark :is(.v2-theme [data-slot="switch"], .v2-theme .peer[role="switch"])[aria-checked="false"] {
+  background-color: hsl(0 0% 34%);
+}
+:is(.v2-theme [data-slot="switch"], .v2-theme .peer[role="switch"])[aria-checked="false"] > span {
+  background-color: hsl(0 0% 100%);
+}
+.dark :is(.v2-theme [data-slot="switch"], .v2-theme .peer[role="switch"])[aria-checked="false"] > span {
+  background-color: hsl(0 0% 88%);
+}

@@ -1,24 +1,44 @@
 'use client';
 
+/**
+ * Onboarding — the full sales provisioning of a rental company, drawn as
+ * Northwind's stepped "add" dialogs (portal add-vehicle / add-customer): one
+ * small idea per screen, a picture, one line, two rows of fields
+ * (components/admin/form-grid.tsx). The done screen is the hand-over.
+ *
+ * SAVES EXACTLY AS BEFORE: the same validation, the same name check, the same
+ * create-sales-onboarding call and the same payment link. Only the
+ * presentation is new (Ghulam, Oct 17 2026).
+ */
+
 import { useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { Copy, Loader2, Upload, X } from 'lucide-react';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { AlertTriangle, Copy, CheckCircle, Loader2, PartyPopper } from 'lucide-react';
+  CONTROL,
+  Cell,
+  ChipToggle,
+  CopyRow,
+  DoneScreen,
+  FORM_DIALOG,
+  FORM_DIALOG_WASH,
+  Segmented,
+  StepFooter,
+  StepScreen,
+  ToggleTile,
+} from '@/components/admin/form-grid';
+import { AddCustomerExtrasArt, AddCustomerWhoArt } from '@/components/admin/illustrations/scenes/add-customer';
+import {
+  AddVehicleAddedArt,
+  AddVehicleBookingArt,
+  AddVehicleCarArt,
+  AddVehiclePhotosArt,
+  AddVehicleRatesArt,
+} from '@/components/admin/illustrations/scenes/add-vehicle';
 
 interface OnboardingResult {
   tenantId: string;
@@ -215,24 +235,42 @@ const buildOperatingHoursText = (
   return `${label} ${timeLabel(open)}–${timeLabel(close)}`;
 };
 
+type FormErrors = {
+  companyName?: string;
+  contactEmail?: string;
+  businessPhone?: string;
+  slug?: string;
+  subscriptionAmount?: string;
+  fleetSize?: string;
+  vehicleTypeOther?: string;
+  hours?: string;
+  logoUrl?: string;
+};
+
+/** The screen each checked field lives on, and the order they are checked in. */
+const FIELD_STEP: Record<keyof FormErrors, number> = {
+  companyName: 0,
+  contactEmail: 0,
+  businessPhone: 0,
+  slug: 1,
+  subscriptionAmount: 1,
+  fleetSize: 2,
+  vehicleTypeOther: 2,
+  hours: 3,
+  logoUrl: 4,
+};
+const FIELD_ORDER = Object.keys(FIELD_STEP) as (keyof FormErrors)[];
+
+const STEPS = ['The client', 'Address and plan', 'Their fleet', 'Opening hours', 'Their brand', 'Marketing'] as const;
+
 export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }: SalesOnboardingDialogProps) {
   const [formData, setFormData] = useState({ ...EMPTY_FORM });
   const [creating, setCreating] = useState(false);
-  const [formErrors, setFormErrors] = useState<{
-    slug?: string;
-    subscriptionAmount?: string;
-    logoUrl?: string;
-    companyName?: string;
-    contactEmail?: string;
-    businessPhone?: string;
-    fleetSize?: string;
-    vehicleTypeOther?: string;
-    hours?: string;
-  }>({});
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [step, setStep] = useState(0);
   /** Set while we check the business name isn't already taken. */
   const [checkingName, setCheckingName] = useState(false);
   const [result, setResult] = useState<OnboardingResult | null>(null);
-  const [showResult, setShowResult] = useState(false);
 
   // Live preview of the subdomain the tenant will actually get.
   const previewSlug = normalizeSlug(formData.slug);
@@ -300,17 +338,11 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
     return null;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Belt-and-braces for the disabled submit button: any other submit path
-    // (implicit Enter-key submission, programmatic) must not race the upload
-    // and provision a logo-less tenant.
-    if (logoUploading) {
-      toast.error('Your logo is still uploading — give it a second.');
-      return;
-    }
-
+  /**
+   * Every field check, in one place: Next runs it for the screen it is
+   * leaving, and submit runs it for all of them.
+   */
+  const validate = () => {
     const slug = normalizeSlug(formData.slug);
     const slugError = validateSlug(slug);
 
@@ -322,7 +354,7 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
       amountError = `Amount must be ${MAX_SUBSCRIPTION_AMOUNT.toLocaleString()} or less`;
     }
 
-    const companyName = formData.companyName.trim();
+    const companyNameError = formData.companyName.trim() ? null : 'Enter the business name';
 
     const email = formData.contactEmail.trim().toLowerCase();
     const emailError = !isEmail(email) ? 'Enter a valid email address' : null;
@@ -334,8 +366,7 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
 
     // Fleet size is a vehicle COUNT. Must LOOK like a plain whole number, not
     // merely survive Number(): "1e3", "0x10", "5.0" and "+5" all parse to a
-    // valid integer but are not counts, and were previously forwarded to the
-    // database verbatim. `\d+` also rejects negatives outright.
+    // valid integer but are not counts. `\d+` also rejects negatives outright.
     const fleetRaw = formData.fleetSize.trim();
     let fleetError: string | null = null;
     let fleetValue: string | undefined;
@@ -374,27 +405,40 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
     const logoUrl = formData.logoUrl.trim();
     const logoError = logoUrl && !isHttpUrl(logoUrl) ? 'Enter a full http(s) URL, e.g. https://…/logo.png' : null;
 
-    const firstError =
-      slugError || amountError || emailError || phoneError || fleetError ||
-      vehicleOtherError || hoursError || logoError;
+    const errors: FormErrors = {
+      companyName: companyNameError || undefined,
+      contactEmail: emailError || undefined,
+      businessPhone: phoneError || undefined,
+      slug: slugError || undefined,
+      subscriptionAmount: amountError || undefined,
+      fleetSize: fleetError || undefined,
+      vehicleTypeOther: vehicleOtherError || undefined,
+      hours: hoursError || undefined,
+      logoUrl: logoError || undefined,
+    };
+    return { errors, slug, amount, email, phone, fleetValue, hoursGiven, logoUrl };
+  };
 
-    if (firstError) {
-      setFormErrors({
-        slug: slugError || undefined,
-        subscriptionAmount: amountError || undefined,
-        contactEmail: emailError || undefined,
-        businessPhone: phoneError || undefined,
-        fleetSize: fleetError || undefined,
-        vehicleTypeOther: vehicleOtherError || undefined,
-        hours: hoursError || undefined,
-        logoUrl: logoError || undefined,
-      });
-      // The dialog scrolls and the offending field is often far above the
-      // submit button, so a red border alone reads as "the button did nothing".
-      toast.error(firstError);
+  const handleSubmit = async () => {
+    // Belt-and-braces for the disabled submit button: any other submit path
+    // (implicit Enter-key submission, programmatic) must not race the upload
+    // and provision a logo-less tenant.
+    if (logoUploading) {
+      toast.error('Your logo is still uploading — give it a second.');
+      return;
+    }
+
+    const { errors, slug, amount, email, phone, fleetValue, hoursGiven, logoUrl } = validate();
+    const firstKey = FIELD_ORDER.find((k) => errors[k]);
+    if (firstKey) {
+      setFormErrors(errors);
+      // Back to the first screen holding a problem, so it is in view.
+      setStep(FIELD_STEP[firstKey]);
+      toast.error(errors[firstKey]!);
       return;
     }
     setFormErrors({});
+    const companyName = formData.companyName.trim();
 
     // Business-name uniqueness. The edge function re-checks this atomically and
     // is the authority; doing it here just saves the sales person a round trip
@@ -417,6 +461,7 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
       if (taken) {
         const msg = 'Another rental company already uses this name';
         setFormErrors({ companyName: msg });
+        setStep(FIELD_STEP.companyName);
         toast.error(msg);
         return;
       }
@@ -547,9 +592,9 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
       } catch (e: any) {
         setResult((r) => (r ? { ...r, subscriptionLinkError: e?.message || 'Could not generate a payment link' } : r));
       }
-      setShowResult(true);
-      onOpenChange(false);
+      // The hand-over is the dialog's last screen, in the same frame.
       setFormData({ ...EMPTY_FORM });
+      setStep(0);
       onCreated?.();
     } catch (err: any) {
       toast.error(`Onboarding failed: ${err.message}`);
@@ -571,702 +616,443 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
     }
   };
 
+  const last = step === STEPS.length - 1;
+  const busy = creating || checkingName || logoUploading;
+
+  /** Next: check only the screen being left, so a problem shows where it is. */
+  const next = () => {
+    const { errors } = validate();
+    const here = FIELD_ORDER.filter((k) => FIELD_STEP[k] === step && errors[k]);
+    if (here.length) {
+      setFormErrors((prev) => ({ ...prev, ...Object.fromEntries(here.map((k) => [k, errors[k]])) }));
+      return;
+    }
+    setStep(step + 1);
+  };
+
+  const close = () => {
+    onOpenChange(false);
+    setStep(0);
+    setFormErrors({});
+    setResult(null);
+  };
+
+  /** Field setter that also clears that field's error as it is corrected. */
+  const set = <K extends keyof typeof EMPTY_FORM>(key: K, value: (typeof EMPTY_FORM)[K], clear?: keyof FormErrors) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+    if (clear && formErrors[clear]) setFormErrors((prev) => ({ ...prev, [clear]: undefined }));
+  };
+
+  const text = (
+    key: 'firstName' | 'companyName' | 'slug' | 'contactEmail' | 'businessPhone' | 'subscriptionAmount' | 'location' | 'fleetSize' | 'businessColours' | 'metaDailyBudget' | 'otherInfo' | 'vehicleTypeOther',
+    placeholder: string,
+    opts: { clear?: keyof FormErrors; type?: string; maxLength?: number; prefix?: string; disabled?: boolean } = {},
+  ) => (
+    <div className="relative">
+      {opts.prefix && (
+        <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+          {opts.prefix}
+        </span>
+      )}
+      <input
+        type={opts.type ?? 'text'}
+        value={formData[key]}
+        placeholder={placeholder}
+        maxLength={opts.maxLength}
+        disabled={opts.disabled}
+        aria-invalid={(opts.clear && !!formErrors[opts.clear]) || undefined}
+        onChange={(e) => set(key, e.target.value, opts.clear)}
+        className={cn(
+          CONTROL,
+          opts.prefix && 'pl-8',
+          '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none',
+        )}
+        autoComplete="off"
+      />
+    </div>
+  );
+
+  const timeSelect = (key: 'hoursOpen' | 'hoursClose', label: string) => (
+    <select
+      aria-label={label}
+      value={formData[key]}
+      disabled={formData.hoursAlwaysOpen}
+      onChange={(e) => set(key, e.target.value, 'hours')}
+      className={cn(CONTROL, 'cursor-pointer')}
+    >
+      {TIME_OPTIONS.map((t) => (
+        <option key={t.value} value={t.value}>
+          {t.label}
+        </option>
+      ))}
+    </select>
+  );
+
+  const hoursText = buildOperatingHoursText(
+    formData.hoursAlwaysOpen,
+    formData.hoursDays,
+    formData.hoursOpen,
+    formData.hoursClose,
+  );
+
   return (
-    <>
-      {/* Onboarding form */}
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create Onboarding</DialogTitle>
-            <DialogDescription>
-              Provision a new rental company — creates their portal, branding, credits and paywall in one step.
-            </DialogDescription>
-          </DialogHeader>
+    <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : close())}>
+      <DialogContent
+        className={FORM_DIALOG}
+        style={FORM_DIALOG_WASH}
+        showCloseButton={false}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          (e.currentTarget as HTMLElement | null)?.querySelector<HTMLInputElement>('input:not([type=hidden]):not([type=file])')?.focus();
+        }}
+      >
+        <DialogTitle className="sr-only">Onboard a rental company</DialogTitle>
+        <DialogDescription className="sr-only">
+          {result ? `${result.companyName} is ready` : STEPS[step]}
+        </DialogDescription>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label className="mb-1.5 block">First Name</Label>
-                <Input
-                  value={formData.firstName}
-                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                  placeholder="George"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block">Rental Business Name *</Label>
-                <Input
-                  required
-                  maxLength={100}
-                  value={formData.companyName}
-                  onChange={(e) => {
-                    setFormData({ ...formData, companyName: e.target.value });
-                    if (formErrors.companyName) setFormErrors({ ...formErrors, companyName: undefined });
-                  }}
-                  className={formErrors.companyName ? 'border-destructive' : ''}
-                  placeholder="Acme Rentals"
-                />
-                {formErrors.companyName ? (
-                  <p className="text-xs text-destructive mt-1">{formErrors.companyName}</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Used as the portal app name, page titles and SEO for their site.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <Label className="mb-1.5 block">Slug (subdomain) *</Label>
-              <Input
-                required
-                minLength={3}
-                maxLength={50}
-                value={formData.slug}
-                onChange={(e) => {
-                  setFormData({ ...formData, slug: e.target.value });
-                  if (formErrors.slug && !validateSlug(normalizeSlug(e.target.value))) {
-                    setFormErrors({ ...formErrors, slug: undefined });
-                  }
-                }}
-                className={formErrors.slug ? 'border-destructive' : ''}
-                placeholder="acme-rentals"
-              />
-              {formErrors.slug ? (
-                <p className="text-xs text-destructive mt-1">{formErrors.slug}</p>
-              ) : (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Portal: {previewSlug || 'slug'}.portal.drive-247.com | Booking: {previewSlug || 'slug'}.drive-247.com
+        {result ? (
+          /* Done: the hand-over. The password only ever shows here. */
+          <div className="flex flex-col">
+            <DoneScreen
+              art={AddVehicleAddedArt}
+              title={`${result.companyName} is ready.`}
+              line="Their portal, booking site and paywall are live. Send them the details below; the password only shows here."
+            >
+              {result.contentSeeded === false && (
+                <p className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-[13px] text-amber-700 dark:text-amber-300">
+                  Their website content did not seed, so the site still shows placeholder copy. Re-publish the pages
+                  from {result.portalUrl} → CMS before you send this.
                 </p>
               )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label className="mb-1.5 block">Business Email *</Label>
-                <Input
-                  type="email"
-                  required
-                  value={formData.contactEmail}
-                  onChange={(e) => {
-                    setFormData({ ...formData, contactEmail: e.target.value });
-                    if (formErrors.contactEmail) setFormErrors({ ...formErrors, contactEmail: undefined });
-                  }}
-                  className={formErrors.contactEmail ? 'border-destructive' : ''}
-                  placeholder="admin@acmerentals.com"
-                />
-                {formErrors.contactEmail && (
-                  <p className="text-xs text-destructive mt-1">{formErrors.contactEmail}</p>
-                )}
-              </div>
-              <div>
-                <Label className="mb-1.5 block">Business Phone</Label>
-                <Input
-                  type="tel"
-                  maxLength={40}
-                  value={formData.businessPhone}
-                  onChange={(e) => {
-                    setFormData({ ...formData, businessPhone: e.target.value });
-                    if (formErrors.businessPhone) setFormErrors({ ...formErrors, businessPhone: undefined });
-                  }}
-                  className={formErrors.businessPhone ? 'border-destructive' : ''}
-                  placeholder="+1 555 123 4567"
-                />
-                {formErrors.businessPhone ? (
-                  <p className="text-xs text-destructive mt-1">{formErrors.businessPhone}</p>
+              <div className="rounded-2xl border border-foreground/10 bg-background/80 px-4">
+                {result.subscriptionLinkUrl ? (
+                  <CopyRow
+                    label="Payment link"
+                    value={result.subscriptionLinkUrl}
+                    onCopy={() => copyToClipboard(result.subscriptionLinkUrl!, 'Payment link')}
+                  />
                 ) : (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Include the country code — it&apos;s never guessed for you.
-                  </p>
+                  <div className="flex items-center gap-3 border-b border-border/60 py-2.5">
+                    <span className="w-24 shrink-0 text-[13px] text-muted-foreground">Payment link</span>
+                    <span className={cn('min-w-0 flex-1 text-[13px]', result.subscriptionLinkError ? 'text-destructive' : 'text-muted-foreground')}>
+                      {result.subscriptionLinkError
+                        ? `${result.subscriptionLinkError}. Generate one from the company's Subscription tab.`
+                        : 'Generating…'}
+                    </span>
+                  </div>
                 )}
+                <CopyRow label="Email" value={result.adminEmail} onCopy={() => copyToClipboard(result.adminEmail, 'Email')} />
+                <CopyRow label="Password" value={result.adminPassword} onCopy={() => copyToClipboard(result.adminPassword, 'Password')} />
+                <CopyRow label="Portal" value={result.portalUrl} href={result.portalUrl} onCopy={() => copyToClipboard(result.portalUrl, 'Portal URL')} />
+                <CopyRow label="Booking site" value={result.bookingUrl} href={result.bookingUrl} onCopy={() => copyToClipboard(result.bookingUrl, 'Booking URL')} />
+                <CopyRow
+                  label="Plan"
+                  value={`${currencySymbol(result.subscriptionCurrency)}${(result.subscriptionAmount / 100).toFixed(2)}/month`}
+                  onCopy={() =>
+                    copyToClipboard(
+                      `${currencySymbol(result.subscriptionCurrency)}${(result.subscriptionAmount / 100).toFixed(2)}/month`,
+                      'Plan',
+                    )
+                  }
+                />
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label className="mb-1.5 block">Tenant Type *</Label>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant={formData.tenantType === 'production' ? 'default' : 'outline'}
-                    onClick={() => setFormData({ ...formData, tenantType: 'production' })}
-                    className={cn('flex-1', formData.tenantType === 'production' && 'bg-success hover:bg-success/90')}
-                  >
-                    Production
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={formData.tenantType === 'test' ? 'default' : 'outline'}
-                    onClick={() => setFormData({ ...formData, tenantType: 'test' })}
-                    className={cn(
-                      'flex-1',
-                      formData.tenantType === 'test' && 'bg-warning hover:bg-warning/90 text-warning-foreground',
-                    )}
-                  >
-                    Test
-                  </Button>
-                </div>
-                {/* This toggle silently decided BoldSign live-vs-sandbox and
-                    whether the paywall charges real money, which repeatedly
-                    read as "BoldSign isn't going live / the paywall is broken"
-                    when a Test tenant was used. Spell out exactly what changes.
-                    Kept accurate to the edge function: ONLY these two modes
-                    differ — stripe_mode (booking payments) and bonzah_mode stay
-                    on 'test' for BOTH types, because live Stripe Connect and
-                    live Bonzah each need their own per-tenant onboarding. */}
-                {formData.tenantType === 'production' ? (
-                  <p className="text-xs text-success mt-1">
-                    <span className="font-semibold">Real client.</span> The paywall charges{' '}
-                    <span className="font-semibold">real money</span>, and e-signatures are legally
-                    binding (BoldSign live).
-                  </p>
-                ) : (
-                  <p className="text-xs text-warning mt-1">
-                    <span className="font-semibold">Safe dry run.</span> Paywall uses a Stripe test
-                    card (no real charge) and e-signatures are watermarked sandbox docs that
-                    auto-delete after 14 days.
-                  </p>
-                )}
-                <p className="text-xs text-muted-foreground mt-1">
-                  Either way they get 100 live + 1000 test credits, branding, and their website
-                  content. Stripe Connect and Bonzah always start in test — the client turns those
-                  on themselves from Portal → Settings.
+              {result.timezone !== undefined && (
+                <p className="mt-2 px-1 text-xs text-muted-foreground">
+                  {result.timezone
+                    ? `Timezone set to ${result.timezone} from the location.`
+                    : 'Timezone could not be worked out from the location, so it is America/New_York. Change it in Portal → Settings if that is wrong.'}
                 </p>
-              </div>
-              <div>
-                <Label className="mb-1.5 block">Subscription Amount ($/month) *</Label>
-                <Input
-                  type="number"
+              )}
+            </DoneScreen>
+            <div className="flex items-center justify-between gap-4 px-8 py-4">
+              <Button type="button" variant="outline" className="h-10 rounded-full px-5" onClick={close}>
+                Done
+              </Button>
+              <Button type="button" className="h-10 rounded-full px-5" onClick={() => copyToClipboard(result.message, 'Client message')}>
+                <Copy className="size-4" /> Copy client message
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (last) void handleSubmit();
+              else next();
+            }}
+            className="flex flex-col"
+          >
+            {step === 0 && (
+              <StepScreen
+                stepKey={0}
+                art={AddCustomerWhoArt}
+                title="Who's the client?"
+                line="The business and the person you're talking to. The name becomes their portal's name and their site's title."
+              >
+                <Cell label="First name">{text('firstName', 'e.g. George', { maxLength: 80 })}</Cell>
+                <Cell label="Business name" required error={formErrors.companyName}>
+                  {text('companyName', 'e.g. Acme Rentals', { clear: 'companyName', maxLength: 100 })}
+                </Cell>
+                <Cell label="Business email" required error={formErrors.contactEmail}>
+                  {text('contactEmail', 'admin@acmerentals.com', { clear: 'contactEmail', type: 'email' })}
+                </Cell>
+                <Cell label="Business phone" error={formErrors.businessPhone} hint="With the country code">
+                  {text('businessPhone', '+1 555 123 4567', { clear: 'businessPhone', type: 'tel', maxLength: 40 })}
+                </Cell>
+              </StepScreen>
+            )}
+
+            {step === 1 && (
+              <StepScreen
+                stepKey={1}
+                art={AddVehicleRatesArt}
+                title="Their address and plan"
+                line={
+                  formData.tenantType === 'production'
+                    ? 'A real client: the paywall charges real money and e-signatures are legally binding.'
+                    : 'A dry run: the paywall takes a Stripe test card and e-signatures are sandbox copies.'
+                }
+              >
+                <Cell
+                  label="Subdomain"
                   required
-                  min="1"
-                  max={MAX_SUBSCRIPTION_AMOUNT}
-                  step="0.01"
-                  value={formData.subscriptionAmount}
-                  onChange={(e) => {
-                    setFormData({ ...formData, subscriptionAmount: e.target.value });
-                    if (formErrors.subscriptionAmount) setFormErrors({ ...formErrors, subscriptionAmount: undefined });
-                  }}
-                  className={formErrors.subscriptionAmount ? 'border-destructive' : ''}
-                  placeholder="300"
-                />
-                {formErrors.subscriptionAmount ? (
-                  <p className="text-xs text-destructive mt-1">{formErrors.subscriptionAmount}</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground mt-1">Charged monthly through the paywall.</p>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label className="mb-1.5 block">Location / Territory</Label>
-                <Input
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  placeholder="Los Angeles, CA"
-                />
-              </div>
-              {/* Multi-select, mirroring the Google form's checkboxes. "Other"
-                  reveals a free-text box instead of forcing a fixed option. */}
-              <div>
-                <Label className="mb-1.5 block">Vehicle Type</Label>
-                <div className="flex flex-wrap gap-2">
-                  {[...VEHICLE_TYPE_OPTIONS, 'Other'].map((opt) => {
-                    const selected = formData.vehicleTypes.includes(opt);
-                    return (
-                      <Button
-                        key={opt}
-                        type="button"
-                        size="sm"
-                        variant={selected ? 'default' : 'outline'}
-                        aria-pressed={selected}
-                        onClick={() =>
-                          setFormData({
-                            ...formData,
-                            vehicleTypes: selected
-                              ? formData.vehicleTypes.filter((v) => v !== opt)
-                              : [...formData.vehicleTypes, opt],
-                            // Drop stale text if "Other" is unticked.
-                            vehicleTypeOther:
-                              selected && opt === 'Other' ? '' : formData.vehicleTypeOther,
-                          })
-                        }
-                      >
-                        {opt}
-                      </Button>
-                    );
-                  })}
-                </div>
-                {formData.vehicleTypes.includes('Other') && (
-                  <Input
-                    className={`mt-2 ${formErrors.vehicleTypeOther ? 'border-destructive' : ''}`}
-                    // 60, not 120: the value is JOINED with the ticked options
-                    // ("Economy, Premium, Exotic and Luxury, " is already 37
-                    // chars) and the server caps the combined string at 120,
-                    // truncating mid-word without warning.
-                    maxLength={60}
-                    value={formData.vehicleTypeOther}
-                    onChange={(e) => {
-                      setFormData({ ...formData, vehicleTypeOther: e.target.value });
-                      if (formErrors.vehicleTypeOther)
-                        setFormErrors({ ...formErrors, vehicleTypeOther: undefined });
-                    }}
-                    placeholder="e.g. Vans, Motorhomes"
+                  className="col-span-2"
+                  error={formErrors.slug}
+                  hint={`${previewSlug || 'slug'}.portal.drive-247.com · ${previewSlug || 'slug'}.drive-247.com`}
+                >
+                  {text('slug', 'acme-rentals', { clear: 'slug', maxLength: 50 })}
+                </Cell>
+                <Cell label="Type" required hint="Both start with 100 live + 1000 test credits">
+                  <Segmented
+                    value={formData.tenantType}
+                    options={[
+                      { value: 'production', label: 'Production' },
+                      { value: 'test', label: 'Test' },
+                    ]}
+                    onChange={(v) => set('tenantType', v)}
                   />
-                )}
-                {formErrors.vehicleTypeOther ? (
-                  <p className="text-xs text-destructive mt-1">{formErrors.vehicleTypeOther}</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground mt-1">Pick all that apply.</p>
-                )}
-              </div>
-            </div>
+                </Cell>
+                <Cell label="Monthly subscription" required error={formErrors.subscriptionAmount} hint="Charged through the paywall">
+                  {text('subscriptionAmount', '300', { clear: 'subscriptionAmount', type: 'number', prefix: '$' })}
+                </Cell>
+              </StepScreen>
+            )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label className="mb-1.5 block">Fleet Size</Label>
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  min={MIN_FLEET_SIZE}
-                  max={MAX_FLEET_SIZE}
-                  step={1}
-                  value={formData.fleetSize}
-                  onChange={(e) => {
-                    setFormData({ ...formData, fleetSize: e.target.value });
-                    if (formErrors.fleetSize) setFormErrors({ ...formErrors, fleetSize: undefined });
-                  }}
-                  className={formErrors.fleetSize ? 'border-destructive' : ''}
-                  placeholder="12"
-                />
-                {formErrors.fleetSize ? (
-                  <p className="text-xs text-destructive mt-1">{formErrors.fleetSize}</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Whole number of vehicles ({MIN_FLEET_SIZE}–{MAX_FLEET_SIZE.toLocaleString()}).
-                  </p>
-                )}
-              </div>
-            </div>
+            {step === 2 && (
+              <StepScreen
+                stepKey={2}
+                art={AddVehicleCarArt}
+                title="Their fleet"
+                line="Where they rent and what they rent. Their website is written around it."
+              >
+                <Cell label="Location" hint="Sets their timezone">
+                  {text('location', 'e.g. Los Angeles, CA', { maxLength: 120 })}
+                </Cell>
+                <Cell
+                  label="Fleet size"
+                  error={formErrors.fleetSize}
+                  hint={`Number of vehicles, ${MIN_FLEET_SIZE}–${MAX_FLEET_SIZE.toLocaleString()}`}
+                >
+                  {text('fleetSize', '12', { clear: 'fleetSize', type: 'number' })}
+                </Cell>
+                <Cell label="Vehicle types" className="col-span-2" error={formErrors.vehicleTypeOther} hint="Pick all that apply">
+                  <div className="flex h-11 items-center gap-2">
+                    {[...VEHICLE_TYPE_OPTIONS, 'Other'].map((opt) => {
+                      const selected = formData.vehicleTypes.includes(opt);
+                      return (
+                        <ChipToggle
+                          key={opt}
+                          on={selected}
+                          className="shrink-0"
+                          onClick={() => {
+                            setFormData((prev) => ({
+                              ...prev,
+                              vehicleTypes: selected ? prev.vehicleTypes.filter((v) => v !== opt) : [...prev.vehicleTypes, opt],
+                              // Drop stale text if "Other" is unticked.
+                              vehicleTypeOther: selected && opt === 'Other' ? '' : prev.vehicleTypeOther,
+                            }));
+                            if (formErrors.vehicleTypeOther) setFormErrors((p) => ({ ...p, vehicleTypeOther: undefined }));
+                          }}
+                        >
+                          {opt}
+                        </ChipToggle>
+                      );
+                    })}
+                    {formData.vehicleTypes.includes('Other') && (
+                      <input
+                        // 60, not 120: the value is JOINED with the ticked
+                        // options and the server caps the combined string at 120.
+                        maxLength={60}
+                        value={formData.vehicleTypeOther}
+                        placeholder="e.g. Vans"
+                        aria-invalid={!!formErrors.vehicleTypeOther || undefined}
+                        onChange={(e) => set('vehicleTypeOther', e.target.value, 'vehicleTypeOther')}
+                        className={cn(CONTROL, 'h-9 min-w-0 flex-1')}
+                        autoFocus
+                      />
+                    )}
+                  </div>
+                </Cell>
+              </StepScreen>
+            )}
 
-            {/* Structured opening hours. Days are picked, times are picked from
-                half-hour slots in 12h + AM/PM — nothing is typed, so there is
-                nothing to mis-parse later. */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <Label>Operating Hours</Label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <span className="text-xs text-muted-foreground">Open 24/7</span>
-                  <Switch
+            {step === 3 && (
+              <StepScreen
+                stepKey={3}
+                art={AddVehicleBookingArt}
+                title="When are they open?"
+                line="Only if they said. Left empty, nothing is published, rather than hours we made up."
+              >
+                <Cell label="Open 24/7">
+                  <ToggleTile
+                    label="Open 24/7"
                     checked={formData.hoursAlwaysOpen}
-                    onCheckedChange={(v) => {
-                      setFormData({ ...formData, hoursAlwaysOpen: v });
-                      if (formErrors.hours) setFormErrors({ ...formErrors, hours: undefined });
-                    }}
+                    on="Always open"
+                    off="Set hours"
+                    onChange={(v) => set('hoursAlwaysOpen', v, 'hours')}
                   />
-                </label>
-              </div>
-
-              {!formData.hoursAlwaysOpen && (
-                <div className="space-y-2">
-                  <div className="flex flex-wrap gap-1.5">
+                </Cell>
+                <Cell label="Hours" error={formErrors.hours} hint={hoursText ? `Saved as: ${hoursText}` : 'Not given'}>
+                  <div className={cn('flex items-center gap-2', formData.hoursAlwaysOpen && 'opacity-50')}>
+                    {timeSelect('hoursOpen', 'Opening time')}
+                    <span className="shrink-0 text-sm text-muted-foreground">to</span>
+                    {timeSelect('hoursClose', 'Closing time')}
+                  </div>
+                </Cell>
+                <Cell label="Days" className="col-span-2">
+                  <div className={cn('flex h-11 items-center gap-1.5', formData.hoursAlwaysOpen && 'pointer-events-none opacity-50')}>
                     {DAY_OPTIONS.map((d) => {
                       const on = formData.hoursDays.includes(d.col);
                       return (
-                        <Button
+                        <ChipToggle
                           key={d.col}
-                          type="button"
-                          size="sm"
-                          variant={on ? 'default' : 'outline'}
-                          aria-pressed={on}
-                          className="w-16"
-                          onClick={() => {
-                            setFormData({
-                              ...formData,
-                              hoursDays: on
-                                ? formData.hoursDays.filter((x) => x !== d.col)
-                                : [...formData.hoursDays, d.col],
-                            });
-                            if (formErrors.hours) setFormErrors({ ...formErrors, hours: undefined });
-                          }}
+                          on={on}
+                          className="flex-1 px-0"
+                          onClick={() =>
+                            set(
+                              'hoursDays',
+                              on ? formData.hoursDays.filter((x) => x !== d.col) : [...formData.hoursDays, d.col],
+                              'hours',
+                            )
+                          }
                         >
                           {d.short}
-                        </Button>
+                        </ChipToggle>
                       );
                     })}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      aria-label="Opening time"
-                      value={formData.hoursOpen}
-                      onChange={(e) => {
-                        setFormData({ ...formData, hoursOpen: e.target.value });
-                        if (formErrors.hours) setFormErrors({ ...formErrors, hours: undefined });
-                      }}
-                      className="h-10 flex-1 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      {TIME_OPTIONS.map((t) => (
-                        <option key={t.value} value={t.value}>
-                          {t.label}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="text-sm text-muted-foreground shrink-0">to</span>
-                    <select
-                      aria-label="Closing time"
-                      value={formData.hoursClose}
-                      onChange={(e) => {
-                        setFormData({ ...formData, hoursClose: e.target.value });
-                        if (formErrors.hours) setFormErrors({ ...formErrors, hours: undefined });
-                      }}
-                      className="h-10 flex-1 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      {TIME_OPTIONS.map((t) => (
-                        <option key={t.value} value={t.value}>
-                          {t.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              {formErrors.hours ? (
-                <p className="text-xs text-destructive mt-1">{formErrors.hours}</p>
-              ) : (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Saved as:{' '}
-                  <span className="font-medium">
-                    {buildOperatingHoursText(
-                      formData.hoursAlwaysOpen,
-                      formData.hoursDays,
-                      formData.hoursOpen,
-                      formData.hoursClose,
-                    ) || '—'}
-                  </span>
-                </p>
-              )}
-            </div>
-
-            <div>
-              <Label className="mb-1.5 block">Business Colours (for website)</Label>
-              <Input
-                maxLength={300}
-                value={formData.businessColours}
-                onChange={(e) => setFormData({ ...formData, businessColours: e.target.value })}
-                placeholder="Black and Gold, minimalistic"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Free text — turned into a full brand palette automatically.
-              </p>
-            </div>
-
-            {/* Real file upload, matching the Google form ("Upload your business
-                logo"). Goes straight into the public company-logos bucket; the
-                resulting URL is what gets sent, so the edge function is
-                unchanged. A URL box was useless when the client emails a PNG. */}
-            <div>
-              <Label className="mb-1.5 block">Business Logo</Label>
-
-              <input
-                ref={logoInputRef}
-                type="file"
-                accept="image/png,image/jpeg,.png,.jpg,.jpeg"
-                className="hidden"
-                onChange={(e) => void handleLogoSelect(e.target.files?.[0] ?? null)}
-              />
-
-              {formData.logoUrl ? (
-                <div className="flex items-center gap-3 rounded-md border border-input p-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={formData.logoUrl}
-                    alt="Uploaded logo preview"
-                    className="h-12 w-12 rounded object-contain bg-muted"
-                  />
-                  <span className="flex-1 text-xs text-muted-foreground truncate">
-                    Logo uploaded — it will be set as their logo, dark logo, login logo and favicon.
-                  </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={logoUploading}
-                    onClick={() => setFormData({ ...formData, logoUrl: '' })}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={logoUploading}
-                  onClick={() => logoInputRef.current?.click()}
-                >
-                  {logoUploading && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {logoUploading ? 'Uploading...' : 'Upload logo'}
-                </Button>
-              )}
-
-              {formErrors.logoUrl ? (
-                <p className="text-xs text-destructive mt-1">{formErrors.logoUrl}</p>
-              ) : (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Optional — PNG, JPG or JPEG, up to {MAX_LOGO_MB}MB. The client can change it later
-                  in Settings.
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-3 rounded-md border border-border p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <Label>Marketing add-on</Label>
-                  <p className="text-xs text-muted-foreground">Client wants the paid marketing package.</p>
-                </div>
-                <Switch
-                  checked={formData.wantsMarketing}
-                  onCheckedChange={(v) =>
-                    setFormData({
-                      ...formData,
-                      wantsMarketing: v,
-                      // Clear the budget when marketing is switched off — the
-                      // input is hidden but its value was still submitted, so a
-                      // corrected answer left a stale budget on the record.
-                      metaDailyBudget: v ? formData.metaDailyBudget : '',
-                    })
-                  }
-                />
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <Label>Has Meta ad account</Label>
-                  <p className="text-xs text-muted-foreground">Already has a Facebook / Instagram ad account.</p>
-                </div>
-                <Switch
-                  checked={formData.hasMetaAdAccount}
-                  onCheckedChange={(v) => setFormData({ ...formData, hasMetaAdAccount: v })}
-                />
-              </div>
-              {/* Gated on wantsMarketing, NOT hasMetaAdAccount. On the Google
-                  form "Budget per day for Meta Marketing?" is required and
-                  independent of whether they already have an ad account — the
-                  commonest case is "wants marketing, no account yet", and
-                  gating on the account made that budget impossible to record. */}
-              {formData.wantsMarketing && (
-                <div>
-                  <Label className="mb-1.5 block">Meta daily budget</Label>
-                  <Input
-                    maxLength={60}
-                    value={formData.metaDailyBudget}
-                    onChange={(e) => setFormData({ ...formData, metaDailyBudget: e.target.value })}
-                    placeholder="$50/day"
-                  />
-                </div>
-              )}
-            </div>
-
-            <div>
-              <Label className="mb-1.5 block">Any other info</Label>
-              <Textarea
-                rows={3}
-                maxLength={5000}
-                value={formData.otherInfo}
-                onChange={(e) => setFormData({ ...formData, otherInfo: e.target.value })}
-                placeholder="Anything else worth noting for this onboarding..."
-              />
-            </div>
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  onOpenChange(false);
-                  setFormErrors({});
-                }}
-              >
-                Cancel
-              </Button>
-              {/* logoUploading is in here for a reason: the upload only writes
-                  formData.logoUrl once it RESOLVES, so submitting mid-upload ships
-                  logoUrl: undefined and the tenant is provisioned with no logo at
-                  all. Provisioning is one-shot — the fix would be manual. */}
-              <Button type="submit" disabled={creating || checkingName || logoUploading}>
-                {(creating || checkingName || logoUploading) && (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                )}
-                {checkingName
-                  ? 'Checking name...'
-                  : logoUploading
-                    ? 'Uploading logo...'
-                    : creating
-                      ? 'Provisioning...'
-                      : 'Create Onboarding'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Send to client dialog */}
-      <Dialog
-        open={showResult}
-        onOpenChange={(o) => {
-          if (!o) {
-            setShowResult(false);
-            setResult(null);
-          }
-        }}
-      >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <PartyPopper className="h-5 w-5 text-success" />
-              {result?.companyName} is ready — send to client
-            </DialogTitle>
-            <DialogDescription>
-              Copy this message and send it to the client. Their password only shows here — it is not stored.
-            </DialogDescription>
-          </DialogHeader>
-
-          {result && (
-            <>
-              {/* Website content did not seed — the site is live on placeholder copy. */}
-              {result.contentSeeded === false && (
-                <Card className="border-warning/50 bg-warning/10">
-                  <CardContent className="p-4 flex items-start gap-3">
-                    <AlertTriangle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-semibold">Website content did not seed</h3>
-                      <p className="text-xs text-muted-foreground">
-                        {result.companyName}&apos;s portal and booking site are live, but the site is still
-                        rendering Drive247&apos;s placeholder content — our contact email, a promo badge and
-                        Drive247 wording on their privacy page.
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Fix it before you send this message: open{' '}
-                        <span className="font-medium text-foreground">{result.portalUrl}</span> → CMS and
-                        re-publish the pages.
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* The payment link, first thing after the credentials: on a live
-                  call this is the artefact George actually needs. */}
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Payment link (valid 24 hours)</Label>
-                {result.subscriptionLinkUrl ? (
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 select-all break-all rounded border bg-muted px-3 py-2 text-xs">
-                      {result.subscriptionLinkUrl}
-                    </code>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => copyToClipboard(result.subscriptionLinkUrl!, 'Payment link')}
-                    >
-                      Copy link
-                    </Button>
-                  </div>
-                ) : result.subscriptionLinkError ? (
-                  <p className="text-xs text-destructive">
-                    {result.subscriptionLinkError} — the account is set up; generate a link from the tenant&apos;s Subscription tab.
-                  </p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Generating…</p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Send this and they can pay without logging in. Their login details are in the message below.
-                </p>
-              </div>
-
-              {/* Copy-paste message. The only copy control lives in the sticky
-                  footer beside Done, so both of the sales person's actions sit
-                  together and stay reachable without scrolling this long pane. */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-semibold">Client message</Label>
-                </div>
-                <Textarea
-                  readOnly
-                  value={result.message}
-                  rows={12}
-                  className="font-mono text-xs leading-relaxed"
-                  onFocus={(e) => e.currentTarget.select()}
-                />
-              </div>
-
-              {/* Read-only recap — no copy buttons here on purpose, "Copy all details"
-                  above is the single copy control. Text stays selectable. */}
-              <Card>
-                <CardContent className="p-4 space-y-3">
-                  <h3 className="text-sm font-semibold">Details</h3>
-                  {[
-                    ['Email', result.adminEmail],
-                    ['Password', result.adminPassword],
-                    ['Portal URL', result.portalUrl],
-                    ['Booking URL', result.bookingUrl],
-                    [
-                      'Subscription',
-                      `${currencySymbol(result.subscriptionCurrency)}${(result.subscriptionAmount / 100).toFixed(2)}/month`,
-                    ],
-                  ].map(([label, value]) => (
-                    <div key={label}>
-                      <Label className="text-xs mb-1 block">{label}</Label>
-                      <code className="block bg-muted/40 px-3 py-2 rounded-md border border-border text-sm font-mono break-all select-all">
-                        {value}
-                      </code>
-                    </div>
-                  ))}
-                  {result.timezone !== undefined && (
-                    <p className="text-xs text-muted-foreground">
-                      {result.timezone
-                        ? `Timezone set to ${result.timezone} from the location you entered.`
-                        : 'Timezone could not be worked out from the location — the tenant is on the America/New_York default. Change it in Portal → Settings if that is wrong.'}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            </>
-          )}
-
-          {/* STICKY on purpose. DialogContent scrolls (max-h-[90vh]
-              overflow-y-auto) and DialogFooter is a plain flex div, so a normal
-              footer would sit below the whole details list — the sales person
-              would have to scroll to the bottom just to copy the handover
-              message. Negative margins bleed it to the DialogContent p-6 edges.
-              Copy is last so it is rightmost on desktop and, because the footer
-              is flex-col-reverse on mobile, topmost there. */}
-          <DialogFooter className="sticky bottom-0 -mx-6 -mb-6 gap-2 border-t bg-background px-6 py-4">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowResult(false);
-                setResult(null);
-              }}
-            >
-              <CheckCircle className="h-4 w-4" />
-              Done
-            </Button>
-            {/* The only copy control in this pane — the message already carries
-                the email, password, both URLs and the monthly amount.
-                Guarded on `result`: this footer sits OUTSIDE the `result &&`
-                block, and Done sets result to null while the dialog is still
-                mounted for its close animation, so an unguarded result.message
-                would throw during that frame. */}
-            {result && (
-              <Button onClick={() => copyToClipboard(result.message, 'All details')}>
-                <Copy className="h-4 w-4" />
-                Copy all details
-              </Button>
+                </Cell>
+              </StepScreen>
             )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+
+            {step === 4 && (
+              <StepScreen
+                stepKey={4}
+                art={AddVehiclePhotosArt}
+                title="Their brand"
+                line="Their colours become a full palette, and the logo goes everywhere their name does."
+              >
+                <Cell label="Business colours" className="col-span-2" hint="Free text, e.g. black and gold, minimal">
+                  {text('businessColours', 'e.g. Black and gold, minimalistic', { maxLength: 300 })}
+                </Cell>
+                <Cell
+                  label="Logo"
+                  className="col-span-2"
+                  error={formErrors.logoUrl}
+                  hint={`Optional. PNG or JPG, up to ${MAX_LOGO_MB}MB. They can change it later.`}
+                >
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+                    className="hidden"
+                    onChange={(e) => void handleLogoSelect(e.target.files?.[0] ?? null)}
+                  />
+                  {formData.logoUrl ? (
+                    <div className={cn(CONTROL, 'flex items-center gap-3 px-2')}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={formData.logoUrl} alt="Logo preview" className="size-8 rounded-md bg-muted object-contain" />
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
+                        Set as their logo, dark logo, login logo and favicon
+                      </span>
+                      <button
+                        type="button"
+                        aria-label="Remove logo"
+                        onClick={() => set('logoUrl', '')}
+                        className="rounded-md p-1 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={logoUploading}
+                      onClick={() => logoInputRef.current?.click()}
+                      className={cn(CONTROL, 'flex cursor-pointer items-center justify-center gap-2 border-dashed text-muted-foreground')}
+                    >
+                      {logoUploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                      {logoUploading ? 'Uploading…' : 'Upload logo'}
+                    </button>
+                  )}
+                </Cell>
+              </StepScreen>
+            )}
+
+            {step === 5 && (
+              <StepScreen
+                stepKey={5}
+                art={AddCustomerExtrasArt}
+                title="Marketing, and anything else"
+                line="Whether they want the paid marketing package, and anything worth noting for the team."
+              >
+                <Cell label="Marketing add-on">
+                  <ToggleTile
+                    label="Marketing add-on"
+                    checked={formData.wantsMarketing}
+                    on="Wants marketing"
+                    off="No marketing"
+                    onChange={(v) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        wantsMarketing: v,
+                        // A hidden budget was still submitted; clear it.
+                        metaDailyBudget: v ? prev.metaDailyBudget : '',
+                      }))
+                    }
+                  />
+                </Cell>
+                <Cell label="Meta ad account">
+                  <ToggleTile
+                    label="Has a Meta ad account"
+                    checked={formData.hasMetaAdAccount}
+                    on="Has one"
+                    off="Doesn't have one"
+                    onChange={(v) => set('hasMetaAdAccount', v)}
+                  />
+                </Cell>
+                <Cell label="Meta daily budget" hint={formData.wantsMarketing ? undefined : 'With the marketing add-on'}>
+                  {text('metaDailyBudget', '$50/day', { maxLength: 60, disabled: !formData.wantsMarketing })}
+                </Cell>
+                <Cell label="Anything else">
+                  {text('otherInfo', 'Worth noting for this onboarding…', { maxLength: 5000 })}
+                </Cell>
+              </StepScreen>
+            )}
+
+            <StepFooter
+              steps={STEPS}
+              step={step}
+              loading={busy}
+              onBack={() => setStep(step - 1)}
+              onCancel={close}
+              finishLabel="Create company"
+              busyLabel={checkingName ? 'Checking name…' : logoUploading ? 'Uploading logo…' : 'Provisioning…'}
+            />
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

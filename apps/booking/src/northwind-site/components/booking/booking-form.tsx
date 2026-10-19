@@ -13,7 +13,7 @@ import {
 } from "@nw/components/ui/select";
 import { useTenantBranding } from "@nw/hooks/use-tenant-branding";
 import type { QuoteResult } from "@nw/lib/quote/types";
-import { useBookingStore, type DeliveryOption } from "@nw/lib/stores/booking-store";
+import { useBookingStore } from "@nw/lib/stores/booking-store";
 import { cn } from "@nw/lib/utils";
 import type { PickupLocation, RentalExtra } from "@nw/lib/vehicles/types";
 
@@ -40,10 +40,13 @@ import {
   TimeField,
 } from "./field-primitives";
 import {
-  formatClockLabel,
-  formatDuration,
-  formatIsoDateLabel,
-} from "./time-utils";
+  applyPickupDate,
+  deriveBookingFormModel,
+  describeExtra,
+  describeLocationOption,
+  describePromoDiscount,
+  fixedReturnSecondary,
+} from "./booking-form-logic";
 import type { UsePromoCodeResult } from "./use-promo-code";
 import type { BookingField } from "./validation";
 
@@ -69,33 +72,11 @@ import type { BookingField } from "./validation";
  * configuration.
  */
 
-/**
- * Which legs of the journey the validator will actually insist on.
- *
- * This is the one place in the form where "required" is not a constant: the
- * validator asks for a location, an address, or nothing at all, depending on
- * the delivery mode and on whether the tenant configured a fixed address. A
- * static asterisk would therefore be a lie in two of the three modes.
- *
- * The branches below mirror `validateBooking` §2 — same inputs, same order,
- * same conditions — so the marker cannot drift away from the rule it is
- * advertising. Anything that changes there has to change here to stay honest.
- *
- * The asymmetry in the fallthrough is real, not a slip in the mirror: in
- * 'fixed' mode the validator requires a PICKUP address when the tenant has
- * none configured (validation.ts:189), but it never requires the return
- * address on that path. That field is genuinely optional, and is labelled so.
- */
-function requiredLegs(
-  mode: DeliveryOption,
-  sameAsPickup: boolean,
-  fixedPickupAddress: string | null,
-): { pickup: boolean; return: boolean } {
-  if (mode === "location" || mode === "area") {
-    return { pickup: true, return: !sameAsPickup };
-  }
-  return { pickup: fixedPickupAddress === null, return: false };
-}
+/*
+  Which legs are required, which return control appears, the date caption and
+  an extra's stock line are decided in `./booking-form-logic`, shared with the
+  v2 form — see `requiredLegs` there for why "required" is not a constant here.
+*/
 
 export interface BookingFormProps {
   rules: BookingRules;
@@ -136,32 +117,15 @@ export function BookingForm({
 }: BookingFormProps) {
   const { formatCurrency } = useTenantBranding();
   const form = useBookingStore();
-  const mode: DeliveryOption = form.deliveryOption ?? modes.enabled[0] ?? "fixed";
-
-  const required = requiredLegs(mode, form.sameAsPickup, rules.fixedPickupAddress);
-
-  const returnAddressFallback = rules.fixedReturnAddress ?? rules.fixedPickupAddress;
-  const canChooseReturn =
-    mode === "fixed"
-      ? rules.fixedPickupAddress === null
-      : returnLocations.length > 0 || mode === "area";
-
-  /*
-    Two captions, one line. They were two stacked paragraphs; each cost a row of
-    a page whose whole complaint was its height, and neither is a sentence the
-    customer reads twice.
-  */
-  const dateCaptions: string[] = [];
-  if (rentalDays !== null && form.pickupDate !== "" && form.dropoffDate !== "") {
-    dateCaptions.push(
-      `${formatDuration(rentalDays, rules.monthlyTierDays)} · ${formatIsoDateLabel(form.pickupDate)} → ${formatIsoDateLabel(form.dropoffDate)}`,
-    );
-  }
-  if (rules.workingHours) {
-    dateCaptions.push(
-      `Collection and return between ${formatClockLabel(rules.workingHours.open)} and ${formatClockLabel(rules.workingHours.close)}`,
-    );
-  }
+  const {
+    mode,
+    required,
+    returnAddressFallback,
+    canChooseReturnLeg,
+    dateCaptions,
+    showOptions,
+  } = deriveBookingFormModel({ form, rules, modes, quote, rentalDays });
+  const canChooseReturn = canChooseReturnLeg(returnLocations.length);
 
   /*
     The two legs of the journey, resolved once and then placed in the field
@@ -197,12 +161,7 @@ export function BookingForm({
       <AddressPanel
         label="Collect from and return to"
         address={rules.fixedPickupAddress}
-        secondary={
-          rules.fixedReturnAddress &&
-          rules.fixedReturnAddress !== rules.fixedPickupAddress
-            ? rules.fixedReturnAddress
-            : null
-        }
+        secondary={fixedReturnSecondary(rules)}
         className={FIELD_FULL_WIDTH}
       />
     ) : (
@@ -247,8 +206,6 @@ export function BookingForm({
       )
     ) : null;
 
-  const showOptions = quote.unlimitedMileage.available || rules.installmentsEnabled;
-
   return (
     <div
       className={cn(
@@ -278,14 +235,7 @@ export function BookingForm({
             id="pickup-date"
             label="Pickup date"
             value={form.pickupDate}
-            onChange={(iso) => {
-              form.set("pickupDate", iso);
-              // A return that is now before the pickup is not a choice the
-              // customer made — clear it rather than leaving it illegal.
-              if (form.dropoffDate !== "" && form.dropoffDate < iso) {
-                form.set("dropoffDate", "");
-              }
-            }}
+            onChange={(iso) => applyPickupDate(form, iso)}
             isDisabledDate={isPickupDateDisabled}
             required
             error={errorFor("pickupDate")}
@@ -506,9 +456,7 @@ export function BookingForm({
           <p className="flex items-center gap-1.5 text-xs text-success">
             <Ticket aria-hidden strokeWidth={1.75} className="size-3.5 shrink-0" />
             {promo.promo.code} applied —{" "}
-            {promo.promo.type === "percentage"
-              ? `${promo.promo.value}% off`
-              : `${formatCurrency(promo.promo.value)} off`}{" "}
+            {describePromoDiscount(promo.promo, formatCurrency)}{" "}
             the rental.
           </p>
         ) : null}
@@ -635,16 +583,10 @@ function ExtraTile({
   onChange: (next: number) => void;
   formatCurrency: (amount: number) => string;
 }) {
-  const cap = extra.bookableQuantity;
-  const soldOut = cap !== null && cap <= 0;
-  const shown = Math.min(quantity, cap ?? quantity);
-  const image = extra.imageUrls[0];
-
-  const stock = soldOut
-    ? " · Unavailable for these dates"
-    : cap !== null && cap <= 3
-      ? ` · ${cap} left`
-      : "";
+  const { cap, soldOut, shown, image, stock, billing } = describeExtra(
+    extra,
+    quantity,
+  );
 
   return (
     <div
@@ -684,7 +626,7 @@ function ExtraTile({
         </p>
         <p className="text-xs leading-snug text-brand-text-subtle">
           {formatCurrency(extra.price)}
-          {extra.billingType === "per_day" ? " per day" : " per rental"}
+          {billing}
           {stock}
         </p>
       </div>
@@ -747,10 +689,7 @@ function LocationPicker({
               value={location.id}
               className={SELECT_ITEM_CLASS}
             >
-              {location.name} ·{" "}
-              {location.deliveryFee > 0
-                ? `+${formatCurrency(location.deliveryFee)}`
-                : "Free"}
+              {describeLocationOption(location, formatCurrency)}
             </SelectItem>
           ))}
         </SelectContent>

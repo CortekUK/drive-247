@@ -71,95 +71,41 @@
  * customer's to read; the server drops it before it can reach a rendered string.
  */
 
-import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Camera,
-  IdCard,
   ImagePlus,
   Loader2,
   RotateCcw,
-  ScanFace,
   ShieldCheck,
   Trash2,
   Upload,
 } from 'lucide-react-nw';
-import type { LucideIcon } from 'lucide-react-nw';
 
 import { Button } from '@nw/components/ui/button';
 import { Panel, PanelHeader } from '@nw/components/portal/primitives';
 import { StatusChip } from '@nw/components/portal/status-chip';
 import { ProblemBox, formatSize } from '@nw/components/booking/documents-shared';
 import {
+  PHOTOS,
+  useIdentityCapture,
+  type IdentityCaptureHandle,
+  type PhotoSpec,
+  type Shot,
+} from '@nw/components/booking/use-identity-capture';
+import {
   IDENTITY_ACCEPT_ATTRIBUTE,
   IDENTITY_FORMATS_LABEL,
-  useStartBookingIdentity,
-  useSubmitBookingIdentity,
-  validateIdentityPhoto,
   type BookingDocumentsSession,
   type IdentitySlot,
 } from '@nw/hooks/use-booking-documents';
 import { cn } from '@nw/lib/utils';
 
-/* ────────────────────────────── the photos ─────────────────────────────── */
-
-interface PhotoSpec {
-  slot: IdentitySlot;
-  title: string;
-  /** The one-line name used in the "still needed" sentence on the send button. */
-  shortTitle: string;
-  /** What a good photo looks like. Concrete, not "make sure it is clear". */
-  guidance: string;
-  /** `environment` is the rear camera, `user` the front one. */
-  capture: 'environment' | 'user';
-  optional: boolean;
-  icon: LucideIcon;
-}
-
-const PHOTOS: readonly PhotoSpec[] = [
-  {
-    slot: 'front',
-    title: 'Front of your driving licence',
-    shortTitle: 'the front of your licence',
-    guidance:
-      'Lay it flat in good light and fill the frame. All four corners visible, text readable.',
-    capture: 'environment',
-    optional: false,
-    icon: IdCard,
-  },
-  {
-    slot: 'back',
-    title: 'Back of your driving licence',
-    shortTitle: 'the back of your licence',
-    guidance:
-      'The same again, turned over. Leave this one out if your document has nothing on the back — a passport, for instance.',
-    capture: 'environment',
-    optional: true,
-    icon: IdCard,
-  },
-  {
-    slot: 'selfie',
-    title: 'A photo of you',
-    shortTitle: 'a photo of you',
-    guidance:
-      'Face the camera in even light, with nothing covering your face. We compare this against the photo on your document.',
-    capture: 'user',
-    optional: false,
-    icon: ScanFace,
-  },
-];
-
-/** The slots a fanned-out multi-file selection fills, in this order. */
-const FILL_ORDER: readonly IdentitySlot[] = ['front', 'back', 'selfie'];
-
-interface Shot {
-  file: File;
-  /** An object URL. Owned by this component and revoked when it is replaced. */
-  previewUrl: string;
-}
-
-type Shots = Record<IdentitySlot, Shot | null>;
-
-const NO_SHOTS: Shots = { front: null, back: null, selfie: null };
+/*
+  The photos, the fan-out, the lazy mint and the send all live in
+  `use-identity-capture.ts` (shared with the v2 panel). This file is the v1
+  markup only.
+*/
 
 /* ───────────────────────── what the shell drives ───────────────────────── */
 
@@ -172,15 +118,7 @@ const NO_SHOTS: Shots = { front: null, back: null, selfie: null };
  * exactly two things: "are you ready" (pushed up through `onReadyChange`) and
  * "go" (pulled down through this handle).
  */
-export interface IdentityCaptureHandle {
-  /**
-   * Send the photos. Resolves TRUE only when the server accepted them; false
-   * covers both a rejection and a failure, each of which has already been
-   * rendered inside this panel. Never throws — the shell's button must not have
-   * to know the difference.
-   */
-  submit: () => Promise<boolean>;
-}
+export type { IdentityCaptureHandle };
 
 /* ──────────────────────────── the component ────────────────────────────── */
 
@@ -211,21 +149,21 @@ export function IdentityCapture({
   onMissingChange: (missing: readonly string[]) => void;
   ref?: React.Ref<IdentityCaptureHandle>;
 }) {
-  const start = useStartBookingIdentity();
-  const submit = useSubmitBookingIdentity();
+  const {
+    shots,
+    problem,
+    submitError,
+    rejected,
+    sending,
+    busy,
+    ready,
+    chosen,
+    offerCamera,
+    clearShot,
+    fanOut,
+    startOver,
+  } = useIdentityCapture({ token, onSubmitted, onReadyChange, onMissingChange, ref });
 
-  /**
-   * Null until the first send. This IS the lazy-mint gate — see the file
-   * header. It is held across a failed attempt so a retry reuses the session
-   * rather than spending another of the customer's ten an hour.
-   */
-  const [uploadPrefix, setUploadPrefix] = useState<string | null>(null);
-
-  const [shots, setShots] = useState<Shots>(NO_SHOTS);
-  const [problem, setProblem] = useState<string | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [rejected, setRejected] = useState(false);
-  const [sending, setSending] = useState<IdentitySlot | null>(null);
   const [dragSlot, setDragSlot] = useState<IdentitySlot | 'board' | null>(null);
 
   /**
@@ -239,248 +177,6 @@ export function IdentityCapture({
   const cameraRefs = useRef<Partial<Record<IdentitySlot, HTMLInputElement | null>>>({});
   const fileRefs = useRef<Partial<Record<IdentitySlot, HTMLInputElement | null>>>({});
   const multiRef = useRef<HTMLInputElement>(null);
-
-  /*
-    Whether to offer "Take a photo" at all.
-
-    `capture` is honoured by phones and quietly ignored by desktop browsers,
-    where the button would open the same file dialog as the one beside it and
-    read as a bug. `(pointer: coarse)` is the standard proxy for "this device
-    has a camera the OS will hand us". Resolved in an effect and defaulted to
-    false so the server and the first client render agree — a hydration mismatch
-    here would be a flash of two buttons turning into one.
-  */
-  const [offerCamera, setOfferCamera] = useState(false);
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return;
-    setOfferCamera(window.matchMedia('(pointer: coarse)').matches);
-  }, []);
-
-  /*
-    Object URLs are revoked when their shot is replaced and again for whatever
-    is left when the component goes away. v1 creates one on every retake and
-    revokes none, which on a phone means the browser holds every discarded
-    attempt in memory for the life of the tab.
-
-    The ref mirrors the state for two readers: the unmount cleanup (which must
-    see the CURRENT shots without listing them as a dependency — depending on
-    `shots` would revoke a live preview on every retake) and `fanOut`, which
-    must build on the batch before it when two selections land in one tick.
-  */
-  const shotsRef = useRef<Shots>(shots);
-  shotsRef.current = shots;
-  useEffect(
-    () => () => {
-      for (const shot of Object.values(shotsRef.current)) {
-        if (shot) URL.revokeObjectURL(shot.previewUrl);
-      }
-    },
-    [],
-  );
-
-  /** Both writes go through here so the ref and the state can never disagree. */
-  const commit = useCallback((next: Shots) => {
-    shotsRef.current = next;
-    setShots(next);
-  }, []);
-
-  const setShot = useCallback(
-    (slot: IdentitySlot, file: File) => {
-      const rejection = validateIdentityPhoto(file);
-      if (rejection) {
-        setProblem(rejection);
-        return;
-      }
-      setProblem(null);
-      const previous = shotsRef.current;
-      const existing = previous[slot];
-      if (existing) URL.revokeObjectURL(existing.previewUrl);
-      commit({ ...previous, [slot]: { file, previewUrl: URL.createObjectURL(file) } });
-    },
-    [commit],
-  );
-
-  const clearShot = useCallback(
-    (slot: IdentitySlot) => {
-      setProblem(null);
-      const previous = shotsRef.current;
-      const existing = previous[slot];
-      if (existing) URL.revokeObjectURL(existing.previewUrl);
-      commit({ ...previous, [slot]: null });
-    },
-    [commit],
-  );
-
-  /**
-   * Several files at once, spread across the slots that are still empty.
-   *
-   * THE WHOLE POINT OF THE BOARD. On a phone the natural gesture is to open the
-   * camera roll once and tick three photos; the wizard threw two of them away.
-   * They fill front → back → selfie, which is the order they were almost
-   * certainly taken in, and every one of them is still validated individually —
-   * a 7 MB photo in the middle of a good batch is named and refused on its own
-   * rather than sinking the batch.
-   *
-   * `targetSlot` is set when the drop landed on ONE slot: that slot is filled
-   * first even if it already had a photo (dropping onto a filled slot means
-   * "replace this one"), and any extras spill into the remaining empties.
-   *
-   * Computed against `shotsRef` rather than inside a `setShots` updater on
-   * purpose: this loop has a side effect (it fills `rejections`, which the last
-   * line puts in front of the customer), and React runs an updater during the
-   * render rather than at the call site. A second batch arriving while a
-   * re-render was queued would have found `rejections` empty and the customer's
-   * oversized file would have vanished with no explanation — the one case the
-   * message exists for.
-   */
-  const fanOut = useCallback(
-    (list: FileList | null, targetSlot?: IdentitySlot) => {
-      if (!list || list.length === 0) return;
-
-      const incoming = Array.from(list);
-      const rejections: string[] = [];
-      const next: Shots = { ...shotsRef.current };
-
-      const queue: IdentitySlot[] = [];
-      if (targetSlot) queue.push(targetSlot);
-      for (const slot of FILL_ORDER) {
-        if (slot !== targetSlot && next[slot] === null) queue.push(slot);
-      }
-
-      let filled = 0;
-      for (const file of incoming) {
-        const rejection = validateIdentityPhoto(file);
-        if (rejection) {
-          rejections.push(rejection);
-          continue;
-        }
-        const slot = queue.shift();
-        if (!slot) {
-          rejections.push(
-            `“${file.name}” was not added — all three photo slots are already filled. Remove one first if you meant to replace it.`,
-          );
-          continue;
-        }
-        const existing = next[slot];
-        if (existing) URL.revokeObjectURL(existing.previewUrl);
-        next[slot] = { file, previewUrl: URL.createObjectURL(file) };
-        filled += 1;
-      }
-
-      if (filled > 0) commit(next);
-      setProblem(rejections.length > 0 ? rejections.join(' ') : null);
-    },
-    [commit],
-  );
-
-  /** Back to a clean slate. The NEXT send mints a fresh session. */
-  const startOver = useCallback(() => {
-    setRejected(false);
-    setSubmitError(null);
-    setProblem(null);
-    setUploadPrefix(null);
-    const previous = shotsRef.current;
-    for (const shot of Object.values(previous)) {
-      if (shot) URL.revokeObjectURL(shot.previewUrl);
-    }
-    commit(NO_SHOTS);
-  }, [commit]);
-
-  /* ── readiness, pushed up to the shell ──────────────────────────────── */
-
-  const ready = shots.front !== null && shots.selfie !== null;
-
-  useEffect(() => {
-    onReadyChange(ready);
-  }, [onReadyChange, ready]);
-
-  useEffect(() => {
-    // Only the REQUIRED slots. The back of the document is genuinely optional
-    // at every layer — the hook types it `File | null`, and the server reads it
-    // with `readPath(body.documentBackPath, false)` — so naming it here would
-    // be inventing a blocker.
-    const missing = PHOTOS.filter(
-      (spec) => !spec.optional && shots[spec.slot] === null,
-    ).map((spec) => spec.shortTitle);
-    onMissingChange(missing);
-  }, [onMissingChange, shots]);
-
-  /* ── the send, driven by the shell's one button ─────────────────────── */
-
-  const handleSubmit = useCallback(async (): Promise<boolean> => {
-    const current = shotsRef.current;
-    if (!current.front || !current.selfie) {
-      setSubmitError(
-        'We still need the front of your document and a photo of you before we can check them.',
-      );
-      return false;
-    }
-    setSubmitError(null);
-
-    /*
-      THE MINT, AND THE ONLY PLACE IT HAPPENS.
-
-      Reusing the prefix we already hold matters: every mint can spend one of
-      the customer's ten sessions an hour, and a customer whose first send
-      failed on a flaky connection would otherwise burn one per retry.
-    */
-    let prefix = uploadPrefix;
-    if (prefix === null) {
-      try {
-        const minted = await start.mutateAsync({ token });
-        prefix = minted.uploadPrefix;
-        setUploadPrefix(minted.uploadPrefix);
-      } catch (caught: unknown) {
-        // The hook has already turned every server code — the ten-an-hour cap
-        // included — into a sentence written for a customer.
-        setSubmitError(
-          caught instanceof Error
-            ? caught.message
-            : 'We could not start the identity check. Please try again in a moment.',
-        );
-        return false;
-      }
-    }
-
-    try {
-      const result = await submit.mutateAsync({
-        token,
-        uploadPrefix: prefix,
-        front: current.front.file,
-        back: current.back?.file ?? null,
-        selfie: current.selfie.file,
-        onPhotoState: (slot, state) => {
-          setSending(state === 'uploading' ? slot : null);
-        },
-      });
-      setSending(null);
-      if (result.identityStatus === 'rejected') {
-        // A rejected session is spent; the retry must mint a fresh one, and the
-        // stale prefix must not be reused or the uploads would land beside a
-        // session the server has already judged.
-        setUploadPrefix(null);
-        setRejected(true);
-        return false;
-      }
-      onSubmitted();
-      return true;
-    } catch (caught: unknown) {
-      setSending(null);
-      // Already written for a customer by the hook — including the
-      // "we could not check your photos just now" case, which is NOT a
-      // rejection and leaves this step exactly where it was.
-      setSubmitError(
-        caught instanceof Error
-          ? caught.message
-          : 'Something went wrong sending your photos. Please try again.',
-      );
-      return false;
-    }
-  }, [onSubmitted, start, submit, token, uploadPrefix]);
-
-  useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
-
-  const busy = submit.isPending || start.isPending;
 
   /* ── the retry panel, after a rejection ─────────────────────────────── */
 
@@ -549,7 +245,6 @@ export function IdentityCapture({
   /* ── the board ──────────────────────────────────────────────────────── */
 
   const returning = serverStatus === 'rejected';
-  const chosen = FILL_ORDER.filter((slot) => shots[slot] !== null).length;
 
   return (
     <Panel>

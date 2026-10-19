@@ -1,28 +1,52 @@
 'use client';
 
+/**
+ * Quick setup — a rental company and its first admin, drawn as Northwind's
+ * stepped "add" dialogs (portal add-vehicle / add-customer): one small idea
+ * per screen, a picture, one line, two rows of fields
+ * (components/admin/form-grid.tsx). The done screen is the hand-over.
+ *
+ * SAVES EXACTLY AS BEFORE: the same tenants insert (with the Square
+ * invariants), the same admin-create-user call and the same rollback. The
+ * payment rules come from payment-provider-picker.tsx, not a copy of them
+ * (Ghulam, Oct 17 2026).
+ */
+
 import { useState } from 'react';
-import PaymentProviderPicker, {
+import {
   DEFAULT_PAYMENT_PROVIDER_SELECTION,
+  OTHER_COUNTRY_OPTIONS,
+  PROVIDER_OPTIONS,
+  SQUARE_COUNTRY_OPTIONS,
+  SQUARE_SUPPORTED_COUNTRIES,
+  isCountrySupported,
+  optionFor,
   paymentProviderTenantColumns,
+  selectionWithCountry,
   validatePaymentProviderSelection,
   type PaymentProviderSelection,
 } from '@/components/tenants/payment-provider-picker';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { Copy, X } from 'lucide-react';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Copy, AlertTriangle, CheckCircle } from 'lucide-react';
+  CONTROL,
+  Cell,
+  CopyRow,
+  DoneScreen,
+  FORM_DIALOG,
+  FORM_DIALOG_WASH,
+  Segmented,
+  StepFooter,
+  StepScreen,
+  ToggleTile,
+} from '@/components/admin/form-grid';
+import { AddCustomerWhoArt } from '@/components/admin/illustrations/scenes/add-customer';
+import { AddVehicleAddedArt, AddVehicleListingArt, AddVehiclePapersArt } from '@/components/admin/illustrations/scenes/add-vehicle';
+import { PaymentsEmptyArt } from '@/components/admin/illustrations/scenes/payments';
 
 interface TenantCredentials {
   tenantId: string;
@@ -50,9 +74,11 @@ export default function CreateTenantDialog({ open, onOpenChange, onCreated }: Cr
     tenantType: 'production' as 'production' | 'test',
   });
   const [creating, setCreating] = useState(false);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [step, setStep] = useState(0);
   const [credentials, setCredentials] = useState<TenantCredentials | null>(null);
-  const [formErrors, setFormErrors] = useState<{ slug?: string }>({});
+  const [formErrors, setFormErrors] = useState<{ companyName?: string; contactEmail?: string; slug?: string }>({});
+  /** Set when a country change dropped Square, so the switch is never silent. */
+  const [revertedFrom, setRevertedFrom] = useState<string | null>(null);
   /**
    * Payment provider is chosen ONCE, at creation, and is immutable afterwards.
    * The lead was explicit that this is never a toggle: switching a live tenant
@@ -81,13 +107,12 @@ export default function CreateTenantDialog({ open, onOpenChange, onCreated }: Cr
     return null;
   };
 
-  const handleCreateTenant = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const handleCreateTenant = async () => {
     const slug = formData.slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
     const slugError = validateSlug(slug);
     if (slugError) {
       setFormErrors({ slug: slugError });
+      setStep(1);
       return;
     }
 
@@ -177,8 +202,9 @@ export default function CreateTenantDialog({ open, onOpenChange, onCreated }: Cr
         portalUrl: `https://${slug}.portal.drive-247.com`,
         bookingUrl: `https://${slug}.drive-247.com`,
       });
-      setShowDetailsModal(true);
-      onOpenChange(false);
+      // The hand-over is the dialog's last screen, in the same frame.
+      setStep(0);
+      setRevertedFrom(null);
       setFormData({ companyName: '', adminName: '', slug: '', contactEmail: '', tenantType: 'production' });
       setProviderSelection(DEFAULT_PAYMENT_PROVIDER_SELECTION);
       setProviderError(null);
@@ -188,9 +214,11 @@ export default function CreateTenantDialog({ open, onOpenChange, onCreated }: Cr
       if (error.message?.includes('slug_length')) {
         errorMessage = 'Slug must be between 3 and 50 characters';
         setFormErrors({ slug: errorMessage });
+        setStep(1);
       } else if (error.message?.includes('tenants_slug_key') || error.message?.includes('duplicate key')) {
         errorMessage = 'This slug is already taken. Please choose a different one.';
         setFormErrors({ slug: errorMessage });
+        setStep(1);
       }
       toast.error(`Error creating tenant: ${errorMessage}`);
     } finally {
@@ -227,253 +255,303 @@ Access URLs:
     toast.success('All credentials copied to clipboard!');
   };
 
+  const provider = optionFor(providerSelection.paymentProvider);
+  // Square adds one screen: what it cannot do, and the client's confirmation.
+  const steps = provider.requiresPermanenceAck
+    ? (['The company', 'Address', 'Payments', 'Square'] as const)
+    : (['The company', 'Address', 'Payments'] as const);
+  const last = step === steps.length - 1;
+
+  /** Next: check only the screen being left, so a problem shows where it is. */
+  const next = () => {
+    if (step === 0) {
+      const errs: typeof formErrors = {};
+      if (!formData.companyName.trim()) errs.companyName = 'Enter the company name';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(formData.contactEmail.trim())) errs.contactEmail = 'Enter a valid email address';
+      if (errs.companyName || errs.contactEmail) {
+        setFormErrors(errs);
+        return;
+      }
+    }
+    if (step === 1) {
+      const slugError = validateSlug(formData.slug);
+      if (slugError) {
+        setFormErrors({ slug: slugError });
+        return;
+      }
+    }
+    if (step === 2 && !providerSelection.country) {
+      setProviderError('Select the country this company operates in.');
+      return;
+    }
+    setFormErrors({});
+    setProviderError(null);
+    setStep(step + 1);
+  };
+
+  const close = () => {
+    onOpenChange(false);
+    setStep(0);
+    setFormErrors({});
+    setProviderError(null);
+    setCredentials(null);
+  };
+
+  const field = (key: 'companyName' | 'adminName' | 'slug' | 'contactEmail', placeholder: string, type = 'text') => (
+    <input
+      type={type}
+      value={formData[key]}
+      placeholder={placeholder}
+      maxLength={key === 'slug' ? 50 : 100}
+      aria-invalid={(key !== 'adminName' && !!formErrors[key]) || undefined}
+      onChange={(e) => {
+        setFormData({ ...formData, [key]: e.target.value });
+        if (key !== 'adminName' && formErrors[key]) setFormErrors({ ...formErrors, [key]: undefined });
+      }}
+      className={CONTROL}
+      autoComplete="off"
+    />
+  );
+
+  const slugPreview = formData.slug.toLowerCase().replace(/[^a-z0-9-]/g, '-') || 'slug';
+  const countryName = [...SQUARE_COUNTRY_OPTIONS, ...OTHER_COUNTRY_OPTIONS].find(
+    (c) => c.code === providerSelection.country,
+  )?.name;
+
   return (
-    <>
-      {/* Create Tenant Dialog */}
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        {/*
-          flex + max-h + p-0 is load-bearing, not styling.
+    <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : close())}>
+      <DialogContent
+        className={FORM_DIALOG}
+        style={FORM_DIALOG_WASH}
+        showCloseButton={false}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          (e.currentTarget as HTMLElement | null)?.querySelector<HTMLInputElement>('input:not([type=hidden]):not([type=file])')?.focus();
+        }}
+      >
+        <DialogTitle className="sr-only">Add a rental company</DialogTitle>
+        <DialogDescription className="sr-only">
+          {credentials ? `${credentials.companyName} is ready` : steps[step]}
+        </DialogDescription>
 
-          DialogContent's base is `grid ... gap-4 p-6` with NO height cap, so this
-          form simply grew past the viewport: the country select, the processor
-          picker and BOTH buttons ended up below the fold with nothing to scroll.
-          Bounding the panel and making it a flex column lets the field area be
-          the only thing that scrolls, so the title stays readable and Create
-          Company stays reachable no matter how tall the form gets.
-        */}
-        <DialogContent className="flex max-h-[90vh] flex-col gap-0 p-0">
-          <DialogHeader className="shrink-0 space-y-1.5 border-b px-6 py-4 text-left">
-            <DialogTitle>Add New Rental Company</DialogTitle>
-            <DialogDescription>
-              Create a new rental company with an initial admin user.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleCreateTenant} className="flex min-h-0 flex-1 flex-col">
-            {/* min-h-0 is required: without it a flex child refuses to shrink
-                below its content height and the overflow never engages. */}
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
-              <div>
-                <Label className="mb-1.5 block">Company Name *</Label>
-                <Input
-                  required
-                  value={formData.companyName}
-                  onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                  placeholder="Acme Rentals"
-                />
+        {credentials ? (
+          /* Done: the hand-over. The password only ever shows here. */
+          <div className="flex flex-col">
+            <DoneScreen
+              art={AddVehicleAddedArt}
+              title={`${credentials.companyName} is ready.`}
+              line="Their portal and booking site are live. Save these now; the password only shows here."
+            >
+              <div className="rounded-2xl border border-foreground/10 bg-background/80 px-4">
+                <CopyRow label="Email" value={credentials.adminEmail} onCopy={() => copyToClipboard(credentials.adminEmail, 'Email')} />
+                <CopyRow label="Password" value={credentials.adminPassword} onCopy={() => copyToClipboard(credentials.adminPassword, 'Password')} />
+                <CopyRow label="Portal" value={credentials.portalUrl} href={credentials.portalUrl} onCopy={() => copyToClipboard(credentials.portalUrl, 'Portal URL')} />
+                <CopyRow label="Booking site" value={credentials.bookingUrl} href={credentials.bookingUrl} onCopy={() => copyToClipboard(credentials.bookingUrl, 'Booking URL')} />
               </div>
-
-              <div>
-                <Label className="mb-1.5 block">Admin Name</Label>
-                <Input
-                  value={formData.adminName}
-                  onChange={(e) => setFormData({ ...formData, adminName: e.target.value })}
-                  placeholder="John Doe"
-                />
-              </div>
-
-              <div>
-                <Label className="mb-1.5 block">Slug (subdomain) *</Label>
-                <Input
-                  required
-                  minLength={3}
-                  maxLength={50}
-                  value={formData.slug}
-                  onChange={(e) => {
-                    setFormData({ ...formData, slug: e.target.value });
-                    if (formErrors.slug) {
-                      const newSlug = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-                      if (newSlug.length >= 3) setFormErrors({});
-                    }
-                  }}
-                  className={formErrors.slug ? 'border-destructive' : ''}
-                  placeholder="acme-rentals"
-                />
-                {formErrors.slug ? (
-                  <p className="text-xs text-destructive mt-1">{formErrors.slug}</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Portal: {formData.slug || 'slug'}.portal.drive-247.com | Booking: {formData.slug || 'slug'}.drive-247.com
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <Label className="mb-1.5 block">Contact Email *</Label>
-                <Input
-                  type="email"
-                  required
-                  value={formData.contactEmail}
-                  onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-                  placeholder="admin@acmerentals.com"
-                />
-              </div>
-
-              <div>
-                <Label className="mb-1.5 block">Tenant Type *</Label>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant={formData.tenantType === 'production' ? 'default' : 'outline'}
-                    onClick={() => setFormData({ ...formData, tenantType: 'production' })}
-                    className={cn('flex-1', formData.tenantType === 'production' && 'bg-success hover:bg-success/90')}
-                  >
-                    Production
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={formData.tenantType === 'test' ? 'default' : 'outline'}
-                    onClick={() => setFormData({ ...formData, tenantType: 'test' })}
-                    className={cn('flex-1', formData.tenantType === 'test' && 'bg-warning hover:bg-warning/90 text-warning-foreground')}
-                  >
-                    Test
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Production = real customer, Test = internal/testing use
-                </p>
-              </div>
-
-              <PaymentProviderPicker
-                value={providerSelection}
-                onChange={setProviderSelection}
-                disabled={creating}
-                error={providerError}
-              />
-
+            </DoneScreen>
+            <div className="flex items-center justify-between gap-4 px-8 py-4">
+              <Button type="button" variant="outline" className="h-10 rounded-full px-5" onClick={close}>
+                Done
+              </Button>
+              <Button type="button" className="h-10 rounded-full px-5" onClick={copyAllCredentials}>
+                <Copy className="size-4" /> Copy all
+              </Button>
             </div>
-
-            {/* Outside the scroll area: the primary action must never scroll away. */}
-            <DialogFooter className="shrink-0 border-t bg-background px-6 py-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => { onOpenChange(false); setFormErrors({}); }}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={creating}>
-                {creating ? 'Creating...' : 'Create Company'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Credentials Dialog */}
-      <Dialog open={showDetailsModal} onOpenChange={(o) => {
-        if (!o) { setShowDetailsModal(false); setCredentials(null); }
-      }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-success" />
-              {credentials?.companyName} - Complete Setup
-            </DialogTitle>
-            <DialogDescription>
-              Rental company created successfully! Save these credentials securely.
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* Warning */}
-          <div className="rounded-md bg-warning/10 border border-warning/30 p-4 flex gap-3">
-            <AlertTriangle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-warning">
-              <strong>Important:</strong> These credentials will only be shown once. Please save them securely before closing this window.
-            </p>
           </div>
+        ) : (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (last) void handleCreateTenant();
+              else next();
+            }}
+            className="flex flex-col"
+          >
+            {step === 0 && (
+              <StepScreen
+                stepKey={0}
+                art={AddCustomerWhoArt}
+                title="Which company is it?"
+                line="Its name, and who looks after it. Their first admin login goes to this email."
+              >
+                <Cell label="Company name" required error={formErrors.companyName}>
+                  {field('companyName', 'e.g. Acme Rentals')}
+                </Cell>
+                <Cell label="Admin name">{field('adminName', 'e.g. John Doe')}</Cell>
+                <Cell label="Contact email" required className="col-span-2" error={formErrors.contactEmail}>
+                  {field('contactEmail', 'admin@acmerentals.com', 'email')}
+                </Cell>
+              </StepScreen>
+            )}
 
-          {credentials && (
-            <>
-              {/* Company Information */}
-              <Card>
-                <CardContent className="p-4 space-y-2">
-                  <h3 className="text-sm font-semibold mb-3">Company Information</h3>
-                  {[
-                    ['Company Name', credentials.companyName],
-                    ['Slug', credentials.slug],
-                    ['Portal', `${credentials.slug}.portal.drive-247.com`],
-                    ['Booking', `${credentials.slug}.drive-247.com`],
-                    ['Contact', credentials.contactEmail],
-                  ].map(([label, value]) => (
-                    <div key={label} className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground">{label}:</span>
-                      <span className="font-medium">{value}</span>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
+            {step === 1 && (
+              <StepScreen
+                stepKey={1}
+                art={AddVehicleListingArt}
+                title="Their address"
+                line="The subdomain both their portal and their booking site live on."
+              >
+                <Cell
+                  label="Subdomain"
+                  required
+                  className="col-span-2"
+                  error={formErrors.slug}
+                  hint={`${slugPreview}.portal.drive-247.com · ${slugPreview}.drive-247.com`}
+                >
+                  {field('slug', 'acme-rentals')}
+                </Cell>
+                <Cell
+                  label="Type"
+                  required
+                  className="col-span-2"
+                  hint={formData.tenantType === 'production' ? 'A real client' : 'For internal testing'}
+                >
+                  <Segmented
+                    value={formData.tenantType}
+                    options={[
+                      { value: 'production', label: 'Production' },
+                      { value: 'test', label: 'Test' },
+                    ]}
+                    onChange={(v) => setFormData({ ...formData, tenantType: v })}
+                  />
+                </Cell>
+              </StepScreen>
+            )}
 
-              {/* Admin Credentials */}
-              <Card className="border-success/30">
-                <CardContent className="p-4 space-y-3">
-                  <h3 className="text-sm font-semibold">Admin User Credentials</h3>
-                  <p className="text-xs text-muted-foreground">Initial admin account for the rental company</p>
-
-                  {[
-                    ['Email', credentials.adminEmail],
-                    ['Password', credentials.adminPassword],
-                  ].map(([label, value]) => (
-                    <div key={label}>
-                      <Label className="text-xs mb-1 block">{label}</Label>
-                      <div className="flex items-center gap-2">
-                        <code className="flex-1 bg-success/10 px-3 py-2 rounded-md border border-success/30 text-sm font-mono break-all">
-                          {value}
-                        </code>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => copyToClipboard(value, label)}
+            {step === 2 && (
+              <StepScreen
+                stepKey={2}
+                art={PaymentsEmptyArt}
+                title="How will they take payments?"
+                line="This is permanent: it is locked the moment the company is created, and fixing it means starting again."
+              >
+                <Cell
+                  label="Operating country"
+                  required
+                  className="col-span-2"
+                  error={providerError ?? undefined}
+                  hint={
+                    revertedFrom
+                      ? `Switched back to Stripe: ${revertedFrom} can't take payments in ${countryName ?? 'this country'}.`
+                      : `Square works in ${SQUARE_SUPPORTED_COUNTRIES.join(', ')}. Everywhere else is Stripe.`
+                  }
+                >
+                  <select
+                    value={providerSelection.country ?? ''}
+                    disabled={creating}
+                    aria-invalid={!!providerError || undefined}
+                    onChange={(e) => {
+                      const { next: picked, revertedFrom: dropped } = selectionWithCountry(providerSelection, e.target.value);
+                      setProviderSelection(picked);
+                      setRevertedFrom(dropped);
+                      setProviderError(null);
+                    }}
+                    className={cn(CONTROL, 'cursor-pointer', !providerSelection.country && 'text-muted-foreground/70')}
+                  >
+                    <option value="" disabled>
+                      Where the business is registered for payments
+                    </option>
+                    <optgroup label="Stripe or Square">
+                      {SQUARE_COUNTRY_OPTIONS.map((c) => (
+                        <option key={c.code} value={c.code}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Stripe only">
+                      {OTHER_COUNTRY_OPTIONS.map((c) => (
+                        <option key={c.code} value={c.code}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </Cell>
+                <Cell label="Processor" required className="col-span-2" hint={provider.tagline}>
+                  <div role="radiogroup" aria-label="Payment processor" className="grid h-11 grid-cols-2 gap-1 rounded-xl border border-foreground/15 bg-muted/40 p-1">
+                    {PROVIDER_OPTIONS.map((o) => {
+                      const ok = isCountrySupported(o, providerSelection.country);
+                      const on = o.id === providerSelection.paymentProvider;
+                      return (
+                        <button
+                          key={o.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          disabled={!ok || creating}
+                          title={ok ? undefined : 'Not available in this country'}
+                          onClick={() => {
+                            setRevertedFrom(null);
+                            // Switching provider always re-arms the acknowledgement.
+                            setProviderSelection({ paymentProvider: o.id, country: providerSelection.country, permanenceAcknowledged: false });
+                          }}
+                          className={cn(
+                            'rounded-lg text-sm outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-40',
+                            on
+                              ? 'bg-background font-medium text-foreground shadow-[0_1px_2px_hsl(var(--foreground)/0.08)] ring-1 ring-foreground/10'
+                              : 'text-muted-foreground hover:text-foreground',
+                          )}
                         >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
+                          {o.name}
+                          {o.isDefault && <span className="ml-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">Default</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Cell>
+              </StepScreen>
+            )}
 
-              {/* Access URLs */}
-              <Card className="border-primary/30">
-                <CardContent className="p-4 space-y-3">
-                  <h3 className="text-sm font-semibold">Access URLs</h3>
+            {step === 3 && provider.requiresPermanenceAck && (
+              <StepScreen
+                stepKey={3}
+                art={AddVehiclePapersArt}
+                title={`What ${provider.name} can't do`}
+                line="These are product facts, not settings. Don't promise any of them to this client."
+              >
+                {provider.limitations.map((l) => (
+                  <div
+                    key={l.headline}
+                    title={l.detail}
+                    className="mb-2 flex h-11 items-center gap-2 rounded-xl border border-destructive/25 bg-destructive/[0.04] px-3.5 text-sm text-foreground"
+                  >
+                    <X className="size-4 shrink-0 text-destructive" />
+                    <span className="truncate">{l.headline}</span>
+                  </div>
+                ))}
+                <Cell
+                  label="Confirmed with the client"
+                  required
+                  className="col-span-2 mt-1"
+                  error={providerError ?? undefined}
+                  hint={`They don't need any of these, and ${provider.name} can't be changed later`}
+                >
+                  <ToggleTile
+                    label={`Confirmed ${provider.name} is permanent`}
+                    checked={providerSelection.permanenceAcknowledged}
+                    on="Confirmed"
+                    off="Not confirmed yet"
+                    onChange={(v) => {
+                      setProviderSelection({ ...providerSelection, permanenceAcknowledged: v });
+                      setProviderError(null);
+                    }}
+                  />
+                </Cell>
+              </StepScreen>
+            )}
 
-                  {[
-                    ['Rental Portal', credentials.portalUrl],
-                    ['Booking Site', credentials.bookingUrl],
-                  ].map(([label, value]) => (
-                    <div key={label}>
-                      <Label className="text-xs mb-1 block">{label}</Label>
-                      <div className="flex items-center gap-2">
-                        <code className="flex-1 bg-primary/10 px-3 py-2 rounded-md border border-primary/30 text-sm break-all">
-                          {value}
-                        </code>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => copyToClipboard(value, label)}
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={copyAllCredentials}>
-              <Copy className="h-4 w-4" />
-              Copy All Credentials
-            </Button>
-            <Button onClick={() => { setShowDetailsModal(false); setCredentials(null); }}>
-              Done
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+            <StepFooter
+              steps={steps}
+              step={step}
+              loading={creating}
+              onBack={() => setStep(step - 1)}
+              onCancel={close}
+              finishLabel="Create company"
+              busyLabel="Creating…"
+            />
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

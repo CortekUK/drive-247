@@ -32,7 +32,6 @@ import { AlertTriangle, CalendarClock, CheckCircle2, Clock } from 'lucide-react-
 
 import { formatDate, relativeDayLabel } from '@nw/components/portal/format';
 import { Panel, PanelHeader } from '@nw/portal-v2/primitives';
-import { StatusChip } from '@nw/portal-v2/status-chip';
 import {
   Accordion,
   AccordionContent,
@@ -46,6 +45,8 @@ import type {
 } from '@nw/hooks/use-customer-payments';
 import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { cn } from '@nw/lib/utils';
+
+import { SectionTitle, StatusText } from './list-table';
 
 type ChipTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
 
@@ -73,8 +74,11 @@ export function InstalmentPlans({
   if (plans.length === 0) return null;
 
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-sm font-medium text-brand-text">Instalment plans</h2>
+    <section className="flex flex-col gap-4">
+      <SectionTitle
+        title="Instalment plans"
+        description="Each instalment is collected from your card automatically on its due date."
+      />
 
       {next ? <NextInstalment plan={next.plan} installment={next.installment} /> : null}
 
@@ -101,35 +105,35 @@ function NextInstalment({
   return (
     <div
       className={cn(
-        'flex items-start gap-3 rounded-2xl border px-4 py-3.5',
+        'flex items-start gap-3 rounded-2xl border px-4 py-3.5 sm:px-5',
         urgent
-          ? 'border-danger-subtle bg-danger-light'
-          : 'border-brand-border-soft bg-brand-card',
+          ? 'border-pv-danger/20 bg-pv-danger-light'
+          : 'border-pv-border bg-pv-card',
       )}
     >
       {urgent ? (
         <AlertTriangle
           aria-hidden
           strokeWidth={1.75}
-          className="mt-0.5 size-4 shrink-0 text-danger"
+          className="mt-0.5 size-4 shrink-0 text-pv-danger"
         />
       ) : (
         <CalendarClock
           aria-hidden
           strokeWidth={1.75}
-          className="mt-0.5 size-4 shrink-0 text-brand-text-subtle"
+          className="mt-0.5 size-4 shrink-0 text-pv-muted-fg"
         />
       )}
 
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-brand-text">
+        <p className="text-sm font-semibold text-pv-fg">
           {installment.state === 'failed'
             ? 'A payment did not go through'
             : installment.state === 'overdue'
               ? 'A payment is overdue'
               : 'Next payment'}
         </p>
-        <p className="mt-0.5 text-sm leading-relaxed text-brand-text-soft">
+        <p className="mt-0.5 text-sm leading-relaxed text-pv-muted-fg">
           {formatCurrency(installment.amount)} — instalment {installment.number} of{' '}
           {plan.count}
           {plan.rental?.vehicle ? ` on ${plan.rental.vehicle.displayName}` : ''}.
@@ -138,11 +142,11 @@ function NextInstalment({
             : ` Due ${formatDate(installment.dueDate)}${when ? ` (${when})` : ''}.`}
         </p>
         {installment.failureReason ? (
-          <p className="mt-1 text-xs text-danger">{installment.failureReason}</p>
+          <p className="mt-1 text-xs text-pv-danger">{installment.failureReason}</p>
         ) : null}
       </div>
 
-      <span className="shrink-0 text-sm font-medium tabular-nums text-brand-text">
+      <span className="shrink-0 text-[15px] font-semibold tabular-nums text-pv-fg">
         {formatCurrency(installment.amount)}
       </span>
     </div>
@@ -175,19 +179,19 @@ function PlanPanel({ plan }: { plan: CustomerInstallmentPlan }) {
     <Panel>
       <PanelHeader
         title={plan.rental?.vehicle?.displayName ?? 'Instalment plan'}
-        action={<StatusChip tone={tone}>{statusLabel}</StatusChip>}
+        action={<StatusText tone={tone}>{statusLabel}</StatusText>}
       />
 
       <div className="flex flex-col gap-4 px-4 py-4 sm:px-5">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <p className="text-sm text-brand-text-soft">
+          <p className="text-sm text-pv-muted-fg">
             {plan.planTypeLabel} · {formatCurrency(plan.instalmentAmount)} ×{' '}
             {plan.count}
           </p>
           {plan.rental ? (
             <Link
-              href={`/portal-v2/bookings/${plan.rental.id}`}
-              className="inline-flex min-h-11 items-center text-sm text-brand-text-soft underline-offset-4 hover:text-brand-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/25"
+              href={`/portal/bookings/${plan.rental.id}`}
+              className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-pv-link underline-offset-4 transition-colors duration-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none"
             >
               {plan.rental.reference}
             </Link>
@@ -199,10 +203,10 @@ function PlanPanel({ plan }: { plan: CustomerInstallmentPlan }) {
             is the same size, which a re-planned schedule breaks. */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-baseline justify-between gap-3 text-xs">
-            <span className="text-brand-text-subtle">
+            <span className="text-pv-muted-fg">
               {plan.paidCount} of {plan.count} paid
             </span>
-            <span className="tabular-nums text-brand-text-subtle">{percent}%</span>
+            <span className="tabular-nums text-pv-muted-fg">{percent}%</span>
           </div>
           <div
             role="progressbar"
@@ -210,16 +214,16 @@ function PlanPanel({ plan }: { plan: CustomerInstallmentPlan }) {
             aria-valuemax={plan.count}
             aria-valuenow={plan.paidCount}
             aria-label="Instalments paid"
-            className="h-1.5 w-full overflow-hidden rounded-full bg-brand-stone"
+            className="h-2 w-full overflow-hidden rounded-full bg-pv-tint"
           >
             <div
-              className="h-full rounded-full bg-brand-forest transition-[width]"
+              className="h-full rounded-full bg-pv-primary"
               style={{ width: `${percent}%` }}
             />
           </div>
         </div>
 
-        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl bg-pv-row px-4 py-3 sm:grid-cols-4">
           <Figure label="Paid" value={formatCurrency(plan.paid)} />
           <Figure label="Remaining" value={formatCurrency(plan.remaining)} />
           <Figure
@@ -236,13 +240,13 @@ function PlanPanel({ plan }: { plan: CustomerInstallmentPlan }) {
         </dl>
       </div>
 
-      <Accordion type="single" collapsible className="border-t border-brand-border-soft">
+      <Accordion type="single" collapsible className="border-t border-pv-border">
         <AccordionItem value="schedule" className="border-b-0">
-          <AccordionTrigger className="min-h-11 px-4 py-3 text-sm font-medium text-brand-text hover:no-underline sm:px-5">
+          <AccordionTrigger className="min-h-11 px-4 py-3 text-sm font-semibold text-pv-fg transition-colors duration-200 hover:bg-pv-row hover:no-underline motion-reduce:transition-none sm:px-5">
             Payment schedule
           </AccordionTrigger>
           <AccordionContent className="px-4 pb-4 sm:px-5">
-            <ul className="divide-y divide-brand-border-soft">
+            <ul className="divide-y divide-pv-border">
               {plan.installments.map((instalment) => (
                 <InstalmentRow key={instalment.id} instalment={instalment} />
               ))}
@@ -265,12 +269,12 @@ function Figure({
 }) {
   return (
     <div className="min-w-0">
-      <dt className="truncate text-xs text-brand-text-subtle">{label}</dt>
-      <dd className="mt-0.5 truncate text-sm font-medium tabular-nums text-brand-text">
+      <dt className="truncate text-xs text-pv-muted-fg">{label}</dt>
+      <dd className="mt-0.5 truncate text-sm font-semibold tabular-nums text-pv-fg">
         {value}
       </dd>
       {caption ? (
-        <dd className="truncate text-xs text-brand-text-subtle">{caption}</dd>
+        <dd className="truncate text-xs text-pv-muted-fg">{caption}</dd>
       ) : null}
     </div>
   );
@@ -282,44 +286,44 @@ function InstalmentRow({ instalment }: { instalment: CustomerInstallment }) {
   const paid = instalment.state === 'paid';
 
   return (
-    <li className="flex items-center gap-3 py-2.5">
+    <li className="flex items-center gap-3 py-3">
       {paid ? (
         <CheckCircle2
           aria-hidden
           strokeWidth={1.75}
-          className="size-4 shrink-0 text-success"
+          className="size-4 shrink-0 text-pv-success"
         />
       ) : instalment.state === 'overdue' || instalment.state === 'failed' ? (
         <AlertTriangle
           aria-hidden
           strokeWidth={1.75}
-          className="size-4 shrink-0 text-danger"
+          className="size-4 shrink-0 text-pv-danger"
         />
       ) : (
         <Clock
           aria-hidden
           strokeWidth={1.75}
-          className="size-4 shrink-0 text-brand-text-subtle"
+          className="size-4 shrink-0 text-pv-muted-fg"
         />
       )}
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm text-brand-text">
+        <p className="truncate text-sm text-pv-fg">
           Instalment {instalment.number}
         </p>
-        <p className="truncate text-xs text-brand-text-subtle">
+        <p className="truncate text-xs text-pv-muted-fg">
           {paid && instalment.paidAt
             ? `Paid ${formatDate(instalment.paidAt.slice(0, 10))}`
             : formatDate(instalment.dueDate)}
         </p>
       </div>
 
-      <span className="shrink-0 text-sm tabular-nums text-brand-text">
+      <span className="shrink-0 text-sm font-medium tabular-nums text-pv-fg">
         {formatCurrency(instalment.amount)}
       </span>
-      <StatusChip tone={chip.tone} className="shrink-0">
+      <StatusText tone={chip.tone} className="w-20 shrink-0 text-right">
         {chip.label}
-      </StatusChip>
+      </StatusText>
     </li>
   );
 }

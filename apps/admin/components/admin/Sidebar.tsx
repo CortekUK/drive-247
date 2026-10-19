@@ -24,10 +24,10 @@
  * name, then its sections.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { ArrowLeft, Check, ChevronsUpDown, ExternalLink, LayoutGrid, LogOut, MailCheck, Moon, SlidersHorizontal, Sun, User } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, Check, ChevronDown, ChevronsUpDown, ExternalLink, LayoutGrid, LogOut, MailCheck, Moon, SlidersHorizontal, Sun, User } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
 import {
@@ -404,6 +404,9 @@ function NavRow({
 }) {
   const Icon = item.icon;
   const count = item.badge ?? 0;
+  if (item.children?.length && !collapsed) {
+    return <NavDropdownRow item={item} active={active} onNavigate={onNavigate} />;
+  }
   return (
     <SidebarMenuItem className="relative">
       <SidebarMenuButton asChild isActive={active} tooltip={collapsed ? item.name : undefined} className={NAV_ROW}>
@@ -419,6 +422,91 @@ function NavRow({
         </Link>
       </SidebarMenuButton>
     </SidebarMenuItem>
+  );
+}
+
+/**
+ * A row with its page's tabs underneath, as a dropdown (Oct 17 2026, Ghulam:
+ * "a drop down … for the two tabs which are inside"). The chevron opens and
+ * closes it; it opens by itself while its page is showing. Each tab is the page
+ * with `?tab=`, which the page already reads.
+ */
+function NavDropdownRow({
+  item,
+  active,
+  onNavigate,
+}: {
+  item: AdminNavItem;
+  active: boolean;
+  onNavigate: () => void;
+}) {
+  const Icon = item.icon;
+  const [open, setOpen] = useState(active);
+  useEffect(() => {
+    if (active) setOpen(true);
+  }, [active]);
+  return (
+    <SidebarMenuItem>
+      <div className="relative">
+      <SidebarMenuButton asChild isActive={active && !open} className={cn(NAV_ROW, 'pr-9')}>
+        <Link href={item.href} onClick={onNavigate}>
+          <Icon className="h-4 w-4 shrink-0" />
+          <span className={labelClass(false, 'min-w-0 flex-1 truncate')}>{item.name}</span>
+        </Link>
+      </SidebarMenuButton>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-label={open ? `Hide ${item.name} tabs` : `Show ${item.name} tabs`}
+        className="absolute right-1 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+      >
+        <ChevronDown className={cn('size-4 transition-transform duration-200 ease-out', open ? 'rotate-0' : '-rotate-90')} />
+      </button>
+      </div>
+      {open && (
+        <Suspense fallback={null}>
+          <NavDropdownChildren item={item} active={active} onNavigate={onNavigate} />
+        </Suspense>
+      )}
+    </SidebarMenuItem>
+  );
+}
+
+/** Its own component so `useSearchParams` sits behind the Suspense above. */
+function NavDropdownChildren({
+  item,
+  active,
+  onNavigate,
+}: {
+  item: AdminNavItem;
+  active: boolean;
+  onNavigate: () => void;
+}) {
+  const params = useSearchParams();
+  const children = item.children ?? [];
+  const current = params.get('tab') ?? children[0]?.tab;
+  return (
+    <ul className="ml-[18px] mt-0.5 flex flex-col gap-0.5 border-l border-border pl-2.5 duration-200 ease-out animate-in fade-in-0 slide-in-from-top-1 motion-reduce:animate-none">
+      {children.map((child) => {
+        const on = active && current === child.tab;
+        return (
+          <li key={child.tab}>
+            <Link
+              href={`${item.href}?tab=${child.tab}`}
+              onClick={onNavigate}
+              aria-current={on ? 'page' : undefined}
+              className={cn(
+                'flex h-9 items-center rounded-lg px-2.5 text-[15px] transition-colors md:h-7 md:text-[13px]',
+                on ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-primary/10 hover:text-primary',
+              )}
+            >
+              {child.name}
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -630,7 +718,8 @@ export default function Sidebar({ desktop = true }: { desktop?: boolean } = {}) 
 
   if (!desktop && !isMobile) return null;
 
-  if (sections && !showNav && view !== 'retention') {
+  // A page registered with no sections only lends the account menu its actions.
+  if (sections && sections.sections.length > 0 && !showNav && view !== 'retention') {
     return (
       <SidebarRoot collapsible="icon" className="transition-all duration-300 ease-in-out">
         <SectionRail collapsed={collapsed} onShowNav={() => setShowNav(true)} onNavigate={closeMobileOnNav} />

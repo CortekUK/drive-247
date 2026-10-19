@@ -38,30 +38,19 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { LucideIcon } from 'lucide-react-nw';
 import {
   Briefcase,
-  CheckCircle2,
-  CircleAlert,
   ExternalLink,
   ImageOff,
+  ImageUp,
   Loader2,
   Plus,
-  TriangleAlert,
   Trash2,
 } from 'lucide-react-nw';
 
 import { formatTimestamp } from '@nw/components/portal/format';
 import { EmptyState, LoadError, PageHeader, Panel } from '@nw/portal-v2/primitives';
 import { Button } from '@nw/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@nw/components/ui/dialog';
 import { Skeleton } from '@nw/components/ui/skeleton';
 import { useTenant } from '@nw/contexts/TenantContext';
 import {
@@ -69,84 +58,16 @@ import {
   useCustomerGigDriver,
   type GigDriverDocument,
 } from '@nw/hooks/use-customer-gig-driver';
-import { cn } from '@nw/lib/utils';
+
+import { ConfirmDialog, IconTile, Notice, UploadZone, type Tone } from '../documents/_components/kit';
 
 /* ─────────────────────────────── feedback ──────────────────────────────── */
 
-type NoticeTone = 'success' | 'warning' | 'danger';
-
 interface Feedback {
-  tone: NoticeTone;
+  tone: Extract<Tone, 'success' | 'warning' | 'danger'>;
   title: string;
   /** One line per item; rendered as a list when there is more than one. */
   lines: string[];
-}
-
-const NOTICE_STYLES: Record<NoticeTone, string> = {
-  success: 'border-success-med bg-success-light',
-  warning: 'border-warning-med bg-warning-light',
-  danger: 'border-danger-subtle bg-danger-light',
-};
-
-const NOTICE_ICON_STYLES: Record<NoticeTone, string> = {
-  success: 'text-success',
-  warning: 'text-warning',
-  danger: 'text-danger',
-};
-
-/** A warning triangle over "2 documents uploaded" reads as a failure. */
-const NOTICE_ICONS: Record<NoticeTone, LucideIcon> = {
-  success: CheckCircle2,
-  warning: TriangleAlert,
-  danger: CircleAlert,
-};
-
-function Notice({
-  tone,
-  title,
-  lines,
-  children,
-}: {
-  tone: NoticeTone;
-  title: string;
-  lines?: string[];
-  children?: React.ReactNode;
-}) {
-  const Icon = NOTICE_ICONS[tone];
-
-  return (
-    <div
-      // `alert` interrupts a screen reader; `status` waits for a pause. A failed
-      // upload is worth the interruption, a successful one is not.
-      role={tone === 'danger' ? 'alert' : 'status'}
-      className={cn(
-        'flex items-start gap-3 rounded-2xl border px-4 py-3.5',
-        NOTICE_STYLES[tone],
-      )}
-    >
-      <Icon
-        aria-hidden
-        strokeWidth={1.75}
-        className={cn('mt-0.5 size-4 shrink-0', NOTICE_ICON_STYLES[tone])}
-      />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-brand-text">{title}</p>
-        {lines && lines.length > 0 ? (
-          <ul className="mt-1 flex flex-col gap-0.5">
-            {lines.map((line, index) => (
-              // Index keys: two rejected files can share a name, and this list
-              // is rebuilt wholesale on every action rather than reordered.
-              // eslint-disable-next-line react/no-array-index-key
-              <li key={index} className="text-sm leading-relaxed text-brand-text-soft">
-                {line}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        {children}
-      </div>
-    </div>
-  );
 }
 
 /* ─────────────────────────────── formatting ────────────────────────────── */
@@ -228,10 +149,10 @@ function DocumentTile({
   const meta = [uploaded, size].filter((part): part is string => part !== null).join(' · ');
 
   return (
-    <li className="flex flex-col overflow-hidden rounded-2xl border border-brand-border-soft bg-brand-card">
-      <div className="relative flex aspect-[4/3] w-full items-center justify-center overflow-hidden bg-brand-stone/50">
+    <li className="flex flex-col overflow-hidden rounded-2xl border border-pv-border bg-pv-card">
+      <div className="relative flex aspect-[4/3] w-full items-center justify-center overflow-hidden bg-pv-muted">
         {failedToLoad ? (
-          <div className="flex flex-col items-center gap-1 px-4 text-center text-brand-text-subtle">
+          <div className="flex flex-col items-center gap-1 px-4 text-center text-pv-muted-fg">
             <ImageOff aria-hidden strokeWidth={1.5} className="size-6" />
             <span className="text-xs leading-relaxed">
               This file is no longer available
@@ -251,13 +172,13 @@ function DocumentTile({
         )}
       </div>
 
-      <div className="flex items-center gap-2 border-t border-brand-border-soft px-3 py-2.5">
+      <div className="flex items-center gap-1 border-t border-pv-border py-2 pr-2 pl-4">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-brand-text" title={document.fileName}>
+          <p className="truncate text-sm font-medium text-pv-fg" title={document.fileName}>
             {document.fileName}
           </p>
           {meta !== '' ? (
-            <p className="truncate text-xs text-brand-text-subtle">{meta}</p>
+            <p className="truncate text-xs text-pv-muted-fg">{meta}</p>
           ) : null}
         </div>
 
@@ -266,7 +187,7 @@ function DocumentTile({
             asChild
             variant="brand-ghost"
             size="icon"
-            className="size-11 shrink-0"
+            className="size-11 shrink-0 rounded-full! text-pv-muted-fg hover:text-pv-fg"
             aria-label={`Open ${document.fileName} in a new tab`}
           >
             <a href={document.url} target="_blank" rel="noopener noreferrer">
@@ -279,7 +200,7 @@ function DocumentTile({
           type="button"
           variant="brand-ghost"
           size="icon"
-          className="size-11 shrink-0 text-danger hover:bg-danger-light hover:text-danger"
+          className="size-11 shrink-0 rounded-full! text-pv-muted-fg hover:bg-pv-danger-light hover:text-pv-danger"
           aria-label={`Delete ${document.fileName}`}
           disabled={isDeleting}
           onClick={onDelete}
@@ -304,12 +225,12 @@ function DocumentGridSkeleton() {
       {Array.from({ length: 3 }, (_, index) => (
         <div
           key={index}
-          className="overflow-hidden rounded-2xl border border-brand-border-soft bg-brand-card"
+          className="overflow-hidden rounded-2xl border border-pv-border bg-pv-card"
         >
-          <Skeleton className="aspect-[4/3] w-full rounded-none bg-brand-stone" />
-          <div className="flex flex-col gap-2 border-t border-brand-border-soft px-3 py-3.5">
-            <Skeleton className="h-4 w-2/3 bg-brand-stone" />
-            <Skeleton className="h-3 w-1/2 bg-brand-stone" />
+          <Skeleton className="aspect-[4/3] w-full rounded-none bg-pv-tint" />
+          <div className="flex flex-col gap-2 border-t border-pv-border px-4 py-4">
+            <Skeleton className="h-4 w-2/3 bg-pv-tint" />
+            <Skeleton className="h-3 w-1/2 bg-pv-tint" />
           </div>
         </div>
       ))}
@@ -319,9 +240,9 @@ function DocumentGridSkeleton() {
 
 /* ──────────────────────────────── the page ─────────────────────────────── */
 
-const PAGE_TITLE = 'Gig Driver Documents';
+const PAGE_TITLE = 'Gig driver documents';
 const PAGE_DESCRIPTION =
-  'Screenshots showing your active gig driver status — your Uber, Lyft, Bolt or delivery app profile.';
+  'Screenshots of your Uber, Lyft or delivery app profile, for gig driver rates.';
 
 export default function PortalGigDriverPage() {
   const { tenant, isLoading: tenantLoading } = useTenant();
@@ -359,13 +280,11 @@ export default function PortalGigDriverPage() {
     inputRef.current?.click();
   }, []);
 
-  const handleFiles = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(event.target.files ?? []);
-      // Cleared immediately so picking the SAME file twice in a row still fires
-      // `change` — the input keeps its value otherwise and the second attempt
-      // does nothing at all.
-      event.target.value = '';
+  const [dragActive, setDragActive] = useState(false);
+
+  /** One path for the picker and the drop zone, so a drop is validated the same way. */
+  const handleFileList = useCallback(
+    async (files: File[]) => {
       if (files.length === 0) return;
 
       setFeedback(null);
@@ -425,6 +344,18 @@ export default function PortalGigDriverPage() {
     [operator, upload],
   );
 
+  const handleFiles = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(event.target.files ?? []);
+      // Cleared immediately so picking the SAME file twice in a row still fires
+      // `change` — the input keeps its value otherwise and the second attempt
+      // does nothing at all.
+      event.target.value = '';
+      return handleFileList(files);
+    },
+    [handleFileList],
+  );
+
   const handleConfirmDelete = useCallback(async () => {
     if (!pendingDelete) return;
     const target = pendingDelete;
@@ -473,7 +404,7 @@ export default function PortalGigDriverPage() {
       <Button
         type="button"
         variant="brand"
-        className="h-11 w-full sm:w-auto"
+        className="h-11 w-full px-5 sm:w-auto"
         disabled={isUploading}
         onClick={handlePick}
       >
@@ -509,13 +440,16 @@ export default function PortalGigDriverPage() {
   if (featureDisabled) {
     return (
       <div className="flex flex-col gap-6">
-        <PageHeader title={PAGE_TITLE} />
+        <PageHeader
+          title={PAGE_TITLE}
+          description="Proof of gig driver status, for rental companies that offer gig driver rates."
+        />
         <Panel>
           <EmptyState
             icon={Briefcase}
             title="Not available here"
             description={`${operator} does not collect gig driver documents, so there is nothing to upload on this page. Everything else about your account is unaffected.`}
-            action={{ href: '/portal-v2', label: 'Back to my account' }}
+            action={{ href: '/portal', label: 'Back to my account' }}
           />
         </Panel>
       </div>
@@ -529,7 +463,9 @@ export default function PortalGigDriverPage() {
       <PageHeader
         title={PAGE_TITLE}
         description={PAGE_DESCRIPTION}
-        action={uploadButton}
+        // The empty page is itself the upload target; a second button above it
+        // would split the one action in two.
+        action={!isLoading && !isError && documents.length === 0 ? undefined : uploadButton}
       />
 
       {/*
@@ -602,23 +538,32 @@ export default function PortalGigDriverPage() {
       ) : isLoading ? (
         <DocumentGridSkeleton />
       ) : documents.length === 0 ? (
-        <Panel>
-          <EmptyState
-            icon={Briefcase}
-            title="No documents yet"
-            description={`Upload screenshots showing your active gig driver status. ${operator} uses them to confirm you qualify for gig driver rates.`}
-          />
+        <Panel className="p-3 sm:p-4">
           {/*
-            `EmptyState`'s own `action` is a Link, and this action opens a file
-            picker rather than navigating, so the button sits just below it.
-            The negative margin closes the gap `EmptyState`'s `py-12` leaves, so
-            the two read as one block instead of a panel with a stray button.
+            The empty page IS the drop target: the one thing to do here is add
+            a screenshot, so the whole panel takes one. The button opens the
+            same hidden picker the header uses.
           */}
-          <div className="-mt-6 flex justify-center px-6 pb-12">
+          <UploadZone
+            active={dragActive}
+            onDragState={setDragActive}
+            onFiles={(list) => {
+              void handleFileList(Array.from(list ?? []));
+            }}
+            className="gap-4 py-14"
+          >
+            <IconTile icon={ImageUp} className="size-14 rounded-3xl [&>svg]:size-6" />
+            <div className="max-w-sm">
+              <p className="text-[15px] font-semibold text-pv-fg">No documents yet</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-pv-muted-fg">
+                Drop screenshots of your active gig driver profile here. {operator} uses them to
+                confirm you qualify for gig driver rates.
+              </p>
+            </div>
             <Button
               type="button"
               variant="brand"
-              className="h-11"
+              className="h-11 px-5"
               disabled={isUploading}
               onClick={handlePick}
             >
@@ -630,11 +575,12 @@ export default function PortalGigDriverPage() {
               ) : (
                 <>
                   <Plus aria-hidden />
-                  Upload documents
+                  Upload screenshots
                 </>
               )}
             </Button>
-          </div>
+            <p className="text-xs text-pv-muted-fg">JPG or PNG, up to 10MB each.</p>
+          </UploadZone>
         </Panel>
       ) : (
         <>
@@ -649,7 +595,7 @@ export default function PortalGigDriverPage() {
             ))}
           </ul>
 
-          <p className="text-xs text-brand-text-subtle">
+          <p className="text-[13px] text-pv-muted-fg">
             JPG or PNG, up to 10MB each.
             {hasMore
               ? ' Showing your 100 most recent documents — contact us if you need to see older ones.'
@@ -658,52 +604,23 @@ export default function PortalGigDriverPage() {
         </>
       )}
 
-      <Dialog
+      <ConfirmDialog
         open={pendingDelete !== null}
-        onOpenChange={(open) => {
-          if (!open && !isConfirming) setPendingDelete(null);
+        icon={Trash2}
+        title="Delete this screenshot?"
+        description={
+          pendingDelete
+            ? `${pendingDelete.fileName} will be removed from your account. You can upload it again if you need to.`
+            : ''
+        }
+        confirmLabel="Delete screenshot"
+        busyLabel="Deleting…"
+        busy={isConfirming}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          void handleConfirmDelete();
         }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete this document?</DialogTitle>
-            <DialogDescription>
-              {pendingDelete
-                ? `${pendingDelete.fileName} will be removed from your account. This cannot be undone — you can upload it again if you need to.`
-                : ''}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button
-              type="button"
-              variant="brand-outline"
-              className="h-11"
-              disabled={isConfirming}
-              onClick={() => setPendingDelete(null)}
-            >
-              Keep it
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              className="h-11 rounded-full"
-              disabled={isConfirming}
-              onClick={() => {
-                void handleConfirmDelete();
-              }}
-            >
-              {isConfirming ? (
-                <>
-                  <Loader2 aria-hidden className="animate-spin" />
-                  Deleting…
-                </>
-              ) : (
-                'Delete'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      />
     </div>
   );
 }

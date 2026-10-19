@@ -28,14 +28,20 @@ import {
 import { Button } from '@nw/components/ui/button';
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@nw/components/ui/dialog';
 import { supabase } from '@nw/integrations/supabase/client';
+import { PvDialogContent } from '@nw/portal-v2/dialog';
 
+import {
+  PV_BUTTON,
+  PV_BUTTON_OUTLINE,
+  PV_DIALOG_DESCRIPTION,
+  PV_DIALOG_TITLE,
+} from './pv-kit';
 import { parkNotice } from './sticky-notice';
 
 /**
@@ -126,10 +132,10 @@ export function ChangePasswordDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Change your password</DialogTitle>
-          <DialogDescription>
+      <PvDialogContent>
+        <DialogHeader className="gap-2 pr-8">
+          <DialogTitle className={PV_DIALOG_TITLE}>Change your password</DialogTitle>
+          <DialogDescription className={PV_DIALOG_DESCRIPTION}>
             You are signed in, so we do not need your old password. Choose one
             of at least {MIN_PASSWORD_LENGTH} characters.
           </DialogDescription>
@@ -173,26 +179,26 @@ export function ChangePasswordDialog({
             }}
           />
 
-          <DialogFooter className="gap-2 sm:gap-2">
+          <DialogFooter className="gap-2 pt-2 sm:gap-2">
             <Button
               type="button"
-              variant="brand-outline"
+              variant="ghost"
               disabled={pending}
               onClick={() => onOpenChange(false)}
-              className="h-11 w-full sm:w-auto"
+              className={`${PV_BUTTON_OUTLINE} w-full sm:w-auto`}
             >
               Cancel
             </Button>
             <Button
               type="submit"
-              variant="brand"
+              variant="ghost"
               disabled={pending}
               aria-busy={pending}
-              className="h-11 w-full sm:w-auto"
+              className={`${PV_BUTTON} w-full sm:w-auto`}
             >
               {pending ? (
                 <>
-                  <Loader2 aria-hidden className="animate-spin" />
+                  <Loader2 aria-hidden className="size-4 animate-spin" />
                   Changing…
                 </>
               ) : (
@@ -201,7 +207,7 @@ export function ChangePasswordDialog({
             </Button>
           </DialogFooter>
         </form>
-      </DialogContent>
+      </PvDialogContent>
     </Dialog>
   );
 }
@@ -271,10 +277,10 @@ export function ChangeEmailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Change your email address</DialogTitle>
-          <DialogDescription>
+      <PvDialogContent>
+        <DialogHeader className="gap-2 pr-8">
+          <DialogTitle className={PV_DIALOG_TITLE}>Change your email address</DialogTitle>
+          <DialogDescription className={PV_DIALOG_DESCRIPTION}>
             We will send a confirmation link to the new address. Nothing changes
             until you open it.
           </DialogDescription>
@@ -303,12 +309,8 @@ export function ChangeEmailDialog({
           {formError ? <FormNotice tone="danger">{formError}</FormNotice> : null}
 
           <div className="space-y-1.5">
-            <p className="text-xs font-medium text-brand-text-soft">
-              Current address
-            </p>
-            <p className="min-h-11 rounded-md border border-brand-border-soft bg-brand-stone/50 px-3 py-2.5 text-sm break-all text-brand-text">
-              {currentEmail}
-            </p>
+            <p className="text-[13px] font-medium text-pv-fg">Current address</p>
+            <p className="text-[14px] break-all text-pv-muted-fg">{currentEmail}</p>
           </div>
 
           <AuthTextField
@@ -326,26 +328,26 @@ export function ChangeEmailDialog({
             }}
           />
 
-          <DialogFooter className="gap-2 sm:gap-2">
+          <DialogFooter className="gap-2 pt-2 sm:gap-2">
             <Button
               type="button"
-              variant="brand-outline"
+              variant="ghost"
               disabled={pending}
               onClick={() => onOpenChange(false)}
-              className="h-11 w-full sm:w-auto"
+              className={`${PV_BUTTON_OUTLINE} w-full sm:w-auto`}
             >
               Cancel
             </Button>
             <Button
               type="submit"
-              variant="brand"
+              variant="ghost"
               disabled={pending}
               aria-busy={pending}
-              className="h-11 w-full sm:w-auto"
+              className={`${PV_BUTTON} w-full sm:w-auto`}
             >
               {pending ? (
                 <>
-                  <Loader2 aria-hidden className="animate-spin" />
+                  <Loader2 aria-hidden className="size-4 animate-spin" />
                   Sending…
                 </>
               ) : (
@@ -354,7 +356,7 @@ export function ChangeEmailDialog({
             </Button>
           </DialogFooter>
         </form>
-      </DialogContent>
+      </PvDialogContent>
     </Dialog>
   );
 }

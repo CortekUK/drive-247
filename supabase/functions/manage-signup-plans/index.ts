@@ -1,5 +1,5 @@
 // =============================================================================
-// manage-signup-plans — super-admin CRUD for the three PUBLIC signup plans.
+// manage-signup-plans — super-admin CRUD for the PUBLIC signup plans.
 //
 // These are the plans on drive-247.com/#pricing that a stranger can subscribe
 // to. They are NOT the per-tenant `subscription_plans` rows (that is
@@ -165,6 +165,100 @@ Deno.serve(async (req) => {
       // ---------------------------------------------------------------------
       case "list":
         return jsonResponse({ plans: await listPlans(supabase) });
+
+      // ---------------------------------------------------------------------
+      // A NEW plan (Oct 17 2026). Stripe first, row second — same order and
+      // reason as update-price. It starts HIDDEN so the admin can finish the
+      // card before anyone can buy it; the card's switch puts it live.
+      // ---------------------------------------------------------------------
+      case "create": {
+        const name = String(body.name ?? "").trim();
+        if (name.length < 2 || name.length > 40) {
+          return fail("VALIDATION_FAILED", "Name must be 2–40 characters.", 400, { field: "name" });
+        }
+        const amount = Number(body.amount_cents);
+        if (!Number.isInteger(amount) || amount < MIN_AMOUNT_CENTS || amount > MAX_AMOUNT_CENTS) {
+          return fail(
+            "VALIDATION_FAILED",
+            `Price must be between $${(MIN_AMOUNT_CENTS / 100).toFixed(2)} and $${(MAX_AMOUNT_CENTS / 100).toLocaleString()}.`,
+            400,
+            { field: "amount_cents" },
+          );
+        }
+        const maxVehicles = Number(body.max_vehicles);
+        if (!Number.isInteger(maxVehicles) || maxVehicles < 1 || maxVehicles > 10_000) {
+          return fail("VALIDATION_FAILED", "Max vehicles must be a whole number between 1 and 10,000.", 400, { field: "max_vehicles" });
+        }
+
+        const { data: existing, error: exErr } = await supabase
+          .from("signup_plans")
+          .select("plan_key, sort_order");
+        if (exErr) throw new Error(`create preload failed: ${exErr.message}`);
+        const taken = new Set((existing ?? []).map((r: any) => String(r.plan_key)));
+
+        // plan_key is what signup, Stripe metadata and the subscription row
+        // carry, so it is a stable slug of the name, never edited afterwards.
+        const base =
+          name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 24) || "plan";
+        const slug = /^[a-z]/.test(base) ? base : `plan_${base}`.slice(0, 24);
+        let planKey = slug;
+        for (let n = 2; taken.has(planKey); n++) planKey = `${slug}_${n}`;
+
+        const sortOrder =
+          Math.max(0, ...(existing ?? []).map((r: any) => Number(r.sort_order) || 0)) + 1;
+
+        const mode = getSignupStripeMode();
+        const stripe = getSignupStripeClient(mode);
+        const lookupKey = `d247_signup_${planKey}_usd_${amount}_v1`;
+        const productId = await getOrCreateSignupProduct(stripe);
+        const price = await stripe.prices.create(
+          {
+            product: productId,
+            unit_amount: amount,
+            currency: "usd",
+            recurring: { interval: "month" },
+            lookup_key: lookupKey,
+            nickname: `Drive247 ${name} (self-serve)`,
+            metadata: { d247_signup_plan: planKey, plan_name: name },
+          },
+          { idempotencyKey: `d247-signup-create-${planKey}-${amount}-v1` },
+        );
+
+        const band = `Up to ${maxVehicles} vehicles`;
+        const { data, error } = await supabase
+          .from("signup_plans")
+          .insert({
+            plan_key: planKey,
+            name,
+            tagline: "",
+            fleet_band: band,
+            max_vehicles: maxVehicles,
+            amount_cents: amount,
+            currency: "usd",
+            interval: "month",
+            bullets: [
+              `Sized for fleets of up to ${maxVehicles} vehicles`,
+              "Unlimited bookings and customer records",
+              "Unlimited staff logins with role-based access",
+              "The full platform — nothing is held back",
+            ],
+            is_highlighted: false,
+            is_visible: false,
+            sort_order: sortOrder,
+            stripe_price_id: price.id,
+            stripe_lookup_key: lookupKey,
+            price_version: 1,
+            updated_by: auth.userId,
+          })
+          .select(PLAN_COLUMNS)
+          .single();
+        if (error) {
+          console.error(`${LOG} create row FAILED after creating ${price.id}:`, error.message);
+          return fail("CREATE_FAILED", "Stripe accepted the price but the plan could not be saved. Please retry.", 500);
+        }
+        console.log(`${LOG} created ${planKey} at ${amount} (price ${price.id})`);
+        return jsonResponse({ plan: await withTrial(supabase, data) });
+      }
 
       // ---------------------------------------------------------------------
       // Card content. Deliberately CANNOT touch amount_cents, currency,

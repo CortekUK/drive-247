@@ -100,7 +100,7 @@ interface CountryOption {
  * in lockstep — a code here that the constraint does not know about turns into a
  * 23514 at insert time.
  */
-const SQUARE_COUNTRY_OPTIONS: readonly CountryOption[] = [
+export const SQUARE_COUNTRY_OPTIONS: readonly CountryOption[] = [
   { code: 'AU', name: 'Australia' },
   { code: 'CA', name: 'Canada' },
   { code: 'FR', name: 'France' },
@@ -116,7 +116,7 @@ const SQUARE_COUNTRY_OPTIONS: readonly CountryOption[] = [
  * purpose — 249 entries would bury the eight that change the outcome. Add on
  * demand; anything here is Stripe-only by construction.
  */
-const OTHER_COUNTRY_OPTIONS: readonly CountryOption[] = [
+export const OTHER_COUNTRY_OPTIONS: readonly CountryOption[] = [
   { code: 'AE', name: 'United Arab Emirates' },
   { code: 'AT', name: 'Austria' },
   { code: 'BE', name: 'Belgium' },
@@ -154,7 +154,7 @@ interface ProviderLimitation {
   detail: string;
 }
 
-interface ProviderOption {
+export interface ProviderOption {
   id: PaymentProviderId;
   name: string;
   tagline: string;
@@ -174,7 +174,7 @@ interface ProviderOption {
   retained: readonly string[];
 }
 
-const PROVIDER_OPTIONS: readonly ProviderOption[] = [
+export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
   {
     id: 'stripe',
     name: 'Stripe',
@@ -232,13 +232,13 @@ const PROVIDER_OPTIONS: readonly ProviderOption[] = [
 ];
 
 /** `capabilities.ts::isCountrySupported`, restated for the browser. */
-function isCountrySupported(option: ProviderOption, country: string | null): boolean {
+export function isCountrySupported(option: ProviderOption, country: string | null): boolean {
   if (!option.supportedCountries) return true; // no country constraint for this processor
   if (!country) return false; // constrained processor + unknown country = refuse
   return option.supportedCountries.includes(country.toUpperCase());
 }
 
-function optionFor(provider: PaymentProviderId): ProviderOption {
+export function optionFor(provider: PaymentProviderId): ProviderOption {
   // Fail safe toward Stripe, matching coerceProvider() in resolve.ts: an
   // unrecognised value must never present itself as the Square rail.
   return PROVIDER_OPTIONS.find((o) => o.id === provider) ?? PROVIDER_OPTIONS[0];
@@ -251,6 +251,28 @@ function optionFor(provider: PaymentProviderId): ProviderOption {
  * Call this before submitting. Returns null when the selection is safe to
  * insert, otherwise a message fit to show the operator.
  */
+/**
+ * The country rule, as a pure step: a country that puts the current provider
+ * outside its supported list falls back to Stripe (it would otherwise fail
+ * tenants_square_country_supported_check at insert). `revertedFrom` names the
+ * provider that was dropped, so the change is never silent. Used by the picker
+ * and by the stepped Quick setup dialog alike.
+ */
+export function selectionWithCountry(
+  value: PaymentProviderSelection,
+  code: string,
+): { next: PaymentProviderSelection; revertedFrom: string | null } {
+  const country = code.toUpperCase();
+  const current = optionFor(value.paymentProvider);
+  if (!isCountrySupported(current, country)) {
+    return {
+      next: { paymentProvider: 'stripe', country, permanenceAcknowledged: false },
+      revertedFrom: current.name,
+    };
+  }
+  return { next: { ...value, country }, revertedFrom: null };
+}
+
 export function validatePaymentProviderSelection(
   value: PaymentProviderSelection,
 ): string | null {
@@ -334,23 +356,11 @@ export default function PaymentProviderPicker({
   }, [value.country]);
 
   const handleCountryChange = (code: string) => {
-    const next = code.toUpperCase();
-
-    // If the country the operator just chose puts the CURRENT provider outside
-    // its supported list, the row would fail tenants_square_country_supported_check
-    // at insert. Fall back to the native rail here rather than at the database.
-    if (!isCountrySupported(selected, next)) {
-      setRevertedFrom(selected.name);
-      onChange({
-        paymentProvider: 'stripe',
-        country: next,
-        permanenceAcknowledged: false,
-      });
-      return;
-    }
-
-    setRevertedFrom(null);
-    onChange({ ...value, country: next });
+    // A country outside the current provider's list falls back to Stripe here
+    // rather than at the database (selectionWithCountry).
+    const { next, revertedFrom: dropped } = selectionWithCountry(value, code);
+    setRevertedFrom(dropped);
+    onChange(next);
   };
 
   const handleProviderChange = (option: ProviderOption) => {

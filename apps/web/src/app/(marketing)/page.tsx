@@ -13,6 +13,7 @@ import { PricingSection } from "@/components/sections/pricing";
 import { ReferralBanner } from "@/components/sections/referral-banner";
 import { fetchLandingPricingEnabled } from "@/lib/landing-pricing-server";
 import { fetchSignupPlans } from "@/lib/plans-server";
+import { fetchEnterpriseCard } from "@/lib/enterprise-card-server";
 import { fetchTestimonials } from "@/lib/testimonials-server";
 import { lookupPromoOffer } from "@/lib/promo-lookup-server";
 import { normalizeReferralCode } from "@/lib/referral-cookie";
@@ -72,9 +73,10 @@ export default async function Home({
    * off — for up to three months, with nothing on screen explaining why.
    */
   const showPricing = (await fetchLandingPricingEnabled()) || !!offer;
-  const [plans, testimonials] = await Promise.all([
+  const [plans, testimonials, enterprise] = await Promise.all([
     showPricing ? fetchSignupPlans() : null,
     fetchTestimonials(),
+    showPricing ? fetchEnterpriseCard() : null,
   ]);
 
   /*
@@ -101,7 +103,7 @@ export default async function Home({
         <ProblemSection />
         <ProductShowcase />
         <Timeline />
-        {plans && <PricingSection plans={plans} offer={offer} />}
+        {plans && <PricingSection plans={plans} offer={offer} enterprise={enterprise} />}
         <FAQSection />
         <CTABand />
       </main>

@@ -1,192 +1,178 @@
 'use client';
 
 /**
- * The furniture /portal/settings is built from.
+ * The furniture /portal-v2/settings is built from — the operator portal v2's
+ * settings kit (`apps/portal/src/components/settings-v2/settings-kit.tsx`)
+ * redrawn on the `--pv-*` tokens, one step roomier.
  *
- * Everything here is the portal's flat recipe — 1px `brand-border-soft` on
- * `brand-card`, no shadows — matched to `components/portal/primitives.tsx` so a
- * settings panel and a booking panel read as the same object. It is local to
- * this route rather than added to the shared primitives because none of it has
- * a second caller yet.
+ * The same rules carry over:
+ *  - FLAT. A section is a heading over rows, straight on the page — no card,
+ *    no icon tile, no rim. Sections are separated by space, not lines.
+ *  - TWO COLUMNS. Every row is a label column (what it is, and one line on why)
+ *    beside its control; the row stacks on a phone. The label column is 320px
+ *    here against the operator's 420px — a customer's page is half as wide in
+ *    practice, and its controls need the room more than the labels do.
+ *  - ONE SOFT HAIRLINE under each row, none under the last.
+ *  - ONE SAVE BAR for the page, floating at the foot while something is
+ *    unsaved — the operator's `SettingsStickySaveBar`.
+ *
+ * Local to this route rather than in the shared primitives because none of it
+ * has a second caller yet.
  */
 
-import type { LucideIcon } from 'lucide-react-nw';
 import { Check, Loader2 } from 'lucide-react-nw';
 import type { ReactNode } from 'react';
 
 import { Button } from '@nw/components/ui/button';
-import { Label } from '@nw/components/ui/label';
 import { Skeleton } from '@nw/components/ui/skeleton';
 import { Switch } from '@nw/components/ui/switch';
 import { cn } from '@nw/lib/utils';
 
-/* ─────────────────────────────── panels ────────────────────────────────── */
+import { PV_BUTTON_GHOST_SM, PV_BUTTON_SM } from './pv-kit';
 
-/**
- * One titled block of the page.
- *
- * The icon is a landmark, not decoration: this page is five near-identical
- * white rectangles and the glyph is what lets someone scrolling find "the one
- * with the padlock". It is `aria-hidden` — the `<h2>` carries the meaning.
- */
-export function SettingsPanel({
-  icon: Icon,
+/* ─────────────────────────────── sections ──────────────────────────────── */
+
+/** One titled part of the page: a heading, one line on what it is, its rows. */
+export function SettingsSection({
+  id,
   title,
   description,
   children,
-  footer,
 }: {
-  icon: LucideIcon;
+  id: string;
   title: string;
   description?: string;
   children: ReactNode;
-  footer?: ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-brand-border-soft bg-brand-card">
-      <div className="flex items-start gap-3 border-b border-brand-border-soft px-4 py-3.5 sm:px-5">
-        <span
-          aria-hidden
-          className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-brand-stone"
+    <section aria-labelledby={`${id}-title`} className="scroll-mt-24">
+      <div className="pb-1">
+        <h2
+          id={`${id}-title`}
+          className="text-[17px] font-semibold tracking-tight text-pv-fg"
         >
-          <Icon strokeWidth={1.75} className="size-4 text-brand-text-subtle" />
-        </span>
-        <div className="min-w-0">
-          <h2 className="text-sm font-medium text-brand-text">{title}</h2>
-          {description ? (
-            <p className="mt-0.5 text-xs leading-relaxed text-brand-text-soft">
-              {description}
-            </p>
-          ) : null}
-        </div>
+          {title}
+        </h2>
+        {description ? (
+          <p className="mt-0.5 text-[14px] text-pv-muted-fg">{description}</p>
+        ) : null}
       </div>
-
-      <div className="px-4 py-4 sm:px-5">{children}</div>
-
-      {footer ? (
-        <div className="border-t border-brand-border-soft px-4 py-3 sm:px-5">
-          {footer}
-        </div>
-      ) : null}
+      <div>{children}</div>
     </section>
   );
 }
 
 /**
- * The save row at the foot of an editable panel.
+ * One setting: the label column beside its control.
  *
- * The button is DISABLED until something actually changed. A settings form
- * whose save button is always live invites a pointless write on every visit,
- * and each of those is a real UPDATE against `customers` plus a membership
- * re-read. "Saved" replaces the hint rather than appearing beside it, so the
- * row's height never changes and the page does not jump under the cursor.
- *
- * IT SUBMITS THE ENCLOSING `<form>` AND CARRIES NO `onClick`, deliberately.
- * An earlier version did both, which meant one click ran the save twice: once
- * from the handler and once from the form's `onSubmit`. Two UPDATEs, two
- * membership re-reads, and — had the mutation not been idempotent — two of
- * whatever it did. Every panel that uses this must therefore be wrapped in a
- * form whose `onSubmit` performs the save; that also buys Enter-to-save from
- * any field in it, which a plain `onClick` button does not.
+ * `align="end"` puts the control at the far end of the row and lets the label
+ * take the rest — for a switch, whose control is a thumb's width and whose
+ * explanation is the long part.
  */
-export function SaveFooter({
-  dirty,
-  saving,
-  saved,
-  label = 'Save changes',
-  hint,
+export function SettingsRow({
+  label,
+  description,
+  htmlFor,
+  children,
+  note,
+  align = 'start',
 }: {
-  dirty: boolean;
-  saving: boolean;
-  /** True for a few seconds after a successful save. */
-  saved: boolean;
-  label?: string;
-  hint?: string;
+  label: ReactNode;
+  description?: ReactNode;
+  htmlFor?: string;
+  children?: ReactNode;
+  /** A warning or consequence that belongs to this row, shown under it. */
+  note?: ReactNode;
+  align?: 'start' | 'end';
 }) {
+  const end = align === 'end';
   return (
-    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <p
+    <div className="border-b border-pv-border/60 py-5 last:border-b-0">
+      <div
         className={cn(
-          'text-xs leading-relaxed',
-          saved ? 'text-success' : 'text-brand-text-subtle',
+          'flex flex-col gap-3',
+          end
+            ? 'sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start sm:gap-x-10'
+            : 'md:grid md:grid-cols-[minmax(0,320px)_minmax(0,1fr)] md:items-start md:gap-x-10',
         )}
-        // The result of a save has to reach a screen reader that never sees the
-        // button's state change. `polite` so it does not interrupt typing.
-        aria-live="polite"
       >
-        {saved ? (
-          <span className="inline-flex items-center gap-1.5">
-            <Check aria-hidden className="size-3.5" />
-            Saved
-          </span>
-        ) : dirty ? (
-          'You have unsaved changes.'
-        ) : (
-          (hint ?? '')
-        )}
-      </p>
-
-      <Button
-        type="submit"
-        variant="brand"
-        disabled={!dirty || saving}
-        aria-busy={saving}
-        className="h-11 w-full sm:w-auto"
-      >
-        {saving ? (
-          <>
-            <Loader2 aria-hidden className="animate-spin" />
-            Saving…
-          </>
-        ) : (
-          label
-        )}
-      </Button>
+        <div className={cn('min-w-0', end ? 'sm:max-w-2xl' : 'md:pt-2.5')}>
+          {htmlFor ? (
+            <label htmlFor={htmlFor} className="text-[14px] font-medium text-pv-fg">
+              {label}
+            </label>
+          ) : (
+            <p className="text-[14px] font-medium text-pv-fg">{label}</p>
+          )}
+          {description ? (
+            <div className="mt-0.5 text-[13px] leading-relaxed text-pv-muted-fg">
+              {description}
+            </div>
+          ) : null}
+        </div>
+        {children ? <div className="min-w-0">{children}</div> : null}
+      </div>
+      {note ? <div className="mt-2 text-[13px] leading-relaxed">{note}</div> : null}
     </div>
   );
 }
 
-/* ────────────────────────── read-only value rows ───────────────────────── */
+/** Help or an error under a control. */
+export function RowHint({
+  children,
+  tone = 'muted',
+  id,
+}: {
+  children: ReactNode;
+  tone?: 'muted' | 'danger' | 'success' | 'warning';
+  id?: string;
+}) {
+  return (
+    <div
+      id={id}
+      role={tone === 'danger' ? 'alert' : undefined}
+      className={cn(
+        'mt-1.5 px-1 text-[12px] leading-relaxed',
+        tone === 'muted' && 'text-pv-muted-fg',
+        tone === 'danger' && 'text-pv-danger',
+        tone === 'success' && 'text-pv-success',
+        tone === 'warning' && 'text-pv-warning',
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/* ────────────────────────── read-only values ───────────────────────────── */
 
 /**
  * A fact the customer cannot change here — their date of birth, their ID
- * expiry, the email on their sign-in.
+ * expiry, the email they sign in with.
  *
- * Rendered as text on a tinted plate rather than as a disabled `<input>`. A
- * greyed-out field reads as "broken, try again later"; a plate reads as "this
- * comes from somewhere else", which is exactly what these are.
+ * Plain text in the control column, not a greyed-out `<input>`: a disabled box
+ * reads as "broken, try again later"; text reads as "this comes from somewhere
+ * else", which is exactly what these are.
  */
-export function ReadOnlyField({
-  label,
+export function ReadOnlyValue({
   value,
-  hint,
   badge,
   action,
 }: {
-  label: string;
   value: ReactNode;
-  hint?: ReactNode;
   badge?: ReactNode;
   action?: ReactNode;
 }) {
   return (
-    <div className="space-y-1.5">
-      <p className="text-xs font-medium text-brand-text-soft">{label}</p>
-      <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border border-brand-border-soft bg-brand-stone/50 px-3 py-2.5">
-        <span className="min-w-0 flex-1 break-words text-sm text-brand-text">
-          {value}
-        </span>
-        {badge}
-        {action}
-      </div>
-      {hint ? (
-        <div className="text-xs leading-relaxed text-brand-text-subtle">{hint}</div>
-      ) : null}
+    <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2">
+      <span className="min-w-0 break-words text-[14px] text-pv-fg">{value}</span>
+      {badge}
+      {action ? <span className="ml-auto sm:ml-0">{action}</span> : null}
     </div>
   );
 }
 
-/** A small status pill — "Verified", "Expired". Never the indigo `Badge`. */
+/** A small status pill — "Verified", "Expired" — in the v2 status tints. */
 export function StatusPill({
   tone,
   children,
@@ -197,11 +183,11 @@ export function StatusPill({
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium leading-4',
-        tone === 'positive' && 'bg-success-light text-success',
-        tone === 'notice' && 'bg-warning-light text-warning',
-        tone === 'negative' && 'bg-danger-light text-danger',
-        tone === 'neutral' && 'bg-brand-stone text-brand-text-soft',
+        'inline-flex h-6 shrink-0 items-center rounded-full px-2.5 text-[11px] font-medium',
+        tone === 'positive' && 'bg-pv-success-light text-pv-success',
+        tone === 'notice' && 'bg-pv-warning-light text-pv-warning',
+        tone === 'negative' && 'bg-pv-danger-light text-pv-danger',
+        tone === 'neutral' && 'bg-pv-muted text-pv-muted-fg',
       )}
     >
       {children}
@@ -212,17 +198,14 @@ export function StatusPill({
 /* ───────────────────────────── switch rows ─────────────────────────────── */
 
 /**
- * One notification preference.
+ * One notification preference, as an `align="end"` row.
  *
- * TAP TARGET — the whole row is the target, twice over. `<label htmlFor>` bound
- * to the switch forwards a click from anywhere in the text (a `<button>` is a
- * labelable element, so this is spec behaviour, not a trick), and the switch
- * itself carries a 44px invisible hit area via `before:`. The visible switch
- * stays 18px, which is the design.
+ * The whole label is the target: `<label htmlFor>` bound to the switch
+ * forwards a click from anywhere in the text (a `<button>` is labelable), and
+ * the switch carries a 44px invisible hit area via `before:`.
  *
- * The insets are measured against the PADDING box, not the border box: the
- * switch is 18.4x32 with a 1px transparent border, so its padding box is
- * 16.4x30 and 14/7 of extra inset is what reaches 44 in both axes.
+ * Sized as the operator's v2 switch — 20x44 track — rather than the shared
+ * 18x32 one, which reads as a toy beside 44px fields.
  */
 export function SwitchRow({
   id,
@@ -240,62 +223,151 @@ export function SwitchRow({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex min-h-11 items-start justify-between gap-4 py-1">
-      <Label
-        htmlFor={id}
-        className="block cursor-pointer text-sm font-medium text-brand-text"
-      >
-        {title}
-        <span className="mt-1 block text-xs font-normal leading-relaxed text-brand-text-soft">
-          {description}
-        </span>
-      </Label>
+    <SettingsRow label={title} description={description} htmlFor={id} align="end">
       <Switch
         id={id}
         checked={checked}
         disabled={disabled}
         onCheckedChange={onChange}
-        className="relative mt-1 shrink-0 before:absolute before:-inset-x-[7px] before:-inset-y-[14px] before:content-['']"
+        className={cn(
+          'relative h-6 w-11 border-2 shadow-none before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-[""]',
+          'data-[state=checked]:border-pv-primary data-[state=checked]:bg-pv-primary',
+          'data-[state=unchecked]:border-transparent data-[state=unchecked]:bg-pv-border',
+          'focus-visible:border-pv-primary focus-visible:ring-3 focus-visible:ring-pv-primary/25',
+          '[&>span]:size-5 [&>span]:data-[state=checked]:translate-x-5 [&>span]:shadow-sm',
+        )}
       />
+    </SettingsRow>
+  );
+}
+
+/* ─────────────────────────────── save bar ──────────────────────────────── */
+
+/**
+ * The page's one Save — the operator's `SettingsStickySaveBar`: a floating
+ * pill at the foot of the scroll area with the state on the left and Reset /
+ * Save on the right.
+ *
+ * It is only on screen while it has something to say (unsaved, saving, or
+ * "Saved" for a few seconds): a customer opens this page to look as often as
+ * to change, and a permanent bar of two disabled buttons would be noise. It
+ * arrives and leaves with the §12 motion — fade plus a 12px lift, 200ms — and
+ * stays painted until it has left (`visibility` is delayed by the 200ms).
+ *
+ * Save is `type="submit"` for the page's `<form>` (by `form={formId}` — the
+ * bar sits after it, at the foot of the page), whose `onSubmit` performs the
+ * save. No `onClick` as well — one click would then
+ * save twice. Enter in any field submits the same way.
+ */
+export function SettingsSaveBar({
+  formId,
+  dirty,
+  saving,
+  saved,
+  onReset,
+}: {
+  formId: string;
+  dirty: boolean;
+  saving: boolean;
+  /** True for a few seconds after a successful save. */
+  saved: boolean;
+  onReset: () => void;
+}) {
+  const shown = dirty || saving || saved;
+
+  return (
+    <div
+      className={cn(
+        'pointer-events-none sticky bottom-4 z-30 -mt-8 flex justify-end',
+        shown
+          ? 'visible translate-y-0 opacity-100 [transition:transform_200ms_ease-out,opacity_200ms_ease-out]'
+          : 'invisible translate-y-3 opacity-0 [transition:transform_200ms_ease-in,opacity_200ms_ease-in,visibility_0s_linear_200ms]',
+        'motion-reduce:transition-none',
+      )}
+    >
+      <div
+        role="region"
+        aria-label="Save changes"
+        className="pointer-events-auto flex max-w-full flex-wrap items-center justify-end gap-2 rounded-full border border-pv-border bg-pv-card p-1.5 pl-5 shadow-lg"
+      >
+        <p
+          className={cn(
+            'mr-1 text-[13px]',
+            saved && !dirty ? 'text-pv-success' : 'text-pv-muted-fg',
+          )}
+          // The result of a save has to reach a screen reader that never sees
+          // the bar move. `polite` so it does not interrupt typing.
+          aria-live="polite"
+        >
+          {saving ? (
+            'Saving…'
+          ) : dirty ? (
+            'You have unsaved changes'
+          ) : saved ? (
+            <span className="inline-flex items-center gap-1.5">
+              <Check aria-hidden className="size-3.5" />
+              Saved
+            </span>
+          ) : null}
+        </p>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={onReset}
+          disabled={!dirty || saving}
+          tabIndex={shown ? undefined : -1}
+          className={PV_BUTTON_GHOST_SM}
+        >
+          Reset
+        </Button>
+        <Button
+          type="submit"
+          form={formId}
+          variant="ghost"
+          disabled={!dirty || saving}
+          aria-busy={saving || undefined}
+          tabIndex={shown ? undefined : -1}
+          className={cn(PV_BUTTON_SM, 'min-w-[124px]')}
+        >
+          {saving ? <Loader2 aria-hidden className="size-4 animate-spin" /> : null}
+          Save changes
+        </Button>
+      </div>
     </div>
   );
 }
 
 /* ─────────────────────────────── skeleton ──────────────────────────────── */
 
-/**
- * Sized like the real thing, not a generic grey box: the panel chrome and the
- * field rows are the same height as what replaces them, so the page does not
- * reflow when the query lands.
- */
-function PanelSkeleton({ rows }: { rows: number }) {
+/** Sized like the real rows, so the page does not reflow when the data lands. */
+function SectionSkeleton({ rows }: { rows: number }) {
   return (
-    <section className="rounded-2xl border border-brand-border-soft bg-brand-card">
-      <div className="flex items-center gap-3 border-b border-brand-border-soft px-4 py-3.5 sm:px-5">
-        <Skeleton className="size-8 shrink-0 rounded-full bg-brand-stone" />
-        <div className="flex-1 space-y-1.5">
-          <Skeleton className="h-3.5 w-32 bg-brand-stone" />
-          <Skeleton className="h-3 w-56 max-w-full bg-brand-stone" />
-        </div>
-      </div>
-      <div className="space-y-4 px-4 py-4 sm:px-5">
+    <div>
+      <Skeleton className="h-4 w-36 bg-pv-muted" />
+      <Skeleton className="mt-2 h-3.5 w-72 max-w-full bg-pv-muted/70" />
+      <div className="mt-2">
         {Array.from({ length: rows }, (_, index) => (
-          <div key={index} className="space-y-1.5">
-            <Skeleton className="h-3 w-24 bg-brand-stone" />
-            <Skeleton className="h-11 w-full rounded-md bg-brand-stone" />
+          <div
+            key={index}
+            className="flex flex-col gap-3 border-b border-pv-border/60 py-5 last:border-b-0 md:grid md:grid-cols-[minmax(0,320px)_minmax(0,1fr)] md:gap-x-10"
+          >
+            <div className="space-y-2 md:pt-2.5">
+              <Skeleton className="h-3.5 w-28 bg-pv-muted" />
+              <Skeleton className="h-3 w-48 max-w-full bg-pv-muted/70" />
+            </div>
+            <Skeleton className="h-11 w-full max-w-md rounded-3xl bg-pv-muted" />
           </div>
         ))}
       </div>
-    </section>
+    </div>
   );
 }
 
 export function SettingsSkeleton() {
   return (
-    <div className="flex flex-col gap-4" aria-hidden>
-      <PanelSkeleton rows={3} />
-      <PanelSkeleton rows={2} />
-      <PanelSkeleton rows={2} />
+    <div className="flex flex-col gap-12" aria-hidden>
+      <SectionSkeleton rows={3} />
+      <SectionSkeleton rows={2} />
     </div>
   );
 }

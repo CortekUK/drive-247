@@ -131,16 +131,16 @@ export function SettlementNotice({
     return (
       <div
         className={cn(
-          'flex items-start gap-2.5 rounded-xl border border-success-med bg-success-light px-3 py-2.5 text-left',
+          'flex items-start gap-2.5 rounded-xl border border-pv-success/25 bg-pv-success-light px-3 py-2.5 text-left',
           className,
         )}
       >
         <CheckCircle2
           aria-hidden
           strokeWidth={1.75}
-          className="mt-px size-4 shrink-0 text-success"
+          className="mt-px size-4 shrink-0 text-pv-success"
         />
-        <p className="text-xs leading-relaxed text-brand-text-soft">
+        <p className="text-[13px] leading-relaxed text-pv-fg">
           Your balance has been updated — this booking is now settled.
         </p>
       </div>
@@ -151,16 +151,16 @@ export function SettlementNotice({
     return (
       <div
         className={cn(
-          'flex items-start gap-2.5 rounded-xl border border-brand-border-soft bg-brand-stone/45 px-3 py-2.5 text-left',
+          'flex items-start gap-2.5 rounded-xl border border-pv-border bg-pv-row px-3 py-2.5 text-left',
           className,
         )}
       >
         <Clock
           aria-hidden
           strokeWidth={1.75}
-          className="mt-px size-4 shrink-0 text-brand-text-subtle"
+          className="mt-px size-4 shrink-0 text-pv-muted-fg"
         />
-        <p className="text-xs leading-relaxed text-brand-text-soft">
+        <p className="text-[13px] leading-relaxed text-pv-fg">
           Your payment went through, but your balance has not updated yet. This
           usually catches up within a few minutes — there is nothing more to do,
           and you will not be charged twice. Contact us if it is still showing
@@ -173,16 +173,16 @@ export function SettlementNotice({
   return (
     <div
       className={cn(
-        'flex items-start gap-2.5 rounded-xl border border-brand-border-soft bg-brand-stone/45 px-3 py-2.5 text-left',
+        'flex items-start gap-2.5 rounded-xl border border-pv-border bg-pv-row px-3 py-2.5 text-left',
         className,
       )}
     >
       <Loader2
         aria-hidden
         strokeWidth={1.75}
-        className="mt-px size-4 shrink-0 animate-spin text-brand-text-subtle"
+        className="mt-px size-4 shrink-0 animate-spin text-pv-muted-fg"
       />
-      <p className="text-xs leading-relaxed text-brand-text-soft">
+      <p className="text-[13px] leading-relaxed text-pv-fg">
         Updating your balance…
       </p>
     </div>

@@ -3,7 +3,9 @@
 import { Check } from "lucide-react";
 
 import { OnboardingProvider } from "@/components/onboarding/onboarding-provider";
+import { EnterpriseCard } from "@/components/pricing/enterprise-card";
 import { PlanCard } from "@/components/pricing/plan-card";
+import type { EnterpriseCard as EnterpriseCardData } from "@/lib/enterprise-card-server";
 import { useFadeIn } from "@/hooks/use-fade-in";
 import type { PromoOffer } from "@/lib/promo-offer";
 import {
@@ -38,6 +40,8 @@ interface PricingSectionProps {
    * discounted price; the signup dialog applies the code at payment.
    */
   offer?: PromoOffer | null;
+  /** The contact-only Enterprise card, always last; null when it is switched off. */
+  enterprise?: EnterpriseCardData | null;
 }
 
 /**
@@ -63,12 +67,14 @@ export function PricingSection({
   plans = SIGNUP_PLANS,
   onSelectPlan,
   offer = null,
+  enterprise = null,
 }: PricingSectionProps) {
   const { ref, visible } = useFadeIn();
 
   // Belt and braces against an empty array reaching the grid: `fetchSignupPlans`
   // already falls back, but a default parameter only fires for `undefined`.
   const catalogue = plans.length > 0 ? plans : SIGNUP_PLANS;
+  const cardCount = catalogue.length + (enterprise ? 1 : 0);
 
   const section = (
     <section
@@ -119,16 +125,19 @@ export function PricingSection({
             at full width, so the section stays balanced whatever is published.
           */
           className={`mx-auto mt-12 grid gap-6 md:items-stretch ${
-            catalogue.length === 1
+            cardCount === 1
               ? "max-w-sm md:grid-cols-1"
-              : catalogue.length === 2
+              : cardCount === 2
                 ? "max-w-3xl md:grid-cols-2"
-                : "md:grid-cols-3"
+                : cardCount === 3
+                  ? "md:grid-cols-3"
+                  : "md:grid-cols-2 lg:grid-cols-4"
           } ${visible ? "fade-in-visible" : "fade-in-hidden"}`}
         >
           {catalogue.map((plan) => (
             <PlanCard key={plan.id} plan={plan} onSelect={onSelectPlan} offer={offer} />
           ))}
+          {enterprise && <EnterpriseCard card={enterprise} />}
         </div>
 
         {/* Nothing in PLATFORM_INCLUDED is plan-gated, which is exactly why it

@@ -21,10 +21,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@nw/components/ui/select";
-import { parseDateOnly } from "@nw/lib/domain";
 import { cn } from "@nw/lib/utils";
 
-import { formatClockLabel, formatIsoDateLabel, isIsoDate } from "./time-utils";
+import {
+  formatClockLabel,
+  formatIsoDateLabel,
+  localDateToIso,
+  resolveDatePickerState,
+} from "./time-utils";
 
 /**
  * The booking form's furniture.
@@ -443,12 +447,7 @@ export function DateField({
   className?: string;
 }) {
   const [open, setOpen] = React.useState(false);
-  const selected = isIsoDate(value) ? parseDateOnly(value) : undefined;
-  const defaultMonth =
-    selected ??
-    (defaultMonthIso && isIsoDate(defaultMonthIso)
-      ? parseDateOnly(defaultMonthIso)
-      : undefined);
+  const { selected, defaultMonth } = resolveDatePickerState(value, defaultMonthIso);
 
   return (
     <div className={cn("space-y-1.5", className)}>
@@ -504,10 +503,8 @@ export function DateField({
             components={{ DayButton: BrandDayButton }}
             onSelect={(date) => {
               if (!date) return;
-              // Format from the local Y/M/D, never `toISOString()` — that is UTC
-              // and shifts the chosen day back for anyone west of Greenwich.
-              const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-              onChange(iso);
+              // Local Y/M/D, never `toISOString()` — see `localDateToIso`.
+              onChange(localDateToIso(date));
               setOpen(false);
             }}
           />

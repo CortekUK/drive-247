@@ -73,11 +73,31 @@ export async function handleAdminTeam(req: Request, db: TeamDb): Promise<Respons
       return fail('An account already exists for this email.', 409);
     }
 
-    const { data: created, error: createError } = await db.auth.admin.createUser({
-      email, password, email_confirm: true, user_metadata: { name, platform_role: role },
-    });
-    if (createError || !created?.user) return fail(createError?.message ?? 'The login could not be created.', 400);
-    const authUserId = created.user.id as string;
+    // The email may already have a LOGIN with no staff profile — most often a
+    // booking-site customer account (customer_users). GoTrue refuses a second
+    // login for the same address, so that login is reused: it gets the password
+    // set here and a team profile beside its customer one. Only a login we
+    // created ourselves is ever deleted on a rollback.
+    const { data: found } = await db.rpc('admin_find_auth_user_by_email', { p_email: email });
+    const existingId = ((Array.isArray(found) ? found[0] : found) as { id?: string } | null)?.id ?? null;
+    let authUserId: string;
+    let createdLogin = false;
+    if (existingId) {
+      const { data: staff } = await db.from('app_users').select('id').eq('auth_user_id', existingId).maybeSingle();
+      if (staff) return fail('An account already exists for this email.', 409);
+      const { error: reuseError } = await db.auth.admin.updateUserById(existingId, {
+        password, email_confirm: true, ban_duration: 'none',
+      });
+      if (reuseError) return fail(reuseError.message ?? 'The login could not be updated.', 400);
+      authUserId = existingId;
+    } else {
+      const { data: created, error: createError } = await db.auth.admin.createUser({
+        email, password, email_confirm: true, user_metadata: { name, platform_role: role },
+      });
+      if (createError || !created?.user) return fail(createError?.message ?? 'The login could not be created.', 400);
+      authUserId = created.user.id as string;
+      createdLogin = true;
+    }
 
     const { data: appUser, error: appUserError } = await db.from('app_users').insert({
       auth_user_id: authUserId, email, name, role: 'head_admin',
@@ -85,7 +105,7 @@ export async function handleAdminTeam(req: Request, db: TeamDb): Promise<Respons
       is_bonzah_partner: false, is_sales_agent: false, tenant_id: null, is_active: true,
     }).select('id').single();
     if (appUserError || !appUser) {
-      await db.auth.admin.deleteUser(authUserId).catch(() => {});
+      if (createdLogin) await db.auth.admin.deleteUser(authUserId).catch(() => {});
       return fail('The account could not be created.', 500);
     }
 
@@ -96,7 +116,7 @@ export async function handleAdminTeam(req: Request, db: TeamDb): Promise<Respons
     if (memberError || secretError) {
       // Never leave a half-made member: no role or no password means undo it all.
       await db.from('app_users').delete().eq('id', appUser.id);
-      await db.auth.admin.deleteUser(authUserId).catch(() => {});
+      if (createdLogin) await db.auth.admin.deleteUser(authUserId).catch(() => {});
       return fail('The account could not be created.', 500);
     }
     return json({ success: true, id: appUser.id });

@@ -1,10 +1,10 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, ImageOff } from "lucide-react-nw";
-import { useEffect, useState } from "react";
-
 import { cn } from "@nw/lib/utils";
 import type { VehicleImage } from "@nw/lib/vehicles/types";
+
+import { useVehicleGallery } from "./use-vehicle-gallery";
 
 /**
  * The vehicle's photos.
@@ -37,18 +37,10 @@ export function VehicleGallery({
   variant?: "standalone" | "inset";
   className?: string;
 }) {
-  const [index, setIndex] = useState(0);
-  const [failed, setFailed] = useState<ReadonlySet<string>>(new Set());
-
-  // A different vehicle (or a photo re-order) must not leave the viewer parked
-  // on an index that no longer exists.
-  useEffect(() => {
-    setIndex(0);
-  }, [images]);
+  const { index, setIndex, usable, active, step, markFailed } =
+    useVehicleGallery(images);
 
   const inset = variant === "inset";
-  const usable = images.filter((image) => !failed.has(image.url));
-  const active = usable[Math.min(index, Math.max(0, usable.length - 1))];
 
   if (!active) {
     return (
@@ -69,15 +61,6 @@ export function VehicleGallery({
     );
   }
 
-  const step = (delta: number) => {
-    setIndex((current) => {
-      const next = current + delta;
-      if (next < 0) return usable.length - 1;
-      if (next >= usable.length) return 0;
-      return next;
-    });
-  };
-
   return (
     <div className={cn(inset ? "" : "space-y-3", className)}>
       <div
@@ -92,9 +75,7 @@ export function VehicleGallery({
           alt={alt}
           loading="eager"
           className="aspect-[16/10] w-full object-cover"
-          onError={() =>
-            setFailed((current) => new Set(current).add(active.url))
-          }
+          onError={() => markFailed(active.url)}
         />
 
         {usable.length > 1 ? (
@@ -136,9 +117,7 @@ export function VehicleGallery({
                   alt=""
                   loading="lazy"
                   className="size-full object-cover"
-                  onError={() =>
-                    setFailed((current) => new Set(current).add(image.url))
-                  }
+                  onError={() => markFailed(image.url)}
                 />
               </button>
             </li>

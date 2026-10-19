@@ -65,6 +65,11 @@ export interface AdminNavItem {
   badgeUnavailable?: boolean;
   /** Opens in its own browser tab (Support is a separate workspace). */
   newTab?: boolean;
+  /**
+   * The page's own tabs, shown as a dropdown under the row (Announcements:
+   * Features and System). Each is the page with `?tab=<tab>`.
+   */
+  children?: { name: string; tab: string }[];
 }
 
 export interface AdminNavGroup {
@@ -160,18 +165,20 @@ function useBuildNav(): AdminNav {
       // inbound queues. Each user can still rearrange it (Customise sidebar).
       { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutGrid },
       { name: 'Rental Companies', href: '/admin/rentals', icon: Building2 },
-      sales[0], // Onboarding
+      // Onboarding is merged into Rental Companies (Ghulam, Oct 17 2026):
+      // its form is the second choice behind "Add New Company" there.
       // Premium integrations and their prices. Super admins only (the
       // catalog table's RLS says so too). docs/integration-billing.
       ...(isSuper ? [{ name: 'Integrations', href: '/admin/integrations', icon: Plug }] : []),
       { name: 'Announcements', href: '/admin/announcements', icon: Megaphone },
       sales[1], // Promo Codes
       { name: 'Signup Plans', href: '/admin/signup-plans', icon: BadgeDollarSign },
+      { name: 'Onboarding Questions', href: '/admin/onboarding-questions', icon: ListChecks },
       { name: 'Contact Requests', href: '/admin/contacts', icon: Mail },
       { name: 'Global Blacklist', href: '/admin/blacklist', icon: Ban },
       { name: 'Feedbacks', href: '/admin/feedbacks', icon: MessageSquareText },
       // Customer Management is the Retention side of the rail's switch.
-      // Notifications, Legal Pages, Onboarding Questions, Setup Checklist,
+      // Notifications, Legal Pages, Setup Checklist,
       // Audit Logs, OpenAI Usage and Manage Admins are cards on Settings.
     ];
 
@@ -193,6 +200,8 @@ function useBuildNav(): AdminNav {
 
     // Off the sidebar but still live: reached from ⌘K search and direct links.
     const hidden: AdminNavItem[] = [
+      // Past onboardings (and their credentials), still reachable by search.
+      sales[0],
       { name: 'Mode Requests', href: '/admin/requests', icon: ArrowUpCircle },
       { name: 'Welcome Pack', href: '/admin/welcome-pack', icon: BookOpen },
       // A section of Customer Management now; the old route redirects there.
@@ -205,7 +214,6 @@ function useBuildNav(): AdminNav {
       ...(isSuper ? [{ name: 'Notifications', href: '/admin/notifications', icon: BellRing }] : []),
       { name: 'Audit Logs', href: '/admin/audit-logs', icon: ScrollText },
       { name: 'Legal Pages', href: '/admin/legal', icon: Scale },
-      { name: 'Onboarding Questions', href: '/admin/onboarding-questions', icon: ListChecks },
       { name: 'Setup Checklist', href: '/admin/setup-checklist', icon: ClipboardCheck },
       ...(isPrimary ? [{ name: 'Manage Admins', href: '/admin/admins', icon: Users }] : []),
     ];

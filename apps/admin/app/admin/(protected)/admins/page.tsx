@@ -6,7 +6,9 @@ import { useAuthStore } from '@/store/authStore';
 import { useRouter } from 'next/navigation';
 import { toast } from '@/components/ui/sonner';
 import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
-import { Copy, Eye, EyeOff, Pencil, Power, Trash2 } from 'lucide-react';
+import { Copy, Eye, EyeOff, Pencil, Plus, Power, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { HEADER_ACTIONS, HEADER_PRIMARY } from '@/components/admin/header-buttons';
 
 type TeamRole = 'super_admin' | 'manager' | 'sales' | 'support';
 
@@ -215,18 +217,19 @@ export default function ManageAdminsPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-8">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Manage Admins</h1>
-          <p className="mt-2 text-muted-foreground">Your team on the Drive247 dashboard</p>
-          <p className="mt-1 text-sm text-red-600">Super admins only</p>
+          <p className="text-sm text-muted-foreground">
+            Your team on the Drive247 dashboard · <span className="text-red-600">Super admins only</span>
+          </p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/80 font-medium"
-        >
-          + Add Team Member
-        </button>
+        <div className={HEADER_ACTIONS}>
+          <Button className={HEADER_PRIMARY} onClick={() => setShowCreateModal(true)}>
+            <Plus />
+            Add Team Member
+          </Button>
+        </div>
       </div>
 
       {/* `overflow-x-auto`, not `overflow-hidden`: this table is wider than a

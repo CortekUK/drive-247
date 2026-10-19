@@ -98,15 +98,11 @@ function toSignupPlan(raw: unknown): SignupPlan | null {
   const row = raw as Record<string, unknown>;
 
   const planKey = readString(row, "plan_key");
-  // `SignupPlanId` is a literal union threaded through OnboardingState, the step
-  // props and `signup-payment-intent`. Widening it to `string` to accommodate a
-  // row would cascade through the whole dialog and let an id the edge functions
-  // cannot price reach a checkout, so an unknown key is dropped here instead.
+  // Admin-created plans are welcome (Oct 17 2026); the edge functions price
+  // them from their own row. Only a malformed key is dropped.
   if (!isSignupPlanId(planKey)) {
     console.error(
-      `[plans] signup_plans row has unknown plan_key ${JSON.stringify(planKey)}; ` +
-        `skipping it. Known ids are resolved server-side by ` +
-        `supabase/functions/_shared/signup-plans.ts and cannot be added from the DB alone.`
+      `[plans] signup_plans row has a malformed plan_key ${JSON.stringify(planKey)}; skipping it.`
     );
     return null;
   }

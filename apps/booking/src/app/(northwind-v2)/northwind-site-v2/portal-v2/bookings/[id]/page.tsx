@@ -1,7 +1,11 @@
 'use client';
 
 /**
- * One booking, read-only.
+ * One booking, read-only — a calmer version of the operator portal v2 rental
+ * record (components/rentals-v2/rental-detail): a page header naming the car,
+ * a short stage rail saying where the booking has got to, then the record in
+ * cards — the car, when and where, extras — with the money in a column of its
+ * own beside them.
  *
  * ── SCOPE ───────────────────────────────────────────────────────────────────
  * This page shows what the customer bought: the car, the dates and places, what
@@ -10,8 +14,7 @@
  * is deliberate. v1's equivalent is ~1,466 lines because it also owns the
  * extension checkout, the installment schedule, the BoldSign envelope and the
  * cancellation request; each of those is a WRITE against money or a contract
- * and none can be bolted on safely as a side-effect of a detail view. See the
- * handoff notes for the exact list left out.
+ * and none can be bolted on safely as a side-effect of a detail view.
  *
  * ── THE ID IN THE URL IS NOT TRUSTED ────────────────────────────────────────
  * `useCustomerRental` filters on `customer_id` AND `tenant_id`, both taken from
@@ -25,48 +28,43 @@ import { useParams } from 'next/navigation';
 import {
   ArrowLeft,
   CalendarDays,
+  CarFront,
+  Check,
   CircleAlert,
   CircleCheck,
   Clock,
   Gauge,
   IdCard,
+  MapPin,
   Package,
   Receipt,
 } from 'lucide-react-nw';
 
-import {
-  formatDate,
-  formatDateRange,
-  formatDateTime,
-  formatTimestamp,
-} from '@nw/components/portal/format';
+import { formatDate, formatDateTime, formatTimestamp } from '@nw/components/portal/format';
+import { formatBookingDates, formatNights } from '@nw/portal-v2/bookings/format';
 import {
   DetailList,
   DetailRow,
   EmptyState,
   LoadError,
+  PageHeader,
   Panel,
   PanelHeader,
 } from '@nw/portal-v2/primitives';
-import {
-  PaymentStatusChip,
-  RentalStatusChip,
-  StatusChip,
-} from '@nw/portal-v2/status-chip';
-import { VehiclePhoto } from '@nw/components/fleet/vehicle-photo';
+import { PaymentStatusChip, RentalStatusChip, StatusChip } from '@nw/portal-v2/status-chip';
 import { Button } from '@nw/components/ui/button';
 import { Skeleton } from '@nw/components/ui/skeleton';
 import { useCustomer } from '@nw/hooks/use-customer';
 import { useCustomerRental } from '@nw/hooks/use-customer-rental';
 import type { CustomerRentalDetail } from '@nw/hooks/use-customer-rental';
-import {
-  bookingCompletionState,
-  type BookingCompletionState,
-} from '@nw/hooks/use-customer-rentals';
+import { bookingCompletionState, type BookingCompletionState } from '@nw/hooks/use-customer-rentals';
 import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { useTenant } from '@nw/contexts/TenantContext';
 import { calculateTotalMileageAllowance } from '@nw/lib/domain';
 import { cn } from '@nw/lib/utils';
+
+/** Hover = fade only, 200ms, ease-out on / ease-in off (V2_PLAN §12). */
+const HOVER_FADE = 'transition-colors duration-200 ease-in hover:ease-out motion-reduce:transition-none';
 
 export default function BookingDetailPage() {
   const params = useParams<{ id: string }>();
@@ -76,18 +74,44 @@ export default function BookingDetailPage() {
   const rawId = params?.id;
   const rentalId = Array.isArray(rawId) ? rawId[0] : rawId;
 
-  const { rental, notFound, isLoading, isError, error, refetch } =
-    useCustomerRental(rentalId);
+  const { rental, notFound, isLoading, isError, error, refetch } = useCustomerRental(rentalId);
 
   return (
     <div className="flex flex-col gap-6">
-      <Link
-        href="/portal-v2/bookings"
-        className="inline-flex min-h-11 w-fit items-center gap-1.5 text-sm text-brand-text-soft transition-colors hover:text-brand-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/25"
-      >
-        <ArrowLeft aria-hidden strokeWidth={1.75} className="size-4" />
-        All bookings
-      </Link>
+      <div className="flex flex-col gap-2">
+        <Link
+          href="/portal/bookings"
+          className={cn(
+            '-ml-2 inline-flex h-9 w-fit items-center gap-1.5 rounded-full px-2 text-[13px] font-medium text-pv-muted-fg hover:bg-pv-hover hover:text-pv-fg',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-ring/50',
+            HOVER_FADE,
+          )}
+        >
+          <ArrowLeft aria-hidden className="size-4" />
+          All bookings
+        </Link>
+
+        {isError || isLoading || notFound || !rental ? (
+          <PageHeader
+            title={isLoading ? 'Your booking' : 'Booking'}
+            description="The car, your dates and pickup, and what you paid."
+          />
+        ) : (
+          <PageHeader
+            title={rental.vehicle?.displayName ?? 'Your booking'}
+            description={`Booking ${rental.reference}${
+              rental.createdAt ? `, made ${formatTimestamp(rental.createdAt)}` : ''
+            }. Your dates, pickup and what you paid.`}
+            action={
+              <div className="flex flex-wrap items-center gap-1.5">
+                <RentalStatusChip lifecycle={rental.lifecycle} />
+                <PaymentStatusChip state={rental.paymentState} />
+                {rental.isExtended ? <StatusChip tone="info">Extended</StatusChip> : null}
+              </div>
+            }
+          />
+        )}
+      </div>
 
       {isError ? (
         <LoadError
@@ -105,7 +129,7 @@ export default function BookingDetailPage() {
             icon={CircleAlert}
             title="Booking not found"
             description="We could not find that booking on your account. It may have been made with a different email address."
-            action={{ href: '/portal-v2/bookings', label: 'Back to my bookings' }}
+            action={{ href: '/portal/bookings', label: 'Back to my bookings' }}
           />
         </Panel>
       ) : (
@@ -115,7 +139,90 @@ export default function BookingDetailPage() {
   );
 }
 
+/* ─────────────────────────────── stage rail ────────────────────────────── */
+
+/**
+ * Where the booking has got to, as four steps — the operator record's stage
+ * rail, reduced to the moments a customer lives through. Every step is read
+ * straight off fields the page already has (`paymentState`, `lifecycle`);
+ * nothing is inferred, so the rail can never say a car was collected that was
+ * not. The first step not yet done is the one marked as current.
+ *
+ * Not drawn for a cancelled booking: the cancellation notice is the whole story.
+ */
+function StageRail({ rental }: { rental: CustomerRentalDetail }) {
+  const pickedUp = rental.lifecycle === 'on_rent' || rental.lifecycle === 'completed';
+  const steps = [
+    { key: 'booked', label: 'Booked', done: true },
+    {
+      key: 'paid',
+      label: rental.paymentState === 'refunded' ? 'Refunded' : 'Paid',
+      done: rental.paymentState === 'paid' || rental.paymentState === 'refunded',
+    },
+    { key: 'pickup', label: 'Picked up', done: pickedUp },
+    { key: 'return', label: 'Returned', done: rental.lifecycle === 'completed' },
+  ];
+  const currentIndex = steps.findIndex((step) => !step.done);
+
+  return (
+    <Panel className="px-4 py-4 sm:px-6">
+      <ol className="flex items-center">
+        {steps.map((step, index) => {
+          const current = index === currentIndex;
+          return (
+            <li key={step.key} className={cn('flex items-center', index < steps.length - 1 && 'flex-1')}>
+              <span className="flex flex-col items-center gap-1.5 sm:flex-row sm:gap-2.5">
+                <span
+                  className={cn(
+                    'grid size-7 shrink-0 place-items-center rounded-full text-[12px] font-semibold tabular-nums',
+                    step.done
+                      ? 'bg-pv-primary text-white'
+                      : current
+                        ? 'bg-pv-card text-pv-primary ring-2 ring-pv-primary'
+                        : 'bg-pv-muted text-pv-muted-fg',
+                  )}
+                >
+                  {step.done ? <Check aria-hidden className="size-4" /> : index + 1}
+                </span>
+                <span
+                  className={cn(
+                    'whitespace-nowrap text-[12px] sm:text-[13px]',
+                    step.done || current ? 'font-semibold text-pv-fg' : 'font-medium text-pv-muted-fg',
+                  )}
+                >
+                  {step.label}
+                  <span className="sr-only">{step.done ? ' (done)' : current ? ' (next)' : ''}</span>
+                </span>
+              </span>
+              {index < steps.length - 1 ? (
+                <span
+                  aria-hidden
+                  className={cn(
+                    'mx-2 mb-5 h-0.5 flex-1 rounded-full sm:mx-4 sm:mb-0',
+                    step.done && steps[index + 1].done ? 'bg-pv-primary' : 'bg-pv-border',
+                  )}
+                />
+              ) : null}
+            </li>
+          );
+        })}
+      </ol>
+    </Panel>
+  );
+}
+
 /* ─────────────────────────────── the detail ────────────────────────────── */
+
+/** A label and a value on one line, for the narrow money column. */
+function SideRow({ label, value }: { label: string; value: React.ReactNode }) {
+  if (value === null || value === undefined || value === '') return null;
+  return (
+    <div className="flex items-baseline justify-between gap-4 py-2.5">
+      <dt className="shrink-0 text-[13px] text-pv-muted-fg">{label}</dt>
+      <dd className="min-w-0 break-words text-right text-[13px] font-medium text-pv-fg">{value}</dd>
+    </div>
+  );
+}
 
 function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
   const { formatCurrency, distanceLabel } = useTenantBranding();
@@ -147,32 +254,12 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
       : null;
 
   const delivered = rental.deliveryMethod === 'delivery' || !!rental.deliveryAddress;
+  const pickupPlace = rental.deliveryAddress ?? rental.pickupLocation;
+  const returnPlace = rental.collectionAddress ?? rental.returnLocation;
+  const nights = formatNights(rental.nights);
 
   return (
     <>
-      {/* ── Heading ──────────────────────────────────────────────────────── */}
-      <header className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <RentalStatusChip lifecycle={rental.lifecycle} />
-          <PaymentStatusChip state={rental.paymentState} />
-          {rental.isExtended ? <StatusChip tone="info">Extended</StatusChip> : null}
-        </div>
-        <div>
-          <h1 className="text-2xl font-medium tracking-[-0.02em] text-brand-text sm:text-3xl">
-            {vehicleName}
-          </h1>
-          <p className="mt-1.5 text-sm text-brand-text-soft">
-            {rental.reference}
-            {rental.createdAt ? (
-              <span className="text-brand-text-subtle">
-                {' · booked '}
-                {formatTimestamp(rental.createdAt)}
-              </span>
-            ) : null}
-          </p>
-        </div>
-      </header>
-
       {/* ── Anything the customer must know before the detail ────────────── */}
       {rental.lifecycle === 'cancelled' ? (
         <Notice tone="danger" title="This booking was cancelled">
@@ -182,37 +269,43 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
         </Notice>
       ) : rental.cancellationRequested ? (
         <Notice tone="warning" title="Cancellation requested">
-          We have your request and are processing it. The booking stays active
-          until we confirm.
+          We have your request and are processing it. The booking stays active until we confirm.
         </Notice>
       ) : rental.paymentState === 'unpaid' ? (
         <Notice tone="warning" title="Payment outstanding">
-          {formatCurrency(rental.breakdown.total)} has not been settled yet. Your
-          reservation is not confirmed until it clears — contact us if you have
-          already paid.
+          {formatCurrency(rental.breakdown.total)} has not been settled yet. Your reservation is not
+          confirmed until it clears — contact us if you have already paid.
         </Notice>
       ) : null}
 
+      {rental.lifecycle !== 'cancelled' ? <StageRail rental={rental} /> : null}
+
       <DocumentsPanel rental={rental} />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-        {/* ── Left column ───────────────────────────────────────────────── */}
-        <div className="flex flex-col gap-4">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+        {/* ── Left column: the record ───────────────────────────────────── */}
+        <div className="flex flex-col gap-5">
           {/* Vehicle */}
           <Panel className="overflow-hidden">
-            <div className="flex flex-col gap-4 p-4 sm:flex-row sm:p-5">
-              <VehiclePhoto
-                url={rental.vehicle?.imageUrl ?? null}
-                alt={vehicleName}
-                className="w-full shrink-0 sm:aspect-auto sm:h-32 sm:w-44"
-              />
-              <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <div className="flex flex-col gap-5 p-4 sm:flex-row sm:items-center sm:p-5">
+              <span className="grid aspect-[16/10] w-full shrink-0 place-items-center overflow-hidden rounded-xl bg-pv-tint sm:w-52">
+                {rental.vehicle?.imageUrl ? (
+                  <img
+                    src={rental.vehicle.imageUrl}
+                    alt={vehicleName}
+                    loading="lazy"
+                    decoding="async"
+                    className="size-full object-cover"
+                  />
+                ) : (
+                  <CarFront aria-hidden strokeWidth={1.5} className="size-8 text-pv-primary" />
+                )}
+              </span>
+              <div className="flex min-w-0 flex-1 flex-col gap-3">
                 <div>
-                  <p className="text-base font-medium text-brand-text">{vehicleName}</p>
+                  <p className="text-[18px] font-semibold tracking-[-0.01em] text-pv-fg">{vehicleName}</p>
                   {rental.vehicle?.registration ? (
-                    <p className="mt-0.5 text-sm text-brand-text-soft">
-                      {rental.vehicle.registration}
-                    </p>
+                    <p className="mt-0.5 text-[13px] text-pv-muted-fg">{rental.vehicle.registration}</p>
                   ) : null}
                 </div>
 
@@ -221,7 +314,7 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
                     {specs.map((spec) => (
                       <span
                         key={spec}
-                        className="rounded-full bg-brand-stone px-2.5 py-1 text-xs text-brand-text-soft"
+                        className="inline-flex h-6 items-center rounded-full bg-pv-tint px-2.5 text-[12px] font-medium text-pv-fg/75"
                       >
                         {spec}
                       </span>
@@ -229,29 +322,21 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
                   </div>
                 ) : null}
 
-                <p className="flex items-start gap-2 text-xs leading-relaxed text-brand-text-soft">
-                  <Gauge
-                    aria-hidden
-                    strokeWidth={1.75}
-                    className="mt-px size-3.5 shrink-0 text-brand-text-subtle"
-                  />
+                <p className="flex items-start gap-2 text-[13px] leading-relaxed text-pv-muted-fg">
+                  <Gauge aria-hidden strokeWidth={1.75} className="mt-0.5 size-4 shrink-0" />
                   <span>
                     {rental.isUnlimitedMileage ? (
-                      <span className="font-medium text-brand-text">
-                        Unlimited mileage included
-                      </span>
+                      <span className="font-medium text-pv-fg">Unlimited mileage included</span>
                     ) : allowance !== null ? (
                       <>
-                        <span className="font-medium text-brand-text">
+                        <span className="font-medium text-pv-fg">
                           {allowance.toLocaleString()}
                           {distanceLabel ? ` ${distanceLabel}` : ''} included
                         </span>
-                        {rental.mileage.excessRate !== null &&
-                        rental.mileage.excessRate > 0 ? (
+                        {rental.mileage.excessRate !== null && rental.mileage.excessRate > 0 ? (
                           <>
                             {' · '}
-                            {formatCurrency(rental.mileage.excessRate)} per extra{' '}
-                            {distanceLabel ?? 'unit'}
+                            {formatCurrency(rental.mileage.excessRate)} per extra {distanceLabel ?? 'unit'}
                           </>
                         ) : null}
                       </>
@@ -264,30 +349,21 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
             </div>
           </Panel>
 
-          {/* Dates */}
+          {/* When & where — one card, because the customer reads them together:
+              when do I collect it, and from where. */}
           <Panel>
-            <PanelHeader title="Dates" />
+            <PanelHeader title={delivered ? 'When & where · delivery' : 'When & where'} />
             <div className="px-4 sm:px-5">
               <DetailList>
                 <DetailRow
                   label="Rental period"
-                  value={formatDateRange(rental.startDate, rental.endDate)}
+                  value={formatBookingDates(rental.startDate, rental.endDate)}
                   hint={
-                    rental.nights !== null
-                      ? `${rental.nights} day${rental.nights === 1 ? '' : 's'}${
-                          rental.periodType ? ` · ${rental.periodType} rate` : ''
-                        }`
-                      : undefined
+                    nights ? `${nights}${rental.periodType ? ` · ${rental.periodType} rate` : ''}` : undefined
                   }
                 />
-                <DetailRow
-                  label="Pick up"
-                  value={formatDateTime(rental.startDate, rental.pickupTime)}
-                />
-                <DetailRow
-                  label="Return"
-                  value={formatDateTime(rental.endDate, rental.returnTime)}
-                />
+                <DetailRow label="Pick up" value={formatDateTime(rental.startDate, rental.pickupTime)} />
+                <DetailRow label="Return" value={formatDateTime(rental.endDate, rental.returnTime)} />
                 {/*
                   Only meaningful on an extended booking — on every other rental
                   `previous_end_date` is null, and `DetailRow` drops the row.
@@ -297,20 +373,9 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
                   value={rental.isExtended ? formatDate(rental.previousEndDate) : null}
                   hint={rental.isExtended ? 'This booking was extended.' : undefined}
                 />
-              </DetailList>
-            </div>
-          </Panel>
-
-          {/* Locations */}
-          <Panel>
-            <PanelHeader
-              title={delivered ? 'Delivery & collection' : 'Pick up & return'}
-            />
-            <div className="px-4 sm:px-5">
-              <DetailList>
                 <DetailRow
                   label={delivered ? 'Delivered to' : 'Pick up from'}
-                  value={rental.deliveryAddress ?? rental.pickupLocation}
+                  value={pickupPlace}
                   hint={
                     rental.deliveryFee && rental.deliveryFee > 0
                       ? `Delivery ${formatCurrency(rental.deliveryFee)}`
@@ -319,7 +384,7 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
                 />
                 <DetailRow
                   label={rental.collectionAddress ? 'Collected from' : 'Return to'}
-                  value={rental.collectionAddress ?? rental.returnLocation}
+                  value={returnPlace}
                   hint={
                     rental.collectionFee && rental.collectionFee > 0
                       ? `Collection ${formatCurrency(rental.collectionFee)}`
@@ -327,6 +392,14 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
                   }
                 />
               </DetailList>
+              {/* No place recorded on either end: say so, rather than leave a
+                  card with a header and nothing under it. */}
+              {!pickupPlace && !returnPlace ? (
+                <p className="flex items-start gap-2 border-t border-pv-border py-3 text-[13px] leading-relaxed text-pv-muted-fg">
+                  <MapPin aria-hidden strokeWidth={1.75} className="mt-0.5 size-4 shrink-0" />
+                  No pick-up or return address is recorded on this booking. Contact us if you need it.
+                </p>
+              ) : null}
             </div>
           </Panel>
 
@@ -335,38 +408,27 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
           {rental.extras.length > 0 ? (
             <Panel>
               <PanelHeader title="Extras" />
-              <ul className="divide-y divide-brand-border-soft">
+              <ul className="divide-y divide-pv-border">
                 {rental.extras.map((extra) => (
-                  <li
-                    key={extra.id}
-                    className="flex items-start gap-3 px-4 py-3 sm:px-5"
-                  >
-                    <Package
-                      aria-hidden
-                      strokeWidth={1.75}
-                      className="mt-0.5 size-4 shrink-0 text-brand-text-subtle"
-                    />
+                  <li key={extra.id} className="flex items-start gap-3 px-4 py-3.5 sm:px-5">
+                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-pv-tint">
+                      <Package aria-hidden strokeWidth={1.75} className="size-4 text-pv-primary" />
+                    </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm text-brand-text">
+                      <p className="text-[14px] font-medium text-pv-fg">
                         {extra.name}
                         {extra.quantity > 1 ? (
-                          <span className="text-brand-text-subtle">
+                          <span className="text-pv-muted-fg">
                             {' × '}
                             {extra.quantity}
                           </span>
                         ) : null}
                       </p>
                       {extra.description ? (
-                        <p className="mt-0.5 text-xs leading-relaxed text-brand-text-soft">
-                          {extra.description}
-                        </p>
+                        <p className="mt-0.5 text-[13px] leading-relaxed text-pv-muted-fg">{extra.description}</p>
                       ) : null}
                     </div>
-                    {extra.perDay ? (
-                      <span className="shrink-0 text-xs text-brand-text-subtle">
-                        per day
-                      </span>
-                    ) : null}
+                    {extra.perDay ? <span className="shrink-0 text-[12px] text-pv-muted-fg">per day</span> : null}
                   </li>
                 ))}
               </ul>
@@ -375,27 +437,20 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
         </div>
 
         {/* ── Right column: the money ───────────────────────────────────── */}
-        <div className="flex flex-col gap-4 lg:sticky lg:top-2">
+        <div className="flex flex-col gap-5 lg:sticky lg:top-2">
           <Panel>
             <PanelHeader title="Price breakdown" />
-            <div className="px-4 py-1 sm:px-5">
+            <div className="px-4 py-1.5 sm:px-5">
               {rental.breakdown.lines.map((line) => (
-                <div
-                  key={line.key}
-                  className="flex items-baseline justify-between gap-3 py-2"
-                >
-                  <span className="min-w-0 text-sm text-brand-text-soft">
+                <div key={line.key} className="flex items-baseline justify-between gap-3 py-2">
+                  <span className="min-w-0 text-[13px] text-pv-muted-fg">
                     {line.label}
-                    {line.caption ? (
-                      <span className="mt-0.5 block text-xs text-brand-text-subtle">
-                        {line.caption}
-                      </span>
-                    ) : null}
+                    {line.caption ? <span className="mt-0.5 block text-[12px] text-pv-muted-fg/80">{line.caption}</span> : null}
                   </span>
                   <span
                     className={cn(
-                      'shrink-0 text-sm tabular-nums',
-                      line.isCredit ? 'text-success' : 'text-brand-text',
+                      'shrink-0 text-[13px] font-medium tabular-nums',
+                      line.isCredit ? 'text-pv-success' : 'text-pv-fg',
                     )}
                   >
                     {line.isCredit ? '−' : ''}
@@ -405,23 +460,23 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
               ))}
             </div>
 
-            <div className="border-t border-brand-border-soft px-4 py-3 sm:px-5">
+            <div className="border-t border-pv-border px-4 py-4 sm:px-5">
               <div className="flex items-baseline justify-between gap-3">
-                <span className="text-sm font-medium text-brand-text">Total</span>
-                <span className="text-lg font-semibold tabular-nums text-brand-text">
+                <span className="text-[14px] font-semibold text-pv-fg">Total</span>
+                <span className="text-[22px] font-bold tracking-[-0.02em] tabular-nums text-pv-fg">
                   {formatCurrency(rental.breakdown.total)}
                 </span>
               </div>
               {!rental.breakdown.fromInvoice ? (
-                <p className="mt-2 text-xs leading-relaxed text-brand-text-subtle">
-                  We do not have an itemised invoice for this booking, so this is
-                  the agreed total only. Ask us for a breakdown any time.
+                <p className="mt-2 text-[12px] leading-relaxed text-pv-muted-fg">
+                  We do not have an itemised invoice for this booking, so this is the agreed total only. Ask us for
+                  a breakdown any time.
                 </p>
               ) : null}
               {rental.breakdown.securityDeposit > 0 ? (
-                <p className="mt-2 text-xs leading-relaxed text-brand-text-subtle">
-                  Includes a {formatCurrency(rental.breakdown.securityDeposit)}{' '}
-                  security deposit, refunded after the car comes back.
+                <p className="mt-2 text-[12px] leading-relaxed text-pv-muted-fg">
+                  Includes a {formatCurrency(rental.breakdown.securityDeposit)} security deposit, refunded after the
+                  car comes back.
                 </p>
               ) : null}
             </div>
@@ -429,30 +484,19 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
 
           <Panel>
             <PanelHeader title="Payment" />
-            <div className="px-4 sm:px-5">
-              <DetailList>
-                <DetailRow
-                  label="Status"
-                  value={<PaymentStatusChip state={rental.paymentState} />}
-                />
-                <DetailRow label="Invoice" value={rental.breakdown.invoiceNumber} />
-                <DetailRow
-                  label="Issued"
-                  value={formatDate(rental.breakdown.invoiceDate)}
-                />
-                <DetailRow label="Due" value={formatDate(rental.breakdown.dueDate)} />
-                <DetailRow
-                  label="Promo code"
-                  value={rental.promoCode}
-                />
-              </DetailList>
-            </div>
-            <div className="border-t border-brand-border-soft px-4 py-3 sm:px-5">
-              <p className="flex items-start gap-2 text-xs leading-relaxed text-brand-text-subtle">
+            <dl className="divide-y divide-pv-border px-4 sm:px-5">
+              <SideRow label="Status" value={<PaymentStatusChip state={rental.paymentState} />} />
+              <SideRow label="Invoice" value={rental.breakdown.invoiceNumber} />
+              <SideRow label="Issued" value={formatDate(rental.breakdown.invoiceDate)} />
+              <SideRow label="Due" value={formatDate(rental.breakdown.dueDate)} />
+              <SideRow label="Promo code" value={rental.promoCode} />
+            </dl>
+            <div className="border-t border-pv-border px-4 py-3.5 sm:px-5">
+              <p className="flex items-start gap-2 text-[12px] leading-relaxed text-pv-muted-fg">
                 <Receipt aria-hidden strokeWidth={1.75} className="mt-px size-3.5 shrink-0" />
                 <span>
-                  Receipts and saved payment methods are moving into this portal
-                  shortly. In the meantime, email us for a copy of any invoice.
+                  Receipts and saved payment methods are moving into this portal shortly. In the meantime, email us
+                  for a copy of any invoice.
                 </span>
               </p>
             </div>
@@ -584,24 +628,24 @@ function DocumentsPanel({ rental }: { rental: CustomerRentalDetail }) {
   return (
     <Panel
       className={cn(
-        step.tone === 'warning' && 'border-warning-med',
-        step.tone === 'success' && 'border-success-med',
+        step.tone === 'warning' && 'border-pv-warning/40',
+        step.tone === 'success' && 'border-pv-success/40',
       )}
     >
-      <div className="flex items-start gap-3 px-4 py-4 sm:px-5">
+      <div className="flex items-start gap-3.5 px-4 py-4 sm:px-5">
         <Icon
           aria-hidden
           strokeWidth={1.75}
           className={cn(
             'mt-0.5 size-5 shrink-0',
-            step.tone === 'warning' && 'text-warning',
-            step.tone === 'info' && 'text-info',
-            step.tone === 'success' && 'text-success',
+            step.tone === 'warning' && 'text-pv-warning',
+            step.tone === 'info' && 'text-pv-primary',
+            step.tone === 'success' && 'text-pv-success',
           )}
         />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-medium text-brand-text">{step.title}</h2>
+            <h2 className="text-[15px] font-semibold text-pv-fg">{step.title}</h2>
             <StatusChip
               tone={step.tone === 'warning' ? 'warning' : step.tone === 'success' ? 'success' : 'info'}
             >
@@ -610,13 +654,13 @@ function DocumentsPanel({ rental }: { rental: CustomerRentalDetail }) {
           </div>
 
           {state === 'awaiting_documents' ? (
-            <div className="mt-1.5 flex flex-col gap-1.5 text-sm leading-relaxed text-brand-text-soft">
+            <div className="mt-1.5 flex flex-col gap-1.5 text-[14px] leading-relaxed text-pv-muted-fg">
               <p>
-                Your booking is paid, but it is <strong className="font-medium text-brand-text">not complete</strong>{' '}
+                Your booking is paid, but it is <strong className="font-semibold text-pv-fg">not complete</strong>{' '}
                 until we have your driving licence and a photo of yourself. We
                 sent a secure upload link to{' '}
                 {sentTo ? (
-                  <span className="font-medium text-brand-text">{sentTo}</span>
+                  <span className="font-medium text-pv-fg">{sentTo}</span>
                 ) : (
                   'the email address on your booking'
                 )}
@@ -628,26 +672,26 @@ function DocumentsPanel({ rental }: { rental: CustomerRentalDetail }) {
                 send a fresh one. Saying so here stops a customer who is a week
                 late from assuming they have to start again.
               */}
-              <p className="text-brand-text-subtle">
+              <p className="text-pv-muted-fg">
                 The link lasts 7 days. If yours has expired, open it anyway and
                 it will offer to email you a new one. Cannot find it? Check your
                 spam folder, or contact us and we will send it again.
               </p>
             </div>
           ) : state === 'documents_in_review' ? (
-            <p className="mt-1.5 text-sm leading-relaxed text-brand-text-soft">
+            <p className="mt-1.5 text-[14px] leading-relaxed text-pv-muted-fg">
               Thank you — we have your documents and are checking them now.
               There is nothing else for you to do. We will email you as soon as
               your booking is confirmed.
             </p>
           ) : state === 'awaiting_approval' ? (
-            <p className="mt-1.5 text-sm leading-relaxed text-brand-text-soft">
+            <p className="mt-1.5 text-[14px] leading-relaxed text-pv-muted-fg">
               Your documents have been accepted. Your booking is with our team
               for a final check, and we will email you as soon as it is
               confirmed.
             </p>
           ) : (
-            <p className="mt-1.5 text-sm leading-relaxed text-brand-text-soft">
+            <p className="mt-1.5 text-[14px] leading-relaxed text-pv-muted-fg">
               {/*
                 Only claim the documents were accepted when they actually were.
                 An operator may approve over unverified documents ("Approve
@@ -686,23 +730,18 @@ function Notice({
   return (
     <div
       className={cn(
-        'flex items-start gap-3 rounded-2xl border px-4 py-3.5',
-        tone === 'danger'
-          ? 'border-danger-subtle bg-danger-light'
-          : 'border-warning-med bg-warning-light',
+        'flex items-start gap-3.5 rounded-2xl border px-4 py-4 sm:px-5',
+        tone === 'danger' ? 'border-pv-danger/25 bg-pv-danger-light' : 'border-pv-warning/30 bg-pv-warning-light',
       )}
     >
       <Icon
         aria-hidden
         strokeWidth={1.75}
-        className={cn(
-          'mt-0.5 size-4 shrink-0',
-          tone === 'danger' ? 'text-danger' : 'text-warning',
-        )}
+        className={cn('mt-0.5 size-5 shrink-0', tone === 'danger' ? 'text-pv-danger' : 'text-pv-warning')}
       />
       <div className="min-w-0">
-        <p className="text-sm font-medium text-brand-text">{title}</p>
-        <p className="mt-0.5 text-sm leading-relaxed text-brand-text-soft">{children}</p>
+        <p className="text-[15px] font-semibold text-pv-fg">{title}</p>
+        <p className="mt-0.5 text-[14px] leading-relaxed text-pv-fg/75">{children}</p>
       </div>
     </div>
   );
@@ -712,14 +751,14 @@ function Notice({
 
 function DetailSkeleton() {
   return (
-    <div className="flex flex-col gap-4" aria-hidden>
-      <Skeleton className="h-8 w-56 bg-brand-stone" />
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-        <div className="flex flex-col gap-4">
-          <Skeleton className="h-40 w-full rounded-2xl bg-brand-stone" />
-          <Skeleton className="h-48 w-full rounded-2xl bg-brand-stone" />
+    <div className="flex flex-col gap-5" aria-hidden>
+      <Skeleton className="h-[60px] w-full rounded-2xl bg-pv-tint" />
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+        <div className="flex flex-col gap-5">
+          <Skeleton className="h-44 w-full rounded-2xl bg-pv-tint" />
+          <Skeleton className="h-64 w-full rounded-2xl bg-pv-tint" />
         </div>
-        <Skeleton className="h-64 w-full rounded-2xl bg-brand-stone" />
+        <Skeleton className="h-72 w-full rounded-2xl bg-pv-tint" />
       </div>
     </div>
   );

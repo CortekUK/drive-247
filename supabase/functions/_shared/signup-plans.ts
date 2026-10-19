@@ -130,7 +130,7 @@ export async function fetchSignupPlan(
   supabase: any,
   id: unknown,
 ): Promise<SignupPlanServer | null> {
-  const base = getSignupPlan(id);
+  const base = getSignupPlan(id) ?? (await fetchAdminCreatedPlan(supabase, id));
   if (!base) return null;
 
   try {
@@ -191,6 +191,44 @@ export async function fetchSignupPlan(
   } catch (e) {
     console.warn(`[signup-plans] DB read threw for "${base.id}" — using hardcoded:`, e);
     return base;
+  }
+}
+
+/**
+ * A plan a super admin CREATED on the Signup Plans page (Oct 17 2026), which
+ * has no hardcoded entry to fall back on. Built only from a row that can
+ * actually be charged — a valid amount AND a Stripe price — so anything less
+ * stays "unknown plan" rather than reaching a checkout. The caller then layers
+ * the same per-field read as for the built-in three on top.
+ */
+async function fetchAdminCreatedPlan(supabase: any, id: unknown): Promise<SignupPlanServer | null> {
+  if (typeof id !== "string" || !/^[a-z][a-z0-9_]{1,31}$/.test(id)) return null;
+  try {
+    const { data, error } = await supabase
+      .from("signup_plans")
+      .select('plan_key, name, amount_cents, max_vehicles, tagline, bullets, stripe_price_id, stripe_lookup_key')
+      .eq("plan_key", id)
+      .maybeSingle();
+    if (error || !data) return null;
+    const amount = Number(data.amount_cents);
+    const maxVehicles = Number(data.max_vehicles);
+    const priceId = typeof data.stripe_price_id === "string" ? data.stripe_price_id.trim() : "";
+    if (!Number.isInteger(amount) || amount < 50 || !priceId) return null;
+    if (!Number.isInteger(maxVehicles) || maxVehicles < 1) return null;
+    return {
+      id: id as SignupPlanId,
+      name: String(data.name ?? id),
+      amountCents: amount,
+      currency: "usd",
+      interval: "month",
+      tagline: String(data.tagline ?? ""),
+      features: Array.isArray(data.bullets) ? data.bullets.filter((b: unknown) => typeof b === "string") : [],
+      lookupKey: String(data.stripe_lookup_key ?? ""),
+      maxVehicles,
+      stripePriceId: priceId,
+    };
+  } catch {
+    return null;
   }
 }
 

@@ -1,30 +1,23 @@
 'use client';
 
 /**
- * One notification row.
+ * One notification row — the operator portal v2's row
+ * (`notifications-v2/notification-sheet-v2`, `Row`) at the customer's size.
  *
- * Colour is carried ONLY while a notification is unread. Once read, every row
- * collapses to the same quiet stone bubble, so the page visibly calms down as
- * the customer works through it and the remaining colour always means "this one
- * still wants you". A permanently colour-coded list makes a fully-read inbox
- * look exactly as urgent as an untouched one.
+ * The same rules carry over: unread is a faint primary wash plus a dot and a
+ * heavier title; a read row fades its title back; an alert keeps a red left
+ * edge whether read or not, so it stays findable without the list turning into
+ * a wall of red; the kind is a small tinted pill beside the time. One step
+ * roomier than the operator's — 14px titles, the whole message rather than two
+ * clamped lines — because a customer reads these, they do not triage them.
+ *
+ * The whole row opens the notification's page when it has one (a stretched
+ * link under the title), and the row's own controls sit above that link.
  */
 
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
-import {
-  AlertCircle,
-  ArrowRight,
-  Car,
-  CheckCircle2,
-  CreditCard,
-  FileSignature,
-  Info,
-  ShieldCheck,
-  Sparkles,
-  X,
-  type LucideIcon,
-} from 'lucide-react-nw';
+import { AlertTriangle, CheckCheck, X } from 'lucide-react-nw';
 
 import { Button } from '@nw/components/ui/button';
 import { formatTimestamp } from '@nw/components/portal/format';
@@ -34,39 +27,22 @@ import type {
 } from '@nw/hooks/use-customer-notifications';
 import { cn } from '@nw/lib/utils';
 
+import { PV_ICON_BUTTON } from '../settings/_components/pv-kit';
+
 /**
- * Icon and tint per kind. Tones come from the status tokens in globals.css —
- * the same family `status-chip.tsx` uses, and the only palette outside the
- * brand set that is safe on these cream cards.
+ * Pill per kind, in the operator's category tones: rentals blue, payments
+ * green, people violet, everything else the quiet grey. Alerts carry the
+ * critical red instead.
  */
-const KIND_STYLE: Record<
-  NotificationKind,
-  { icon: LucideIcon; unread: string; label: string }
-> = {
-  booking: { icon: Car, unread: 'bg-info-light text-info', label: 'Booking' },
-  agreement: {
-    icon: FileSignature,
-    unread: 'bg-info-light text-info',
-    label: 'Agreement',
-  },
-  payment: {
-    icon: CreditCard,
-    unread: 'bg-warning-light text-warning',
-    label: 'Payment',
-  },
-  verification: {
-    icon: ShieldCheck,
-    unread: 'bg-warning-light text-warning',
-    label: 'Verification',
-  },
-  welcome: { icon: Sparkles, unread: 'bg-success-light text-success', label: 'Welcome' },
-  alert: { icon: AlertCircle, unread: 'bg-danger-light text-danger', label: 'Alert' },
-  success: {
-    icon: CheckCircle2,
-    unread: 'bg-success-light text-success',
-    label: 'Update',
-  },
-  info: { icon: Info, unread: 'bg-info-light text-info', label: 'Notice' },
+const KIND_STYLE: Record<NotificationKind, { label: string; tone: string }> = {
+  booking: { label: 'Booking', tone: 'bg-blue-500/10 text-blue-700' },
+  agreement: { label: 'Agreement', tone: 'bg-blue-500/10 text-blue-700' },
+  payment: { label: 'Payment', tone: 'bg-emerald-500/10 text-emerald-700' },
+  verification: { label: 'Verification', tone: 'bg-violet-500/10 text-violet-700' },
+  welcome: { label: 'Welcome', tone: 'bg-pv-muted text-pv-muted-fg' },
+  alert: { label: 'Needs attention', tone: 'bg-pv-danger-light text-pv-danger' },
+  success: { label: 'Update', tone: 'bg-pv-muted text-pv-muted-fg' },
+  info: { label: 'Notice', tone: 'bg-pv-muted text-pv-muted-fg' },
 };
 
 /** "3 hours ago", or null when the row has no usable timestamp. */
@@ -76,6 +52,16 @@ function relativeLabel(createdAt: string | null): string | null {
   if (Number.isNaN(date.getTime())) return null;
   return formatDistanceToNow(date, { addSuffix: true });
 }
+
+/**
+ * Icon actions: always visible on a touch screen (there is no hover to reveal
+ * them), and from md up shown on hover or keyboard focus, as the operator's
+ * mark-read control is. Opacity only, 200ms — §12's hover rule.
+ */
+const ROW_ACTION = cn(
+  PV_ICON_BUTTON,
+  'relative z-10 transition-[opacity,color,background-color] md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100',
+);
 
 export function NotificationItem({
   notification,
@@ -90,110 +76,105 @@ export function NotificationItem({
   onDismiss: (id: string) => void;
 }) {
   const style = KIND_STYLE[notification.kind];
-  const Icon = style.icon;
   const unread = !notification.isRead;
+  const critical = notification.kind === 'alert';
 
   const relative = relativeLabel(notification.createdAt);
   const absolute = formatTimestamp(notification.createdAt);
+  const href = notification.href ?? null;
 
   return (
     <article
       className={cn(
-        'flex gap-3 px-4 py-4 transition-colors sm:gap-4 sm:px-5',
-        unread && 'bg-brand-stone/45',
+        'group relative flex items-start gap-3 px-5 py-4 sm:px-6',
+        'transition-colors duration-200 ease-out motion-reduce:transition-none',
+        critical ? 'bg-pv-danger/[0.03]' : unread ? 'bg-pv-primary/[0.03]' : undefined,
+        href ? 'hover:bg-pv-row-hover' : undefined,
       )}
     >
-      <span
-        aria-hidden
-        className={cn(
-          'grid size-10 shrink-0 place-items-center rounded-full',
-          unread ? style.unread : 'bg-brand-stone text-brand-text-subtle',
-        )}
-      >
-        <Icon strokeWidth={1.75} className="size-5" />
-      </span>
+      {/* Severity is a left edge, not a filled card. */}
+      {critical ? (
+        <span aria-hidden className="absolute inset-y-0 left-0 w-[3px] bg-pv-danger" />
+      ) : null}
 
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <h3
-              className={cn(
-                'min-w-0 text-sm',
-                unread ? 'font-medium text-brand-text' : 'text-brand-text-soft',
-              )}
-            >
-              {notification.title}
-            </h3>
-            {unread ? (
-              <span className="inline-flex items-center rounded-full bg-brand-forest px-2 py-0.5 text-[11px] font-medium leading-none text-white">
-                New
-              </span>
-            ) : null}
-          </div>
-
-          {/*
-            Remove rides with the title rather than in the action row below.
-            Once a notification is read it has no other control, and a lone X
-            sitting in an otherwise empty bar under the text reads as a broken
-            layout. The negative margins pull the 44px hit area back over the
-            padding so the target stays tappable without inflating the row.
-          */}
-          <Button
-            type="button"
-            variant="brand-ghost"
-            size="icon"
-            className="-mt-2.5 -mr-2 size-11 shrink-0 text-brand-text-subtle hover:text-danger"
-            disabled={isBusy}
-            onClick={() => onDismiss(notification.id)}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start gap-2.5">
+          <h3
+            className={cn(
+              'min-w-0 text-[14px] leading-snug',
+              unread || critical ? 'font-semibold text-pv-fg' : 'font-medium text-pv-fg/80',
+            )}
           >
-            <X aria-hidden className="size-4" />
-            <span className="sr-only">Remove “{notification.title}”</span>
-          </Button>
+            {href ? (
+              <Link
+                href={href}
+                className="rounded-sm after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-3 focus-visible:after:ring-inset focus-visible:after:ring-pv-primary/25"
+              >
+                {notification.title}
+              </Link>
+            ) : (
+              notification.title
+            )}
+          </h3>
+          {unread ? (
+            <span className="mt-1.5 size-2 shrink-0 rounded-full bg-pv-primary">
+              <span className="sr-only">Unread</span>
+            </span>
+          ) : null}
         </div>
 
-        <p className="text-sm leading-relaxed text-brand-text-soft">
-          {notification.message}
-        </p>
-
-        <p className="text-xs text-brand-text-subtle">
-          <span className="sr-only">{style.label} · </span>
-          {relative ?? 'Date unknown'}
-          {relative && absolute ? <span aria-hidden> · {absolute}</span> : null}
-        </p>
-
-        {/*
-          Actions sit under the copy rather than beside it. At 360px there is no
-          room for a title and two controls on one line, and floating them right
-          forces the message to wrap into a two-word column.
-        */}
-        {notification.href || unread ? (
-          <div className="mt-1 -ml-3 flex flex-wrap items-center gap-1">
-            {notification.href ? (
-              <Button
-                asChild
-                variant="brand-ghost"
-                className="h-11 px-3 text-sm has-[>svg]:px-3"
-              >
-                <Link href={notification.href.replace(/^\/portal(?=\/|$)/, "/portal-v2")}>
-                  Open
-                  <ArrowRight aria-hidden className="size-4" />
-                </Link>
-              </Button>
-            ) : null}
-
-            {unread ? (
-              <Button
-                type="button"
-                variant="brand-ghost"
-                className="h-11 px-3 text-sm"
-                disabled={isBusy}
-                onClick={() => onMarkRead(notification.id)}
-              >
-                Mark as read
-              </Button>
-            ) : null}
-          </div>
+        {notification.message ? (
+          <p className="mt-1 text-[13px] leading-relaxed text-pv-muted-fg">
+            {notification.message}
+          </p>
         ) : null}
+
+        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          <span
+            className={cn(
+              'inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium',
+              style.tone,
+            )}
+          >
+            {critical ? <AlertTriangle aria-hidden className="size-3" /> : null}
+            {style.label}
+          </span>
+          {/* No date rather than a wrong one. */}
+          {relative ? (
+            <span className="text-[12px] text-pv-muted-fg/80" title={absolute ?? undefined}>
+              {relative}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      {/* One action that applies, plus remove. A read notification has
+          nothing to mark. */}
+      <div className="-my-1 -mr-2 flex shrink-0 items-center">
+        {unread ? (
+          <Button
+            type="button"
+            variant="ghost"
+            title="Mark as read"
+            className={ROW_ACTION}
+            disabled={isBusy}
+            onClick={() => onMarkRead(notification.id)}
+          >
+            <CheckCheck aria-hidden className="size-4" />
+            <span className="sr-only">Mark “{notification.title}” as read</span>
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          variant="ghost"
+          title="Remove"
+          className={cn(ROW_ACTION, 'hover:text-pv-danger')}
+          disabled={isBusy}
+          onClick={() => onDismiss(notification.id)}
+        >
+          <X aria-hidden className="size-4" />
+          <span className="sr-only">Remove “{notification.title}”</span>
+        </Button>
       </div>
     </article>
   );
@@ -202,13 +183,10 @@ export function NotificationItem({
 /** Sized like a real row, so the list does not jump when the data lands. */
 export function NotificationItemSkeleton() {
   return (
-    <div className="flex gap-3 px-4 py-4 sm:gap-4 sm:px-5">
-      <span className="size-10 shrink-0 animate-pulse rounded-full bg-brand-stone" />
-      <div className="flex min-w-0 flex-1 flex-col gap-2 pt-1">
-        <span className="h-3.5 w-40 max-w-full animate-pulse rounded-full bg-brand-stone" />
-        <span className="h-3 w-full animate-pulse rounded-full bg-brand-stone" />
-        <span className="h-3 w-28 animate-pulse rounded-full bg-brand-stone" />
-      </div>
+    <div className="space-y-2.5 px-5 py-4 sm:px-6">
+      <span className="block h-3.5 w-2/5 animate-pulse rounded-full bg-pv-muted motion-reduce:animate-none" />
+      <span className="block h-3 w-4/5 animate-pulse rounded-full bg-pv-muted/70 motion-reduce:animate-none" />
+      <span className="block h-5 w-28 animate-pulse rounded-full bg-pv-muted/70 motion-reduce:animate-none" />
     </div>
   );
 }

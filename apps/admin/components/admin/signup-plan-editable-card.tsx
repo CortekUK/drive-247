@@ -40,7 +40,7 @@ import {
 } from './signup-plan-card';
 
 /** Text that is also its own field: no box until hovered or focused. */
-const INLINE =
+export const INLINE =
   'w-full min-w-0 rounded-lg bg-transparent px-1.5 -mx-1.5 outline-none transition-[background-color,box-shadow] duration-200 ease-out ' +
   'placeholder:text-muted-foreground/60 hover:bg-muted/60 focus:bg-muted/70 focus:shadow-[0_0_0_1px_hsl(var(--primary)/0.35)] ' +
   'disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none';
@@ -112,27 +112,45 @@ export function SignupPlanEditableCard({
             plan.is_highlighted ? 'via-primary/60' : 'via-primary/20',
           )}
         />
-        {plan.is_highlighted && (
-          <span className="absolute -top-3 right-5 inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-0.5 text-[11px] font-semibold text-primary-foreground">
-            <Sparkles className="size-3" aria-hidden="true" /> Most popular
-          </span>
-        )}
-        {!plan.is_visible && (
-          <span className="absolute -top-3 left-5 rounded-full bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-            Hidden
-          </span>
+        {/* Top-left tags: Most popular first, then Off. */}
+        {(plan.is_highlighted || !plan.is_visible) && (
+          <div className="absolute -top-3 left-5 flex items-center gap-1.5">
+            {plan.is_highlighted && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-0.5 text-[11px] font-semibold text-primary-foreground">
+                <Sparkles className="size-3" aria-hidden="true" /> Most popular
+              </span>
+            )}
+            {!plan.is_visible && (
+              <span className="rounded-full bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                Off
+              </span>
+            )}
+          </div>
         )}
 
-        {/* The plan's settings: badge, visibility, max vehicles, trial. */}
-        <button
-          type="button"
-          onClick={() => setSettingsOpen(true)}
-          aria-label={`${plan.name || plan.plan_key} settings`}
-          title="Plan settings"
-          className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-out hover:bg-primary/10 hover:text-primary motion-reduce:transition-none"
-        >
-          <Settings2 className="size-4" aria-hidden="true" />
-        </button>
+        {/* On/off for the pricing page, then the plan's other settings. */}
+        <div className="absolute right-3 top-3 flex items-center gap-1">
+          {pending === `${plan.id}:visibility` ? (
+            <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden="true" />
+          ) : (
+            <Switch
+              checked={plan.is_visible}
+              disabled={busy || lastVisible}
+              onCheckedChange={onToggleVisibility}
+              aria-label={plan.is_visible ? `Turn ${plan.name || plan.plan_key} off` : `Turn ${plan.name || plan.plan_key} on`}
+              title={lastVisible ? 'At least one plan must stay on' : plan.is_visible ? 'On the pricing page' : 'Off the pricing page'}
+            />
+          )}
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            aria-label={`${plan.name || plan.plan_key} settings`}
+            title="Plan settings"
+            className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-out hover:bg-primary/10 hover:text-primary motion-reduce:transition-none"
+          >
+            <Settings2 className="size-4" aria-hidden="true" />
+          </button>
+        </div>
 
         {/* Name */}
         <input
@@ -143,7 +161,7 @@ export function SignupPlanEditableCard({
           aria-label="Plan name"
           aria-invalid={Boolean(errors.name)}
           onChange={(e) => onDraftChange({ name: e.target.value })}
-          className={cn(INLINE, 'h-8 pr-9 text-lg font-semibold tracking-tight text-foreground')}
+          className={cn(INLINE, 'h-8 pr-[5.5rem] text-lg font-semibold tracking-tight text-foreground')}
         />
         <FieldIssue>{errors.name}</FieldIssue>
 
@@ -166,7 +184,6 @@ export function SignupPlanEditableCard({
           onClick={() => setSettingsOpen(true)}
           className="mt-2 flex flex-wrap items-center gap-1.5 self-start text-[11px] text-muted-foreground"
         >
-          <Chip>{plan.is_visible ? 'On pricing page' : 'Hidden'}</Chip>
           <Chip>Up to {draft.max_vehicles || '—'} vehicles</Chip>
           <Chip>{plan.trial_days > 0 ? `${plan.trial_days}-day trial` : 'No trial'}</Chip>
         </button>

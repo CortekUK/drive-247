@@ -1,70 +1,43 @@
 'use client';
 
-import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton } from '@/components/admin/header-buttons';
-import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
-import { FeedbackEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+/**
+ * Feedback (Ghulam, Oct 19 2026: "just a simple list, no AI and stats; I should
+ * be able to run campaigns, each one separate with its feedback, and see which
+ * tenants answered and which didn't").
+ *
+ *   All feedback   every reply, newest first. Open one to read it, see the
+ *                  screenshot, and mark it resolved.
+ *   Campaigns      each round of "ask every operator on their next sign-in".
+ *                  Open one for its feedback, by tenant, and the tenants that
+ *                  have not answered (saw it and skipped, or not signed in yet).
+ *
+ * A campaign is the portal's existing prompt: starting one sets
+ * tenant_feedback_settings.force_login_triggered_at, ending one clears it, and
+ * a database trigger tags prompt replies (source = 'forced') with the live
+ * campaign (supabase/migrations/20261019120000_feedback_campaigns.sql). One
+ * campaign is live at a time; starting a new one ends the old one.
+ */
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, Check, ImageIcon, Loader2, Megaphone, Plus, RotateCcw, Settings2, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from '@/components/ui/sonner';
-import { FilterChip, FilterSearch, FilterSection, FilterShell } from '@/components/admin/filter-primitives';
-import { FilterReveal } from '@/components/admin/overview-flip';
-import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton } from '@/components/admin/header-buttons';
+import { EmptyState } from '@/components/admin/empty-state';
+import { FeedbackEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
+import { CATEGORY_META, type Category } from '@/components/admin/feedback-category';
 import { ForceLogoutAllControl } from '@/components/admin/ForceLogoutAllControl';
-import {
-  MessageSquareText,
-  Bug,
-  Wrench,
-  Sparkles,
-  StickyNote,
-  Settings2,
-  RefreshCw,
-  Send,
-  Check,
-  RotateCcw,
-  X,
-  ImageIcon,
-  Loader2,
-  Megaphone,
-  Building2,
-  CalendarDays,
-} from 'lucide-react';
-
-const PAGE_SIZE = 50;
-
-type Category = 'bug' | 'improvement' | 'feature_request' | 'note';
-
-const CATEGORY_META: Record<Category, { label: string; icon: React.ElementType; color: string }> = {
-  bug: { label: 'Bug', icon: Bug, color: '#dc2626' },
-  improvement: { label: 'Improvement', icon: Wrench, color: '#d97706' },
-  feature_request: { label: 'Feature Request', icon: Sparkles, color: '#6366f1' },
-  note: { label: 'Note', icon: StickyNote, color: '#737373' },
-};
+import { SegmentedControl } from '@/components/announcements/segmented-control';
+import { cn } from '@/lib/utils';
 
 interface Feedback {
   id: string;
   tenant_id: string;
-  app_user_id: string | null;
   submitter_name: string | null;
   submitter_email: string | null;
   submitter_role: string | null;
@@ -72,962 +45,660 @@ interface Feedback {
   message: string;
   screenshot_path: string | null;
   page_path: string | null;
-  user_agent: string | null;
   status: 'open' | 'resolved';
-  resolved_at: string | null;
+  source: string | null;
+  campaign_id: string | null;
   created_at: string;
-  // `company_name`, NOT `name` — the tenants table has no bare `name` column,
-  // and asking PostgREST for one fails the entire query, not just the field.
   tenants?: { company_name: string | null; slug: string | null } | null;
 }
 
-interface Insight {
+interface Campaign {
   id: string;
-  summary: string;
-  top_themes: { theme: string; count: number }[];
-  feedback_count: number;
-  generated_at: string;
+  name: string;
+  started_at: string;
+  ended_at: string | null;
 }
 
-interface ChatEntry {
-  role: 'user' | 'assistant';
-  content: string;
+interface TenantLite {
+  id: string;
+  company_name: string | null;
+  slug: string | null;
 }
+
+const FEEDBACK_COLUMNS =
+  'id,tenant_id,submitter_name,submitter_email,submitter_role,category,message,screenshot_path,page_path,status,source,campaign_id,created_at,tenants(company_name,slug)';
+
+const VIEW_OPTIONS = [
+  { value: 'feedback', label: 'All feedback' },
+  { value: 'campaigns', label: 'Campaigns' },
+] as const;
+
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+const fmtDateTime = (iso: string) =>
+  new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+const tenantLabel = (t: { company_name: string | null; slug: string | null } | null | undefined) => t?.company_name || t?.slug || 'Unknown company';
 
 export default function FeedbacksPage() {
   const { user } = useAuthStore();
-
+  const [view, setView] = useState<'feedback' | 'campaigns'>('feedback');
   const [items, setItems] = useState<Feedback[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
-
-  // Filters
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('open');
-  const [tenantFilter, setTenantFilter] = useState<string>('all');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [search, setSearch] = useState('');
-  /* Whether the filter panel is showing. Filters start hidden. */
-  const [filtersOpen, setFiltersOpen] = useState(false);
-
-  const [tenants, setTenants] = useState<{ id: string; company_name: string | null; slug: string | null }[]>([]);
-
-  // Detail
   const [detail, setDetail] = useState<Feedback | null>(null);
-  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
-
-  // Insights
-  const [insight, setInsight] = useState<Insight | null>(null);
-  const [regenerating, setRegenerating] = useState(false);
-  const [chat, setChat] = useState<ChatEntry[]>([]);
-  const [chatInput, setChatInput] = useState('');
-  const [chatSending, setChatSending] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
-  // Settings panel
+  const [openCampaignId, setOpenCampaignId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [formEnabled, setFormEnabled] = useState(true);
   const [settingsRowId, setSettingsRowId] = useState<string | null>(null);
-  const [forceTriggeredAt, setForceTriggeredAt] = useState<string | null>(null);
-  const [recipients, setRecipients] = useState<{ id: string; email: string }[]>([]);
-  const [newRecipient, setNewRecipient] = useState('');
-  const [showForceConfirm, setShowForceConfirm] = useState(false);
-  const [forcing, setForcing] = useState(false);
 
-  // ── Loading ───────────────────────────────────────────────────────────────
-  const loadFeedback = useCallback(async () => {
-    setLoading(true);
-    try {
-      let query = (supabase as any)
-        .from('tenant_feedback')
-        .select('*, tenants(company_name, slug)', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
-
-      if (categoryFilter !== 'all') query = query.eq('category', categoryFilter);
-      if (statusFilter !== 'all') query = query.eq('status', statusFilter);
-      if (tenantFilter !== 'all') query = query.eq('tenant_id', tenantFilter);
-      if (fromDate) query = query.gte('created_at', new Date(fromDate).toISOString());
-      // Inclusive of the whole end day, not midnight at its start — otherwise a
-      // single-day range silently returns nothing.
-      if (toDate) {
-        const end = new Date(toDate);
-        end.setHours(23, 59, 59, 999);
-        query = query.lte('created_at', end.toISOString());
-      }
-      if (search.trim()) query = query.ilike('message', `%${search.trim()}%`);
-
-      const { data, error, count } = await query;
-      if (error) throw error;
-      setItems((data || []) as Feedback[]);
-      setTotalCount(count ?? 0);
-    } catch (err: any) {
-      toast.error(`Failed to load feedback: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  }, [page, categoryFilter, statusFilter, tenantFilter, fromDate, toDate, search]);
-
-  useEffect(() => {
-    loadFeedback();
-  }, [loadFeedback]);
-
-  // Any filter change starts a new result set — staying on page 4 of the old
-  // one shows an empty table that reads as "no feedback".
-  useEffect(() => {
-    setPage(0);
-  }, [categoryFilter, statusFilter, tenantFilter, fromDate, toDate, search]);
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await (supabase as any)
-        .from('tenants')
-        .select('id, company_name, slug')
-        .order('company_name');
-      setTenants(data || []);
-
-      const { data: insightRow } = await (supabase as any)
-        .from('tenant_feedback_insights')
-        .select('*')
-        .order('generated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (insightRow) setInsight(insightRow as Insight);
-
-      await loadSettings();
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const loadSettings = async () => {
-    const { data: settings } = await (supabase as any)
-      .from('tenant_feedback_settings')
-      .select('id, form_enabled, force_login_triggered_at')
-      .limit(1)
-      .maybeSingle();
-    if (settings) {
-      setSettingsRowId(settings.id);
-      setFormEnabled(settings.form_enabled);
-      setForceTriggeredAt(settings.force_login_triggered_at);
-    }
-
-    const { data: recips } = await (supabase as any)
-      .from('tenant_feedback_recipients')
-      .select('id, email')
-      .order('created_at');
-    setRecipients(recips || []);
-  };
-
-  // ── Stats ─────────────────────────────────────────────────────────────────
-  // Computed server-side rather than over the current page — a count taken from
-  // 50 visible rows would be wrong the moment there are 51.
-  const [stats, setStats] = useState({ open: 0, week: 0, topCategory: '—' });
-
-  const loadStats = useCallback(async () => {
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-
-    const { count: openCount } = await (supabase as any)
-      .from('tenant_feedback')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'open');
-
-    const { data: weekRows } = await (supabase as any)
-      .from('tenant_feedback')
-      .select('category')
-      .gte('created_at', weekAgo);
-
-    const tally: Record<string, number> = {};
-    (weekRows || []).forEach((r: { category: Category }) => {
-      tally[r.category] = (tally[r.category] || 0) + 1;
-    });
-    const top = Object.entries(tally).sort((a, b) => b[1] - a[1])[0];
-
-    setStats({
-      open: openCount ?? 0,
-      week: weekRows?.length ?? 0,
-      topCategory: top ? `${CATEGORY_META[top[0] as Category]?.label ?? top[0]} (${top[1]})` : '—',
-    });
+  const load = useCallback(async () => {
+    const [fb, cs, st] = await Promise.all([
+      supabase.from('tenant_feedback').select(FEEDBACK_COLUMNS).order('created_at', { ascending: false }).limit(500),
+      supabase.from('feedback_campaigns').select('id,name,started_at,ended_at').order('started_at', { ascending: false }),
+      supabase.from('tenant_feedback_settings').select('id').limit(1).maybeSingle(),
+    ]);
+    if (fb.error) toast.error(`Could not load feedback: ${fb.error.message}`);
+    if (cs.error) toast.error(`Could not load campaigns: ${cs.error.message}`);
+    setItems((fb.data as unknown as Feedback[] | null) ?? []);
+    setCampaigns((cs.data as Campaign[] | null) ?? []);
+    setSettingsRowId((st.data as { id: string } | null)?.id ?? null);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
-    loadStats();
-  }, [loadStats]);
+    void load();
+  }, [load]);
 
-  // ── Actions ───────────────────────────────────────────────────────────────
+  const campaignById = useMemo(() => new Map(campaigns.map((c) => [c.id, c])), [campaigns]);
+  const live = campaigns.find((c) => !c.ended_at) ?? null;
+  const openCampaign = openCampaignId ? campaignById.get(openCampaignId) ?? null : null;
+
   const toggleStatus = async (item: Feedback) => {
-    const nextStatus = item.status === 'open' ? 'resolved' : 'open';
-    try {
-      const { error } = await (supabase as any)
-        .from('tenant_feedback')
-        .update({
-          status: nextStatus,
-          resolved_at: nextStatus === 'resolved' ? new Date().toISOString() : null,
-          resolved_by: nextStatus === 'resolved' ? user?.id ?? null : null,
-        })
-        .eq('id', item.id);
-      if (error) throw error;
-
-      toast.success(nextStatus === 'resolved' ? 'Marked resolved' : 'Reopened');
-      setDetail((d) => (d && d.id === item.id ? { ...d, status: nextStatus } : d));
-      await Promise.all([loadFeedback(), loadStats()]);
-    } catch (err: any) {
-      toast.error(`Failed to update: ${err.message}`);
+    const next = item.status === 'open' ? 'resolved' : 'open';
+    const { error } = await supabase
+      .from('tenant_feedback')
+      .update({
+        status: next,
+        resolved_at: next === 'resolved' ? new Date().toISOString() : null,
+        resolved_by: next === 'resolved' ? user?.id ?? null : null,
+      })
+      .eq('id', item.id);
+    if (error) {
+      toast.error(`Could not update: ${error.message}`);
+      return;
     }
+    setItems((prev) => prev.map((f) => (f.id === item.id ? { ...f, status: next } : f)));
+    setDetail((d) => (d && d.id === item.id ? { ...d, status: next } : d));
+    toast.success(next === 'resolved' ? 'Marked resolved' : 'Reopened');
   };
 
-  const openDetail = async (item: Feedback) => {
-    setDetail(item);
-    setScreenshotUrl(null);
-    if (item.screenshot_path) {
-      // Private bucket — a screenshot routinely contains customer PII, so it is
-      // reachable only through a short-lived signed URL, never a public link.
-      const { data, error } = await supabase.storage
-        .from('feedback-screenshots')
-        .createSignedUrl(item.screenshot_path, 300);
+  const setPrompt = async (at: string | null) => {
+    if (!settingsRowId) return { message: 'The feedback settings row is missing.' };
+    const { error } = await supabase.from('tenant_feedback_settings').update({ force_login_triggered_at: at }).eq('id', settingsRowId);
+    return error;
+  };
+
+  const startCampaign = async (name: string) => {
+    const now = new Date().toISOString();
+    if (live) {
+      const { error } = await supabase.from('feedback_campaigns').update({ ended_at: now, updated_at: now }).eq('id', live.id);
       if (error) {
-        console.error('Failed to sign screenshot URL:', error);
-      } else {
-        setScreenshotUrl(data?.signedUrl ?? null);
+        toast.error(`Could not end "${live.name}": ${error.message}`);
+        return false;
       }
     }
-  };
-
-  const regenerateInsights = async () => {
-    setRegenerating(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('feedback-insights', {
-        body: { action: 'summarize' },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      if (data?.empty) {
-        toast.info(data.message || 'No feedback to summarise yet');
-        return;
-      }
-      setInsight(data.insight as Insight);
-      toast.success('Insights regenerated');
-    } catch (err: any) {
-      toast.error(`Failed to regenerate: ${err.message}`);
-    } finally {
-      setRegenerating(false);
+    const { data, error } = await supabase
+      .from('feedback_campaigns')
+      .insert({ name: name.trim(), started_at: now, created_by: user?.id ?? null })
+      .select('id,name,started_at,ended_at')
+      .single();
+    if (error || !data) {
+      toast.error(`Could not start the campaign: ${error?.message ?? 'no row came back'}`);
+      void load();
+      return false;
     }
+    const promptError = await setPrompt(now);
+    if (promptError) toast.error(`Campaign saved, but the portal prompt did not switch on: ${promptError.message}`);
+    else toast.success('Campaign started. Every operator is asked on their next sign-in.');
+    await load();
+    setView('campaigns');
+    setOpenCampaignId((data as Campaign).id);
+    return true;
   };
 
-  const sendChat = async () => {
-    const question = chatInput.trim();
-    if (!question || chatSending) return;
-
-    const nextChat: ChatEntry[] = [...chat, { role: 'user', content: question }];
-    setChat(nextChat);
-    setChatInput('');
-    setChatSending(true);
-
-    try {
-      const { data, error } = await supabase.functions.invoke('feedback-insights', {
-        body: { action: 'chat', messages: nextChat },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      setChat([...nextChat, { role: 'assistant', content: data.reply || '' }]);
-    } catch (err: any) {
-      // Keep the question on screen and report the failure inline — silently
-      // dropping it looks like the assistant ignored them.
-      setChat([
-        ...nextChat,
-        { role: 'assistant', content: `Sorry — that failed: ${err.message}` },
-      ]);
-    } finally {
-      setChatSending(false);
+  const endCampaign = async (c: Campaign) => {
+    if (!window.confirm(`End "${c.name}"?\n\nOperators who have not been asked yet will not be asked.`)) return;
+    const now = new Date().toISOString();
+    const { error } = await supabase.from('feedback_campaigns').update({ ended_at: now, updated_at: now }).eq('id', c.id);
+    if (error) {
+      toast.error(`Could not end it: ${error.message}`);
+      return;
     }
+    const promptError = await setPrompt(null);
+    if (promptError) toast.error(`Ended, but the portal prompt is still on: ${promptError.message}`);
+    else toast.success('Campaign ended');
+    void load();
   };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Feedback</h1>
+          <p className="text-sm text-muted-foreground">What operators tell us, from the portal and from campaigns.</p>
+        </div>
+        <div className={HEADER_ACTIONS}>
+          <HeaderIconButton label="Feedback settings" onClick={() => setSettingsOpen(true)}>
+            <Settings2 className="h-4 w-4" />
+          </HeaderIconButton>
+          <Button className={HEADER_PRIMARY} onClick={() => setCreating(true)} disabled={loading}>
+            <Plus className="h-4 w-4" />
+            New campaign
+          </Button>
+        </div>
+      </div>
+
+      {!openCampaign && (
+        <SegmentedControl
+          ariaLabel="Feedback view"
+          options={VIEW_OPTIONS}
+          value={view}
+          onChange={(v) => setView(v)}
+        />
+      )}
+
+      {loading ? (
+        <div className="space-y-2">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-[76px] animate-pulse rounded-2xl border border-border bg-muted/40" />
+          ))}
+        </div>
+      ) : openCampaign ? (
+        <CampaignView
+          campaign={openCampaign}
+          feedback={items.filter((f) => f.campaign_id === openCampaign.id)}
+          onBack={() => setOpenCampaignId(null)}
+          onEnd={() => void endCampaign(openCampaign)}
+          onOpenFeedback={setDetail}
+        />
+      ) : view === 'feedback' ? (
+        items.length === 0 ? (
+          <EmptyState illustration={<FeedbackEmptyArt />} headline="No feedback yet" body="Replies from the portal's feedback form show up here." />
+        ) : (
+          <ul className="space-y-2">
+            {items.map((f) => (
+              <FeedbackRow key={f.id} item={f} campaign={f.campaign_id ? campaignById.get(f.campaign_id) : undefined} onOpen={() => setDetail(f)} />
+            ))}
+          </ul>
+        )
+      ) : campaigns.length === 0 ? (
+        <EmptyState
+          illustration={<FeedbackEmptyArt />}
+          headline="No campaigns yet"
+          body="A campaign asks every operator for feedback once, on their next sign-in."
+          action={{ label: 'New campaign', icon: Plus, onClick: () => setCreating(true) }}
+        />
+      ) : (
+        <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {campaigns.map((c) => {
+            const replies = items.filter((f) => f.campaign_id === c.id);
+            const companies = new Set(replies.map((f) => f.tenant_id)).size;
+            return (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => setOpenCampaignId(c.id)}
+                  className="flex w-full flex-col gap-3 rounded-3xl border border-border bg-card p-5 text-left transition-colors hover:border-primary/40"
+                >
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <Megaphone className="size-5" aria-hidden />
+                    </span>
+                    <CampaignPill campaign={c} />
+                  </span>
+                  <span className="space-y-1">
+                    <span className="block text-base font-semibold text-foreground">{c.name}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {fmtDate(c.started_at)} – {c.ended_at ? fmtDate(c.ended_at) : 'now'}
+                    </span>
+                  </span>
+                  <span className="text-sm text-foreground">
+                    {replies.length} {replies.length === 1 ? 'reply' : 'replies'} from {companies} {companies === 1 ? 'company' : 'companies'}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <FeedbackDetail item={detail} campaign={detail?.campaign_id ? campaignById.get(detail.campaign_id) : undefined} onClose={() => setDetail(null)} onToggle={toggleStatus} />
+      <NewCampaignDialog open={creating} live={live} onClose={() => setCreating(false)} onStart={startCampaign} />
+      <SettingsDialog open={settingsOpen} rowId={settingsRowId} onClose={() => setSettingsOpen(false)} />
+    </div>
+  );
+}
+
+function CampaignPill({ campaign }: { campaign: Campaign }) {
+  return campaign.ended_at ? (
+    <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-muted-foreground">Ended</span>
+  ) : (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-1 text-[11px] font-semibold text-success">
+      <span className="size-1.5 rounded-full bg-success" /> Live
+    </span>
+  );
+}
+
+function CategoryChip({ category }: { category: Category }) {
+  const meta = CATEGORY_META[category] ?? CATEGORY_META.note;
+  const Icon = meta.icon;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ color: meta.color, backgroundColor: meta.color + '14' }}>
+      <Icon className="size-3" aria-hidden /> {meta.label}
+    </span>
+  );
+}
+
+function FeedbackRow({ item, campaign, onOpen, hideCompany = false }: { item: Feedback; campaign?: Campaign; onOpen: () => void; hideCompany?: boolean }) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onOpen}
+        className={cn(
+          'flex w-full items-start gap-4 rounded-2xl border border-border bg-card px-4 py-3 text-left transition-colors hover:border-primary/40',
+          item.status === 'resolved' && 'opacity-60',
+        )}
+      >
+        <span className="min-w-0 flex-1 space-y-1">
+          <span className="line-clamp-2 text-sm text-foreground">{item.message}</span>
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            <CategoryChip category={item.category} />
+            {!hideCompany && <span className="font-medium text-foreground">{tenantLabel(item.tenants)}</span>}
+            {item.submitter_name && <span>{item.submitter_name}</span>}
+            <span>{fmtDateTime(item.created_at)}</span>
+            {campaign && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">{campaign.name}</span>}
+            {item.screenshot_path && <ImageIcon className="size-3.5" aria-label="Has a screenshot" />}
+          </span>
+        </span>
+        {item.status === 'resolved' && (
+          <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 text-xs font-medium text-success">
+            <Check className="size-3.5" aria-hidden /> Resolved
+          </span>
+        )}
+      </button>
+    </li>
+  );
+}
+
+/** One campaign: its replies grouped by company, then the companies that have not answered. */
+function CampaignView({
+  campaign,
+  feedback,
+  onBack,
+  onEnd,
+  onOpenFeedback,
+}: {
+  campaign: Campaign;
+  feedback: Feedback[];
+  onBack: () => void;
+  onEnd: () => void;
+  onOpenFeedback: (f: Feedback) => void;
+}) {
+  const [tenants, setTenants] = useState<TenantLite[] | null>(null);
+  const [prompted, setPrompted] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chat, chatSending]);
+    let cancelled = false;
+    void (async () => {
+      let promptedQuery = supabase
+        .from('app_users')
+        .select('tenant_id')
+        .not('tenant_id', 'is', null)
+        .gte('feedback_last_prompted_at', campaign.started_at);
+      if (campaign.ended_at) promptedQuery = promptedQuery.lte('feedback_last_prompted_at', campaign.ended_at);
+      const [ts, pu] = await Promise.all([
+        supabase.from('tenants').select('id,company_name,slug').eq('status', 'active').order('company_name'),
+        promptedQuery,
+      ]);
+      if (cancelled) return;
+      if (ts.error) toast.error(`Could not load companies: ${ts.error.message}`);
+      setTenants((ts.data as TenantLite[] | null) ?? []);
+      setPrompted(new Set(((pu.data as { tenant_id: string }[] | null) ?? []).map((r) => r.tenant_id)));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [campaign.id, campaign.started_at, campaign.ended_at]);
 
-  const saveFormEnabled = async (next: boolean) => {
-    if (!settingsRowId) return;
+  const byTenant = useMemo(() => {
+    const m = new Map<string, Feedback[]>();
+    for (const f of feedback) m.set(f.tenant_id, [...(m.get(f.tenant_id) ?? []), f]);
+    return m;
+  }, [feedback]);
+  const notYet = (tenants ?? []).filter((t) => !byTenant.has(t.id));
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back to campaigns"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" />
+          </button>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="truncate text-xl font-semibold text-foreground">{campaign.name}</h2>
+              <CampaignPill campaign={campaign} />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {fmtDateTime(campaign.started_at)} – {campaign.ended_at ? fmtDateTime(campaign.ended_at) : 'now'}
+            </p>
+          </div>
+        </div>
+        {!campaign.ended_at && (
+          <Button variant="outline" className="rounded-full" onClick={onEnd}>
+            End campaign
+          </Button>
+        )}
+      </div>
+
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <section className="space-y-3">
+          <h3 className="text-sm font-semibold text-foreground">
+            Answered <span className="font-normal text-muted-foreground">· {byTenant.size} {byTenant.size === 1 ? 'company' : 'companies'}</span>
+          </h3>
+          {byTenant.size === 0 ? (
+            <p className="rounded-2xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">No replies yet.</p>
+          ) : (
+            [...byTenant.entries()].map(([tenantId, list]) => (
+              <div key={tenantId} className="space-y-2 rounded-3xl border border-border bg-card p-4">
+                <p className="text-sm font-semibold text-foreground">{tenantLabel(list[0].tenants)}</p>
+                <ul className="space-y-2">
+                  {list.map((f) => (
+                    <FeedbackRow key={f.id} item={f} hideCompany onOpen={() => onOpenFeedback(f)} />
+                  ))}
+                </ul>
+              </div>
+            ))
+          )}
+        </section>
+
+        <section className="space-y-3">
+          <h3 className="text-sm font-semibold text-foreground">
+            Not answered <span className="font-normal text-muted-foreground">· {tenants ? notYet.length : '…'}</span>
+          </h3>
+          {tenants === null ? (
+            <div className="h-40 animate-pulse rounded-3xl border border-border bg-muted/40" />
+          ) : notYet.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">Every company has answered.</p>
+          ) : (
+            <ul className="divide-y divide-border overflow-hidden rounded-3xl border border-border bg-card">
+              {notYet.map((t) => {
+                const saw = prompted.has(t.id);
+                return (
+                  <li key={t.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                    <span className="min-w-0 truncate text-sm text-foreground">{tenantLabel(t)}</span>
+                    <span
+                      className={cn(
+                        'shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium',
+                        saw ? 'bg-warning/10 text-warning' : 'bg-secondary text-muted-foreground',
+                      )}
+                    >
+                      {saw ? 'Saw it, skipped' : 'Not asked yet'}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function FeedbackDetail({
+  item,
+  campaign,
+  onClose,
+  onToggle,
+}: {
+  item: Feedback | null;
+  campaign?: Campaign;
+  onClose: () => void;
+  onToggle: (f: Feedback) => void;
+}) {
+  const [shot, setShot] = useState<string | null>(null);
+  useEffect(() => {
+    setShot(null);
+    if (!item?.screenshot_path) return;
+    let cancelled = false;
+    // Private bucket: a screenshot can hold customer details, so only a short-lived signed link.
+    void supabase.storage
+      .from('feedback-screenshots')
+      .createSignedUrl(item.screenshot_path, 300)
+      .then(({ data }) => {
+        if (!cancelled) setShot(data?.signedUrl ?? null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [item?.id, item?.screenshot_path]);
+
+  return (
+    <Dialog open={item !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-[620px] gap-4 rounded-3xl p-6">
+        {item && (
+          <>
+            <DialogHeader className="text-left">
+              <DialogTitle>{tenantLabel(item.tenants)}</DialogTitle>
+              <DialogDescription>
+                {[item.submitter_name, item.submitter_role, item.submitter_email].filter(Boolean).join(' · ') || 'Unknown person'}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <CategoryChip category={item.category} />
+              <span>{fmtDateTime(item.created_at)}</span>
+              {campaign && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">{campaign.name}</span>}
+              {item.page_path && <span className="font-mono">{item.page_path}</span>}
+            </div>
+            <p className="whitespace-pre-wrap rounded-2xl bg-muted/50 p-4 text-sm leading-relaxed text-foreground">{item.message}</p>
+            {item.screenshot_path &&
+              (shot ? (
+                <a href={shot} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-2xl border border-border">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={shot} alt="Screenshot sent with the feedback" className="max-h-[360px] w-full object-contain" />
+                </a>
+              ) : (
+                <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="size-3.5 animate-spin" /> Loading screenshot…
+                </p>
+              ))}
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" className="rounded-full" onClick={onClose}>
+                Close
+              </Button>
+              <Button className="rounded-full" variant={item.status === 'resolved' ? 'outline' : 'default'} onClick={() => onToggle(item)}>
+                {item.status === 'resolved' ? <RotateCcw className="size-4" /> : <Check className="size-4" />}
+                {item.status === 'resolved' ? 'Reopen' : 'Mark resolved'}
+              </Button>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function NewCampaignDialog({
+  open,
+  live,
+  onClose,
+  onStart,
+}: {
+  open: boolean;
+  live: Campaign | null;
+  onClose: () => void;
+  onStart: (name: string) => Promise<boolean>;
+}) {
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (o) setName('');
+        else onClose();
+      }}
+    >
+      <DialogContent className="max-w-[500px] gap-5 rounded-3xl p-6">
+        <DialogHeader className="text-left">
+          <DialogTitle>New campaign</DialogTitle>
+          <DialogDescription>Every operator is shown the feedback form once, on their next sign-in.</DialogDescription>
+        </DialogHeader>
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-foreground">Name</span>
+          <Input autoFocus value={name} maxLength={80} onChange={(e) => setName(e.target.value)} placeholder="e.g. October check-in" className="rounded-full" />
+        </label>
+        {live && (
+          <p className="rounded-2xl bg-warning/10 px-3 py-2 text-xs text-warning">
+            Starting this ends &ldquo;{live.name}&rdquo;. Only one campaign runs at a time.
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" className="rounded-full" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            className="rounded-full"
+            disabled={busy || !name.trim()}
+            onClick={async () => {
+              setBusy(true);
+              const ok = await onStart(name);
+              setBusy(false);
+              if (ok) onClose();
+            }}
+          >
+            {busy && <Loader2 className="size-4 animate-spin" />}
+            Start campaign
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** The form switch, who gets emailed about new feedback, and the platform sign-out. */
+function SettingsDialog({ open, rowId, onClose }: { open: boolean; rowId: string | null; onClose: () => void }) {
+  const [formEnabled, setFormEnabled] = useState(true);
+  const [recipients, setRecipients] = useState<{ id: string; email: string }[]>([]);
+  const [email, setEmail] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    void (async () => {
+      const [st, rc] = await Promise.all([
+        supabase.from('tenant_feedback_settings').select('form_enabled').limit(1).maybeSingle(),
+        supabase.from('tenant_feedback_recipients').select('id,email').order('created_at'),
+      ]);
+      setFormEnabled((st.data as { form_enabled: boolean } | null)?.form_enabled ?? true);
+      setRecipients((rc.data as { id: string; email: string }[] | null) ?? []);
+    })();
+  }, [open]);
+
+  const saveForm = async (next: boolean) => {
+    if (!rowId) return;
     setFormEnabled(next);
-    const { error } = await (supabase as any)
-      .from('tenant_feedback_settings')
-      .update({ form_enabled: next })
-      .eq('id', settingsRowId);
+    const { error } = await supabase.from('tenant_feedback_settings').update({ form_enabled: next }).eq('id', rowId);
     if (error) {
       setFormEnabled(!next);
-      toast.error(`Failed to save: ${error.message}`);
-    } else {
-      toast.success(next ? 'Feedback form enabled' : 'Feedback form hidden from portals');
+      toast.error(`Could not save: ${error.message}`);
     }
   };
 
-  const addRecipient = async () => {
-    const email = newRecipient.trim().toLowerCase();
-    if (!email) return;
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+  const add = async () => {
+    const value = email.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) {
       toast.error('Enter a valid email address');
       return;
     }
-    if (recipients.some((r) => r.email.toLowerCase() === email)) {
+    if (recipients.some((r) => r.email.toLowerCase() === value)) {
       toast.error('That address is already on the list');
       return;
     }
-    const { data, error } = await (supabase as any)
-      .from('tenant_feedback_recipients')
-      .insert({ email })
-      .select()
-      .single();
-    if (error) {
-      toast.error(`Failed to add: ${error.message}`);
+    const { data, error } = await supabase.from('tenant_feedback_recipients').insert({ email: value }).select('id,email').single();
+    if (error || !data) {
+      toast.error(`Could not add: ${error?.message ?? 'no row came back'}`);
       return;
     }
-    setRecipients((r) => [...r, data]);
-    setNewRecipient('');
+    setRecipients((r) => [...r, data as { id: string; email: string }]);
+    setEmail('');
   };
 
-  const removeRecipient = async (id: string) => {
-    const { error } = await (supabase as any)
-      .from('tenant_feedback_recipients')
-      .delete()
-      .eq('id', id);
+  const remove = async (id: string) => {
+    const { error } = await supabase.from('tenant_feedback_recipients').delete().eq('id', id);
     if (error) {
-      toast.error(`Failed to remove: ${error.message}`);
+      toast.error(`Could not remove: ${error.message}`);
       return;
     }
     setRecipients((r) => r.filter((x) => x.id !== id));
   };
 
-  const triggerForceShow = async () => {
-    if (!settingsRowId) return;
-    setForcing(true);
-    try {
-      const now = new Date().toISOString();
-      const { error } = await (supabase as any)
-        .from('tenant_feedback_settings')
-        .update({ force_login_triggered_at: now })
-        .eq('id', settingsRowId);
-      if (error) throw error;
-      setForceTriggeredAt(now);
-      setShowForceConfirm(false);
-      toast.success('Every operator will be asked for feedback on their next visit');
-    } catch (err: any) {
-      toast.error(`Failed: ${err.message}`);
-    } finally {
-      setForcing(false);
-    }
-  };
-
-  const clearForceShow = async () => {
-    if (!settingsRowId) return;
-    const { error } = await (supabase as any)
-      .from('tenant_feedback_settings')
-      .update({ force_login_triggered_at: null })
-      .eq('id', settingsRowId);
-    if (error) {
-      toast.error(`Failed: ${error.message}`);
-      return;
-    }
-    setForceTriggeredAt(null);
-    toast.success('Campaign cleared — no one else will be prompted');
-  };
-
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-  const tenantName = (f: Feedback) => f.tenants?.company_name || f.tenants?.slug || '—';
-
-  const themes = useMemo(
-    () => (Array.isArray(insight?.top_themes) ? insight!.top_themes : []),
-    [insight]
-  );
-
-  /* What the Filters button counts. Read off the very same state the list
-     filters on, so the badge cannot say 2 while three filters are narrowing
-     the table. */
-  const activeFilterCount =
-    (categoryFilter !== 'all' ? 1 : 0) +
-    (statusFilter !== 'all' ? 1 : 0) +
-    (tenantFilter !== 'all' ? 1 : 0) +
-    (fromDate ? 1 : 0) +
-    (toDate ? 1 : 0) +
-    (search.trim() ? 1 : 0);
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Feedbacks</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            What rental operators are telling us about the software.
-          </p>
-        </div>
-        <div className={HEADER_ACTIONS}>
-          <HeaderIconButton label="Feedback settings" onClick={() => setSettingsOpen(true)}>
-            <Settings2 />
-          </HeaderIconButton>
-        </div>
-      </div>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-[520px] gap-5 rounded-3xl p-6">
+        <DialogHeader className="text-left">
+          <DialogTitle>Feedback settings</DialogTitle>
+          <DialogDescription>The portal&apos;s feedback form and who hears about new feedback.</DialogDescription>
+        </DialogHeader>
 
-      {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        {[
-          { label: 'Open', value: stats.open },
-          { label: 'This week', value: stats.week },
-          { label: 'Top category this week', value: stats.topCategory },
-        ].map((s) => (
-          <div key={s.label} className="rounded-4xl bg-card p-4 shadow-sm ring-1 ring-foreground/10">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">{s.label}</p>
-            <p className="mt-1 text-2xl font-semibold text-foreground">{s.value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* AI Insights */}
-      <div className="rounded-4xl bg-card p-5 space-y-4 shadow-sm ring-1 ring-foreground/10">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" />
-              AI Insights
-            </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {insight
-                ? `Generated ${new Date(insight.generated_at).toLocaleString()} from ${insight.feedback_count} items`
-                : 'Not generated yet'}
-            </p>
+            <p className="text-sm font-medium text-foreground">Feedback form in the portal</p>
+            <p className="text-xs text-muted-foreground">Off hides the button from every operator.</p>
           </div>
-          <Button size="sm" onClick={regenerateInsights} disabled={regenerating}>
-            {regenerating ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
-            {regenerating ? 'Analysing...' : 'Regenerate'}
-          </Button>
+          <Switch checked={formEnabled} onCheckedChange={(v) => void saveForm(v)} aria-label="Feedback form in the portal" />
         </div>
 
-        {insight ? (
-          <>
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
-              {insight.summary}
-            </p>
-            {themes.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {themes.map((t, i) => (
-                  <span
-                    key={`${t.theme}-${i}`}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-dark-border bg-secondary px-2.5 py-1 text-xs text-muted-foreground"
-                  >
-                    {t.theme}
-                    <span className="text-primary font-semibold">{t.count}</span>
-                  </span>
-                ))}
-              </div>
-            )}
-          </>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Hit Regenerate to summarise the last 90 days of feedback.
-          </p>
-        )}
-
-        {/* Ad-hoc chat over the corpus. Held in component state only — never
-            written to a table. */}
-        <div className="rounded-md border border-dark-border bg-secondary/40 p-3 space-y-3">
-          <p className="text-xs font-medium text-muted-foreground">Ask about the feedback</p>
-
-          {chat.length > 0 && (
-            <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
-              {chat.map((m, i) => (
-                <div
-                  key={i}
-                  className={
-                    m.role === 'user'
-                      ? 'ml-auto max-w-[85%] rounded-lg bg-primary/15 px-3 py-2 text-sm text-primary-foreground'
-                      : 'mr-auto max-w-[85%] rounded-lg bg-dark-card px-3 py-2 text-sm text-muted-foreground whitespace-pre-wrap'
-                  }
-                >
-                  {m.content}
-                </div>
-              ))}
-              {chatSending && (
-                <div className="mr-auto rounded-lg bg-dark-card px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Thinking...
-                </div>
-              )}
-              <div ref={chatEndRef} />
-            </div>
-          )}
-
+        <div className="space-y-2 border-t border-border pt-4">
+          <p className="text-sm font-medium text-foreground">Email new feedback to</p>
+          <ul className="flex flex-wrap gap-1.5">
+            {recipients.map((r) => (
+              <li key={r.id} className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-foreground">
+                {r.email}
+                <button type="button" onClick={() => void remove(r.id)} aria-label={`Remove ${r.email}`} className="text-muted-foreground hover:text-destructive">
+                  <X className="size-3" />
+                </button>
+              </li>
+            ))}
+            {recipients.length === 0 && <li className="text-xs text-muted-foreground">Nobody yet.</li>}
+          </ul>
           <div className="flex gap-2">
             <Input
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  sendChat();
-                }
-              }}
-              placeholder="e.g. which tenants are complaining about invoicing?"
-              disabled={chatSending}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && void add()}
+              placeholder="name@company.com"
+              className="rounded-full"
             />
-            <Button size="sm" onClick={sendChat} disabled={chatSending || !chatInput.trim()}>
-              <Send className="h-4 w-4" />
+            <Button variant="outline" className="rounded-full" onClick={() => void add()}>
+              Add
             </Button>
           </div>
         </div>
-      </div>
 
-      {/* Search, with the filter toggle inside the field. The row of labelled
-          controls used to sit here permanently, between the title and the data,
-          on screen whether or not anyone was filtering.
-
-          Every value below is still this page's own `useState` and every
-          handler is unchanged — the controls simply moved onto the panel. */}
-      <FilterSearch
-        scopeLabel="Feedbacks"
-        value={search}
-        onChange={setSearch}
-        placeholder="Search message text..."
-        open={filtersOpen}
-        onOpenChange={setFiltersOpen}
-        activeCount={activeFilterCount}
-      />
-
-      <FilterReveal open={filtersOpen}>
-        <FilterShell
-          activeCount={activeFilterCount}
-          onClear={() => {
-            setStatusFilter('all');
-            setCategoryFilter('all');
-            setTenantFilter('all');
-            setFromDate('');
-            setToDate('');
-            setSearch('');
-          }}
-          onClose={() => setFiltersOpen(false)}
-        >
-          {/* Status is two states plus "all", so it is chips. Category and
-              tenant are open-ended lists and stay Selects. */}
-          <FilterSection
-            icon={<Check className="size-3 text-success" />}
-            tint="bg-success/10"
-            title="Status"
-          >
-            <div className="flex flex-wrap gap-1.5">
-              {(['all', 'open', 'resolved'] as const).map((status) => (
-                <FilterChip
-                  key={status}
-                  active={statusFilter === status}
-                  onClick={() => setStatusFilter(status)}
-                >
-                  <span className="capitalize">{status === 'all' ? 'Any' : status}</span>
-                </FilterChip>
-              ))}
-            </div>
-          </FilterSection>
-
-          <FilterSection
-            icon={<StickyNote className="size-3 text-primary" />}
-            tint="bg-primary/10"
-            title="Category"
-          >
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All categories</SelectItem>
-                {(Object.keys(CATEGORY_META) as Category[]).map((c) => (
-                  <SelectItem key={c} value={c}>{CATEGORY_META[c].label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FilterSection>
-
-          <FilterSection
-            icon={<Building2 className="size-3 text-[hsl(var(--chart-3))]" />}
-            tint="bg-[hsl(var(--chart-3))]/10"
-            title="Tenant"
-          >
-            <Select value={tenantFilter} onValueChange={setTenantFilter}>
-              <SelectTrigger className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All tenants</SelectItem>
-                {tenants.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>{t.company_name || t.slug}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FilterSection>
-
-          <FilterSection
-            icon={<CalendarDays className="size-3 text-warning" />}
-            tint="bg-warning/10"
-            title="Date range"
-          >
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Input
-                type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className="h-8 w-[8.75rem] text-xs"
-                aria-label="From date"
-              />
-              <Input
-                type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                className="h-8 w-[8.75rem] text-xs"
-                aria-label="To date"
-              />
-            </div>
-          </FilterSection>
-        </FilterShell>
-      </FilterReveal>
-
-      {/* Table */}
-      <div className="overflow-hidden rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10">
-        {loading ? (
-          <TableSkeleton />
-        ) : items.length === 0 ? (
-          categoryFilter === 'all' && tenantFilter === 'all' && !search.trim() ? (
-            <EmptyState
-              illustration={<FeedbackEmptyArt />}
-              headline={statusFilter === 'all' ? 'No feedback yet' : `No ${statusFilter} feedback`}
-              body={
-                statusFilter === 'open'
-                  ? 'Every note from an operator has been dealt with. New ones land here as they are sent.'
-                  : 'When operators send feedback from their portal, it lands here to triage and answer.'
-              }
-            />
-          ) : (
-            <NoMatchState
-              noun="feedback"
-              onClear={() => {
-                setCategoryFilter('all');
-                setTenantFilter('all');
-                setSearch('');
-              }}
-            />
-          )
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-dark-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Tenant</th>
-                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Submitter</th>
-                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Category</th>
-                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Message</th>
-                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
-                  <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Date</th>
-                  <th className="h-10 whitespace-nowrap px-3 align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((f) => {
-                  const meta = CATEGORY_META[f.category] || CATEGORY_META.note;
-                  const Icon = meta.icon;
-                  return (
-                    <tr
-                      key={f.id}
-                      onClick={() => openDetail(f)}
-                      className="border-b border-dark-border last:border-0 cursor-pointer hover:bg-secondary/40 transition-colors"
-                    >
-                      <td className="px-3 py-3 text-foreground">{tenantName(f)}</td>
-                      <td className="px-3 py-3 text-muted-foreground">
-                        <div>{f.submitter_name || f.submitter_email || 'Unknown'}</div>
-                        {f.submitter_role && (
-                          <div className="text-xs text-muted-foreground">{f.submitter_role}</div>
-                        )}
-                      </td>
-                      <td className="px-3 py-3">
-                        <span
-                          className="inline-flex items-center gap-1.5 text-xs font-medium"
-                          style={{ color: meta.color }}
-                        >
-                          <Icon className="h-3.5 w-3.5" />
-                          {meta.label}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-muted-foreground max-w-[320px]">
-                        <div className="flex items-center gap-2">
-                          {f.screenshot_path && (
-                            <ImageIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          )}
-                          <span className="truncate">{f.message}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <span
-                          className={
-                            f.status === 'open'
-                              ? 'text-xs font-medium text-amber-600'
-                              : 'text-xs font-medium text-green-600'
-                          }
-                        >
-                          {f.status === 'open' ? 'Open' : 'Resolved'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
-                        {new Date(f.created_at).toLocaleDateString()}
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleStatus(f);
-                          }}
-                        >
-                          {f.status === 'open' ? (
-                            <><Check className="h-3.5 w-3.5 mr-1.5" />Resolve</>
-                          ) : (
-                            <><RotateCcw className="h-3.5 w-3.5 mr-1.5" />Reopen</>
-                          )}
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
+          <div>
+            <p className="text-sm font-medium text-foreground">Sessions</p>
+            <p className="text-xs text-muted-foreground">Sign out every portal operator and booking customer.</p>
           </div>
-        )}
-      </div>
-
-      {/* Pagination */}
-      {totalCount > PAGE_SIZE && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)} of {totalCount}
-          </span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page === 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
-          </div>
+          <ForceLogoutAllControl className="whitespace-nowrap" />
         </div>
-      )}
-
-      {/* Detail dialog */}
-      <Dialog open={!!detail} onOpenChange={(open) => !open && setDetail(null)}>
-        <DialogContent className="sm:max-w-[640px] max-h-[85vh] overflow-y-auto">
-          {detail && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  {(() => {
-                    const meta = CATEGORY_META[detail.category] || CATEGORY_META.note;
-                    const Icon = meta.icon;
-                    return (
-                      <>
-                        <Icon className="h-4 w-4" style={{ color: meta.color }} />
-                        <span style={{ color: meta.color }}>{meta.label}</span>
-                      </>
-                    );
-                  })()}
-                </DialogTitle>
-                <DialogDescription>
-                  {tenantName(detail)} · {detail.submitter_name || detail.submitter_email || 'Unknown'}
-                  {detail.submitter_role ? ` (${detail.submitter_role})` : ''} ·{' '}
-                  {new Date(detail.created_at).toLocaleString()}
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-4">
-                <div className="rounded-md border border-dark-border bg-secondary/40 p-3 text-sm text-foreground whitespace-pre-wrap">
-                  {detail.message}
-                </div>
-
-                {detail.page_path && (
-                  <div className="text-xs text-muted-foreground">
-                    <span className="text-muted-foreground">Page: </span>
-                    {detail.page_path}
-                  </div>
-                )}
-                {detail.user_agent && (
-                  <div className="text-xs text-muted-foreground break-all">
-                    <span className="text-muted-foreground">Browser: </span>
-                    {detail.user_agent}
-                  </div>
-                )}
-
-                {detail.screenshot_path && (
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-2">Screenshot</p>
-                    {screenshotUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={screenshotUrl}
-                        alt="Feedback screenshot"
-                        className="max-h-80 rounded-md border border-dark-border"
-                      />
-                    ) : (
-                      <p className="text-xs text-muted-foreground">Loading screenshot…</p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setDetail(null)}>
-                  Close
-                </Button>
-                <Button onClick={() => toggleStatus(detail)}>
-                  {detail.status === 'open' ? 'Mark Resolved' : 'Reopen'}
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Settings dialog */}
-      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="sm:max-w-[560px] max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Feedback settings</DialogTitle>
-            <DialogDescription>
-              Platform-wide — these apply to every tenant portal.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-6">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <Label className="text-sm">Feedback form enabled</Label>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Turning this off removes the entry point from every portal and stops
-                  both automatic prompts.
-                </p>
-              </div>
-              <Switch checked={formEnabled} onCheckedChange={saveFormEnabled} />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm">Email alerts</Label>
-              <p className="text-xs text-muted-foreground">
-                Every submission is emailed to these addresses.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {recipients.length === 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    No recipients — submissions are stored but nobody is emailed.
-                  </span>
-                )}
-                {recipients.map((r) => (
-                  <span
-                    key={r.id}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-dark-border bg-secondary px-2.5 py-1 text-xs text-muted-foreground"
-                  >
-                    {r.email}
-                    <button
-                      onClick={() => removeRecipient(r.id)}
-                      aria-label={`Remove ${r.email}`}
-                      className="text-muted-foreground hover:text-red-600"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  value={newRecipient}
-                  onChange={(e) => setNewRecipient(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addRecipient();
-                    }
-                  }}
-                  placeholder="name@drive-247.com"
-                />
-                <Button size="sm" onClick={addRecipient}>Add</Button>
-              </div>
-            </div>
-
-            <div className="space-y-2 border-t border-dark-border pt-4">
-              <Label className="text-sm">Ask everyone for feedback</Label>
-              <p className="text-xs text-muted-foreground">
-                Prompts every operator across every tenant once, the next time they open
-                their portal. Anyone already prompted since the campaign started is
-                skipped.
-              </p>
-              {forceTriggeredAt && (
-                <p className="text-xs text-amber-600">
-                  Campaign active since {new Date(forceTriggeredAt).toLocaleString()}.
-                </p>
-              )}
-              <div className="flex gap-2">
-                <Button size="sm" onClick={() => setShowForceConfirm(true)}>
-                  <Megaphone className="h-4 w-4 mr-2" />
-                  {forceTriggeredAt ? 'Restart campaign' : 'Force show on next login'}
-                </Button>
-                {forceTriggeredAt && (
-                  <Button variant="outline" size="sm" onClick={clearForceShow}>
-                    Clear
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-2 border-t border-dark-border pt-4">
-              <Label className="text-sm">Sessions</Label>
-              <div className="flex items-center justify-between gap-4">
-                <p className="text-xs text-muted-foreground">
-                  Sign out every portal operator and booking customer on the platform.
-                </p>
-                <ForceLogoutAllControl className="whitespace-nowrap" />
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSettingsOpen(false)}>
-              Done
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Force-show confirmation */}
-      <Dialog open={showForceConfirm} onOpenChange={setShowForceConfirm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Ask every operator for feedback?</DialogTitle>
-            <DialogDescription>
-              The next time each operator opens their portal, the feedback dialog opens
-              once. It is dismissible and does not block them from working. You can clear
-              the campaign at any time.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForceConfirm(false)}>
-              Cancel
-            </Button>
-            <Button onClick={triggerForceShow} disabled={forcing}>
-              {forcing ? 'Starting...' : 'Start campaign'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

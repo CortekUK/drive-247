@@ -36,16 +36,16 @@ export function DocumentPreview({
 
   return (
     <figure className="flex min-w-0 flex-col gap-2">
-      <figcaption className="text-xs text-brand-text-subtle">{label}</figcaption>
+      <figcaption className="text-[11px] font-medium uppercase tracking-wider text-pv-muted-fg">{label}</figcaption>
 
       <div
         className={cn(
-          'relative overflow-hidden rounded-xl border border-brand-border-soft bg-brand-stone',
+          'relative overflow-hidden rounded-3xl bg-pv-muted ring-1 ring-black/5',
           portrait ? 'aspect-[3/4]' : 'aspect-[3/2]',
         )}
       >
         {failed ? (
-          <p className="absolute inset-0 grid place-items-center px-3 text-center text-xs text-brand-text-subtle">
+          <p className="absolute inset-0 grid place-items-center px-3 text-center text-xs text-pv-muted-fg">
             This image is no longer available
           </p>
         ) : (
@@ -58,7 +58,7 @@ export function DocumentPreview({
             aria-hidden={!revealed}
             onError={() => setFailed(true)}
             className={cn(
-              'size-full object-cover transition-[filter] duration-200',
+              'size-full object-cover transition-[filter] duration-200 ease-out motion-reduce:transition-none',
               revealed ? 'blur-0' : 'scale-110 blur-lg',
             )}
           />
@@ -68,9 +68,9 @@ export function DocumentPreview({
           <button
             type="button"
             onClick={() => setRevealed(true)}
-            className="absolute inset-0 grid place-items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/25"
+            className="group absolute inset-0 grid cursor-pointer place-items-center rounded-3xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-pv-primary/25"
           >
-            <span className="inline-flex min-h-11 items-center gap-2 rounded-full bg-brand-card px-4 text-sm font-medium text-brand-text">
+            <span className="inline-flex min-h-11 items-center gap-2 rounded-full bg-pv-card/95 px-4 text-sm font-medium text-pv-fg shadow-sm ring-1 ring-black/5 transition-colors duration-200 ease-out group-hover:bg-pv-tint motion-reduce:transition-none">
               <Eye aria-hidden strokeWidth={1.75} className="size-4" />
               Show
               {/* The visible word stays one short verb; the control still
@@ -85,7 +85,7 @@ export function DocumentPreview({
         <button
           type="button"
           onClick={() => setRevealed(false)}
-          className="inline-flex min-h-11 w-fit items-center gap-1.5 text-sm text-brand-text-soft transition-colors hover:text-brand-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/25"
+          className="inline-flex min-h-11 w-fit cursor-pointer items-center gap-1.5 rounded-full px-1 text-sm font-medium text-pv-muted-fg transition-colors duration-200 ease-out hover:text-pv-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-pv-primary/25 motion-reduce:transition-none"
         >
           <EyeOff aria-hidden strokeWidth={1.75} className="size-4" />
           Hide

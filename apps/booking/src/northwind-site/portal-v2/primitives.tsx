@@ -15,24 +15,36 @@ import { cn } from '@nw/lib/utils';
 
 /* ──────────────────────────── page furniture ───────────────────────────── */
 
+/**
+ * The operator v2 page header (billing-page-v2.tsx, agreements-page-v2.tsx):
+ * a tight bold title, 24px on a phone and 30px from `sm`, and ONE muted line
+ * under it saying what the page is for. Pass that line as `description`.
+ * `eyebrow` is a small muted line above the title (a date, a step) for the few
+ * screens that need one.
+ */
 export function PageHeader({
   title,
   description,
   action,
+  eyebrow,
   className,
 }: {
-  title: string;
-  description?: string;
+  title: React.ReactNode;
+  description?: React.ReactNode;
   action?: React.ReactNode;
+  eyebrow?: React.ReactNode;
   className?: string;
 }) {
   return (
-    <div className={cn('flex flex-col gap-3 pt-1 sm:flex-row sm:items-end sm:justify-between', className)}>
+    <div className={cn('flex flex-col gap-3 pt-1 sm:flex-row sm:items-start sm:justify-between', className)}>
       <div className="min-w-0">
-        <h1 className="text-[28px] font-bold leading-[1.15] tracking-[-0.03em] text-pv-fg md:text-[32px]">{title}</h1>
-        {description ? <p className="mt-1 text-[14px] leading-relaxed text-pv-muted-fg">{description}</p> : null}
+        {eyebrow ? <p className="mb-1 text-xs font-medium text-pv-muted-fg">{eyebrow}</p> : null}
+        <h1 className="text-2xl font-bold tracking-tight text-pv-fg sm:text-3xl">{title}</h1>
+        {description ? (
+          <p className="mt-1 max-w-2xl text-sm text-pv-muted-fg sm:text-base">{description}</p>
+        ) : null}
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+      {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
     </div>
   );
 }
@@ -44,10 +56,13 @@ export function Panel({ children, className }: { children: React.ReactNode; clas
 
 export function PanelHeader({
   title,
+  description,
   action,
   className,
 }: {
-  title: string;
+  title: React.ReactNode;
+  /** One muted line under the title. */
+  description?: React.ReactNode;
   action?: React.ReactNode;
   className?: string;
 }) {
@@ -58,8 +73,11 @@ export function PanelHeader({
         className,
       )}
     >
-      <h2 className="text-[13px] font-semibold text-pv-fg">{title}</h2>
-      {action}
+      <div className="min-w-0">
+        <h2 className="text-[13px] font-semibold text-pv-fg">{title}</h2>
+        {description ? <p className="mt-0.5 text-xs text-pv-muted-fg">{description}</p> : null}
+      </div>
+      {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
     </div>
   );
 }

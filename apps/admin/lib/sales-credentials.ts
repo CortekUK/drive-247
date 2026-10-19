@@ -140,3 +140,41 @@ export const buildClientMessage = (args: ClientMessageArgs): string => {
     `Any questions, just reply here!`
   );
 };
+
+/** The parts of a sales_onboarding_submissions row the credentials pane needs. */
+export interface OnboardingSubmissionForCredentials {
+  first_name: string | null;
+  business_name: string | null;
+  slug: string | null;
+  business_email: string | null;
+  generated_email: string | null;
+  subscription_amount: number | null; // cents
+  subscription_currency: string | null;
+}
+
+/**
+ * What the credentials dialog shows for an onboarding, or null when it cannot
+ * be re-opened. Only re-openable while the tenant it provisioned still exists:
+ * the URLs and the first-login password are derived from the slug, which means
+ * nothing for a deleted or never-created tenant. Used by the Onboarding page
+ * and by Rental Companies' key button alike.
+ */
+export const credentialsForSubmission = (
+  row: OnboardingSubmissionForCredentials,
+  tenant: { company_name: string | null; slug: string | null } | null,
+) => {
+  if (!tenant) return null;
+  // Prefer the submission's slug: the first-login password was derived from it
+  // at provisioning time, so a later rename must not change what we show.
+  const slug = row.slug || tenant.slug;
+  const email = row.generated_email || row.business_email;
+  if (!slug || !email) return null;
+  return {
+    companyName: tenant.company_name || row.business_name || slug,
+    slug,
+    email,
+    firstName: row.first_name,
+    amountCents: row.subscription_amount,
+    currency: row.subscription_currency,
+  };
+};

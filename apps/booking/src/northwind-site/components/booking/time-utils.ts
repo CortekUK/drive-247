@@ -264,3 +264,33 @@ export function formatHourSpan(totalHours: number): string {
   if (rest > 0) parts.push(`${rest} hour${rest === 1 ? "" : "s"}`);
   return parts.length > 0 ? parts.join(" ") : "1 hour";
 }
+
+/* ───────────────────────────── calendar picker ───────────────────────── */
+
+/**
+ * A calendar's chosen Date back to 'YYYY-MM-DD'.
+ *
+ * Formatted from the local Y/M/D, never `toISOString()` — that is UTC and
+ * shifts the chosen day back for anyone west of Greenwich. Shared by the v1
+ * and v2 `DateField`s.
+ */
+export function localDateToIso(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * What a date picker shows: the selected day (if the value is a real date) and
+ * the month to open on — the selection, else the caller's hint, else today.
+ */
+export function resolveDatePickerState(
+  value: string,
+  defaultMonthIso?: string,
+): { selected: Date | undefined; defaultMonth: Date | undefined } {
+  const selected = isIsoDate(value) ? parseDateOnly(value) : undefined;
+  const defaultMonth =
+    selected ??
+    (defaultMonthIso && isIsoDate(defaultMonthIso)
+      ? parseDateOnly(defaultMonthIso)
+      : undefined);
+  return { selected, defaultMonth };
+}

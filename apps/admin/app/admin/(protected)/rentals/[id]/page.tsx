@@ -1,6 +1,6 @@
 'use client';
 
-import { HeaderIconButton } from '@/components/admin/header-buttons';
+import { ToggleTile } from '@/components/admin/form-grid';
 import { setTenantStatus, setTenantType, type TenantStatus, type TenantType } from '@/lib/tenant-actions';
 import { DeleteTenantDialog } from '@/components/admin/delete-tenant-dialog';
 import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
@@ -41,12 +41,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { useRegisterSidebarSections } from '@/components/admin/sidebar-sections';
 import { CardBrandIcon } from '@/components/ui/card-brand-icon';
 import { TenantCreditsTab } from '@/components/admin/tenant-credits-tab';
 import { TenantTimelineTab } from '@/components/admin/tenant-timeline-tab';
 import { LinkPromoPicker } from '@/components/admin/promo-codes/link-promo-picker';
+import { InvoiceStatusBadge, SubscriptionTrail } from '@/components/admin/subscription-trail';
+import { FeedbackPanel, TenantInsights } from '@/components/admin/tenant-insights';
+import { NotesPanel } from '@/components/admin/tenant-notes';
+import { EditCompanyDialog } from '@/components/admin/edit-company-dialog';
+import { bookingUrlFor, portalUrlFor } from '@/lib/sales-credentials';
+import { useAdminSupport } from '@/lib/use-support-messaging';
 import {
   ArrowLeft,
   Pencil,
@@ -69,8 +74,18 @@ import {
   LayoutTemplate,
   KeyRound,
   Copy,
-  Globe,
+  Percent,
+  Tag,
+  Lock,
+  Unlock,
+  ChevronRight,
+  LogOut,
+  Trash2,
+  LifeBuoy,
+  History,
   LayoutDashboard,
+  Globe,
+  Signature,
 } from 'lucide-react';
 
 interface Tenant {
@@ -211,6 +226,12 @@ function ModeControl({ mode, disabled, onSwitch }: { mode: string; disabled: boo
   );
 }
 
+const NO_SECTIONS: { id: string; label: string }[] = [];
+const noSection = () => {};
+
+/** How many integration tiles fit the page row before See all. */
+const INTEGRATIONS_IN_ROW = 5;
+
 function IntegrationTile({
   logo,
   name,
@@ -229,14 +250,16 @@ function IntegrationTile({
     <button
       type="button"
       onClick={onOpen}
-      className="group flex flex-col items-center gap-2 rounded-4xl bg-card py-6 text-center shadow-sm ring-1 ring-foreground/10 transition-all duration-200 hover:ring-primary/30 hover:bg-gradient-to-br hover:from-primary/15 hover:via-primary/5 hover:to-transparent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      className="group flex min-w-0 flex-col items-center gap-1.5 rounded-2xl bg-card px-2 py-3 text-center shadow-sm ring-1 ring-foreground/10 transition-all duration-200 hover:ring-primary/30 hover:bg-gradient-to-br hover:from-primary/15 hover:via-primary/5 hover:to-transparent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
-      <div className="flex h-20 items-center justify-center px-6">{logo}</div>
-      <div className="flex-1 space-y-1 px-6 pt-1">
-        {name && <p className="text-base font-semibold text-foreground">{name}</p>}
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </div>
-      <div className="px-6 pb-0.5">{status}</div>
+      {/* Compact, so the whole record fits one screen and all five sit in
+          one row: a small logo, the name, the status; the description is
+          the tooltip. */}
+      <div className="flex h-7 items-center justify-center [&_img]:max-h-7 [&_img]:max-w-20 [&_svg]:size-7">{logo}</div>
+      {name && <p className="max-w-full truncate text-[13px] font-semibold text-foreground">{name}</p>}
+      {/* Pinned to the bottom, so every status sits on one line even
+          when a tile has no name under its logo (Bonzah). */}
+      <div className="mt-auto max-w-full pt-1.5">{status}</div>
     </button>
   );
 }
@@ -363,13 +386,11 @@ export default function TenantDetailsPage() {
 
   // Edit state
   const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({
-    company_name: '',
-    admin_name: '',
-    slug: '',
-    contact_email: '',
-  });
-  const [saving, setSaving] = useState(false);
+  // Support tickets still open for this company, behind the header button.
+  const [openTickets, setOpenTickets] = useState<{ id: string; reference: string; summary: string | null; status: string; created_at: string }[]>([]);
+  const [showTickets, setShowTickets] = useState(false);
+  const [showConsent, setShowConsent] = useState(false);
+  const [showTimeline, setShowTimeline] = useState(false);
 
   // Delete state
 
@@ -525,12 +546,6 @@ export default function TenantDetailsPage() {
 
       if (error) throw error;
       setTenant(data);
-      setEditForm({
-        company_name: data.company_name,
-        admin_name: data.admin_name || '',
-        slug: data.slug,
-        contact_email: data.contact_email,
-      });
 
       loadSubscription(id);
       loadSubscriptionLink(id);
@@ -696,6 +711,24 @@ export default function TenantDetailsPage() {
       setSubLinkBusy(false);
     }
   };
+
+  // Tickets are only readable through the support service (RLS keeps the
+  // table closed), so this asks it, filtered to this company.
+  const { call: supportCall } = useAdminSupport();
+  const loadOpenTickets = async (tenantId: string) => {
+    try {
+      const data = await supportCall('list', { statuses: ['open', 'in_progress'], tenants: [tenantId] });
+      setOpenTickets(data?.tickets ?? []);
+    } catch {
+      setOpenTickets([]);
+    }
+  };
+  // Re-asked when the support client changes (it is keyed to the signed-in
+  // admin, who may load after the page).
+  useEffect(() => {
+    if (params.id) void loadOpenTickets(String(params.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supportCall, params.id]);
 
   const loadSubscription = async (tenantId: string, silent = false) => {
     if (!silent) setSubscriptionLoading(true);
@@ -1321,42 +1354,6 @@ export default function TenantDetailsPage() {
     }
   };
 
-  const handleSaveEdit = async () => {
-    if (!tenant) return;
-    setSaving(true);
-
-    const sanitizedSlug = editForm.slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-
-    try {
-      const { error } = await supabase
-        .from('tenants')
-        .update({
-          company_name: editForm.company_name,
-          admin_name: editForm.admin_name || null,
-          slug: sanitizedSlug,
-          contact_email: editForm.contact_email,
-        })
-        .eq('id', tenant.id);
-
-      if (error) throw error;
-
-      setTenant({
-        ...tenant,
-        company_name: editForm.company_name,
-        admin_name: editForm.admin_name || null,
-        slug: sanitizedSlug,
-        contact_email: editForm.contact_email,
-      });
-      setEditForm({ ...editForm, slug: sanitizedSlug });
-      setIsEditing(false);
-      toast.success('Tenant updated successfully!');
-    } catch (error: any) {
-      toast.error(`Error updating tenant: ${error.message}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const openPasswordReset = async () => {
     if (!tenant) return;
     setPwResult(null);
@@ -1437,12 +1434,8 @@ export default function TenantDetailsPage() {
   /* Restored Sep 26 2026: the controls moved into the account menu rather
      than being dropped. The dialog they open is unchanged. */
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [tab, setTab] = useState(() =>
-    typeof window !== 'undefined' &&
-    new URLSearchParams(window.location.search).get('tab') === 'payments'
-      ? 'payments'
-      : 'details',
-  );
+  const [showGateDialog, setShowGateDialog] = useState(false);
+  const [showIntegrations, setShowIntegrations] = useState(false);
   /*
    * Four sections, not six: Details, Subscriptions, Integrations and Consent.
    *
@@ -1475,48 +1468,16 @@ export default function TenantDetailsPage() {
     }
   };
 
+  /* No sections any more: everything is on one screen (Oct 17 2026), so the
+     rail keeps the normal navigation. The company's actions (type, status,
+     force logout, password reset, delete) sit top right of the page header
+     since Oct 19 2026, no longer in the account menu. */
   useRegisterSidebarSections(
     '/admin/rentals',
-    [
-      { id: 'details', label: 'Details' },
-      { id: 'subscriptions', label: 'Subscriptions' },
-      { id: 'integrations', label: 'Integrations' },
-      { id: 'consent', label: 'Consent' },
-      /* Retention step 1 (RETENTION_PLAN.md): the account's lifecycle events. */
-      { id: 'timeline', label: 'Timeline' },
-    ],
-    tab,
-    setTab,
+    NO_SECTIONS,
+    '',
+    noSection,
     tenant?.company_name ?? 'Rental company',
-    /*
-     * What this company lets you do, offered in the account menu at the foot
-     * of the rail. These were four buttons beside the page title until
-     * Sep 26 2026.
-     *
-     * `active` marks the type currently in force, so the pair reads as a
-     * choice rather than as two separate commands.
-     */
-    [
-      { id: 'production', label: 'Mark as Production', tone: tenant?.tenant_type === 'production' ? 'active' : 'default' },
-      { id: 'test', label: 'Mark as Test', tone: tenant?.tenant_type === 'test' ? 'active' : 'default' },
-      { id: 'status', label: tenant?.status === 'active' ? 'Suspend company' : 'Activate company' },
-      /* Joined the list Sep 26 2026 when Quick Actions was removed. It signs
-         every one of the company's staff out, so it sits with the other
-         things that act on the whole company rather than on this page. It
-         opens the same confirm dialog it always did. */
-      { id: 'force-logout', label: 'Force Logout All Users' },
-      /* Recovers a locked-out operator when the self-service email cannot
-         reach them. See the note on `showPasswordReset`. */
-      { id: 'reset-password', label: 'Reset login password' },
-      { id: 'delete', label: 'Delete company', tone: 'destructive' },
-    ],
-    (id) => {
-      if (id === 'production' || id === 'test') return void handleUpdateType(id);
-      if (id === 'status') return void handleUpdateStatus(tenant?.status === 'active' ? 'suspended' : 'active');
-      if (id === 'force-logout') return setShowForceLogoutConfirm(true);
-      if (id === 'reset-password') return void openPasswordReset();
-      if (id === 'delete') setShowDeleteConfirm(true);
-    },
   );
 
   if (loading) {
@@ -1546,8 +1507,95 @@ export default function TenantDetailsPage() {
   }
 
 
+
+  // Integration tiles, in order. The page shows one row of them; See all
+  // opens the full set in a dialog. Each opens its own detail dialog.
+  const integrationTiles = [
+    tenant.custom_site_eligible && (
+      <IntegrationTile
+        key="booking-site"
+        logo={<LayoutTemplate size={64} className="text-violet-600" />}
+        name="Booking Site Design"
+        description="Serve this tenant's custom website instead of the legacy site."
+        status={<IntegrationStatus tone={tenant.booking_v2_enabled ? 'success' : 'neutral'} label={tenant.booking_v2_enabled ? 'Custom site' : 'Legacy'} />}
+        onOpen={() => setOpenIntegration('booking-site')}
+      />
+    ),
+    <IntegrationTile
+      key="credits"
+      logo={<Coins size={64} className="text-amber-500" />}
+      name="Credits"
+      description="Verification credit wallet and transaction history."
+      status={<IntegrationStatus tone="neutral" label="Balance" />}
+      onOpen={() => setShowCreditsDetail(true)}
+    />,
+    <IntegrationTile
+      key="stripe"
+      logo={<IntegrationLogo src={brandLogo('stripe.com')} alt="Stripe" />}
+      name="Stripe Connect"
+      description="Accept booking payments, deposits & payouts."
+      status={
+        <IntegrationStatus
+          tone={tenant.stripe_account_id ? (tenant.stripe_onboarding_complete ? 'success' : 'warning') : 'neutral'}
+          label={tenant.stripe_account_id ? (tenant.stripe_onboarding_complete ? 'Connected' : 'Onboarding') : 'Not connected'}
+        />
+      }
+      onOpen={() => setOpenIntegration('stripe')}
+    />,
+    <IntegrationTile
+      key="bonzah"
+      logo={
+        <>
+          <img src="/bonzah-logo.svg" alt="Bonzah" className="h-10 w-auto dark:hidden" />
+          <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="hidden h-10 w-auto dark:block" />
+        </>
+      }
+      description="Per-rental insurance coverage at checkout."
+      status={<IntegrationStatus tone={tenant.integration_bonzah ? 'success' : 'neutral'} label={tenant.integration_bonzah ? 'Enabled' : 'Not connected'} />}
+      onOpen={() => setOpenIntegration('bonzah')}
+    />,
+    <IntegrationTile
+      key="tesla"
+      logo={<IntegrationLogo src={brandLogo('tesla.com')} alt="Tesla" />}
+      name="Tesla"
+      description="Supercharging & vehicle data via the Fleet API."
+      status={<IntegrationStatus tone={tenant.integration_tesla_fleet ? 'success' : 'neutral'} label={tenant.integration_tesla_fleet ? 'Enabled' : 'Disabled'} />}
+      onOpen={() => setOpenIntegration('tesla')}
+    />,
+    <IntegrationTile
+      key="boldsign"
+      logo={<IntegrationLogo src={brandLogo('boldsign.com')} alt="BoldSign" />}
+      name="BoldSign"
+      description="E-signature for rental agreements."
+      status={<IntegrationStatus tone={tenant.boldsign_mode === 'live' ? 'success' : 'info'} label={tenant.boldsign_mode === 'live' ? 'Production' : 'Sandbox'} />}
+      onOpen={() => setOpenIntegration('boldsign')}
+    />,
+    // MOCK (Ghulam, Oct 18 2026): placeholder tiles to preview See all with
+    // more than one row. Delete this block once reviewed.
+    ...[
+      { key: 'mock-xero', domain: 'xero.com', name: 'Xero', label: 'Connected', tone: 'success' as const },
+      { key: 'mock-twilio', domain: 'twilio.com', name: 'Twilio', label: 'Enabled', tone: 'success' as const },
+      { key: 'mock-turo', domain: 'turo.com', name: 'Turo', label: 'Not connected', tone: 'neutral' as const },
+      { key: 'mock-zoho', domain: 'zoho.com', name: 'Zoho Books', label: 'Not connected', tone: 'neutral' as const },
+    ].map((m) => (
+      <IntegrationTile
+        key={m.key}
+        logo={<IntegrationLogo src={brandLogo(m.domain)} alt={m.name} />}
+        name={m.name}
+        description="Mock tile."
+        status={<IntegrationStatus tone={m.tone} label={m.label} />}
+        onOpen={() => {}}
+      />
+    )),
+  ].filter(Boolean);
+
   return (
-    <div className="p-6 lg:p-8 space-y-6 h-full overflow-auto">
+    /* One screen (Ghulam, Oct 17 2026): the five sections that were rail rows
+       — Details, Subscriptions, Integrations, Consent, Timeline — sit on one
+       page. On a desktop it is bounded to the viewport under the top bar, the
+       Timeline runs down the right as its own scrolling column, and the main
+       pane only scrolls if a tall subscription panel overflows it. */
+    <div className="flex flex-col gap-5 lg:h-[calc(100svh-6rem)]">
       {/* No back button, and no breadcrumb above it — both removed Sep 26
           2026 ("remove all breadcrumbs globally").
 
@@ -1561,54 +1609,97 @@ export default function TenantDetailsPage() {
           whole right half of the screen empty — and then the buttons on a
           second row below it. Reported Sep 26 2026 with that empty space
           circled in red. */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-            <Building2 className="h-5 w-5 text-primary" />
-          </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{tenant.company_name}</h1>
-          <Badge variant={
-            tenant.tenant_type === 'production' ? 'success'
-            : tenant.tenant_type === 'test' ? 'warning'
-            : 'secondary'
-          }>
-            {tenant.tenant_type || 'Not Set'}
-          </Badge>
-          <Badge variant={tenant.status === 'active' ? 'success' : 'destructive'}>
-            {tenant.status}
-          </Badge>
         </div>
-
-        {/* The two places this company actually lives.
-
-            They were buttons in a "Quick Actions" card below the header,
-            labelled "Open Portal" and "Open Booking Site". The card is gone
-            and the word "Open" with it: the arrow-out-of-box icon already
-            says the link leaves this app, so the word only repeated it.
-
-            Up here they also fill the space the Production/Test switch,
-            Suspend and Delete left when those moved into the account menu.
-
-            The Production/Test switch, Suspend and Delete are NOT here — they
-            are in Rental Settings at the foot of the rail. The badges beside
-            the title still REPORT type and status, which is what this page is
-            read for; only the controls that change them moved. */}
-        <div className="flex flex-wrap items-center gap-2">
-          <HeaderIconButton label="Open portal" href={tenantPortalUrl(tenant.slug)} external>
-            <LayoutDashboard />
-          </HeaderIconButton>
-          <HeaderIconButton label="Open booking site" href={tenantBookingUrl(tenant.slug)} external>
-            <Globe />
-          </HeaderIconButton>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {/* Edit, any support ticket still open, consent and the timeline.
+              Login, links, notes and feedback are in the right column. */}
+          {/* Icon-only buttons carry their name as the tooltip. */}
+          {openTickets.length > 0 && (
+            <Button
+              size="icon"
+              variant="outline"
+              className="relative size-8 rounded-lg"
+              onClick={() => setShowTickets(true)}
+              title={`${openTickets.length} open support ${openTickets.length === 1 ? 'ticket' : 'tickets'}`}
+              aria-label={`${openTickets.length} open support tickets`}
+            >
+              <LifeBuoy className="size-3.5" />
+              <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-warning px-1 text-[10px] font-semibold tabular-nums text-white">
+                {openTickets.length > 99 ? '99+' : openTickets.length}
+              </span>
+            </Button>
+          )}
+          {/* Health score and onboarding answers, each opening a dialog. */}
+          <TenantInsights tenantId={tenant.id} companyName={tenant.company_name} />
+          <Button
+            size="icon"
+            variant="outline"
+            className="size-8 rounded-lg"
+            onClick={() => setShowConsent(true)}
+            title={policyLoading ? 'Consent' : `Consent · ${policyAcceptances.length} accepted`}
+            aria-label="Consent"
+          >
+            <Signature className="size-3.5" />
+          </Button>
+          <Button size="icon" variant="outline" className="size-8 rounded-lg" onClick={() => setShowTimeline(true)} title="Timeline" aria-label="Timeline">
+            <History className="size-3.5" />
+          </Button>
+          <Button size="icon" variant="outline" className="size-8 rounded-lg" asChild>
+            <a href={portalUrlFor(tenant.slug)} target="_blank" rel="noopener noreferrer" title="Open portal" aria-label="Open portal">
+              <LayoutDashboard className="size-3.5" />
+            </a>
+          </Button>
+          <Button size="icon" variant="outline" className="size-8 rounded-lg" asChild>
+            <a href={bookingUrlFor(tenant.slug)} target="_blank" rel="noopener noreferrer" title="Open booking site" aria-label="Open booking site">
+              <Globe className="size-3.5" />
+            </a>
+          </Button>
+          <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
+            {/* Type and status are buttons: a click flips them. Suspending
+                locks the company out, so that one asks first. */}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleUpdateType(tenant.tenant_type === 'production' ? 'test' : 'production')}
+              title={tenant.tenant_type === 'production' ? 'Production. Click to mark as test' : 'Test. Click to mark as production'}
+              className={cn(
+                'h-8 rounded-lg px-3 text-[13px] capitalize',
+                tenant.tenant_type === 'production' ? 'text-success hover:text-success' : 'text-warning hover:text-warning',
+              )}
+            >
+              {tenant.tenant_type || 'Not set'}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                if (tenant.status === 'active' && !window.confirm(`Suspend ${tenant.company_name}? Their team loses access until reactivated.`)) return;
+                void handleUpdateStatus(tenant.status === 'active' ? 'suspended' : 'active');
+              }}
+              title={tenant.status === 'active' ? 'Active. Click to suspend' : 'Suspended. Click to activate'}
+              className={cn(
+                'h-8 rounded-lg px-3 text-[13px] capitalize',
+                tenant.status === 'active' ? 'text-success hover:text-success' : 'text-destructive hover:text-destructive',
+              )}
+            >
+              {tenant.status}
+            </Button>
+          <Button size="icon" variant="outline" className="size-8 rounded-lg text-destructive hover:text-destructive" onClick={() => setShowDeleteConfirm(true)} title="Delete company" aria-label="Delete company">
+            <Trash2 className="size-3.5" />
+          </Button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs value={tab} onValueChange={setTab} className="space-y-6">
-        {/* No `TabsList`: the six triggers are rows in the rail. */}
-
-        {/* Details Tab */}
-        <TabsContent value="details" className="space-y-6">
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+        {/* Left: the company, its billing, its integrations, its consent log,
+            each a compact full-width strip. */}
+        <div className="flex min-h-0 flex-col gap-4 lg:-m-1.5 lg:overflow-y-auto lg:p-1.5">
+          <div className="shrink-0 space-y-4">
+            {/* Details */}
+            <div>
           {/* Single column, and Company Information leads it.
 
               The right rail (Access URLs, Recent Activity) and the Email
@@ -1621,528 +1712,30 @@ export default function TenantDetailsPage() {
               So the first thing on the page is now what the page is
               about — the company — rather than a row of buttons. */}
           <div className="min-w-0 space-y-6">
-            {/* Company Information */}
-            <Card>
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-primary" />
-                    <CardTitle className="text-lg">Company Information</CardTitle>
-                  </div>
-                  {!isEditing && (
-                    <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>
-                      <Pencil className="w-3.5 h-3.5 mr-1" />
-                      Edit
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                {isEditing ? (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Company Name</Label>
-                      <Input
-                        value={editForm.company_name}
-                        onChange={(e) => setEditForm({ ...editForm, company_name: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Admin Name</Label>
-                      <Input
-                        value={editForm.admin_name}
-                        onChange={(e) => setEditForm({ ...editForm, admin_name: e.target.value })}
-                        placeholder="John Doe"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Slug (subdomain)</Label>
-                      <Input
-                        value={editForm.slug}
-                        onChange={(e) => setEditForm({ ...editForm, slug: e.target.value })}
-                      />
-                      <p className="text-xs text-amber-600">
-                        Warning: Changing the slug will change the portal and booking URLs
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Contact Email</Label>
-                      <Input
-                        type="email"
-                        value={editForm.contact_email}
-                        onChange={(e) => setEditForm({ ...editForm, contact_email: e.target.value })}
-                      />
-                    </div>
-                    <div className="flex gap-2 pt-2">
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setIsEditing(false);
-                          setEditForm({
-                            company_name: tenant.company_name,
-                            admin_name: tenant.admin_name || '',
-                            slug: tenant.slug,
-                            contact_email: tenant.contact_email,
-                          });
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                      <Button onClick={handleSaveEdit} disabled={saving}>
-                        {saving ? 'Saving...' : 'Save Changes'}
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {[
-                      { label: 'Company Name', value: tenant.company_name },
-                      { label: 'Admin Name', value: tenant.admin_name || 'Not set' },
-                      { label: 'Slug', value: tenant.slug },
-                      { label: 'Contact Email', value: tenant.contact_email },
-                      {
-                        label: 'Created',
-                        value: new Date(tenant.created_at).toLocaleDateString('en-US', {
-                          year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                        }),
-                      },
-                    ].map((item) => (
-                      <div key={item.label} className="flex flex-col gap-1">
-                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{item.label}</span>
-                        <span className={cn("text-sm", !item.value || item.value === 'Not set' ? 'text-muted-foreground' : 'text-foreground')}>
-                          {item.value}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </div>
-        </TabsContent>
-
-        {/* Consent Tab
-
-            Policy Acceptances moved here from Details on Sep 26 2026 by
-            request, and the Staff Users card beside it was removed. The
-            log is read-only, so it gets a section of its own rather than
-            sitting under the company's editable details. */}
-        <TabsContent value="consent" className="space-y-6">
-          <Card>
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-primary" />
-                  <CardTitle className="text-lg">Policy Acceptances</CardTitle>
-                  {!policyLoading && (
-                    <Badge variant="secondary" className="text-[10px]">{policyAcceptances.length}</Badge>
-                  )}
-                </div>
-              </div>
-              <CardDescription>Privacy policy and terms acceptance log</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {policyLoading ? (
-                <div className="space-y-3">
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              ) : policyAcceptances.length === 0 ? (
-                <EmptyState
-                  size="section"
-                  illustration={<DocumentsEmptyArt />}
-                  headline="No policy acceptances yet"
-                  body="When this company's staff accept the privacy policy and terms, each acceptance is recorded here."
-                />
-              ) : (
-                <div className="overflow-hidden rounded-2xl border border-border/40">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>User</TableHead>
-                        <TableHead>Policy</TableHead>
-                        <TableHead>Version</TableHead>
-                        <TableHead>IP Address</TableHead>
-                        <TableHead>Accepted At</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {policyAcceptances.map((entry) => (
-                        <TableRow key={entry.id}>
-                          <TableCell>
-                            <div>
-                              <span className="text-sm font-medium">
-                                {entry.user_name || <span className="text-muted-foreground">No name</span>}
-                              </span>
-                              {entry.user_email && (
-                                <p className="text-xs text-muted-foreground">{entry.user_email}</p>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={entry.policy_type === 'privacy_policy' ? 'info' : 'default'} className="text-[11px] whitespace-nowrap">
-                              {entry.policy_type === 'privacy_policy' ? 'Privacy Policy' : 'Terms & Conditions'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground tabular-nums">
-                            v{entry.version}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground tabular-nums">
-                            {entry.ip_address || '—'}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {formatDate(entry.accepted_at)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Subscriptions Tab
-
-            Was "Management" until Sep 26 2026, when it was split by request:
-            the subscription block stays here on its own, and every other card
-            (booking site design, credits, Stripe Connect, Bonzah, Tesla,
-            BoldSign) moved to the Integrations tab below. */}
-        <TabsContent value="subscriptions" className="space-y-6">
-          {/* Subscription */}
-          {/* Subscription stays full width — it carries a plan table, an
-              invoice history and its own dialogs, and none of that reads
-              well in half a screen. */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between mb-5">
-                <div className="flex items-center gap-3">
-                  <img src="/stripe-logo.svg" alt="Stripe" className="h-5 w-auto" />
-                  <div>
-                    <h3 className="text-base font-semibold">Subscription</h3>
-                    <p className="text-xs text-muted-foreground">Platform billing and plan management</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {/* Sales link. Deliberately NOT gated on a subscription
-                      existing: the whole point is the tenant who has never
-                      subscribed, so unlike its neighbour this must render for
-                      them too. */}
-                  <Button
-                    size="sm"
-                    variant={subLinkLive ? 'secondary' : 'outline'}
-                    disabled={subLinkBusy}
-                    onClick={handleGenerateLink}
-                  >
-                    {subLinkBusy
-                      ? 'Working…'
-                      : subLinkLive
-                        ? `Link live · ${subLinkRemaining}`
-                        : (subLink?.status === 'expired' || (subLink?.status === 'pending' && subLinkExpiresMs > 0 && subLinkExpiresMs <= Date.now()))
-                          ? 'Link expired · Regenerate'
-                          : subLink
-                            ? 'Generate subscription link'
-                            : 'Generate first subscription link'}
-                  </Button>
-                  {/* Gated on a LIVE subscription, not merely on one existing.
-                      This page now also loads canceled / unpaid / paused rows so
-                      churned tenants are distinguishable from never-subscribed —
-                      but there is no "next invoice" to discount on a dead
-                      subscription, so the action must not be offered. */}
-                  {subscription && ['active', 'trialing', 'past_due'].includes(subscription.status) && (
-                    <Button size="sm" variant="outline" onClick={() => setShowDiscountModal(true)}>
-                      Discount next invoice
-                    </Button>
-                  )}
-                  {/* Same live-subscription gate: there is no ongoing rate to
-                      change on a dead subscription. Also needs a plan to move
-                      onto — the price lives on the plan, not the subscription. */}
-                  {subscription && ['active', 'trialing', 'past_due'].includes(subscription.status) && plans.length > 0 && (
-                    <Button size="sm" variant="outline" onClick={openRepriceModal}>
-                      Change price
-                    </Button>
-                  )}
-                  <Button size="sm" onClick={() => setShowSubscriptionDetail(true)}>
-                    Manage Plans
-                  </Button>
-                </div>
-              </div>
-              {(subLinkUrl || subLink) && (
-                <div className="mb-5 rounded-lg border border-border bg-muted/40 p-4 space-y-3">
-                  {subLink?.status === 'paid' ? (
-                    <p className={`text-sm font-medium ${subIsLive ? 'text-emerald-600' : 'text-amber-600'}`}>
-                      {subIsLive
-                        ? `Payment link paid${subLink.paid_at ? ` on ${new Date(subLink.paid_at).toLocaleDateString()}` : ''} — this tenant is subscribed.`
-                        // The link settled, but the subscription is no longer
-                        // live (cancelled, lapsed, expired). Claiming "subscribed"
-                        // off the link row alone was how this printed green while
-                        // the status two lines below read Incomplete_expired.
-                        : `Payment link was paid${subLink.paid_at ? ` on ${new Date(subLink.paid_at).toLocaleDateString()}` : ''}, but the subscription is no longer active — see Status below.`}
-                    </p>
-                  ) : (
-                    <>
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                          {subLink?.kind === 'first' ? 'First subscription link' : 'Subscription link'}
-                        </p>
-                        <span className="text-xs text-muted-foreground">
-                          {subLinkLive
-                            ? `Expires in ${subLinkRemaining}`
-                            : subLink?.status === 'revoked'
-                              ? 'Revoked'
-                              : subLink?.status === 'superseded'
-                                ? 'Replaced by a newer link'
-                                : 'Expired'}
-                        </span>
-                      </div>
-                      {subLinkUrl && subLinkLive ? (
-                        <div className="flex items-center gap-2">
-                          <code className="flex-1 select-all break-all rounded bg-background px-3 py-2 text-xs">
-                            {subLinkUrl}
-                          </code>
-                          <Button size="sm" variant="outline" onClick={() => {
-                            navigator.clipboard?.writeText(subLinkUrl);
-                            toast.success('Link copied');
-                          }}>Copy</Button>
-                        </div>
-                      ) : (
-                        // The plaintext token is never stored, so once this screen is
-                        // gone the address is unrecoverable — by design.
-                        <p className="text-xs text-muted-foreground">
-                          {subLinkLive
-                            ? 'A link is live, but its address is only shown once at generation. Press Regenerate to create a fresh one you can send.'
-                            : 'This link can no longer be paid. Press Regenerate to send a fresh one.'}
-                        </p>
-                      )}
-                      {subLink?.payment_attempted_at && (
-                        <p className="text-xs text-red-600">
-                          {subLinkLive
-                            ? 'Card declined — they are not subscribed. They can retry with the same link.'
-                            : 'A card was declined on this link before it closed. They are not subscribed — send a fresh link.'}
-                        </p>
-                      )}
-                      {(subLink?.mint_count ?? 0) > 0 && (
-                        <p className="text-xs text-muted-foreground">Opened {subLink.mint_count}&times;</p>
-                      )}
-                      {/* Send from here so George never changes tab mid-call.
-                          Sending mints a FRESH link, because the plaintext of
-                          the current one is unrecoverable by design. */}
-                      <div className="flex items-center gap-2 pt-1">
-                        <Input
-                          type="email"
-                          placeholder="client@company.com"
-                          value={subLinkEmail}
-                          onChange={(e) => setSubLinkEmail(e.target.value)}
-                          disabled={subLinkSending}
-                          className="h-8 text-xs"
-                        />
-                        <Button
-                          size="sm"
-                          disabled={subLinkSending || !subLinkEmail.trim()}
-                          onClick={handleSendLinkEmail}
-                        >
-                          {subLinkSending ? 'Sending…' : 'Email it'}
-                        </Button>
-                      </div>
-                      <div className="flex gap-2 pt-1">
-                        <Button size="sm" variant="outline" disabled={subLinkBusy} onClick={handleGenerateLink}>Regenerate</Button>
-                        {subLinkLive && (
-                          <Button size="sm" variant="ghost" disabled={subLinkBusy} onClick={handleRevokeLink}>Revoke</Button>
-                        )}
-                      </div>
-                      {subLinkLive && <LinkPromoPicker tenantId={String(params.id)} />}
-                    </>
-                  )}
-                </div>
-              )}
-              <Separator className="mb-5" />
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Status</span>
-                  <div>
-                    {subscription ? (
-                      <Badge variant={subscription.status === 'active' ? 'success' : subscription.status === 'trialing' ? 'warning' : 'secondary'} className="capitalize">
-                        {subscription.status}
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary">Inactive</Badge>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Plan</span>
-                  <p className="text-sm font-medium capitalize">{subscription?.plan_name || <span className="text-muted-foreground">No plan</span>}</p>
-                </div>
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Billing</span>
-                  <p className="text-sm font-medium">
-                    {subscription
-                      ? <>{(subscription.amount / 100).toFixed(2)} <span className="text-muted-foreground text-xs">{subscription.currency.toUpperCase()}/{subscription.interval}</span></>
-                      : <span className="text-muted-foreground">—</span>
-                    }
-                  </p>
-                  {currentDiscount && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-500">
-                      −{currentDiscount.percentOff != null
-                        ? `${currentDiscount.percentOff}%`
-                        : formatCurrency((currentDiscount.amountOff || 0) * 100, currentDiscount.currency || subscription?.currency || 'usd')} next invoice
-                      <button
-                        type="button"
-                        onClick={handleRemoveDiscount}
-                        disabled={discountBusy}
-                        className="text-muted-foreground hover:text-red-500 disabled:opacity-50"
-                        title="Remove discount"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Mode</span>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={(tenant.subscription_stripe_mode || 'test') === 'live' ? 'success' : 'warning'} className="capitalize">
-                      {tenant.subscription_stripe_mode || 'test'}
-                    </Badge>
-                    <Button
-                      variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                      disabled={modeUpdating}
-                      onClick={() => handleModeToggle('subscription_stripe', (tenant.subscription_stripe_mode || 'test') === 'test' ? 'live' : 'test')}
-                    >
-                      <ArrowRightLeft className="h-3 w-3" />
-                      Switch
-                    </Button>
-                  </div>
-                </div>
-              </div>
-              {subscription && (
-                <div className="mt-5 pt-4 border-t border-border/40 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
-                  {subscription.current_period_end && (
-                    <span>Period ends <span className="text-foreground font-medium">{formatDate(subscription.current_period_end)}</span></span>
-                  )}
-                  {subscription.card_last4 && (
-                    <span className="inline-flex items-center gap-1.5">
-                      Payment
-                      <CardBrandIcon brand={subscription.card_brand} className="h-4 w-6" />
-                      <span className="text-foreground font-medium tabular-nums">
-                        ····{subscription.card_last4}
-                      </span>
-                    </span>
-                  )}
-                  {subscription.card_exp_month && subscription.card_exp_year && (
-                    <span>Expires <span className="text-foreground font-medium">{String(subscription.card_exp_month).padStart(2, '0')}/{subscription.card_exp_year}</span></span>
-                  )}
-                  {subscription.stripe_customer_id && (
-                    <span>Customer <span className="text-foreground font-mono text-[11px]">{subscription.stripe_customer_id}</span></span>
-                  )}
-                </div>
-              )}
-
-              {/* Per-tenant blocker override */}
-              <div className="mt-5 pt-4 border-t border-border/40 flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium">Soft subscription block</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    When on, an unpaid tenant keeps their dashboard and is reminded instead of locked
-                    out: a dismissible popup that returns every 24 hours, plus a &ldquo;payment due&rdquo;
-                    bar that does not dismiss. When off, they meet the full-screen blocker. Their
-                    status, plans and billing stay unchanged either way.
-                  </p>
-                </div>
-                <label className="flex items-center cursor-pointer shrink-0">
-                  <div className="relative">
-                    <input
-                      type="checkbox"
-                      checked={!!tenant.subscription_gate_disabled}
-                      disabled={gateUpdating}
-                      onChange={(e) => handleToggleSubscriptionGate(e.target.checked)}
-                      className="sr-only"
-                    />
-                    <div className={cn(
-                      "w-11 h-6 rounded-full transition-colors",
-                      tenant.subscription_gate_disabled ? 'bg-emerald-500' : 'bg-muted'
-                    )}>
-                      <div className={cn(
-                        "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md ring-1 ring-black/5 transition-transform dark:bg-white",
-                        tenant.subscription_gate_disabled && 'translate-x-5'
-                      )} />
-                    </div>
-                  </div>
-                  <Badge variant={tenant.subscription_gate_disabled ? 'success' : 'outline'} className="ml-2 whitespace-nowrap">
-                    {tenant.subscription_gate_disabled ? 'Soft' : 'Hard'}
-                  </Badge>
-                </label>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Integrations Tab */}
-        <TabsContent value="integrations" className="space-y-6">
-          {/* Tiles, then a dialog. Matches the operator portal's own
-              Integrations board (Sep 26 2026, by request): the same brand
-              logos, the same card shape, one status pill per tile. The
-              details open in a dialog as label/value rows (see PanelRow),
-              never a fixed column grid — long values such as a login email
-              ran over their neighbours in one. See
-              `narrow-column-safety.test.ts`. */}
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {tenant.custom_site_eligible && (
-              <IntegrationTile
-                logo={<LayoutTemplate size={64} className="text-violet-600" />}
-                name="Booking Site Design"
-                description="Serve this tenant's custom website instead of the legacy site."
-                status={<IntegrationStatus tone={tenant.booking_v2_enabled ? 'success' : 'neutral'} label={tenant.booking_v2_enabled ? 'Custom site' : 'Legacy'} />}
-                onOpen={() => setOpenIntegration('booking-site')}
-              />
-            )}
-            <IntegrationTile
-              logo={<Coins size={64} className="text-amber-500" />}
-              name="Credits"
-              description="Verification credit wallet and transaction history."
-              status={<IntegrationStatus tone="neutral" label="Manage balance" />}
-              onOpen={() => setShowCreditsDetail(true)}
-            />
-            <IntegrationTile
-              logo={<IntegrationLogo src={brandLogo('stripe.com')} alt="Stripe" />}
-              name="Stripe Connect"
-              description="Accept booking payments, deposits & payouts."
-              status={
-                <IntegrationStatus
-                  tone={tenant.stripe_account_id ? (tenant.stripe_onboarding_complete ? 'success' : 'warning') : 'neutral'}
-                  label={tenant.stripe_account_id ? (tenant.stripe_onboarding_complete ? 'Connected' : 'Onboarding') : 'Not connected'}
-                />
-              }
-              onOpen={() => setOpenIntegration('stripe')}
-            />
-            <IntegrationTile
-              logo={
-                <>
-                  <img src="/bonzah-logo.svg" alt="Bonzah" className="h-10 w-auto dark:hidden" />
-                  <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="hidden h-10 w-auto dark:block" />
-                </>
-              }
-              description="Per-rental insurance coverage at checkout."
-              status={<IntegrationStatus tone={tenant.integration_bonzah ? 'success' : 'neutral'} label={tenant.integration_bonzah ? 'Enabled' : 'Not connected'} />}
-              onOpen={() => setOpenIntegration('bonzah')}
-            />
-            <IntegrationTile
-              logo={<IntegrationLogo src={brandLogo('tesla.com')} alt="Tesla" />}
-              name="Tesla"
-              description="Supercharging & vehicle data via the Fleet API."
-              status={<IntegrationStatus tone={tenant.integration_tesla_fleet ? 'success' : 'neutral'} label={tenant.integration_tesla_fleet ? 'Enabled' : 'Disabled'} />}
-              onOpen={() => setOpenIntegration('tesla')}
-            />
-            <IntegrationTile
-              logo={<IntegrationLogo src={brandLogo('boldsign.com')} alt="BoldSign" />}
-              name="BoldSign"
-              description="E-signature for rental agreements."
-              status={<IntegrationStatus tone={tenant.boldsign_mode === 'live' ? 'success' : 'info'} label={tenant.boldsign_mode === 'live' ? 'Production' : 'Sandbox'} />}
-              onOpen={() => setOpenIntegration('boldsign')}
-            />
+        </div>
           </div>
+          {/* Integrations: one row of tiles; the rest behind See all. */}
+          <section className="shrink-0 space-y-2.5">
+            <div className="flex items-center justify-between px-1">
+              <h2 className="text-base font-semibold tracking-tight">Integrations</h2>
+              {integrationTiles.length > INTEGRATIONS_IN_ROW && (
+                <Button variant="ghost" size="sm" className="-my-1 h-8 px-3 text-[13px]" onClick={() => setShowIntegrations(true)}>
+                  See all
+                </Button>
+              )}
+            </div>
+            <div className="grid grid-cols-5 gap-3">{integrationTiles.slice(0, INTEGRATIONS_IN_ROW)}</div>
+          </section>
+
+          <Dialog open={showIntegrations} onOpenChange={setShowIntegrations}>
+            <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto rounded-3xl p-7">
+              <DialogHeader>
+                <DialogTitle>Integrations</DialogTitle>
+              </DialogHeader>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">{integrationTiles}</div>
+            </DialogContent>
+          </Dialog>
 
           {/* One dialog for every tile. Its bodies are the detail rows and
               controls the stacked cards used to carry, unchanged. */}
@@ -2373,26 +1966,415 @@ export default function TenantDetailsPage() {
               )}
             </DialogContent>
           </Dialog>
-        </TabsContent>
 
-        <TabsContent value="timeline" className="space-y-6">
+          {/* Subscription: billing, plans, the sales link and the block on
+              top, then every payment — as many lines as fit the rest of the
+              column, the others behind See all. */}
+          <SubscriptionTrail
+            invoices={invoices}
+            formatCurrency={formatCurrency}
+            formatDate={formatDate}
+            top={
+              <>
+              {(subLinkUrl || subLink) && (
+                <div className="mb-5 rounded-lg border border-border bg-muted/40 p-4 space-y-3">
+                  {subLink?.status === 'paid' ? (
+                    <p className={`text-sm font-medium ${subIsLive ? 'text-emerald-600' : 'text-amber-600'}`}>
+                      {subIsLive
+                        ? `Payment link paid${subLink.paid_at ? ` on ${new Date(subLink.paid_at).toLocaleDateString()}` : ''} — this tenant is subscribed.`
+                        // The link settled, but the subscription is no longer
+                        // live (cancelled, lapsed, expired). Claiming "subscribed"
+                        // off the link row alone was how this printed green while
+                        // the status two lines below read Incomplete_expired.
+                        : `Payment link was paid${subLink.paid_at ? ` on ${new Date(subLink.paid_at).toLocaleDateString()}` : ''}, but the subscription is no longer active — see Status below.`}
+                    </p>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          {subLink?.kind === 'first' ? 'First subscription link' : 'Subscription link'}
+                        </p>
+                        <span className="text-xs text-muted-foreground">
+                          {subLinkLive
+                            ? `Expires in ${subLinkRemaining}`
+                            : subLink?.status === 'revoked'
+                              ? 'Revoked'
+                              : subLink?.status === 'superseded'
+                                ? 'Replaced by a newer link'
+                                : 'Expired'}
+                        </span>
+                      </div>
+                      {subLinkUrl && subLinkLive ? (
+                        <div className="flex items-center gap-2">
+                          <code className="flex-1 select-all break-all rounded bg-background px-3 py-2 text-xs">
+                            {subLinkUrl}
+                          </code>
+                          <Button size="sm" variant="outline" onClick={() => {
+                            navigator.clipboard?.writeText(subLinkUrl);
+                            toast.success('Link copied');
+                          }}>Copy</Button>
+                        </div>
+                      ) : (
+                        // The plaintext token is never stored, so once this screen is
+                        // gone the address is unrecoverable — by design.
+                        <p className="text-xs text-muted-foreground">
+                          {subLinkLive
+                            ? 'A link is live, but its address is only shown once at generation. Press Regenerate to create a fresh one you can send.'
+                            : 'This link can no longer be paid. Press Regenerate to send a fresh one.'}
+                        </p>
+                      )}
+                      {subLink?.payment_attempted_at && (
+                        <p className="text-xs text-red-600">
+                          {subLinkLive
+                            ? 'Card declined — they are not subscribed. They can retry with the same link.'
+                            : 'A card was declined on this link before it closed. They are not subscribed — send a fresh link.'}
+                        </p>
+                      )}
+                      {(subLink?.mint_count ?? 0) > 0 && (
+                        <p className="text-xs text-muted-foreground">Opened {subLink.mint_count}&times;</p>
+                      )}
+                      {/* Send from here so George never changes tab mid-call.
+                          Sending mints a FRESH link, because the plaintext of
+                          the current one is unrecoverable by design. */}
+                      <div className="flex items-center gap-2 pt-1">
+                        <Input
+                          type="email"
+                          placeholder="client@company.com"
+                          value={subLinkEmail}
+                          onChange={(e) => setSubLinkEmail(e.target.value)}
+                          disabled={subLinkSending}
+                          className="h-8 text-xs"
+                        />
+                        <Button
+                          size="sm"
+                          disabled={subLinkSending || !subLinkEmail.trim()}
+                          onClick={handleSendLinkEmail}
+                        >
+                          {subLinkSending ? 'Sending…' : 'Email it'}
+                        </Button>
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <Button size="sm" variant="outline" disabled={subLinkBusy} onClick={handleGenerateLink}>Regenerate</Button>
+                        {subLinkLive && (
+                          <Button size="sm" variant="ghost" disabled={subLinkBusy} onClick={handleRevokeLink}>Revoke</Button>
+                        )}
+                      </div>
+                      {subLinkLive && <LinkPromoPicker tenantId={String(params.id)} />}
+                    </>
+                  )}
+                </div>
+              )}
+              {(subLinkUrl || subLink) && <Separator className="mb-3" />}
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-6">
+                {/* Status, plan and billing are one fact, so one pill: the plan
+                    and its price, green when active, amber while trialing or
+                    unpaid, grey with no subscription. A state other than active
+                    is spelled out in it. */}
+                <div className="space-y-1.5">
+                  {/* The pill is the way into Manage Plans. */}
+                  <button
+                    type="button"
+                    onClick={() => setShowSubscriptionDetail(true)}
+                    title="Manage plans"
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background pl-3 pr-2 outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30 [&>*]:cursor-pointer"
+                  >
+                    {subscription ? (
+                      <Badge
+                        variant={
+                          subscription.status === 'active' ? 'success'
+                          : ['trialing', 'past_due'].includes(subscription.status) ? 'warning'
+                          : ['unpaid', 'canceled', 'incomplete_expired'].includes(subscription.status) ? 'destructive'
+                          : 'secondary'
+                        }
+                        className="gap-1.5 bg-transparent p-0 text-[13px]"
+                      >
+                        <span className="capitalize">{subscription.plan_name || 'Plan'}</span>
+                        <span className="opacity-50">·</span>
+                        <span className="tabular-nums">
+                          {formatCurrency(subscription.amount, subscription.currency)}/{subscription.interval}
+                        </span>
+                        {subscription.status !== 'active' && (
+                          <>
+                            <span className="opacity-50">·</span>
+                            <span className="capitalize">{subscription.status.replace(/_/g, ' ')}</span>
+                          </>
+                        )}
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="bg-transparent p-0 text-[13px] text-muted-foreground">No plan</Badge>
+                    )}
+                    <ChevronRight className="size-4 text-muted-foreground" aria-hidden="true" />
+                  </button>
+                  {currentDiscount && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-500">
+                      −{currentDiscount.percentOff != null
+                        ? `${currentDiscount.percentOff}%`
+                        : formatCurrency((currentDiscount.amountOff || 0) * 100, currentDiscount.currency || subscription?.currency || 'usd')} next invoice
+                      <button
+                        type="button"
+                        onClick={handleRemoveDiscount}
+                        disabled={discountBusy}
+                        className="text-muted-foreground hover:text-red-500 disabled:opacity-50"
+                        title="Remove discount"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  )}
+                </div>
+                {/* Icon buttons; each one's name is its tooltip. */}
+                <div className="flex items-center gap-1 [&>button]:size-8 [&>button]:rounded-full">
+                  {/* Sales link. Deliberately NOT gated on a subscription
+                      existing: the whole point is the tenant who has never
+                      subscribed. Its state (live, expired) is in the tooltip
+                      and the link panel above. */}
+                  {(() => {
+                    const label = subLinkBusy
+                      ? 'Working…'
+                      : subLinkLive
+                        ? `Link live · ${subLinkRemaining}`
+                        : (subLink?.status === 'expired' || (subLink?.status === 'pending' && subLinkExpiresMs > 0 && subLinkExpiresMs <= Date.now()))
+                          ? 'Link expired · Regenerate'
+                          : subLink
+                            ? 'Generate subscription link'
+                            : 'Generate first subscription link';
+                    return (
+                      <Button
+                        size="icon"
+                        variant={subLinkLive ? 'secondary' : 'outline'}
+                        disabled={subLinkBusy}
+                        onClick={handleGenerateLink}
+                        title={label}
+                        aria-label={label}
+                      >
+                        <Link2 className="size-4" />
+                      </Button>
+                    );
+                  })()}
+                  {/* Discount and Change price need a LIVE subscription: there is
+                      no next invoice or ongoing rate on a dead one, and Change
+                      price also needs a plan to move onto. */}
+                  {subscription && ['active', 'trialing', 'past_due'].includes(subscription.status) && (
+                    <Button size="icon" variant="outline" onClick={() => setShowDiscountModal(true)} title="Discount next invoice" aria-label="Discount next invoice">
+                      <Percent className="size-4" />
+                    </Button>
+                  )}
+                  {subscription && ['active', 'trialing', 'past_due'].includes(subscription.status) && plans.length > 0 && (
+                    <Button size="icon" variant="outline" onClick={openRepriceModal} title="Change price" aria-label="Change price">
+                      <Tag className="size-4" />
+                    </Button>
+                  )}
+                  {/* The per-tenant blocker override: the icon says which block
+                      is in force. */}
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={() => setShowGateDialog(true)}
+                    title={tenant.subscription_gate_disabled ? 'Soft block' : 'Hard block'}
+                    aria-label={tenant.subscription_gate_disabled ? 'Soft block' : 'Hard block'}
+                  >
+                    {tenant.subscription_gate_disabled ? <Unlock className="size-4" /> : <Lock className="size-4" />}
+                  </Button>
+                  {/* Billing mode: the button names the current mode; a click
+                      flips it. Going live still asks first. */}
+                  {(() => {
+                    const live = (tenant.subscription_stripe_mode || 'test') === 'live';
+                    // Wrapped, so the row's icon-button sizing doesn't square it.
+                    return (
+                      <span className="ml-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={modeUpdating}
+                        onClick={() => handleModeToggle('subscription_stripe', live ? 'test' : 'live')}
+                        title={live ? 'Live billing. Click to switch to Test' : 'Test billing. Click to switch to Live'}
+                        className={cn('h-8 rounded-lg px-3 text-[13px]', live ? 'text-success hover:text-success' : 'text-warning hover:text-warning')}
+                      >
+                        {live ? 'Live' : 'Test'}
+                      </Button>
+                      </span>
+                    );
+                  })()}
+                </div>
+              </div>
+              {subscription && (
+                <div className="mt-3 pt-2.5 border-t border-border/40 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
+                  {subscription.current_period_end && (
+                    <span>Period ends <span className="text-foreground font-medium">{formatDate(subscription.current_period_end)}</span></span>
+                  )}
+                  {subscription.card_last4 && (
+                    <span className="inline-flex items-center gap-1.5">
+                      Payment
+                      <CardBrandIcon brand={subscription.card_brand} className="h-4 w-6" />
+                      <span className="text-foreground font-medium tabular-nums">
+                        ····{subscription.card_last4}
+                      </span>
+                    </span>
+                  )}
+                  {subscription.card_exp_month && subscription.card_exp_year && (
+                    <span>Expires <span className="text-foreground font-medium">{String(subscription.card_exp_month).padStart(2, '0')}/{subscription.card_exp_year}</span></span>
+                  )}
+                  {subscription.stripe_customer_id && (
+                    <span>Customer <span className="text-foreground font-mono text-[11px]">{subscription.stripe_customer_id}</span></span>
+                  )}
+                </div>
+              )}
+
+              </>
+            }
+          />
+        </div>
+        {/* Right: how to get in, what they told us, and the team's sticky note. */}
+        <aside className="flex min-h-0 flex-col gap-4 lg:-m-1.5 lg:overflow-y-auto lg:p-1.5">
+          {/* The company's facts. Its name is the page title, so only what
+              the title doesn't say; the pencil edits them and the login. */}
+          <section className="shrink-0 rounded-3xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-base font-semibold tracking-tight">Company</h2>
+              {/* Edit (details, login email and password) and sign everyone
+                  out: icons only, named in the tooltip. */}
+              <div className="-my-1 flex items-center gap-1">
+                <Button size="icon" variant="outline" className="size-8 rounded-lg" onClick={() => setIsEditing(true)} title="Edit company and login" aria-label="Edit company and login">
+                  <Pencil className="size-3.5" />
+                </Button>
+                <Button size="icon" variant="outline" className="size-8 rounded-lg" onClick={() => setShowForceLogoutConfirm(true)} title="Force logout" aria-label="Force logout">
+                  <LogOut className="size-3.5" />
+                </Button>
+              </div>
+            </div>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+              {[
+                { label: 'Admin', value: tenant.admin_name || null },
+                { label: 'Slug', value: tenant.slug },
+                { label: 'Contact email', value: tenant.contact_email },
+                {
+                  label: 'Created',
+                  value: new Date(tenant.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
+                },
+              ].map((item) => (
+                <div key={item.label} className="min-w-0">
+                  <dt className="text-[13px] text-muted-foreground">{item.label}</dt>
+                  <dd
+                    title={item.value || undefined}
+                    className={cn('truncate text-sm font-medium', item.value ? 'text-foreground' : 'text-muted-foreground')}
+                  >
+                    {item.value || 'Not set'}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+          <FeedbackPanel tenantId={tenant.id} className="shrink-0" />
+          <NotesPanel tenantId={tenant.id} className="flex-1" />
+        </aside>
+      </div>
+
+      <EditCompanyDialog
+        open={isEditing}
+        onOpenChange={setIsEditing}
+        tenant={tenant}
+        onSaved={(patch) => setTenant((t) => (t ? ({ ...t, ...patch } as Tenant) : t))}
+      />
+
+      {/* Consent and Timeline: behind header buttons since Oct 19 2026, so
+          the page body is one full-width column. */}
+      <Dialog open={showConsent} onOpenChange={setShowConsent}>
+        <DialogContent className="max-w-lg rounded-3xl p-7">
+          <DialogHeader>
+            <DialogTitle>Consent</DialogTitle>
+            <DialogDescription>Who at {tenant.company_name} accepted the privacy policy and terms. Hover a row for its IP.</DialogDescription>
+          </DialogHeader>
+          {policyLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          ) : policyAcceptances.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No one has accepted the privacy policy or terms yet.
+            </p>
+          ) : (
+            <ul className="divide-y divide-border/60">
+              {policyAcceptances.map((entry) => (
+                <li
+                  key={entry.id}
+                  className="flex items-baseline justify-between gap-3 py-2"
+                  title={entry.ip_address ? `IP ${entry.ip_address}` : undefined}
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">
+                      {entry.policy_type === 'privacy_policy' ? 'Privacy Policy' : 'Terms & Conditions'}
+                      <span className="ml-1.5 text-xs font-normal tabular-nums text-muted-foreground">v{entry.version}</span>
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {entry.user_name || entry.user_email || 'No name'}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-xs text-muted-foreground">{formatDate(entry.accepted_at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showTimeline} onOpenChange={setShowTimeline}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto rounded-3xl p-2">
+          <DialogTitle className="sr-only">Timeline</DialogTitle>
           <TenantTimelineTab tenantId={tenant.id} />
-        </TabsContent>
+        </DialogContent>
+      </Dialog>
 
-        {/* Payments, Analytics, Finance Sync and Todos were removed from
-            Super Admin on Sep 26 2026 by request.
+      {/* Open support tickets for this company; each opens in Support. */}
+      <Dialog open={showTickets} onOpenChange={setShowTickets}>
+        <DialogContent className="flex max-h-[85vh] max-w-lg flex-col gap-0 rounded-3xl p-7">
+          <DialogHeader className="mb-3">
+            <DialogTitle>Open support tickets</DialogTitle>
+            <DialogDescription>{tenant.company_name}&rsquo;s tickets that are still open or in progress.</DialogDescription>
+          </DialogHeader>
+          <ul className="-mx-2 min-h-0 flex-1 overflow-y-auto">
+            {openTickets.map((t) => (
+              <li key={t.id}>
+                <a
+                  href={`/admin/support?ticket=${t.id}`}
+                  className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-muted"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-foreground">{t.summary || 'No summary'}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {t.reference} · {formatDate(t.created_at)}
+                    </span>
+                  </span>
+                  <span className={cn('text-xs font-medium', t.status === 'open' ? 'text-warning' : 'text-primary')}>
+                    {t.status === 'open' ? 'Open' : 'In progress'}
+                  </span>
+                  <ChevronRight className="size-4 text-muted-foreground" />
+                </a>
+              </li>
+            ))}
+          </ul>
+        </DialogContent>
+      </Dialog>
 
-            The PANELS go with the rail rows deliberately. `Tabs` honours a
-            `?tab=` query and a programmatic `value` even when no trigger
-            exists, so leaving the panels behind would have kept them
-            reachable to anyone who had bookmarked or typed the URL — the
-            same reasoning the old Finance Sync gate carried, in its own
-            comment, for gating the panel as well as its trigger.
-
-            This is the Super Admin page only. The rental operator's own
-            portal is a separate application (`apps/portal`) and keeps
-            every one of these features. */}
-      </Tabs>
+      {/* Soft / hard subscription block for this tenant. */}
+      <Dialog open={showGateDialog} onOpenChange={setShowGateDialog}>
+        <DialogContent className="max-w-md rounded-3xl p-7">
+          <DialogHeader>
+            <DialogTitle>Subscription block</DialogTitle>
+            <DialogDescription className="leading-relaxed">
+              What an unpaid {tenant.company_name} meets. Soft: they keep their dashboard, with a
+              dismissible reminder every 24 hours and a &ldquo;payment due&rdquo; bar that stays.
+              Hard: the full-screen blocker. Their status, plans and billing stay the same either way.
+            </DialogDescription>
+          </DialogHeader>
+          <ToggleTile
+            label="Soft subscription block"
+            checked={!!tenant.subscription_gate_disabled}
+            on="Soft block: reminded, not locked out"
+            off="Hard block: full-screen blocker"
+            onChange={(v) => { if (!gateUpdating) void handleToggleSubscriptionGate(v); }}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Subscription Detail Dialog */}
       {/* One-time discount modal — next invoice only, then auto-reverts */}
@@ -2729,40 +2711,7 @@ export default function TenantDetailsPage() {
                               )}
                             </TableCell>
                             <TableCell>
-                              {/* Stripe leaves a DECLINED invoice at status 'open' \u2014
-                                  identical to one nobody has attempted yet. Rendering
-                                  the raw status made a failed payment indistinguishable
-                                  from money simply not due, which is backwards for the
-                                  operator drilling in to chase it. attempt_count is the
-                                  discriminator; the list page already keys off it. */}
-                              {(() => {
-                                const attempts = (invoice as any).attempt_count ?? 0;
-                                const refunded = ((invoice as any).amount_refunded ?? 0) > 0;
-                                const disputed = !!(invoice as any).dispute_status;
-                                if (disputed) {
-                                  return <Badge variant="destructive">Disputed</Badge>;
-                                }
-                                if (invoice.status === 'paid') {
-                                  return refunded
-                                    ? <Badge variant="warning">Refunded</Badge>
-                                    : <Badge variant="success">Paid</Badge>;
-                                }
-                                if (invoice.status === 'open') {
-                                  return attempts > 0
-                                    ? <Badge variant="destructive">Payment failed</Badge>
-                                    : <Badge variant="warning">Not yet due</Badge>;
-                                }
-                                if (invoice.status === 'uncollectible') {
-                                  return <Badge variant="destructive">Written off</Badge>;
-                                }
-                                if (invoice.status === 'void') {
-                                  return <Badge variant="secondary">Voided</Badge>;
-                                }
-                                if (invoice.status === 'draft') {
-                                  return <Badge variant="secondary">Draft</Badge>;
-                                }
-                                return <Badge variant="secondary" className="capitalize">{invoice.status}</Badge>;
-                              })()}
+                              <InvoiceStatusBadge invoice={invoice} />
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1">

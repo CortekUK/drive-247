@@ -5,10 +5,9 @@
  * and unpaid, or cancelled and refunded; collapsing them into one label loses
  * exactly the combination the customer needs to act on.
  *
- * Colour comes from the status tokens in globals.css (`success`, `warning`,
- * `danger`, `info`) — the only palette family outside the brand set that is
- * safe to use here. The tinted `*-light` backgrounds are deliberately quiet:
- * these sit inside cream cards and must not out-shout the dark-green CTA.
+ * Drawn as the operator ui-v2 Badge: a 20px pill, 12px medium text, the
+ * status colour at 10% behind it. `plain` gives the text-only form the
+ * operator tables use in their status columns.
  */
 
 import { cn } from '@nw/lib/utils';
@@ -17,28 +16,43 @@ import type { RentalLifecycle, RentalPaymentState } from '@nw/hooks/use-customer
 
 type ChipTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
 
+/** The operator ui-v2 Badge tones: the colour at 10% behind the colour. */
 const TONE_CLASS: Record<ChipTone, string> = {
   neutral: 'bg-pv-muted text-pv-muted-fg',
-  success: 'bg-pv-success-light text-pv-success',
-  warning: 'bg-pv-warning-light text-pv-warning',
-  danger: 'bg-pv-danger-light text-pv-danger',
-  info: 'bg-pv-tint text-pv-primary',
+  success: 'bg-pv-success/10 text-pv-success',
+  warning: 'bg-pv-warning/10 text-pv-warning',
+  danger: 'bg-pv-danger/10 text-pv-danger',
+  info: 'bg-pv-primary/10 text-pv-primary',
+};
+
+/** Text-only, for a table's status column (the operator tables' rule). */
+const PLAIN_CLASS: Record<ChipTone, string> = {
+  neutral: 'text-pv-muted-fg',
+  success: 'text-pv-success',
+  warning: 'text-pv-warning',
+  danger: 'text-pv-danger',
+  info: 'text-pv-primary',
 };
 
 export function StatusChip({
   tone = 'neutral',
+  plain = false,
   children,
   className,
 }: {
   tone?: ChipTone;
+  /** Coloured text with no fill — use inside table rows. */
+  plain?: boolean;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-md px-2 py-1 text-[11px] font-semibold leading-none whitespace-nowrap',
-        TONE_CLASS[tone],
+        plain
+          ? 'inline-flex items-center text-[13px] font-medium whitespace-nowrap'
+          : 'inline-flex h-5 w-fit shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium leading-none whitespace-nowrap [&>svg]:size-3',
+        plain ? PLAIN_CLASS[tone] : TONE_CLASS[tone],
         className,
       )}
     >
@@ -60,14 +74,16 @@ const LIFECYCLE_CHIP: Record<RentalLifecycle, { label: string; tone: ChipTone }>
 
 export function RentalStatusChip({
   lifecycle,
+  plain,
   className,
 }: {
   lifecycle: RentalLifecycle;
+  plain?: boolean;
   className?: string;
 }) {
   const chip = LIFECYCLE_CHIP[lifecycle];
   return (
-    <StatusChip tone={chip.tone} className={className}>
+    <StatusChip tone={chip.tone} plain={plain} className={className}>
       {chip.label}
     </StatusChip>
   );
@@ -86,15 +102,17 @@ const PAYMENT_CHIP: Record<RentalPaymentState, { label: string; tone: ChipTone }
 
 export function PaymentStatusChip({
   state,
+  plain,
   className,
 }: {
   state: RentalPaymentState;
+  plain?: boolean;
   className?: string;
 }) {
   const chip = PAYMENT_CHIP[state];
   if (!chip) return null;
   return (
-    <StatusChip tone={chip.tone} className={className}>
+    <StatusChip tone={chip.tone} plain={plain} className={className}>
       {chip.label}
     </StatusChip>
   );

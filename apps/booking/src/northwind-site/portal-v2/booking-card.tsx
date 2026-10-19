@@ -13,7 +13,8 @@ import Link from 'next/link';
 import { ChevronRight, MapPin } from 'lucide-react-nw';
 
 import { VehiclePhoto } from '@nw/components/fleet/vehicle-photo';
-import { formatDateRange, relativeDayLabel } from '@nw/components/portal/format';
+import { relativeDayLabel } from '@nw/components/portal/format';
+import { formatBookingDates } from './bookings/format';
 import {
   PaymentStatusChip,
   RentalStatusChip,
@@ -35,7 +36,7 @@ export function BookingCard({
   const { formatCurrency } = useTenantBranding();
 
   const name = rental.vehicle?.displayName ?? 'Vehicle';
-  const dates = formatDateRange(rental.startDate, rental.endDate);
+  const dates = formatBookingDates(rental.startDate, rental.endDate);
 
   // Only for bookings that have not happened yet — "3 days ago" next to a
   // completed rental is noise, and next to a cancelled one it is cruel.
@@ -57,10 +58,10 @@ export function BookingCard({
 
   return (
     <Link
-      href={`/portal-v2/bookings/${rental.id}`}
+      href={`/portal/bookings/${rental.id}`}
       className={cn(
-        'group flex gap-3.5 rounded-2xl border bg-pv-card p-3.5 transition-colors sm:gap-4',
-        'hover:border-pv-primary/30 hover:bg-pv-row',
+        'group flex gap-3.5 rounded-2xl border bg-pv-card p-3.5 transition-colors duration-200 motion-reduce:transition-none sm:gap-4',
+        'hover:border-pv-primary/30 hover:bg-pv-row-hover',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30',
         featured ? 'border-pv-primary/25' : 'border-pv-border',
         className,
@@ -86,7 +87,7 @@ export function BookingCard({
           <ChevronRight
             aria-hidden
             strokeWidth={1.75}
-            className="mt-0.5 size-4 shrink-0 text-pv-muted-fg transition-transform group-hover:translate-x-0.5"
+            className="mt-0.5 size-4 shrink-0 text-pv-muted-fg transition-[transform,color] duration-200 group-hover:translate-x-0.5 group-hover:text-pv-primary motion-reduce:transition-none"
           />
         </div>
 

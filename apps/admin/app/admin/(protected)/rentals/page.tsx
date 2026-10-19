@@ -20,9 +20,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import CreateTenantDialog from '@/components/admin/CreateTenantDialog';
+import SalesOnboardingDialog from '@/components/admin/SalesOnboardingDialog';
+import { CreateCompanyChooser } from '@/components/admin/create-company-chooser';
+import SalesCredentialsDialog, { type SalesCredentialsTarget } from '@/components/admin/SalesCredentialsDialog';
+import { credentialsForSubmission, type OnboardingSubmissionForCredentials } from '@/lib/sales-credentials';
 import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
 import { CompaniesEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
-import { Plus, Star, Building2, AlertTriangle, Boxes, Activity, Eye, Check, ChevronDown, Trash2 } from 'lucide-react';
+import { Plus, Star, Building2, AlertTriangle, Boxes, Activity, Eye, Check, ChevronDown, ContactRound, Trash2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -360,7 +364,14 @@ export default function RentalCompaniesPage() {
   const router = useRouter();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
+  // Add company: the chooser first, then whichever form was picked.
+  const [showChooser, setShowChooser] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  // Onboarded companies' hand-over (what the Onboarding page used to open),
+  // by tenant id. Quick-setup companies have none, so they get no key button.
+  const [onboardings, setOnboardings] = useState<Map<string, OnboardingSubmissionForCredentials>>(new Map());
+  const [credentialsTarget, setCredentialsTarget] = useState<SalesCredentialsTarget | null>(null);
   /** The company the Delete dialog is open for (from a row's ⋯ menu). */
   const [deleting, setDeleting] = useState<{ id: string; company_name: string } | null>(null);
   const [typeFilter, setTypeFilter] = useState<'all' | 'production' | 'test'>('all');
@@ -615,9 +626,23 @@ export default function RentalCompaniesPage() {
         query = query.eq('status', statusFilter);
       }
 
-      const { data, error } = await query;
+      const [{ data, error }, subs] = await Promise.all([
+        query,
+        // Newest first, so the first row seen per tenant is its latest onboarding.
+        (supabase as any)
+          .from('sales_onboarding_submissions')
+          .select('tenant_id, first_name, business_name, slug, business_email, generated_email, subscription_amount, subscription_currency')
+          .not('tenant_id', 'is', null)
+          .order('created_at', { ascending: false }),
+      ]);
       if (error) throw error;
       setTenants(data || []);
+      // Non-fatal: without it the list still works, just with no key buttons.
+      const byTenant = new Map<string, OnboardingSubmissionForCredentials>();
+      for (const row of (subs?.data ?? []) as (OnboardingSubmissionForCredentials & { tenant_id: string })[]) {
+        if (!byTenant.has(row.tenant_id)) byTenant.set(row.tenant_id, row);
+      }
+      setOnboardings(byTenant);
     } catch (error) {
       console.error('Error loading tenants:', error);
     } finally {
@@ -896,10 +921,12 @@ export default function RentalCompaniesPage() {
             </p>
           </div>
         </div>
-        <Button className={HEADER_PRIMARY} onClick={() => setShowCreateModal(true)}>
-          <Plus className="h-4 w-4" />
-          Add New Rental
-        </Button>
+        <div className={HEADER_ACTIONS}>
+          <Button className={HEADER_PRIMARY} onClick={() => setShowChooser(true)}>
+            <Plus className="h-4 w-4" />
+            Add New Company
+          </Button>
+        </div>
       </div>
 
       {/* Search, with the filter toggle inside the field.
@@ -1214,9 +1241,16 @@ export default function RentalCompaniesPage() {
                       <DropdownMenuTrigger asChild>
                         <button type="button" className="group/pill inline-flex items-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/30">
                           {tenant.tenant_type ? (
-                            // Northwind's meta chip (ListMetaChip): a quiet grey tag,
-                            // not a colour — the type is a fact, not a state.
-                            <span className="inline-flex cursor-pointer items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground transition-colors group-hover/pill:bg-primary/10 group-hover/pill:text-primary">
+                            // Coloured text, no ground: production in the brand
+                            // indigo, test in amber, so the two read apart at a glance.
+                            <span
+                              className={cn(
+                                'inline-flex cursor-pointer items-center gap-0.5 text-[11px] font-semibold uppercase tracking-wide',
+                                tenant.tenant_type === 'production'
+                                  ? 'text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]'
+                                  : 'text-amber-600 dark:text-amber-400',
+                              )}
+                            >
                               {tenant.tenant_type}
                               <ChevronDown className="hidden h-2.5 w-2.5 group-hover/pill:inline" />
                             </span>
@@ -1481,8 +1515,25 @@ export default function RentalCompaniesPage() {
                     {new Date(tenant.created_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </TableCell>
                 )}
-                <TableCell className="w-12 pl-0 text-right" onClick={(e) => e.stopPropagation()}>
-                  {/* Just delete: status and type are changed from their own pills. */}
+                <TableCell className="w-20 whitespace-nowrap pl-0 text-right" onClick={(e) => e.stopPropagation()}>
+                  {/* The onboarding hand-over (login, password, links), for
+                      companies that came through Onboarding. */}
+                  {(() => {
+                    const sub = onboardings.get(tenant.id);
+                    const target = sub ? credentialsForSubmission(sub, tenant) : null;
+                    return target ? (
+                      <button
+                        type="button"
+                        onClick={() => setCredentialsTarget(target)}
+                        aria-label={`Credentials for ${tenant.company_name}`}
+                        title="Login details"
+                        className="-my-1.5 inline-flex size-8 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-primary/10 hover:text-primary focus-visible:ring-3 focus-visible:ring-primary/30 dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
+                      >
+                        <ContactRound className="h-4 w-4" />
+                      </button>
+                    ) : null;
+                  })()}
+                  {/* Status and type are changed from their own pills. */}
                   <button
                     type="button"
                     onClick={() => setDeleting({ id: tenant.id, company_name: tenant.company_name })}
@@ -1504,7 +1555,7 @@ export default function RentalCompaniesPage() {
               illustration={<CompaniesEmptyArt />}
               headline="No rental companies yet"
               body="Every operator on Drive247 shows up here, with their plan, their health and their bookings."
-              action={{ label: 'Create rental company', icon: Plus, onClick: () => setShowCreateModal(true) }}
+              action={{ label: 'Create rental company', icon: Plus, onClick: () => setShowChooser(true) }}
             />
           ) : showFavoritesOnly && !searchQuery ? (
             <EmptyState
@@ -1534,10 +1585,28 @@ export default function RentalCompaniesPage() {
         onDeleted={() => void loadTenants()}
       />
 
+      <CreateCompanyChooser
+        open={showChooser}
+        onOpenChange={setShowChooser}
+        onChoose={(mode) => {
+          setShowChooser(false);
+          if (mode === 'quick') setShowCreateModal(true);
+          else setShowOnboarding(true);
+        }}
+      />
+
       <CreateTenantDialog
         open={showCreateModal}
         onOpenChange={setShowCreateModal}
         onCreated={loadTenants}
+      />
+
+      <SalesOnboardingDialog open={showOnboarding} onOpenChange={setShowOnboarding} onCreated={loadTenants} />
+
+      <SalesCredentialsDialog
+        open={!!credentialsTarget}
+        onOpenChange={(o) => !o && setCredentialsTarget(null)}
+        target={credentialsTarget}
       />
     </div>
   );

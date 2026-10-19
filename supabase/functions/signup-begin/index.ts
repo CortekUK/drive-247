@@ -20,7 +20,7 @@
 import { handleCors, errorResponse, jsonResponse } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getSignupPlan } from "../_shared/signup-plans.ts";
+import { fetchSignupPlan } from "../_shared/signup-plans.ts";
 import { isParkedRow, readRehearsalFor, signupModeFor } from "../_shared/signup-rehearsal.ts";
 import { mintOtp, otpEmailHtml } from "../_shared/signup-otp.ts";
 import { sendEmail } from "../_shared/resend-service.ts";
@@ -165,7 +165,7 @@ Deno.serve(async (req) => {
     const fullName = clean(body.fullName, MAX.firstName);
     const email = clean(body.email, MAX.email).toLowerCase();
     const password = typeof body.password === "string" ? body.password : "";
-    const plan = getSignupPlan(body.planId);
+    const plan = await fetchSignupPlan(supabase, body.planId);
 
     // -----------------------------------------------------------------------
     // Honeypot. Repo precedent: submit-application returns a silent success so

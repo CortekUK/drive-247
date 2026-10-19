@@ -57,6 +57,72 @@ const isRuleType = (value: string): value is VehicleOverride["rule_type"] =>
 const isOverrideType = (value: string): value is VehicleOverride["override_type"] =>
   value === "fixed_price" || value === "custom_percent" || value === "excluded";
 
+/* The row → rule mappers, exported so a caller pricing the whole fleet at once
+ * (the v2 quick book dialog) reads the rows exactly as this hook does. */
+
+type HolidayRow = {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  surcharge_percent: number | string | null;
+  excluded_vehicle_ids: string[] | null;
+  recurs_annually: boolean | null;
+};
+
+type OverrideRow = {
+  id: string;
+  vehicle_id: string;
+  rule_type: string;
+  holiday_id: string | null;
+  override_type: string;
+  fixed_price: number | string | null;
+  custom_percent: number | string | null;
+};
+
+export function toHolidays(rows: readonly HolidayRow[]): Holiday[] {
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    start_date: row.start_date,
+    end_date: row.end_date,
+    // `numeric` arrives as a string over PostgREST; a string percentage would
+    // corrupt the surcharge maths.
+    surcharge_percent: Number(row.surcharge_percent) || 0,
+    excluded_vehicle_ids: row.excluded_vehicle_ids ?? [],
+    // NULL means "never set", and an unset holiday is a one-off, not recurring.
+    recurs_annually: row.recurs_annually === true,
+  }));
+}
+
+// A row whose rule_type or override_type is not one the engine understands is
+// dropped rather than coerced: guessing at an unknown pricing rule would
+// charge the customer something nobody configured.
+export function toVehicleOverrides(rows: readonly OverrideRow[]): VehicleOverride[] {
+  return rows.flatMap((row) => {
+    if (!isRuleType(row.rule_type) || !isOverrideType(row.override_type)) return [];
+    return [
+      {
+        id: row.id,
+        vehicle_id: row.vehicle_id,
+        rule_type: row.rule_type,
+        holiday_id: row.holiday_id,
+        fixed_price: row.fixed_price === null ? null : Number(row.fixed_price),
+        custom_percent: row.custom_percent === null ? null : Number(row.custom_percent),
+        override_type: row.override_type,
+      },
+    ];
+  });
+}
+
+export function toDailyPrices(
+  rows: readonly { date: string; price: number | string | null }[],
+): VehicleDailyPrice[] {
+  return rows.map((row) => ({ date: row.date, price: Number(row.price) || 0 }));
+}
+
+export { HOLIDAY_COLUMNS, OVERRIDE_COLUMNS, DAILY_PRICE_COLUMNS };
+
 /**
  * Load every rule that can move the base rental price.
  *
@@ -88,43 +154,11 @@ async function fetchPricingRules(
   if (overridesRes?.error) throw new Error(overridesRes.error.message);
   if (dailyPricesRes?.error) throw new Error(dailyPricesRes.error.message);
 
-  const holidays: Holiday[] = (holidaysRes.data ?? []).map((row) => ({
-    id: row.id,
-    name: row.name,
-    start_date: row.start_date,
-    end_date: row.end_date,
-    // `numeric` arrives as a string over PostgREST; a string percentage would
-    // corrupt the surcharge maths.
-    surcharge_percent: Number(row.surcharge_percent) || 0,
-    excluded_vehicle_ids: row.excluded_vehicle_ids ?? [],
-    // NULL means "never set", and an unset holiday is a one-off, not recurring.
-    recurs_annually: row.recurs_annually === true,
-  }));
-
-  // A row whose rule_type or override_type is not one the engine understands is
-  // dropped rather than coerced: guessing at an unknown pricing rule would
-  // charge the customer something nobody configured.
-  const vehicleOverrides: VehicleOverride[] = (overridesRes?.data ?? []).flatMap((row) => {
-    if (!isRuleType(row.rule_type) || !isOverrideType(row.override_type)) return [];
-    return [
-      {
-        id: row.id,
-        vehicle_id: row.vehicle_id,
-        rule_type: row.rule_type,
-        holiday_id: row.holiday_id,
-        fixed_price: row.fixed_price === null ? null : Number(row.fixed_price),
-        custom_percent: row.custom_percent === null ? null : Number(row.custom_percent),
-        override_type: row.override_type,
-      },
-    ];
-  });
-
-  const dailyPrices: VehicleDailyPrice[] = (dailyPricesRes?.data ?? []).map((row) => ({
-    date: row.date,
-    price: Number(row.price) || 0,
-  }));
-
-  return { holidays, vehicleOverrides, dailyPrices };
+  return {
+    holidays: toHolidays(holidaysRes.data ?? []),
+    vehicleOverrides: toVehicleOverrides(overridesRes?.data ?? []),
+    dailyPrices: toDailyPrices(dailyPricesRes?.data ?? []),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
