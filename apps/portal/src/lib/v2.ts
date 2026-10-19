@@ -133,8 +133,14 @@ const V2_AREAS: Record<V2Area, readonly string[]> = {
    * So the column stays the operator's opt-in and this entry decides who may
    * reach the screen at all. Both must agree. Widening is deleting nothing and
    * adding a slug here, once the canary has run it long enough to have failed.
+   *
+   * car-rental-deal-hq added 2026-10-20 at the owner's request: its operator
+   * (Ivy) syncs from the extension, and imports wait in the review queue on
+   * /turo-bridge until approved, so the screen has to be reachable. This area
+   * gates only Turo Sync surfaces (sidebar entry, /turo-bridge, the Settings
+   * switch); nothing else about that tenant's portal changes.
    */
-  turo: [NORTHWIND],
+  turo: [NORTHWIND, 'car-rental-deal-hq'],
   /**
    * `/agreements` — Agreements v2: templates on the Agreements tab, the
    * half-and-half template editor, individual agreements sent from the tab
