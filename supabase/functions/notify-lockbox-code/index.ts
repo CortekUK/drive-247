@@ -1,3 +1,18 @@
+/**
+ * ⚠ DEPLOY WARNING — this file is NOT what production runs.
+ *
+ * Production runs commit f5c2f095's version of this function (which still has
+ * the WhatsApp lockbox path) plus one patch: getTenantTwilioCredentials reads
+ * the Twilio token from Vault (Multi Chat §1, 2026-10-19). This file contains
+ * the WhatsApp removal from 3064cc42, which was committed but NEVER DEPLOYED,
+ * and at least one tenant still lists `whatsapp` in
+ * tenants.lockbox_notification_methods.
+ *
+ * Deploying this file as-is silently stops WhatsApp lockbox codes for that
+ * tenant. Do not deploy it until the WhatsApp removal has been agreed with its
+ * author and the product owner. To redeploy the live behaviour instead, rebuild
+ * from f5c2f095 + the Vault patch in a temporary worktree.
+ */
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { corsHeaders } from "../_shared/cors.ts";

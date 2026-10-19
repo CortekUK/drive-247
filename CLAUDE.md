@@ -163,6 +163,11 @@ Uses Supabase Realtime channels (replaced Socket.io):
 
 10 functions have `verify_jwt = false` in `supabase/config.toml`: `boldsign-webhook`, `customer-chat`, `validate-customer-invite`, `submit-customer-registration`, `custom-auth-email`, `subscription-webhook`, `check-policy-acceptance`, `stripe-webhook-test`, `stripe-webhook-live`. Stripe webhook functions handle their own signature verification. All other functions require JWT auth by default.
 
+**Deploying edge functions — verify each one, never trust a batch success.** On 2026-10-19 a multi-function `supabase functions deploy a b c … --use-api` reported "Deployed Functions." and bumped every version, yet `send-sms-message` kept serving the old code until it was redeployed on its own. So:
+- Deploy one function per command.
+- After each deploy, verify it **behaviourally**: send a request whose response differs between the old and new code. A version number or a bundle download is not proof.
+- Before redeploying a function you did not just change, compare the deployed bundle (`GET /v1/projects/{ref}/functions/{slug}/body`, an eszip that carries the source verbatim) against `git show HEAD:supabase/functions/<slug>/index.ts`. A committed-but-undeployed change in HEAD ships with you otherwise. `notify-lockbox-code` is the live example: see its file header.
+
 Edge function pattern:
 ```typescript
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
