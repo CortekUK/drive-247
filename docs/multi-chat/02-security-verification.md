@@ -105,7 +105,7 @@ These are outside Multi Chat. I'm listing them because they are open now.
 
 ## Rotating the leaked Twilio credentials
 
-Until today, the stored tokens were readable by any signed-in session. Treat them as leaked. Affected tenants (by slug). All 7 are on the **v1** portal. Settings › Messaging was retired for every tenant on 2026-10-19, so an owner can only re-enter a token on the Integrations board, and that board serves v2 tenants only. **Move each tenant to v2 before sending the note.**
+Until today, the stored tokens were readable by any signed-in session. Treat them as leaked. Affected tenants (by slug). All 7 are on the **v1** portal, so they rotate through the legacy Settings screen:
 
 | Tenant | Number | Voice API key also stored |
 |---|---|---|
@@ -124,9 +124,9 @@ Note to send each account owner:
 > We found and closed a security issue in how Drive247 stored the Twilio credentials you connected. Before the fix, your Twilio Auth Token could have been read by other signed-in users of the platform. We have no evidence it was misused, but please treat it as exposed and rotate it now:
 >
 > 1. In the Twilio Console, go to **Account → API keys & tokens → Auth tokens**, and choose **Create secondary token**.
-> 2. In Drive247, open **Integrations → Twilio Messages → Disconnecting**, and disconnect. Then choose **Connect** again, enter your Account SID and the **new secondary token**, and pick your existing number under **Use a number I have**. Wait for "Connected". Texts sent to your number in the minute between these two steps may not reach Drive247.
+> 2. In Drive247, open **Settings → Messaging → SMS** and choose **Disconnect Twilio**. Then fill in the form again: your Account SID, the **new secondary token** and your Twilio number. Choose **Connect** and wait for "Connected". Texts sent to your number in the minute between these two steps may not reach Drive247.
 > 3. Back in Twilio, choose **Promote to primary**. The old token stops working.
-> 4. If you use calling: in Twilio go to **API keys & tokens**, and delete the key named `Drive247Voice`. Then in Drive247 go to **Integrations → Twilio Calling → Disconnecting**, and turn calling off and back on. That creates a fresh key.
+> 4. If you use calling: in Twilio go to **API keys & tokens**, and delete the key named `Drive247Voice`. Then in Drive247 go to **Settings → Messaging → Calling**, and turn calling off and back on. That creates a fresh key.
 > 5. Check **Monitor → Logs** and **Billing → Usage** in Twilio for any messages or calls you don't recognise since you connected, and tell us if you find any.
 >
 > Credentials are now encrypted at rest and can no longer be read back by anyone, including our staff.

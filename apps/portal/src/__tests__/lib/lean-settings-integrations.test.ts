@@ -276,9 +276,7 @@ describe("gate call sites", () => {
   it("declares a body gate for each newly hidden tab", () => {
     const src = settings();
     expect(src).toMatch(/const hidePaymentsTab = useIsAreaHidden\('settings-payments'\);/);
-    // Messaging is retired for EVERY tenant (Twilio lives only on /integrations),
-    // not just the lean ones — see RETIRED_SETTINGS_TABS in lib/lean-areas.
-    expect(src).toMatch(/const hideMessagingTab = isSettingsTabRetired\('messaging'\);/);
+    expect(src).toMatch(/const hideMessagingTab = useIsAreaHidden\('settings-messaging'\);/);
     expect(src).toMatch(/const hideESignTab = useIsAreaHidden\('settings-esign'\);/);
     expect(src).toMatch(/const hideInsuranceNav = useIsAreaHidden\('settings-insurance'\);/);
   });

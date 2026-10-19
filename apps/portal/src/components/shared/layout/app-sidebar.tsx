@@ -33,7 +33,6 @@ import { useFleetHealthStats } from "@/hooks/use-fleet-health";
 import { BrandLogo } from "@/components/shared/layout/brand-logo";
 import { useTenant } from "@/contexts/TenantContext";
 import { useIsAreaHidden } from "@/lib/lean-context";
-import { isSettingsTabRetired } from "@/lib/lean-areas";
 import { isV2 } from "@/lib/v2";
 import { useV2 } from "@/lib/v2-context";
 import { UserPlus, Workflow, Gift, RefreshCw } from "lucide-react";
@@ -540,8 +539,6 @@ export function AppSidebar() {
                 ...group,
                 items: group.items.filter(item =>
                   canViewSettings(item.value) &&
-                  // Retired for every tenant (Twilio moved to /integrations).
-                  !isSettingsTabRetired(item.value) &&
                   // Tesla Fleet is hidden from the lean canary and that tenant
                   // alone. Presentation only — the settings tab, the edge
                   // functions and the hourly Supercharger sync all stay put for

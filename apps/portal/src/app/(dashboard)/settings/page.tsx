@@ -60,7 +60,6 @@ import { ESignSettings } from '@/components/settings/esign-settings';
 import {
   SETTINGS_TAB_BOARD_ROUTE,
   isSettingsTabHiddenForLean,
-  isSettingsTabRetired,
   settingsTabBoardCard,
 } from '@/lib/lean-areas';
 import { useIsAreaHidden, useIsLean } from '@/lib/lean-context';
@@ -601,9 +600,7 @@ const Settings = () => {
   // keeps reaching Stripe onboarding, Twilio setup, Bonzah credentials and the
   // BoldSign mode switch exactly where they always have. See lib/lean-areas.
   const hidePaymentsTab = useIsAreaHidden('settings-payments');
-  // Twilio setup is retired from Settings for every tenant; it lives only on
-  // /integrations now. See RETIRED_SETTINGS_TABS in lib/lean-areas.
-  const hideMessagingTab = isSettingsTabRetired('messaging');
+  const hideMessagingTab = useIsAreaHidden('settings-messaging');
   const hideESignTab = useIsAreaHidden('settings-esign');
 
   // Insurance is the one that does NOT stop rendering. Bonzah's 10-step
@@ -4005,7 +4002,7 @@ const Settings = () => {
                 // disagreeing is not hypothetical: E-Signatures was filtered out
                 // here and left in the sidebar, so a lean tenant could still
                 // click it and land on an empty page.
-                .filter(item => !isSettingsTabHiddenForLean(item.value, leanTenant) && !isSettingsTabRetired(item.value))
+                .filter(item => !isSettingsTabHiddenForLean(item.value, leanTenant))
                 .map(item => (
                 <TabsTrigger key={item.value} value={item.value} className="flex items-center gap-1.5 whitespace-nowrap text-xs px-3">
                   <item.icon className="h-3.5 w-3.5" />{item.label}
