@@ -159,6 +159,8 @@ export function usePlatformStatus(): PlatformStatus {
   // tenant would otherwise still get an "INSHUR Period Z — Learn more" row on
   // its dashboard linking to a Settings tab that no longer exists for it.
   const inshurHidden = useIsAreaHidden("inshur");
+  // The lean (v2) tenants are exactly the ones `/integrations` serves.
+  const integrationsBoard = useIsAreaHidden("settings-messaging");
   // `enabled` is null while the config read is in flight or has failed; the
   // TenantContext copy of the same flag is the fallback so a slow settings read
   // does not demote a configured tenant to the "coming soon" row.
@@ -395,10 +397,11 @@ export function usePlatformStatus(): PlatformStatus {
         : "Automated SMS alerts for your customers",
       isComplete: twilioConnected,
       actionLabel: twilioConnected ? "Manage" : "Learn more",
-      // Same destination either way: /settings?tab=messaging renders
-      // CommunicationSettings, which owns the Twilio SMS and voice panels, and
-      // maps to the same `settings.integrations` permission key as /integrations.
-      actionPath: "/settings?tab=messaging",
+      // Twilio is set up only on the Twilio Messages card now; the Settings ›
+      // Messaging tab was retired for every tenant (lib/lean-areas). A tenant
+      // without the board (/integrations is notFound() off v2) is sent to the
+      // Messages inbox, where a connected number is actually used.
+      actionPath: integrationsBoard ? "/integrations" : "/messages",
       priority: 20,
       comingSoon: !twilioConnected,
       icon: "twilio",

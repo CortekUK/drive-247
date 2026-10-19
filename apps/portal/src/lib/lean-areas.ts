@@ -502,6 +502,27 @@ export function isSettingsTabHidden(
  * (desktop sidebar, mobile trigger row, typed `?tab=`) to agree. They have
  * disagreed before, twice, in opposite directions.
  */
+/**
+ * Settings tabs retired for EVERY tenant, lean or not.
+ *
+ * `messaging` (Twilio SMS + Twilio Voice + call forwarding) was retired on
+ * 2026-10-19 (Multi Chat §B/Q4): Twilio is configured in exactly one place, the
+ * Twilio Messages / Twilio Calling cards on `/integrations`, so nobody sets it
+ * up through two paths. The components (`communication-settings.tsx`,
+ * `twilio-sms-settings.tsx`, `call-forwarding-settings.tsx`) are kept but no
+ * longer mounted. Existing connections keep sending and receiving; only the
+ * settings screen is gone.
+ *
+ * Deliberately NOT folded into isSettingsTabHiddenForLean: that answers the
+ * lean question (a v1 tenant hides nothing; a lean-hidden tab always has the
+ * board to go to). Retirement is a different rule, applied at each nav site.
+ */
+const RETIRED_SETTINGS_TABS: ReadonlySet<string> = new Set(['messaging']);
+
+export function isSettingsTabRetired(tabValue: string): boolean {
+  return RETIRED_SETTINGS_TABS.has(tabValue);
+}
+
 export function isSettingsTabHiddenForLean(tabValue: string, lean: boolean): boolean {
   const area = SETTINGS_TAB_AREAS[tabValue];
   if (!area) return false;
