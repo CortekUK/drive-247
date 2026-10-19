@@ -33,6 +33,7 @@ import { ChatMessageBubble } from "@/components/chat";
 import { AttachmentList } from "@/components/messages-v2/attachment-list";
 import type { ChatMessage } from "@/hooks/use-chat-messages";
 import type { ChatAttachment } from "@/components/messages-v2/use-chat-attachments";
+import { useV2 } from "@/lib/v2-context";
 
 function attachmentsOf(m: ChatMessage): ChatAttachment[] {
   const raw = (m.metadata as { attachments?: unknown } | undefined)?.attachments;
@@ -55,7 +56,15 @@ function CallEvent({ message }: { message: ChatMessage }) {
     direction?: string;
     outcome?: string;
     duration_seconds?: number;
+    recording_url?: string;
+    recording_sid?: string;
   };
+  // v2 only (v1 renders exactly as before). Recordings moved to a private
+  // bucket on 2026-10-19, so the stored public URL no longer plays; until
+  // signed-URL playback lands (Multi Chat §6) say so plainly rather than
+  // offering a player that cannot load.
+  const v2 = useV2("chrome");
+  const recordingUnavailable = v2 && !!(meta.recording_url || meta.recording_sid);
   const incoming = meta.direction === "incoming";
   const missed = meta.outcome === "missed";
   const Icon = missed ? PhoneMissed : incoming ? PhoneIncoming : PhoneOutgoing;
@@ -75,6 +84,7 @@ function CallEvent({ message }: { message: ChatMessage }) {
         <Icon className="h-3.5 w-3.5 shrink-0" />
         <span className="font-medium">{label}</span>
         {duration && <span className="opacity-70">· {duration}</span>}
+        {recordingUnavailable && <span className="opacity-70">· Recording unavailable</span>}
         <span className="opacity-60">· {format(new Date(message.created_at), "h:mm a")}</span>
       </div>
     </div>
