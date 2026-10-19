@@ -1,0 +1,13 @@
+-- Rollback for 20261020150000_multichat_s2_data_model.sql
+-- Drops the five Multi Chat §2 tables. Safe while nothing reads them; once the
+-- v2 number/AI/opt-out features use them, this discards that data.
+
+BEGIN;
+DROP TABLE IF EXISTS public.twilio_webhook_events;
+DROP TABLE IF EXISTS public.call_ai_outputs;
+DROP TRIGGER IF EXISTS integration_audit_log_no_change ON public.integration_audit_log;
+DROP TABLE IF EXISTS public.integration_audit_log;
+DROP FUNCTION IF EXISTS public.integration_audit_log_append_only();
+DROP TABLE IF EXISTS public.sms_suppressions;
+DROP TABLE IF EXISTS public.tenant_phone_numbers;
+COMMIT;

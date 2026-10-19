@@ -266,6 +266,22 @@ async function main() {
     }
   }
 
+  // Multi Chat §2 tables: staff read their own tenant only; nobody else reads; no client writes.
+  for (const t of ['tenant_phone_numbers', 'sms_suppressions', 'integration_audit_log', 'call_ai_outputs', 'twilio_webhook_events']) {
+    for (const [as, bearer] of Object.entries(who)) {
+      const r = await http('GET', `/rest/v1/${t}?select=id&limit=1000`, bearer);
+      rec(`read ${t}`, as, r.status, `${count(r)} rows`, count(r) > 0);
+    }
+    const r = await http('POST', `/rest/v1/${t}`, f.staff.token, { tenant_id: tenant.id });
+    rec(`staff writes ${t}`, 'staff', r.status, '', r.status < 300);
+  }
+  {
+    const r = await http('GET', '/rest/v1/tenant_phone_numbers?select=tenant_id,e164', f.staff.token);
+    const rowsSeen = Array.isArray(r.json) ? r.json : [];
+    must('staff sees own tenant numbers', 'staff', r.status, `${rowsSeen.length} rows`, r.status === 200 && rowsSeen.length > 0);
+    rec("staff sees other tenants' numbers", 'staff', r.status, '', rowsSeen.some((x) => x.tenant_id !== tenant.id));
+  }
+
   // Internal tools.
   for (const [as, bearer] of [...Object.entries(who), ['staff', f.staff.token]]) {
     for (const [fn, body] of [['send-tenant-sms', { tenantId: tenant.id }], ['diag-twilio-a2p', { slug: 'zz-no-such-tenant' }],
