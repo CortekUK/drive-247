@@ -142,6 +142,16 @@ async function main() {
       rec(`list private bucket ${bucket}`, as, r.status, `${count(r)} entries`, count(r) > 0);
     }
   }
+  // Platform P1: the global master password table and its verifier.
+  for (const [as, bearer] of [...Object.entries(who), ['staff', f.staff.token]]) {
+    let r = await http('GET', '/rest/v1/global_admin_config?select=id', bearer);
+    rec('read global_admin_config', as, r.status, `${count(r)} rows`, count(r) > 0);
+    // Matches no row, so it can never change anything: it only proves the permission.
+    r = await http('PATCH', '/rest/v1/global_admin_config?master_email=eq.zz-no-such-row@invalid', bearer, { updated_at: '2000-01-01T00:00:00Z' });
+    rec('write global_admin_config (zero-row PATCH)', as, r.status, '', r.status < 300);
+    r = await http('POST', '/rest/v1/rpc/verify_global_master_password', bearer, { p_email: 'zz-no-such@invalid', p_password: 'x' });
+    rec('call verify_global_master_password', as, r.status, '', r.status === 200);
+  }
   for (const [as, bearer] of [...Object.entries(who), ['staff', f.staff.token]]) {
     const r = await http('POST', '/rest/v1/rpc/twilio_get_secrets', bearer, { p_tenant_id: tenant.id });
     rec('call Vault RPC twilio_get_secrets', as, r.status, '', r.status === 200);
