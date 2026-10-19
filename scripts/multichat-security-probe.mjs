@@ -39,11 +39,11 @@ const rows = [];
 const rec = (check, as, status, detail, exposed) => rows.push({ check, as, status, detail, result: exposed ? 'EXPOSED' : 'blocked' });
 const must = (check, as, status, detail, ok) => rows.push({ check, as, status, detail, result: ok ? 'ok' : 'BROKEN' });
 
-async function http(method, path, bearer, body, headers = {}) {
+async function http(method, path, bearer, body, headers = {}, raw) {
   const res = await fetch(URL + path, {
     method,
     headers: { apikey: ANON, Authorization: `Bearer ${bearer ?? ANON}`, ...(body && !(body instanceof URLSearchParams) ? { 'Content-Type': 'application/json' } : {}), ...headers },
-    body: body == null ? undefined : body instanceof URLSearchParams ? body : JSON.stringify(body),
+    body: raw != null ? raw : body == null ? undefined : body instanceof URLSearchParams ? body : JSON.stringify(body),
   });
   const text = await res.text();
   let json = null;
@@ -95,6 +95,9 @@ async function createFixture(tenantId) {
 }
 
 async function teardown() {
+  if (fx.cleanupPaths?.length) await svc.storage.from('customer-documents').remove(fx.cleanupPaths);
+  if (fx.cleanupHandover?.length) await svc.storage.from('rental-handover-photos').remove(fx.cleanupHandover);
+  if (fx.ivIds?.length) await svc.from('identity_verifications').delete().in('id', fx.ivIds);
   const ids = fx.customerIds;
   if (ids.length) {
     const { data: chans } = await svc.from('chat_channels').select('id').in('customer_id', ids);
@@ -107,6 +110,7 @@ async function teardown() {
       await svc.from('chat_channel_messages').delete().in('channel_id', chanIds);
       await svc.from('chat_channels').delete().in('id', chanIds);
     }
+    await svc.from('customer_documents').delete().in('customer_id', ids);
     await svc.from('customer_users').delete().in('customer_id', ids);
     await svc.from('customers').delete().in('id', ids);
   }
@@ -170,6 +174,97 @@ async function main() {
   must('staff reads own tenant channels', 'staff', r.status, `${count(r)} rows`, r.status === 200 && count(r) > 0);
   r = await http('GET', `/rest/v1/chat_channels?select=id&tenant_id=neq.${tenant.id}&limit=5000`, f.staff.token);
   rec("staff reads other tenants' channels", 'staff', r.status, `${count(r)} rows`, count(r) > 0);
+
+  // Platform P3 (A2): document buckets. Exposure first, then every v1 path that must keep working.
+  {
+    const tag = randomBytes(4).toString('hex');
+    const up = (bucket, objPath, bearer, upsert = false) => http('POST', `/storage/v1/object/${bucket}/${objPath}`, bearer,
+      undefined, { 'Content-Type': 'image/jpeg', ...(upsert ? { 'x-upsert': 'true' } : {}) }, `probe ${tag}`);
+    const exists = async (bucket, objPath) => {
+      const dir = objPath.split('/').slice(0, -1).join('/');
+      const { data } = await svc.storage.from(bucket).list(dir, { search: objPath.split('/').pop() });
+      return (data ?? []).length > 0;
+    };
+    const list = (bucket, prefix, bearer) => http('POST', `/storage/v1/object/list/${bucket}`, bearer, { prefix, limit: 1000 });
+
+    for (const [as, bearer] of Object.entries(who)) {
+      for (const [bucket, prefix] of [['customer-documents', ''], ['customer-documents', 'ai-verification/'], ['customer-documents', 'insurance/'], ['rental-handover-photos', '']]) {
+        const r = await list(bucket, prefix, bearer);
+        rec(`list ${bucket}/${prefix}`, as, r.status, `${count(r)} entries`, count(r) > 0);
+      }
+    }
+
+    // One document each for probe customers A (has a login) and B (no login).
+    const aPath = `zzprobe-${tag}/a.jpg`;
+    const bPath = `zzprobe-${tag}/b.jpg`;
+    fx.cleanupPaths = [aPath, bPath];
+    await svc.storage.from('customer-documents').upload(aPath, new Blob([`a ${tag}`], { type: 'image/jpeg' }), { contentType: 'image/jpeg' });
+    await svc.storage.from('customer-documents').upload(bPath, new Blob([`b ${tag}`], { type: 'image/jpeg' }), { contentType: 'image/jpeg' });
+    await svc.from('customer_documents').insert([
+      { customer_id: f.customerA, tenant_id: tenant.id, document_type: 'Other', document_name: `probe ${tag}`, file_url: `${URL}/storage/v1/object/public/customer-documents/${aPath}` },
+      { customer_id: f.customerB, tenant_id: tenant.id, document_type: 'Other', document_name: `probe ${tag}`, file_url: bPath },
+    ]).throwOnError();
+
+    let r = await http('GET', `/storage/v1/object/authenticated/customer-documents/${aPath}`, f.customer.token);
+    must('customer downloads own document (v1 use-customer-documents)', 'customer', r.status, '', r.status === 200);
+    // A public bucket serves an object by exact path on every route without consulting
+    // policy, so these two stay open until option B makes the bucket private.
+    r = await http('GET', `/storage/v1/object/authenticated/customer-documents/${bPath}`, f.customer.token);
+    rows.push({ check: "customer downloads another customer's document BY EXACT PATH", as: 'customer', status: r.status, detail: 'closed only by option B', result: r.status === 200 ? 'known-open' : 'blocked' });
+    r = await http('GET', `/storage/v1/object/authenticated/customer-documents/${bPath}`, f.staff.token);
+    must('staff downloads own-tenant document (v1 use-customer-documents)', 'staff', r.status, '', r.status === 200);
+    r = await http('GET', `/storage/v1/object/authenticated/customer-documents/${bPath}`, null);
+    rows.push({ check: 'anon downloads BY EXACT PATH (authenticated route)', as: 'anon', status: r.status, detail: 'closed only by option B', result: r.status === 200 ? 'known-open' : 'blocked' });
+    r = await http('GET', `/storage/v1/object/public/customer-documents/${bPath}`, null);
+    rows.push({ check: 'exact public URL still serves the file (A2 leaves this open)', as: 'anon', status: r.status, detail: 'closed only by option B', result: 'known-open' });
+
+    await http('DELETE', '/storage/v1/object/customer-documents', null, { prefixes: [bPath] });
+    rec('anon deletes a document', 'anon', '', '', !(await exists('customer-documents', bPath)));
+    await http('DELETE', '/storage/v1/object/customer-documents', f.customer.token, { prefixes: [bPath] });
+    rec("customer deletes another customer's document", 'customer', '', '', !(await exists('customer-documents', bPath)));
+    const newPath = `zzprobe-${tag}/new.jpg`;
+    fx.cleanupPaths.push(newPath);
+    r = await up('customer-documents', newPath, f.customer.token);
+    must('customer plain upload (v1 DocumentUploadDialog)', 'customer', r.status, '', r.status === 200);
+    r = await up('customer-documents', `zzprobe-${tag}/anon.jpg`, null);
+    fx.cleanupPaths.push(`zzprobe-${tag}/anon.jpg`);
+    must('anon plain upload (v1 booking insurance upload)', 'anon', r.status, '', r.status === 200);
+    await http('DELETE', '/storage/v1/object/customer-documents', f.staff.token, { prefixes: [bPath] });
+    must('staff removes own-tenant document (v1 rentals/[id], use-customer-documents)', 'staff', '', '', !(await exists('customer-documents', bPath)));
+
+    // v1 /verify: anonymous upsert into an OPEN session works; into a stale one it does not.
+    const sid = `zzprobe-${tag}`;
+    const { data: iv } = await svc.from('identity_verifications').insert({ session_id: sid, status: 'init', tenant_id: tenant.id }).select('id').single().throwOnError();
+    fx.ivIds = [iv.id];
+    const vPath = `ai-verification/${sid}/front.jpg`;
+    fx.cleanupPaths.push(vPath);
+    r = await up('customer-documents', vPath, null, true);
+    must('anon /verify upsert into open session (first write)', 'anon', r.status, '', r.status === 200);
+    r = await up('customer-documents', vPath, null, true);
+    must('anon /verify upsert into open session (overwrite)', 'anon', r.status, '', r.status === 200);
+    await svc.from('identity_verifications').update({ created_at: new Date(Date.now() - 3 * 86400_000).toISOString() }).eq('id', iv.id).throwOnError();
+    r = await up('customer-documents', vPath, null, true);
+    rec('anon upsert into a STALE session', 'anon', r.status, '', r.status === 200);
+    r = await list('customer-documents', `ai-verification/${sid}/`, null);
+    rec('anon lists a stale session folder', 'anon', r.status, `${count(r)} entries`, count(r) > 0);
+
+    // Handover photos: plain staff upload must keep working. The remove predicate is
+    // checked against existing rows, so no fixture handover is created on a real rental.
+    const hPath = `zzprobe-${tag}.jpg`;
+    fx.cleanupHandover = [hPath];
+    r = await up('rental-handover-photos', hPath, f.staff.token);
+    must('staff plain upload of a handover photo (v1 use-key-handover)', 'staff', r.status, '', r.status === 200);
+    const { data: own } = await svc.from('rental_handover_photos').select('file_path').eq('tenant_id', tenant.id).limit(1);
+    const { data: other } = await svc.from('rental_handover_photos').select('file_path').neq('tenant_id', tenant.id).limit(1);
+    if (own?.[0]) {
+      r = await http('POST', '/rest/v1/rpc/storage_ho_staff_can_access', f.staff.token, { p_name: own[0].file_path });
+      must('staff may remove own-tenant handover photo (predicate)', 'staff', r.status, String(r.json), r.json === true);
+    }
+    if (other?.[0]) {
+      r = await http('POST', '/rest/v1/rpc/storage_ho_staff_can_access', f.staff.token, { p_name: other[0].file_path });
+      rec("staff may remove another tenant's handover photo (predicate)", 'staff', r.status, String(r.json), r.json === true);
+    }
+  }
 
   // Internal tools.
   for (const [as, bearer] of [...Object.entries(who), ['staff', f.staff.token]]) {

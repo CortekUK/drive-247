@@ -1,0 +1,28 @@
+-- Rollback for 20261020120000_sec_p3_a2_document_buckets.sql
+-- WARNING: makes both buckets listable, overwritable and deletable by anyone again.
+
+BEGIN;
+DROP POLICY IF EXISTS cd_staff_select ON storage.objects;
+DROP POLICY IF EXISTS cd_staff_update ON storage.objects;
+DROP POLICY IF EXISTS cd_staff_delete ON storage.objects;
+DROP POLICY IF EXISTS cd_customer_select ON storage.objects;
+DROP POLICY IF EXISTS cd_customer_update ON storage.objects;
+DROP POLICY IF EXISTS cd_customer_delete ON storage.objects;
+DROP POLICY IF EXISTS cd_verify_select ON storage.objects;
+DROP POLICY IF EXISTS cd_verify_update ON storage.objects;
+DROP POLICY IF EXISTS ho_staff_select ON storage.objects;
+DROP POLICY IF EXISTS ho_staff_delete ON storage.objects;
+
+CREATE POLICY "Allow public reads" ON storage.objects FOR SELECT USING (bucket_id = 'customer-documents');
+CREATE POLICY "Authenticated users can view customer documents" ON storage.objects FOR SELECT USING (bucket_id = 'customer-documents');
+CREATE POLICY "Authenticated users can update customer documents" ON storage.objects FOR UPDATE USING (bucket_id = 'customer-documents');
+CREATE POLICY "Authenticated users can delete customer documents" ON storage.objects FOR DELETE USING (bucket_id = 'customer-documents');
+CREATE POLICY "Allow public reads from rental-handover-photos" ON storage.objects FOR SELECT USING (bucket_id = 'rental-handover-photos');
+CREATE POLICY "Allow authenticated deletes from rental-handover-photos" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'rental-handover-photos');
+
+DROP FUNCTION IF EXISTS public.storage_ho_staff_can_access(text);
+DROP FUNCTION IF EXISTS public.storage_verify_session_open(text);
+DROP FUNCTION IF EXISTS public.storage_cd_customer_can_access(text);
+DROP FUNCTION IF EXISTS public.storage_cd_staff_can_access(text);
+DROP FUNCTION IF EXISTS public.storage_cd_file_matches(text, text);
+COMMIT;
