@@ -594,13 +594,13 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
             TooltipTrigger so both land on the button. Wrapped the other way
             round the click went to the Tooltip root and the sheet never opened. */}
         <MessagesSheetV2
-          tooltip="Crossroads"
+          tooltip="Multi Chat"
           tooltipClassName={TIP}
           trigger={
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label="Crossroads — messages, texts, emails and calls"
+              aria-label="Multi Chat — messages, texts, emails and calls"
               className="relative text-muted-foreground hover:bg-primary/10 hover:text-foreground aria-expanded:bg-primary/10 aria-expanded:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))]"
             >
               <MessageCircle />

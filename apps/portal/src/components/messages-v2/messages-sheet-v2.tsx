@@ -186,7 +186,7 @@ function Panel({ onClose }: { onClose: () => void }) {
       <SheetHeader className="shrink-0 border-b border-border/60 px-5 py-4">
         <div className="flex items-center justify-between gap-2">
           <SheetTitle className="text-[15px] font-semibold tracking-tight">
-            Crossroads
+            Multi Chat
             {unreadThreads > 0 && (
               <span className="ml-2 inline-flex h-5 items-center rounded-full bg-primary/10 px-2 text-[11px] font-semibold text-primary">
                 {unreadThreads}

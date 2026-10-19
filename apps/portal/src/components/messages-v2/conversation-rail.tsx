@@ -264,10 +264,10 @@ export function ConversationRail({
             >
               <Link href="/"><ArrowLeft className="h-4 w-4" /></Link>
             </Button>
-            {/* "Crossroads" on v2 — where every channel (in-app, SMS, email,
+            {/* "Multi Chat" on v2 — where every channel (in-app, SMS, email,
                 calls) meets. This rail also serves v1 tenants, who keep
                 "Messages" until the area is widened. */}
-            <h1 className="truncate text-[15px] font-semibold tracking-tight">{v2Name ? "Crossroads" : "Messages"}</h1>
+            <h1 className="truncate text-[15px] font-semibold tracking-tight">{v2Name ? "Multi Chat" : "Messages"}</h1>
           </div>
         )}
         {/* The search, on its own row underneath. */}
