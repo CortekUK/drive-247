@@ -40,6 +40,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { storeTwilioAuthToken } from "../_shared/twilio-secrets.ts";
 import { getTenantTwilioCredentials, validateTenantConnection } from "../_shared/twilio-sms-client.ts";
 
 const TWILIO_API = "https://api.twilio.com/2010-04-01";
@@ -132,11 +133,12 @@ Deno.serve(async (req) => {
           console.warn("[twilio-numbers-v2] could not carry calling over:", e instanceof Error ? e.message : e);
         }
       }
+      // The token goes to Vault, never onto the tenants row.
+      await storeTwilioAuthToken(admin, tenantId!, token);
       return admin
         .from("tenants")
         .update({
           twilio_account_sid: sid,
-          twilio_auth_token: token,
           twilio_phone_number: number.phone_number,
           twilio_phone_number_sid: number.sid,
           integration_twilio_sms: true,

@@ -1,0 +1,49 @@
+-- Rollback for 20261019160000_multichat_sec_chat_voicemail_rls.sql
+-- WARNING: this RE-OPENS the public read/write holes described in that file.
+-- Only run it to recover from a regression, and re-apply the forward migration
+-- as soon as the regression is fixed.
+
+BEGIN;
+
+ALTER TABLE public.chat_channels DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_channel_messages DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_channel_participants DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS chat_channels_staff_select ON public.chat_channels;
+DROP POLICY IF EXISTS chat_channels_staff_insert ON public.chat_channels;
+DROP POLICY IF EXISTS chat_channels_staff_update ON public.chat_channels;
+DROP POLICY IF EXISTS chat_channels_customer_select ON public.chat_channels;
+DROP POLICY IF EXISTS chat_channels_customer_insert ON public.chat_channels;
+DROP POLICY IF EXISTS chat_channels_customer_update ON public.chat_channels;
+DROP POLICY IF EXISTS chat_messages_staff_select ON public.chat_channel_messages;
+DROP POLICY IF EXISTS chat_messages_staff_insert ON public.chat_channel_messages;
+DROP POLICY IF EXISTS chat_messages_staff_update ON public.chat_channel_messages;
+DROP POLICY IF EXISTS chat_messages_customer_select ON public.chat_channel_messages;
+DROP POLICY IF EXISTS chat_messages_customer_insert ON public.chat_channel_messages;
+DROP POLICY IF EXISTS chat_messages_customer_update ON public.chat_channel_messages;
+
+GRANT ALL ON public.chat_channels, public.chat_channel_messages, public.chat_channel_participants TO anon, authenticated;
+GRANT ALL ON public.voicemail_recordings TO anon, authenticated;
+CREATE POLICY "Service role manages voicemails" ON public.voicemail_recordings
+  FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS voicemails_staff_read ON storage.objects;
+DROP POLICY IF EXISTS voice_greetings_staff_read ON storage.objects;
+DROP POLICY IF EXISTS voice_greetings_staff_insert ON storage.objects;
+DROP POLICY IF EXISTS voice_greetings_staff_update ON storage.objects;
+DROP POLICY IF EXISTS voice_greetings_staff_delete ON storage.objects;
+UPDATE storage.buckets SET public = true WHERE id = 'voicemails';
+CREATE POLICY "Tenant users can read voicemails" ON storage.objects FOR SELECT USING (bucket_id = 'voicemails');
+CREATE POLICY "Service role can upload voicemails" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'voicemails');
+CREATE POLICY "Service role can delete voicemails" ON storage.objects FOR DELETE USING (bucket_id = 'voicemails');
+CREATE POLICY "Enable read access for all users" ON storage.objects FOR SELECT USING (true);
+-- The voice-greetings bucket is left in place (it may hold uploaded greetings).
+
+DROP FUNCTION IF EXISTS public.chat_customer_owns_pair(uuid, uuid);
+DROP FUNCTION IF EXISTS public.chat_customer_can_access_channel(uuid);
+DROP FUNCTION IF EXISTS public.chat_staff_can_access_channel(uuid);
+DROP FUNCTION IF EXISTS public.chat_staff_can_access_tenant(uuid);
+DROP FUNCTION IF EXISTS public.chat_auth_customer_ids();
+DROP FUNCTION IF EXISTS public.storage_staff_can_access_folder(text);
+
+COMMIT;

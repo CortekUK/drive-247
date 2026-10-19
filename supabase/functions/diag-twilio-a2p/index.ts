@@ -21,6 +21,8 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { requireInternalCaller } from '../_shared/internal-auth.ts';
+import { getTwilioSecrets } from '../_shared/twilio-secrets.ts';
 
 const API = 'https://api.twilio.com/2010-04-01';
 const MSG = 'https://messaging.twilio.com/v1';
@@ -30,23 +32,28 @@ Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
-  let slug = 'revtekrentals';
-  try { const b = await req.json(); if (b?.slug) slug = String(b.slug); } catch { /* default */ }
-
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
+  // Internal tool: service role or an active super admin only (see internal-auth.ts).
+  const denied = await requireInternalCaller(req, supabase, { allowSuperAdmin: true });
+  if (denied) return denied;
+
+  // No default tenant: a diagnostic must name the tenant it inspects.
+  let slug = '';
+  try { const b = await req.json(); if (b?.slug) slug = String(b.slug); } catch { /* no body */ }
+  if (!slug) return errorResponse('slug is required', 400);
 
   const { data: t, error } = await supabase
     .from('tenants')
-    .select('slug, twilio_account_sid, twilio_auth_token, twilio_phone_number, twilio_phone_number_sid, twilio_messaging_service_sid')
+    .select('id, slug, twilio_account_sid, twilio_phone_number, twilio_phone_number_sid, twilio_messaging_service_sid')
     .eq('slug', slug)
     .single();
   if (error || !t) return errorResponse(`Tenant ${slug} not found`, 404);
 
   const sid = (t as any).twilio_account_sid;
-  const tok = (t as any).twilio_auth_token;
+  const tok = (await getTwilioSecrets(supabase, (t as any).id)).authToken;
   if (!sid || !tok) return errorResponse('Tenant has no Twilio credentials stored', 400);
   const auth = `Basic ${btoa(`${sid}:${tok}`)}`;
 
@@ -118,7 +125,7 @@ Deno.serve(async (req) => {
     ok: true,
     all_campaigns_probe: { http: allCampaigns.status, body: allCampaigns.body },
     tenant: slug,
-    account_sid: sid,
+    account_sid: sid ? `${String(sid).slice(0, 6)}...${String(sid).slice(-4)}` : null,
     stored_messaging_service_sid: (t as any).twilio_messaging_service_sid,
     messaging_services: serviceDetail,
     brand_registrations: brandList,

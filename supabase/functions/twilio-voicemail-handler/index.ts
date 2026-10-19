@@ -122,8 +122,12 @@ Deno.serve(async (req) => {
       // Download and upload to Supabase Storage (so browser can access without Twilio auth)
       let finalRecordingUrl = twilioMp3Url;
       try {
-        const { data: tenantCreds } = await supabase.from('tenants')
-          .select('twilio_account_sid, twilio_auth_token').eq('id', tenantId).single();
+        const { data: tenantRow } = await supabase.from('tenants')
+          .select('twilio_account_sid').eq('id', tenantId).single();
+        const tenantCreds = {
+          twilio_account_sid: tenantRow?.twilio_account_sid as string | undefined,
+          authToken: await tenantTokenByTenantId(supabase, tenantId),
+        };
 
         // Second gate, now that the account is known: the recording must belong to the
         // SAME Twilio account as the credentials. tenantId comes from the query string,
@@ -132,8 +136,8 @@ Deno.serve(async (req) => {
           throw new Error('RecordingUrl does not belong to this tenant\'s Twilio account');
         }
 
-        const authHeader = tenantCreds?.twilio_account_sid && tenantCreds?.twilio_auth_token
-          ? `Basic ${btoa(`${tenantCreds.twilio_account_sid}:${tenantCreds.twilio_auth_token}`)}`
+        const authHeader = tenantCreds?.twilio_account_sid && tenantCreds?.authToken
+          ? `Basic ${btoa(`${tenantCreds.twilio_account_sid}:${tenantCreds.authToken}`)}`
           : undefined;
 
         const audioResponse = await fetch(twilioMp3Url, {

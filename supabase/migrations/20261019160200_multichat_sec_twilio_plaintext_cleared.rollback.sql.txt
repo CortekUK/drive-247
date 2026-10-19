@@ -1,0 +1,20 @@
+-- Rollback for 20261019160200_multichat_sec_twilio_plaintext_cleared.sql
+-- WARNING: puts the Twilio secrets back into plaintext columns that every
+-- signed-in session can read. Only for recovering from a regression in a
+-- function that still reads plaintext; re-apply the forward migration after.
+
+BEGIN;
+
+ALTER TABLE public.tenants DROP CONSTRAINT IF EXISTS tenants_twilio_secrets_not_plaintext;
+
+UPDATE public.tenants t
+   SET twilio_auth_token = s.auth_token,
+       twilio_api_key_secret = s.api_key_secret
+  FROM (SELECT id, (public.twilio_get_secrets(id)).* FROM public.tenants
+         WHERE twilio_auth_token_vault_id IS NOT NULL OR twilio_api_key_secret_vault_id IS NOT NULL) s
+ WHERE t.id = s.id;
+
+COMMENT ON COLUMN public.tenants.twilio_auth_token IS NULL;
+COMMENT ON COLUMN public.tenants.twilio_api_key_secret IS NULL;
+
+COMMIT;

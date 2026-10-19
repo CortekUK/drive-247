@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors } from '../_shared/cors.ts';
-import { twilioSignatureGate, formDataToParams } from '../_shared/twilio-signature.ts';
+import { twilioSignatureGate, formDataToParams, tenantTokenByTenantId } from '../_shared/twilio-signature.ts';
 
 /**
  * twilio-voice-inbound
@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
 
     const { data: directMatch } = await supabase
       .from('tenants')
-      .select('id, company_name, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number, call_recording_enabled, forwarding_caller_id_mode, twilio_auth_token')
+      .select('id, company_name, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number, call_recording_enabled, forwarding_caller_id_mode')
       .eq('twilio_phone_number', to)
       .eq('twilio_voice_enabled', true)
       .single();
@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
       const altTo = to.startsWith('+') ? to.substring(1) : `+${to}`;
       const { data: altMatch } = await supabase
         .from('tenants')
-        .select('id, company_name, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number, call_recording_enabled, forwarding_caller_id_mode, twilio_auth_token')
+        .select('id, company_name, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number, call_recording_enabled, forwarding_caller_id_mode')
         .eq('twilio_phone_number', altTo)
         .eq('twilio_voice_enabled', true)
         .single();
@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
     if (!isPreview) {
       const reject = await twilioSignatureGate(
         req,
-        (tenant as any).twilio_auth_token,
+        await tenantTokenByTenantId(supabase, tenant.id),
         formDataToParams(formData),
         'twilio-voice-inbound',
       );

@@ -955,10 +955,11 @@ function Voicemail({
   const fileRef = useRef<HTMLInputElement>(null);
 
   /**
-   * Into the existing PUBLIC `voicemails` bucket — it has to be public, since
-   * Twilio's `<Play>` fetches the file with no credentials. Tenant-prefixed
-   * like `twilio-voicemail-handler`'s recordings; the prefix is tidiness, not
-   * security, so nothing secret goes in. The demo uploads nothing.
+   * Into the PUBLIC `voice-greetings` bucket — it has to be public, since
+   * Twilio's `<Play>` fetches the file with no credentials, so it holds
+   * greetings and nothing else. Recordings and voicemails live in the private
+   * `voicemails` bucket. Uploads are limited to the tenant's own folder by
+   * storage policy (migration 20261019160000). The demo uploads nothing.
    */
   const upload = async (file: File) => {
     if (file.size > 5 * 1024 * 1024) {
@@ -973,9 +974,9 @@ function Voicemail({
       } else {
         const ext = file.name.split(".").pop()?.toLowerCase() || "mp3";
         const path = `${tenant.id}/greeting-${Date.now()}.${ext}`;
-        const { error: upErr } = await supabase.storage.from("voicemails").upload(path, file, { contentType: file.type || "audio/mpeg", upsert: false });
+        const { error: upErr } = await supabase.storage.from("voice-greetings").upload(path, file, { contentType: file.type || "audio/mpeg", upsert: false });
         if (upErr) throw upErr;
-        const { data } = supabase.storage.from("voicemails").getPublicUrl(path);
+        const { data } = supabase.storage.from("voice-greetings").getPublicUrl(path);
         if (!data?.publicUrl) throw new Error("Couldn't resolve the uploaded file's address");
         await invokeVoice("update-forwarding", tenant.id, { voicemailGreetingUrl: data.publicUrl });
         refreshAll();

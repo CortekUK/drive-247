@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { resolveStaffSender, loadOwnedConversation } from '../_shared/conversation-ownership.ts';
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -18,15 +19,6 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) return errorResponse('Unauthorized', 401);
 
-    // Get app user
-    const { data: appUser } = await supabase
-      .from('app_users')
-      .select('id, tenant_id, role, is_super_admin')
-      .eq('auth_user_id', user.id)
-      .single();
-
-    if (!appUser) return errorResponse('User not found', 403);
-
     /* `subject` and `metadata` are BOTH OPTIONAL and both new. Older clients
        send neither and get exactly the behaviour they always got: the
        "Message from <tenant>" subject below, and no metadata on the row. */
@@ -37,16 +29,17 @@ Deno.serve(async (req) => {
     if (!content) return errorResponse('content is required');
     if (!channelId || !customerId) return errorResponse('channelId and customerId are required');
 
-    // Resolve tenant
-    const tenantId = appUser.tenant_id || (appUser.is_super_admin ? bodyTenantId : null);
-    if (!tenantId) return errorResponse('No tenant context', 403);
+    // Resolve the caller's tenant, then load the customer and conversation
+    // INSIDE it: a staff user may only email their own tenant's customers.
+    const sender = await resolveStaffSender(supabase, user.id, bodyTenantId);
+    if (!sender.ok) return errorResponse(sender.message, sender.status);
+    const { appUser, tenantId } = sender;
 
-    // Get customer email
-    const { data: customer } = await supabase
-      .from('customers')
-      .select('email, name')
-      .eq('id', customerId)
-      .single();
+    const owned = await loadOwnedConversation<{ email: string | null; name: string | null }>(
+      supabase, tenantId, customerId, channelId, 'email, name',
+    );
+    if (!owned.ok) return errorResponse(owned.message, owned.status);
+    const customer = owned.customer;
 
     if (!customer?.email) {
       return errorResponse('Customer has no email address on file');

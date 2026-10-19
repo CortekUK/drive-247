@@ -1,3 +1,4 @@
+import { authTokenForAccountSid, authTokenForTenant } from './twilio-secrets.ts';
 /**
  * X-Twilio-Signature validation.
  *
@@ -204,27 +205,14 @@ export async function tenantTokenByAccountSid(
   supabase: any,
   accountSid: string | null | undefined,
 ): Promise<string | null> {
-  if (!accountSid) return null;
-  const { data } = await supabase
-    .from('tenants')
-    .select('twilio_auth_token')
-    .eq('twilio_account_sid', accountSid)
-    .not('twilio_auth_token', 'is', null)
-    .limit(1);
-  return data?.[0]?.twilio_auth_token ?? null;
+  return authTokenForAccountSid(supabase, accountSid);
 }
 
 export async function tenantTokenByTenantId(
   supabase: any,
   tenantId: string | null | undefined,
 ): Promise<string | null> {
-  if (!tenantId) return null;
-  const { data } = await supabase
-    .from('tenants')
-    .select('twilio_auth_token')
-    .eq('id', tenantId)
-    .limit(1);
-  return data?.[0]?.twilio_auth_token ?? null;
+  return authTokenForTenant(supabase, tenantId);
 }
 
 /** For status callbacks, which name a CallSid rather than a tenant. */

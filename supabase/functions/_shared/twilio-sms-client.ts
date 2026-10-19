@@ -3,6 +3,7 @@
 // and call Twilio's API on their behalf. Twilio bills them directly.
 
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import { getTwilioSecrets } from './twilio-secrets.ts';
 
 const TWILIO_API_BASE = 'https://api.twilio.com/2010-04-01';
 
@@ -66,7 +67,7 @@ export async function getTenantTwilioCredentials(
 ): Promise<TenantTwilioCredentials> {
   const { data, error } = await supabaseClient
     .from('tenants')
-    .select('twilio_account_sid, twilio_auth_token, twilio_phone_number, twilio_phone_number_sid, integration_twilio_sms')
+    .select('twilio_account_sid, twilio_phone_number, twilio_phone_number_sid, integration_twilio_sms')
     .eq('id', tenantId)
     .single();
 
@@ -74,9 +75,12 @@ export async function getTenantTwilioCredentials(
     throw new Error(`Failed to fetch tenant Twilio credentials: ${error.message}`);
   }
 
+  // The token lives in Vault (see twilio-secrets.ts), not on the tenants row.
+  const { authToken } = await getTwilioSecrets(supabaseClient, tenantId);
+
   return {
     sid: (data as any)?.twilio_account_sid || '',
-    authToken: (data as any)?.twilio_auth_token || '',
+    authToken,
     phoneNumber: (data as any)?.twilio_phone_number || '',
     phoneNumberSid: (data as any)?.twilio_phone_number_sid || null,
     isConfigured: !!(data as any)?.integration_twilio_sms,

@@ -6,6 +6,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { storeTwilioAuthToken } from '../_shared/twilio-secrets.ts';
 import {
   getTenantTwilioCredentials,
   sendTenantSMS,
@@ -107,12 +108,12 @@ Deno.serve(async (req) => {
           console.warn('[Twilio] Failed to auto-configure webhooks:', webhookErr.message);
         }
 
-        // Step 4: Save to DB
+        // Step 4: Save to DB. The token goes to Vault, never onto the row.
+        await storeTwilioAuthToken(supabase, tenantId, authToken);
         const { error: updateError } = await supabase
           .from('tenants')
           .update({
             twilio_account_sid: accountSid,
-            twilio_auth_token: authToken,
             twilio_phone_number: number.phoneNumber,
             twilio_phone_number_sid: number.sid,
             integration_twilio_sms: true,
@@ -213,11 +214,11 @@ Deno.serve(async (req) => {
       // Clears the tenant's Twilio creds from our DB. Does NOT touch the tenant's
       // Twilio account — they own it, we just forget it.
       case 'disconnect': {
+        await storeTwilioAuthToken(supabase, tenantId, null);
         const { error: updateError } = await supabase
           .from('tenants')
           .update({
             twilio_account_sid: null,
-            twilio_auth_token: null,
             twilio_phone_number: null,
             twilio_phone_number_sid: null,
             integration_twilio_sms: false,

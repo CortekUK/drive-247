@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from '../_shared/twilio-sms-client.ts';
+import { resolveStaffSender, loadOwnedConversation, loadOwnedUnknownThread } from '../_shared/conversation-ownership.ts';
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -19,15 +20,6 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) return errorResponse('Unauthorized', 401);
 
-    // Get app user
-    const { data: appUser } = await supabase
-      .from('app_users')
-      .select('id, tenant_id, role, is_super_admin')
-      .eq('auth_user_id', user.id)
-      .single();
-
-    if (!appUser) return errorResponse('User not found', 403);
-
     /* `metadata` is optional and new. Older clients omit it and the row is
        written with {} exactly as before. */
     const {
@@ -36,9 +28,11 @@ Deno.serve(async (req) => {
 
     if (!content) return errorResponse('content is required');
 
-    // Resolve tenant
-    const tenantId = appUser.tenant_id || (appUser.is_super_admin ? bodyTenantId : null);
-    if (!tenantId) return errorResponse('No tenant context', 403);
+    // Resolve the caller's tenant. Everything below is pinned to it: a staff
+    // user may only message their own tenant's customers and threads.
+    const sender = await resolveStaffSender(supabase, user.id, bodyTenantId);
+    if (!sender.ok) return errorResponse(sender.message, sender.status);
+    const { appUser, tenantId } = sender;
 
     // Get Twilio credentials
     const creds = await getTenantTwilioCredentials(supabase, tenantId);
@@ -48,12 +42,9 @@ Deno.serve(async (req) => {
 
     // --- Path A: Send to known customer (via channelId/customerId) ---
     if (channelId && customerId) {
-      // Get customer phone number
-      const { data: customer } = await supabase
-        .from('customers')
-        .select('phone')
-        .eq('id', customerId)
-        .single();
+      const owned = await loadOwnedConversation<{ phone: string | null }>(supabase, tenantId, customerId, channelId, 'phone');
+      if (!owned.ok) return errorResponse(owned.message, owned.status);
+      const customer = owned.customer;
 
       if (!customer?.phone) {
         return errorResponse('Customer has no phone number on file');
@@ -112,14 +103,9 @@ Deno.serve(async (req) => {
       let targetPhone = phoneNumber;
 
       if (threadId) {
-        const { data: thread } = await supabase
-          .from('sms_unknown_threads')
-          .select('phone_number')
-          .eq('id', threadId)
-          .single();
-
-        if (!thread) return errorResponse('Unknown thread not found');
-        targetPhone = thread.phone_number;
+        const owned = await loadOwnedUnknownThread(supabase, tenantId, threadId);
+        if (!owned.ok) return errorResponse(owned.message, owned.status);
+        targetPhone = owned.thread.phone_number;
       }
 
       if (!targetPhone) return errorResponse('No phone number to send to');

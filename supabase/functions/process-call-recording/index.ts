@@ -64,18 +64,20 @@ Deno.serve(async (req) => {
     const mp3Url = `${recordingUrl}.mp3`;
 
     // Get tenant's Twilio credentials for authenticated download
-    const { data: tenantCreds } = await supabase
+    const { data: tenantRow } = await supabase
       .from('tenants')
-      .select('twilio_account_sid, twilio_auth_token')
+      .select('twilio_account_sid')
       .eq('id', callLog.tenant_id)
       .single();
+    const tenantToken = await tenantTokenByTenantId(supabase, callLog.tenant_id);
+    const tenantCreds = { twilio_account_sid: tenantRow?.twilio_account_sid as string | undefined, authToken: tenantToken };
 
     // Signature first: proves Twilio sent this at all. The URL pin below stays as a
     // second layer, because a valid signature still does not make an arbitrary
     // RecordingUrl safe to fetch with credentials attached.
     if (await twilioSignatureGate(
       req,
-      await tenantTokenByTenantId(supabase, callLog.tenant_id),
+      tenantToken,
       formDataToParams(formData),
       'process-call-recording',
     )) {
@@ -93,8 +95,8 @@ Deno.serve(async (req) => {
     // Step 2: Download the recording (with Twilio auth)
     let audioBlob: Blob;
     try {
-      const authHeader = tenantCreds?.twilio_account_sid && tenantCreds?.twilio_auth_token
-        ? `Basic ${btoa(`${tenantCreds.twilio_account_sid}:${tenantCreds.twilio_auth_token}`)}`
+      const authHeader = tenantCreds?.twilio_account_sid && tenantCreds?.authToken
+        ? `Basic ${btoa(`${tenantCreds.twilio_account_sid}:${tenantCreds.authToken}`)}`
         : undefined;
 
       const audioResponse = await fetch(mp3Url, {

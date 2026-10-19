@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { requireInternalCaller } from '../_shared/internal-auth.ts';
 import {
   getTenantTwilioCredentials,
   sendTenantSMS,
@@ -14,6 +15,11 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Server-to-server only. This sends from the named tenant's own number, so
+    // neither the anon key nor any user session may reach it.
+    const denied = await requireInternalCaller(req, supabase);
+    if (denied) return denied;
 
     const { tenantId, to, body } = await req.json();
 

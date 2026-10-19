@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { getTenantTwilioCredentials } from '../_shared/twilio-sms-client.ts';
+import { getTwilioSecrets, storeTwilioApiKeySecret } from '../_shared/twilio-secrets.ts';
 
 const TWILIO_API_BASE = 'https://api.twilio.com/2010-04-01';
 
@@ -169,10 +170,17 @@ async function ensureLiveApiKey(
 
   // Twilio returns the secret exactly once, at creation. If this write is lost the
   // new key is unusable and unrecoverable, so a failure here must not be swallowed.
-  const { error: persistError } = await supabase
-    .from('tenants')
-    .update({ twilio_api_key_sid: fresh.sid, twilio_api_key_secret: fresh.secret })
-    .eq('id', tenantId);
+  // The secret goes to Vault; only the key SID sits on the tenants row.
+  let persistError: unknown = null;
+  try {
+    await storeTwilioApiKeySecret(supabase, tenantId, fresh.secret);
+    ({ error: persistError } = await supabase
+      .from('tenants')
+      .update({ twilio_api_key_sid: fresh.sid })
+      .eq('id', tenantId));
+  } catch (e) {
+    persistError = e;
+  }
 
   if (persistError) {
     console.error('[manage-twilio-voice] Failed to persist replacement API Key:', persistError);
@@ -308,13 +316,13 @@ Deno.serve(async (req) => {
           }
         );
 
-        // Step 4: Save everything to DB
+        // Step 4: Save everything to DB (the API key secret to Vault)
+        await storeTwilioApiKeySecret(supabase, tenantId, apiKeySecret);
         const { error: updateError } = await supabase
           .from('tenants')
           .update({
             twilio_twiml_app_sid: twimlAppSid,
             twilio_api_key_sid: apiKeySid,
-            twilio_api_key_secret: apiKeySecret,
             twilio_voice_enabled: true,
             twilio_voice_webhook_configured: true,
           })
@@ -339,19 +347,20 @@ Deno.serve(async (req) => {
         // Fetch tenant voice config
         const { data: tenant, error: tenantError } = await supabase
           .from('tenants')
-          .select('twilio_account_sid, twilio_auth_token, twilio_twiml_app_sid, twilio_api_key_sid, twilio_api_key_secret, twilio_voice_enabled')
+          .select('twilio_account_sid, twilio_twiml_app_sid, twilio_api_key_sid, twilio_voice_enabled')
           .eq('id', tenantId)
           .single();
 
         if (tenantError || !tenant) {
           return errorResponse('Failed to fetch tenant config', 500);
         }
+        const secrets = await getTwilioSecrets(supabase, tenantId);
 
         if (!tenant.twilio_voice_enabled || !tenant.twilio_twiml_app_sid) {
           return errorResponse('Voice is not enabled for this tenant. Run setup first.', 400);
         }
 
-        if (!tenant.twilio_api_key_sid || !tenant.twilio_api_key_secret) {
+        if (!tenant.twilio_api_key_sid || !secrets.apiKeySecret) {
           return errorResponse('API Key not found. Please re-run voice setup.', 400);
         }
 
@@ -361,9 +370,9 @@ Deno.serve(async (req) => {
           supabase,
           tenantId,
           tenant.twilio_account_sid,
-          tenant.twilio_auth_token,
+          secrets.authToken,
           tenant.twilio_api_key_sid,
-          tenant.twilio_api_key_secret
+          secrets.apiKeySecret
         );
 
         const accessToken = await createAccessToken(
@@ -511,12 +520,12 @@ Deno.serve(async (req) => {
         }
 
         // Clear DB
+        await storeTwilioApiKeySecret(supabase, tenantId, null);
         const { error: updateError } = await supabase
           .from('tenants')
           .update({
             twilio_twiml_app_sid: null,
             twilio_api_key_sid: null,
-            twilio_api_key_secret: null,
             twilio_voice_enabled: false,
             twilio_voice_webhook_configured: false,
           })
@@ -549,7 +558,14 @@ Deno.serve(async (req) => {
           updateFields.forwarding_caller_id_mode = params.forwardingCallerIdMode;
         }
         if (params.voicemailGreetingUrl !== undefined) {
-          updateFields.voicemail_greeting_url = params.voicemailGreetingUrl || null;
+          // Twilio <Play>s this URL, and it is written into TwiML. Accept only a
+          // file in this tenant's own folder of the public greetings bucket.
+          const greetingPrefix = `${supabaseUrl}/storage/v1/object/public/voice-greetings/${tenantId}/`;
+          const greeting = typeof params.voicemailGreetingUrl === 'string' ? params.voicemailGreetingUrl.trim() : '';
+          if (greeting && (!greeting.startsWith(greetingPrefix) || /["'<>&\s]/.test(greeting.slice(greetingPrefix.length)))) {
+            return errorResponse('Voicemail greeting must be a file uploaded from this page.', 400);
+          }
+          updateFields.voicemail_greeting_url = greeting || null;
         }
         if (params.forwardingNumber !== undefined) {
           // Validate: forwarding number must not be the same as the Twilio number

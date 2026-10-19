@@ -13,6 +13,8 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { requireInternalCaller } from '../_shared/internal-auth.ts';
+import { getTwilioSecrets } from '../_shared/twilio-secrets.ts';
 
 const API = 'https://api.twilio.com/2010-04-01';
 
@@ -20,28 +22,34 @@ Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
-  let slug = 'revtekrentals';
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  );
+  // Internal tool: service role or an active super admin only (see internal-auth.ts).
+  const denied = await requireInternalCaller(req, supabase, { allowSuperAdmin: true });
+  if (denied) return denied;
+
+  // No default tenant: a diagnostic must name the tenant it inspects.
+  let slug = '';
   let sids: string[] = [];
   try {
     const b = await req.json();
     if (b?.slug) slug = String(b.slug);
     if (Array.isArray(b?.sids)) sids = b.sids.map(String);
-  } catch { /* defaults */ }
-
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-  );
+  } catch { /* no body */ }
+  if (!slug) return errorResponse('slug is required', 400);
 
   const { data: t, error } = await supabase
     .from('tenants')
-    .select('slug, twilio_account_sid, twilio_auth_token, twilio_phone_number, forwarding_number, forwarding_caller_id_mode')
+    .select('id, slug, twilio_account_sid, twilio_phone_number, forwarding_number, forwarding_caller_id_mode')
     .eq('slug', slug)
     .single();
   if (error || !t) return errorResponse(`Tenant ${slug} not found`, 404);
 
   const acct = (t as any).twilio_account_sid;
-  const tok = (t as any).twilio_auth_token;
+  const secrets = await getTwilioSecrets(supabase, (t as any).id);
+  const tok = secrets.authToken;
   if (!acct || !tok) return errorResponse('Tenant has no Twilio credentials stored', 400);
   const auth = `Basic ${btoa(`${acct}:${tok}`)}`;
 
@@ -219,12 +227,12 @@ Deno.serve(async (req) => {
   //     fail only in the browser. Authenticate AS the key to prove the pair is live.
   const { data: keyRow } = await supabase
     .from('tenants')
-    .select('twilio_api_key_sid, twilio_api_key_secret, twilio_twiml_app_sid, twilio_voice_enabled')
+    .select('twilio_api_key_sid, twilio_twiml_app_sid, twilio_voice_enabled')
     .eq('slug', slug)
     .single();
   let apiKeyCheck: Record<string, unknown> = { checked: false };
   const kSid = (keyRow as any)?.twilio_api_key_sid;
-  const kSec = (keyRow as any)?.twilio_api_key_secret;
+  const kSec = secrets.apiKeySecret;
   if (kSid && kSec) {
     const r = await fetch(`${API}/Accounts/${acct}/IncomingPhoneNumbers.json?PageSize=1`, {
       headers: { Authorization: `Basic ${btoa(`${kSid}:${kSec}`)}` },
@@ -232,7 +240,6 @@ Deno.serve(async (req) => {
     apiKeyCheck = {
       checked: true,
       key_sid: kSid,
-      secret_length: String(kSec).length,
       authenticates: r.ok,
       http: r.status,
       note: r.ok
