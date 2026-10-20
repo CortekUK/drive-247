@@ -1,9 +1,15 @@
 import type { Config } from "tailwindcss";
 import sharedV2Theme from "../../shared/portal-v2/theme.json";
 
-/** The shared portal v2 colours (`text-v2-muted-fg` …), the same names the customer portal's build generates. */
+/**
+ * The shared portal v2 colours (`text-v2-muted-fg` …), the same names the
+ * customer portal's build generates; each falls back to its shadcn twin outside
+ * `.v2-theme`. `<alpha-value>` is required: Tailwind 3 cannot put an opacity
+ * modifier (`bg-v2-primary/40`) on a `var()` that carries a fallback, and
+ * silently drops the class without it.
+ */
 const sharedV2Colors = Object.fromEntries(
-  Object.entries(sharedV2Theme.colors).map(([name, token]) => [name, `hsl(var(${token}))`]),
+  Object.entries(sharedV2Theme.colors).map(([name, { token, fallback }]) => [name, `hsl(var(${token}, var(${fallback})) / <alpha-value>)`]),
 );
 
 export default {

@@ -67,7 +67,7 @@ css = `@source "../../app/(northwind)";\n@source "../../app/(northwind-v2)";\n@s
 // name means one token in both builds.
 const sharedTheme = JSON.parse(fs.readFileSync(path.join(ROOT, 'shared/portal-v2/theme.json'), 'utf8'));
 const themeLines = [
-  ...Object.entries(sharedTheme.colors).map(([name, token]) => `  --color-${name}: hsl(var(${token}));`),
+  ...Object.entries(sharedTheme.colors).map(([name, { token, fallback }]) => `  --color-${name}: hsl(var(${token}, var(${fallback})));`),
   ...Object.entries(sharedTheme.fontFamily).map(([name, stack]) => `  --font-${name}: ${stack.join(', ')};`),
 ];
 css += `\n@theme inline {\n${themeLines.join('\n')}\n}\n`;

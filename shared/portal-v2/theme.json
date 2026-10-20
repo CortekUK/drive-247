@@ -1,31 +1,105 @@
 {
-  "//": "Colour utilities for shared/portal-v2 components: `text-v2-muted-fg`, `bg-v2-primary/40` … Each maps to a token in tokens.css. Read by apps/portal/tailwind.config.ts (Tailwind 3) and scripts/build-northwind-css.mjs (Tailwind 4), so both builds generate the same class names.",
+  "//": "Colour utilities for shared/portal-v2 components: `text-v2-muted-fg`, `bg-v2-primary/40` \u2026 Each reads its token in tokens.css and, outside the v2 theme (the operator portal's v1 tenants, where tokens.css defines nothing), falls back to the shadcn colour it stands in for, so a shared component renders exactly as the semantic class it replaced: hsl(var(--v2-foreground, var(--foreground))). --v2-hover and --v2-row-hover fall back to --muted as the ui-v2 table does; --v2-link to --primary as the ui-v2 link does. Read by apps/portal/tailwind.config.ts (Tailwind 3) and scripts/build-northwind-css.mjs (Tailwind 4).",
   "colors": {
-    "v2-bg": "--v2-background",
-    "v2-fg": "--v2-foreground",
-    "v2-card": "--v2-card",
-    "v2-card-fg": "--v2-card-foreground",
-    "v2-popover": "--v2-popover",
-    "v2-popover-fg": "--v2-popover-foreground",
-    "v2-primary": "--v2-primary",
-    "v2-primary-fg": "--v2-primary-foreground",
-    "v2-primary-hover": "--v2-primary-hover",
-    "v2-muted": "--v2-muted",
-    "v2-muted-fg": "--v2-muted-foreground",
-    "v2-muted-on-tint": "--v2-muted-on-tint",
-    "v2-accent-fg": "--v2-accent-foreground",
-    "v2-hover": "--v2-hover",
-    "v2-row-hover": "--v2-row-hover",
-    "v2-link": "--v2-link",
-    "v2-border": "--v2-border",
-    "v2-ring": "--v2-ring",
-    "v2-chart-1": "--v2-chart-1",
-    "v2-chart-2": "--v2-chart-2",
-    "v2-chart-3": "--v2-chart-3",
-    "v2-chart-4": "--v2-chart-4",
-    "v2-chart-5": "--v2-chart-5"
+    "v2-bg": {
+      "token": "--v2-background",
+      "fallback": "--background"
+    },
+    "v2-fg": {
+      "token": "--v2-foreground",
+      "fallback": "--foreground"
+    },
+    "v2-card": {
+      "token": "--v2-card",
+      "fallback": "--card"
+    },
+    "v2-card-fg": {
+      "token": "--v2-card-foreground",
+      "fallback": "--card-foreground"
+    },
+    "v2-popover": {
+      "token": "--v2-popover",
+      "fallback": "--popover"
+    },
+    "v2-popover-fg": {
+      "token": "--v2-popover-foreground",
+      "fallback": "--popover-foreground"
+    },
+    "v2-primary": {
+      "token": "--v2-primary",
+      "fallback": "--primary"
+    },
+    "v2-primary-fg": {
+      "token": "--v2-primary-foreground",
+      "fallback": "--primary-foreground"
+    },
+    "v2-primary-hover": {
+      "token": "--v2-primary-hover",
+      "fallback": "--primary-hover"
+    },
+    "v2-muted": {
+      "token": "--v2-muted",
+      "fallback": "--muted"
+    },
+    "v2-muted-fg": {
+      "token": "--v2-muted-foreground",
+      "fallback": "--muted-foreground"
+    },
+    "v2-muted-on-tint": {
+      "token": "--v2-muted-on-tint",
+      "fallback": "--muted-foreground"
+    },
+    "v2-accent-fg": {
+      "token": "--v2-accent-foreground",
+      "fallback": "--accent-foreground"
+    },
+    "v2-hover": {
+      "token": "--v2-hover",
+      "fallback": "--muted"
+    },
+    "v2-row-hover": {
+      "token": "--v2-row-hover",
+      "fallback": "--muted"
+    },
+    "v2-link": {
+      "token": "--v2-link",
+      "fallback": "--primary"
+    },
+    "v2-border": {
+      "token": "--v2-border",
+      "fallback": "--border"
+    },
+    "v2-ring": {
+      "token": "--v2-ring",
+      "fallback": "--ring"
+    },
+    "v2-chart-1": {
+      "token": "--v2-chart-1",
+      "fallback": "--chart-1"
+    },
+    "v2-chart-2": {
+      "token": "--v2-chart-2",
+      "fallback": "--chart-2"
+    },
+    "v2-chart-3": {
+      "token": "--v2-chart-3",
+      "fallback": "--chart-3"
+    },
+    "v2-chart-4": {
+      "token": "--v2-chart-4",
+      "fallback": "--chart-4"
+    },
+    "v2-chart-5": {
+      "token": "--v2-chart-5",
+      "fallback": "--chart-5"
+    }
   },
   "fontFamily": {
-    "heading": ["var(--font-manrope)", "ui-sans-serif", "system-ui", "sans-serif"]
+    "heading": [
+      "var(--font-manrope)",
+      "ui-sans-serif",
+      "system-ui",
+      "sans-serif"
+    ]
   }
 }
