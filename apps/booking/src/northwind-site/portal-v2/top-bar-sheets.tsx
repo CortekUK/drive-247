@@ -38,6 +38,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@nw/component
 import { supabase } from '@nw/integrations/supabase/client';
 import { useTenant } from '@nw/contexts/TenantContext';
 import { useCustomer } from '@nw/hooks/use-customer';
+import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import {
   useCustomerNotifications,
   type CustomerNotification,
@@ -551,8 +552,14 @@ const initialsOf = (name: string) =>
     .toUpperCase()
     .slice(0, 2) || '?';
 
-/** The rental company's mark: its logo where it has one, else its initials. */
-export function CompanyAvatar({ name, logoUrl, className }: { name: string; logoUrl?: string | null; className?: string }) {
+/**
+ * The rental company's mark: the same square mark the portal's sidebar shows
+ * at the top of the rail (the tenant's favicon, `useTenantBranding`), whole
+ * the circle; its initials when it has none. Not `logo_url`: that is the wide
+ * wordmark, which shrinks to an unreadable sliver in a circle.
+ */
+export function CompanyAvatar({ name, className }: { name: string; className?: string }) {
+  const { faviconUrl } = useTenantBranding();
   return (
     <span
       className={cn(
@@ -560,7 +567,7 @@ export function CompanyAvatar({ name, logoUrl, className }: { name: string; logo
         className,
       )}
     >
-      {logoUrl ? <img src={logoUrl} alt="" className="size-full object-contain p-1.5" /> : initialsOf(name)}
+      {faviconUrl ? <img src={faviconUrl} alt="" className="size-full object-contain" /> : initialsOf(name)}
     </span>
   );
 }
@@ -602,7 +609,7 @@ function MessagesPanel({ unread, onClose }: { unread: number; onClose: () => voi
                 hasUnread && 'bg-pv-primary/[0.03]',
               )}
             >
-              <CompanyAvatar name={companyName} logoUrl={tenant?.logo_url} className="size-9" />
+              <CompanyAvatar name={companyName} className="size-9" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-3">
                   <p className={cn('truncate text-[13px] leading-snug', hasUnread ? 'font-semibold text-pv-fg' : 'font-medium text-pv-fg/80')}>

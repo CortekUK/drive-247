@@ -154,7 +154,7 @@ export default function PortalMessagesPage() {
               aria-current="true"
               className="relative flex w-full items-center gap-3.5 rounded-xl bg-pv-primary/10 px-2 py-3 text-left"
             >
-              <CompanyAvatar name={companyName} logoUrl={tenant?.logo_url} />
+              <CompanyAvatar name={companyName} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
                   <p className="truncate text-[13px] font-medium text-pv-fg">{companyName}</p>
@@ -204,7 +204,7 @@ export default function PortalMessagesPage() {
           <Link href="/portal" aria-label="Back to the portal" className={ROUND_ICON}>
             <ArrowLeft aria-hidden className="size-4" />
           </Link>
-          <CompanyAvatar name={companyName} logoUrl={tenant?.logo_url} className="size-8" />
+          <CompanyAvatar name={companyName} className="size-8" />
           <p className="min-w-0 truncate text-[14px] font-semibold text-pv-fg">{companyName}</p>
         </header>
 
@@ -340,7 +340,7 @@ function CompanyContext({ companyName }: { companyName: string }) {
   return (
     <aside className="hidden min-h-0 w-[292px] shrink-0 flex-col xl:flex">
       <div className="flex shrink-0 items-center gap-3 px-5 pb-5 pt-6">
-        <CompanyAvatar name={companyName} logoUrl={tenant?.logo_url} className="size-11 text-[13px]" />
+        <CompanyAvatar name={companyName} className="size-11 text-[13px]" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[14px] font-semibold leading-tight text-pv-fg">{companyName}</p>
           <p className="mt-0.5 truncate text-[11.5px] text-pv-muted-fg">
