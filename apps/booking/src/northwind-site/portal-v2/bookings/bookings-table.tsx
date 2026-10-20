@@ -1,212 +1,175 @@
 'use client';
 
 /**
- * The customer's bookings as a list table — the operator portal v2 rentals
- * list (components/rentals-v2/rentals-list-v2.tsx), customer-scaled: one card,
- * a tinted header row of small uppercase labels, then one row per booking with
- * the status as coloured TEXT, never a pill. Rows are taller than the
- * operator's (py-4 rather than py-3) and carry a photo, because a customer
- * finds their booking by the car, not by the reference.
+ * The customer's bookings, on the operator's v2 list table: the same kit the
+ * Northwind Customers and Vehicles lists are built from
+ * (shared/portal-v2/list-table.tsx), not a look-alike. So the card, the sticky
+ * heading row of small uppercase labels, the row height and cell padding, the
+ * hairlines, the purple hover tint and the "All N shown" line are the
+ * operator's own.
  *
- * Shared by Home (recent bookings), Bookings and Booking history, so the three
- * can never format a date or colour a status differently.
+ * Columns, one line each (no cell stacks two lines, as in every operator list):
+ *   Reference (the row's identifier, weighted, like "NWC 153N") · Vehicle (bold
+ *   make, lighter model) · Dates · Days · Status · Payment · Total (money, the
+ *   one column that reads right).
+ * Status and payment are coloured TEXT in the operator palette (list-styles.ts).
  *
- * The WHOLE row is the link. On a phone the header row is dropped and each row
- * folds into photo · name and dates · total and status.
+ * The whole row opens the booking (/portal/bookings/[id], the read-only booking
+ * page), as an operator row opens its record; the reference is a real button so
+ * the booking is reachable by keyboard. No chevron: no operator table has one.
  *
- * The card, headings, row rhythm, two-tone vehicle name and status palette are
- * the operator Fleet table's (shared/portal-v2/list-styles.ts): a borderless
- * white card with a large radius and soft shadow, a plain heading row of small
- * uppercase grey labels, hairlines between rows, bold make with a lighter
- * model, and coloured status text.
+ * Shared by Bookings, Booking history and Home's recent bookings.
  */
 
-import Link from 'next/link';
-import { CarFront, ChevronRight } from 'lucide-react-nw';
+import { useRouter } from 'next/navigation';
 
-import { Skeleton } from '@nw/components/ui/skeleton';
-import { PaymentStatusChip, RentalStatusChip } from '@nw/portal-v2/status-chip';
-import { bookingCompletionState, type CustomerRental } from '@nw/hooks/use-customer-rentals';
+import {
+  ListBody,
+  ListCell,
+  ListHead,
+  ListRow,
+  ListStatusText,
+  ListTable,
+  ListTableHeader,
+  useProgressiveRows,
+} from '@portal-v2-shared/list-table';
+import { V2_LIST_CLASSES, type V2ListTone } from '@portal-v2-shared/list-styles';
+import type { CustomerRental, RentalLifecycle, RentalPaymentState } from '@nw/hooks/use-customer-rentals';
 import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { cn } from '@nw/lib/utils';
-import { V2_LIST_CARD, V2_LIST_CLASSES } from '@portal-v2-shared/list-styles';
 
 import { formatBookingDates, formatNights } from './format';
 
-/* ──────────────────────────────── layout ───────────────────────────────── */
+const LIFECYCLE: Record<RentalLifecycle, { label: string; tone: V2ListTone }> = {
+  on_rent: { label: 'On rent', tone: 'success' },
+  upcoming: { label: 'Upcoming', tone: 'brand' },
+  // "Awaiting confirmation" rather than "Pending": pending is the operator's
+  // word, and it reads to a customer as though they still have something to do.
+  pending: { label: 'Awaiting confirmation', tone: 'warning' },
+  completed: { label: 'Completed', tone: 'muted' },
+  cancelled: { label: 'Cancelled', tone: 'danger' },
+};
 
-const COLUMNS =
-  'md:grid md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.7fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_16px] md:items-center md:gap-4';
+const PAYMENT: Record<RentalPaymentState, { label: string; tone: V2ListTone } | null> = {
+  paid: { label: 'Paid', tone: 'success' },
+  unpaid: { label: 'Payment due', tone: 'warning' },
+  refunded: { label: 'Refunded', tone: 'brand' },
+  // The column was never written. Saying nothing beats guessing.
+  unknown: null,
+};
 
-/** Status columns: the shared chips in their text-only form, at row size. */
-const STATUS_TEXT = 'text-[14px] font-medium';
-
-const HEAD = cn(V2_LIST_CLASSES.head, 'h-auto');
-
-function HeaderRow() {
-  return (
-    <div
-      aria-hidden
-      className={cn('hidden h-10 border-b border-pv-border px-5', COLUMNS)}
-    >
-      <span className={HEAD}>Vehicle</span>
-      <span className={HEAD}>Dates</span>
-      <span className={HEAD}>Status</span>
-      <span className={HEAD}>Payment</span>
-      <span className={cn(HEAD, 'text-right')}>Total</span>
-      <span />
-    </div>
-  );
-}
-
-/** A small photo of the car, or a car glyph on the tint when there is none. */
-function Thumb({ url }: { url: string | null }) {
-  return (
-    <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-pv-tint">
-      {url ? (
-        <img src={url} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
-      ) : (
-        <CarFront aria-hidden strokeWidth={1.75} className="size-5 text-pv-primary" />
-      )}
-    </span>
-  );
-}
-
-/**
- * "Toyota Corolla" as the operator Fleet table draws it: the make in the row's
- * weight, the model lighter beside it. A car with only one of the two, or
- * neither (a plate-hiding tenant's bare plate), falls back to its display name.
- */
+/** "Toyota Corolla" as the operator Fleet table draws it: the make in the row's weight, the model lighter. */
 function VehicleName({ vehicle }: { vehicle: CustomerRental['vehicle'] }) {
   if (vehicle?.make && vehicle.model) {
     return (
       <>
-        {vehicle.make} <span className="font-normal text-pv-muted-fg">{vehicle.model}</span>
+        {vehicle.make} <span className="font-normal text-v2-muted-fg">{vehicle.model}</span>
       </>
     );
   }
   return <>{vehicle?.displayName ?? 'Vehicle'}</>;
 }
 
-/* ───────────────────────────────── rows ────────────────────────────────── */
-
-function BookingRow({ rental }: { rental: CustomerRental }) {
+export function BookingsTable({
+  rentals,
+  resetKey = '',
+  fillViewport = false,
+}: {
+  rentals: CustomerRental[];
+  /** Changes when a search or filter changes the set, so the list starts from its top again. */
+  resetKey?: string;
+  /** The Bookings page fills the window, as the operator lists do; a short list on Home does not. */
+  fillViewport?: boolean;
+}) {
+  const router = useRouter();
   const { formatCurrency } = useTenantBranding();
-
-  const dates = formatBookingDates(rental.startDate, rental.endDate);
-  const nights = formatNights(rental.nights);
-  // A paid booking still waiting on the customer's licence and selfie is the
-  // one row on this list that needs a reply, so it carries the operator list's
-  // flag treatment: a 2px rail and a faint wash, plus a line saying why.
-  const needsDocuments = bookingCompletionState(rental) === 'awaiting_documents';
+  const rows = useProgressiveRows(rentals, resetKey);
+  const open = (id: string) => router.push(`/portal/bookings/${id}`);
 
   return (
-    <li>
-      <Link
-        href={`/portal/bookings/${rental.id}`}
-        className={cn(
-          'group flex items-center gap-3.5 px-4 py-3 sm:px-5',
-          'transition-colors duration-200 ease-in hover:bg-pv-row-hover hover:ease-out motion-reduce:transition-none',
-          'focus-visible:bg-pv-row-hover focus-visible:outline-none',
-          COLUMNS,
-          needsDocuments && 'border-l-2 border-l-pv-warning bg-pv-warning-light/40 pl-[14px] sm:pl-[18px]',
-        )}
-      >
-        {/* Vehicle */}
-        <span className="flex min-w-0 flex-1 items-center gap-3.5">
-          <Thumb url={rental.vehicle?.imageUrl ?? null} />
-          <span className="min-w-0">
-            <span className="block truncate text-[14px] font-semibold text-pv-fg">
-              <VehicleName vehicle={rental.vehicle} />
-            </span>
-            <span className="block truncate text-[12px] text-pv-muted-fg">
-              {rental.reference}
-            </span>
-            {/* Phone only: the dates column is hidden, so they ride here. */}
-            <span className="block truncate text-[12px] text-pv-muted-fg md:hidden">{dates}</span>
-            {needsDocuments ? (
-              <span className="mt-0.5 block truncate text-[12px] font-medium text-pv-warning">
-                Upload your documents — the link is in your email
-              </span>
-            ) : null}
-          </span>
-        </span>
-
-        {/* Dates */}
-        <span className="hidden min-w-0 md:block">
-          <span className="block truncate text-[14px] font-medium text-pv-fg">{dates}</span>
-          {nights ? <span className="block text-[12px] text-pv-muted-fg">{nights}</span> : null}
-        </span>
-
-        {/* Status */}
-        <span className="hidden min-w-0 truncate md:block">
-          <RentalStatusChip plain lifecycle={rental.lifecycle} className={STATUS_TEXT} />
-        </span>
-
-        {/* Payment */}
-        <span className="hidden min-w-0 truncate md:block">
-          <PaymentStatusChip plain state={rental.paymentState} className={STATUS_TEXT} />
-        </span>
-
-        {/* Total — and on a phone, the status under it */}
-        <span className="shrink-0 text-right">
-          <span className="block text-[14px] font-semibold tabular-nums text-pv-fg">
-            {formatCurrency(rental.total)}
-          </span>
-          <span className="block md:hidden">
-            <RentalStatusChip plain lifecycle={rental.lifecycle} className="text-[12px] font-medium" />
-          </span>
-        </span>
-
-        <ChevronRight
-          aria-hidden
-          className="hidden size-4 text-pv-muted-fg/50 transition-colors duration-200 ease-in group-hover:text-pv-fg group-hover:ease-out motion-reduce:transition-none md:block"
-        />
-      </Link>
-    </li>
+    <ListTable rows={rows} fillViewport={fillViewport}>
+      <ListTableHeader>
+        <ListHead className="w-[12%]">Reference</ListHead>
+        <ListHead className="w-[21%]">Vehicle</ListHead>
+        <ListHead className="w-[22%]">Dates</ListHead>
+        <ListHead className="w-[8%]">Days</ListHead>
+        <ListHead className="w-[15%]">Status</ListHead>
+        <ListHead className="w-[11%]">Payment</ListHead>
+        <ListHead className="w-[11%] text-right">Total</ListHead>
+      </ListTableHeader>
+      <ListBody>
+        {rows.visible.map((rental) => {
+          const status = LIFECYCLE[rental.lifecycle];
+          const payment = PAYMENT[rental.paymentState];
+          const days = formatNights(rental.nights);
+          return (
+            <ListRow key={rental.id} onOpen={() => open(rental.id)}>
+              <ListCell>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    open(rental.id);
+                  }}
+                  className={cn(V2_LIST_CLASSES.identifier, 'truncate text-left hover:underline')}
+                >
+                  {rental.reference}
+                </button>
+              </ListCell>
+              <ListCell className={cn(V2_LIST_CLASSES.text, 'truncate')}>
+                <VehicleName vehicle={rental.vehicle} />
+              </ListCell>
+              <ListCell className={cn(V2_LIST_CLASSES.text, 'truncate')}>
+                {formatBookingDates(rental.startDate, rental.endDate)}
+              </ListCell>
+              <ListCell className={cn(V2_LIST_CLASSES.text, 'tabular-nums')}>{days ?? '—'}</ListCell>
+              <ListCell>
+                <ListStatusText tone={status.tone}>{status.label}</ListStatusText>
+              </ListCell>
+              <ListCell>
+                {payment ? <ListStatusText tone={payment.tone}>{payment.label}</ListStatusText> : null}
+              </ListCell>
+              <ListCell className={cn(V2_LIST_CLASSES.text, 'text-right tabular-nums')}>
+                {formatCurrency(rental.total)}
+              </ListCell>
+            </ListRow>
+          );
+        })}
+      </ListBody>
+    </ListTable>
   );
 }
 
-/* ──────────────────────────────── table ────────────────────────────────── */
-
-export function BookingsTable({ rentals, className }: { rentals: CustomerRental[]; className?: string }) {
-  return (
-    <section className={cn(V2_LIST_CARD, className)}>
-      <HeaderRow />
-      <ul className="divide-y divide-pv-border">
-        {rentals.map((rental) => (
-          <BookingRow key={rental.id} rental={rental} />
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-/** Placeholder rows in the same frame, so the page does not jump on load. */
+/** The table while bookings load: the same kit, heading row and row height, with bars for the cells. */
 export function BookingsTableSkeleton({ rows = 4 }: { rows?: number }) {
+  const progressive = useProgressiveRows(Array.from({ length: rows }), 'skeleton');
   return (
     <div aria-hidden>
-      <section className={V2_LIST_CARD}>
-        <HeaderRow />
-        <ul className="divide-y divide-pv-border">
-          {Array.from({ length: rows }, (_, index) => (
-            <li key={index} className={cn('flex items-center gap-3.5 px-4 py-3 sm:px-5', COLUMNS)}>
-              <span className="flex min-w-0 flex-1 items-center gap-3.5">
-                <Skeleton className="size-10 shrink-0 rounded-xl bg-pv-tint" />
-                <span className="flex flex-col gap-2">
-                  <Skeleton className="h-3.5 w-32 bg-pv-tint" />
-                  <Skeleton className="h-3 w-20 bg-pv-tint" />
-                </span>
-              </span>
-              <Skeleton className="hidden h-3.5 w-36 bg-pv-tint md:block" />
-              <Skeleton className="hidden h-3.5 w-20 bg-pv-tint md:block" />
-              <Skeleton className="hidden h-3.5 w-16 bg-pv-tint md:block" />
-              <Skeleton className="ml-auto h-3.5 w-16 bg-pv-tint" />
-              <span className="hidden md:block" />
-            </li>
+      <ListTable rows={{ ...progressive, hasMore: false }}>
+        <ListTableHeader>
+          <ListHead className="w-[12%]">Reference</ListHead>
+          <ListHead className="w-[21%]">Vehicle</ListHead>
+          <ListHead className="w-[22%]">Dates</ListHead>
+          <ListHead className="w-[8%]">Days</ListHead>
+          <ListHead className="w-[15%]">Status</ListHead>
+          <ListHead className="w-[11%]">Payment</ListHead>
+          <ListHead className="w-[11%] text-right">Total</ListHead>
+        </ListTableHeader>
+        <ListBody>
+          {progressive.visible.map((_, index) => (
+            <ListRow key={index}>
+              {[16, 28, 32, 8, 20, 14, 14].map((width, cell) => (
+                <ListCell key={cell} className={cell === 6 ? 'text-right' : undefined}>
+                  <span
+                    className="inline-block h-3 animate-pulse rounded-full bg-v2-muted"
+                    style={{ width: `${width * 4}px`, maxWidth: '100%' }}
+                  />
+                </ListCell>
+              ))}
+            </ListRow>
           ))}
-        </ul>
-      </section>
+        </ListBody>
+      </ListTable>
     </div>
   );
 }

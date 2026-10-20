@@ -1,5 +1,5 @@
 {
-  "//": "Colour utilities for shared/portal-v2 components: `text-v2-muted-fg`, `bg-v2-primary/40` \u2026 Each reads its token in tokens.css and, outside the v2 theme (the operator portal's v1 tenants, where tokens.css defines nothing), falls back to the shadcn colour it stands in for, so a shared component renders exactly as the semantic class it replaced: hsl(var(--v2-foreground, var(--foreground))). --v2-hover and --v2-row-hover fall back to --muted as the ui-v2 table does; --v2-link to --primary as the ui-v2 link does. Read by apps/portal/tailwind.config.ts (Tailwind 3) and scripts/build-northwind-css.mjs (Tailwind 4).",
+  "//": "Colour utilities for shared/portal-v2 components: `text-v2-muted-fg`, `bg-v2-primary/40` \u2026 Each reads its token in tokens.css and, outside the v2 theme (the operator portal's v1 tenants, where tokens.css defines nothing), falls back to the shadcn colour it stands in for, so a shared component renders exactly as the semantic class it replaced: hsl(var(--v2-foreground, var(--foreground))). --v2-hover and --v2-row-hover fall back to --muted as the ui-v2 table does; --v2-link to --primary as the ui-v2 link does. Read by apps/portal/tailwind.config.ts (Tailwind 3) and scripts/build-northwind-css.mjs (Tailwind 4). `utilities` are plain CSS utilities the customer build emits with @utility; the operator config already defines bg-gradient-primary (backgroundImage).",
   "colors": {
     "v2-bg": {
       "token": "--v2-background",
@@ -92,6 +92,14 @@
     "v2-chart-5": {
       "token": "--v2-chart-5",
       "fallback": "--chart-5"
+    },
+    "v2-destructive": {
+      "token": "--v2-destructive",
+      "fallback": "--destructive"
+    },
+    "v2-input": {
+      "token": "--v2-input",
+      "fallback": "--input"
     }
   },
   "fontFamily": {
@@ -101,5 +109,8 @@
       "system-ui",
       "sans-serif"
     ]
+  },
+  "utilities": {
+    "bg-gradient-primary": "background-image: var(--gradient-primary);"
   }
 }

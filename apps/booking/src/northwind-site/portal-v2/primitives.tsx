@@ -39,13 +39,15 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <div className={cn('flex flex-col gap-3 pt-1 sm:flex-row sm:items-start sm:justify-between', className)}>
+    // The operator v2 page header (Customers, Vehicles): the same row, heading
+    // and one-line description. The heading names its font and tracking because
+    // the site's base styles give every h1 DM Sans at -0.02em, which set it
+    // wider than the operator's Manrope at the same 30px.
+    <div className={cn('flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between', className)}>
       <div className="min-w-0">
         {eyebrow ? <p className="mb-1 text-xs font-medium text-pv-muted-fg">{eyebrow}</p> : null}
-        <h1 className="text-2xl font-bold tracking-tight text-pv-fg sm:text-3xl">{title}</h1>
-        {description ? (
-          <p className="mt-1 max-w-2xl text-sm text-pv-muted-fg sm:text-base">{description}</p>
-        ) : null}
+        <h1 className="font-heading text-2xl font-bold tracking-normal text-pv-fg sm:text-3xl">{title}</h1>
+        {description ? <p className="text-sm text-pv-muted-fg sm:text-base">{description}</p> : null}
       </div>
       {action ? <div className={cn('flex shrink-0 items-center gap-2', actionClassName)}>{action}</div> : null}
     </div>

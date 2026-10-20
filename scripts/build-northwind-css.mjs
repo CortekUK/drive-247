@@ -71,6 +71,9 @@ const themeLines = [
   ...Object.entries(sharedTheme.fontFamily).map(([name, stack]) => `  --font-${name}: ${stack.join(', ')};`),
 ];
 css += `\n@theme inline {\n${themeLines.join('\n')}\n}\n`;
+// Plain utilities the shared components use that are not colours
+// (bg-gradient-primary: the primary button's fill).
+for (const [name, body] of Object.entries(sharedTheme.utilities ?? {})) css += `@utility ${name} { ${body} }\n`;
 
 const result = await postcss([
   tailwind({ base: path.join(BOOKING, 'src/northwind-site'), optimize: { minify: true } }),

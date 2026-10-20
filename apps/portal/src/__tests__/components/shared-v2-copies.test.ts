@@ -1,0 +1,115 @@
+/**
+ * shared/portal-v2 carries COPIES of three operator pieces that cannot move
+ * there yet, for the customer portal's Bookings page:
+ *
+ *   button-styles.ts  the ui-v2 Button's looks (the component stays here)
+ *   filter-panel.tsx  components/shared/filter-primitives.tsx (draws the Button)
+ *   search-field.tsx  the list-page field inside layout/top-bar-v2.tsx (GitHub #32)
+ *
+ * Each copy is the operator source with semantic colours swapped for their
+ * shared twins (shared/portal-v2/class-map.ts). These tests recompute that from
+ * the operator files, so changing the operator piece without its copy fails.
+ */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+import { buttonVariants } from '@/components/ui-v2/button';
+import { cn } from '@/lib/utils';
+import { toSharedClasses } from '../../../../../shared/portal-v2/class-map';
+import {
+  V2_BUTTON_GHOST_SM,
+  V2_BUTTON_OUTLINE,
+  V2_BUTTON_OUTLINE_ICON,
+  V2_BUTTON_PRIMARY,
+} from '../../../../../shared/portal-v2/button-styles';
+
+const SRC = join(__dirname, '..', '..');
+const SHARED = join(SRC, '..', '..', '..', 'shared', 'portal-v2');
+const read = (path: string) => readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
+const stripComments = (code: string) =>
+  code
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
+    // Import specifiers are not class lists.
+    .replace(/^import[\s\S]*?from\s+"[^"]*";?$/gm, '');
+
+/** Every double-quoted string in `code` that reads as a class list. */
+function classLiterals(code: string): string[] {
+  const out: string[] = [];
+  for (const m of stripComments(code).matchAll(/"([^"\n]*)"/g)) {
+    const value = m[1];
+    if (!value.includes('-') || value.includes('${')) continue;
+    if (!value.trim().split(/\s+/).every((t) => /^[!\w\-:[\]()/.,&_%=*>#'+@]+$/.test(t))) continue;
+    out.push(value);
+  }
+  return out;
+}
+
+describe('shared button styles are the operator Button', () => {
+  it('primary: the default Button with bg-gradient-primary, as "+ Add Customer" draws it', () => {
+    expect(V2_BUTTON_PRIMARY).toBe(toSharedClasses(cn(buttonVariants({}), 'bg-gradient-primary')));
+    // The gradient replaces the solid fill, as on the operator header.
+    expect(V2_BUTTON_PRIMARY).toContain('bg-gradient-primary');
+    expect(V2_BUTTON_PRIMARY).not.toMatch(/(^|\s)bg-v2-primary(\s|$)/);
+  });
+
+  it('ghost sm, outline icon and outline', () => {
+    expect(V2_BUTTON_GHOST_SM).toBe(toSharedClasses(cn(buttonVariants({ variant: 'ghost', size: 'sm' }))));
+    expect(V2_BUTTON_OUTLINE_ICON).toBe(toSharedClasses(cn(buttonVariants({ variant: 'outline', size: 'icon' }))));
+    expect(V2_BUTTON_OUTLINE).toBe(toSharedClasses(cn(buttonVariants({ variant: 'outline' }))));
+  });
+});
+
+describe('shared filter panel is filter-primitives', () => {
+  const operator = read(join(SRC, 'components', 'shared', 'filter-primitives.tsx'));
+  const copy = read(join(SHARED, 'filter-panel.tsx'));
+  const literals = classLiterals(operator);
+
+  it('finds the operator class strings to compare', () => {
+    expect(literals.length).toBeGreaterThan(8);
+  });
+
+  for (const literal of literals) {
+    it(`carries "${literal.slice(0, 60)}…"`, () => {
+      expect(copy).toContain(toSharedClasses(literal));
+    });
+  }
+
+  it('draws Reset and close with the operator ghost / outline-icon Button looks', () => {
+    expect(operator).toContain('variant="ghost"');
+    expect(operator).toContain('variant="outline"');
+    expect(copy).toContain('cn(V2_BUTTON_GHOST_SM,');
+    expect(copy).toContain('cn(V2_BUTTON_OUTLINE_ICON,');
+  });
+});
+
+describe('shared search field is top-bar-v2\'s list-page field', () => {
+  const bar = read(join(SRC, 'components', 'shared', 'layout', 'top-bar-v2.tsx'));
+  const copy = read(join(SHARED, 'search-field.tsx'));
+  const field = bar.slice(bar.indexOf('const FIELD ='), bar.indexOf(';', bar.indexOf('const FIELD =')));
+  const slotStart = bar.indexOf('{slot ? (');
+  const region = bar.slice(slotStart, bar.indexOf(') : (', slotStart));
+  const literals = [...classLiterals(field), ...classLiterals(region)];
+
+  it('finds the field and its class strings', () => {
+    expect(field).toContain('rounded-full');
+    expect(slotStart).toBeGreaterThan(-1);
+    expect(literals.length).toBeGreaterThan(15);
+  });
+
+  for (const literal of literals) {
+    it(`carries "${literal.slice(0, 60)}…"`, () => {
+      expect(copy).toContain(toSharedClasses(literal));
+    });
+  }
+
+  it('keeps the behaviour: filter as you type after 400ms, ⌘↵ and the row to search everywhere', () => {
+    expect(bar).toMatch(/,\s*400\);/);
+    expect(copy).toMatch(/,\s*400\);/);
+    for (const piece of ['Search everywhere for', '⌘↵', '⌘K', 'Remove ${slot.scopeLabel} filter and search everything', 'onMouseDown']) {
+      expect(bar).toContain(piece);
+      expect(copy).toContain(piece);
+    }
+  });
+});

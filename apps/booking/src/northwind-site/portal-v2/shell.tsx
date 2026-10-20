@@ -38,7 +38,6 @@ import {
   Plus,
   Search,
   Settings,
-  X,
 } from 'lucide-react-nw';
 
 import { PortalBoot } from '@nw/components/portal/portal-boot';
@@ -54,6 +53,8 @@ import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { supabase } from '@nw/integrations/supabase/client';
 import { cn } from '@nw/lib/utils';
 import { QuickBookProvider, QuickBookTrigger } from '@nw/site-v2/quick-book/quick-book-dialog';
+import { PageSearchProvider, usePageSearchSlot } from '@portal-v2-shared/page-search-slot';
+import { SearchField } from '@portal-v2-shared/search-field';
 
 import { brandHslVars } from './brand';
 import {
@@ -300,6 +301,9 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
             </SheetContent>
           </Sheet>
 
+          {/* A list page lends the top bar its search field and filter button,
+              as on the operator portal (shared/portal-v2/page-search-slot). */}
+          <PageSearchProvider>
           <div className="flex min-w-0 flex-1 flex-col">
             <TopBar counts={counts} onOpenNav={() => setNavOpen(true)} onOpenSearch={() => setSearchOpen(true)} />
             <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-10 pt-2 outline-none sm:px-6 md:pl-4">
@@ -309,6 +313,7 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
               </div>
             </main>
           </div>
+          </PageSearchProvider>
 
           <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
         </div>
@@ -732,11 +737,10 @@ function TopBar({
 }) {
   const { initials } = useCustomer();
   const [menuOpen, setMenuOpen] = useState(false);
-  // The list this page is, drawn in the pill as the operator's search scope
-  // chip ("in Vehicles"). Here the pill opens the one search dialog either way,
-  // so the chip only says where you are; its × is the operator's mark for
-  // "search everything", which is what the dialog does.
-  const scopeLabel = usePathname()?.startsWith('/portal/bookings') ? 'Bookings' : null;
+  // A list page (Bookings) lends the bar its own field: it filters that list as
+  // you type, and "Search everywhere" / ⌘K hand off to the search dialog.
+  // Everywhere else the bar keeps the pill that opens the dialog.
+  const slot = usePageSearchSlot();
 
   // No title here: every page carries its own big heading, as on the operator portal v2.
   return (
@@ -745,22 +749,19 @@ function TopBar({
         <Menu aria-hidden className="size-4" />
       </button>
 
-      <button type="button" onClick={onOpenSearch} aria-label="Search" className={cn(FIELD, 'hidden sm:flex')}>
-        <Search aria-hidden className="size-4 shrink-0 text-pv-primary" />
-        {scopeLabel ? (
-          <span className="flex shrink-0 items-center gap-1 rounded-md border border-v2-primary/30 bg-v2-bg/70 py-0.5 pl-1.5 pr-0.5 text-[11px] font-medium text-v2-fg">
-            <span className="text-v2-muted-fg">in</span>
-            {scopeLabel}
-            <span aria-hidden className="flex size-4 items-center justify-center rounded text-v2-muted-fg">
-              <X className="size-3" />
-            </span>
-          </span>
-        ) : null}
-        <span className="min-w-0 flex-1 truncate text-[13px] text-pv-muted-on-tint">Search your bookings…</span>
-        <kbd className="shrink-0 rounded-full bg-pv-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-pv-primary">
-          ⌘K
-        </kbd>
-      </button>
+      {slot ? (
+        <div className="hidden w-full max-w-[440px] sm:block">
+          <SearchField slot={slot} onSearchEverywhere={onOpenSearch} />
+        </div>
+      ) : (
+        <button type="button" onClick={onOpenSearch} aria-label="Search" className={cn(FIELD, 'hidden sm:flex')}>
+          <Search aria-hidden className="size-4 shrink-0 text-pv-primary" />
+          <span className="min-w-0 flex-1 truncate text-[13px] text-pv-muted-on-tint">Search your bookings…</span>
+          <kbd className="shrink-0 rounded-full bg-pv-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-pv-primary">
+            ⌘K
+          </kbd>
+        </button>
+      )}
       <button
         type="button"
         onClick={onOpenSearch}

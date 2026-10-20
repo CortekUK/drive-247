@@ -116,6 +116,10 @@
   --v2-shadow-sm: 0 1px 2px 0 hsl(159 21% 20% / 0.08);
   --v2-shadow-card: 0 4px 6px -1px hsl(159 21% 20% / 0.1), 0 2px 4px -1px hsl(159 21% 20% / 0.06);
   --v2-shadow-hover: 0 10px 15px -3px hsl(var(--brand-h) var(--brand-s) 51% / 0.15), 0 4px 6px -2px hsl(var(--brand-h) var(--brand-s) 51% / 0.1);
+
+  /* The primary button's fill (`bg-gradient-primary`): the brand falling off
+     10% lighter toward the end. The operator's v2-theme.css declares the same. */
+  --gradient-primary: linear-gradient(135deg, hsl(var(--brand-h) var(--brand-s) var(--brand-l)), hsl(var(--brand-h) var(--brand-s) calc(var(--brand-l) + 10%)));
 }
 
 /* Soft dark, after Notion (owner, Sep 28 2026): neutral grey surfaces, nothing
@@ -182,4 +186,6 @@
   --v2-shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.3);
   --v2-shadow-card: 0 4px 6px -1px hsl(0 0% 0% / 0.3), 0 2px 4px -1px hsl(0 0% 0% / 0.2);
   --v2-shadow-hover: 0 10px 15px -3px hsl(0 0% 0% / 0.35), 0 4px 6px -2px hsl(0 0% 0% / 0.25);
+
+  --gradient-primary: linear-gradient(135deg, hsl(var(--brand-h) var(--brand-s) 54%), hsl(var(--brand-h) var(--brand-s) 60%));
 }

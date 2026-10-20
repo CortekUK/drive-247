@@ -1,0 +1,32 @@
+/**
+ * The operator ui-v2 Button's looks, as class strings, for shared components
+ * and the customer portal. The Button component itself stays in the operator
+ * app (apps/portal/src/components/ui-v2/button.tsx); only its styling is shared.
+ *
+ * Each string is EXACTLY `cn(buttonVariants(...))` from that file, with the
+ * semantic colours swapped for their shared twins (class-map.ts).
+ * apps/portal/src/__tests__/components/shared-v2-copies.test.ts recomputes them
+ * from the operator Button and fails on any drift.
+ */
+
+/**
+ * The page's one labelled action ("+ Add Customer", "+ Book a car"): the
+ * default Button with `bg-gradient-primary`, as the operator header draws it.
+ * tailwind-merge drops the solid `bg-primary` for the gradient, so the fill is
+ * the brand falling off 10% lighter toward the end (--gradient-primary).
+ * Pair with HEADER_PRIMARY_V2 for the header size.
+ */
+export const V2_BUTTON_PRIMARY =
+  "group/button inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[var(--v2-radius-4xl,2rem)] border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-v2-ring focus-visible:ring-3 focus-visible:ring-v2-ring/30 active:[&:not([aria-haspopup])]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-[invalid=true]:border-v2-destructive aria-[invalid=true]:ring-3 aria-[invalid=true]:ring-v2-destructive/20 dark:aria-[invalid=true]:border-v2-destructive/50 dark:aria-[invalid=true]:ring-v2-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 text-v2-primary-fg hover:bg-v2-primary/80 h-9 gap-1.5 px-3 has-[[data-icon=inline-end]]:pr-2.5 has-[[data-icon=inline-start]]:pl-2.5 bg-gradient-primary";
+
+/** `variant="ghost" size="sm"`: the filter panel's Reset. */
+export const V2_BUTTON_GHOST_SM =
+  "group/button inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[var(--v2-radius-4xl,2rem)] border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-v2-ring focus-visible:ring-3 focus-visible:ring-v2-ring/30 active:[&:not([aria-haspopup])]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-[invalid=true]:border-v2-destructive aria-[invalid=true]:ring-3 aria-[invalid=true]:ring-v2-destructive/20 dark:aria-[invalid=true]:border-v2-destructive/50 dark:aria-[invalid=true]:ring-v2-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:text-v2-fg aria-expanded:text-v2-fg h-8 gap-1 px-3 has-[[data-icon=inline-end]]:pr-2 has-[[data-icon=inline-start]]:pl-2 hover:bg-[hsl(var(--v2-hover,var(--muted)))] aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)_/_0.5))]";
+
+/** `variant="outline" size="icon"`: the filter panel's close button. */
+export const V2_BUTTON_OUTLINE_ICON =
+  "group/button inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[var(--v2-radius-4xl,2rem)] border bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-v2-ring focus-visible:ring-3 focus-visible:ring-v2-ring/30 active:[&:not([aria-haspopup])]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-[invalid=true]:border-v2-destructive aria-[invalid=true]:ring-3 aria-[invalid=true]:ring-v2-destructive/20 dark:aria-[invalid=true]:border-v2-destructive/50 dark:aria-[invalid=true]:ring-v2-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 border-v2-border hover:text-v2-fg aria-expanded:text-v2-fg dark:bg-transparent size-9 bg-[var(--v2-outline-fill,hsl(var(--background)))] hover:bg-[hsl(var(--v2-hover,var(--muted)))] aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:bg-[hsl(var(--v2-hover,var(--input)_/_0.3))]";
+
+/** `variant="outline"` at the default size: the filter panel's date buttons. */
+export const V2_BUTTON_OUTLINE =
+  "group/button inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[var(--v2-radius-4xl,2rem)] border bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-v2-ring focus-visible:ring-3 focus-visible:ring-v2-ring/30 active:[&:not([aria-haspopup])]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-[invalid=true]:border-v2-destructive aria-[invalid=true]:ring-3 aria-[invalid=true]:ring-v2-destructive/20 dark:aria-[invalid=true]:border-v2-destructive/50 dark:aria-[invalid=true]:ring-v2-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 border-v2-border hover:text-v2-fg aria-expanded:text-v2-fg dark:bg-transparent h-9 gap-1.5 px-3 has-[[data-icon=inline-end]]:pr-2.5 has-[[data-icon=inline-start]]:pl-2.5 bg-[var(--v2-outline-fill,hsl(var(--background)))] hover:bg-[hsl(var(--v2-hover,var(--muted)))] aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:bg-[hsl(var(--v2-hover,var(--input)_/_0.3))]";

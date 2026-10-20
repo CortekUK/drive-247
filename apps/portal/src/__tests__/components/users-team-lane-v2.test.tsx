@@ -169,7 +169,9 @@ describe('UsersTableV2: a simple list, straight on the page', () => {
     expect(thead).not.toBeNull();
     // ListTableHeader's classes: near-opaque card colour, blurred, pinned.
     expect(thead!.className).toContain('sticky');
-    expect(thead!.className).toContain('bg-card/95');
+    // The kit lives in shared/portal-v2 and paints with the shared twin of
+    // bg-card/95 (same colour; shared-list-styles.test.ts).
+    expect(thead!.className).toContain('bg-v2-card/95');
   });
 
   it('shows four visible headings with no sort control, left but for Actions', () => {
