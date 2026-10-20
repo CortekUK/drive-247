@@ -15,8 +15,7 @@
  *      on their own and the page updates once a document is signed);
  *   2. when something needs signing, the operator's Alert saying so, first,
  *      with "Open" taking the customer to that agreement;
- *   3. the count tiles (only once there is more than one agreement);
- *   4. the list, on the shared operator list kit, agreements that need the
+ *   3. the list, on the shared operator list kit, agreements that need the
  *      customer's signature first; the whole row opens the agreement.
  * Search and filters live in the top bar, as on Bookings: the field filters the
  * list as you type, and its filter button opens the panel above the table.
@@ -27,7 +26,7 @@ import { FileSignature, PenLine, SearchX } from 'lucide-react-nw';
 
 import { formatDate, formatTimestamp } from '@nw/components/portal/format';
 import { formatBookingDates } from '@nw/portal-v2/bookings/format';
-import { EmptyState, LoadError, PageHeader, Panel, StatTile } from '@nw/portal-v2/primitives';
+import { EmptyState, LoadError, PageHeader, Panel } from '@nw/portal-v2/primitives';
 import { useCustomer } from '@nw/hooks/use-customer';
 import { useCustomerAgreements, type CustomerAgreement } from '@nw/hooks/use-customer-agreements';
 import { useCustomerRentals } from '@nw/hooks/use-customer-rentals';
@@ -91,19 +90,11 @@ function datesOf(agreement: CustomerAgreement): string | null {
   return agreement.rentalStartDate ? formatBookingDates(agreement.rentalStartDate, agreement.rentalEndDate) : null;
 }
 
-/** Sized like the tiles and the table, so the page does not jump on load. */
+/** Sized like the table, so the page does not jump on load. */
 function AgreementsSkeleton() {
   const rows = useProgressiveRows([0, 1, 2], 'skeleton');
   return (
     <div className="flex flex-col gap-6" aria-hidden>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {[0, 1, 2].map((tile) => (
-          <div
-            key={tile}
-            className={cn('h-[84px] animate-pulse rounded-2xl bg-v2-muted', tile === 2 && 'col-span-2 sm:col-span-1')}
-          />
-        ))}
-      </div>
       <ListTable rows={{ ...rows, hasMore: false }} minWidth={MIN_WIDTH}>
         <Heads />
         <ListBody>
@@ -127,7 +118,7 @@ function AgreementsSkeleton() {
 
 export default function PortalAgreementsPage() {
   const { email } = useCustomer();
-  const { agreements, summary, isLoading, isError, error, refetch } = useCustomerAgreements();
+  const { agreements, isLoading, isError, error, refetch } = useCustomerAgreements();
   // The same cached query the hook already reads — free here, and it lets the
   // empty state tell a customer with no bookings something different from one
   // whose operator simply has not raised a document yet.
@@ -219,22 +210,6 @@ export default function PortalAgreementsPage() {
                 </button>
               </AlertAction>
             </Alert>
-          ) : null}
-
-          {/* Only worth its space once there is more than one row: "1, 0, 1"
-              restates the single row beneath it in three tiles. */}
-          {agreements.length > 1 ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <StatTile label="Agreements" value={summary.total} />
-              <StatTile label="Signed" value={summary.signed} />
-              <div className="col-span-2 sm:col-span-1">
-                <StatTile
-                  label="Awaiting you"
-                  value={summary.awaiting}
-                  caption={summary.awaiting > 0 ? 'Needs your signature' : 'All up to date'}
-                />
-              </div>
-            </div>
           ) : null}
 
           {filtersOpen ? (
