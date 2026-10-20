@@ -540,6 +540,18 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => {
     set({ membership, membershipResolved: true });
   };
 
+  /**
+   * The current tenant, once `setTenant` has answered (up to 10s). Null when
+   * it answered "no tenant here", or never answered.
+   */
+  const waitForTenant = async (): Promise<TenantIdentity | null> => {
+    const deadline = Date.now() + 10_000;
+    while (!get().tenantResolved && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return get().tenant;
+  };
+
   return {
     ...SIGNED_OUT,
     tenant: null,
@@ -805,7 +817,7 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => {
     },
 
     startGoogleSignIn: async () => {
-      const { tenant } = get();
+      const tenant = await waitForTenant();
       if (!tenant) return fail("no-tenant", NO_TENANT_MESSAGE);
 
       // Back to this very page (its `?next=` included), marked as the return.
@@ -830,7 +842,11 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => {
     },
 
     completeGoogleSignIn: async () => {
-      const { tenant } = get();
+      // Google's return lands on a fresh page load, where this runs in the
+      // page's first effects: before CustomerAuthProvider's own effect has
+      // handed the store the tenant (React runs a child's effects before its
+      // parent's). Wait for it rather than reporting "which site is this?".
+      const tenant = await waitForTenant();
       if (!tenant) return fail("no-tenant", NO_TENANT_MESSAGE);
 
       // The session Supabase read from the address Google returned to.
