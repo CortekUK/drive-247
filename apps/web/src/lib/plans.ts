@@ -253,8 +253,10 @@ export function reportPlanCatalogueProblems(
     }
   }
 
+  // One recommended tier among several. A single visible plan has nothing to be
+  // recommended over, so it may go unmarked (more than one mark is still wrong).
   const highlighted = plans.filter((p) => p.highlighted).length;
-  if (highlighted !== 1) {
+  if (plans.length > 1 ? highlighted !== 1 : highlighted > 1) {
     console.error(
       `[plans] (${source}) Exactly one plan must set \`highlighted: true\` — the ` +
         `pricing grid elevates a single recommended tier, but ${highlighted} are marked.`

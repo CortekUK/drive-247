@@ -1,0 +1,118 @@
+/*
+ * Insights (Numbers view) — the portal's Tailwind classes resolved under the
+ * v2 theme (apps/portal/src/styles/v2-theme.css + tailwind.config.ts):
+ *   primary #442dd7 (248 68% 51%), primary-foreground #f0f3ff (226 100% 97%)
+ *   foreground #0a0a0a, muted #f5f5f5, muted-foreground #737373
+ *   success #16a34a (142 76% 36%), destructive #e6000b (357 100% 45%)
+ *   rounded-2xl 18px, rounded-3xl 22px, rounded-4xl 26px; font-heading Manrope
+ * The 1280×800 window sits under `[@media(max-height:860px)]`, so the short-
+ * window variants (gap-4, py-2.5, gap-3, text-4xl…) are the ones applied.
+ */
+
+/* insights-view.tsx — flex flex-col gap-4 px-2 md:pt-[23.25px] md:pb-4, 100svh − 66px */
+.l4-scaled .inner .scr-ins { display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 1560px; height: 734px; margin: 0 auto; padding: 23.25px 8px 16px; overflow: hidden; }
+.l4-scaled .inner .scr-ins .top { flex: none; }
+.l4-scaled .inner .scr-ins .top > header { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.l4-scaled .inner .scr-ins .ttl { flex: 1; min-width: 0; }
+.l4-scaled .inner .scr-ins h1 { margin: 0; font-size: 30px; font-weight: 600; line-height: 1.25; letter-spacing: -0.025em; color: #0a0a0a; }
+.l4-scaled .inner .scr-ins .ttl p { margin: 6px 0 0; font-size: 14px; line-height: 20px; color: #737373; }
+.l4-scaled .inner .scr-ins .flip { height: 1px; }
+
+/* _view-switch.tsx — bg-muted p-0.5 rounded-full; tabs h-7 px-3 text-[13px] font-medium */
+.l4-scaled .inner .scr-ins .vs { position: relative; display: flex; flex: none; padding: 2px; border-radius: 999px; background: #f5f5f5; }
+.l4-scaled .inner .scr-ins .vs span { display: flex; align-items: center; height: 28px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 500; line-height: 20px; white-space: nowrap; color: #442dd7; }
+.l4-scaled .inner .scr-ins .vs span.on { background: #442dd7; color: #f0f3ff; }
+
+/* the Numbers grid — xl:grid-cols-[minmax(0,1fr)_420px] xl:gap-12 xl:items-stretch */
+.l4-scaled .inner .scr-ins > .cols { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 48px; align-items: stretch; }
+.l4-scaled .inner .scr-ins > .cols > * { height: 100%; min-height: 0; }
+
+/* ── _receipt.tsx ── -mx-3 space-y-1 xl:flex xl:flex-col */
+.l4-scaled .inner .scr-ins .rcpt { display: flex; flex-direction: column; gap: 4px; margin: 0 -12px; }
+.l4-scaled .inner .scr-ins .rcpt > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 0 12px 8px; }
+.l4-scaled .inner .scr-ins .rcpt h2 { margin: 0; font-family: var(--font-manrope), Manrope, sans-serif; font-size: 18px; font-weight: 500; line-height: 28px; letter-spacing: -0.025em; }
+.l4-scaled .inner .scr-ins .wcw { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 999px; font-size: 13px; color: #737373; }
+.l4-scaled .inner .scr-ins .wcw svg { width: 14px; height: 14px; }
+.l4-scaled .inner .scr-ins .rcpt .body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0 12px; }
+
+/* the sum — rounded-3xl bg-card p-2 ring-1 ring-foreground/[0.07] */
+.l4-scaled .inner .scr-ins .sum { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 8px; border-radius: 22px; background: #fff; box-shadow: 0 0 0 1px rgb(10 10 10 / 0.07); }
+.l4-scaled .inner .scr-ins .sum .lines { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; }
+
+/* EquationRow — grid-cols-[28px_minmax(0,1fr)_auto_16px] gap-x-4 rounded-2xl px-4 py-2.5 */
+.l4-scaled .inner .scr-ins .eq,
+.l4-scaled .inner .scr-ins .kept { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto 16px; align-items: center; column-gap: 16px; padding: 10px 16px; border-radius: 18px; }
+.l4-scaled .inner .scr-ins .op { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 999px; font-size: 15px; font-weight: 600; line-height: 1; background: rgb(10 10 10 / 0.05); color: #737373; }
+.l4-scaled .inner .scr-ins .op.plus { background: rgb(68 45 215 / 0.1); color: #442dd7; }
+.l4-scaled .inner .scr-ins .op.owed { background: rgb(230 0 11 / 0.1); color: #e6000b; }
+.l4-scaled .inner .scr-ins .op svg { width: 14px; height: 14px; }
+.l4-scaled .inner .scr-ins .lb { min-width: 0; }
+.l4-scaled .inner .scr-ins .lb b { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 15px; font-weight: 500; line-height: 22.5px; }
+.l4-scaled .inner .scr-ins .lb small { display: block; margin-top: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12.5px; line-height: 18.75px; color: #737373; }
+.l4-scaled .inner .scr-ins .amt { text-align: right; font-family: var(--font-manrope), Manrope, sans-serif; font-size: 20px; font-weight: 500; line-height: 1; font-variant-numeric: tabular-nums; }
+.l4-scaled .inner .scr-ins .amt.less { color: rgb(10 10 10 / 0.8); }
+.l4-scaled .inner .scr-ins .chev { display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; }
+.l4-scaled .inner .scr-ins .chev svg { width: 16px; height: 16px; color: rgb(115 115 115 / 0.5); }
+.l4-scaled .inner .scr-ins .eq.owed { margin-top: 8px; background: rgb(230 0 11 / 0.06); }
+
+/* the receipt's double rule — mx-4 my-1 border-t-[3px] border-double border-foreground/15 */
+.l4-scaled .inner .scr-ins .dbl { margin: 4px 16px; border-top: 3px double rgb(10 10 10 / 0.15); }
+
+/* Money you kept — mt-1, bg-success/[0.09]; operator bg-success/15 text-success */
+.l4-scaled .inner .scr-ins .kept { margin-top: 4px; background: rgb(22 163 74 / 0.09); }
+.l4-scaled .inner .scr-ins .kept .op { background: rgb(22 163 74 / 0.15); color: #16a34a; }
+
+/* CapitalFootnote — grid-cols-[minmax(0,1fr)_1rem] rounded-3xl px-3 py-2.5 text-[13px] */
+.l4-scaled .inner .scr-ins .foot { display: grid; grid-template-columns: minmax(0, 1fr) 16px; align-items: center; column-gap: 16px; margin-top: 12px; padding: 10px 12px; border-radius: 22px; font-size: 13px; line-height: 19.5px; color: #737373; }
+.l4-scaled .inner .scr-ins .foot b { font-weight: 500; color: #0a0a0a; font-variant-numeric: tabular-nums; }
+.l4-scaled .inner .scr-ins .foot svg { width: 16px; height: 16px; color: rgb(115 115 115 / 0.6); }
+
+/* ── _calculator.tsx ── rounded-4xl bg-card p-3.5 gap-3 ring-1 ring-foreground/10 + soft lift */
+.l4-scaled .inner .scr-ins .calc { display: flex; flex-direction: column; justify-content: space-between; gap: 12px; overflow: hidden; padding: 14px; border-radius: 26px; background: #fff; box-shadow: 0 0 0 1px rgb(10 10 10 / 0.1), 0 1px 2px rgb(0 0 0 / 0.05), 0 12px 32px -16px rgb(0 0 0 / 0.18); }
+.l4-scaled .inner .scr-ins .calc > :not(:first-child) { padding-left: 4px; padding-right: 4px; }
+
+/* display — rounded-3xl bg-primary px-5 pt-4 pb-4 text-primary-foreground */
+.l4-scaled .inner .scr-ins .disp { position: relative; flex: none; overflow: hidden; padding: 16px 20px; border-radius: 22px; background: #442dd7; color: #f0f3ff; }
+.l4-scaled .inner .scr-ins .disp .rings { position: absolute; top: -64px; right: -64px; width: 224px; height: 224px; opacity: 0.14; pointer-events: none; }
+.l4-scaled .inner .scr-ins .disp .lbl { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; line-height: 16px; opacity: 0.8; }
+.l4-scaled .inner .scr-ins .disp .lbl svg { width: 14px; height: 14px; }
+.l4-scaled .inner .scr-ins .disp .ans { margin: 12px 0 0; font-family: var(--font-manrope), Manrope, sans-serif; font-size: 36px; font-weight: 600; line-height: 1; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+.l4-scaled .inner .scr-ins .disp .sub { margin: 12px 0 0; font-size: 13px; line-height: 19.5px; opacity: 0.8; font-variant-numeric: tabular-nums; }
+
+/* keys — grid-cols-2 gap-3; Key: rounded-3xl bg-muted/40 p-3 py-2 gap-2 */
+.l4-scaled .inner .scr-ins .keys { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.l4-scaled .inner .scr-ins .key { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 12px; border-radius: 22px; background: rgb(245 245 245 / 0.4); }
+.l4-scaled .inner .scr-ins .kl { flex: 1; min-width: 0; align-self: stretch; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; }
+.l4-scaled .inner .scr-ins .kt { line-height: 1.25; }
+.l4-scaled .inner .scr-ins .kt p { margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; font-weight: 500; }
+.l4-scaled .inner .scr-ins .kt small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; color: #737373; }
+.l4-scaled .inner .scr-ins .kv { display: flex; align-items: baseline; gap: 4px; }
+.l4-scaled .inner .scr-ins .kv i { font-style: normal; font-size: 16px; line-height: 24px; color: #737373; }
+.l4-scaled .inner .scr-ins .kv b { flex: 1; min-width: 0; font-family: var(--font-manrope), Manrope, sans-serif; font-size: 24px; font-weight: 600; line-height: 1; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+.l4-scaled .inner .scr-ins .kv em { flex: none; font-style: normal; font-size: 12px; line-height: 16px; color: #737373; }
+
+/* Knob — size-14, ticks stroke-primary / stroke-foreground/25, track foreground/10 */
+.l4-scaled .inner .scr-ins .knob { flex: none; width: 56px; height: 56px; }
+.l4-scaled .inner .scr-ins .knob .tk { stroke: rgb(10 10 10 / 0.25); }
+.l4-scaled .inner .scr-ins .knob .tk.on { stroke: #442dd7; }
+.l4-scaled .inner .scr-ins .knob .trk { fill: none; stroke: rgb(10 10 10 / 0.1); }
+.l4-scaled .inner .scr-ins .knob .val { fill: none; stroke: #442dd7; }
+.l4-scaled .inner .scr-ins .knob .cap { fill: #fff; stroke: rgb(10 10 10 / 0.2); }
+.l4-scaled .inner .scr-ins .knob .face { fill: rgb(10 10 10 / 0.04); }
+.l4-scaled .inner .scr-ins .knob .ptr { stroke: #442dd7; }
+.l4-scaled .inner .scr-ins .knob .dot { fill: #442dd7; }
+
+/* function keys — h-8 rounded-full px-3 text-[13px] font-medium text-primary */
+.l4-scaled .inner .scr-ins .fns { display: flex; flex: none; flex-wrap: wrap; gap: 8px; }
+.l4-scaled .inner .scr-ins .fns span { display: flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 500; white-space: nowrap; color: #442dd7; }
+
+/* BreakEven — 30 cells h-3 rounded-[3px] gap-[3px] */
+.l4-scaled .inner .scr-ins .be { flex: none; }
+.l4-scaled .inner .scr-ins .be .bars { display: flex; gap: 3px; }
+.l4-scaled .inner .scr-ins .be .bars i { flex: 1; height: 12px; border-radius: 3px; background: rgb(10 10 10 / 0.06); }
+.l4-scaled .inner .scr-ins .be .bars i.keep { background: #442dd7; }
+.l4-scaled .inner .scr-ins .be .bars i.pay { background: rgb(10 10 10 / 0.35); }
+.l4-scaled .inner .scr-ins .be .bars i.idlepay { background: rgb(10 10 10 / 0.15); }
+.l4-scaled .inner .scr-ins .be p { margin: 8px 0 0; font-size: 12px; line-height: 1.375; color: #737373; }
+.l4-scaled .inner .scr-ins .be b { font-weight: 500; color: #0a0a0a; font-variant-numeric: tabular-nums; }
+.l4-scaled .inner .scr-ins .be em { font-style: normal; font-weight: 500; color: #442dd7; font-variant-numeric: tabular-nums; }

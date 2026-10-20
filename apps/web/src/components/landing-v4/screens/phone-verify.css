@@ -1,0 +1,156 @@
+/*
+ * "How it works" step 1 — apps/booking (legacy)/verify/[token]/page.tsx at a
+ * 390px-wide phone, Tailwind classes resolved:
+ *   fixed inset-0 bg-black · header p-4 · bars h-1.5 (w-8 bg-white current,
+ *   w-6 bg-green-500 done, w-6 bg-white/30 to come) · back w-10 h-10 bg-black/40
+ *   · corner brackets top-[15%] left/right-[8%] bottom-[30%] w-12 h-12 border-4
+ *   border-white/80 rounded-lg · scan line h-0.5 via-white/60, `scan 2s
+ *   ease-in-out infinite` · face oval w-56 h-72 border-4 border-white/60 ·
+ *   controls bg-gradient-to-t from-black via-black/90 pt-16 pb-8 px-6, title
+ *   text-xl font-semibold, subtitle text-white/60 text-sm, shutter w-20 h-20
+ *   bg-white + w-16 h-16 border-4 border-black/20, "Upload from gallery"
+ *   text-white/60 text-sm · processing from-gray-900 to-black, w-24 ring
+ *   border-4 white/10 + border-t-white animate-spin · success
+ *   from-green-900/50 to-black, w-24 bg-green-500/20 animate-pulse, text-2xl
+ *   font-bold, card bg-white/10 rounded-xl p-4.
+ * Body Inter; h1/h2 Playfair Display. Radius: rounded-lg 12px, rounded-xl 12px.
+ *
+ * Animation: the base styles are the FINAL frame (success). `.is-on` plays
+ * the run from the first frame (fill-mode both), so re-adding `.is-on`
+ * restarts it, a screen fading out keeps its last frame, and reduced motion
+ * simply shows the result. Timings are fractions of --hv-d (VERIFY_MS).
+ */
+
+.l4-scaled .inner .hiw-v {
+  --hv-d: 2400ms;
+  position: absolute; inset: 0; overflow: hidden;
+  background: #000; color: #fff;
+  font-family: var(--font-sans), Inter, system-ui, sans-serif; font-size: 16px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  transition: opacity 0.35s, transform 0.35s;
+}
+.l4-scaled .inner .hiw-v:not(.is-on) { opacity: 0; transform: translateX(16px); pointer-events: none; }
+.l4-scaled .inner .hiw-v h1,
+.l4-scaled .inner .hiw-v h2 { margin: 0; font-family: var(--font-playfair), "Playfair Display", Georgia, serif; letter-spacing: normal; }
+.l4-scaled .inner .hiw-v p { margin: 0; }
+.l4-scaled .inner .hiw-v svg { display: block; flex: none; }
+
+/* the browser viewport, under the status bar */
+.l4-scaled .inner .hv-page { position: absolute; left: 0; right: 0; top: 54px; bottom: 0; overflow: hidden; }
+.l4-scaled .inner .hv-scene { position: absolute; inset: 0; background: #000; opacity: 0; }
+.l4-scaled .inner .hv-ok { opacity: 1; }
+
+/* ── camera feed (drawn) ── */
+.l4-scaled .inner .hv-feed { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 42%, #4a4642, #1d1b19 72%); }
+.l4-scaled .inner .hv-feed-self { background: radial-gradient(ellipse at 50% 38%, #3b4048, #121418 74%); }
+/* the licence, lying in the frame (frame: top 15%, bottom 30% → centre ≈ 42%) */
+.l4-scaled .inner .hv-lic {
+  position: absolute; left: 50%; top: 42.5%; width: 296px; height: 188px; margin: -94px 0 0 -148px;
+  border-radius: 14px; transform: rotate(-2deg); overflow: hidden;
+  background: linear-gradient(160deg, #eef2f4, #d3dce2); box-shadow: 0 14px 34px rgb(0 0 0 / 0.5);
+}
+.l4-scaled .inner .hv-lic-top { position: absolute; left: 0; right: 0; top: 0; height: 34px; padding: 9px 16px 0; background: linear-gradient(90deg, #3e5f80, #6d8faa); color: #fff; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 0.16em; }
+.l4-scaled .inner .hv-lic-ph { position: absolute; left: 16px; top: 48px; width: 82px; height: 106px; border-radius: 6px; overflow: hidden;
+  background: radial-gradient(circle at 50% 38%, #8c99a3 0 19%, transparent 20%), radial-gradient(ellipse at 50% 100%, #8c99a3 0 46%, transparent 47%), #bcc7cf; }
+.l4-scaled .inner .hv-lic-ln { position: absolute; left: 114px; right: 18px; top: 54px; display: flex; flex-direction: column; gap: 13px; }
+.l4-scaled .inner .hv-lic-ln i { display: block; height: 8px; border-radius: 4px; background: rgb(52 66 82 / 0.42); }
+.l4-scaled .inner .hv-lic-ln i:nth-child(1) { width: 92%; height: 10px; background: rgb(52 66 82 / 0.6); }
+.l4-scaled .inner .hv-lic-ln i:nth-child(2) { width: 70%; }
+.l4-scaled .inner .hv-lic-ln i:nth-child(3) { width: 84%; }
+.l4-scaled .inner .hv-lic-ln i:nth-child(4) { width: 52%; }
+/* the face, mirrored front camera (drawn) */
+.l4-scaled .inner .hv-face { position: absolute; left: 50%; top: 50%; width: 240px; height: 330px; margin: -150px 0 0 -120px; filter: blur(1.5px);
+  background: radial-gradient(ellipse 30% 27% at 50% 36%, #6f625a 0 96%, transparent 100%), radial-gradient(ellipse 48% 26% at 50% 100%, #2c3644 0 96%, transparent 100%); }
+
+/* ── document guides ── */
+.l4-scaled .inner .hv-corners { position: absolute; inset: 0; pointer-events: none; }
+.l4-scaled .inner .hv-c { position: absolute; width: 48px; height: 48px; border: 0 solid rgb(255 255 255 / 0.8); }
+.l4-scaled .inner .hv-tl { top: 15%; left: 8%; border-width: 4px 0 0 4px; border-top-left-radius: 12px; }
+.l4-scaled .inner .hv-tr { top: 15%; right: 8%; border-width: 4px 4px 0 0; border-top-right-radius: 12px; }
+.l4-scaled .inner .hv-bl { bottom: 30%; left: 8%; border-width: 0 0 4px 4px; border-bottom-left-radius: 12px; }
+.l4-scaled .inner .hv-br { bottom: 30%; right: 8%; border-width: 0 4px 4px 0; border-bottom-right-radius: 12px; }
+.l4-scaled .inner .hv-scanbox { position: absolute; top: 15%; left: 8%; right: 8%; bottom: 30%; overflow: hidden; pointer-events: none; }
+.l4-scaled .inner .hv-scan { position: absolute; left: 0; right: 0; top: 0; height: 2px; background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.6), transparent); }
+.l4-scaled .inner .hiw-v.is-on .hv-scan { animation: hv-scan 2s ease-in-out infinite; }
+@keyframes hv-scan { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }
+
+/* ── selfie guide ── */
+.l4-scaled .inner .hv-oval-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.l4-scaled .inner .hv-oval { display: block; width: 224px; height: 288px; border: 4px solid rgb(255 255 255 / 0.6); border-radius: 50%; }
+.l4-scaled .inner .hv-spark { position: absolute; left: 50%; top: 50%; width: 24px; height: 24px; margin: -152px 0 0 -12px; color: rgb(255 255 255 / 0.8); }
+
+/* ── header ── */
+.l4-scaled .inner .hv-top { position: absolute; left: 0; right: 0; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; padding: 16px; }
+.l4-scaled .inner .hv-w10 { width: 40px; }
+.l4-scaled .inner .hv-back { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 999px; background: rgb(0 0 0 / 0.4); backdrop-filter: blur(8px); }
+.l4-scaled .inner .hv-back svg { width: 20px; height: 20px; color: #fff; }
+.l4-scaled .inner .hv-bars { display: flex; align-items: center; gap: 8px; }
+.l4-scaled .inner .hv-bars i { display: block; width: 24px; height: 6px; border-radius: 999px; background: rgb(255 255 255 / 0.3); }
+.l4-scaled .inner .hv-bars i.hv-cur { width: 32px; background: #fff; }
+.l4-scaled .inner .hv-bars i.hv-done { background: #22c55e; }
+.l4-scaled .inner .hv-brand { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; }
+.l4-scaled .inner .hv-brand svg { width: 20px; height: 20px; color: rgb(255 255 255 / 0.6); }
+
+/* ── bottom controls ── */
+.l4-scaled .inner .hv-bot { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 64px 24px 32px; background: linear-gradient(to top, #000, rgb(0 0 0 / 0.9), transparent); }
+.l4-scaled .inner .hv-info { margin-bottom: 12px; text-align: center; } /* mb-6 less the column gap */
+.l4-scaled .inner .hv-info h2 { margin-bottom: 4px; font-size: 20px; line-height: 28px; font-weight: 600; color: #fff; }
+.l4-scaled .inner .hv-info span { display: block; font-size: 14px; line-height: 20px; color: rgb(255 255 255 / 0.6); }
+.l4-scaled .inner .hv-shutter { display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 999px; background: #fff; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+.l4-scaled .inner .hv-shutter i { display: block; width: 64px; height: 64px; border: 4px solid rgb(0 0 0 / 0.2); border-radius: 999px; }
+.l4-scaled .inner .hv-gal { display: flex; align-items: center; gap: 4px; padding: 8px 0; font-size: 14px; line-height: 20px; color: rgb(255 255 255 / 0.6); }
+.l4-scaled .inner .hv-gal svg { width: 16px; height: 16px; }
+.l4-scaled .inner .hv-flash { position: absolute; inset: 0; z-index: 3; background: #fff; opacity: 0; pointer-events: none; }
+
+/* ── processing / success ── */
+.l4-scaled .inner .hv-mid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; }
+.l4-scaled .inner .hv-proc { background: linear-gradient(to bottom, #111827, #000); }
+.l4-scaled .inner .hv-ring { position: relative; width: 96px; height: 96px; margin-bottom: 24px; }
+.l4-scaled .inner .hv-ring i { position: absolute; inset: 0; border: 4px solid rgb(255 255 255 / 0.1); border-radius: 999px; }
+.l4-scaled .inner .hv-ring i.hv-spin { border-color: transparent; border-top-color: #fff; animation: hv-rot 1s linear infinite; }
+.l4-scaled .inner .hv-ring svg { position: absolute; inset: 0; margin: auto; width: 40px; height: 40px; color: rgb(255 255 255 / 0.8); }
+@keyframes hv-rot { to { transform: rotate(360deg); } }
+.l4-scaled .inner .hv-mid h1 { margin-bottom: 8px; font-size: 20px; line-height: 28px; font-weight: 600; color: #fff; }
+.l4-scaled .inner .hv-proc p { color: #9ca3af; }
+.l4-scaled .inner .hv-ok { background: linear-gradient(to bottom, rgb(20 83 45 / 0.5), #000); }
+.l4-scaled .inner .hv-okc { display: flex; align-items: center; justify-content: center; width: 96px; height: 96px; margin-bottom: 24px; border-radius: 999px; background: rgb(34 197 94 / 0.2); animation: hv-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.l4-scaled .inner .hv-okc svg { width: 48px; height: 48px; color: #22c55e; }
+@keyframes hv-pulse { 50% { opacity: 0.5; } }
+.l4-scaled .inner .hv-mid h1.hv-big { font-size: 24px; line-height: 32px; font-weight: 700; }
+.l4-scaled .inner .hv-okp { margin-bottom: 32px; color: #d1d5db; }
+.l4-scaled .inner .hv-max { max-width: 384px; text-align: center; }
+.l4-scaled .inner .hv-max .hv-okc { margin-left: auto; margin-right: auto; }
+.l4-scaled .inner .hv-as { margin: 0 0 24px; padding: 16px; border-radius: 12px; background: rgb(255 255 255 / 0.1); text-align: left; }
+.l4-scaled .inner .hv-as small { display: block; margin-bottom: 8px; font-size: 12px; line-height: 16px; letter-spacing: 0.05em; text-transform: uppercase; color: rgb(255 255 255 / 0.6); }
+.l4-scaled .inner .hv-as b { display: block; font-weight: 500; color: #fff; }
+.l4-scaled .inner .hv-close { font-size: 14px; line-height: 20px; color: #6b7280; }
+
+/* ── the run (fractions of --hv-d) ──
+   front 0–33% · selfie 33–58% · processing 58–77% · success 77%+ */
+.l4-scaled .inner .hiw-v.is-on .hv-front { animation: hv-s-front var(--hv-d) linear both; }
+.l4-scaled .inner .hiw-v.is-on .hv-selfie { animation: hv-s-selfie var(--hv-d) linear both; }
+.l4-scaled .inner .hiw-v.is-on .hv-proc { animation: hv-s-proc var(--hv-d) linear both; }
+.l4-scaled .inner .hiw-v.is-on .hv-ok { animation: hv-s-ok var(--hv-d) linear both; }
+.l4-scaled .inner .hiw-v.is-on .hv-okc { animation: hv-pop var(--hv-d) ease-out both, hv-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.l4-scaled .inner .hiw-v.is-on .hv-front .hv-flash { animation: hv-flash-a var(--hv-d) linear both; }
+.l4-scaled .inner .hiw-v.is-on .hv-selfie .hv-flash { animation: hv-flash-b var(--hv-d) linear both; }
+.l4-scaled .inner .hiw-v.is-on .hv-front .hv-shutter { animation: hv-press-a var(--hv-d) linear both; }
+.l4-scaled .inner .hiw-v.is-on .hv-selfie .hv-shutter { animation: hv-press-b var(--hv-d) linear both; }
+@keyframes hv-s-front { 0%, 32% { opacity: 1; } 34%, 100% { opacity: 0; } }
+@keyframes hv-s-selfie { 0%, 32% { opacity: 0; } 34%, 57% { opacity: 1; } 59%, 100% { opacity: 0; } }
+@keyframes hv-s-proc { 0%, 57% { opacity: 0; } 59%, 76% { opacity: 1; } 78%, 100% { opacity: 0; } }
+@keyframes hv-s-ok { 0%, 76% { opacity: 0; } 79%, 100% { opacity: 1; } }
+@keyframes hv-pop { 0%, 77% { transform: scale(0.6); } 84%, 100% { transform: scale(1); } }
+@keyframes hv-flash-a { 0%, 25% { opacity: 0; } 27% { opacity: 0.9; } 33%, 100% { opacity: 0; } }
+@keyframes hv-flash-b { 0%, 50% { opacity: 0; } 52% { opacity: 0.9; } 58%, 100% { opacity: 0; } }
+@keyframes hv-press-a { 0%, 23% { transform: none; } 26% { transform: scale(0.92); } 29%, 100% { transform: none; } }
+@keyframes hv-press-b { 0%, 48% { transform: none; } 51% { transform: scale(0.92); } 54%, 100% { transform: none; } }
+
+/* paused with the step's progress bar (hover, or scrolled away) */
+.hiw-paused .hiw-v,
+.hiw-paused .hiw-v * { animation-play-state: paused !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .l4-scaled .inner .hiw-v,
+  .l4-scaled .inner .hiw-v * { animation: none !important; transition: none !important; }
+}

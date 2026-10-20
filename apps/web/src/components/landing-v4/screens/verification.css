@@ -1,0 +1,124 @@
+/*
+ * Customer record → Verification (screens/verification.tsx). Values resolved
+ * from apps/portal: tailwind.config.ts (radius ramp, font-heading) and
+ * styles/v2-theme.css (.v2-theme tokens, brand 248 68% 51% = #442dd7):
+ *   foreground #0a0a0a · muted-foreground #737373 · muted #f5f5f5
+ *   primary #442dd7 · primary-foreground #f0f3ff · primary-light #eceafb
+ *   success #16a249 · success-light #e4fbed · border #e5e5e5
+ *   rounded-lg 10px · rounded-xl 14px · rounded-3xl 22px · rounded-4xl 26px
+ */
+
+.l4-scaled .inner .scr-ver { position: relative; display: flex; width: 100%; height: 100%; overflow: hidden; color: #0a0a0a; font-size: 14px; line-height: 1.5; }
+.l4-scaled .inner .scr-ver p, .l4-scaled .inner .scr-ver h2, .l4-scaled .inner .scr-ver h3, .l4-scaled .inner .scr-ver ol, .l4-scaled .inner .scr-ver ul { margin: 0; padding: 0; }
+.l4-scaled .inner .scr-ver ul, .l4-scaled .inner .scr-ver ol { list-style: none; }
+.l4-scaled .inner .scr-ver em, .l4-scaled .inner .scr-ver i { font-style: normal; }
+
+/* ── the section rail (app-sidebar-v2 Customer Record Mode, ui-v2/sidebar) ── */
+.l4-scaled .inner .scr-ver .vr-rail { width: 256px; flex: none; display: flex; flex-direction: column; }
+/* SidebarHeader h-16 p-2 → px-2 → Link h-8 px-1 rounded-xl gap-2 */
+.l4-scaled .inner .scr-ver .vr-rail .vr-rh { height: 64px; padding: 8px; display: flex; }
+.l4-scaled .inner .scr-ver .vr-rail .vr-rh .vr-back { align-self: center; display: flex; align-items: center; gap: 8px; height: 32px; margin: 0 8px; padding: 0 4px; border-radius: 14px; color: #737373; }
+.l4-scaled .inner .scr-ver .vr-rail .vr-rh .vr-back svg { width: 16px; height: 16px; }
+.l4-scaled .inner .scr-ver .vr-rail .vr-rh .vr-back span { font-size: 13px; }
+/* px-4 pt-4 pb-1 — text-sm semibold, then text-[11px] muted */
+.l4-scaled .inner .scr-ver .vr-rail .vr-who { padding: 16px 16px 4px; }
+.l4-scaled .inner .scr-ver .vr-rail .vr-who h2 { font-size: 14px; line-height: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.l4-scaled .inner .scr-ver .vr-rail .vr-who p { margin-top: 2px; font-size: 11px; color: #737373; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* SidebarGroup p-1.5 pb-0; GroupContent text-sm */
+.l4-scaled .inner .scr-ver .vr-rail .vr-grp { padding: 6px 6px 0; font-size: 14px; line-height: 20px; }
+.l4-scaled .inner .scr-ver .vr-rail .vr-rule { display: block; margin: 0 10px 6px; border-top: 1px solid #e5e5e5; }
+.l4-scaled .inner .scr-ver .vr-rail .vr-gl { padding: 2px 10px 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: rgb(115 115 115 / 0.5); }
+.l4-scaled .inner .scr-ver .vr-rail ul { display: flex; flex-direction: column; gap: 2px; }
+/* SidebarMenuButton h-8 px-3 py-2 rounded-lg, gap-2.5, 13px, foreground/70, svg /60 */
+.l4-scaled .inner .scr-ver .vr-rail li { display: flex; align-items: center; gap: 10px; height: 32px; padding: 8px 12px; border-radius: 10px; color: rgb(10 10 10 / 0.7); }
+.l4-scaled .inner .scr-ver .vr-rail li svg { width: 16px; height: 16px; color: rgb(10 10 10 / 0.6); }
+.l4-scaled .inner .scr-ver .vr-rail li span { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.l4-scaled .inner .scr-ver .vr-rail li.vr-on { background: rgb(68 45 215 / 0.1); color: #442dd7; font-weight: 500; }
+.l4-scaled .inner .scr-ver .vr-rail li.vr-on svg { color: #442dd7; }
+
+/* ── <main p-4> → Frame (100svh − 2rem) → middle column (md:pr-6 + DOCK_CLEARANCE) ── */
+.l4-scaled .inner .scr-ver .vr-main { flex: 1; min-width: 0; padding: 16px; }
+.l4-scaled .inner .scr-ver .vr-frame { display: flex; height: 768px; overflow: hidden; }
+.l4-scaled .inner .scr-ver .vr-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; padding: 0 24px 88px 0; }
+
+/* kit.tsx Panel — max-w-3xl, fixed head, scrolling body (mt-7 space-y-6 pb-8 pr-1) */
+.l4-scaled .inner .scr-ver .vr-panel { display: flex; flex-direction: column; width: 100%; max-width: 768px; height: 100%; min-height: 0; }
+.l4-scaled .inner .scr-ver .vr-ph-head h2 { font-size: 24px; line-height: 32px; font-weight: 500; letter-spacing: -0.025em; }
+.l4-scaled .inner .scr-ver .vr-ph-head p { margin-top: 6px; font-size: 14px; line-height: 20px; color: #737373; }
+.l4-scaled .inner .scr-ver .vr-pb { flex: 1; min-height: 0; margin-top: 28px; padding: 0 4px 32px 0; overflow: hidden; display: flex; flex-direction: column; gap: 24px; }
+
+/* "Checked against Identity and Licence & driving" */
+.l4-scaled .inner .scr-ver .vr-chk { display: flex; flex-wrap: wrap; align-items: center; column-gap: 6px; row-gap: 4px; font-size: 12px; line-height: 16px; color: #737373; }
+.l4-scaled .inner .scr-ver .vr-chk svg { width: 14px; height: 14px; }
+.l4-scaled .inner .scr-ver .vr-chk em { font-weight: 500; color: #442dd7; }
+
+/* kit.tsx Surface — rounded-4xl bg-card shadow-md ring-1 ring-foreground/5, p-6 */
+.l4-scaled .inner .scr-ver .vr-surf { flex: none; padding: 24px; border-radius: 26px; background: #fff; box-shadow: 0 0 0 1px rgb(10 10 10 / 0.05), 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+.l4-scaled .inner .scr-ver .vr-sh { margin-bottom: 20px; }
+.l4-scaled .inner .scr-ver .vr-sh h3 { font-size: 14px; line-height: 20px; font-weight: 600; }
+.l4-scaled .inner .scr-ver .vr-sh p { margin-top: 4px; font-size: 12px; line-height: 1.625; color: #737373; }
+
+/* the headline verdict */
+.l4-scaled .inner .scr-ver .vr-verdict { display: flex; align-items: flex-start; gap: 16px; }
+.l4-scaled .inner .scr-ver .vr-vt { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 22px; background: #e4fbed; color: #16a249; }
+.l4-scaled .inner .scr-ver .vr-vt svg { width: 20px; height: 20px; }
+.l4-scaled .inner .scr-ver .vr-vx { flex: 1; min-width: 0; }
+.l4-scaled .inner .scr-ver .vr-vx .vr-w { font-size: 14px; line-height: 20px; font-weight: 600; }
+.l4-scaled .inner .scr-ver .vr-vx .vr-s { margin-top: 4px; font-size: 12px; line-height: 1.625; color: #737373; }
+.l4-scaled .inner .scr-ver .vr-fm { flex: none; text-align: right; }
+.l4-scaled .inner .scr-ver .vr-fm p { font-size: 24px; line-height: 32px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.l4-scaled .inner .scr-ver .vr-fm small { display: block; font-size: 11px; color: #737373; }
+
+/* kit.tsx Timeline — ml-1.5 border-l foreground/10 pl-6 space-y-4 */
+.l4-scaled .inner .scr-ver .vr-tl { position: relative; margin: 24px 0 0 6px; padding-left: 24px; border-left: 1px solid rgb(10 10 10 / 0.1); display: flex; flex-direction: column; gap: 16px; }
+.l4-scaled .inner .scr-ver .vr-tl li { position: relative; }
+.l4-scaled .inner .scr-ver .vr-tl .vr-dot { position: absolute; left: -30px; top: 4px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #16a249; background: #16a249; }
+.l4-scaled .inner .scr-ver .vr-tl p { font-size: 14px; line-height: 20px; font-weight: 500; }
+.l4-scaled .inner .scr-ver .vr-tl small { display: block; font-size: 12px; line-height: 16px; color: #737373; }
+
+/* provider switch — kit.tsx Segmented + Pill (ui-v2 Badge) */
+.l4-scaled .inner .scr-ver .vr-prov { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.l4-scaled .inner .scr-ver .vr-prov > p { font-size: 12px; line-height: 16px; color: #737373; }
+.l4-scaled .inner .scr-ver .vr-seg { display: inline-flex; align-items: center; gap: 4px; padding: 4px; border-radius: 22px; background: rgb(245 245 245 / 0.6); }
+.l4-scaled .inner .scr-ver .vr-seg > span { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 22px; font-size: 13px; line-height: 20px; font-weight: 500; color: #737373; }
+.l4-scaled .inner .scr-ver .vr-seg > span.vr-on { background: #fff; color: #0a0a0a; box-shadow: 0 0 0 1px rgb(10 10 10 / 0.05), 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); }
+.l4-scaled .inner .scr-ver .vr-pill { display: inline-flex; align-items: center; height: 20px; padding: 2px 8px; border-radius: 22px; font-size: 12px; line-height: 16px; font-weight: 500; white-space: nowrap; background: #e4fbed; color: #16a249; }
+
+/* What the provider captured — grid-cols-4 gap-4, Thumb aspect-[3/4] rounded-3xl bg-muted ring */
+.l4-scaled .inner .scr-ver .vr-thumbs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.l4-scaled .inner .scr-ver .vr-thumb { min-width: 0; }
+.l4-scaled .inner .scr-ver .vr-thumb .vr-tb { position: relative; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 22px; background: #f5f5f5; box-shadow: 0 0 0 1px rgb(10 10 10 / 0.05); }
+.l4-scaled .inner .scr-ver .vr-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* Sample imagery: the provider's face crop is tight, the selfie close — both framed so the face sits where the panel opens. */
+.l4-scaled .inner .scr-ver .vr-thumb img { transform: scale(1.35); transform-origin: 50% 95%; }
+.l4-scaled .inner .scr-ver .vr-thumb img.vr-face { transform: scale(1.5); transform-origin: 50% 80%; filter: saturate(0.82) contrast(1.04); }
+.l4-scaled .inner .scr-ver .vr-thumb > p { margin-top: 8px; font-size: 12px; line-height: 16px; color: #737373; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* the licence, photographed on a desk */
+.l4-scaled .inner .scr-ver .vr-lic { position: absolute; inset: 0; display: grid; place-items: start center; padding-top: 14px; background: radial-gradient(120% 90% at 30% 20%, #d9d4cc, #b9b2a7 70%, #a69e92); }
+.l4-scaled .inner .scr-ver .vr-lic .vr-card { position: relative; width: 136px; height: 86px; padding: 7px 8px; border-radius: 6px; transform: rotate(-5deg); background: linear-gradient(135deg, #eef4fb, #dbe7f3 55%, #e9eff7); box-shadow: 0 6px 14px -4px rgb(0 0 0 / 0.35), 0 0 0 0.5px rgb(0 0 0 / 0.12); overflow: hidden; }
+.l4-scaled .inner .scr-ver .vr-lic .vr-top { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 4px; border-bottom: 1px solid rgb(30 64 120 / 0.25); }
+.l4-scaled .inner .scr-ver .vr-lic .vr-top b { font-size: 9px; line-height: 10px; font-weight: 800; letter-spacing: 0.06em; color: #1e4078; }
+.l4-scaled .inner .scr-ver .vr-lic .vr-top small { font-size: 5px; line-height: 6px; font-weight: 700; letter-spacing: 0.08em; color: #b8323b; }
+.l4-scaled .inner .scr-ver .vr-lic .vr-body { display: flex; gap: 7px; margin-top: 6px; }
+.l4-scaled .inner .scr-ver .vr-lic .vr-ph { width: 34px; height: 44px; flex: none; border-radius: 2px; background: url("/landing-v3/avatars/a2.webp") 50% 30% / cover; filter: grayscale(0.35) contrast(1.05); }
+.l4-scaled .inner .scr-ver .vr-lic .vr-txt { flex: 1; display: flex; flex-direction: column; gap: 6px; padding-top: 2px; }
+.l4-scaled .inner .scr-ver .vr-lic .vr-ln { display: block; height: 3px; border-radius: 2px; background: rgb(30 40 60 / 0.45); }
+.l4-scaled .inner .scr-ver .vr-lic .vr-ln.vr-w1 { width: 90%; background: rgb(30 40 60 / 0.7); }
+.l4-scaled .inner .scr-ver .vr-lic .vr-ln.vr-w2 { width: 68%; }
+.l4-scaled .inner .scr-ver .vr-lic .vr-ln.vr-w3 { width: 80%; }
+.l4-scaled .inner .scr-ver .vr-lic.vr-back .vr-card { transform: rotate(4deg); background: linear-gradient(135deg, #f1f4f8, #e2e8f0); }
+.l4-scaled .inner .scr-ver .vr-lic.vr-back .vr-strip { display: block; height: 12px; margin: -1px -8px 8px; background: rgb(30 40 60 / 0.8); }
+.l4-scaled .inner .scr-ver .vr-lic.vr-back .vr-bars { display: block; height: 26px; margin-bottom: 8px; background: repeating-linear-gradient(90deg, #1f2937 0 1px, transparent 1px 3px, #1f2937 3px 5px, transparent 5px 6px, #1f2937 6px 7px, transparent 7px 9px); }
+.l4-scaled .inner .scr-ver .vr-lic.vr-back .vr-ln { margin-top: 5px; }
+
+/* ── ui-v2/record-dock.tsx — bottom centre, 1rem off the edge ── */
+.l4-scaled .inner .scr-ver .vr-dock { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; display: flex; justify-content: center; padding: 0 16px 16px; pointer-events: none; }
+.l4-scaled .inner .scr-ver .vr-dock nav { position: relative; display: flex; align-items: center; gap: 2px; height: 56px; max-width: 100%; padding: 0 6px; border-radius: 999px; border: 1px solid rgb(10 10 10 / 0.1); background: rgb(255 255 255 / 0.8); box-shadow: 0 8px 30px rgb(0 0 0 / 0.12); backdrop-filter: blur(24px); }
+.l4-scaled .inner .scr-ver .vr-dock .vr-fl { flex: 1 1 0; display: flex; align-items: center; gap: 4px; }
+.l4-scaled .inner .scr-ver .vr-dock .vr-fl.vr-l { justify-content: flex-end; }
+.l4-scaled .inner .scr-ver .vr-dock .vr-fl.vr-r { justify-content: flex-start; }
+.l4-scaled .inner .scr-ver .vr-dock .vr-ib { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 50%; color: #737373; }
+.l4-scaled .inner .scr-ver .vr-dock .vr-ib svg { width: 18px; height: 18px; }
+.l4-scaled .inner .scr-ver .vr-dock .vr-ctr { width: 48px; height: 48px; flex: none; margin: 0 2px; display: grid; place-items: center; border-radius: 50%; background: #442dd7; color: #f0f3ff; box-shadow: 0 4px 12px -4px rgb(68 45 215 / 0.45); }
+.l4-scaled .inner .scr-ver .vr-dock .vr-ctr svg { width: 20px; height: 20px; }

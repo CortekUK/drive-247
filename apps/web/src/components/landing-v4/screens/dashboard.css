@@ -1,0 +1,155 @@
+/*
+ * Dashboard (v2 home) — see the header of dashboard.tsx for the portal files mirrored.
+ * The `.pv` palette (dashboard-v2/home/ui.tsx HOME_PALETTE) resolved under the
+ * v2 theme (apps/portal/src/styles/v2-theme.css, default brand 248 68% 51%):
+ *   --pv-paper #fff          --pv-wash  #f8f8f8 (3% ink on card)
+ *   --pv-line  #e5e5e5       --pv-line-2 #d8d8d8 (16% ink on card)
+ *   --pv-ink   #0a0a0a       --pv-ink-2 #4f4f4f (72%)   --pv-ink-3 #737373
+ *   --pv-accent / --pv-accent-ink #442dd7   --pv-accent-30 rgb(68 45 215 / .3)
+ *   --pv-accent-bg #eae8fb (11% accent on card)   --pv-on-accent #f0f3ff
+ *   --pv-late #d93025 / #fdeceb   --pv-wait #b45309 / #fdf3e7
+ *   --chart-3 hsl(247 92% 60%)    --v2-wash hsl(248 68% 51%)
+ *   rounded-lg 10px, rounded-xl 14px, rounded-2xl 18px (--v2-radius-*)
+ * Body type is the portal's text-sm (14px / 20px), so every `text-[Npx]`
+ * without its own leading sits on a 20px line, as it does in the portal.
+ */
+
+/* dashboard-v2.tsx root: mx-auto w-full max-w-[1560px] px-2 pb-4, a flex column filling <main> */
+.l4-scaled .inner .scr-dash { flex: 1; min-height: 0; width: 100%; max-width: 1560px; margin-left: auto; margin-right: auto; padding: 0 8px 16px; display: flex; flex-direction: column; font-family: var(--font-manrope), Manrope, sans-serif; font-size: 14px; line-height: 20px; color: #0a0a0a; }
+.l4-scaled .inner .scr-dash ul { margin: 0; padding: 0; list-style: none; }
+.l4-scaled .inner .scr-dash p { margin: 0; }
+
+/* `.pv`: space-y-10 gives it 40px (the md:hidden phone header comes first) */
+.l4-scaled .inner .scr-dash .db-pv { margin-top: 40px; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* home-bands.tsx: relative lg:min-h-0 lg:flex-1, then flex-col gap-[30px] lg:h-[calc(100%-70px)] */
+.l4-scaled .inner .scr-dash .db-bands { position: relative; flex: 1; min-height: 0; }
+.l4-scaled .inner .scr-dash .db-first { display: flex; flex-direction: column; gap: 30px; height: calc(100% - 70px); }
+/* the desk row: flex lg:flex-row gap-5 items-stretch — the chart flex-1, the feature card w-[320px] */
+.l4-scaled .inner .scr-dash .db-desk { flex-shrink: 0; margin-top: -15px; display: flex; align-items: stretch; gap: 20px; }
+.l4-scaled .inner .scr-dash .db-desk > .db-rev { flex: 1; }
+
+/* ui.tsx Eyebrow */
+.l4-scaled .inner .scr-dash .db-eb { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; color: #737373; }
+
+/* ── revenue-line-card.tsx: no card, h-[240px] ── */
+.l4-scaled .inner .scr-dash .db-rev { display: flex; flex-direction: column; height: 240px; min-width: 0; }
+.l4-scaled .inner .scr-dash .db-rev-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 4px; }
+.l4-scaled .inner .scr-dash .db-rev-menu { margin-right: -6px; width: 28px; height: 28px; transform: translateY(6px); display: flex; align-items: center; justify-content: center; border-radius: 10px; color: #737373; }
+.l4-scaled .inner .scr-dash .db-rev-menu svg { width: 16px; height: 16px; }
+.l4-scaled .inner .scr-dash .db-rev-figure { padding-top: 8px; }
+.l4-scaled .inner .scr-dash .db-rev-big { display: block; font-size: 32px; font-weight: 600; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: #0a0a0a; }
+.l4-scaled .inner .scr-dash .db-rev-cap { margin-top: 6px; display: flex; align-items: center; gap: 6px; font-size: 12px; color: #737373; }
+.l4-scaled .inner .scr-dash .db-rev-info { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: #737373; }
+.l4-scaled .inner .scr-dash .db-rev-info svg { width: 14px; height: 14px; }
+/* chart area: relative min-h-0 flex-1 pt-1, currentColor = accent ink */
+.l4-scaled .inner .scr-dash .db-rev-chart { position: relative; flex: 1; min-height: 0; padding-top: 4px; color: #442dd7; }
+.l4-scaled .inner .scr-dash .db-rev-chart svg { display: block; overflow: visible; }
+.l4-scaled .inner .scr-dash .db-rev-curve { filter: drop-shadow(0 6px 10px rgb(68 45 215 / 0.35)); }
+.l4-scaled .inner .scr-dash .db-rev-tick { font-size: 10.5px; fill: #737373; }
+.l4-scaled .inner .scr-dash .db-rev-pt { font-size: 11px; font-weight: 600; fill: #4f4f4f; font-variant-numeric: tabular-nums; }
+/* motion-safe:animate-ping, [transform-box:fill-box] [transform-origin:center] */
+.l4-scaled .inner .scr-dash .db-rev-ping { transform-box: fill-box; transform-origin: center; }
+@media (prefers-reduced-motion: no-preference) {
+  .l4-scaled .inner .scr-dash .db-rev-ping { animation: db-ping 1s cubic-bezier(0, 0, 0.2, 1) infinite; }
+}
+@keyframes db-ping { 75%, 100% { transform: scale(2); opacity: 0; } }
+
+/* ── FeatureAnnouncementDeck variant="accent": FEATURE_CARD_UI.root h-[230px] rounded-2xl,
+      ACCENT_UI.root border-white/80 + the 145° white wash; shrink-0 lg:mt-[10px] lg:w-[320px] ── */
+.l4-scaled .inner .scr-dash .db-feat { position: relative; isolation: isolate; flex-shrink: 0; width: 320px; height: 230px; margin-top: 10px; overflow: hidden; border-radius: 18px; border: 1px solid rgb(255 255 255 / 0.8); background: linear-gradient(145deg, rgba(255, 255, 255, 0.72) 0%, rgba(238, 238, 252, 0.55) 100%); }
+.l4-scaled .inner .scr-dash .db-feat-slide { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; }
+.l4-scaled .inner .scr-dash .db-feat-art { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; }
+/* ACCENT_UI.body p-5 flex-col justify-between; title text-[34px] font-black leading-[1] tracking-[-0.04em] max-w-[10.5ch] pb-[0.1em] */
+.l4-scaled .inner .scr-dash .db-feat-body { display: flex; flex: 1; width: 100%; flex-direction: column; justify-content: space-between; padding: 20px; }
+.l4-scaled .inner .scr-dash .db-feat-title { display: block; max-width: 10.5ch; padding-bottom: 0.1em; font-size: 34px; font-weight: 900; line-height: 1; letter-spacing: -0.04em; color: #0a0a0a; }
+.l4-scaled .inner .scr-dash .db-feat-foot { display: block; min-width: 0; }
+.l4-scaled .inner .scr-dash .db-feat-sum { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 20px; color: #525252; }
+.l4-scaled .inner .scr-dash .db-feat-more { margin-top: 8px; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: #5b5bd6; }
+.l4-scaled .inner .scr-dash .db-feat-more svg { width: 14px; height: 14px; }
+/* dots: absolute bottom-4 right-4; button h-5 w-3.5; dot h-1 w-1 neutral-950/20, active h-1 w-2.5 #5b5bd6 */
+.l4-scaled .inner .scr-dash .db-feat-dots { position: absolute; right: 16px; bottom: 16px; z-index: 10; display: flex; align-items: center; }
+.l4-scaled .inner .scr-dash .db-feat-dotb { width: 14px; height: 20px; display: flex; align-items: center; justify-content: center; }
+.l4-scaled .inner .scr-dash .db-feat-dotb span { display: block; width: 4px; height: 4px; border-radius: 999px; background: rgb(10 10 10 / 0.2); }
+.l4-scaled .inner .scr-dash .db-feat-dotb span.on { width: 10px; background: #5b5bd6; }
+
+/* ── the three cards: grid h-full md:grid-cols-3 gap-5, lg:-mb-[35px] ── */
+.l4-scaled .inner .scr-dash .db-ops { flex: 1; min-height: 0; margin-bottom: -35px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; gap: 20px; }
+.l4-scaled .inner .scr-dash .db-card { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border-radius: 18px; border: 1px solid #e5e5e5; background: #fff; }
+/* CardGrip: size-7 rounded-lg, GripHorizontal size-3.5 */
+.l4-scaled .inner .scr-dash .db-grip { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 10px; color: #737373; }
+.l4-scaled .inner .scr-dash .db-grip svg { width: 14px; height: 14px; }
+/* ExpandButton: -mr-2 size-7 rounded-lg, Maximize2 size-3.5 */
+.l4-scaled .inner .scr-dash .db-expand { margin-right: -8px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 10px; color: #737373; }
+.l4-scaled .inner .scr-dash .db-expand svg { width: 14px; height: 14px; }
+.l4-scaled .inner .scr-dash .db-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 24px 0; }
+.l4-scaled .inner .scr-dash .db-acts { display: flex; align-items: center; gap: 2px; }
+
+/* TraxBriefCard: border-[--pv-accent-30], the ⌘K gradient as its surface */
+.l4-scaled .inner .scr-dash .db-trax { position: relative; border-color: rgb(68 45 215 / 0.3); cursor: pointer; }
+.l4-scaled .inner .scr-dash .db-trax-wash { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(to bottom right, color-mix(in srgb, #442dd7 20%, transparent), color-mix(in srgb, #442dd7 10%, transparent), color-mix(in srgb, #442dd7 25%, transparent)); }
+.l4-scaled .inner .scr-dash .db-trax-head { position: relative; display: flex; align-items: center; gap: 8px; padding: 20px 24px 0; }
+.l4-scaled .inner .scr-dash .db-trax-acts { margin-left: auto; margin-right: -6px; display: flex; align-items: center; gap: 4px; }
+.l4-scaled .inner .scr-dash .db-trax-go { width: 16px; height: 16px; color: #442dd7; }
+.l4-scaled .inner .scr-dash .db-trax-body { position: relative; flex: 1; min-height: 0; overflow: hidden; padding: 12px 24px 20px; display: flex; flex-direction: column; }
+.l4-scaled .inner .scr-dash .db-trax-hl { font-size: 17px; font-weight: 800; line-height: 1.375; letter-spacing: -0.02em; color: #442dd7; }
+.l4-scaled .inner .scr-dash .db-trax-fit { position: relative; margin-top: 12px; flex: 1; min-height: 0; overflow: hidden; }
+.l4-scaled .inner .scr-dash .db-trax-fit li { display: flex; gap: 10px; font-size: 13px; line-height: 1.375; color: #0a0a0a; }
+.l4-scaled .inner .scr-dash .db-trax-fit li + li { margin-top: 8px; }
+.l4-scaled .inner .scr-dash .db-trax-fit .dot { margin-top: 6px; width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: #442dd7; }
+.l4-scaled .inner .scr-dash .db-trax-fit strong { font-weight: 700; }
+.l4-scaled .inner .scr-dash .db-trax-chips { display: flex; flex-wrap: nowrap; gap: 4px; padding-top: 12px; }
+.l4-scaled .inner .scr-dash .db-chip { display: flex; min-width: 0; flex-shrink: 1; align-items: center; gap: 4px; white-space: nowrap; border-radius: 999px; border: 1px solid rgb(68 45 215 / 0.3); background: #fff; padding: 4px 8px; font-size: 11px; color: #4f4f4f; }
+.l4-scaled .inner .scr-dash .db-chip svg { width: 10px; height: 10px; flex-shrink: 0; color: #442dd7; }
+.l4-scaled .inner .scr-dash .db-chip .t { overflow: hidden; text-overflow: ellipsis; }
+
+/* RequestsCard: the page wash from the top-left corner, over paper */
+.l4-scaled .inner .scr-dash .db-req { background-image: radial-gradient(120% 90% at -8% -10%, hsl(247 92% 60% / 0.14), transparent 60%), radial-gradient(90% 70% at 110% -10%, hsl(248 68% 51% / 0.1), transparent 60%); }
+.l4-scaled .inner .scr-dash .db-req-list { position: relative; margin-top: 8px; flex: 1; min-height: 0; overflow: hidden; padding: 0 16px 16px; }
+.l4-scaled .inner .scr-dash .db-req-list li { display: flex; height: 58px; }
+.l4-scaled .inner .scr-dash .db-req-row { display: flex; width: 100%; align-items: center; gap: 12px; border-radius: 14px; padding: 6px 8px; }
+.l4-scaled .inner .scr-dash .db-av { width: 38px; height: 38px; flex-shrink: 0; border-radius: 50%; object-fit: cover; }
+.l4-scaled .inner .scr-dash .db-av-ini { display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 500; color: #fff; }
+.l4-scaled .inner .scr-dash .db-req-txt { min-width: 0; flex: 1; }
+.l4-scaled .inner .scr-dash .db-req-top { display: flex; align-items: center; gap: 8px; }
+.l4-scaled .inner .scr-dash .db-req-top .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 600; line-height: 1.25; color: #0a0a0a; }
+.l4-scaled .inner .scr-dash .db-kind { flex-shrink: 0; border-radius: 999px; padding: 0 6px; font-size: 9.5px; font-weight: 500; line-height: 15px; }
+.l4-scaled .inner .scr-dash .db-kind.booking { background: #eae8fb; color: #442dd7; }
+.l4-scaled .inner .scr-dash .db-kind.extension { background: #fdf3e7; color: #b45309; }
+.l4-scaled .inner .scr-dash .db-kind.cancellation { background: #fdeceb; color: #d93025; }
+.l4-scaled .inner .scr-dash .db-req-ask { display: block; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 1.25; color: #737373; }
+.l4-scaled .inner .scr-dash .db-req-wait { display: flex; width: 40px; flex-shrink: 0; justify-content: flex-end; font-size: 11px; font-variant-numeric: tabular-nums; color: #737373; }
+
+/* TodoCard */
+.l4-scaled .inner .scr-dash .db-todo-add { padding: 10px 16px 0; }
+.l4-scaled .inner .scr-dash .db-todo-field { display: flex; height: 32px; width: 100%; align-items: center; gap: 8px; border-radius: 14px; background: #f8f8f8; padding: 0 12px; cursor: text; }
+.l4-scaled .inner .scr-dash .db-todo-field svg { width: 14px; height: 14px; flex-shrink: 0; color: #737373; }
+.l4-scaled .inner .scr-dash .db-todo-field .ph { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: #737373; }
+.l4-scaled .inner .scr-dash .db-todo-list { position: relative; margin-top: 6px; flex: 1; min-height: 0; overflow: hidden; padding: 0 16px 12px; }
+.l4-scaled .inner .scr-dash .db-todo-list li { position: relative; overflow: hidden; border-radius: 10px; }
+.l4-scaled .inner .scr-dash .db-todo-row { position: relative; display: flex; align-items: flex-start; gap: 12px; border-radius: 10px; background: #fff; padding: 11px 8px; cursor: pointer; }
+.l4-scaled .inner .scr-dash .db-tick { margin-top: 1px; width: 18px; height: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 1.5px solid #d8d8d8; color: transparent; }
+.l4-scaled .inner .scr-dash .db-tick.late { border-color: #d93025; }
+.l4-scaled .inner .scr-dash .db-tick.done { border-color: #442dd7; background: #442dd7; color: #f0f3ff; }
+.l4-scaled .inner .scr-dash .db-tick svg { width: 10px; height: 10px; }
+.l4-scaled .inner .scr-dash .db-todo-main { display: flex; min-width: 0; flex: 1; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.l4-scaled .inner .scr-dash .db-todo-text { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 18px; color: #0a0a0a; }
+.l4-scaled .inner .scr-dash .db-todo-text.done { color: #737373; }
+/* the strike is drawn across the words: a 1px currentColor band at 55% */
+.l4-scaled .inner .scr-dash .db-todo-text .s { background-image: linear-gradient(currentColor, currentColor); background-position: 0 55%; background-repeat: no-repeat; background-size: 0% 1px; }
+.l4-scaled .inner .scr-dash .db-todo-text.done .s { background-size: 100% 1px; }
+.l4-scaled .inner .scr-dash .db-when { margin-top: 1px; display: flex; flex-shrink: 0; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 8px; font-size: 10.5px; font-weight: 500; font-variant-numeric: tabular-nums; background: #eae8fb; color: #442dd7; }
+.l4-scaled .inner .scr-dash .db-when.late { background: #fdeceb; color: #d93025; }
+
+/* ── below the fold: mt-[65px] grid lg:grid-cols-3 gap-5 pb-4 ── */
+.l4-scaled .inner .scr-dash .db-insights { margin-top: 65px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; gap: 20px; padding-bottom: 16px; }
+.l4-scaled .inner .scr-dash .db-busy,
+.l4-scaled .inner .scr-dash .db-src { min-height: 420px; padding: 24px; }
+.l4-scaled .inner .scr-dash .db-busy { grid-column: span 2 / span 2; }
+.l4-scaled .inner .scr-dash .db-ins-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.l4-scaled .inner .scr-dash .db-busy .db-ins-head { flex-wrap: wrap; gap: 16px; }
+.l4-scaled .inner .scr-dash .db-ins-head p { margin-top: 4px; font-size: 12px; color: #737373; }
+.l4-scaled .inner .scr-dash .db-scale { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: #737373; }
+.l4-scaled .inner .scr-dash .db-scale span { width: 12px; height: 12px; border-radius: 4px; }
+.l4-scaled .inner .scr-dash .db-src-total { text-align: right; }
+.l4-scaled .inner .scr-dash .db-src-total .n { margin: 0; font-size: 24px; font-weight: 600; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: #0a0a0a; }
+.l4-scaled .inner .scr-dash .db-src-total .l { margin-top: 4px; font-size: 11px; color: #737373; }

@@ -1,0 +1,108 @@
+/*
+ * /finances (v2) — see the header of finances.tsx for the portal files mirrored.
+ * Tokens resolved from apps/portal/src/styles/v2-theme.css (.v2-theme):
+ *   --foreground #0a0a0a  --muted-foreground #737373  --muted #f5f5f5
+ *   --border #e5e5e5      --primary hsl(248 68% 51%) = #442dd7
+ *   --gradient-primary 135deg hsl(248 68% 51%) → hsl(248 68% 61%)
+ *   rounded-2xl 18px, rounded-4xl 26px (--v2-radius-*)
+ */
+
+/* finances-view.tsx: `container mx-auto p-4 sm:p-6 space-y-6` */
+.l4-scaled .inner .scr-fin { padding: 24px; display: flex; flex-direction: column; gap: 24px; font-family: var(--font-manrope), Manrope, sans-serif; color: #0a0a0a; }
+
+/* header: flex sm:justify-between sm:items-start gap-3 */
+.l4-scaled .inner .scr-fin .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.l4-scaled .inner .scr-fin .head .titles { min-width: 0; }
+.l4-scaled .inner .scr-fin .head h1 { margin: 0; font-size: 30px; line-height: 36px; font-weight: 700; letter-spacing: normal; color: #0a0a0a; }
+.l4-scaled .inner .scr-fin .head p { margin: 0; font-size: 16px; line-height: 24px; color: #737373; }
+/* HEADER_ACTIONS_V2: sm:self-end sm:h-6 sm:items-center, gap-2 */
+.l4-scaled .inner .scr-fin .head .acts { align-self: flex-end; height: 24px; display: flex; align-items: center; gap: 8px; }
+/* headerIconButtonClass: outline icon-sm (32px), rounded-full, border-primary/30 bg-primary/5 text-primary, svg 14px */
+.l4-scaled .inner .scr-fin .hib { width: 32px; height: 32px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid rgb(68 45 215 / 0.3); background: rgb(68 45 215 / 0.05); color: #442dd7; }
+.l4-scaled .inner .scr-fin .hib svg { width: 14px; height: 14px; }
+/* ui/button default + bg-gradient-primary + HEADER_PRIMARY_V2 (h-8 gap-1.5 rounded-full px-3.5 text-[13px], svg 14px) */
+.l4-scaled .inner .scr-fin .hpb { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 14px; border-radius: 999px; background: linear-gradient(135deg, hsl(248 68% 51%), hsl(248 68% 61%)); color: #fff; font-size: 13px; line-height: 20px; font-weight: 500; white-space: nowrap; }
+.l4-scaled .inner .scr-fin .hpb svg { width: 14px; height: 14px; }
+
+/* invoices-tab.tsx: AutoSkeleton `space-y-4` around hero row, table card, footer */
+.l4-scaled .inner .scr-fin .ftab { display: flex; flex-direction: column; gap: 16px; }
+
+/* HeroRow: grid gap-6 py-2 lg:grid-cols-[repeat(3,minmax(0,1fr))_minmax(15rem,1fr)], chart col-span-3 */
+.l4-scaled .inner .scr-fin .hero { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(15rem, 1fr); gap: 24px; padding: 8px 0; }
+.l4-scaled .inner .scr-fin .chart { grid-column: span 3 / span 3; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.l4-scaled .inner .scr-fin .cap { display: flex; flex-direction: column; gap: 8px; }
+.l4-scaled .inner .scr-fin .cap .r1 { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.l4-scaled .inner .scr-fin .cap .metric { font-size: 14px; line-height: 20px; font-weight: 500; color: #0a0a0a; }
+.l4-scaled .inner .scr-fin .cap .range { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; line-height: 20px; font-weight: 500; color: #0a0a0a; }
+.l4-scaled .inner .scr-fin .cap .range svg { width: 14px; height: 14px; color: #737373; }
+.l4-scaled .inner .scr-fin .cap .r2 { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; column-gap: 24px; row-gap: 6px; }
+.l4-scaled .inner .scr-fin .cap .num { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; column-gap: 12px; row-gap: 6px; }
+/* font-heading text-3xl leading-none tracking-tight tabular-nums */
+.l4-scaled .inner .scr-fin .cap .big { font-size: 30px; line-height: 1; font-weight: 400; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+/* ChangeChip up: h-6 rounded-full pl-1.5 pr-2 text-xs font-semibold bg-emerald-500/10 text-emerald-700 */
+.l4-scaled .inner .scr-fin .cap .chip { display: inline-flex; align-items: center; gap: 2px; height: 24px; padding: 0 8px 0 6px; border-radius: 999px; font-size: 12px; line-height: 16px; font-weight: 600; font-variant-numeric: tabular-nums; background: rgb(16 185 129 / 0.1); color: #047857; }
+.l4-scaled .inner .scr-fin .cap .chip svg { width: 14px; height: 14px; }
+/* legend: ml-auto min-h-[30px] gap-x-4 text-xs text-muted-foreground */
+.l4-scaled .inner .scr-fin .legend { margin-left: auto; min-height: 30px; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; column-gap: 16px; row-gap: 4px; font-size: 12px; line-height: 16px; color: #737373; }
+.l4-scaled .inner .scr-fin .legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.l4-scaled .inner .scr-fin .legend b { font-weight: 500; font-variant-numeric: tabular-nums; color: rgb(10 10 10 / 0.8); }
+.l4-scaled .inner .scr-fin .sw { flex: none; display: block; width: 12px; }
+.l4-scaled .inner .scr-fin .sw.cur { height: 2px; border-radius: 999px; background: #442dd7; }
+.l4-scaled .inner .scr-fin .sw.sec { height: 2px; border-radius: 999px; background: rgb(68 45 215 / 0.4); }
+.l4-scaled .inner .scr-fin .sw.prev { height: 0; border-top: 2px dotted #737373; }
+.l4-scaled .inner .scr-fin .plot { display: block; width: 100%; height: 140px; overflow: visible; }
+
+/* FeaturedCardShell (+ lg:min-h-0) and CardAction px-5 pt-5 pb-4 */
+.l4-scaled .inner .scr-fin .feat { position: relative; isolation: isolate; display: flex; flex-direction: column; overflow: hidden; min-height: 0; border-radius: 18px; border: 1px solid rgb(255 255 255 / 0.8); background: linear-gradient(145deg, rgb(255 255 255 / 0.72) 0%, rgb(238 238 252 / 0.55) 100%); color: #0a0a0a; }
+.l4-scaled .inner .scr-fin .feat .act { position: relative; display: flex; min-height: 0; flex: 1; flex-direction: column; justify-content: space-between; padding: 20px 20px 16px; text-align: left; }
+/* FeaturedCardFace: text-[26px] font-black leading-[1] tracking-[-0.04em] max-w-[10.5ch] pb-[0.1em] line-clamp-2 */
+.l4-scaled .inner .scr-fin .feat h3 { position: relative; margin: 0; max-width: 10.5ch; padding-bottom: 0.1em; font-size: 26px; font-weight: 900; line-height: 1; letter-spacing: -0.04em; color: #0a0a0a; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.l4-scaled .inner .scr-fin .feat .foot { position: relative; min-width: 0; }
+.l4-scaled .inner .scr-fin .feat p { margin: 0; font-size: 13px; line-height: 20px; color: #525252; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.l4-scaled .inner .scr-fin .feat .open { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 12px; line-height: 16px; font-weight: 600; color: #5b5bd6; }
+.l4-scaled .inner .scr-fin .feat .open svg { width: 14px; height: 14px; }
+
+/* ListTable: ui-v2 Card (rounded-4xl, py-6, shadow-md ring-1 ring-foreground/5) */
+.l4-scaled .inner .scr-fin .card { display: flex; flex-direction: column; overflow: hidden; padding: 24px 0; border-radius: 26px; background: #fff; box-shadow: 0 0 0 1px rgb(10 10 10 / 0.05), 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); font-size: 14px; line-height: 20px; }
+/* LIST_CLASSES.scrollRoot: p-0 max-h-[520px], scrolls inside with its bar hidden */
+.l4-scaled .inner .scr-fin .scroll { position: relative; max-height: 520px; overflow: hidden; }
+/* min-w-[960px] table-fixed, w-full text-sm */
+.l4-scaled .inner .scr-fin table { width: 100%; min-width: 960px; table-layout: fixed; border-collapse: collapse; caption-side: bottom; font-size: 14px; line-height: 20px; }
+.l4-scaled .inner .scr-fin thead tr { border-bottom: 1px solid #e5e5e5; }
+/* LIST_CLASSES.head on TableHead: h-10 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground */
+.l4-scaled .inner .scr-fin th { height: 40px; padding: 0 12px; text-align: left; vertical-align: middle; white-space: nowrap; font-size: 11px; line-height: 16.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #737373; background: rgb(255 255 255 / 0.95); }
+.l4-scaled .inner .scr-fin th.r, .l4-scaled .inner .scr-fin td.r { text-align: right; }
+.l4-scaled .inner .scr-fin .sumh { display: inline-flex; align-items: baseline; white-space: nowrap; }
+.l4-scaled .inner .scr-fin .sumh > span:not(.op) { display: inline-block; text-align: right; }
+.l4-scaled .inner .scr-fin tbody tr { border-bottom: 1px solid #e5e5e5; }
+.l4-scaled .inner .scr-fin tbody tr:last-child { border-bottom: 0; }
+/* TableCell p-3 + LIST_CLASSES.cell py-3 text-left */
+.l4-scaled .inner .scr-fin td { padding: 12px; text-align: left; vertical-align: middle; white-space: nowrap; }
+.l4-scaled .inner .scr-fin .tnum { font-variant-numeric: tabular-nums; }
+.l4-scaled .inner .scr-fin .idw { display: flex; min-width: 0; align-items: center; gap: 4px; }
+/* LIST_CLASSES.identifier */
+.l4-scaled .inner .scr-fin .id { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; color: #0a0a0a; }
+/* CopyOnHover: h-6 w-6, opacity-0 until the row is hovered */
+.l4-scaled .inner .scr-fin .copy { flex: none; display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; opacity: 0; color: #737373; }
+.l4-scaled .inner .scr-fin .copy svg { width: 14px; height: 14px; }
+/* LIST_CLASSES.metaChip */
+.l4-scaled .inner .scr-fin .chipm { border-radius: 999px; background: #f5f5f5; padding: 2px 6px; font-size: 10px; line-height: 15px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.025em; color: #737373; }
+/* LIST_CLASSES.text, block truncate */
+.l4-scaled .inner .scr-fin .txt { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: #0a0a0a; }
+.l4-scaled .inner .scr-fin .due { font-weight: 500; color: #0a0a0a; }
+.l4-scaled .inner .scr-fin .due.red { color: #ef4444; }
+.l4-scaled .inner .scr-fin .due.muted { color: #737373; }
+/* AmountSum */
+.l4-scaled .inner .scr-fin .sum { position: relative; display: inline-flex; align-items: baseline; white-space: nowrap; border-radius: 6px; font-variant-numeric: tabular-nums; }
+.l4-scaled .inner .scr-fin .sum .strike { position: absolute; left: 0; right: -8px; top: 50%; height: 1px; transform: translateY(-1px); background: #ef4444; pointer-events: none; }
+.l4-scaled .inner .scr-fin .sum .fig { display: inline-block; text-align: right; font-size: 13px; color: #737373; }
+.l4-scaled .inner .scr-fin .op { margin: 0 6px; color: rgb(115 115 115 / 0.5); }
+.l4-scaled .inner .scr-fin .sum .ans { display: inline-block; text-align: right; font-size: 15px; font-weight: 600; color: #737373; }
+.l4-scaled .inner .scr-fin .sum .ans.settled { font-weight: 500; }
+.l4-scaled .inner .scr-fin .sum .ans.paid { color: #059669; }
+.l4-scaled .inner .scr-fin .sum .ans.part { color: #d97706; }
+/* LIST_ROW_ACTION on a ghost icon button: -my-1.5 h-8 w-8 text-muted-foreground, MoreHorizontal 16px */
+.l4-scaled .inner .scr-fin .rowact { display: inline-flex; width: 32px; height: 32px; margin: -6px 0; align-items: center; justify-content: center; border-radius: 999px; color: #737373; vertical-align: middle; }
+.l4-scaled .inner .scr-fin .rowact svg { width: 16px; height: 16px; }
+/* ListFooter: LIST_CLASSES.footer */
+.l4-scaled .inner .scr-fin .lfoot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px; font-size: 14px; line-height: 20px; color: #737373; }

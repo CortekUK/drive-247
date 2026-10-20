@@ -1,0 +1,148 @@
+/*
+ * "How it works" step 2 — the original customer portal's My Agreements page
+ * (apps/booking (legacy)/(customer-portal)/portal/agreements/page.tsx) at a
+ * 390px phone, Tailwind classes resolved through apps/booking/tailwind.config.ts
+ * and (legacy)/globals.css `.dark`, with the runtime tokens useDynamicTheme.ts
+ * writes for a new self-serve signup (same values as renter-portal.css):
+ *   --primary 239 84% 67% (#6366F1), foreground 0 0% 15%
+ *   --background 223 49% 8% (#0B1120), --card 223 49% 11%
+ *   --secondary #334155 → 215 25% 27%, foreground 0 0% 95% (l ≤ 50)
+ *   muted-foreground 0 0% 65%, border 0 0% 25%, input 0 0% 20%
+ *   rounded-lg 12px, rounded-md 10px; body Inter, h1–h6 Playfair Display.
+ * Badges (ui/badge.tsx): rounded-full border px-2.5 py-0.5 text-xs font-semibold;
+ *   secondary = bg-secondary, default = bg-primary, outline = text-foreground
+ *   + the page's text-yellow-600 border-yellow-600 / text-green-600 border-green-600.
+ *
+ * Animation (--hs-d = SIGN_MS): base styles are the FINAL frame (signed).
+ * Under `.is-on`: Refresh spins (isFetching) 20–55%, then at 55% the card,
+ * the badges, the Signed: row and the stats switch to the signed state and
+ * the Sign button leaves (needsSignature is false once signed).
+ */
+
+.l4-scaled .inner .hiw-s {
+  --hs-d: 2000ms;
+  --hs-bg: hsl(223 49% 8%);
+  --hs-fg: hsl(0 0% 95%);
+  --hs-card: hsl(223 49% 11%);
+  --hs-mfg: hsl(0 0% 65%);
+  --hs-border: hsl(0 0% 25%);
+  --hs-input: hsl(0 0% 20%);
+  --hs-primary: hsl(239 84% 67%);
+  --hs-primary-fg: hsl(0 0% 15%);
+  --hs-sec: hsl(215 25% 27%);
+  --hs-sec-fg: hsl(0 0% 95%);
+  position: absolute; inset: 0; overflow: hidden;
+  background: var(--hs-bg); color: var(--hs-fg);
+  font-family: var(--font-sans), Inter, system-ui, sans-serif; font-size: 16px; line-height: 1.5; text-align: left;
+  -webkit-font-smoothing: antialiased;
+  transition: opacity 0.35s, transform 0.35s;
+}
+.l4-scaled .inner .hiw-s:not(.is-on) { opacity: 0; transform: translateX(16px); pointer-events: none; }
+.l4-scaled .inner .hiw-s h1,
+.l4-scaled .inner .hiw-s h2,
+.l4-scaled .inner .hiw-s h3 { margin: 0; font-family: var(--font-playfair), "Playfair Display", Georgia, serif; letter-spacing: normal; color: inherit; }
+.l4-scaled .inner .hiw-s p { margin: 0; }
+.l4-scaled .inner .hiw-s svg { display: block; flex: none; }
+
+.l4-scaled .inner .hs-page { position: absolute; left: 0; right: 0; top: 54px; bottom: 0; overflow: hidden; }
+
+/* CustomerPortalHeader: flex h-16 items-center gap-2 border-b px-4 */
+.l4-scaled .inner .hs-hd { display: flex; align-items: center; gap: 8px; height: 64px; padding: 0 16px; border-bottom: 1px solid var(--hs-border); }
+.l4-scaled .inner .hs-hd svg { width: 16px; height: 16px; }
+.l4-scaled .inner .hs-trig { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin-left: -4px; border-radius: 10px; }
+.l4-scaled .inner .hs-sep { width: 1px; height: 16px; margin-right: 8px; background: var(--hs-border); }
+.l4-scaled .inner .hs-fill { flex: 1; }
+.l4-scaled .inner .hs-ib { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; }
+.l4-scaled .inner .hs-tt { display: flex; align-items: center; justify-content: center; height: 36px; padding: 0 12px; border-radius: 10px; color: #d1d5db; }
+.l4-scaled .inner .hs-prof { display: flex; align-items: center; height: 40px; padding: 0 8px; }
+.l4-scaled .inner .hs-av { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 999px; background: hsl(239 84% 67% / 0.1); font-size: 12px; line-height: 16px; font-weight: 500; }
+
+/* <main className="flex flex-1 flex-col gap-4 p-4"> + page space-y-4 */
+.l4-scaled .inner .hs-main { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+.l4-scaled .inner .hs-ph { display: flex; flex-direction: column; gap: 12px; }
+.l4-scaled .inner .hs-ph h1 { font-size: 20px; line-height: 28px; font-weight: 700; }
+.l4-scaled .inner .hs-ph p { font-size: 14px; line-height: 20px; color: var(--hs-mfg); }
+/* Button outline sm w-full: h-9 px-3 rounded-md border-input bg-background; icon mr-2 + gap-2 */
+.l4-scaled .inner .hs-refresh { display: flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 12px; border: 1px solid var(--hs-input); border-radius: 10px; background: var(--hs-bg); font-size: 14px; line-height: 20px; font-weight: 500; }
+.l4-scaled .inner .hs-refresh svg { width: 16px; height: 16px; margin-right: 8px; }
+
+/* Card: rounded-lg border bg-card shadow-sm */
+.l4-scaled .inner .hs-card { border: 1px solid var(--hs-border); border-radius: 12px; background: var(--hs-card); box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
+.l4-scaled .inner .hs-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.l4-scaled .inner .hs-wide { grid-column: span 2 / span 2; }
+.l4-scaled .inner .hs-sh { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 8px; }
+.l4-scaled .inner .hs-sh h3 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 1; font-weight: 500; letter-spacing: -0.025em; }
+.l4-scaled .inner .hs-sh svg { width: 16px; height: 16px; color: var(--hs-mfg); }
+.l4-scaled .inner .hs-sc { padding: 0 12px 12px; }
+.l4-scaled .inner .hs-v { font-size: 20px; line-height: 28px; font-weight: 700; }
+.l4-scaled .inner .hs-sc p { font-size: 12px; line-height: 16px; color: var(--hs-mfg); }
+
+.l4-scaled .inner .hs-h2 { margin-bottom: 16px; font-size: 18px; line-height: 28px; font-weight: 600; }
+.l4-scaled .inner .hs-list { display: flex; flex-direction: column; gap: 16px; }
+
+/* AgreementCard: CardContent p-3, flex items-start gap-3 */
+.l4-scaled .inner .hs-agr { display: flex; align-items: flex-start; gap: 12px; padding: 12px; }
+.l4-scaled .inner .hs-tile { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: none; border-radius: 12px; background: hsl(239 84% 67% / 0.1); }
+.l4-scaled .inner .hs-tile svg { width: 20px; height: 20px; color: var(--hs-primary); }
+.l4-scaled .inner .hs-body { flex: 1; min-width: 0; }
+.l4-scaled .inner .hs-titles { display: flex; flex-direction: column; gap: 8px; }
+.l4-scaled .inner .hs-min { min-width: 0; }
+.l4-scaled .inner .hs-agr h3 { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 4px; font-size: 14px; line-height: 20px; font-weight: 600; }
+.l4-scaled .inner .hs-num { font-size: 12px; line-height: 16px; font-weight: 400; color: var(--hs-mfg); word-break: break-all; }
+.l4-scaled .inner .hs-veh { display: flex; align-items: center; gap: 4px; font-size: 12px; line-height: 16px; color: var(--hs-mfg); }
+.l4-scaled .inner .hs-veh svg { width: 12px; height: 12px; }
+.l4-scaled .inner .hs-veh span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.l4-scaled .inner .hs-self { align-self: flex-start; }
+
+.l4-scaled .inner .hs-badge { display: inline-flex; align-items: center; width: max-content; padding: 2px 10px; border: 1px solid transparent; border-radius: 999px; font-size: 12px; line-height: 16px; font-weight: 600; white-space: nowrap; }
+.l4-scaled .inner .hs-badge svg { width: 12px; height: 12px; margin-right: 4px; }
+.l4-scaled .inner .hs-sec { background: var(--hs-sec); color: var(--hs-sec-fg); }
+.l4-scaled .inner .hs-def { background: var(--hs-primary); color: var(--hs-primary-fg); }
+.l4-scaled .inner .hs-out { background: transparent; }
+.l4-scaled .inner .hs-yel { color: #ca8a04; border-color: #ca8a04; }
+.l4-scaled .inner .hs-grn { color: #16a34a; border-color: #16a34a; }
+
+/* mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs */
+.l4-scaled .inner .hs-dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; row-gap: 4px; margin-top: 8px; font-size: 12px; line-height: 16px; }
+.l4-scaled .inner .hs-dl span { color: var(--hs-mfg); }
+/* mt-3 flex-col gap-2; actions flex gap-1 self-start */
+.l4-scaled .inner .hs-foot { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.l4-scaled .inner .hs-acts { display: flex; align-items: center; gap: 4px; align-self: flex-start; }
+.l4-scaled .inner .hs-signbtn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 36px; padding: 0 12px; overflow: hidden; border-radius: 10px; background: var(--hs-primary); color: var(--hs-primary-fg); font-size: 14px; line-height: 20px; font-weight: 500; white-space: nowrap; }
+.l4-scaled .inner .hs-signbtn svg,
+.l4-scaled .inner .hs-gh svg { width: 16px; height: 16px; }
+.l4-scaled .inner .hs-gh { display: inline-flex; align-items: center; justify-content: center; height: 36px; padding: 0 12px; border-radius: 10px; }
+
+/* swap cells: both states share one grid cell */
+.l4-scaled .inner .hs-swap { display: inline-grid; justify-items: start; }
+.l4-scaled .inner .hs-swap > * { grid-area: 1 / 1; }
+.l4-scaled .inner .hs-was { opacity: 0; }
+.l4-scaled .inner .hs-now { opacity: 1; }
+/* once signed the Sign button is not rendered at all */
+.l4-scaled .inner .hs-signbtn.hs-was { max-width: 0; padding: 0; margin-right: -4px; }
+
+/* TraxChatButton: fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg bg-primary */
+.l4-scaled .inner .hs-trax { position: absolute; right: 24px; bottom: 24px; display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 999px; background: var(--hs-primary); color: var(--hs-primary-fg); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+.l4-scaled .inner .hs-trax svg { width: 16px; height: 16px; }
+
+/* ── the run (fractions of --hs-d) ── */
+.l4-scaled .inner .hiw-s.is-on .hs-refresh svg { animation: hs-fetch var(--hs-d) linear both; }
+.l4-scaled .inner .hiw-s.is-on .hs-was { animation: hs-out var(--hs-d) linear both; }
+.l4-scaled .inner .hiw-s.is-on .hs-now { animation: hs-in var(--hs-d) linear both; }
+.l4-scaled .inner .hiw-s.is-on .hs-signbtn.hs-was { animation: hs-leave var(--hs-d) ease-in-out both; }
+@keyframes hs-fetch { 0%, 20% { transform: rotate(0deg); } 55%, 100% { transform: rotate(720deg); } }
+@keyframes hs-out { 0%, 55% { opacity: 1; } 59%, 100% { opacity: 0; } }
+@keyframes hs-in { 0%, 55% { opacity: 0; } 59%, 100% { opacity: 1; } }
+@keyframes hs-leave {
+  0%, 55% { max-width: 80px; padding: 0 12px; margin-right: 0; opacity: 1; }
+  57% { opacity: 0; }
+  64%, 100% { max-width: 0; padding: 0; margin-right: -4px; opacity: 0; }
+}
+
+.hiw-paused .hiw-s,
+.hiw-paused .hiw-s * { animation-play-state: paused !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .l4-scaled .inner .hiw-s,
+  .l4-scaled .inner .hiw-s * { animation: none !important; transition: none !important; }
+}

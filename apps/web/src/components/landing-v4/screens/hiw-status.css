@@ -1,0 +1,16 @@
+/* Handset status bar for the "How it works" phone screens (hiw-status.tsx).
+   54px tall at the 390px design width — the island sits at 14–53px. */
+.l4-scaled .inner .hiw-sb {
+  position: absolute; left: 0; right: 0; top: 0; z-index: 4; height: 54px;
+  display: flex; align-items: center; justify-content: space-between; padding: 4px 30px 0 44px;
+  font-family: var(--font-sans), Inter, system-ui, sans-serif; pointer-events: none;
+}
+.l4-scaled .inner .hiw-sb-light { color: #fff; }
+.l4-scaled .inner .hiw-sb-dark { color: #000; }
+.l4-scaled .inner .hiw-sb-t { font-size: 16px; line-height: 1; font-weight: 600; letter-spacing: -0.01em; }
+.l4-scaled .inner .hiw-sb-i { display: flex; align-items: center; gap: 6px; }
+.l4-scaled .inner .hiw-sb svg { display: block; fill: currentColor; stroke: currentColor; }
+.l4-scaled .inner .hiw-sb svg path:first-child { stroke: none; }
+.l4-scaled .inner .hiw-sb-bat { position: relative; display: block; width: 25px; height: 12px; padding: 1.5px; border: 1px solid currentColor; border-radius: 4px; opacity: 0.95; }
+.l4-scaled .inner .hiw-sb-bat::after { content: ""; position: absolute; right: -3.5px; top: 3.5px; width: 2px; height: 4px; border-radius: 0 1px 1px 0; background: currentColor; opacity: 0.5; }
+.l4-scaled .inner .hiw-sb-bat i { display: block; width: 80%; height: 100%; border-radius: 2px; background: currentColor; }

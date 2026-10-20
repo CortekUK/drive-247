@@ -1,0 +1,128 @@
+/*
+ * Original booking site home (apps/booking (legacy) design) — Tailwind classes
+ * resolved under the .dark tokens of src/app/(legacy)/globals.css as
+ * rewritten at runtime by src/hooks/useDynamicTheme.ts for a new signup's
+ * palette (dark_accent #6366F1, dark_header_footer #0F172A, dark_background #0B1120):
+ *   --primary / --accent   239 84% 67%   (primary-foreground 0 0% 15%)
+ *   --nav-bg               222 47% 11%   (nav-foreground 0 0% 95%)
+ *   --background           223 49% 8%    (foreground 0 0% 95%)
+ *   --gradient-accent      135deg 239 84% 67% → 239 84% 74%
+ *   --shadow-glow          0 0 40px hsla(239, 84%, 67%, .3)
+ *   --shadow-metal (.dark) 0 4px 20px rgba(255,255,255,.1)
+ *   --radius .75rem → rounded-md 10px
+ * Body font is Inter (next/font in (legacy)/layout.tsx); h1 is font-display,
+ * Playfair Display. `font-luxury` on the text logo is not defined anywhere,
+ * so the logo inherits Inter.
+ */
+
+.l4-scaled .inner .scr-site {
+  position: relative; width: 1280px; height: 800px; overflow: hidden;
+  background: hsl(223 49% 8%); color: hsl(0 0% 95%);
+  font-family: var(--font-sans), Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+}
+.l4-scaled .inner .scr-site *, .l4-scaled .inner .scr-site *::before, .l4-scaled .inner .scr-site *::after { box-sizing: border-box; }
+
+/* ── Navigation.tsx — fixed top-0 z-50 backdrop-blur-sm border-b shadow-metal, bg/border hsl(--nav-bg) ── */
+.l4-scaled .inner .scr-site .nav {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 50;
+  background: hsl(222 47% 11%); border-bottom: 1px solid hsl(222 47% 11%);
+  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(4px);
+}
+/* container mx-auto px-2 lg:px-4 → flex items-center justify-between xl:gap-8 */
+.l4-scaled .inner .scr-site .nav .row {
+  display: flex; align-items: center; justify-content: space-between; gap: 32px;
+  width: 100%; max-width: 1280px; margin: 0 auto; padding: 0 16px;
+}
+/* Link py-1 > div flex flex-col py-4 > span xl:text-2xl font-semibold leading-tight tracking-wide uppercase */
+.l4-scaled .inner .scr-site .logo { display: flex; flex-direction: column; flex-shrink: 0; padding: 20px 0; }
+.l4-scaled .inner .scr-site .logo .name {
+  font-size: 24px; line-height: 1.25; font-weight: 600; letter-spacing: 0.025em; text-transform: uppercase;
+  white-space: nowrap; color: hsl(0 0% 95%);
+}
+/* h-0.5 w-full bg-accent/60 mt-0.5 lg:mt-1 */
+.l4-scaled .inner .scr-site .logo .rule { display: block; height: 2px; width: 100%; margin-top: 4px; background: hsl(239 84% 67% / 0.6); }
+
+/* hidden xl:flex items-center justify-center flex-1 gap-3; text-sm font-medium px-2 */
+.l4-scaled .inner .scr-site .links { display: flex; flex: 1; align-items: center; justify-content: center; gap: 12px; }
+.l4-scaled .inner .scr-site .links span {
+  padding: 0 8px; font-size: 14px; line-height: 20px; font-weight: 500; white-space: nowrap; color: hsl(0 0% 95% / 0.8);
+}
+.l4-scaled .inner .scr-site .links span.on { color: hsl(239 84% 67%); }
+
+/* hidden xl:flex items-center gap-3 flex-shrink-0 */
+.l4-scaled .inner .scr-site .acts { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+/* button.tsx base: inline-flex gap-2 rounded-md text-sm font-medium; default size h-10 px-4 py-2; [&_svg]:size-4 */
+.l4-scaled .inner .scr-site .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 8px 16px;
+  border-radius: 10px; font-size: 14px; line-height: 20px; font-weight: 500; white-space: nowrap;
+}
+.l4-scaled .inner .scr-site .btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+/* variant outline (border border-input bg-background) + border-accent/50 text-foreground; icon mr-2 */
+.l4-scaled .inner .scr-site .btn.out { border: 1px solid hsl(239 84% 67% / 0.5); background: hsl(223 49% 8%); color: hsl(0 0% 95%); }
+.l4-scaled .inner .scr-site .btn.out svg { margin-right: 8px; }
+/* default variant + gradient-accent shadow-glow font-semibold; label is `hidden 2xl:inline` */
+.l4-scaled .inner .scr-site .btn.call {
+  background: linear-gradient(135deg, hsl(239 84% 67%), hsl(239 84% 74%));
+  box-shadow: 0 0 40px hsla(239, 84%, 67%, 0.3); color: hsl(0 0% 15%); font-weight: 600;
+}
+/* ThemeToggle: ghost, size sm (h-9 px-3), text-gray-300 */
+.l4-scaled .inner .scr-site .btn.ghost { height: 36px; padding: 0 12px; color: #d1d5db; }
+
+/* ── legacy-home.tsx hero: section relative min-h-screen > HeroCarousel ── */
+.l4-scaled .inner .scr-site .hero { position: relative; height: 800px; overflow: hidden; }
+.l4-scaled .inner .scr-site .hero .media { position: absolute; inset: 0; z-index: 0; }
+/* img w-full h-full object-cover scale-105 (current slide) */
+.l4-scaled .inner .scr-site .hero .media img { display: block; width: 100%; height: 100%; object-fit: cover; transform: scale(1.05); }
+/* overlayStrength 'medium': bg-gradient-to-b from-black/50 via-black/40 to-black/70 */
+.l4-scaled .inner .scr-site .hero .ov {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.7));
+}
+/* flex items-center justify-center min-h-screen pt-20 > container mx-auto px-4 */
+.l4-scaled .inner .scr-site .hero .content {
+  position: relative; z-index: 10; display: flex; align-items: center; justify-content: center;
+  min-height: 800px; padding: 80px 16px 0;
+}
+/* max-w-6xl mx-auto text-center space-y-8 */
+.l4-scaled .inner .scr-site .hero .box { width: 100%; max-width: 1152px; margin: 0 auto; text-align: center; }
+.l4-scaled .inner .scr-site .hero .box > * + * { margin-top: 32px; }
+/* lg:text-7xl font-display font-bold text-white leading-tight [text-wrap:balance] */
+.l4-scaled .inner .scr-site .hero h1 {
+  margin: 0; font-family: var(--font-playfair), "Playfair Display", Georgia, serif;
+  font-size: 72px; line-height: 1.25; font-weight: 700; color: #fff; text-wrap: balance;
+}
+/* lg:text-2xl text-white/90 max-w-3xl mx-auto font-light leading-relaxed */
+.l4-scaled .inner .scr-site .hero .sub {
+  max-width: 768px; margin-left: auto; margin-right: auto; margin-bottom: 0;
+  font-size: 24px; line-height: 1.625; font-weight: 300; color: rgba(255, 255, 255, 0.9); white-space: pre-line;
+}
+/* flex sm:flex-row gap-4 justify-center items-center pt-4 */
+.l4-scaled .inner .scr-site .hero .ctas { display: flex; justify-content: center; align-items: center; gap: 16px; padding-top: 16px; }
+/* Button size lg, variant outline + bg-transparent border-2 border-white text-white
+   font-semibold md:text-lg px-8 py-6 rounded-md (h-11 loses to py-6 + border → 52px) */
+.l4-scaled .inner .scr-site .hero .book {
+  display: inline-flex; align-items: center; justify-content: center; height: 52px; padding: 0 32px;
+  border: 2px solid #fff; border-radius: 10px; background: transparent; color: #fff;
+  font-size: 18px; line-height: 28px; font-weight: 600; white-space: nowrap;
+}
+/* text-sm md:text-base text-white/80 font-medium pt-4 */
+.l4-scaled .inner .scr-site .hero .trust {
+  margin-bottom: 0; padding-top: 16px; font-size: 16px; line-height: 24px; font-weight: 500; color: rgba(255, 255, 255, 0.8);
+}
+
+/* HeroCarousel scroll indicator: absolute bottom-24 left-1/2 w-6 h-10 border-2 border-white/50 rounded-full */
+.l4-scaled .inner .scr-site .hero .mouse {
+  position: absolute; bottom: 96px; left: 50%; z-index: 20; transform: translateX(-50%);
+  display: flex; justify-content: center; width: 24px; height: 40px;
+  border: 2px solid rgba(255, 255, 255, 0.5); border-radius: 999px;
+}
+.l4-scaled .inner .scr-site .hero .mouse span { display: block; width: 4px; height: 12px; margin-top: 8px; border-radius: 999px; background: #fff; }
+/* dots: absolute bottom-8 gap-2; active w-6 h-2 bg-accent, others w-2 h-2 bg-white/60 */
+.l4-scaled .inner .scr-site .hero .dots {
+  position: absolute; bottom: 32px; left: 0; right: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.l4-scaled .inner .scr-site .hero .dots span { display: block; width: 8px; height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.6); }
+.l4-scaled .inner .scr-site .hero .dots span.on { width: 24px; background: hsl(239 84% 67%); }

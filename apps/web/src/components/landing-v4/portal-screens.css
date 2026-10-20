@@ -1,0 +1,140 @@
+/*
+ * The shared pieces in screens.tsx — the operator portal v2 shell (PortalShell)
+ * and its chrome — styled from the product's own tokens
+ * (apps/portal/src/styles/v2-theme.css, ui-v2/*, shared/layout/*), plus the
+ * base type, the v2 wash and the TraxMark disc the screens share.
+ * The showcase screens and the renter's phone in "How it works" carry their
+ * own stylesheets in screens/*.css.
+ * Every rule is scoped to the scaled screen, so nothing reaches the page.
+ */
+
+.l4-scaled .inner { font-family: var(--font-manrope), Manrope, sans-serif; color: #0a0a0a; font-size: 14px; line-height: 1.45; text-align: left; }
+.l4-scaled .inner * { box-sizing: border-box; }
+.l4-scaled .inner svg { flex: none; }
+
+/* bg-app-gradient — the wash under every v2 surface */
+.l4-scaled .wash {
+  background:
+    radial-gradient(70rem 50rem at 105% -10%, rgb(68 45 215 / 0.2), transparent 55%),
+    radial-gradient(60rem 48rem at -8% -6%, rgb(81 59 247 / 0.16), transparent 52%),
+    radial-gradient(55rem 45rem at 50% 115%, rgb(68 45 215 / 0.12), transparent 55%),
+    linear-gradient(180deg, rgb(68 45 215 / 0.07) 0%, transparent 45%),
+    #fff;
+}
+
+/* =================== operator shell ===================
+ * v2 chrome at 1280px. Values resolved from apps/portal: ui-v2/sidebar.tsx
+ * (16rem rail, no fill — it sits on the wash), app-sidebar-v2.tsx NAV_ROW,
+ * org-switcher.tsx, sidebar-promo.tsx, user-menu-v2.tsx, top-bar-v2.tsx,
+ * helpline-link.tsx, trax-greeting.tsx, v2-theme.css tokens (default brand
+ * 248 68% 51% = #442dd7) and tailwind.config.ts radii (lg 10px, md 8px,
+ * xl 14px, 4xl 26px). Body text is text-sm, so line boxes are 20px. */
+.l4-scaled .ps { position: relative; display: flex; width: 100%; height: 100%; overflow: hidden; }
+.l4-scaled .ps-side { width: 256px; flex: none; display: flex; flex-direction: column; min-height: 0; line-height: 20px; color: #0a0a0a; }
+.l4-scaled .ps-content { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-top: 4px; overflow: hidden; }
+.l4-scaled .ps-side > nav { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 2px; padding: 6px; overflow: hidden; }
+.l4-scaled .ps-side > .mode-wrap { margin-top: 4px; }
+
+/* SidebarHeader p-1.5 pt-4 → OrgSwitcher */
+.l4-scaled .ps-side .org { flex: none; display: flex; align-items: center; margin: 16px 6px 6px; border-radius: 10px; }
+.l4-scaled .ps-side .org .site { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 6px; border-radius: 10px; }
+.l4-scaled .ps-side .org .logo-img { width: 32px; height: 32px; flex: none; border-radius: 10px; object-fit: contain; }
+.l4-scaled .ps-side .org b { min-width: 0; font-size: 13px; font-weight: 600; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.l4-scaled .ps-side .org .fill { flex: 1; }
+.l4-scaled .ps-side .org .ib { width: 28px; height: 28px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 10px; color: #737373; }
+.l4-scaled .ps-side .org .ib.ghost { opacity: 0; }
+.l4-scaled .ps-side .org .ib svg { width: 14px; height: 14px; }
+
+/* Portal / Website strip: px-1.5 pb-1 pt-0.5, grid p-1, sliding pill */
+.l4-scaled .ps-side .mode-wrap { flex: none; padding: 2px 6px 4px; }
+.l4-scaled .ps-side .mode { position: relative; display: grid; grid-template-columns: 1fr 1fr; padding: 4px; border-radius: 9999px; }
+.l4-scaled .ps-side .mode .pill { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: 9999px; background: #fff; box-shadow: 0 0 0 1px rgb(68 45 215 / 0.2), 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); }
+.l4-scaled .ps-side .mode span { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 500; line-height: 20px; color: #737373; }
+.l4-scaled .ps-side .mode span.on { color: #442dd7; }
+.l4-scaled .ps-side .mode kbd { display: inline-block; padding: 2px 6px; border-radius: 9999px; font: 600 10px/20px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; background: rgb(10 10 10 / 0.1); color: rgb(10 10 10 / 0.7); }
+.l4-scaled .ps-side .mode span.on kbd { background: rgb(68 45 215 / 0.15); color: #442dd7; }
+
+/* SidebarGroup p-1.5 pb-0 → SidebarMenu gap-0.5 */
+.l4-scaled .ps-side .grp-a { flex: none; display: flex; flex-direction: column; gap: 2px; padding: 6px 6px 0; }
+.l4-scaled .ps-side .grp-more { flex: none; display: flex; flex-direction: column; gap: 2px; padding: 4px 6px 8px; }
+.l4-scaled .ps-side .more-lb { display: block; margin-bottom: -2px; padding: 0 10px 4px; font-size: 10px; font-weight: 600; line-height: 20px; text-transform: uppercase; letter-spacing: 0.1em; color: #737373; }
+.l4-scaled .ps-side .sep { display: block; flex: none; height: 1px; margin: 6px 12px; background: rgb(231 230 240 / 0.6); }
+
+/* SidebarMenuButton + NAV_ROW (h-8 px-3 gap-2 rounded-lg, sidebar-foreground/70, svg /60) */
+.l4-scaled .ps-side .nr { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 10px; overflow: hidden; font-size: 13px; font-weight: 500; line-height: 20px; color: rgb(10 10 10 / 0.7); white-space: nowrap; }
+.l4-scaled .ps-side .nr svg { width: 17px; height: 17px; color: rgb(10 10 10 / 0.6); }
+.l4-scaled .ps-side .nr .lb { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.l4-scaled .ps-side .nr.on { background: rgb(68 45 215 / 0.1); color: #442dd7; box-shadow: inset 0 0 0 1px rgb(68 45 215 / 0.12), 0 1px 2px rgb(68 45 215 / 0.08); }
+.l4-scaled .ps-side .nr.on svg { color: #442dd7; }
+.l4-scaled .ps-side .nr .badge { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; flex: none; min-width: 18px; padding: 2px 6px; border-radius: 9999px; font-style: normal; font-size: 10px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; background: #e6000b; color: #fff; }
+
+/* SidebarFooter p-1.5 gap-2 */
+.l4-scaled .ps-foot { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 6px; }
+.l4-scaled .ps-foot .promo-wrap { padding: 0 2px 6px; }
+.l4-scaled .ps-foot .promo { position: relative; isolation: isolate; overflow: hidden; padding: 10px; border-radius: 14px; color: #fff;
+  background: linear-gradient(to bottom right, #513bf7 0%, #442dd7 50%, #372aac 100%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.2), 0 16px 32px -12px rgba(0, 0, 0, 0.55), 0 4px 10px -4px rgba(0, 0, 0, 0.35), inset 0 1px 0 0 rgba(255, 255, 255, 0.5), inset 0 -8px 16px -8px rgba(0, 0, 0, 0.45); }
+.l4-scaled .ps-foot .promo .sheen { position: absolute; left: 0; right: 0; top: 0; z-index: -1; height: 50%; background: linear-gradient(to bottom, rgb(255 255 255 / 0.3), transparent); pointer-events: none; }
+.l4-scaled .ps-foot .promo .glow { position: absolute; left: -40px; top: -48px; z-index: -1; width: 112px; height: 112px; border-radius: 50%; background: rgb(255 255 255 / 0.35); filter: blur(40px); pointer-events: none; }
+.l4-scaled .ps-foot .promo .x { position: absolute; right: 6px; top: 6px; z-index: 10; display: flex; padding: 4px; border-radius: 8px; color: rgb(255 255 255 / 0.7); }
+.l4-scaled .ps-foot .promo .x svg { width: 14px; height: 14px; }
+.l4-scaled .ps-foot .promo .t { position: relative; margin: 0; padding-right: 20px; font-size: 12px; font-weight: 600; line-height: 1.25; filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.05)); }
+.l4-scaled .ps-foot .promo .b { position: relative; margin: 2px 0 0; font-size: 10.5px; line-height: 1.375; color: rgb(255 255 255 / 0.85); }
+.l4-scaled .ps-foot .promo .cta { position: relative; margin-top: 8px; display: flex; width: 100%; align-items: center; justify-content: center; gap: 4px; padding: 4px 8px; border-radius: 10px; background: rgb(255 255 255 / 0.2); font-size: 11px; font-weight: 600; line-height: 20px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.3), inset 0 1px 0 0 rgba(255, 255, 255, 0.5), 0 3px 8px -2px rgba(0, 0, 0, 0.4); }
+.l4-scaled .ps-foot .promo .cta svg { width: 12px; height: 12px; }
+
+/* UserMenuV2 variant="row" settings */
+.l4-scaled .ps-foot .user { display: flex; width: 100%; align-items: center; border-radius: 10px; }
+.l4-scaled .ps-foot .user .me { display: flex; flex: 1; min-width: 0; align-items: center; gap: 10px; padding: 10px 8px; border-radius: 10px; }
+.l4-scaled .ps-foot .user .av { width: 32px; height: 32px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgb(68 45 215 / 0.1); color: #442dd7; font-size: 12px; font-weight: 500; box-shadow: inset 0 0 0 1px #e5e5e5; }
+.l4-scaled .ps-foot .user .who { flex: 1; min-width: 0; }
+.l4-scaled .ps-foot .user b { display: block; font-size: 13px; font-weight: 600; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.l4-scaled .ps-foot .user small { display: block; font-size: 11px; line-height: 1.25; color: #737373; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.l4-scaled .ps-foot .user .ub { flex: none; display: flex; padding: 6px; border-radius: 10px; color: #737373; }
+.l4-scaled .ps-foot .user .ub svg { width: 16px; height: 16px; }
+
+/* SidebarInset (bg-transparent, min-w-0) → TopBarV2 h-16 px-4 gap-2 */
+.l4-scaled .ps-main { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.l4-scaled .ps-top { height: 64px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px; line-height: 20px; color: #0a0a0a; }
+.l4-scaled .ps-top .search { position: relative; display: flex; align-items: center; gap: 8px; width: 100%; max-width: 380px; height: 32px; padding: 0 10px; overflow: hidden; border-radius: 9999px; border: 1px solid rgb(68 45 215 / 0.25); background: rgb(68 45 215 / 0.07); backdrop-filter: blur(2px); }
+.l4-scaled .ps-top .search svg { width: 16px; height: 16px; color: #442dd7; }
+.l4-scaled .ps-top .search .ph { flex: 1; min-width: 0; font-size: 13px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.l4-scaled .ps-top .search kbd { flex: none; padding: 2px 6px; border-radius: 9999px; background: rgb(68 45 215 / 0.15); color: #442dd7; font: 600 10px/15px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+/* A page's own field (slot): wrapper max-w-[440px]; scope chip rounded-md border-primary/30 bg-background/70
+   py-0.5 pl-1.5 pr-0.5 text-[11px] font-medium; filters h-6 w-8 rounded-md bg-primary/10; ⌘K rounded-md */
+.l4-scaled .ps-top .search.page { max-width: 440px; }
+/* an <input> placeholder clips, it does not ellipsize */
+.l4-scaled .ps-top .search.page .ph { text-overflow: clip; }
+.l4-scaled .ps-top .search .scope { flex: none; display: flex; align-items: center; gap: 4px; padding: 2px 2px 2px 6px; border-radius: 8px; border: 1px solid rgb(68 45 215 / 0.3); background: rgb(255 255 255 / 0.7); font-size: 11px; font-weight: 500; line-height: 16.5px; color: #0a0a0a; }
+.l4-scaled .ps-top .search .scope .in { color: #737373; }
+.l4-scaled .ps-top .search .scope .sx { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; border-radius: 4px; color: #737373; }
+.l4-scaled .ps-top .search .scope .sx svg { width: 12px; height: 12px; color: #737373; }
+.l4-scaled .ps-top .search .flt { flex: none; width: 32px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: rgb(68 45 215 / 0.1); }
+.l4-scaled .ps-top .search kbd.sq { border-radius: 8px; }
+.l4-scaled .ps-top .right { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+.l4-scaled .ps-top .div { width: 1px; height: 20px; margin: 0 4px; background: #e5e5e5; }
+.l4-scaled .ps-top .phone { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border-radius: 9999px; font-size: 13px; font-weight: 500; color: #442dd7; font-variant-numeric: tabular-nums; }
+.l4-scaled .ps-top .phone svg { width: 16px; height: 16px; }
+.l4-scaled .ps-top .help { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 10px 0 6px; border: 1px solid transparent; border-radius: 26px; font-size: 13px; font-weight: 500; color: #442dd7; white-space: nowrap; }
+.l4-scaled .ps-top .ib { position: relative; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 26px; color: #737373; }
+.l4-scaled .ps-top .ib svg { width: 16px; height: 16px; }
+.l4-scaled .ps-top .ib em { position: absolute; top: -2px; right: -2px; display: inline-flex; align-items: center; justify-content: center; height: 16px; min-width: 16px; padding: 0 4px; border-radius: 9999px; background: #e6000b; color: #fff; font-style: normal; font-size: 9px; font-weight: 700; line-height: 1; }
+/* TraxMark size="xs" */
+.l4-scaled .trax-dot { position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: none; border-radius: 50%; }
+.l4-scaled .trax-dot .lift { position: absolute; inset: 0; overflow: hidden; border-radius: 50%; box-shadow: 0 2px 6px -2px rgb(68 45 215 / 0.5); }
+.l4-scaled .trax-dot .cone { position: absolute; inset: -25%; background: conic-gradient(from 180deg, #6461ff, #442dd7, #442dd7, #a3b2ff, #6461ff); }
+.l4-scaled .trax-dot svg { position: relative; width: 12px; height: 12px; color: #f0f3ff; filter: drop-shadow(0 1px 2px rgb(55 42 172 / 0.55)); }
+/* <main>: flex-col gap-4 p-4, pt-0 under the bar, first child -mt-3.5; the one scroll container */
+.l4-scaled .ps-body { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 16px; padding: 0 16px 16px; overflow: hidden; }
+.l4-scaled .ps-body > :first-child { margin-top: -14px; }
+
+/* =================== Finances feature card ===================
+ * Left from the old Finances screen, but these still match the
+ * <section className="feat"> in screens/finances.tsx (alongside
+ * screens/finances.css), so they stay until that screen is checked without them. */
+.l4-scaled .feat { display: flex; flex-direction: column; justify-content: space-between; padding: 20px 20px 16px; border-radius: 18px; border: 1px solid rgb(255 255 255 / 0.8); background: linear-gradient(145deg, rgb(255 255 255 / 0.72), rgb(238 238 252 / 0.55)); }
+.l4-scaled .feat b { max-width: 10.5ch; font-size: 26px; font-weight: 900; line-height: 1; letter-spacing: -0.04em; }
+.l4-scaled .feat small { display: block; font-size: 13px; line-height: 20px; color: #525252; }
+.l4-scaled .feat em { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; font-style: normal; font-size: 12px; font-weight: 600; color: #5b5bd6; }
+.l4-scaled .feat em svg { width: 14px; height: 14px; }

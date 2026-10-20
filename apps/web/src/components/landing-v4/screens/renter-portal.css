@@ -1,0 +1,186 @@
+/*
+ * Renter portal (original design) — apps/booking's Tailwind classes resolved
+ * for a brand-new self-serve signup:
+ *   supabase/functions/signup-provision/index.ts writes
+ *   buildTenantPalette(DEFAULT_PALETTE) (_shared/brand-colors.ts) — blank
+ *   colours answer → accent #6366F1, dark_accent lightenForDark(#6366F1) =
+ *   #6366F1, dark_background #0B1120, dark_header_footer #0F172A — and pins
+ *   only primary/light_primary to #442DD7, which this portal never reads
+ *   (it paints --primary from the ACCENT). customer_theme_mode is not set, so
+ *   the code default 'dark' applies.
+ *   hooks/useDynamicTheme.ts (dark branch) then sets:
+ *     --primary  = dark_accent #6366F1 → 239 84% 67%, foreground 0 0% 15% (l > 50)
+ *     --sidebar-background = #0F172A → 222 47% 11%, foreground 0 0% 95%
+ *     --background = #0B1120 → 223 49% 8%, --foreground 0 0% 95%
+ *     --card 223 49% 11% (l + 3), --muted 223 49% 10% (l + 2)
+ *   and leaves these at app/(legacy)/globals.css `.dark`:
+ *     muted-foreground 0 0% 65%, border 0 0% 25%, input 0 0% 20%,
+ *     destructive 0 84.2% 60.2%, sidebar-accent 165 20% 22% (the active nav
+ *     item — the hook never repaints it), --radius 0.75rem (lg 12, md 10, sm 8px)
+ * Fonts (tailwind.config.ts): body Inter (`font-sans`); h1–h6 get
+ * `font-display` = Playfair Display from globals.css' base layer, which is
+ * why "My Bookings" and the StatCard titles (CardTitle is an <h3>) are serif.
+ * At 1280px sm/md/lg/xl all apply.
+ */
+
+.l4-scaled .inner .scr-rp {
+  --rp-bg: hsl(223 49% 8%);
+  --rp-fg: hsl(0 0% 95%);
+  --rp-card: hsl(223 49% 11%);
+  --rp-muted: hsl(223 49% 10%);
+  --rp-mfg: hsl(0 0% 65%);
+  --rp-border: hsl(0 0% 25%);
+  --rp-input: hsl(0 0% 20%);
+  --rp-primary: hsl(239 84% 67%);
+  --rp-primary-fg: hsl(0 0% 15%);
+  --rp-destructive: hsl(0 84.2% 60.2%);
+  --rp-destructive-fg: hsl(0 0% 98%);
+  --rp-sb: hsl(222 47% 11%);
+  --rp-sb-fg: hsl(0 0% 95%);
+  --rp-sb-accent: hsl(165 20% 22%);
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--rp-bg);
+  color: var(--rp-fg);
+  font-family: var(--font-sans), Inter, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+.l4-scaled .inner .scr-rp * { border-color: var(--rp-border); }
+.l4-scaled .inner .scr-rp p { margin: 0; }
+.l4-scaled .inner .scr-rp ul { margin: 0; padding: 0; list-style: none; }
+
+/* ── ui/sidebar.tsx — w-[16rem], fixed div border-r, bg-sidebar ── */
+.l4-scaled .inner .scr-rp .sb { width: 256px; flex: none; display: flex; flex-direction: column; height: 100%; background: var(--rp-sb); color: var(--rp-sb-fg); border-right: 1px solid var(--rp-border); }
+/* SidebarHeader "border-b h-16 flex items-center justify-center p-0" (flex-col) */
+.l4-scaled .inner .scr-rp .sb-h { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 64px; flex: none; border-bottom: 1px solid var(--rp-border); }
+/* Link px-4 gap-2 → span font-semibold text-lg */
+.l4-scaled .inner .scr-rp .sb-h .co { padding: 0 16px; font-size: 18px; line-height: 28px; font-weight: 600; }
+/* SidebarContent gap-2; SidebarGroup p-2 */
+.l4-scaled .inner .scr-rp .sb-c { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
+.l4-scaled .inner .scr-rp .grp { display: flex; flex-direction: column; padding: 8px; font-size: 14px; }
+.l4-scaled .inner .scr-rp .grp ul { display: flex; flex-direction: column; gap: 4px; }
+.l4-scaled .inner .scr-rp .grp li { position: relative; }
+/* SidebarGroupLabel h-8 px-2 text-xs font-medium text-sidebar-foreground/70 */
+.l4-scaled .inner .scr-rp .lbl { display: flex; align-items: center; height: 32px; padding: 0 8px; border-radius: 10px; font-size: 12px; line-height: 16px; font-weight: 500; color: hsl(0 0% 95% / 0.7); }
+/* sidebarMenuButtonVariants: h-8 p-2 gap-2 rounded-md text-sm, svg size-4 */
+.l4-scaled .inner .scr-rp .mb { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 8px; border-radius: 10px; font-size: 14px; line-height: 20px; overflow: hidden; white-space: nowrap; }
+.l4-scaled .inner .scr-rp .mb svg { width: 16px; height: 16px; flex: none; }
+.l4-scaled .inner .scr-rp .mb > span { overflow: hidden; text-overflow: ellipsis; }
+.l4-scaled .inner .scr-rp .mb.pr { padding-right: 32px; }
+/* data-[active=true]: bg-sidebar-accent font-medium */
+.l4-scaled .inner .scr-rp .mb.on { background: var(--rp-sb-accent); font-weight: 500; }
+/* "Back to Booking": bg-primary/10 text-primary font-medium */
+.l4-scaled .inner .scr-rp .mb.back { background: hsl(239 84% 67% / 0.1); color: var(--rp-primary); font-weight: 500; }
+/* unread badge: absolute top-1.5 right-2 px-2 py-0.5 text-xs font-bold bg-destructive rounded-full */
+.l4-scaled .inner .scr-rp .unread { position: absolute; top: 6px; right: 8px; display: inline-flex; align-items: center; justify-content: center; padding: 2px 8px; border-radius: 999px; background: var(--rp-destructive); color: #fff; font-size: 12px; line-height: 1; font-weight: 700; }
+
+/* ── SidebarInset: flex-1 flex-col bg-background ── */
+.l4-scaled .inner .scr-rp .inset { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--rp-bg); }
+
+/* CustomerPortalHeader: flex h-16 items-center gap-2 border-b px-4 */
+.l4-scaled .inner .scr-rp .hd { display: flex; align-items: center; gap: 8px; height: 64px; flex: none; padding: 0 16px; border-bottom: 1px solid var(--rp-border); }
+/* SidebarTrigger -ml-1 h-7 w-7 ghost icon */
+.l4-scaled .inner .scr-rp .trig { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin-left: -4px; border-radius: 10px; }
+.l4-scaled .inner .scr-rp .hd svg { width: 16px; height: 16px; flex: none; }
+/* Separator vertical mr-2 h-4 */
+.l4-scaled .inner .scr-rp .sep { width: 1px; height: 16px; margin-right: 8px; background: var(--rp-border); }
+.l4-scaled .inner .scr-rp .fill { flex: 1; }
+.l4-scaled .inner .scr-rp .acts { display: flex; align-items: center; gap: 8px; }
+/* ghost size="icon" h-10 w-10 — the h-5 w-5 on the icon loses to [&_svg]:size-4 */
+.l4-scaled .inner .scr-rp .ib { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; }
+/* absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-xs font-medium */
+.l4-scaled .inner .scr-rp .ib .cnt { position: absolute; top: -4px; right: -4px; display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 999px; background: var(--rp-destructive); color: var(--rp-destructive-fg); font-size: 12px; line-height: 16px; font-weight: 500; }
+/* ThemeToggle: ghost size="sm" (h-9 px-3) text-gray-300, Sun in dark */
+.l4-scaled .inner .scr-rp .tt { display: inline-flex; align-items: center; justify-content: center; height: 36px; padding: 0 12px; border-radius: 10px; color: #d1d5db; }
+/* profile: ghost h-10 px-2 gap-2; Avatar h-8 w-8, fallback text-xs bg-primary/10 */
+.l4-scaled .inner .scr-rp .prof { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 8px; border-radius: 10px; font-size: 14px; font-weight: 500; }
+.l4-scaled .inner .scr-rp .av { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 999px; background: hsl(239 84% 67% / 0.1); font-size: 12px; line-height: 16px; font-weight: 500; }
+.l4-scaled .inner .scr-rp .who { display: block; text-align: left; }
+.l4-scaled .inner .scr-rp .who b { display: block; font-size: 14px; line-height: 1; font-weight: 500; }
+.l4-scaled .inner .scr-rp .who small { display: block; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--rp-mfg); }
+.l4-scaled .inner .scr-rp .prof > svg { color: var(--rp-mfg); }
+
+/* layout.tsx <main>: flex flex-1 flex-col gap-4 p-4 pt-4 */
+.l4-scaled .inner .scr-rp .mn { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 16px; padding: 16px; overflow: hidden; }
+/* page: space-y-6 */
+.l4-scaled .inner .scr-rp .pg > * + * { margin-top: 24px; }
+
+/* header: flex-row items-center justify-between gap-3 */
+.l4-scaled .inner .scr-rp .ph { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.l4-scaled .inner .scr-rp .h1 { font-family: var(--font-playfair), "Playfair Display", Georgia, serif; font-size: 24px; line-height: 32px; font-weight: 700; }
+.l4-scaled .inner .scr-rp .ph p { font-size: 16px; line-height: 24px; color: var(--rp-mfg); }
+/* Button default: h-10 px-4 rounded-md text-sm font-medium gap-2; icon mr-2 */
+.l4-scaled .inner .scr-rp .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 8px 16px; border-radius: 10px; background: var(--rp-primary); color: var(--rp-primary-fg); font-size: 14px; line-height: 20px; font-weight: 500; white-space: nowrap; }
+.l4-scaled .inner .scr-rp .btn svg { width: 16px; height: 16px; margin-right: 8px; }
+
+/* stats: grid lg:grid-cols-4 sm:gap-4 */
+.l4-scaled .inner .scr-rp .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+/* Card: rounded-lg border bg-card shadow-sm */
+.l4-scaled .inner .scr-rp .card { border: 1px solid var(--rp-border); border-radius: 12px; background: var(--rp-card); color: var(--rp-fg); box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
+/* CardHeader flex-row items-center justify-between sm:p-6 sm:pb-2 */
+.l4-scaled .inner .scr-rp .ch { display: flex; align-items: center; justify-content: space-between; padding: 24px 24px 8px; }
+/* CardTitle <h3>: Playfair, sm:text-sm font-medium leading-none tracking-tight */
+.l4-scaled .inner .scr-rp .ct { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-playfair), "Playfair Display", Georgia, serif; font-size: 14px; line-height: 1; font-weight: 500; letter-spacing: -0.025em; }
+.l4-scaled .inner .scr-rp .ch svg { width: 16px; height: 16px; flex: none; color: var(--rp-mfg); }
+/* CardContent sm:p-6 sm:pt-0; value sm:text-2xl font-bold */
+.l4-scaled .inner .scr-rp .cc { padding: 0 24px 24px; }
+.l4-scaled .inner .scr-rp .v { font-size: 24px; line-height: 32px; font-weight: 700; }
+
+/* tabs row: sm:flex-row sm:items-center justify-between gap-4 */
+.l4-scaled .inner .scr-rp .bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+/* TabsList h-10 rounded-md bg-muted p-1 text-muted-foreground */
+.l4-scaled .inner .scr-rp .tabs { display: inline-flex; align-items: center; height: 40px; padding: 4px; border-radius: 10px; background: var(--rp-muted); color: var(--rp-mfg); }
+/* TabsTrigger rounded-sm px-3 py-1.5 text-sm font-medium; active bg-background text-foreground shadow-sm */
+.l4-scaled .inner .scr-rp .tabs span { display: inline-flex; align-items: center; justify-content: center; padding: 6px 12px; border-radius: 8px; font-size: 14px; line-height: 20px; font-weight: 500; white-space: nowrap; }
+.l4-scaled .inner .scr-rp .tabs span.on { background: var(--rp-bg); color: var(--rp-fg); box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
+.l4-scaled .inner .scr-rp .tools { display: flex; align-items: center; gap: 8px; }
+/* search: relative sm:w-64; Input h-9 pl-8 pr-8 text-sm; icon left-2.5 h-3.5 */
+.l4-scaled .inner .scr-rp .srch { position: relative; width: 256px; }
+.l4-scaled .inner .scr-rp .srch svg { position: absolute; left: 10px; top: 50%; width: 14px; height: 14px; transform: translateY(-50%); color: var(--rp-mfg); }
+.l4-scaled .inner .scr-rp .srch .in { display: flex; align-items: center; height: 36px; padding: 8px 32px; border: 1px solid var(--rp-input); border-radius: 10px; background: var(--rp-bg); color: var(--rp-mfg); font-size: 14px; line-height: 20px; }
+/* sort: ArrowUpDown h-4 muted + SelectTrigger sm:h-9 sm:w-[150px] */
+.l4-scaled .inner .scr-rp .sort { display: flex; align-items: center; gap: 8px; }
+.l4-scaled .inner .scr-rp .sort > svg { width: 16px; height: 16px; color: var(--rp-mfg); }
+.l4-scaled .inner .scr-rp .sel { display: flex; align-items: center; justify-content: space-between; width: 150px; height: 36px; padding: 8px 12px; border: 1px solid var(--rp-input); border-radius: 10px; background: var(--rp-bg); font-size: 14px; line-height: 20px; }
+.l4-scaled .inner .scr-rp .sel svg { width: 16px; height: 16px; opacity: 0.5; }
+
+/* list: border rounded-lg divide-y */
+.l4-scaled .inner .scr-rp .list { border: 1px solid var(--rp-border); border-radius: 12px; }
+.l4-scaled .inner .scr-rp .row { display: flex; align-items: center; gap: 16px; padding: 16px; }
+.l4-scaled .inner .scr-rp .row + .row { border-top: 1px solid var(--rp-border); }
+/* thumbnail h-12 w-16 rounded-md bg-muted; img object-cover */
+.l4-scaled .inner .scr-rp .th { width: 64px; height: 48px; flex: none; overflow: hidden; border-radius: 10px; background: var(--rp-muted); }
+.l4-scaled .inner .scr-rp .th img { display: block; width: 100%; height: 100%; max-width: none; object-fit: cover; }
+.l4-scaled .inner .scr-rp .th .ph0 { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
+.l4-scaled .inner .scr-rp .th .ph0 svg { width: 20px; height: 20px; color: var(--rp-mfg); }
+.l4-scaled .inner .scr-rp .info { flex: 1; min-width: 0; }
+.l4-scaled .inner .scr-rp .l1 { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+/* ref: rounded-md border-indigo-500/30 bg-indigo-500/10 px-1.5 py-0.5 font-mono text-[11px] font-semibold dark:text-indigo-300 */
+.l4-scaled .inner .scr-rp .ref { display: inline-flex; align-items: center; padding: 2px 6px; border: 1px solid rgb(99 102 241 / 0.3); border-radius: 10px; background: rgb(99 102 241 / 0.1); color: #a5b4fc; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.l4-scaled .inner .scr-rp .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.l4-scaled .inner .scr-rp .reg { font-size: 12px; line-height: 16px; color: var(--rp-mfg); }
+/* text-xs text-muted-foreground mt-0.5 gap-3; icons h-3 w-3 gap-1 */
+.l4-scaled .inner .scr-rp .l2 { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--rp-mfg); }
+.l4-scaled .inner .scr-rp .l2 span { display: flex; align-items: center; gap: 4px; }
+.l4-scaled .inner .scr-rp .l2 svg { width: 12px; height: 12px; }
+.l4-scaled .inner .scr-rp .alerts { display: flex; align-items: center; gap: 8px; flex: none; }
+/* Badge outline text-[10px] dark:bg-indigo-900/20 dark:text-indigo-400 dark:border-indigo-800 */
+.l4-scaled .inner .scr-rp .sign { display: inline-flex; align-items: center; padding: 2px 10px; border: 1px solid #3730a3; border-radius: 999px; background: rgb(49 46 129 / 0.2); color: #818cf8; font-size: 10px; font-weight: 600; }
+/* status Badge: rounded-full border-transparent px-2.5 py-0.5 text-xs font-semibold + getStatusColor (dark) */
+.l4-scaled .inner .scr-rp .st { display: inline-flex; align-items: center; flex: none; padding: 2px 10px; border: 1px solid transparent; border-radius: 999px; font-size: 12px; line-height: 16px; font-weight: 600; }
+.l4-scaled .inner .scr-rp .st.active { background: rgb(20 83 45 / 0.3); color: #4ade80; }
+.l4-scaled .inner .scr-rp .st.pending { background: rgb(120 53 15 / 0.3); color: #fbbf24; }
+.l4-scaled .inner .scr-rp .st.completed { background: rgb(30 58 138 / 0.3); color: #60a5fa; }
+.l4-scaled .inner .scr-rp .chev { width: 16px; height: 16px; flex: none; color: var(--rp-mfg); }
+
+/* TraxChatButton: fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg bg-primary;
+   the h-6 icon loses to Button's [&_svg]:size-4 */
+.l4-scaled .inner .scr-rp .trax { position: absolute; right: 24px; bottom: 24px; z-index: 5; display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 999px; background: var(--rp-primary); color: var(--rp-primary-fg); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+.l4-scaled .inner .scr-rp .trax svg { width: 16px; height: 16px; }
+/* absolute -top-1 -right-1 h-5 min-w-5 px-1.5 text-[11px] font-medium bg-destructive */
+.l4-scaled .inner .scr-rp .trax .cnt { position: absolute; top: -4px; right: -4px; display: flex; align-items: center; justify-content: center; height: 20px; min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--rp-destructive); color: var(--rp-destructive-fg); font-size: 11px; font-weight: 500; }

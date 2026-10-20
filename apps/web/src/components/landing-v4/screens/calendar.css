@@ -1,0 +1,128 @@
+/* Bookings calendar — portal components/timeline-v2/timeline.css (`.rental-timeline.tl-fill`)
+   with ui-v2 Button sizes, resolved against styles/v2-theme.css tokens:
+   primary #442dd7 · primary-foreground #f0f3ff · border #e5e5e5 · muted-fg #737373 · fg #0a0a0a */
+
+.l4-scaled .inner .scr-cal {
+  --p: 68 45 215;
+  --fg: 10 10 10;
+  --mf: 115 115 115;
+  --id: 204px;
+  display: flex; flex-direction: column; height: 100%; width: 100%;
+  background: #fff; color: #0a0a0a; border-top: 1px solid #e5e5e5;
+  font-family: var(--font-manrope), Manrope, sans-serif;
+}
+.l4-scaled .inner .scr-cal svg { flex: none; }
+
+/* ── toolbar: two rows on one grid ── */
+.l4-scaled .inner .scr-cal .tb {
+  flex-shrink: 0; display: grid; align-items: center; gap: 12px 10px; padding: 18px 40px 14px;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto auto;
+  grid-template-areas: "title nav range periods actions actions" "persp persp search search filters block";
+  background: linear-gradient(180deg, rgb(var(--p) / 0.07), rgb(var(--p) / 0.025));
+}
+.l4-scaled .inner .scr-cal .tb h3 { grid-area: title; margin: 0 10px 0 0; font-size: 18px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.3; color: #0a0a0a; }
+.l4-scaled .inner .scr-cal .acts { grid-area: actions; justify-self: end; display: flex; align-items: center; gap: 8px; }
+.l4-scaled .inner .scr-cal .pnav { grid-area: nav; display: flex; align-items: center; gap: 4px; }
+.l4-scaled .inner .scr-cal .filters { grid-area: filters; }
+.l4-scaled .inner .scr-cal .block { grid-area: block; }
+
+/* ui-v2 Button: outline (default here) / ghost, size sm (h-8 px-3 gap-1) and icon-sm (size-8), rounded-4xl = 26px */
+.l4-scaled .inner .scr-cal .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 32px; padding: 0 12px;
+  border: 1px solid #e5e5e5; border-radius: 26px; background: transparent;
+  font-size: 14px; line-height: 20px; font-weight: 500; white-space: nowrap; color: #0a0a0a;
+}
+.l4-scaled .inner .scr-cal .btn.ghost { border-color: transparent; }
+.l4-scaled .inner .scr-cal .btn.sq { width: 32px; padding: 0; }
+.l4-scaled .inner .scr-cal .btn svg { width: 16px; height: 16px; }
+
+.l4-scaled .inner .scr-cal .range { grid-area: range; display: flex; align-items: center; gap: 8px; min-height: 32px; font-size: 13px; font-weight: 600; color: rgb(var(--p)); white-space: nowrap; }
+.l4-scaled .inner .scr-cal .range > span, .l4-scaled .inner .scr-cal .range > svg { color: #737373; }
+.l4-scaled .inner .scr-cal .range > svg { width: 13px; height: 13px; }
+
+.l4-scaled .inner .scr-cal .persp, .l4-scaled .inner .scr-cal .periods { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 9px; background: rgb(var(--p) / 0.08); }
+.l4-scaled .inner .scr-cal .persp { grid-area: persp; justify-self: start; }
+.l4-scaled .inner .scr-cal .periods { grid-area: periods; }
+.l4-scaled .inner .scr-cal .persp span, .l4-scaled .inner .scr-cal .periods span {
+  display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 28px; padding: 5px 10px; border-radius: 7px;
+  font-size: 12px; line-height: 16px; font-weight: 500; white-space: nowrap; color: rgb(var(--p) / 0.75);
+}
+.l4-scaled .inner .scr-cal .periods span { padding: 5px 11px; font-size: 11px; }
+.l4-scaled .inner .scr-cal .persp svg { width: 14px; height: 14px; }
+.l4-scaled .inner .scr-cal .persp span.on, .l4-scaled .inner .scr-cal .periods span.on { background: rgb(var(--p)); color: #f0f3ff; }
+
+.l4-scaled .inner .scr-cal .srch {
+  grid-area: search; justify-self: end; width: 300px; max-width: 100%; display: flex; align-items: center; gap: 8px;
+  min-height: 34px; padding: 0 10px; border: 1px solid rgb(var(--p) / 0.2); border-radius: 9px; background: #fff; color: #737373;
+}
+.l4-scaled .inner .scr-cal .srch svg { width: 15px; height: 15px; }
+.l4-scaled .inner .scr-cal .srch span { padding: 8px 0; font-size: 12px; line-height: 16px; color: #9ca3af; }
+
+/* ── window meta ── */
+.l4-scaled .inner .scr-cal .meta {
+  flex-shrink: 0; display: flex; justify-content: space-between; gap: 8px; padding: 7px 40px;
+  border-top: 1px solid rgb(var(--p) / 0.12); background: rgb(var(--p) / 0.06); color: rgb(var(--p)); font-size: 11px; line-height: 16px;
+}
+.l4-scaled .inner .scr-cal .meta > span { display: inline-flex; align-items: center; gap: 6px; }
+.l4-scaled .inner .scr-cal .meta i { width: 5px; height: 5px; border-radius: 50%; background: rgb(var(--p)); }
+
+/* ── the grid ── */
+.l4-scaled .inner .scr-cal .scroll { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-top: 1px solid rgb(var(--p) / 0.12); }
+.l4-scaled .inner .scr-cal .gh, .l4-scaled .inner .scr-cal .row { display: grid; grid-template-columns: var(--id) minmax(0, 1fr); }
+.l4-scaled .inner .scr-cal .gh { position: relative; z-index: 12; flex-shrink: 0; background: linear-gradient(rgb(var(--p) / 0.05), rgb(var(--p) / 0.05)), #fff; box-shadow: 0 1px 0 rgb(var(--p) / 0.15); }
+.l4-scaled .inner .scr-cal .dates, .l4-scaled .inner .scr-cal .cells { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); }
+.l4-scaled .inner .scr-cal .date { height: 53px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-right: 1px solid rgb(var(--p) / 0.08); }
+.l4-scaled .inner .scr-cal .date > span { font-size: 9px; line-height: 13px; text-transform: uppercase; color: rgb(var(--p) / 0.7); }
+.l4-scaled .inner .scr-cal .date > strong { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 50%; font-size: 12px; font-weight: 500; }
+.l4-scaled .inner .scr-cal .date.today > span { color: rgb(var(--p)); font-weight: 650; }
+.l4-scaled .inner .scr-cal .date.today > strong { background: rgb(var(--p)); color: #f0f3ff; }
+.l4-scaled .inner .scr-cal .we { background: rgb(var(--p) / 0.045); }
+
+.l4-scaled .inner .scr-cal .idn {
+  position: relative; z-index: 7; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 12px 8px 40px;
+  background: linear-gradient(rgb(var(--p) / 0.03), rgb(var(--p) / 0.03)), #fff; border-right: 1px solid rgb(var(--p) / 0.14);
+}
+.l4-scaled .inner .scr-cal .idn > div { min-width: 0; }
+.l4-scaled .inner .scr-cal .idn strong { display: block; font-size: 11px; font-weight: 500; line-height: 1.45; }
+/* tl-identity small sets no leading, so it takes the body's 20px: the cell is 54px in a 44px row and runs 10px into the next one, which is what doubles the weekend tint in a band under each row line */
+.l4-scaled .inner .scr-cal .idn small { display: block; margin-top: 2px; font-size: 10px; line-height: 20px; color: #737373; }
+.l4-scaled .inner .scr-cal .idh { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; font-size: 11px; font-weight: 600; line-height: 1.45; background: linear-gradient(rgb(var(--p) / 0.07), rgb(var(--p) / 0.07)), #fff; }
+
+.l4-scaled .inner .scr-cal .gb { position: relative; flex: 1 0 auto; display: flex; flex-direction: column; }
+.l4-scaled .inner .scr-cal .row { height: 44px; flex-shrink: 0; border-bottom: 1px solid rgb(var(--p) / 0.08); }
+.l4-scaled .inner .scr-cal .row.filler { flex: 1 0 0; height: auto; min-height: 0; border-bottom: 0; }
+.l4-scaled .inner .scr-cal .rd { position: relative; min-width: 0; overflow: clip; }
+.l4-scaled .inner .scr-cal .cells { position: absolute; inset: 0; }
+.l4-scaled .inner .scr-cal .cell { border-right: 1px solid rgb(var(--p) / 0.08); }
+
+/* A booking: a 2px stroke in foreground/70 with status-coloured endpoint dots. */
+.l4-scaled .inner .scr-cal .bk { position: absolute; z-index: 3; top: 10px; height: 24px; color: rgb(var(--fg) / 0.7); }
+.l4-scaled .inner .scr-cal .bk .stroke { position: absolute; top: 11px; left: 0; right: 0; height: 2px; background: currentColor; }
+.l4-scaled .inner .scr-cal .bk.dash .stroke { background: repeating-linear-gradient(to right, currentColor 0 5px, transparent 5px 8px); }
+.l4-scaled .inner .scr-cal .ep { position: absolute; top: 12px; transform: translate(-50%, -50%); }
+.l4-scaled .inner .scr-cal .ep.s { left: 0; }
+.l4-scaled .inner .scr-cal .ep.e { left: 100%; }
+.l4-scaled .inner .scr-cal .ep.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dot); }
+.l4-scaled .inner .scr-cal .ep.cont { width: 12px; height: 12px; }
+.l4-scaled .inner .scr-cal .ep.s.cont { transform: translate(0, -50%); }
+.l4-scaled .inner .scr-cal .ep.e.cont { transform: translate(-100%, -50%); }
+
+.l4-scaled .inner .scr-cal .blk { position: absolute; z-index: 2; top: 10px; height: 24px; color: #737373; }
+.l4-scaled .inner .scr-cal .blk > span {
+  position: absolute; inset: 5px 0; display: flex; align-items: center; justify-content: center;
+  border-block: 1px dashed rgb(var(--mf) / 0.4); background: repeating-linear-gradient(125deg, rgb(var(--mf) / 0.09) 0 2px, transparent 2px 6px);
+}
+.l4-scaled .inner .scr-cal .blk svg { width: 11px; height: 11px; }
+
+.l4-scaled .inner .scr-cal .track { position: absolute; left: var(--id); right: 0; top: 0; bottom: 0; z-index: 5; pointer-events: none; }
+.l4-scaled .inner .scr-cal .now { position: absolute; top: 0; bottom: 0; width: 2px; background: rgb(var(--p) / 0.65); }
+.l4-scaled .inner .scr-cal .now::before { content: ""; position: absolute; top: 0; left: -2px; width: 6px; height: 5px; border-radius: 0 0 50% 50%; background: rgb(var(--p)); }
+
+/* ── footer legend ── */
+.l4-scaled .inner .scr-cal .foot {
+  flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 40px;
+  border-top: 1px solid rgb(var(--p) / 0.12); background: rgb(var(--p) / 0.04); font-size: 10px; line-height: 15px; color: #737373;
+}
+.l4-scaled .inner .scr-cal .foot > span:first-child { display: flex; align-items: center; gap: 7px; }
+.l4-scaled .inner .scr-cal .foot .ln { width: 16px; height: 2px; background: rgb(var(--fg) / 0.7); }
+.l4-scaled .inner .scr-cal .foot .bx { width: 16px; height: 7px; margin-left: 8px; border: 1px dashed #737373; }
