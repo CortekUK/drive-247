@@ -53,6 +53,10 @@ export interface CustomerAuthContextValue {
   ) => Promise<AuthResult>;
   /** Re-read the customer row — after a profile edit, say. */
   refresh: () => Promise<void>;
+  /** "Continue with Google": leave for Google (comes back with `?oauth=google`). */
+  startGoogleSignIn: () => Promise<AuthResult>;
+  /** On the page Google returned to: join this site as a customer and sign in. */
+  completeGoogleSignIn: () => Promise<AuthResult>;
 }
 
 const CustomerAuthContext = createContext<CustomerAuthContextValue | undefined>(
@@ -81,6 +85,8 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
     (state) => state.confirmPasswordReset,
   );
   const refresh = useCustomerAuthStore((state) => state.refresh);
+  const startGoogleSignIn = useCustomerAuthStore((state) => state.startGoogleSignIn);
+  const completeGoogleSignIn = useCustomerAuthStore((state) => state.completeGoogleSignIn);
 
   const tenantId = tenant?.id ?? null;
   // `company_name` is nullable in the schema; the fallback is what appears in
@@ -120,6 +126,8 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
       resetPassword,
       confirmPasswordReset,
       refresh,
+      startGoogleSignIn,
+      completeGoogleSignIn,
     };
   }, [
     user,
@@ -132,6 +140,8 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
     resetPassword,
     confirmPasswordReset,
     refresh,
+    startGoogleSignIn,
+    completeGoogleSignIn,
   ]);
 
   return (
@@ -182,6 +192,14 @@ const EMPTY_CUSTOMER_AUTH: CustomerAuthContextValue = {
     },
   }),
   refresh: async () => {},
+  startGoogleSignIn: async () => ({
+    ok: false,
+    failure: { kind: "unexpected", message: "Sign-in is unavailable on this page." },
+  }),
+  completeGoogleSignIn: async () => ({
+    ok: false,
+    failure: { kind: "unexpected", message: "Sign-in is unavailable on this page." },
+  }),
 };
 
 export function useCustomerAuth(): CustomerAuthContextValue {

@@ -17,7 +17,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useId, useState } from 'react';
+import { useCallback, useId, useState } from 'react';
 import type { FormEvent } from 'react';
 import { AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react-nw';
 
@@ -29,6 +29,7 @@ import { isClean, validateEmail, validateExistingPassword } from '@/app/(northwi
 
 import { AUTH_FIELD_CLASS as FIELD_CLASS, AUTH_FIELD_ERROR_CLASS as FIELD_ERROR_CLASS } from './auth-fields-v2';
 import { AuthSplitShell, authLinkInk } from './auth-split-shell';
+import { ContinueWithGoogle } from './google-sign-in';
 
 interface FieldErrors {
   email?: string;
@@ -42,6 +43,9 @@ export function LoginV2() {
   const { signIn } = useCustomerAuth();
   const { tenant, isLoading: tenantLoading } = useTenant();
   const next = useNextPath();
+  // Where a Google sign-in goes once it lands: where the form would go.
+  const goNext = useCallback(() => router.replace(next), [router, next]);
+  const [googleBusy, setGoogleBusy] = useState(false);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -188,7 +192,7 @@ export function LoginV2() {
         {/* Held until the tenant resolves: sign-in is scoped to one operator. */}
         <button
           type="submit"
-          disabled={pending || tenantLoading}
+          disabled={pending || tenantLoading || googleBusy}
           className="inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-pv-primary text-base font-medium text-pv-primary-fg transition-colors hover:bg-pv-primary-hover focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-pv-primary/30 active:translate-y-px disabled:pointer-events-none disabled:opacity-50"
         >
           {pending ? (
@@ -201,6 +205,13 @@ export function LoginV2() {
           )}
         </button>
       </form>
+
+      {/* CONTINUE WITH GOOGLE, as on the operator portal's login: under the
+          form's own button. For a Google account signing in and signing up
+          are the same thing, so both pages carry it. */}
+      <div className="mt-4">
+        <ContinueWithGoogle disabled={pending} onSignedIn={goNext} onBusyChange={setGoogleBusy} />
+      </div>
 
       <p className="mt-6 text-center text-sm text-pv-muted-fg">
         New here?{' '}

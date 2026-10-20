@@ -238,7 +238,7 @@ const UNEXPECTED_MESSAGE =
 async function readFunctionError(error: unknown): Promise<string | null> {
   if (!(error instanceof FunctionsHttpError)) return null;
   try {
-    const body: unknown = await error.context.json();
+    const body: unknown = await error.context.clone().json();
     if (
       typeof body === "object" &&
       body !== null &&
@@ -250,6 +250,19 @@ async function readFunctionError(error: unknown): Promise<string | null> {
   } catch {
     // A non-JSON body (a gateway page, a truncated response) is not a message
     // worth showing; fall through to the caller's generic copy.
+  }
+  return null;
+}
+
+/** The `code` an edge function's error body carries ('blocked', 'taken' …), if any. */
+async function readFunctionCode(error: FunctionsHttpError): Promise<string | null> {
+  try {
+    const body: unknown = await error.context.clone().json();
+    if (typeof body === "object" && body !== null && typeof (body as { code?: unknown }).code === "string") {
+      return (body as { code: string }).code;
+    }
+  } catch {
+    // Not JSON: no code.
   }
   return null;
 }
@@ -440,7 +453,22 @@ interface CustomerAuthState {
   ) => Promise<AuthResult>;
   /** Re-read the customer row — after a profile edit, say. */
   refresh: () => Promise<void>;
+  /**
+   * "Continue with Google", step 1: leave for Google. It comes back to the
+   * page it left from, with `?oauth=google` (GOOGLE_RETURN_PARAM) added.
+   */
+  startGoogleSignIn: () => Promise<AuthResult>;
+  /**
+   * Step 2, on the page Google returned to: make the Google account a customer
+   * of THIS site (the `customer-google-link` function: an existing customer
+   * with the same verified email is claimed, else one is created), then run the
+   * same membership and block checks every other sign-in runs.
+   */
+  completeGoogleSignIn: () => Promise<AuthResult>;
 }
+
+/** Marks the page Google returned to, so it knows to finish the sign-in. */
+export const GOOGLE_RETURN_PARAM = "oauth";
 
 export interface SignUpInput {
   email: string;
@@ -773,6 +801,82 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => {
         );
       }
 
+      return { ok: true };
+    },
+
+    startGoogleSignIn: async () => {
+      const { tenant } = get();
+      if (!tenant) return fail("no-tenant", NO_TENANT_MESSAGE);
+
+      // Back to this very page (its `?next=` included), marked as the return.
+      const back = new URL(window.location.href);
+      back.searchParams.set(GOOGLE_RETURN_PARAM, "google");
+      back.hash = "";
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: back.toString(),
+          // A shared machine must not silently sign the last person back in.
+          queryParams: { prompt: "select_account" },
+        },
+      });
+      if (error) {
+        console.error("[customer-auth] Google sign-in could not start", error.message);
+        return fail("network", "We could not reach Google. Please try again in a moment.");
+      }
+      // The browser is leaving for Google.
+      return { ok: true };
+    },
+
+    completeGoogleSignIn: async () => {
+      const { tenant } = get();
+      if (!tenant) return fail("no-tenant", NO_TENANT_MESSAGE);
+
+      // The session Supabase read from the address Google returned to.
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user) {
+        return fail("unexpected", "Google sign-in was cancelled or did not finish. Please try again.");
+      }
+
+      const { data, error } = await supabase.functions.invoke("customer-google-link", {
+        body: { tenant_id: tenant.id },
+      });
+
+      if (error || (data as { ok?: unknown } | null)?.ok !== true) {
+        const reported = error ? await readFunctionError(error) : null;
+        // Local scope: the Google session may be a real account on another
+        // operator's site, and failing to join this one must not end it.
+        await supabase.auth.signOut({ scope: "local" });
+        set({ ...SIGNED_OUT, membershipResolved: true });
+        const code = error instanceof FunctionsHttpError ? await readFunctionCode(error) : null;
+        if (code === "blocked") return fail("account-blocked", reported ?? BLOCKED_MESSAGE);
+        if (code === "taken") return fail("email-taken", reported ?? UNEXPECTED_MESSAGE);
+        console.error("[customer-auth] customer-google-link failed", reported ?? error);
+        return fail("unexpected", reported ?? UNEXPECTED_MESSAGE);
+      }
+
+      const user = session.user;
+      const membership = await fetchMembership(user.id, tenant.id);
+      if (!membership) {
+        await supabase.auth.signOut({ scope: "local" });
+        set({ ...SIGNED_OUT, membershipResolved: true });
+        return fail("unexpected", UNEXPECTED_MESSAGE);
+      }
+
+      const blockReason = await findBlockReason(tenant.id, (user.email ?? "").toLowerCase(), membership.customer);
+      if (blockReason) {
+        await supabase.auth.signOut();
+        await clearBookingDraft();
+        set({ ...SIGNED_OUT, membershipResolved: true });
+        return fail("account-blocked", blockReason);
+      }
+
+      // Supersede any lookup the auth listener started for this sign-in.
+      membershipToken += 1;
+      set({ user, session, membership, sessionResolved: true, membershipResolved: true });
       return { ok: true };
     },
 

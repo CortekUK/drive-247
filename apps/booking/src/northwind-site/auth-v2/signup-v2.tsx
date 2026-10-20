@@ -11,7 +11,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useId, useState } from 'react';
+import { useCallback, useId, useState } from 'react';
 import type { FormEvent } from 'react';
 
 import { useCustomerAuth } from '@nw/contexts/CustomerAuthContext';
@@ -36,6 +36,7 @@ import {
   AuthTextFieldV2,
 } from './auth-fields-v2';
 import { AuthSplitShell, authLinkInk } from './auth-split-shell';
+import { ContinueWithGoogle } from './google-sign-in';
 
 interface FieldErrors {
   name?: string;
@@ -51,6 +52,9 @@ export function SignupV2() {
   const { signUp } = useCustomerAuth();
   const { tenant, isLoading: tenantLoading } = useTenant();
   const next = useNextPath();
+  // Where a Google sign-up goes once it lands: where the form would go.
+  const goNext = useCallback(() => router.replace(next), [router, next]);
+  const [googleBusy, setGoogleBusy] = useState(false);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -214,11 +218,18 @@ export function SignupV2() {
 
         {/* Held until the tenant resolves: the account belongs to ONE operator. */}
         <div className="pt-2">
-          <AuthSubmitV2 pending={pending} pendingLabel="Creating your account…" disabled={tenantLoading}>
+          <AuthSubmitV2 pending={pending} pendingLabel="Creating your account…" disabled={tenantLoading || googleBusy}>
             Create account
           </AuthSubmitV2>
         </div>
       </form>
+
+      {/* CONTINUE WITH GOOGLE, as on the operator portal's login: under the
+          form's own button. For a Google account signing up and signing in
+          are the same thing, so both pages carry it. */}
+      <div className="mt-4">
+        <ContinueWithGoogle disabled={pending} onSignedIn={goNext} onBusyChange={setGoogleBusy} />
+      </div>
 
       <p className="mt-6 text-center text-sm text-pv-muted-fg">Already have an account? {signInLink}</p>
     </AuthSplitShell>
