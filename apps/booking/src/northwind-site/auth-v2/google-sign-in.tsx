@@ -17,10 +17,20 @@
  * The same component on both pages, because for a Google account signing in
  * and signing up are one action: a first visit creates the customer, a later
  * one finds it.
+ *
+ * V2 ONLY. Drawn only for a tenant on V2 (`portal_experience = 'v2'`, or a
+ * canary slug: `isLeanTenant`, the rule every v2 gate uses), and the
+ * `customer-google-link` function refuses anyone else with the same rule. A v1
+ * tenant's customers keep email and password. Until the answer is in, nothing
+ * is drawn, so a v1 site never flashes the button.
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, Loader2 } from 'lucide-react-nw';
+
+import { isLeanTenant, readTenantOnV2ById } from '@/lib/lean-tenants';
+import { supabase } from '@nw/integrations/supabase/client';
 
 import { useCustomerAuth } from '@nw/contexts/CustomerAuthContext';
 import { useTenant } from '@nw/contexts/TenantContext';
@@ -40,6 +50,20 @@ export function GoogleMark({ className }: { className?: string }) {
       <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.59C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.96l2.99 2.33C4.66 5.16 6.65 3.58 9 3.58Z" />
     </svg>
   );
+}
+
+/** Is this site's tenant on V2? Null while the answer is not in. */
+function useTenantOnV2(): boolean | null {
+  const { tenant } = useTenant();
+  const query = useQuery({
+    queryKey: ['tenant-on-v2', tenant?.id],
+    queryFn: () => readTenantOnV2ById(supabase, tenant?.id),
+    enabled: !!tenant?.id,
+    staleTime: 5 * 60_000,
+  });
+  if (!tenant?.id) return null;
+  if (isLeanTenant(tenant.slug)) return true;
+  return query.isSuccess ? isLeanTenant(tenant.slug, query.data) : null;
 }
 
 /** Drop the return marker (and anything Google added) so a reload does not repeat the finish. */
@@ -64,6 +88,7 @@ export function ContinueWithGoogle({
 }) {
   const { startGoogleSignIn, completeGoogleSignIn } = useCustomerAuth();
   const { isLoading: tenantLoading } = useTenant();
+  const onV2 = useTenantOnV2();
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<AuthFailure | null>(null);
   const finishing = useRef(false);
@@ -97,6 +122,9 @@ export function ContinueWithGoogle({
       setFailure(result.failure);
     });
   }, [tenantLoading, completeGoogleSignIn, onSignedIn]);
+
+  // A v1 tenant (or one not known yet) gets no Google option at all.
+  if (onV2 !== true) return null;
 
   const start = async () => {
     setFailure(null);

@@ -14,9 +14,12 @@
 //      user id or email from the body;
 //   2. their email must be confirmed (Google confirms it), because an existing
 //      customer record is claimed by matching it;
-//   3. the tenant must exist; it comes from the body, which is fine: all the
-//      caller can choose is which operator they become a customer of, which a
-//      sign-up form lets anyone do;
+//   3. the tenant must exist and be on V2 (`portal_experience = 'v2'`, or a
+//      canary slug: the `isLeanTenant` rule every v2 gate uses). Google sign-in
+//      is a V2 feature; a v1 tenant's customers keep email and password. The
+//      tenant comes from the body, which is fine: all the caller can choose is
+//      which operator they become a customer of, which a sign-up form lets
+//      anyone do;
 //   4. a blocked address is refused before anything is written: the global
 //      blacklist (unless whitelisted) and this operator's blocked identities,
 //      the checks the customer sign-in and sign-up run;
@@ -27,9 +30,10 @@
 //      (Individual, Active), with the welcome notification.
 //
 // Replies: 200 { ok, customer_id, created } · 400 bad request · 401 no user ·
-// 403 { ok:false, code:'blocked'|'unverified'|'taken', error } · 500.
+// 403 { ok:false, code:'blocked'|'unverified'|'taken'|'not_v2', error } · 500.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse } from '../_shared/cors.ts';
+import { isLeanTenant, readTenantOnV2ById } from '../_shared/lean-tenants.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BLOCKED = 'This account has been blocked. Please contact support if you think that is a mistake.';
@@ -82,9 +86,12 @@ Deno.serve(async (req: Request) => {
 
   try {
     // 3. The operator.
-    const { data: tenant, error: tenantError } = await admin.from('tenants').select('id').eq('id', tenantId).maybeSingle();
+    const { data: tenant, error: tenantError } = await admin.from('tenants').select('id, slug').eq('id', tenantId).maybeSingle();
     if (tenantError) throw tenantError;
     if (!tenant) return respond({ ok: false, error: 'The request could not be read.' }, 400);
+    if (!isLeanTenant(tenant.slug, await readTenantOnV2ById(admin, tenant.id))) {
+      return respond({ ok: false, code: 'not_v2', error: 'Google sign-in is not available on this site. Sign in with your email and password.' }, 403);
+    }
 
     // 4. Blocked addresses, before anything is written.
     const [{ data: globally }, { data: locally }] = await Promise.all([
