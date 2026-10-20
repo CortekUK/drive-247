@@ -10,7 +10,8 @@
  * live, amber waiting, slate finished, red cancelled). Upcoming has no colour
  * of its own there in purple, so it takes the plain chosen chip, which is the
  * portal purple. The date range is the Rentals panel's: an outline button per
- * end opening a calendar, and "Clear dates" since dates have no "All" chip.
+ * end opening a calendar, and "Clear dates" since dates have no "All" chip,
+ * in the portal purple rather than the Rentals panel's blue.
  *
  * Filtering is in memory over the one fetch the page already holds
  * (`applyBookingFilters`), so the data and its query are unchanged.
@@ -104,7 +105,7 @@ export function BookingsFilterPanel({
           type="button"
           className={cn(V2_BUTTON_OUTLINE, 'h-8 w-full justify-start text-xs font-normal', !value && 'text-v2-muted-fg')}
         >
-          <CalendarIcon className="mr-1.5 size-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
+          <CalendarIcon className="mr-1.5 size-3.5 shrink-0 text-v2-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />
           {value ? format(parseDateOnly(value), 'MMM d, yyyy') : placeholder}
         </button>
       </PopoverTrigger>
@@ -160,8 +161,8 @@ export function BookingsFilterPanel({
       </FilterSection>
 
       <FilterSection
-        icon={<CalendarIcon className="size-3.5 text-blue-600 dark:text-blue-400" />}
-        tint="bg-blue-500/10"
+        icon={<CalendarIcon className="size-3.5 text-v2-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
+        tint="bg-v2-primary/10"
         title="Pickup date range"
       >
         <div className="grid grid-cols-2 gap-3">
