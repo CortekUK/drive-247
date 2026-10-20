@@ -52,55 +52,21 @@ const Blank = () => <span className="text-muted-foreground">—</span>;
    The Agreements v2 list
    ══════════════════════════════════════════════════════════════════════════ */
 
-/** The three statuses as the list prints them (D16), and their hue. */
-export const AGREEMENT_STATUS_LABEL_V2: Record<AgreementStatusV2, string> = {
-  signed: "Signed",
-  pending: "Pending",
-  failed: "Failed",
-};
-
-/** What an agreement is linked to: its rental, or (sent from the tab) the customer. */
-export const AGREEMENT_LINK_LABEL_V2: Record<AgreementRowV2["kind"], string> = {
-  rental: "Rental",
-  individual: "Customer",
-};
-
-/**
- * The reference the Reference column shows: the rental's number for a rental
- * agreement, the customer's ID for one linked to a customer. Customers carry
- * no number of their own, so the ID is the short form of their record id,
- * written like a rental reference (`C-1a2b3c`).
+/*
+ * The words, reference and date format live in
+ * shared/portal-v2/agreements/list.ts (the customer portal's Agreements list
+ * prints the same), re-exported here under their v2 names.
  */
-export function agreementReferenceV2(row: Pick<AgreementRowV2, "kind" | "rentalRef" | "customerId">): string | null {
-  if (row.kind === "rental") return row.rentalRef;
-  return row.customerId ? `C-${row.customerId.replace(/-/g, "").slice(0, 6)}` : null;
-}
+export {
+  AGREEMENT_STATUS_LABEL as AGREEMENT_STATUS_LABEL_V2,
+  AGREEMENT_LINK_LABEL as AGREEMENT_LINK_LABEL_V2,
+  agreementReference as agreementReferenceV2,
+  formatAgreementSentAt as formatAgreementSentAtV2,
+} from "../../../../../shared/portal-v2/agreements/list";
+import { AGREEMENT_STATUS_TONE } from "../../../../../shared/portal-v2/agreements/list";
+import { AgreementsTable } from "../../../../../shared/portal-v2/agreements/table";
 
-export const AGREEMENT_STATUS_TONE_LIST_V2: Record<AgreementStatusV2, ListTone> = {
-  signed: "success",
-  pending: "warning",
-  failed: "danger",
-};
-
-/**
- * "Sep 21, 3:04 PM", with the year only when it is not this one: the date and
- * time format the v2 records use (`vehicles-v2/kit.tsx` fmtDateTime), in the
- * operator's own zone. A 12-hour clock with AM/PM, as the team lead asked.
- */
-export function formatAgreementSentAtV2(value: string | null | undefined, now: Date = new Date()): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  const sameYear = d.getFullYear() === now.getFullYear();
-  return d.toLocaleString("en-US", {
-    day: "numeric",
-    month: "short",
-    ...(sameYear ? {} : { year: "numeric" }),
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
+export const AGREEMENT_STATUS_TONE_LIST_V2: Record<AgreementStatusV2, ListTone> = AGREEMENT_STATUS_TONE as Record<AgreementStatusV2, ListTone>;
 
 /**
  * What a row's menu offers, by status (D17).
@@ -193,7 +159,6 @@ export function AgreementsListTableV2({
   onResend: (row: AgreementRowV2) => void;
 }) {
   const agreementRows = useProgressiveRows(rows, resetKey);
-  const now = new Date();
 
   return (
     <>
@@ -203,82 +168,25 @@ export function AgreementsListTableV2({
           Customer takes the most room and truncates with a title; the email
           truncates too. Sent holds "Sep 21, 2025, 12:45 PM" whole and Status
           "Pending signature" whole. */}
-      <ListTable rows={agreementRows} minWidth="min-w-[920px]">
-        <ListTableHeader>
-          <ListHead className="w-[20%]">Customer</ListHead>
-          <ListHead className="w-[25%]">Email</ListHead>
-          <ListHead className="w-[12%]">Linked to</ListHead>
-          <ListHead className="w-[12%]">Reference</ListHead>
-          <ListHead className="w-[19%]">Sent</ListHead>
-          <ListHead className="w-[12%]">Status</ListHead>
-        </ListTableHeader>
-        <ListBody>
-          {agreementRows.visible.map((row) => {
-            const who = row.customerName || row.customerEmail || "this agreement";
-            const reference = agreementReferenceV2(row);
-
-            return (
-              // The whole row opens the agreement (View: the document, Download PDF,
-              // Resend and the activity), by click or by Enter / Space.
-              <ListRow
-                key={row.id}
-                data-agreement-kind={row.kind}
-                data-agreement-status={row.status}
-                onOpen={() => onView(row)}
-                tabIndex={0}
-                aria-label={`Open the agreement for ${who}`}
-                aria-busy={viewingId === row.id || undefined}
-                onKeyDown={(e) => {
-                  if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
-                    e.preventDefault();
-                    onView(row);
-                  }
-                }}
-                className="focus-visible:bg-muted/60 focus-visible:outline-none"
-              >
-                <ListCell>
-                  <span
-                    className={`block truncate ${LIST_CLASSES.identifier}`}
-                    title={row.title ? `${row.customerName} · ${row.title}` : row.customerName}
-                  >
-                    {row.customerName || <Blank />}
-                  </span>
-                </ListCell>
-                <ListCell>
-                  {row.customerEmail ? (
-                    <span className={`block truncate ${LIST_CLASSES.text}`} title={row.customerEmail}>
-                      {row.customerEmail}
-                    </span>
-                  ) : (
-                    <Blank />
-                  )}
-                </ListCell>
-                <ListCell>
-                  <span className={LIST_CLASSES.text}>{AGREEMENT_LINK_LABEL_V2[row.kind]}</span>
-                </ListCell>
-                <ListCell className="tabular-nums">
-                  {reference ? (
-                    <span className={`block truncate ${LIST_CLASSES.text}`} title={row.kind === "individual" ? row.customerId ?? undefined : undefined}>
-                      {reference}
-                    </span>
-                  ) : (
-                    <Blank />
-                  )}
-                </ListCell>
-                <ListCell className="tabular-nums">
-                  <span className={LIST_CLASSES.text}>{formatAgreementSentAtV2(row.sentAt, now)}</span>
-                </ListCell>
-                {/* Never truncated: a cut status is a different status. */}
-                <ListCell>
-                  <ListStatusText tone={AGREEMENT_STATUS_TONE_LIST_V2[row.status]}>
-                    {AGREEMENT_STATUS_LABEL_V2[row.status]}
-                  </ListStatusText>
-                </ListCell>
-              </ListRow>
-            );
-          })}
-        </ListBody>
-      </ListTable>
+      {/* The shared Agreements table (shared/portal-v2/agreements/table.tsx),
+          the one the customer portal's Agreements page draws too: Customer and
+          Email here, Company and its email there. */}
+      <AgreementsTable
+        rows={agreementRows}
+        party={{
+          label: "Customer",
+          name: (row) => row.customerName,
+          email: (row) => row.customerEmail || null,
+          title: (row) => (row.title ? `${row.customerName} · ${row.title}` : row.customerName),
+        }}
+        onOpen={onView}
+        rowProps={(row) => ({
+          "data-agreement-kind": row.kind,
+          "data-agreement-status": row.status,
+          "aria-label": `Open the agreement for ${row.customerName || row.customerEmail || "this agreement"}`,
+          "aria-busy": viewingId === row.id || undefined,
+        })}
+      />
       {/* No `serverTotal`: the list hook reads every row for the tenant. */}
       <ListFooter rows={agreementRows} one="agreement" many="agreements" />
     </>

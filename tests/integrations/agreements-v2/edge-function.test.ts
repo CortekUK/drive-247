@@ -57,6 +57,12 @@ const state = {
   rpcCalls: [] as Array<{ name: string; params: any }>,
   users: {} as Record<string, string>,
   appUser: null as any,
+  /** The caller's `customer_users` row, when the caller is a customer. */
+  customerUser: null as any,
+  /** `rentals` rows, for the customer ownership check. */
+  rentals: [] as any[],
+  /** `rental_agreements` rows, for the history action. */
+  rentalAgreements: [] as any[],
   grant: null as any,
   tenants: [] as any[],
   portalExperience: {} as Record<string, string | null>,
@@ -81,6 +87,12 @@ function respond(op: Op): { data: any; error: any } {
   switch (op.table) {
     case 'app_users':
       return { data: state.appUser, error: null };
+    case 'customer_users':
+      return { data: state.customerUser, error: null };
+    case 'rentals':
+      return { data: one(state.rentals.filter((r) => matches(r, op.filters))), error: null };
+    case 'rental_agreements':
+      return { data: one(state.rentalAgreements.filter((r) => matches(r, op.filters))), error: null };
     case 'manager_permissions':
       return { data: state.grant, error: null };
     case 'tenants': {
@@ -249,6 +261,9 @@ beforeEach(() => {
   state.rpcCalls = [];
   state.users = { 'good-token': 'auth-1' };
   state.appUser = { id: 'app-1', tenant_id: TENANT_A, role: 'admin', is_super_admin: false, is_active: true };
+  state.customerUser = null;
+  state.rentals = [];
+  state.rentalAgreements = [];
   state.grant = null;
   state.tenants = [northwind, goniko];
   state.portalExperience = {};
@@ -1092,5 +1107,93 @@ describe('ready (asked when the send dialog opens)', () => {
   it('never contacts the signing provider', async () => {
     await ready();
     expect(recordingFetch).not.toHaveBeenCalled();
+  });
+});
+
+/* ── a customer reading their own agreements ───────────────────────────── */
+
+describe('customer (the customer portal Agreements page)', () => {
+  const ME = '77777777-7777-4777-8777-777777777777';
+  const SOMEONE_ELSE = '88888888-8888-4888-8888-888888888888';
+  const RENTAL = '99999999-9999-4999-8999-999999999999';
+  const AGREEMENT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+  beforeEach(() => {
+    state.appUser = null;
+    state.customerUser = { customer_id: ME, tenant_id: TENANT_A };
+    state.fetchImpl = async () => new Response(PDF_BYTES, { status: 200 });
+  });
+
+  const individual = (over: Record<string, unknown> = {}) => ({
+    id: OLD_ROW,
+    tenant_id: TENANT_A,
+    customer_id: ME,
+    document_id: 'doc-9',
+    boldsign_mode: 'live',
+    document_status: 'completed',
+    content_html: '<p>x</p>',
+    created_at: '2026-10-05T17:10:00Z',
+    ...over,
+  });
+  const rentalAgreement = {
+    id: AGREEMENT,
+    tenant_id: TENANT_A,
+    rental_id: RENTAL,
+    document_id: null,
+    document_status: 'completed',
+    boldsign_mode: 'live',
+    envelope_created_at: '2026-10-05T17:10:00Z',
+    envelope_sent_at: '2026-10-05T17:10:05Z',
+    envelope_completed_at: '2026-10-05T17:11:00Z',
+    created_at: '2026-10-05T17:10:00Z',
+  };
+
+  it('reads the document of an agreement sent to them', async () => {
+    state.rows.push(individual());
+    const res = await call({ action: 'document', id: OLD_ROW });
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({ ok: true, kind: 'pdf', signed: true });
+    const read = opsOn('individual_agreements_v2')[0];
+    expect(filterValue(read, 'customer_id')).toBe(ME);
+    expect(filterValue(read, 'tenant_id')).toBe(TENANT_A);
+  });
+
+  it("never reads another customer's agreement", async () => {
+    state.rows.push(individual({ customer_id: SOMEONE_ELSE }));
+    expect((await call({ action: 'document', id: OLD_ROW })).status).toBe(404);
+    expect((await call({ action: 'history', id: OLD_ROW, kind: 'individual' })).status).toBe(404);
+  });
+
+  it('reads the history of their own rental agreement, oldest first', async () => {
+    state.rentals.push({ id: RENTAL, tenant_id: TENANT_A, customer_id: ME });
+    state.rentalAgreements.push(rentalAgreement);
+    const res = await call({ action: 'history', id: AGREEMENT, kind: 'rental' });
+    expect(res.status).toBe(200);
+    expect(res.json.events.map((e: any) => e.type)).toEqual(['created', 'sent', 'completed']);
+  });
+
+  it("refuses the history of someone else's rental agreement", async () => {
+    state.rentals.push({ id: RENTAL, tenant_id: TENANT_A, customer_id: SOMEONE_ELSE });
+    state.rentalAgreements.push(rentalAgreement);
+    expect((await call({ action: 'history', id: AGREEMENT, kind: 'rental' })).status).toBe(404);
+  });
+
+  it('takes the tenant from their own link, never the body', async () => {
+    state.customerUser = { customer_id: ME, tenant_id: TENANT_B };
+    state.rows.push(individual());
+    expect((await call({ action: 'document', id: OLD_ROW, tenantId: TENANT_A })).status).not.toBe(200);
+  });
+
+  it('may not send, check readiness or sync', async () => {
+    for (const action of ['send', 'ready', 'sync']) {
+      const res = await call(action === 'send' ? validBody() : { action });
+      expect(res.status, action).toBe(403);
+    }
+    expect(opsOn('customer_users')).toHaveLength(0);
+  });
+
+  it('is refused with no customer link either', async () => {
+    state.customerUser = null;
+    expect((await call({ action: 'document', id: OLD_ROW })).status).toBe(403);
   });
 });

@@ -1,54 +1,55 @@
 'use client';
 
 /**
- * Every rental agreement raised against the customer's bookings.
+ * /portal/agreements: the operator's Agreements tab
+ * (apps/portal/src/components/agreements-v2/agreements-page-v2.tsx), for a
+ * customer. Taken piece for piece:
  *
- * The page is a LIST, not a signing surface. Signing happens in BoldSign, via
- * the link the operator emails, and this portal has no server route that could
- * mint an embedded signing session — see the "what is not here" note at the top
- * of `use-customer-agreements`. So each row states where the document has got
- * to, tells the customer whose move it is, and hands over the signed PDF once
- * there is one. Nothing here pretends to an ability the app does not have.
+ *   - the header: "Agreements", one line under it, and the one labelled
+ *     button top right ("+ Book a car", where the operator sends an
+ *     agreement), in the operator's heading and primary-button style;
+ *   - the overview row: the shared HeroChart with the shared Agreements
+ *     metrics (Agreements sent, with Signed as the second line), and the
+ *     companion card; the filter panel is the card's back face, turned by the
+ *     top bar's filter button (shared overview-flip);
+ *   - the table: the shared Agreements table, with the operator's Customer and
+ *     Email swapped for the Company and its main email, and Linked to,
+ *     Reference, Sent and Status as the operator has them;
+ *   - the drawer: the shared agreement drawer, "Rental agreement", the
+ *     document on the left, Details and Activity on the right, Download signed
+ *     PDF and New tab at its foot. Signing happens in BoldSign from the
+ *     emailed link, so nothing here manages signatures.
  *
- * Laid out as an operator v2 list page, like Bookings:
- *   1. the page header (one-line description; no Refresh, the agreements poll
- *      on their own and the page updates once a document is signed);
- *   2. when something needs signing, the operator's Alert saying so, first,
- *      with "Open" taking the customer to that agreement;
- *   3. the list, on the shared operator list kit, agreements that need the
- *      customer's signature first; the whole row opens the agreement.
- * Search and filters live in the top bar, as on Bookings: the field filters the
- * list as you type, and its filter button opens the panel above the table.
+ * Every number on the page is this customer's own: the rows come from
+ * `useCustomerAgreementsList`, scoped to them and the tenant.
  */
 
 import { useMemo, useState } from 'react';
-import { FileSignature, PenLine, SearchX } from 'lucide-react-nw';
+import Link from 'next/link';
+import { FileSignature, Plus, SearchX } from 'lucide-react-nw';
 
-import { formatDate, formatTimestamp } from '@nw/components/portal/format';
-import { formatBookingDates } from '@nw/portal-v2/rentals/format';
 import { EmptyState, LoadError, PageHeader, Panel } from '@nw/portal-v2/primitives';
-import { useCustomer } from '@nw/hooks/use-customer';
-import { useCustomerAgreements, type CustomerAgreement } from '@nw/hooks/use-customer-agreements';
-import { useCustomerRentals } from '@nw/hooks/use-customer-rentals';
-import { cn } from '@nw/lib/utils';
-import { Alert, AlertAction, AlertDescription, AlertTitle } from '@portal-v2-shared/alert';
-import { V2_BUTTON_PRIMARY } from '@portal-v2-shared/button-styles';
-import { HEADER_PRIMARY_V2 } from '@portal-v2-shared/header';
+import { QuickBookTrigger } from '@nw/site-v2/quick-book/quick-book-dialog';
+import { useTenant } from '@nw/contexts/TenantContext';
 import {
-  ListBody,
-  ListCell,
-  ListHead,
-  ListRow,
-  ListStatusText,
-  ListTable,
-  ListTableHeader,
-  useProgressiveRows,
-} from '@portal-v2-shared/list-table';
-import { V2_LIST_CLASSES, type V2ListTone } from '@portal-v2-shared/list-styles';
+  fetchCustomerAgreementDocument,
+  fetchCustomerAgreementHistory,
+  useCustomerAgreementsList,
+} from '@nw/hooks/use-customer-agreements-list';
+import { cn } from '@nw/lib/utils';
+import { AgreementsTable } from '@portal-v2-shared/agreements/table';
+import { AgreementViewDialog } from '@portal-v2-shared/agreements/view-dialog';
+import { loadAgreementDocument, type AgreementDocumentSource } from '@portal-v2-shared/agreements/document';
+import { agreementMetrics, type AgreementListRow } from '@portal-v2-shared/agreements/list';
+import { V2_BUTTON_GHOST_SM, V2_BUTTON_PRIMARY } from '@portal-v2-shared/button-styles';
+import { FEATURED_ACTION_CLASS, FeaturedCardFace, FeaturedCardShell } from '@portal-v2-shared/featured-card';
+import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2 } from '@portal-v2-shared/header';
+import { HERO_CHART_HEIGHT, HeroChart, HeroRow } from '@portal-v2-shared/hero-chart';
+import { useProgressiveRows } from '@portal-v2-shared/list-table';
+import { V2_LIST_CLASSES } from '@portal-v2-shared/list-styles';
+import { RentalsOverviewFlip } from '@portal-v2-shared/overview-flip';
 import { usePageSearch } from '@portal-v2-shared/page-search-slot';
 
-import { AgreementDialog, agreementTitle } from './agreement-dialog';
-import { STATE_CHIP } from './agreement-state';
 import {
   AgreementsFilterPanel,
   NO_AGREEMENT_FILTERS,
@@ -57,107 +58,70 @@ import {
   type AgreementFilters,
 } from './agreements-filter-panel';
 
-/** The state chip's tone, in the operator list palette. */
-const TONE: Record<string, V2ListTone> = {
-  neutral: 'muted',
-  success: 'success',
-  warning: 'warning',
-  danger: 'danger',
-  info: 'brand',
+/** Why a rental agreement has nothing to show, in a customer's words. */
+function unavailableReason(rawStatus: string | null | undefined): string {
+  const status = (rawStatus ?? '').toLowerCase();
+  if (status === 'credit_failed' || status === 'send_failed' || status === 'failed') {
+    return 'This agreement was never sent. The company will send you a new copy to sign.';
+  }
+  return 'The document is not ready yet. If it was sent a moment ago, try again shortly.';
+}
+
+const CUSTOMER_SOURCE: AgreementDocumentSource = {
+  fetchIndividualDocument: fetchCustomerAgreementDocument,
+  unavailableReason,
 };
 
-/** As on Bookings: every cell one line, columns sized for their longest value at this floor. */
-const MIN_WIDTH = 'min-w-[960px]';
-
-function Heads() {
-  return (
-    <ListTableHeader>
-      <ListHead className="w-[11%]">Reference</ListHead>
-      <ListHead className="w-[18%]">Agreement</ListHead>
-      <ListHead className="w-[19%]">Vehicle</ListHead>
-      <ListHead className="w-[21%]">Dates</ListHead>
-      <ListHead className="w-[13%]">Signed</ListHead>
-      <ListHead className="w-[18%]">Status</ListHead>
-    </ListTableHeader>
-  );
-}
-
-function datesOf(agreement: CustomerAgreement): string | null {
-  if (agreement.kind === 'extension') {
-    const to = formatDate(agreement.periodEndDate);
-    return to ? `Extended to ${to}` : null;
-  }
-  return agreement.rentalStartDate ? formatBookingDates(agreement.rentalStartDate, agreement.rentalEndDate) : null;
-}
-
-/** Sized like the table, so the page does not jump on load. */
-function AgreementsSkeleton() {
-  const rows = useProgressiveRows([0, 1, 2], 'skeleton');
-  return (
-    <div className="flex flex-col gap-6" aria-hidden>
-      <ListTable rows={{ ...rows, hasMore: false }} minWidth={MIN_WIDTH}>
-        <Heads />
-        <ListBody>
-          {rows.visible.map((row) => (
-            <ListRow key={row}>
-              {[14, 30, 28, 34, 20, 26].map((width, cell) => (
-                <ListCell key={cell}>
-                  <span
-                    className="inline-block h-3 animate-pulse rounded-full bg-v2-muted"
-                    style={{ width: `${width * 4}px`, maxWidth: '100%' }}
-                  />
-                </ListCell>
-              ))}
-            </ListRow>
-          ))}
-        </ListBody>
-      </ListTable>
-    </div>
-  );
-}
-
 export default function PortalAgreementsPage() {
-  const { email } = useCustomer();
-  const { agreements, isLoading, isError, error, refetch } = useCustomerAgreements();
-  // The same cached query the hook already reads — free here, and it lets the
-  // empty state tell a customer with no bookings something different from one
-  // whose operator simply has not raised a document yet.
-  const { summary: rentalSummary } = useCustomerRentals('all');
+  const { tenant } = useTenant();
+  const { rows, isLoading, isError, error, refetch } = useCustomerAgreementsList();
 
-  const [openId, setOpenId] = useState<string | null>(null);
-  // Looked up by id on every render, so a background poll that moves the
-  // agreement on (signed, PDF filed) shows up inside an open dialog too.
-  const open = openId ? (agreements.find((row) => row.id === openId) ?? null) : null;
+  // The company, as the operator's list names the customer: its name and main email.
+  const companyName = tenant?.company_name ?? tenant?.app_name ?? 'Your rental company';
+  const companyEmail = tenant?.contact_email ?? null;
 
   const [term, setTerm] = useState('');
   const [filters, setFilters] = useState<AgreementFilters>(NO_AGREEMENT_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [viewRow, setViewRow] = useState<AgreementListRow | null>(null);
 
-  // What needs the customer first, then the rest in the order they came.
-  const ordered = useMemo(
-    () => [...agreements.filter((row) => row.needsSignature), ...agreements.filter((row) => !row.needsSignature)],
-    [agreements],
-  );
-  const shown = useMemo(() => applyAgreementFilters(ordered, filters, term), [ordered, filters, term]);
+  const shown = useMemo(() => applyAgreementFilters(rows, filters, term), [rows, filters, term]);
   const activeCount = countActiveAgreementFilters(filters);
   const narrowed = activeCount > 0 || term.trim() !== '';
-  const rows = useProgressiveRows(shown, `${term}|${filters.state}|${filters.kind}`);
+  const noAgreements = !isLoading && !isError && rows.length === 0;
+  const progressive = useProgressiveRows(shown, `${term}|${filters.status}|${filters.kind}|${filters.sentFrom?.getTime() ?? ''}|${filters.sentTo?.getTime() ?? ''}`);
 
-  usePageSearch({
-    placeholder: 'Search agreements…',
-    value: term,
-    onChange: setTerm,
-    scopeLabel: 'Agreements',
-    resultCount: isLoading ? undefined : shown.length,
-    filters: { open: filtersOpen, onOpenChange: setFiltersOpen, activeCount },
-  });
+  usePageSearch(
+    noAgreements
+      ? null
+      : {
+          placeholder: 'Search agreements…',
+          value: term,
+          onChange: setTerm,
+          scopeLabel: 'Agreements',
+          resultCount: isLoading ? undefined : shown.length,
+          filters: { open: filtersOpen, onOpenChange: setFiltersOpen, activeCount },
+        },
+  );
 
-  const hasBookings = rentalSummary.total > 0;
-  const awaiting = ordered.filter((row) => row.needsSignature);
+  const metrics = useMemo(
+    () => agreementMetrics(shown, { sentDescription: `Agreements ${companyName} sent you to sign.` }),
+    [shown, companyName],
+  );
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Agreements" description="Your rental agreements and signed copies" />
+      <PageHeader
+        title="Agreements"
+        description="Your agreements for signature, and every one's signed copy."
+        actionClassName={HEADER_ACTIONS_V2}
+        action={
+          <QuickBookTrigger className={cn(V2_BUTTON_PRIMARY, HEADER_PRIMARY_V2, 'flex-1 sm:flex-none')}>
+            <Plus aria-hidden />
+            Book a car
+          </QuickBookTrigger>
+        }
+      />
 
       {isError ? (
         <LoadError
@@ -167,124 +131,108 @@ export default function PortalAgreementsPage() {
             void refetch();
           }}
         />
-      ) : isLoading ? (
-        <AgreementsSkeleton />
-      ) : agreements.length === 0 ? (
+      ) : noAgreements ? (
         <Panel>
           <EmptyState
             icon={FileSignature}
-            title={hasBookings ? 'Nothing to sign right now' : 'No agreements yet'}
-            description={
-              hasBookings
-                ? 'None of your bookings has an agreement raised against it yet. If you have just booked, give it a few minutes — it will appear here, and we will email you when it is ready to sign.'
-                : 'When you book a car, the rental agreement you need to sign appears here — and your signed copy stays here afterwards.'
-            }
-            action={
-              hasBookings
-                ? { href: '/portal/rentals', label: 'View my rentals' }
-                : { href: '/booking', label: 'Browse the fleet' }
-            }
+            title="No agreements yet"
+            description={`When ${companyName} sends you an agreement to sign, it appears here, and its signed copy stays here afterwards.`}
+            action={{ href: '/portal/rentals', label: 'View my rentals' }}
           />
         </Panel>
       ) : (
         <>
-          {/* The one thing to do on this page, when there is one: first. */}
-          {awaiting.length > 0 ? (
-            <Alert>
-              <PenLine aria-hidden />
-              <AlertTitle>
-                {awaiting.length === 1
-                  ? 'One agreement needs your signature'
-                  : `${awaiting.length} agreements need your signature`}
-              </AlertTitle>
-              <AlertDescription>
-                We emailed you a signing link{email ? ` at ${email}` : ''}. This page updates once you have signed.
-              </AlertDescription>
-              <AlertAction>
-                <button
-                  type="button"
-                  onClick={() => setOpenId(awaiting[0].id)}
-                  className={cn(V2_BUTTON_PRIMARY, HEADER_PRIMARY_V2)}
-                >
-                  Open
-                </button>
-              </AlertAction>
-            </Alert>
-          ) : null}
+          <RentalsOverviewFlip
+            flipped={filtersOpen}
+            onFlipBack={() => setFiltersOpen(false)}
+            front={
+              <HeroRow
+                chart={
+                  isLoading ? (
+                    <div className={cn(HERO_CHART_HEIGHT, 'mt-14 w-full animate-pulse rounded-xl bg-v2-muted/60')} aria-hidden />
+                  ) : (
+                    // The last 12 months, where the operator's opens on 30 days: a
+                    // customer is sent a few agreements a year (the canary
+                    // customer's five were all sent on Sep 19), so 30 days is
+                    // usually an empty window. Every period is still in the picker.
+                    <HeroChart metrics={metrics} defaultRange="12m" note={narrowed ? 'Filtered' : undefined} />
+                  )
+                }
+                card={<DocumentsCard />}
+              />
+            }
+            back={<AgreementsFilterPanel filters={filters} onChange={setFilters} onClose={() => setFiltersOpen(false)} />}
+          />
 
-          {filtersOpen ? (
-            <AgreementsFilterPanel filters={filters} onChange={setFilters} onClose={() => setFiltersOpen(false)} />
-          ) : null}
-
-          <section className="flex flex-col gap-3">
-            {shown.length === 0 ? (
-              <Panel>
-                <EmptyState
-                  icon={SearchX}
-                  title="No agreements match"
-                  description="Try a different search, or clear the filters to see every agreement."
-                />
-              </Panel>
-            ) : (
-              <>
-                <ListTable rows={rows} fillViewport minWidth={MIN_WIDTH}>
-                  <Heads />
-                  <ListBody>
-                    {rows.visible.map((agreement) => (
-                      <AgreementRow key={agreement.id} agreement={agreement} onOpen={() => setOpenId(agreement.id)} />
-                    ))}
-                  </ListBody>
-                </ListTable>
-                <p className={V2_LIST_CLASSES.footer}>
-                  {narrowed
-                    ? `${shown.length} of ${agreements.length} agreements shown`
-                    : `All ${agreements.length} ${agreements.length === 1 ? 'agreement' : 'agreements'} shown`}
-                </p>
-              </>
-            )}
-          </section>
+          {isLoading ? null : shown.length === 0 ? (
+            <Panel>
+              <EmptyState
+                icon={SearchX}
+                title="No agreements match"
+                description="Try a different search, or clear the filters to see every agreement."
+                action={{
+                  label: 'Clear filters',
+                  onClick: () => {
+                    setFilters(NO_AGREEMENT_FILTERS);
+                    setTerm('');
+                  },
+                }}
+              />
+            </Panel>
+          ) : (
+            <section className="flex flex-col gap-3" aria-label="Your agreements">
+              <AgreementsTable
+                rows={progressive}
+                party={{ label: 'Company', name: () => companyName, email: () => companyEmail }}
+                onOpen={setViewRow}
+              />
+              <div className={V2_LIST_CLASSES.footer}>
+                <span>
+                  {progressive.hasMore
+                    ? `Showing ${progressive.visible.length} of ${progressive.total} agreements`
+                    : `All ${progressive.total} ${progressive.total === 1 ? 'agreement' : 'agreements'} shown`}
+                </span>
+                {progressive.hasMore ? (
+                  <button type="button" onClick={progressive.showMore} className={cn(V2_BUTTON_GHOST_SM, V2_LIST_CLASSES.showMore)}>
+                    Show more
+                  </button>
+                ) : null}
+              </div>
+            </section>
+          )}
         </>
       )}
 
-      <AgreementDialog
-        agreement={open}
-        email={email}
-        onOpenChange={(next) => {
-          if (!next) setOpenId(null);
+      <AgreementViewDialog
+        row={viewRow}
+        open={!!viewRow}
+        onOpenChange={(open) => {
+          if (!open) setViewRow(null);
         }}
+        loadDocument={(row) => loadAgreementDocument(row, CUSTOMER_SOURCE)}
+        fetchHistory={fetchCustomerAgreementHistory}
+        party={{ label: 'Company', name: companyName, email: companyEmail }}
+        renderHtml={(html) => (
+          // An agreement that never reached the signing service exists only as
+          // the html that was sent; drawn in a sandboxed frame, no script.
+          <iframe title="Agreement" sandbox="" srcDoc={html} className="mx-auto block h-full min-h-[70vh] w-full max-w-[816px] rounded-sm bg-white ring-1 ring-black/10" />
+        )}
       />
     </div>
   );
 }
 
-/** One agreement, one line per cell, as on Bookings. The whole row opens it; the reference is a real button for the keyboard. */
-function AgreementRow({ agreement, onOpen }: { agreement: CustomerAgreement; onOpen: () => void }) {
-  const chip = STATE_CHIP[agreement.state];
-  const title = agreementTitle(agreement);
+/**
+ * The companion card, in the slot the operator's "Template Studio" takes:
+ * the same shell and face, opening Documents, where the customer's licence,
+ * ID and signed copies live.
+ */
+function DocumentsCard() {
   return (
-    <ListRow onOpen={onOpen}>
-      <ListCell>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpen();
-          }}
-          aria-label={`Open ${title} ${agreement.rentalReference ?? ''}`.trim()}
-          className={cn(V2_LIST_CLASSES.identifier, 'truncate text-left hover:underline')}
-        >
-          {agreement.rentalReference ?? '—'}
-        </button>
-      </ListCell>
-      <ListCell className={cn(V2_LIST_CLASSES.text, 'truncate')}>{title}</ListCell>
-      <ListCell className={cn(V2_LIST_CLASSES.text, 'truncate')}>{agreement.vehicleLabel ?? '—'}</ListCell>
-      <ListCell className={cn(V2_LIST_CLASSES.text, 'truncate')}>{datesOf(agreement) ?? '—'}</ListCell>
-      <ListCell className={cn(V2_LIST_CLASSES.text, 'truncate tabular-nums')}>
-        {formatTimestamp(agreement.completedAt) ?? <span className="text-v2-muted-fg">—</span>}
-      </ListCell>
-      <ListCell className="truncate" title={chip.label}>
-        <ListStatusText tone={TONE[chip.tone]}>{chip.label}</ListStatusText>
-      </ListCell>
-    </ListRow>
+    <FeaturedCardShell className="lg:min-h-0" aria-label="Your documents">
+      <Link href="/portal/documents" className={cn(FEATURED_ACTION_CLASS, 'pb-4')}>
+        <FeaturedCardFace title="Your Documents" subtitle="Your licence, ID and every signed copy." />
+      </Link>
+    </FeaturedCardShell>
   );
 }

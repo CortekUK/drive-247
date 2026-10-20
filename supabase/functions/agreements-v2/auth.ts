@@ -29,7 +29,13 @@
  *     row's `portal_experience` read through `_shared/lean-tenants.ts`;
  *  5. the BoldSign mode goes through the SAME lean gate every other edge
  *     function uses (`resolveBoldSignMode`, as `_shared/boldsign-client.ts`'s
- *     `getTenantBoldSignMode` does), so northwind is always LIVE.
+ *     `getTenantBoldSignMode` does), so northwind is always LIVE;
+ *  6. a CUSTOMER (no `app_users` row, a `customer_users` row instead) is let in
+ *     only where the caller asks for it (`customer: true`: the read-only
+ *     `document` and `history` actions the customer portal's Agreements page
+ *     uses). Their tenant and customer id come from their `customer_users`
+ *     row, never the body, and the context carries `customerId` so the action
+ *     can refuse any agreement that is not theirs. Never a write.
  */
 
 import { readTenantOnV2ById, resolveBoldSignMode } from '../_shared/lean-tenants.ts';
@@ -50,6 +56,12 @@ export interface AgreementsCallerV2 {
   appUserId: string;
   role: string;
   isSuperAdmin: boolean;
+  /**
+   * Set only for a signed-in customer (role 'customer', no app user): the
+   * `customers.id` they act as. An action that sees it must return only that
+   * customer's own agreements.
+   */
+  customerId?: string;
 }
 
 /**
@@ -136,7 +148,7 @@ const bearerToken = (header: string | null): string | null => {
 export async function authenticateAgreementsV2(
   headers: Headers,
   client: DbClient,
-  opts: { write: boolean },
+  opts: { write: boolean; customer?: boolean },
 ): Promise<AuthResultV2> {
   const token = bearerToken(headers.get('authorization'));
   if (!token) return deny(401, 'Sign in to continue.');
@@ -156,6 +168,7 @@ export async function authenticateAgreementsV2(
     .eq('auth_user_id', userId)
     .maybeSingle();
   if (appUserError) return deny(500, 'Your account could not be checked. Try again.');
+  if (!appUser && opts.customer && !opts.write) return authenticateCustomer(userId, client);
   if (!appUser || appUser.is_active === false) return deny(403, 'Your account does not have access to agreements.');
 
   const isSuperAdmin = appUser.is_super_admin === true;
@@ -199,6 +212,41 @@ export async function authenticateAgreementsV2(
       caller: { appUserId: String(appUser.id), role, isSuperAdmin },
       tenant: tenant as AgreementsTenantV2,
       boldsignMode,
+    },
+  };
+}
+
+/**
+ * A signed-in customer, for the read-only actions (point 6 above). Their
+ * `customer_users` row supplies both the tenant and the customer; the tenant
+ * must be on v2 for agreements, as for staff.
+ */
+async function authenticateCustomer(userId: string, client: DbClient): Promise<AuthResultV2> {
+  const { data: link, error: linkError } = await client
+    .from('customer_users')
+    .select('customer_id, tenant_id')
+    .eq('auth_user_id', userId)
+    .maybeSingle();
+  if (linkError) return deny(500, 'Your account could not be checked. Try again.');
+  if (!link?.customer_id || !link?.tenant_id) return deny(403, 'Your account does not have access to agreements.');
+
+  const { data: tenant, error: tenantError } = await client
+    .from('tenants')
+    .select(TENANT_COLUMNS)
+    .eq('id', link.tenant_id)
+    .maybeSingle();
+  if (tenantError) return deny(500, 'Your company could not be loaded. Try again.');
+  if (!tenant?.id) return deny(403, 'Your account does not have access to agreements.');
+
+  const onV2 = await readTenantOnV2ById(client, tenant.id);
+  if (!isV2('agreements', tenant.slug, onV2)) return deny(403, 'Agreements are not available for this company yet.');
+
+  return {
+    ok: true,
+    context: {
+      caller: { appUserId: '', role: 'customer', isSuperAdmin: false, customerId: String(link.customer_id) },
+      tenant: tenant as AgreementsTenantV2,
+      boldsignMode: resolveBoldSignMode(tenant.boldsign_mode, tenant.slug, onV2),
     },
   };
 }

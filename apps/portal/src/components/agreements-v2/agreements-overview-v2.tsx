@@ -37,6 +37,7 @@ import { formatAgreementSentAtV2 } from "@/components/agreements-v2/agreements-t
 import { sentAtMs } from "@/lib/agreements-v2/list-filters";
 import type { AgreementRowV2 } from "@/lib/agreements-v2/types";
 import { cn } from "@/lib/utils";
+import { agreementMetrics } from "../../../../../shared/portal-v2/agreements/list";
 
 export const OVERVIEW_WEEKS_V2 = 8;
 export const OVERVIEW_LIST_LENGTH_V2 = 3;
@@ -291,36 +292,8 @@ function AgreementsActivityV2({
  * their helpers stay exported for the tests that pin them.
  */
 function agreementMetricsV2(rows: readonly AgreementRowV2[]): HeroMetric[] {
-  const at = (iso: string | null) => (iso ? new Date(iso) : null);
-  const sent = rows.flatMap((r) => {
-    const d = at(r.sentAt);
-    return d && !Number.isNaN(d.getTime()) ? [{ at: d, amount: 1 }] : [];
-  });
-  const signed = rows.flatMap((r) => {
-    if (r.status !== "signed") return [];
-    const d = at(r.signedAt ?? r.sentAt);
-    return d && !Number.isNaN(d.getTime()) ? [{ at: d, amount: 1 }] : [];
-  });
-  const count = (v: number) => Math.round(v).toLocaleString();
-  return [
-    {
-      key: "sent",
-      label: "Agreements sent",
-      kind: "flow",
-      description: "Agreements sent for signature, from rentals and from this tab.",
-      format: count,
-      events: sent,
-      secondary: { label: "Signed", events: signed },
-    },
-    {
-      key: "signed",
-      label: "Signed",
-      kind: "flow",
-      description: "Agreements signed, on the day the signature came back.",
-      format: count,
-      events: signed,
-    },
-  ];
+  // shared/portal-v2/agreements/list.ts: the customer portal's graph counts the same way.
+  return agreementMetrics(rows, { sentDescription: "Agreements sent for signature, from rentals and from this tab." });
 }
 
 export function AgreementsOverviewV2({

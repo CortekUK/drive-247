@@ -6,6 +6,7 @@
  *   filter-panel.tsx  components/shared/filter-primitives.tsx (draws the Button)
  *   search-field.tsx  the list-page field inside layout/top-bar-v2.tsx (GitHub #32)
  *   popover.tsx, tooltip.tsx  ui-v2's, for the shared rentals timeline
+ *   dialog.tsx, tabs.tsx      ui-v2's, for the shared agreement drawer
  *
  * Each copy is the operator source with semantic colours swapped for their
  * shared twins (shared/portal-v2/class-map.ts). These tests recompute that from
@@ -19,6 +20,7 @@ import { buttonVariants } from '@/components/ui-v2/button';
 import { cn } from '@/lib/utils';
 import { toSharedClasses } from '../../../../../shared/portal-v2/class-map';
 import {
+  V2_BUTTON_DEFAULT,
   V2_BUTTON_DEFAULT_SM,
   V2_BUTTON_GHOST_ICON_SM,
   V2_BUTTON_GHOST_SM,
@@ -70,6 +72,10 @@ describe('shared button styles are the operator Button', () => {
     expect(V2_BUTTON_OUTLINE_ICON_SM).toBe(toSharedClasses(cn(buttonVariants({ variant: 'outline', size: 'icon-sm' }))));
     expect(V2_BUTTON_GHOST_ICON_SM).toBe(toSharedClasses(cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }))));
     expect(V2_BUTTON_DEFAULT_SM).toBe(toSharedClasses(cn(buttonVariants({ size: 'sm' }))));
+  });
+
+  it("the agreement drawer's Download: the default Button at the default size", () => {
+    expect(V2_BUTTON_DEFAULT).toBe(toSharedClasses(cn(buttonVariants({}))));
   });
 });
 
@@ -147,4 +153,33 @@ describe("shared popover and tooltip are ui-v2's", () => {
       expect(copy).toContain('MOTION_FLOATING');
     });
   }
+});
+
+describe("shared dialog and tabs are ui-v2's", () => {
+  const pairs: Array<[string, (literal: string) => boolean]> = [
+    ['dialog', (l) => l.startsWith('fixed ') || l.startsWith('font-heading') || l.startsWith('text-sm text-muted-foreground') || l === 'flex flex-col gap-1.5'],
+    ['tabs', (l) => l.startsWith('group/tabs flex') || l.startsWith('relative inline-flex h-[calc(100%-1px)]') || l.startsWith('data-[state=active]:bg-background') || l === 'flex-1 text-sm outline-none'],
+  ];
+  for (const [name, wanted] of pairs) {
+    const operator = read(join(SRC, 'components', 'ui-v2', `${name}.tsx`));
+    const copy = read(join(SHARED, `${name}.tsx`));
+    const literals = classLiterals(operator).filter(wanted);
+
+    it(`${name}: finds the operator class strings`, () => {
+      expect(literals.length).toBeGreaterThanOrEqual(name === 'dialog' ? 5 : 3);
+    });
+
+    for (const literal of literals) {
+      it(`${name}: carries "${literal.slice(0, 50)}…"`, () => {
+        expect(copy.replace(/\s+/g, ' ')).toContain(toSharedClasses(literal));
+      });
+    }
+  }
+
+  it('tabs: the default list, mapped', () => {
+    const copy = read(join(SHARED, 'tabs.tsx'));
+    for (const c of ['inline-flex w-fit items-center justify-center rounded-full p-1 text-v2-muted-fg', 'bg-v2-muted']) {
+      expect(copy).toContain(c);
+    }
+  });
 });

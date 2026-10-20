@@ -95,7 +95,12 @@ export async function handleAgreementsV2(req: Request, deps: AgreementsDepsV2): 
   }
 
   // `ready` asks "may I send?", so it applies the send gate.
-  const auth = await authenticateAgreementsV2(req.headers, deps.client, { write: action === 'send' || action === 'ready' });
+  // A signed-in customer may read their own agreements' document and history
+  // (the customer portal's Agreements page), and nothing else.
+  const auth = await authenticateAgreementsV2(req.headers, deps.client, {
+    write: action === 'send' || action === 'ready',
+    customer: action === 'document' || action === 'history',
+  });
   if (!auth.ok || !auth.context) return auth.outcome!;
   const ctx = auth.context;
 
@@ -462,12 +467,14 @@ async function documentOf(ctx: AgreementsContextV2, rawId: unknown, deps: Agreem
   const { tenant, boldsignMode } = ctx;
   if (!isUuidV2(rawId)) return reply(404, { ok: false, error: NOT_FOUND });
 
-  const { data: row, error } = await client
+  let documentQuery = client
     .from(INDIVIDUAL_TABLE)
     .select('id, document_id, boldsign_mode, document_status, content_html')
     .eq('id', rawId)
-    .eq('tenant_id', tenant.id)
-    .maybeSingle();
+    .eq('tenant_id', tenant.id);
+  // A customer sees only an agreement sent to them; anything else is not found.
+  if (ctx.caller.customerId) documentQuery = documentQuery.eq('customer_id', ctx.caller.customerId);
+  const { data: row, error } = await documentQuery.maybeSingle();
   if (error && !isMissingTableError(error)) {
     return reply(500, { ok: false, error: 'The agreement could not be loaded. Try again.' });
   }
@@ -559,6 +566,19 @@ function providerEvents(props: any): AgreementEventV2[] {
 
 const KINDS = new Set(['rental', 'individual']);
 
+/** Is this rental the customer's, in this tenant? A customer reads only their own agreements. */
+async function rentalBelongsTo(client: DbClient, rentalId: unknown, tenantId: string, customerId: string): Promise<boolean> {
+  if (!isUuidV2(rentalId)) return false;
+  const { data, error } = await client
+    .from('rentals')
+    .select('id')
+    .eq('id', rentalId)
+    .eq('tenant_id', tenantId)
+    .eq('customer_id', customerId)
+    .maybeSingle();
+  return !error && !!data;
+}
+
 async function historyOf(ctx: AgreementsContextV2, rawId: unknown, rawKind: unknown, deps: AgreementsDepsV2): Promise<Outcome> {
   const { client } = deps;
   const { tenant, boldsignMode } = ctx;
@@ -578,12 +598,15 @@ async function historyOf(ctx: AgreementsContextV2, rawId: unknown, rawKind: unkn
   if (rawKind === 'rental') {
     const { data: row, error } = await client
       .from('rental_agreements')
-      .select('id, document_id, document_status, boldsign_mode, envelope_created_at, envelope_sent_at, envelope_completed_at, created_at, email_delivery_status, email_delivery_error, email_delivered_at')
+      .select('id, rental_id, document_id, document_status, boldsign_mode, envelope_created_at, envelope_sent_at, envelope_completed_at, created_at, email_delivery_status, email_delivery_error, email_delivered_at')
       .eq('id', rawId)
       .eq('tenant_id', tenant.id)
       .maybeSingle();
     if (error) return reply(500, { ok: false, error: 'The agreement could not be loaded. Try again.' });
     if (!row) return reply(404, { ok: false, error: NOT_FOUND });
+    if (ctx.caller.customerId && !(await rentalBelongsTo(client, row.rental_id, tenant.id, ctx.caller.customerId))) {
+      return reply(404, { ok: false, error: NOT_FOUND });
+    }
     push(row.envelope_created_at ?? row.created_at, 'created', 'Agreement created from the rental');
     if (row.email_delivered_at) push(row.email_delivered_at, 'email_delivered', 'Signing email delivered');
     else if (String(row.email_delivery_status ?? '').toLowerCase() === 'failed') {
@@ -594,12 +617,13 @@ async function historyOf(ctx: AgreementsContextV2, rawId: unknown, rawKind: unkn
     sentAt = row.envelope_sent_at;
     completedAt = row.envelope_completed_at;
   } else {
-    const { data: row, error } = await client
+    let historyQuery = client
       .from(INDIVIDUAL_TABLE)
       .select('id, document_id, document_status, boldsign_mode, error, sent_at, completed_at, created_at')
       .eq('id', rawId)
-      .eq('tenant_id', tenant.id)
-      .maybeSingle();
+      .eq('tenant_id', tenant.id);
+    if (ctx.caller.customerId) historyQuery = historyQuery.eq('customer_id', ctx.caller.customerId);
+    const { data: row, error } = await historyQuery.maybeSingle();
     if (error && !isMissingTableError(error)) return reply(500, { ok: false, error: 'The agreement could not be loaded. Try again.' });
     if (!row) return reply(404, { ok: false, error: NOT_FOUND });
     push(row.created_at, 'created', 'Agreement created');

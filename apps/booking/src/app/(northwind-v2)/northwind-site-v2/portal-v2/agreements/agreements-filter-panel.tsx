@@ -1,76 +1,72 @@
 'use client';
 
 /**
- * The Agreements filters, built like the Bookings ones from the shared v2
- * filter panel (shared/portal-v2/filter-panel.tsx): STATUS and TYPE pill
- * groups, Reset and a close button. The top bar's filter button opens it above
- * the table. Chip colours follow the operator Rentals palette for the same
- * meaning (amber waiting on you, green done, slate inactive, red stopped).
+ * The Agreements filters: the operator's Agreements panel
+ * (apps/portal/src/components/agreements-v2/agreements-filter-panel-v2.tsx),
+ * built from the shared parts in shared/portal-v2/filter-panel.tsx, on the
+ * BACK of the overview card as there. Sent between, Status and Kind, with the
+ * operator's chips and colours. The operator's Customer field is left out: a
+ * customer's agreements all come from the one company.
  *
- * Filtering is in memory over the agreements the page already loaded.
+ * Filtering is in memory over the one list the page already holds, with the
+ * search matching the reference, the title and the message.
  */
 
-import { FileText, PenLine } from 'lucide-react-nw';
+import { format } from 'date-fns';
+import { Activity, CalendarIcon, Layers } from 'lucide-react-nw';
 
-import type { AgreementKind, AgreementState, CustomerAgreement } from '@nw/hooks/use-customer-agreements';
+import { Calendar } from '@nw/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@nw/components/ui/popover';
+import { cn } from '@nw/lib/utils';
+import { agreementReference, type AgreementKind, type AgreementListRow, type AgreementStatus } from '@portal-v2-shared/agreements/list';
+import { V2_BUTTON_OUTLINE } from '@portal-v2-shared/button-styles';
 import { FilterChip, FilterSection, FilterShell } from '@portal-v2-shared/filter-panel';
 
-import { agreementTitle } from './agreement-dialog';
-import { STATE_CHIP } from './agreement-state';
-
 export interface AgreementFilters {
-  state: 'all' | AgreementState;
+  status: 'all' | AgreementStatus;
   kind: 'all' | AgreementKind;
+  sentFrom?: Date;
+  sentTo?: Date;
 }
 
-export const NO_AGREEMENT_FILTERS: AgreementFilters = { state: 'all', kind: 'all' };
+export const NO_AGREEMENT_FILTERS: AgreementFilters = { status: 'all', kind: 'all' };
 
-const STATE_COLOR: Record<AgreementState, string> = {
-  awaiting_signature: '#d97706',
-  opened: '#d97706',
-  signed: '#16a34a',
-  preparing: '#64748b',
-  cancelled: '#64748b',
-  declined: '#dc2626',
-  expired: '#dc2626',
-};
-
-// The order a customer cares about: what needs them first.
-const STATE_ORDER: AgreementState[] = [
-  'awaiting_signature',
-  'opened',
-  'signed',
-  'preparing',
-  'declined',
-  'expired',
-  'cancelled',
+const STATUS_OPTIONS: { value: AgreementFilters['status']; label: string; color: string | null }[] = [
+  { value: 'all', label: 'All', color: null },
+  { value: 'signed', label: 'Signed', color: '#16a34a' },
+  { value: 'pending', label: 'Pending signature', color: '#d97706' },
+  { value: 'failed', label: 'Failed', color: '#dc2626' },
 ];
 
-const KIND_OPTIONS: ReadonlyArray<{ value: AgreementFilters['kind']; label: string }> = [
+const KIND_OPTIONS: { value: AgreementFilters['kind']; label: string }[] = [
   { value: 'all', label: 'All' },
-  { value: 'original', label: 'Rental agreement' },
-  { value: 'extension', label: 'Extension agreement' },
+  { value: 'rental', label: 'Rental' },
+  { value: 'individual', label: 'Individual' },
 ];
+
+/** Noon, so a picked day can never drift across midnight on a timezone shift. */
+const normalizeDate = (date: Date | undefined) =>
+  date ? new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0) : undefined;
+
+const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 
 export function countActiveAgreementFilters(filters: AgreementFilters): number {
-  return [filters.state !== 'all', filters.kind !== 'all'].filter(Boolean).length;
+  return [filters.status !== 'all', filters.kind !== 'all', !!(filters.sentFrom || filters.sentTo)].filter(Boolean).length;
 }
 
-/** The rows a search term and the filters leave. The term matches the reference, the car or the title. */
-export function applyAgreementFilters(
-  agreements: readonly CustomerAgreement[],
-  filters: AgreementFilters,
-  term: string,
-): CustomerAgreement[] {
+export function applyAgreementFilters<T extends AgreementListRow>(rows: readonly T[], filters: AgreementFilters, term: string): T[] {
   const q = term.trim().toLowerCase();
-  return agreements.filter((agreement) => {
-    if (filters.state !== 'all' && agreement.state !== filters.state) return false;
-    if (filters.kind !== 'all' && agreement.kind !== filters.kind) return false;
+  return rows.filter((row) => {
+    if (filters.status !== 'all' && row.status !== filters.status) return false;
+    if (filters.kind !== 'all' && row.kind !== filters.kind) return false;
+    if (filters.sentFrom || filters.sentTo) {
+      const at = row.sentAt ? Date.parse(row.sentAt) : NaN;
+      if (Number.isNaN(at)) return false;
+      if (filters.sentFrom && at < dayStart(filters.sentFrom)) return false;
+      if (filters.sentTo && at >= dayStart(filters.sentTo) + 86_400_000) return false;
+    }
     if (q) {
-      const haystack = [agreement.rentalReference, agreement.vehicleLabel, agreementTitle(agreement)]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
+      const haystack = [agreementReference(row), row.title, row.message].filter(Boolean).join(' ').toLowerCase();
       if (!haystack.includes(q)) return false;
     }
     return true;
@@ -86,47 +82,59 @@ export function AgreementsFilterPanel({
   onChange: (next: AgreementFilters) => void;
   onClose: () => void;
 }) {
+  const set = <K extends keyof AgreementFilters>(key: K, value: AgreementFilters[K]) => onChange({ ...filters, [key]: value });
+  const hasDates = !!(filters.sentFrom || filters.sentTo);
+
+  const dateBtn = (value: Date | undefined, placeholder: string, onSelect: (d: Date | undefined) => void) => (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" className={cn(V2_BUTTON_OUTLINE, 'h-8 w-full justify-start text-xs font-normal', !value && 'text-v2-muted-fg')}>
+          <CalendarIcon className="mr-1.5 size-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
+          {value ? format(value, 'MMM d, yyyy') : placeholder}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar mode="single" selected={value} onSelect={(d: Date | undefined) => onSelect(normalizeDate(d))} />
+      </PopoverContent>
+    </Popover>
+  );
+
   return (
-    <FilterShell
-      onClear={() => onChange(NO_AGREEMENT_FILTERS)}
-      onClose={onClose}
-      activeCount={countActiveAgreementFilters(filters)}
-    >
+    <FilterShell onClear={() => onChange(NO_AGREEMENT_FILTERS)} onClose={onClose} activeCount={countActiveAgreementFilters(filters)}>
+      <FilterSection icon={<CalendarIcon className="size-3.5 text-blue-600 dark:text-blue-400" />} tint="bg-blue-500/10" title="Sent between">
+        <div className="grid grid-cols-2 gap-3">
+          {dateBtn(filters.sentFrom, 'From', (d) => set('sentFrom', d))}
+          {dateBtn(filters.sentTo, 'To', (d) => set('sentTo', d))}
+        </div>
+        {hasDates && (
+          <button
+            type="button"
+            onClick={() => onChange({ ...filters, sentFrom: undefined, sentTo: undefined })}
+            className="mt-1.5 cursor-pointer text-[11px] text-v2-muted-fg underline-offset-2 hover:text-v2-fg hover:underline"
+          >
+            Clear dates
+          </button>
+        )}
+      </FilterSection>
+
       <FilterSection
-        icon={<PenLine className="size-3.5 text-v2-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
+        icon={<Activity className="size-3.5 text-v2-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
         tint="bg-v2-primary/10"
         title="Status"
-        className="lg:col-span-3"
       >
         <div className="flex flex-wrap gap-2">
-          <FilterChip active={filters.state === 'all'} onClick={() => onChange({ ...filters, state: 'all' })}>
-            All
-          </FilterChip>
-          {STATE_ORDER.map((state) => (
-            <FilterChip
-              key={state}
-              active={filters.state === state}
-              color={STATE_COLOR[state]}
-              onClick={() => onChange({ ...filters, state })}
-            >
-              {STATE_CHIP[state].label}
+          {STATUS_OPTIONS.map((o) => (
+            <FilterChip key={o.value} active={filters.status === o.value} color={o.color} onClick={() => set('status', o.value)}>
+              {o.label}
             </FilterChip>
           ))}
         </div>
       </FilterSection>
 
-      <FilterSection
-        icon={<FileText className="size-3.5 text-v2-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
-        tint="bg-v2-primary/10"
-        title="Type"
-      >
+      <FilterSection icon={<Layers className="size-3.5 text-emerald-600 dark:text-emerald-400" />} tint="bg-emerald-500/10" title="Kind">
         <div className="flex flex-wrap gap-2">
           {KIND_OPTIONS.map((o) => (
-            <FilterChip
-              key={o.value}
-              active={filters.kind === o.value}
-              onClick={() => onChange({ ...filters, kind: o.value })}
-            >
+            <FilterChip key={o.value} active={filters.kind === o.value} onClick={() => set('kind', o.value)}>
               {o.label}
             </FilterChip>
           ))}

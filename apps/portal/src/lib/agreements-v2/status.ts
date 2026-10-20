@@ -15,17 +15,8 @@ import type { AgreementStatusV2 } from './types';
  * The same vocabulary covers both kinds: `individual_agreements_v2` reuses the
  * strings `rental_agreements` and the BoldSign webhook already write.
  */
-const SIGNED = new Set(['signed', 'completed']);
-const FAILED = new Set(['send_failed', 'credit_failed', 'declined', 'expired', 'failed']);
-const HIDDEN = new Set(['voided', 'revoked']);
-
-export function toStatusV2(raw: string | null): AgreementStatusV2 | 'hidden' {
-  const value = (raw ?? '').trim().toLowerCase();
-  if (SIGNED.has(value)) return 'signed';
-  if (FAILED.has(value)) return 'failed';
-  if (HIDDEN.has(value)) return 'hidden';
-  return 'pending';
-}
+// Shared with the customer portal's Agreements list (shared/portal-v2/agreements/list.ts).
+export { toAgreementStatus as toStatusV2 } from "../../../../../shared/portal-v2/agreements/list";
 
 /**
  * The table is not there at all, which is what the v2 tables look like until
