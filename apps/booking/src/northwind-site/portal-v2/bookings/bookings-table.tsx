@@ -87,15 +87,15 @@ export function BookingsTable({
   const open = (id: string) => router.push(`/portal/bookings/${id}`);
 
   return (
-    <ListTable rows={rows} fillViewport={fillViewport}>
+    <ListTable rows={rows} fillViewport={fillViewport} minWidth={MIN_WIDTH}>
       <ListTableHeader>
-        <ListHead className="w-[12%]">Reference</ListHead>
-        <ListHead className="w-[21%]">Vehicle</ListHead>
-        <ListHead className="w-[22%]">Dates</ListHead>
-        <ListHead className="w-[8%]">Days</ListHead>
-        <ListHead className="w-[15%]">Status</ListHead>
-        <ListHead className="w-[11%]">Payment</ListHead>
-        <ListHead className="w-[11%] text-right">Total</ListHead>
+        <ListHead className="w-[10%]">Reference</ListHead>
+        <ListHead className="w-[17%]">Vehicle</ListHead>
+        <ListHead className="w-[19%]">Dates</ListHead>
+        <ListHead className="w-[9%]">Days</ListHead>
+        <ListHead className="w-[19%]">Status</ListHead>
+        <ListHead className="w-[13%]">Payment</ListHead>
+        <ListHead className="w-[13%] text-right">Total</ListHead>
       </ListTableHeader>
       <ListBody>
         {rows.visible.map((rental) => {
@@ -122,11 +122,11 @@ export function BookingsTable({
               <ListCell className={cn(V2_LIST_CLASSES.text, 'truncate')}>
                 {formatBookingDates(rental.startDate, rental.endDate)}
               </ListCell>
-              <ListCell className={cn(V2_LIST_CLASSES.text, 'tabular-nums')}>{days ?? '—'}</ListCell>
-              <ListCell>
+              <ListCell className={cn(V2_LIST_CLASSES.text, 'truncate tabular-nums')}>{days ?? '—'}</ListCell>
+              <ListCell className="truncate" title={status.label}>
                 <ListStatusText tone={status.tone}>{status.label}</ListStatusText>
               </ListCell>
-              <ListCell>
+              <ListCell className="truncate" title={payment?.label}>
                 {payment ? <ListStatusText tone={payment.tone}>{payment.label}</ListStatusText> : null}
               </ListCell>
               <ListCell className={cn(V2_LIST_CLASSES.text, 'text-right tabular-nums')}>
@@ -140,20 +140,28 @@ export function BookingsTable({
   );
 }
 
+/**
+ * Wider than the kit's 720px floor: every cell is one line (no wrapping, as in
+ * the operator lists), so each column is sized for its longest value at that
+ * floor, "Awaiting confirmation" and "Sep 28 – Oct 28, 2026" above all. Below
+ * it the table scrolls sideways, as the operator lists do.
+ */
+const MIN_WIDTH = 'min-w-[960px]';
+
 /** The table while bookings load: the same kit, heading row and row height, with bars for the cells. */
 export function BookingsTableSkeleton({ rows = 4 }: { rows?: number }) {
   const progressive = useProgressiveRows(Array.from({ length: rows }), 'skeleton');
   return (
     <div aria-hidden>
-      <ListTable rows={{ ...progressive, hasMore: false }}>
+      <ListTable rows={{ ...progressive, hasMore: false }} minWidth={MIN_WIDTH}>
         <ListTableHeader>
-          <ListHead className="w-[12%]">Reference</ListHead>
-          <ListHead className="w-[21%]">Vehicle</ListHead>
-          <ListHead className="w-[22%]">Dates</ListHead>
-          <ListHead className="w-[8%]">Days</ListHead>
-          <ListHead className="w-[15%]">Status</ListHead>
-          <ListHead className="w-[11%]">Payment</ListHead>
-          <ListHead className="w-[11%] text-right">Total</ListHead>
+          <ListHead className="w-[10%]">Reference</ListHead>
+          <ListHead className="w-[17%]">Vehicle</ListHead>
+          <ListHead className="w-[19%]">Dates</ListHead>
+          <ListHead className="w-[9%]">Days</ListHead>
+          <ListHead className="w-[19%]">Status</ListHead>
+          <ListHead className="w-[13%]">Payment</ListHead>
+          <ListHead className="w-[13%] text-right">Total</ListHead>
         </ListTableHeader>
         <ListBody>
           {progressive.visible.map((_, index) => (
