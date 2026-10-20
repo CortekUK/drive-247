@@ -14,22 +14,22 @@
  * The WHOLE row is the link. On a phone the header row is dropped and each row
  * folds into photo · name and dates · total and status.
  *
- * Headings, the two-tone vehicle name and the status palette are the operator
- * Fleet table's (shared/portal-v2/list-styles.ts): bold make, lighter model,
- * coloured status text. The header row keeps its light tint, so its labels take
- * the muted step that still reads on a tint.
+ * The card, headings, row rhythm, two-tone vehicle name and status palette are
+ * the operator Fleet table's (shared/portal-v2/list-styles.ts): a borderless
+ * white card with a large radius and soft shadow, a plain heading row of small
+ * uppercase grey labels, hairlines between rows, bold make with a lighter
+ * model, and coloured status text.
  */
 
 import Link from 'next/link';
 import { CarFront, ChevronRight } from 'lucide-react-nw';
 
-import { Panel } from '@nw/portal-v2/primitives';
 import { Skeleton } from '@nw/components/ui/skeleton';
 import { PaymentStatusChip, RentalStatusChip } from '@nw/portal-v2/status-chip';
 import { bookingCompletionState, type CustomerRental } from '@nw/hooks/use-customer-rentals';
 import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { cn } from '@nw/lib/utils';
-import { V2_LIST_CLASSES } from '@portal-v2-shared/list-styles';
+import { V2_LIST_CARD, V2_LIST_CLASSES } from '@portal-v2-shared/list-styles';
 
 import { formatBookingDates, formatNights } from './format';
 
@@ -41,13 +41,13 @@ const COLUMNS =
 /** Status columns: the shared chips in their text-only form, at row size. */
 const STATUS_TEXT = 'text-[14px] font-medium';
 
-const HEAD = cn(V2_LIST_CLASSES.head, 'h-auto text-v2-muted-on-tint');
+const HEAD = cn(V2_LIST_CLASSES.head, 'h-auto');
 
 function HeaderRow() {
   return (
     <div
       aria-hidden
-      className={cn('hidden h-11 border-b border-pv-border bg-pv-tint/60 px-5', COLUMNS)}
+      className={cn('hidden h-10 border-b border-pv-border px-5', COLUMNS)}
     >
       <span className={HEAD}>Vehicle</span>
       <span className={HEAD}>Dates</span>
@@ -62,7 +62,7 @@ function HeaderRow() {
 /** A small photo of the car, or a car glyph on the tint when there is none. */
 function Thumb({ url }: { url: string | null }) {
   return (
-    <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-pv-tint md:size-12">
+    <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-pv-tint">
       {url ? (
         <img src={url} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
       ) : (
@@ -105,7 +105,7 @@ function BookingRow({ rental }: { rental: CustomerRental }) {
       <Link
         href={`/portal/bookings/${rental.id}`}
         className={cn(
-          'group flex items-center gap-3.5 px-4 py-4 sm:px-5',
+          'group flex items-center gap-3.5 px-4 py-3 sm:px-5',
           'transition-colors duration-200 ease-in hover:bg-pv-row-hover hover:ease-out motion-reduce:transition-none',
           'focus-visible:bg-pv-row-hover focus-visible:outline-none',
           COLUMNS,
@@ -171,14 +171,14 @@ function BookingRow({ rental }: { rental: CustomerRental }) {
 
 export function BookingsTable({ rentals, className }: { rentals: CustomerRental[]; className?: string }) {
   return (
-    <Panel className={cn('overflow-hidden', className)}>
+    <section className={cn(V2_LIST_CARD, className)}>
       <HeaderRow />
       <ul className="divide-y divide-pv-border">
         {rentals.map((rental) => (
           <BookingRow key={rental.id} rental={rental} />
         ))}
       </ul>
-    </Panel>
+    </section>
   );
 }
 
@@ -186,13 +186,13 @@ export function BookingsTable({ rentals, className }: { rentals: CustomerRental[
 export function BookingsTableSkeleton({ rows = 4 }: { rows?: number }) {
   return (
     <div aria-hidden>
-      <Panel className="overflow-hidden">
+      <section className={V2_LIST_CARD}>
         <HeaderRow />
         <ul className="divide-y divide-pv-border">
           {Array.from({ length: rows }, (_, index) => (
-            <li key={index} className={cn('flex items-center gap-3.5 px-4 py-4 sm:px-5', COLUMNS)}>
+            <li key={index} className={cn('flex items-center gap-3.5 px-4 py-3 sm:px-5', COLUMNS)}>
               <span className="flex min-w-0 flex-1 items-center gap-3.5">
-                <Skeleton className="size-11 shrink-0 rounded-xl bg-pv-tint md:size-12" />
+                <Skeleton className="size-10 shrink-0 rounded-xl bg-pv-tint" />
                 <span className="flex flex-col gap-2">
                   <Skeleton className="h-3.5 w-32 bg-pv-tint" />
                   <Skeleton className="h-3 w-20 bg-pv-tint" />
@@ -206,7 +206,7 @@ export function BookingsTableSkeleton({ rows = 4 }: { rows?: number }) {
             </li>
           ))}
         </ul>
-      </Panel>
+      </section>
     </div>
   );
 }

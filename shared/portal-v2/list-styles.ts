@@ -12,6 +12,15 @@
  * key by key, so the two cannot drift.
  */
 
+/**
+ * The card a list sits in: the operator ui-v2 Card (components/ui-v2/card.tsx)
+ * as its lists draw it. No border: white, a 26px radius (`rounded-4xl`, which
+ * v2-theme.css resolves to --v2-radius × 2.6), 24px above the heading row and
+ * below the last row, `shadow-md` and a 5% hairline ring.
+ */
+export const V2_LIST_CARD =
+  "overflow-hidden rounded-[calc(var(--v2-radius)*2.6)] bg-v2-card py-6 text-sm text-v2-card-fg shadow-md ring-1 ring-v2-fg/5 dark:ring-v2-fg/10";
+
 export const V2_LIST_CLASSES = {
   /** Column headings: small, uppercase, letter-spaced, muted. */
   head: "h-10 text-[11px] font-semibold uppercase tracking-wider text-v2-muted-fg text-left",
