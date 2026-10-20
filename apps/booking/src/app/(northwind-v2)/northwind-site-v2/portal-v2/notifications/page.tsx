@@ -292,7 +292,7 @@ export default function PortalNotificationsPage() {
                 body={EMPTY_COPY[filter].description}
                 action={
                   filter === 'all' && notifications.length === 0
-                    ? { href: '/portal/bookings', label: 'See your bookings' }
+                    ? { href: '/portal/rentals', label: 'See your rentals' }
                     : undefined
                 }
               />

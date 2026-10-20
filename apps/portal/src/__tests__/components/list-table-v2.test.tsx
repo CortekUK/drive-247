@@ -26,6 +26,7 @@ import {
   ListTableHeader,
   useProgressiveRows,
 } from '@/components/shared/list-table-v2';
+import { RENTAL_STATUS_TONE, RentalsTable } from '../../../../../shared/portal-v2/rentals-table';
 
 /*
  * Line endings normalised, because the assertions below quote multi-line
@@ -39,45 +40,81 @@ const rentalsSource = readFileSync(
   'utf8',
 ).replace(/\r\n/g, '\n');
 
-describe('list table kit matches the rentals list', () => {
-  // Rentals writes each column's width into the middle of its head classes
-  // (`h-10 w-[20%] text-[11px] …`); the kit takes widths separately.
-  const withoutWidths = rentalsSource.replace(/h-10 w-\[\d+%\] /g, 'h-10 ');
+/*
+ * The rentals TABLE now lives in shared/portal-v2/rentals-table.tsx (the
+ * customer portal's Rentals page draws it too); the list file keeps the page
+ * around it. The table names the kit's strings through V2_LIST_CLASSES, which
+ * shared-list-styles.test.ts proves equal to LIST_CLASSES key by key, so a key
+ * counts as used when the list file carries the operator string or the shared
+ * table reads its twin.
+ */
+const sharedTableSource = readFileSync(
+  resolve(process.cwd(), '../../shared/portal-v2/rentals-table.tsx'),
+  'utf8',
+).replace(/\r\n/g, '\n');
 
+describe('list table kit matches the rentals list', () => {
   for (const [name, classes] of Object.entries(LIST_CLASSES)) {
     it(`uses the rentals list's ${name} classes`, () => {
-      expect(withoutWidths).toContain(classes);
+      const inList = rentalsSource.includes(classes);
+      const inSharedTable = sharedTableSource.includes(`V2_LIST_CLASSES.${name}`);
+      expect(inList || inSharedTable, name).toBe(true);
     });
   }
 
-  for (const [tone, classes] of Object.entries(LIST_TONES)) {
-    it(`uses the rentals list's ${tone} status colour`, () => {
-      expect(rentalsSource).toContain(classes);
+  it('colours each status with the kit tones', () => {
+    expect(sharedTableSource).toContain('V2_LIST_TONES[RENTAL_STATUS_TONE[row.status] ?? "muted"]');
+    expect(RENTAL_STATUS_TONE).toEqual({
+      Active: 'success',
+      Upcoming: 'info',
+      Pending: 'warning',
+      Completed: 'muted',
+      Cancelled: 'danger',
+      Rejected: 'danger',
     });
-  }
+  });
 
   it('fills the same number of rows at a time', () => {
     expect(rentalsSource).toContain(`const ROWS_PER_FILL = ${LIST_ROWS_PER_FILL};`);
   });
 
+  it('draws the shared Rentals table, Customer as its second column', () => {
+    expect(rentalsSource).toContain('<RentalsTable');
+    expect(rentalsSource).toContain('partyLabel="Customer"');
+  });
+
   it('left-aligns all five headings and every cell, like the kit', () => {
-    expect(rentalsSource.match(/tracking-wider text-muted-foreground text-left">/g)).toHaveLength(5);
-    // Rental #, Customer, Pickup, Return, Status.
-    expect(rentalsSource.match(/<TableCell className="py-3 text-left/g)).toHaveLength(5);
+    const { container } = render(
+      <RentalsTable
+        partyLabel="Customer"
+        onOpen={() => {}}
+        rows={[{ id: 'r1', reference: 'R-1b710f', party: 'Ada Whitfield', start: '2026-09-28', end: null, ongoing: true, status: 'Active', meta: ['PAYG'] }]}
+      />,
+    );
+    const heads = [...container.querySelectorAll('th')];
+    expect(heads.map((th) => th.textContent)).toEqual(['Rental #', 'Customer', 'Pickup', 'Return', 'Status']);
+    for (const th of heads) {
+      expect(th.className.split(/\s+/)).toContain('text-left');
+      expect(th.className).not.toContain('text-center');
+    }
+    const cells = [...container.querySelectorAll('tbody td')];
+    expect(cells).toHaveLength(5);
+    for (const td of cells) {
+      expect(td.className.split(/\s+/)).toContain('text-left');
+      expect(td.className).not.toContain('text-center');
+    }
     // The two cells that lay their content out with flex have to start too: a
     // flex box ignores the cell's text-align.
-    expect(rentalsSource).toContain('<div className="flex flex-col items-start gap-0.5">');
-    expect(rentalsSource).toContain('<div className="flex flex-wrap items-center justify-start gap-1.5">');
-    // And nothing centred survives anywhere in the reference table.
-    expect(rentalsSource).not.toContain('text-center">');
-    expect(rentalsSource).not.toContain('justify-center');
+    expect(sharedTableSource).toContain('<div className="flex flex-col items-start gap-0.5">');
+    expect(sharedTableSource).toContain('<div className="flex flex-wrap items-center justify-start gap-1.5">');
+    expect(sharedTableSource).not.toContain('text-center');
+    expect(sharedTableSource).not.toContain('justify-center');
   });
 
   it('fills the window with the kit hook, on the box that carries the kit classes', () => {
     expect(rentalsSource).toContain('const tableFillCap = useViewportFillCap(scrollRootRef, tableMounted);');
-    expect(rentalsSource).toContain(
-      'style={tableFillCap !== undefined ? { maxHeight: tableFillCap } : undefined}',
-    );
+    expect(rentalsSource).toContain('maxHeight={tableFillCap}');
+    expect(sharedTableSource).toContain('maxHeight !== undefined ? { maxHeight } : undefined');
     // The same condition as the table branch, so the box is measured when it mounts.
     expect(rentalsSource).toContain('currentView !== "calendar" && allRentals.length > 0 && !devForceEmptyRentals;');
     expect(rentalsSource).toContain(') : /* Rentals Table */\n      allRentals.length > 0 && !devForceEmptyRentals ? (');

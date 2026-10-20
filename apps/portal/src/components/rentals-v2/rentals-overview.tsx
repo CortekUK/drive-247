@@ -3,9 +3,9 @@
 import { useMemo } from "react";
 import type { EnhancedRental, RentalStats } from "@/hooks/use-enhanced-rentals";
 import { formatCurrency } from "@/lib/format-utils";
-import { parseLocalDate } from "@/lib/date-utils";
 import { HeroChart, HeroRow, type HeroMetric } from "@/components/shared/hero-chart-v2";
 import { FeaturedDeck } from "@/components/shared/featured-deck-v2";
+import { rentalsHeroMetrics } from "../../../../../shared/portal-v2/rentals-metrics";
 
 /**
  * The Rentals hero row: one simple graph, and the featured deck beside it.
@@ -59,53 +59,19 @@ interface Props {
   onOpenCalendar: () => void;
 }
 
-/** Statuses of rentals that never ran. */
-const NEVER_RAN = new Set(["Cancelled", "Rejected"]);
-/** Statuses of rentals whose car has not gone out, whatever the start date says. */
-const NOT_PICKED_UP = new Set(["Cancelled", "Rejected", "Pending"]);
-
-/**
- * `start_date` is a bare date ("2026-09-22"), which `new Date` would read as UTC
- * midnight and slip to the day before west of Greenwich, so it goes through
- * parseLocalDate. `created_at` is a timestamptz, a real instant.
- */
-function dayOf(value: string): Date {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? parseLocalDate(value) : new Date(value);
-}
-
 const DECK_ROUTES = ["/rentals", "/turo-bridge"] as const;
 
 export function RentalsOverview({ stats, rentals, currencyCode, filtered, onOpenCalendar }: Props) {
-  const metrics = useMemo<HeroMetric[]>(() => {
-    const booked = rentals.filter((r) => r.created_at && !NEVER_RAN.has(r.computed_status));
-    const pickedUp = rentals.filter((r) => r.start_date && !NOT_PICKED_UP.has(r.computed_status));
-    return [
-      {
-        key: "booked-value",
-        label: "Booked value",
-        kind: "flow",
-        description: "What new rentals were booked for, excluding cancelled and rejected ones. This is not money collected.",
-        format: (v) => formatCurrency(v, currencyCode),
-        events: booked.map((r) => ({ at: new Date(r.created_at as string), amount: Number(r.total_amount) || 0 })),
-        secondary: {
-          label: "Picked up",
-          events: pickedUp.map((r) => ({ at: dayOf(r.start_date), amount: Number(r.total_amount) || 0 })),
-        },
-      },
-      {
-        key: "bookings",
-        label: "New bookings",
-        kind: "flow",
-        description: "Rentals created, excluding cancelled and rejected ones.",
-        format: (v) => v.toLocaleString(),
-        events: booked.map((r) => ({ at: new Date(r.created_at as string), amount: 1 })),
-        secondary: {
-          label: "Picked up",
-          events: pickedUp.map((r) => ({ at: dayOf(r.start_date), amount: 1 })),
-        },
-      },
-    ];
-  }, [rentals, currencyCode]);
+  // The series math is shared with the customer portal's Rentals graph
+  // (shared/portal-v2/rentals-metrics.ts), so the two cannot count differently.
+  const metrics = useMemo<HeroMetric[]>(
+    () =>
+      rentalsHeroMetrics(
+        rentals.map((r) => ({ createdAt: r.created_at, start: r.start_date, status: r.computed_status, amount: r.total_amount })),
+        { format: (v) => formatCurrency(v, currencyCode), countLabel: "New bookings" },
+      ),
+    [rentals, currencyCode],
+  );
 
   const handlers = useMemo(() => ({ openCalendar: onOpenCalendar }), [onOpenCalendar]);
 

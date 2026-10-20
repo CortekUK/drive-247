@@ -16,7 +16,7 @@ import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { Check } from "lucide-react";
 import { cn } from "./cn";
 
-const MOTION_FLOATING =
+export const MOTION_FLOATING =
   "animate-in fade-in-0 duration-200 ease-out data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-200 data-[state=closed]:ease-in data-[side=bottom]:slide-in-from-top-3 data-[side=bottom]:slide-out-to-top-3 data-[side=top]:slide-in-from-bottom-3 data-[side=top]:slide-out-to-bottom-3 data-[side=left]:slide-in-from-right-3 data-[side=left]:slide-out-to-right-3 data-[side=right]:slide-in-from-left-3 data-[side=right]:slide-out-to-left-3 motion-reduce:!animate-none";
 
 export const DropdownMenu = DropdownMenuPrimitive.Root;

@@ -45,7 +45,7 @@ export const PORTAL_V2_NAV: readonly PortalV2NavGroup[] = [
   {
     label: 'Your rentals',
     items: [
-      { href: '/portal/bookings', label: 'Bookings', icon: CalendarDays, v1Href: '/portal/bookings', built: true },
+      { href: '/portal/rentals', label: 'Rentals', icon: CalendarDays, v1Href: '/portal/bookings', built: true },
       { href: '/portal/agreements', label: 'Agreements', icon: FileSignature, v1Href: '/portal/agreements', built: true },
       { href: '/portal/payments', label: 'Payments', icon: CreditCard, v1Href: '/portal/payments', built: true },
     ],

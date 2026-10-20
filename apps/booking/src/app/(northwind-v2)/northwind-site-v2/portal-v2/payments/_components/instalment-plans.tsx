@@ -190,7 +190,7 @@ function PlanPanel({ plan }: { plan: CustomerInstallmentPlan }) {
           </p>
           {plan.rental ? (
             <Link
-              href={`/portal/bookings/${plan.rental.id}`}
+              href={`/portal/rentals/${plan.rental.id}`}
               className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-pv-link underline-offset-4 transition-colors duration-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none"
             >
               {plan.rental.reference}

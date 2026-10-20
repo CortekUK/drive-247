@@ -19,7 +19,7 @@
 import { Calendar, Car, Check, CheckCheck } from 'lucide-react-nw';
 
 import { Skeleton } from '@nw/components/ui/skeleton';
-import { formatBookingDates } from '@nw/portal-v2/bookings/format';
+import { formatBookingDates } from '@nw/portal-v2/rentals/format';
 import type {
   CustomerMessage,
   MessageBookingReference,

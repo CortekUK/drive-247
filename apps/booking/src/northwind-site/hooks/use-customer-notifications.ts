@@ -224,8 +224,13 @@ export interface CustomerNotification {
 const KNOWN_ROUTES = new Set([
   '/portal',
   '/portal/agreements',
+  // The section was renamed Rentals. Stored links still say /portal/bookings
+  // (the status-change trigger writes it), and those addresses redirect to
+  // /portal/rentals, so both spellings are known.
   '/portal/bookings',
   '/portal/bookings/history',
+  '/portal/rentals',
+  '/portal/rentals/history',
   '/portal/documents',
   '/portal/gig-driver',
   '/portal/messages',
@@ -238,9 +243,9 @@ const KNOWN_ROUTES = new Set([
   '/contact',
 ]);
 
-/** `/portal/bookings/<uuid>` — the one dynamic route a link may legitimately name. */
+/** `/portal/rentals/<uuid>` (or the old `/portal/bookings/<uuid>`): the one dynamic route a link may legitimately name. */
 const BOOKING_DETAIL_RE =
-  /^\/portal\/bookings\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  /^\/portal\/(?:rentals|bookings)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -254,7 +259,7 @@ function rentalIdFromMetadata(metadata: NotificationRow['metadata']): string | n
 
 function resolveHref(row: CustomerNotificationRow): string | null {
   const rentalId = rentalIdFromMetadata(row.metadata);
-  if (rentalId) return `/portal/bookings/${rentalId}`;
+  if (rentalId) return `/portal/rentals/${rentalId}`;
 
   const raw = row.link?.trim();
   // Single leading slash only. `//host` is protocol-relative and leaves the app.

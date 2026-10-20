@@ -130,7 +130,7 @@ export function DocumentCard({
       <div className="flex shrink-0 flex-wrap items-center gap-2 pl-15 sm:pl-0">
         {doc.booking ? (
           <Button asChild variant="brand-ghost" className="h-11 px-4">
-            <Link href={`/portal/bookings/${doc.booking.id}`}>Booking {doc.booking.reference}</Link>
+            <Link href={`/portal/rentals/${doc.booking.id}`}>Rental {doc.booking.reference}</Link>
           </Button>
         ) : null}
 

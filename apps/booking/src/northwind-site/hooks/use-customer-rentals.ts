@@ -575,9 +575,10 @@ export function normalizeCustomerRental(
 
   return {
     id: row.id,
-    // `rental_number` is written by a DB trigger and is nullable in the type,
-    // so there has to be a fallback the customer can quote down a phone line.
-    reference: row.rental_number ?? `#${row.id.slice(0, 8)}`,
+    // `rental_number` is written by a DB trigger (generate_rental_number) and
+    // is nullable in the type, so the fallback is that trigger's own format,
+    // "R-" and the id's first six hex digits, never a second shape of reference.
+    reference: row.rental_number ?? `R-${row.id.replace(/-/g, '').slice(0, 6)}`,
     startDate: row.start_date,
     endDate: row.end_date,
     pickupTime: row.pickup_time,

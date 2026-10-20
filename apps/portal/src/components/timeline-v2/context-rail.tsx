@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui-v2/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { cn } from "@/lib/utils";
-import "./timeline.css";
+import "../../../../../shared/portal-v2/timeline/timeline.css";
 
 /**
  * `icon` is for the dock, not for this strip.

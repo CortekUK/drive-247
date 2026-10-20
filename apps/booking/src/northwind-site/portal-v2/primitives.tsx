@@ -147,7 +147,8 @@ export function EmptyState({
   icon: LucideIcon;
   title: string;
   description: string;
-  action?: { href: string; label: string };
+  /** A link, or a button for an action on the page itself (Clear Filters). */
+  action?: { href: string; label: string } | { onClick: () => void; label: string };
 }) {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
@@ -158,9 +159,13 @@ export function EmptyState({
         <p className="text-[15px] font-semibold text-pv-fg">{title}</p>
         <p className="mt-1 text-[13px] leading-relaxed text-pv-muted-fg">{description}</p>
       </div>
-      {action ? (
+      {action && 'href' in action ? (
         <Button asChild variant="brand" className="mt-1 h-10">
           <Link href={action.href}>{action.label}</Link>
+        </Button>
+      ) : action ? (
+        <Button type="button" variant="brand" className="mt-1 h-10" onClick={action.onClick}>
+          {action.label}
         </Button>
       ) : null}
     </div>

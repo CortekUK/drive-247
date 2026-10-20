@@ -21,7 +21,7 @@ import { Button } from '@nw/components/ui/button';
 import { Input } from '@nw/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@nw/components/ui/popover';
 import { Textarea } from '@nw/components/ui/textarea';
-import { formatBookingDates } from '@nw/portal-v2/bookings/format';
+import { formatBookingDates } from '@nw/portal-v2/rentals/format';
 import { RentalStatusChip } from '@nw/portal-v2/status-chip';
 import { useCustomerRentals, type CustomerRental } from '@nw/hooks/use-customer-rentals';
 import type { MessageBookingReference } from '@nw/hooks/use-customer-messages';

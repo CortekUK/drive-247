@@ -218,7 +218,7 @@ function AccountControl() {
               <LayoutGrid className="mr-2.5 size-4 text-pv-muted-fg" />
               Your account
             </DropdownMenu.Item>
-            <DropdownMenu.Item className={MENU_ITEM} onSelect={() => router.push('/portal/bookings')}>
+            <DropdownMenu.Item className={MENU_ITEM} onSelect={() => router.push('/portal/rentals')}>
               <CalendarDays className="mr-2.5 size-4 text-pv-muted-fg" />
               Your bookings
             </DropdownMenu.Item>

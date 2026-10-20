@@ -18,7 +18,7 @@ import Link from 'next/link';
 import { Download, Loader2, SquareArrowOutUpRight } from 'lucide-react-nw';
 
 import { formatDate, formatTimestamp } from '@nw/components/portal/format';
-import { formatBookingDates } from '@nw/portal-v2/bookings/format';
+import { formatBookingDates } from '@nw/portal-v2/rentals/format';
 import { DetailList, DetailRow } from '@nw/portal-v2/primitives';
 import { Button } from '@nw/components/ui/button';
 import {

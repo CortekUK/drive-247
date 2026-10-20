@@ -2,6 +2,10 @@
 @import "tw-animate-css";
 /* The portal v2 tokens, shared with the operator portal (see the .pv2 block). */
 @import "../../../../../shared/portal-v2/tokens.css";
+/* The rentals calendar (the operator Rentals tab's timeline board), shared with
+   the operator portal. It reads the shadcn token names; the .pv2 block below
+   points them at the v2 tokens. */
+@import "../../../../../shared/portal-v2/timeline/timeline.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -623,6 +627,37 @@
 }
 .pv2-tokens {
   font-family: var(--font-manrope), var(--font-dm-sans), system-ui, sans-serif;
+}
+/* The shadcn token names the shared rentals timeline (timeline.css) reads,
+   pointed at the v2 tokens exactly as the operator's v2-theme.css points them.
+   Nothing else on this site reads these names. */
+.pv2,
+.pv2-tokens {
+  --background: var(--v2-background);
+  --foreground: var(--v2-foreground);
+  --card: var(--v2-card);
+  --popover: var(--v2-popover);
+  --popover-foreground: var(--v2-popover-foreground);
+  --primary: var(--v2-primary);
+  --primary-foreground: var(--v2-primary-foreground);
+  --muted: var(--v2-muted);
+  --muted-foreground: var(--v2-muted-foreground);
+  --destructive: var(--v2-destructive);
+  --border: var(--v2-border);
+  --sidebar-primary: var(--v2-sidebar-primary);
+}
+/* `no-scrollbar-from-md` from the operator's v2-theme.css, which the shared
+   list and Rentals tables put on their scroll box: from md up the box scrolls
+   with no visible bar, as the operator's does; below it the browser's overlay
+   indicator stays, the only sign a phone has that the row runs on. */
+@media (min-width: 768px) {
+  .pv2 .no-scrollbar-from-md {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .pv2 .no-scrollbar-from-md::-webkit-scrollbar {
+    display: none;
+  }
 }
 /* v2 buttons are the operator ui-v2 Button: pills (`rounded-4xl`), primary
    hovering to primary/80, outline and ghost hovering with the light purple

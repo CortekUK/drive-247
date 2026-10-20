@@ -94,7 +94,7 @@ export function PolicyCard({
         <div className="flex shrink-0 flex-wrap items-center gap-2 pl-15 sm:max-w-[40%] sm:justify-end sm:pl-0">
           {policy.booking ? (
             <Button asChild variant="brand-ghost" className="h-11 px-4">
-              <Link href={`/portal/bookings/${policy.booking.id}`}>View booking</Link>
+              <Link href={`/portal/rentals/${policy.booking.id}`}>View rental</Link>
             </Button>
           ) : null}
           {policy.pdfIds.map((entry) => {

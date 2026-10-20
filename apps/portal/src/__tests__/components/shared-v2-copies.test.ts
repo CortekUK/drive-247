@@ -5,6 +5,7 @@
  *   button-styles.ts  the ui-v2 Button's looks (the component stays here)
  *   filter-panel.tsx  components/shared/filter-primitives.tsx (draws the Button)
  *   search-field.tsx  the list-page field inside layout/top-bar-v2.tsx (GitHub #32)
+ *   popover.tsx, tooltip.tsx  ui-v2's, for the shared rentals timeline
  *
  * Each copy is the operator source with semantic colours swapped for their
  * shared twins (shared/portal-v2/class-map.ts). These tests recompute that from
@@ -18,9 +19,13 @@ import { buttonVariants } from '@/components/ui-v2/button';
 import { cn } from '@/lib/utils';
 import { toSharedClasses } from '../../../../../shared/portal-v2/class-map';
 import {
+  V2_BUTTON_DEFAULT_SM,
+  V2_BUTTON_GHOST_ICON_SM,
   V2_BUTTON_GHOST_SM,
   V2_BUTTON_OUTLINE,
   V2_BUTTON_OUTLINE_ICON,
+  V2_BUTTON_OUTLINE_ICON_SM,
+  V2_BUTTON_OUTLINE_SM,
   V2_BUTTON_PRIMARY,
 } from '../../../../../shared/portal-v2/button-styles';
 
@@ -58,6 +63,13 @@ describe('shared button styles are the operator Button', () => {
     expect(V2_BUTTON_GHOST_SM).toBe(toSharedClasses(cn(buttonVariants({ variant: 'ghost', size: 'sm' }))));
     expect(V2_BUTTON_OUTLINE_ICON).toBe(toSharedClasses(cn(buttonVariants({ variant: 'outline', size: 'icon' }))));
     expect(V2_BUTTON_OUTLINE).toBe(toSharedClasses(cn(buttonVariants({ variant: 'outline' }))));
+  });
+
+  it("the rentals timeline's looks: outline sm, outline icon-sm, ghost icon-sm, default sm", () => {
+    expect(V2_BUTTON_OUTLINE_SM).toBe(toSharedClasses(cn(buttonVariants({ variant: 'outline', size: 'sm' }))));
+    expect(V2_BUTTON_OUTLINE_ICON_SM).toBe(toSharedClasses(cn(buttonVariants({ variant: 'outline', size: 'icon-sm' }))));
+    expect(V2_BUTTON_GHOST_ICON_SM).toBe(toSharedClasses(cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }))));
+    expect(V2_BUTTON_DEFAULT_SM).toBe(toSharedClasses(cn(buttonVariants({ size: 'sm' }))));
   });
 });
 
@@ -112,4 +124,27 @@ describe('shared search field is top-bar-v2\'s list-page field', () => {
       expect(copy).toContain(piece);
     }
   });
+});
+
+describe("shared popover and tooltip are ui-v2's", () => {
+  for (const name of ['popover', 'tooltip']) {
+    const operator = read(join(SRC, 'components', 'ui-v2', `${name}.tsx`));
+    const copy = read(join(SHARED, `${name}.tsx`));
+    const literals = classLiterals(operator).filter((l) => l.startsWith('z-50'));
+
+    it(`${name}: finds the content's class string`, () => {
+      expect(literals).toHaveLength(1);
+    });
+
+    for (const literal of literals) {
+      it(`${name}: carries "${literal.slice(0, 50)}…"`, () => {
+        expect(copy).toContain(toSharedClasses(literal));
+      });
+    }
+
+    it(`${name}: same floating motion`, () => {
+      expect(operator).toContain('MOTION_FLOATING');
+      expect(copy).toContain('MOTION_FLOATING');
+    });
+  }
 });

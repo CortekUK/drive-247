@@ -5,8 +5,8 @@
  * (components/dashboard-v2): a page header, a top row of three cards on one
  * brand ramp — the lead booking on the full gradient, what needs the customer
  * on a lighter print of it, where they stand on the flat accent tint, exactly
- * the three strengths `card-surface.tsx` uses — then recent bookings in the
- * same list table as the Bookings page.
+ * the three strengths `card-surface.tsx` uses — then recent rentals in the
+ * same table as the Rentals page.
  *
  * Everything comes from the single `useCustomerRentals` fetch (scoped by
  * `customer_id` AND `tenant_id` inside the hook), so a number here can never
@@ -22,8 +22,8 @@ import { useCustomer } from '@nw/hooks/use-customer';
 import { useCustomerRentals, type CustomerRental } from '@nw/hooks/use-customer-rentals';
 import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { cn } from '@nw/lib/utils';
-import { BookingsTable, BookingsTableSkeleton } from '@nw/portal-v2/bookings/bookings-table';
-import { formatBookingDates } from '@nw/portal-v2/bookings/format';
+import { CustomerRentalsTable, CustomerRentalsTableSkeleton } from '@nw/portal-v2/rentals/rentals-table';
+import { formatBookingDates } from '@nw/portal-v2/rentals/format';
 import { LoadError, PageHeader, Panel } from '@nw/portal-v2/primitives';
 import { QuickBookTrigger } from '@nw/site-v2/quick-book/quick-book-dialog';
 
@@ -69,7 +69,7 @@ function CardSurface({ surface }: { surface: Surface }) {
 }
 
 function bookingHref(rental: CustomerRental): string {
-  return `/portal/bookings/${rental.id}`;
+  return `/portal/rentals/${rental.id}`;
 }
 
 function useFirstName(): string | null {
@@ -94,12 +94,12 @@ export function PortalV2Overview() {
       <PageHeader
         eyebrow={today}
         title={firstName ? `Hi, ${firstName}` : 'Welcome back'}
-        description="Your next booking, anything we need from you, and your recent rentals."
+        description="Your next rental, anything we need from you, and your recent rentals."
       />
 
       {isError ? (
         <LoadError
-          title="We could not load your bookings"
+          title="We could not load your rentals"
           error={error}
           onRetry={() => {
             void refetch();
@@ -132,16 +132,16 @@ export function PortalV2Overview() {
       {isLoading ? (
         <section className="flex flex-col gap-3">
           <Skeleton className="h-5 w-40 bg-pv-tint" />
-          <BookingsTableSkeleton rows={3} />
+          <CustomerRentalsTableSkeleton rows={3} />
         </section>
       ) : recent.length > 0 ? (
-        <section aria-labelledby="recent-bookings" className="flex flex-col gap-3">
+        <section aria-labelledby="recent-rentals" className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3 px-1">
-            <h2 id="recent-bookings" className="text-[18px] font-semibold tracking-[-0.01em] text-pv-fg">
-              Recent bookings
+            <h2 id="recent-rentals" className="text-[18px] font-semibold tracking-[-0.01em] text-pv-fg">
+              Recent rentals
             </h2>
             <Link
-              href="/portal/bookings"
+              href="/portal/rentals"
               className={cn(
                 '-mr-2 inline-flex h-9 items-center gap-1 rounded-full px-3 text-[13px] font-medium text-pv-link hover:bg-pv-hover',
                 HOVER_FADE,
@@ -151,7 +151,7 @@ export function PortalV2Overview() {
               <ArrowRight aria-hidden className="size-3.5" />
             </Link>
           </div>
-          <BookingsTable rentals={recent} />
+          <CustomerRentalsTable rentals={recent} footer={false} />
         </section>
       ) : null}
     </div>
@@ -174,7 +174,7 @@ function LeadCard({ lead, isOnRent, hasAny }: { lead: CustomerRental | null; isO
   return (
     <Panel className={cn(TOP_CARD, 'border-transparent bg-transparent text-white')}>
       <CardSurface surface="lead" />
-      <p className={cn(CARD_LABEL, 'text-white/70')}>{isOnRent ? 'On rent now' : 'Your next booking'}</p>
+      <p className={cn(CARD_LABEL, 'text-white/70')}>{isOnRent ? 'On rent now' : 'Your next rental'}</p>
 
       {lead ? (
         <>
@@ -201,7 +201,7 @@ function LeadCard({ lead, isOnRent, hasAny }: { lead: CustomerRental | null; isO
               <span className="block text-[12px] text-white/70">{lead.reference}</span>
             </span>
             <Link href={bookingHref(lead)} className={WHITE_BUTTON}>
-              View booking
+              View rental
               <ArrowUpRight aria-hidden className="size-4" />
             </Link>
           </div>
@@ -209,11 +209,11 @@ function LeadCard({ lead, isOnRent, hasAny }: { lead: CustomerRental | null; isO
       ) : (
         <>
           <h3 className="mt-2 text-[22px] font-bold leading-tight tracking-[-0.02em]">
-            {hasAny ? 'Nothing coming up' : 'No bookings yet'}
+            {hasAny ? 'Nothing coming up' : 'No rentals yet'}
           </h3>
           <p className="mt-2 text-[13px] leading-relaxed text-white/85">
             {hasAny
-              ? 'Your past bookings are still under Bookings.'
+              ? 'Your past rentals are still under Rentals.'
               : 'When you book a car it shows here, with your dates and pickup.'}
           </p>
           <div className="mt-auto pt-5">
@@ -239,7 +239,7 @@ function NeedsYouCard({ awaitingPayment }: { awaitingPayment: CustomerRental[] }
       href: bookingHref(rental),
       icon: CreditCard,
       label: `Pay for ${rental.reference}`,
-      hint: `${formatCurrency(rental.total)} · ${rental.vehicle?.displayName ?? 'Booking'}`,
+      hint: `${formatCurrency(rental.total)} · ${rental.vehicle?.displayName ?? 'Rental'}`,
     });
   }
   if (!isIdentityVerified) {
@@ -324,13 +324,13 @@ function WhereYouStandCard({
       <p className={cn(CARD_LABEL, 'text-pv-muted-on-tint')}>Where you stand</p>
 
       <Link
-        href="/portal/bookings"
+        href="/portal/rentals"
         className={cn('group -mx-2 my-auto flex flex-col gap-3 rounded-xl px-2 py-2 hover:bg-white/40', HOVER_FADE)}
       >
         <span className="flex items-baseline gap-2">
           <span className="text-[34px] font-semibold leading-none tabular-nums text-pv-fg">{total}</span>
           <span className="text-[13px] text-pv-muted-on-tint">
-            {total === 1 ? 'booking' : 'bookings'} in total{cancelled > 0 ? ` · ${cancelled} cancelled` : ''}
+            {total === 1 ? 'rental' : 'rentals'} in total{cancelled > 0 ? ` · ${cancelled} cancelled` : ''}
           </span>
           <ArrowUpRight
             aria-hidden

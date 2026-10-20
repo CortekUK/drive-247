@@ -9,7 +9,7 @@ import type { RentalDetailV2 } from "@/components/rentals-v2/rental-detail/use-r
 import { EMPTY_TIMELINE, rentalSegments, shiftDay, tenantToday, type TimelineBooking, type TimelineData } from "./model";
 import { RentalPeriodCalendar } from "./rental-period-calendar";
 import { periodMonth } from "./rental-period-days";
-import "./timeline.css";
+import "../../../../../shared/portal-v2/timeline/timeline.css";
 import { ManualExtensionDialog } from "./timeline-dialogs";
 import { useTimelineData } from "./use-timeline-data";
 

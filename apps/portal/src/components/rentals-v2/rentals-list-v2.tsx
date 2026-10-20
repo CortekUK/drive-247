@@ -23,21 +23,10 @@
  * count that filters by `tenant_id` itself (§5).
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-// CardHeader / CardTitle / CardDescription came across with the copy but the
-// only Card left on this screen is the table's shell — the four tiles they
-// titled are now `rentals-overview.tsx`, which imports its own.
-import { Card, CardContent } from "@/components/ui-v2/card";
 import { Button } from "@/components/ui-v2/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui-v2/table";
+import { RentalsTable, type RentalsTableRow } from "../../../../../shared/portal-v2/rentals-table";
 import {
   FileText,
   Plus,
@@ -47,7 +36,6 @@ import {
   Download,
   List,
 } from "lucide-react";
-import { parseLocalDate } from "@/lib/date-utils";
 import { useEnhancedRentals, RentalFilters, EnhancedRental } from "@/hooks/use-enhanced-rentals";
 import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { countActiveRentalFilters } from "@/components/rentals-v2/rentals-filter-panel";
@@ -70,79 +58,6 @@ import { csvDate, csvFilename, downloadCsv } from "@/lib/csv-export";
 import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
 import { skeletonRows } from "@/lib/skeleton-data";
 import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
-
-/**
- * `30 Sep`, or `30 Sep 2027` when the year is not the current one.
- *
- * Slash-form dates (`9/30/2026`) are ambiguous to half the world and hard to
- * scan in a dense column; the year is dropped when it is this year because in a
- * rentals list it is nearly always redundant and repeating it four times a row
- * is noise. Rendered in `tabular-nums` at the call site so the days line up
- * down the page.
- *
- * `parseLocalDate`, never `new Date(value)`: these are date-only strings, and
- * `new Date("2026-09-30")` is parsed as UTC midnight, which renders as the 29th
- * for every user west of Greenwich.
- */
-const RENTAL_DATE = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
-const RENTAL_DATE_WITH_YEAR = new Intl.DateTimeFormat(undefined, {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-});
-const formatRentalDate = (value: string | null | undefined): string => {
-  if (!value) return "—";
-  const d = parseLocalDate(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.getFullYear() === new Date().getFullYear()
-    ? RENTAL_DATE.format(d)
-    : RENTAL_DATE_WITH_YEAR.format(d);
-};
-
-/**
- * The status column: coloured TEXT, no pill.
- *
- * A pill draws a filled, ringed shape around every row of a 45-row column, so
- * the eye counts shapes before it reads words and the column shouts louder than
- * anything else on the screen. The word in its own colour carries exactly the
- * same meaning at a fraction of the weight — and it is what the portal's design
- * system already specifies for table status columns.
- *
- * Each tone is a text colour plus a dark-mode step, so the word stays legible
- * in both themes without one hardcoded light value. Completed is deliberately
- * muted rather than coloured: it is the most common value and the least
- * actionable, so it should recede.
- */
-const STATUS_TONE: Record<string, string> = {
-  Active: "text-emerald-600 dark:text-emerald-400",
-  Upcoming: "text-blue-600 dark:text-blue-400",
-  Pending: "text-amber-600 dark:text-amber-400",
-  Completed: "text-muted-foreground",
-  Cancelled: "text-red-500 dark:text-red-400",
-  Rejected: "text-red-500 dark:text-red-400",
-};
-
-function RentalStatusText({ status }: { status: string }) {
-  return (
-    <span className={`text-sm font-medium ${STATUS_TONE[status] ?? "text-muted-foreground"}`}>
-      {status}
-    </span>
-  );
-}
-
-/**
- * Everything in the status column that is NOT the status. One quiet, uncoloured
- * treatment for all of them on purpose: PAYG and auto-extend are facts about
- * how the rental bills, not states competing with it, and giving each its own
- * colour is what turned this column into four badges of equal loudness.
- */
-function MetaChip({ children }: { children: ReactNode }) {
-  return (
-    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-      {children}
-    </span>
-  );
-}
 
 /**
  * Is any FILTER set on the rentals list?
@@ -522,6 +437,75 @@ export function RentalsListV2() {
     );
   };
 
+  /**
+   * One rental as a row of the shared table.
+   *
+   * The row-level flag is resolved ONCE: it decides both the row's tint and
+   * the line under the rental number, and working it out twice is how those
+   * two drift apart. `is_extended` is deliberately NOT a flag: extensions are
+   * out of scope for this screen while the rental model is being settled.
+   *
+   * The tint is halved and the rail 2px: with so little else on the row the
+   * flag does not have to shout, and a wall of amber rows is what stops any
+   * one of them being noticed.
+   *
+   * The data attributes are inert markers read by `lib/tab-tours`, so the
+   * Rentals tour can walk from this list INTO a rental record: the row
+   * navigates on click and emits no href, so nothing else on the page names a
+   * rental id.
+   */
+  const toTableRow = (rental: EnhancedRental): RentalsTableRow => {
+    const flag = rental.cancellation_requested
+      ? "cancelling"
+      : !filters.bonzahStatus && rental.bonzah_status === "insufficient_balance"
+      ? "balance"
+      : !filters.bonzahStatus && rental.bonzah_status === "quoted"
+      ? "quoted"
+      : null;
+    return {
+      id: rental.id,
+      reference: rental.rental_number,
+      // The FULL name: the first name alone turned every Smith into one row.
+      party: rental.customer.name,
+      start: rental.start_date,
+      end: rental.end_date,
+      ongoing: rental.is_pay_as_you_go,
+      status: rental.computed_status,
+      tint:
+        flag === "cancelling"
+          ? "bg-red-500/5 border-l-2 border-l-red-500"
+          : flag === "balance" || flag === "quoted"
+          ? "bg-[#CC004A]/5 dark:bg-[#CC004A]/15 border-l-2 border-l-[#CC004A]"
+          : undefined,
+      note:
+        flag === "cancelling" ? (
+          <span className="flex items-center gap-1 text-[11px] font-medium text-red-600 dark:text-red-400">
+            <XCircle className="size-3" />
+            Cancellation requested
+          </span>
+        ) : flag === "balance" ? (
+          <span className="flex items-center gap-1 text-[11px] font-medium text-[#CC004A] dark:text-[#ff6b9a]">
+            <ShieldAlert className="size-3" />
+            Balance required
+          </span>
+        ) : flag === "quoted" ? (
+          <span className="flex items-center gap-1 text-[11px] font-medium text-[#CC004A] dark:text-[#ff6b9a]">
+            <img src="/bonzah-logo.svg" alt="" className="h-3 w-auto dark:hidden" />
+            <img src="/bonzah-logo-dark.svg" alt="" className="hidden h-3 w-auto dark:block" />
+            Insurance quoted
+          </span>
+        ) : undefined,
+      // PAYG and auto-extend are facts about how the rental bills, not states
+      // competing with it: one quiet, uncoloured chip each.
+      meta: [
+        rental.is_pay_as_you_go && "PAYG",
+        (rental as any).auto_extend_enabled && "Auto-extend",
+        (rental as any).auto_extend_status === "paused" && "Paused",
+      ].filter((chip): chip is string => typeof chip === "string"),
+      attrs: { "data-tour": "rental-row", "data-record-kind": "rentals", "data-record-id": rental.id },
+    };
+  };
+
   return (
     <div className={currentView === "calendar" ? "p-4 md:p-6 space-y-6" : "container mx-auto p-4 md:p-6 space-y-6"}>
       {/* Header. Not in the full-screen calendar from md up — the board carries
@@ -650,212 +634,20 @@ export function RentalsListV2() {
       ) : /* Rentals Table */
       allRentals.length > 0 && !devForceEmptyRentals ? (
         <>
-          <Card>
-            {/* The scroll root the observer measures against — see the sentinel
-                at the foot of this container. */}
-            {/* The last class switches off ui-v2 Table's own overflow-x-auto
-                wrapper. As a scroll container of its own, it was what the
-                sticky header pinned to, and it never scrolls vertically, so the
-                header scrolled away with the rows. Kept identical to
-                LIST_CLASSES.scrollRoot + LIST_CLASSES.fillViewport in
-                components/shared/list-table-v2.tsx; the inline max-height is
-                the measured window fill, and replaces the 520px from md up. */}
-            <CardContent
-              ref={scrollRootRef}
-              className="p-0 overflow-x-auto max-h-[520px] overflow-y-auto no-scrollbar-from-md relative [&>[data-slot=table-container]]:overflow-visible md:overscroll-contain"
-              style={tableFillCap !== undefined ? { maxHeight: tableFillCap } : undefined}
-            >
-              {/* `table-fixed` with declared widths, so the five columns keep
-                  their proportions instead of handing every spare pixel to
-                  Customer — which is what auto layout does when only one column
-                  is unsized, and it left a hand's width of nothing between the
-                  name and the dates. */}
-              <Table className="min-w-[720px] table-fixed">
-                {/* Sticky while the body scrolls inside the card. Nearly opaque
-                    rather than fully so, with a blur behind it: rows passing
-                    underneath stay hidden, but the header does not look like a
-                    separate slab sitting on the card. */}
-                <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm">
-                  <TableRow className="border-b hover:bg-transparent">
-                    <TableHead className="h-10 w-[20%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left">
-                      Rental #
-                    </TableHead>
-                    <TableHead className="h-10 w-[28%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left">
-                      Customer
-                    </TableHead>
-                    <TableHead className="h-10 w-[16%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left">
-                      Pickup
-                    </TableHead>
-                    <TableHead className="h-10 w-[16%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left">
-                      Return
-                    </TableHead>
-                    <TableHead className="h-10 w-[20%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left">
-                      Status
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {visibleRentals.map((rental) => {
-                    // The row-level flag, resolved ONCE. It decides both the
-                    // row's tint and the line under the rental number, and
-                    // working it out twice is how those two drift apart.
-                    //
-                    // `is_extended` is deliberately NOT a flag: extensions are
-                    // out of scope for this screen while the rental model is
-                    // being settled, and an extension row was the one case that
-                    // grew taller than every other row for something nobody has
-                    // decided what to do with yet.
-                    const flag = rental.cancellation_requested
-                      ? "cancelling"
-                      : !filters.bonzahStatus && rental.bonzah_status === "insufficient_balance"
-                      ? "balance"
-                      : !filters.bonzahStatus && rental.bonzah_status === "quoted"
-                      ? "quoted"
-                      : null;
-
-                    return (
-                      <TableRow
-                        key={rental.id}
-                        data-tour="rental-row"
-                        // Inert markers, read by `lib/tab-tours` so the Rentals
-                        // tour can walk from this list INTO a rental record.
-                        // This row navigates via onClick and emits no href, so
-                        // there is otherwise nothing on the page that names a
-                        // rental id — and without one the tour's seven record
-                        // steps drop silently and it looks merely short.
-                        data-record-kind="rentals"
-                        data-record-id={rental.id}
-                        // The tint is halved and the rail thinned from 4px to
-                        // 2px: with three columns gone there is far less on the
-                        // row to compete with, so the flag no longer has to
-                        // shout to be seen — and a wall of amber rows is what
-                        // stops any one of them being noticed.
-                        className={`cursor-pointer ${
-                          flag === "cancelling"
-                            ? "bg-red-500/5 border-l-2 border-l-red-500"
-                            : flag === "balance" || flag === "quoted"
-                            ? "bg-[#CC004A]/5 dark:bg-[#CC004A]/15 border-l-2 border-l-[#CC004A]"
-                            : ""
-                        }`}
-                        onClick={() => router.push(`/rentals/${rental.id}`)}
-                      >
-                        {/* Rental # — the row's identifier, and weighted as
-                            one: this is the string an operator reads out on
-                            the phone and searches for, so it carries the row
-                            rather than sitting in it. */}
-                        <TableCell className="py-3 text-left">
-                          <div className="flex flex-col items-start gap-0.5">
-                            <span className="font-semibold tabular-nums tracking-tight text-foreground">
-                              {rental.rental_number}
-                            </span>
-                            {flag === "cancelling" && (
-                              <span className="flex items-center gap-1 text-[11px] font-medium text-red-600 dark:text-red-400">
-                                <XCircle className="size-3" />
-                                Cancellation requested
-                              </span>
-                            )}
-                            {flag === "balance" && (
-                              <span className="flex items-center gap-1 text-[11px] font-medium text-[#CC004A] dark:text-[#ff6b9a]">
-                                <ShieldAlert className="size-3" />
-                                Balance required
-                              </span>
-                            )}
-                            {flag === "quoted" && (
-                              <span className="flex items-center gap-1 text-[11px] font-medium text-[#CC004A] dark:text-[#ff6b9a]">
-                                <img src="/bonzah-logo.svg" alt="" className="h-3 w-auto dark:hidden" />
-                                <img src="/bonzah-logo-dark.svg" alt="" className="hidden h-3 w-auto dark:block" />
-                                Insurance quoted
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-
-                        {/* Customer — the FULL name, plain. The old cell
-                            printed `name.split(' ')[0]`, which turned every
-                            Smith and every Haseeb into the same row; the whole
-                            name is already on the record, so nothing is fetched
-                            to fix this. No initials disc: at the user's request
-                            the name carries the cell on its own. */}
-                        <TableCell className="py-3 text-left">
-                          <span className="block truncate font-medium text-foreground">
-                            {rental.customer.name}
-                          </span>
-                        </TableCell>
-
-                        {/* Pickup / Return — `tabular-nums` is what makes these
-                            two columns line up down the page: proportional
-                            digits give every row a different width and the
-                            column reads as ragged noise. */}
-                        <TableCell className="py-3 text-left tabular-nums">
-                          <span className="font-medium text-foreground">
-                            {formatRentalDate(rental.start_date)}
-                          </span>
-                        </TableCell>
-                        <TableCell className="py-3 text-left tabular-nums">
-                          {rental.end_date ? (
-                            <span className="font-medium text-foreground">
-                              {formatRentalDate(rental.end_date)}
-                            </span>
-                          ) : rental.is_pay_as_you_go ? (
-                            <span className="text-sm font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">Ongoing</span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-
-                        {/* Status — ONE treatment for every value, hue being
-                            the only thing that changes. The old column mixed a
-                            solid green fill, an outlined amber pill and a plain
-                            grey outline, which made three visual weights out of
-                            one fact and left "Rejected" shouting louder than
-                            "Active". PAYG and auto-extend are secondary and now
-                            look it, so the coloured pill is the only thing in
-                            the column asking for the eye. */}
-                        <TableCell className="py-3 text-left">
-                          <div className="flex flex-wrap items-center justify-start gap-1.5">
-                            <RentalStatusText status={rental.computed_status} />
-                            {rental.is_pay_as_you_go && <MetaChip>PAYG</MetaChip>}
-                            {(rental as any).auto_extend_enabled && <MetaChip>Auto-extend</MetaChip>}
-                            {(rental as any).auto_extend_status === "paused" && (
-                              <MetaChip>Paused</MetaChip>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-
-              {/* The sentinel, inside the scroll container and after the last
-                  row — it has to live in here for the observer to be able to
-                  root on this container.
-
-                  The bars are the next fill arriving. Those rows are already in
-                  memory, so in practice they land within a frame and this is
-                  barely seen; it exists so the bottom of a partially-filled
-                  list is never a bare cut, and so a slow frame reads as "more
-                  coming" rather than "that's all of them". `aria-hidden`: the
-                  count line below carries the same fact in words, and offers
-                  the button. */}
-              {hasMore && (
-                <div
-                  ref={sentinelRef}
-                  aria-hidden="true"
-                  className="space-y-3 px-4 py-4"
-                >
-                  {[0, 1].map((row) => (
-                    <div key={row} className="flex items-center gap-4">
-                      <div className="h-3 w-20 animate-pulse rounded-full bg-muted" />
-                      <div className="h-3 w-28 animate-pulse rounded-full bg-muted" />
-                      <div className="h-3 w-16 animate-pulse rounded-full bg-muted" />
-                      <div className="h-3 w-24 animate-pulse rounded-full bg-muted" />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {/* The shared Rentals table (shared/portal-v2/rentals-table.tsx),
+              the one the customer portal's Rentals page draws too. The scroll
+              root and sentinel are this page's infinite scroll; the inline
+              max-height is the measured window fill (`tableFillCap`), and
+              replaces the 520px from md up. */}
+          <RentalsTable
+            partyLabel="Customer"
+            rows={visibleRentals.map(toTableRow)}
+            onOpen={(id) => router.push(`/rentals/${id}`)}
+            scrollRootRef={scrollRootRef}
+            sentinelRef={sentinelRef}
+            hasMore={hasMore}
+            maxHeight={tableFillCap}
+          />
 
           {/* No pager — just how much of the set is on screen.
               "Show more" is the escape hatch: if the observer never fires (an

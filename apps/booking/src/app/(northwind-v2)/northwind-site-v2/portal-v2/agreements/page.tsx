@@ -25,7 +25,7 @@ import { useMemo, useState } from 'react';
 import { FileSignature, PenLine, SearchX } from 'lucide-react-nw';
 
 import { formatDate, formatTimestamp } from '@nw/components/portal/format';
-import { formatBookingDates } from '@nw/portal-v2/bookings/format';
+import { formatBookingDates } from '@nw/portal-v2/rentals/format';
 import { EmptyState, LoadError, PageHeader, Panel } from '@nw/portal-v2/primitives';
 import { useCustomer } from '@nw/hooks/use-customer';
 import { useCustomerAgreements, type CustomerAgreement } from '@nw/hooks/use-customer-agreements';
@@ -181,7 +181,7 @@ export default function PortalAgreementsPage() {
             }
             action={
               hasBookings
-                ? { href: '/portal/bookings', label: 'View my bookings' }
+                ? { href: '/portal/rentals', label: 'View my rentals' }
                 : { href: '/booking', label: 'Browse the fleet' }
             }
           />

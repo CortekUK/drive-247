@@ -689,9 +689,9 @@ function AccountMenu({
               <Settings className="mr-2.5 size-4 text-pv-muted-fg" />
               Settings
             </DropdownMenu.Item>
-            <DropdownMenu.Item className={MENU_ITEM} onSelect={() => go('/portal/bookings')}>
+            <DropdownMenu.Item className={MENU_ITEM} onSelect={() => go('/portal/rentals')}>
               <CalendarDays className="mr-2.5 size-4 text-pv-muted-fg" />
-              Your bookings
+              Your rentals
             </DropdownMenu.Item>
             <DropdownMenu.Item className={MENU_ITEM} onSelect={() => go('/')}>
               <ArrowUpRight className="mr-2.5 size-4 text-pv-muted-fg" />
@@ -737,7 +737,7 @@ function TopBar({
 }) {
   const { initials } = useCustomer();
   const [menuOpen, setMenuOpen] = useState(false);
-  // A list page (Bookings) lends the bar its own field: it filters that list as
+  // A list page (Rentals) lends the bar its own field: it filters that list as
   // you type, and "Search everywhere" / ⌘K hand off to the search dialog.
   // Everywhere else the bar keeps the pill that opens the dialog.
   const slot = usePageSearchSlot();
@@ -756,7 +756,7 @@ function TopBar({
       ) : (
         <button type="button" onClick={onOpenSearch} aria-label="Search" className={cn(FIELD, 'hidden sm:flex')}>
           <Search aria-hidden className="size-4 shrink-0 text-pv-primary" />
-          <span className="min-w-0 flex-1 truncate text-[13px] text-pv-muted-on-tint">Search your bookings…</span>
+          <span className="min-w-0 flex-1 truncate text-[13px] text-pv-muted-on-tint">Search your rentals…</span>
           <kbd className="shrink-0 rounded-full bg-pv-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-pv-primary">
             ⌘K
           </kbd>
@@ -811,14 +811,14 @@ function TopBar({
 
 interface SearchResult {
   key: string;
-  group: 'Bookings' | 'Pages';
+  group: 'Rentals' | 'Pages';
   title: string;
   subtitle: string;
   href: string;
 }
 
 /**
- * ⌘K. It searches what a customer has — their own bookings, by reference,
+ * ⌘K. It searches what a customer has — their own rentals, by reference,
  * car or plate — and the portal's pages. Nothing else, so it never promises a
  * result it cannot find. Mounted only while open, so a closed search costs no
  * query.
@@ -832,7 +832,7 @@ function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
       >
         <DialogTitle className="sr-only">Search</DialogTitle>
         <DialogDescription className="sr-only">
-          Search your bookings and pages. Use the up and down arrows to move, Enter to open.
+          Search your rentals and pages. Use the up and down arrows to move, Enter to open.
         </DialogDescription>
         {open ? <SearchBody onDone={() => onOpenChange(false)} /> : null}
       </DialogContent>
@@ -861,10 +861,10 @@ function SearchBody({ onDone }: { onDone: () => void }) {
       .slice(0, q ? 8 : 5)
       .map<SearchResult>((rental) => ({
         key: `booking-${rental.id}`,
-        group: 'Bookings',
-        title: rental.vehicle?.displayName ?? 'Booking',
+        group: 'Rentals',
+        title: rental.vehicle?.displayName ?? 'Rental',
         subtitle: rental.reference,
-        href: `/portal/bookings/${rental.id}`,
+        href: `/portal/rentals/${rental.id}`,
       }));
     const pages = PORTAL_V2_ITEMS.filter((item) => item.requires !== 'gig_driver' || gigDriver)
       .filter((item) => !q || item.label.toLowerCase().includes(q))
@@ -903,7 +903,7 @@ function SearchBody({ onDone }: { onDone: () => void }) {
     }
   };
 
-  const groups = (['Bookings', 'Pages'] as const)
+  const groups = (['Rentals', 'Pages'] as const)
     .map((name) => ({ name, items: results.filter((result) => result.group === name) }))
     .filter((group) => group.items.length > 0);
 
@@ -915,7 +915,7 @@ function SearchBody({ onDone }: { onDone: () => void }) {
           autoFocus
           value={term}
           onChange={(event) => setTerm(event.target.value)}
-          placeholder="Search by booking reference, car or page"
+          placeholder="Search by rental reference, car or page"
           aria-label="Search"
           className="h-8 min-w-0 flex-1 bg-transparent text-[15px] font-medium text-pv-fg outline-none placeholder:font-medium placeholder:text-pv-muted-fg sm:text-sm"
         />
@@ -930,8 +930,8 @@ function SearchBody({ onDone }: { onDone: () => void }) {
             <p className="text-sm font-semibold text-pv-fg">{isLoading ? 'Looking…' : 'Nothing found'}</p>
             {isLoading ? null : (
               <p className="mt-1 text-xs text-pv-muted-fg">
-                No booking or page matches <span className="font-medium text-pv-fg">&ldquo;{term.trim()}&rdquo;</span>. Try a
-                booking reference such as R-1234, or the name of the car.
+                No rental or page matches <span className="font-medium text-pv-fg">&ldquo;{term.trim()}&rdquo;</span>. Try a
+                rental reference such as R-1b710f, or the name of the car.
               </p>
             )}
           </div>

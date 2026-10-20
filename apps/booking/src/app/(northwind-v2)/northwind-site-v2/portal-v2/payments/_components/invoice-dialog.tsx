@@ -69,8 +69,8 @@ export function InvoiceDialog({
       footer={
         shown?.rental ? (
           <Button asChild variant="brand" className="h-11 px-5">
-            <Link href={`/portal/bookings/${shown.rental.id}`}>
-              See booking {shown.rental.reference}
+            <Link href={`/portal/rentals/${shown.rental.id}`}>
+              See rental {shown.rental.reference}
               <ArrowRight aria-hidden className="size-4" />
             </Link>
           </Button>

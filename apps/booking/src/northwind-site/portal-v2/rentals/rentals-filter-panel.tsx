@@ -1,20 +1,22 @@
 'use client';
 
 /**
- * The Bookings filters: the operator's v2 filter panel (STATUS, PAYMENT and a
- * date range, as on its Rentals and Customers pages), built from the shared
- * parts in shared/portal-v2/filter-panel.tsx. The search field's filter button
- * opens it; it sits above the table, and its ✕ (or the button again) closes it.
+ * The Rentals filters: the operator Rentals panel (STATUS, PAYMENT and the
+ * start date range), built from the shared parts in
+ * shared/portal-v2/filter-panel.tsx. As on the operator page it is the BACK of
+ * the overview card: the search field's filter button turns the card over, and
+ * its ✕ (or Escape) turns it back.
  *
- * Chip colours are the operator Rentals panel's for the same meaning (green
- * live, amber waiting, slate finished, red cancelled). Upcoming has no colour
- * of its own there in purple, so it takes the plain chosen chip, which is the
- * portal purple. The date range is the Rentals panel's: an outline button per
- * end opening a calendar, and "Clear dates" since dates have no "All" chip,
- * in the portal purple rather than the Rentals panel's blue.
+ * Status chips are the operator's words and colours, the same words the table
+ * prints (`customerRentalStatus`), so a chip selects exactly the rows that read
+ * that way. Payment is what happened to the customer's money (the operator's
+ * Payment section is its billing mode, which means nothing to a customer).
+ * The date range is the operator's: an outline button per end opening a
+ * calendar, and "Clear dates" since dates have no "All" chip, in the portal
+ * purple.
  *
  * Filtering is in memory over the one fetch the page already holds
- * (`applyBookingFilters`), so the data and its query are unchanged.
+ * (`applyRentalFilters`), so the data and its query are unchanged.
  */
 
 import { format } from 'date-fns';
@@ -22,33 +24,37 @@ import { Activity, CalendarIcon, CreditCard } from 'lucide-react-nw';
 
 import { Calendar } from '@nw/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@nw/components/ui/popover';
-import type { CustomerRental, RentalLifecycle, RentalPaymentState } from '@nw/hooks/use-customer-rentals';
+import type { CustomerRental, RentalPaymentState } from '@nw/hooks/use-customer-rentals';
 import { parseDateOnly } from '@nw/lib/domain';
 import { cn } from '@nw/lib/utils';
 import { V2_BUTTON_OUTLINE } from '@portal-v2-shared/button-styles';
 import { FilterChip, FilterSection, FilterShell } from '@portal-v2-shared/filter-panel';
 
-export interface BookingFilters {
-  status: 'all' | RentalLifecycle;
+import { customerRentalStatus } from './rentals-table';
+
+export interface RentalFilters {
+  /** One of the operator's status words, or 'all'. */
+  status: 'all' | 'Active' | 'Upcoming' | 'Pending' | 'Completed' | 'Cancelled';
   payment: 'all' | Exclude<RentalPaymentState, 'unknown'>;
-  /** Pickup on or after, 'YYYY-MM-DD'. */
+  /** Starts on or after, 'YYYY-MM-DD'. */
   pickupFrom?: string;
-  /** Pickup on or before, 'YYYY-MM-DD'. */
+  /** Starts on or before, 'YYYY-MM-DD'. */
   pickupTo?: string;
 }
 
-export const NO_BOOKING_FILTERS: BookingFilters = { status: 'all', payment: 'all' };
+export const NO_RENTAL_FILTERS: RentalFilters = { status: 'all', payment: 'all' };
 
-const STATUS_OPTIONS: ReadonlyArray<{ value: BookingFilters['status']; label: string; color: string | null }> = [
+/** The operator Rentals panel's chips, word for word and colour for colour. */
+const STATUS_OPTIONS: ReadonlyArray<{ value: RentalFilters['status']; label: string; color: string | null }> = [
   { value: 'all', label: 'All', color: null },
-  { value: 'on_rent', label: 'On rent', color: '#16a34a' },
-  { value: 'upcoming', label: 'Upcoming', color: null },
-  { value: 'pending', label: 'Awaiting confirmation', color: '#d97706' },
-  { value: 'completed', label: 'Completed', color: '#64748b' },
-  { value: 'cancelled', label: 'Cancelled', color: '#dc2626' },
+  { value: 'Active', label: 'Active', color: '#16a34a' },
+  { value: 'Upcoming', label: 'Upcoming', color: '#2563eb' },
+  { value: 'Pending', label: 'Pending', color: '#d97706' },
+  { value: 'Completed', label: 'Completed', color: '#64748b' },
+  { value: 'Cancelled', label: 'Cancelled', color: '#dc2626' },
 ];
 
-const PAYMENT_OPTIONS: ReadonlyArray<{ value: BookingFilters['payment']; label: string; color: string | null }> = [
+const PAYMENT_OPTIONS: ReadonlyArray<{ value: RentalFilters['payment']; label: string; color: string | null }> = [
   { value: 'all', label: 'All', color: null },
   { value: 'paid', label: 'Paid', color: '#16a34a' },
   { value: 'unpaid', label: 'Payment due', color: '#d97706' },
@@ -56,7 +62,7 @@ const PAYMENT_OPTIONS: ReadonlyArray<{ value: BookingFilters['payment']; label: 
 ];
 
 /** How many filters are in force: the badge on the search field's filter button. */
-export function countActiveBookingFilters(filters: BookingFilters): number {
+export function countActiveRentalFilters(filters: RentalFilters): number {
   return [
     filters.status !== 'all',
     filters.payment !== 'all',
@@ -65,14 +71,19 @@ export function countActiveBookingFilters(filters: BookingFilters): number {
 }
 
 /** The rows a search term and the filters leave. The term matches the reference or the car. */
-export function applyBookingFilters(
+export function applyRentalFilters(
   rentals: readonly CustomerRental[],
-  filters: BookingFilters,
+  filters: RentalFilters,
   term: string,
 ): CustomerRental[] {
   const q = term.trim().toLowerCase();
   return rentals.filter((rental) => {
-    if (filters.status !== 'all' && rental.lifecycle !== filters.status) return false;
+    if (filters.status !== 'all') {
+      const status = customerRentalStatus(rental);
+      // Rejected has no chip of its own (the operator panel has none either):
+      // a rejected rental never ran, so it sits with the cancelled ones.
+      if ((status === 'Rejected' ? 'Cancelled' : status) !== filters.status) return false;
+    }
     if (filters.payment !== 'all' && rental.paymentState !== filters.payment) return false;
     if (filters.pickupFrom && rental.startDate < filters.pickupFrom) return false;
     if (filters.pickupTo && rental.startDate > filters.pickupTo) return false;
@@ -87,13 +98,13 @@ export function applyBookingFilters(
   });
 }
 
-export function BookingsFilterPanel({
+export function RentalsFilterPanel({
   filters,
   onChange,
   onClose,
 }: {
-  filters: BookingFilters;
-  onChange: (next: BookingFilters) => void;
+  filters: RentalFilters;
+  onChange: (next: RentalFilters) => void;
   onClose: () => void;
 }) {
   const hasDates = !!(filters.pickupFrom || filters.pickupTo);
@@ -121,9 +132,9 @@ export function BookingsFilterPanel({
 
   return (
     <FilterShell
-      onClear={() => onChange(NO_BOOKING_FILTERS)}
+      onClear={() => onChange(NO_RENTAL_FILTERS)}
       onClose={onClose}
-      activeCount={countActiveBookingFilters(filters)}
+      activeCount={countActiveRentalFilters(filters)}
     >
       <FilterSection
         icon={<Activity className="size-3.5 text-v2-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
@@ -163,7 +174,7 @@ export function BookingsFilterPanel({
       <FilterSection
         icon={<CalendarIcon className="size-3.5 text-v2-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
         tint="bg-v2-primary/10"
-        title="Pickup date range"
+        title="Start date range"
       >
         <div className="grid grid-cols-2 gap-3">
           {dateBtn(filters.pickupFrom, 'From', (day) => onChange({ ...filters, pickupFrom: day }))}
