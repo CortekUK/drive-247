@@ -150,7 +150,7 @@ describe('list table kit: no sort prop left', () => {
     });
 
   it('the kit has no sort prop, and no source outside tests names its type', () => {
-    const kit = read('components/shared/list-table-v2.tsx');
+    const kit = read('../../shared/portal-v2/list-table.tsx');
     expect(kit).not.toContain('ListSortDirection');
     expect(kit).not.toContain('_ignoredSort');
     expect(kit).not.toMatch(/\bsort\??:/);

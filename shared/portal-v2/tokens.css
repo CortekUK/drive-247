@@ -104,6 +104,14 @@
   --v2-sidebar-ring: var(--brand-h) calc(var(--brand-s) - 28%) 70%;
 
   --v2-radius: 0.625rem;
+  /* The radius ramp the operator's rounded-xl … rounded-4xl resolve to (its
+     v2-theme.css sets the same four from --radius, which equals this). The
+     shared card names --v2-radius-4xl directly, so the customer portal needs
+     it here. */
+  --v2-radius-xl: calc(var(--v2-radius) * 1.4);
+  --v2-radius-2xl: calc(var(--v2-radius) * 1.8);
+  --v2-radius-3xl: calc(var(--v2-radius) * 2.2);
+  --v2-radius-4xl: calc(var(--v2-radius) * 2.6);
 
   --v2-shadow-sm: 0 1px 2px 0 hsl(159 21% 20% / 0.08);
   --v2-shadow-card: 0 4px 6px -1px hsl(159 21% 20% / 0.1), 0 2px 4px -1px hsl(159 21% 20% / 0.06);

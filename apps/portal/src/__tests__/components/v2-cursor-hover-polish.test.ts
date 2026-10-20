@@ -395,7 +395,7 @@ describe('v2-only primitives highlight with the purple, not grey', () => {
   });
 
   it('ui-v2 table rows: one hover class with the old muted fallback, and a call site\'s hover:bg-transparent wins in the class list', () => {
-    const table = read('components/ui-v2/table.tsx');
+    const table = read('../../../shared/portal-v2/table.tsx');
     expect(table).toContain('hover:bg-[hsl(var(--v2-row-hover,var(--muted)_/_0.5))]');
     expect(table).toContain('data-[state=selected]:bg-[hsl(var(--v2-hover,var(--muted)))]');
     // A `dark:hover:` twin out-ranks a call site's `hover:bg-transparent` in the

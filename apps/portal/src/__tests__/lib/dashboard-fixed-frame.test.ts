@@ -188,13 +188,15 @@ describe('everything that measured the window now measures the scrollport', () =
   const uses = (rel: string) => codeOnly(readPortalSource(rel));
 
   it.each([
-    ['components/shared/list-table-v2.tsx'],
-    ['components/rentals-v2/rental-onboarding-shell.tsx'],
-    ['components/rentals/calendar/calendar-view.tsx'],
-  ])('%s asks lib/scrollport, never window.scrollY', (rel) => {
+    // The list kit lives in shared/portal-v2 beside its own scrollport.ts,
+    // which lib/scrollport.ts re-exports.
+    ['../../../shared/portal-v2/list-table.tsx', 'from "./scrollport"'],
+    ['components/rentals-v2/rental-onboarding-shell.tsx', 'from "@/lib/scrollport"'],
+    ['components/rentals/calendar/calendar-view.tsx', 'from "@/lib/scrollport"'],
+  ])('%s asks lib/scrollport, never window.scrollY', (rel, importFrom) => {
     const src = uses(rel);
     expect(src).toContain('scrollportFill');
-    expect(src).toContain('from "@/lib/scrollport"');
+    expect(src).toContain(importFrom);
     // `rect.top + window.scrollY` is the expression that breaks silently: once
     // the window stops scrolling, scrollY is permanently 0 and the "document
     // coordinate" slides with the page.

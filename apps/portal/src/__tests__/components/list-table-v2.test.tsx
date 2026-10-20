@@ -124,7 +124,7 @@ describe('ListHead and ListCell', () => {
   });
 
   it('no longer takes the deprecated sort prop or exports its direction type', () => {
-    const kitSource = readFileSync(resolve(process.cwd(), 'src/components/shared/list-table-v2.tsx'), 'utf8');
+    const kitSource = readFileSync(resolve(process.cwd(), '../../shared/portal-v2/list-table.tsx'), 'utf8');
     expect(kitSource).not.toContain('ListSortDirection');
     expect(kitSource).not.toMatch(/\bsort\??:/);
     expect(kitSource).not.toContain('_ignoredSort');

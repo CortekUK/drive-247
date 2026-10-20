@@ -22,6 +22,15 @@ export const V2_LIST_CARD =
   "overflow-hidden rounded-[calc(var(--v2-radius)*2.6)] bg-v2-card py-6 text-sm text-v2-card-fg shadow-md ring-1 ring-v2-fg/5 dark:ring-v2-fg/10";
 
 export const V2_LIST_CLASSES = {
+  scrollRoot:
+    "p-0 overflow-x-auto max-h-[520px] overflow-y-auto no-scrollbar-from-md relative [&>[data-slot=table-container]]:overflow-visible",
+  fillViewport: "md:overscroll-contain",
+  header: "sticky top-0 z-10 bg-v2-card/95 backdrop-blur-sm",
+  headerRow: "border-b hover:bg-transparent",
+  cell: "py-3 text-left",
+  metaChip:
+    "rounded-full bg-v2-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-v2-muted-fg",
+  showMore: "h-7 px-2 text-xs font-normal text-v2-muted-fg hover:text-v2-fg",
   /** Column headings: small, uppercase, letter-spaced, muted. */
   head: "h-10 text-[11px] font-semibold uppercase tracking-wider text-v2-muted-fg text-left",
   /** The row's identifier: weighted. */

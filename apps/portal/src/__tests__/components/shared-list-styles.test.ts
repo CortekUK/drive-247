@@ -11,7 +11,11 @@ import { V2_LIST_CLASSES, V2_LIST_TONES } from '../../../../../shared/portal-v2/
 
 /** Semantic utility → its shared twin (both resolve to one token under `.v2-theme`). */
 const toShared = (classes: string) =>
-  classes.replace(/\btext-muted-foreground\b/g, 'text-v2-muted-fg').replace(/\btext-foreground\b/g, 'text-v2-fg');
+  classes
+    .replace(/\btext-muted-foreground\b/g, 'text-v2-muted-fg')
+    .replace(/\btext-foreground\b/g, 'text-v2-fg')
+    .replace(/\bbg-card\b/g, 'bg-v2-card')
+    .replace(/\bbg-muted\b/g, 'bg-v2-muted');
 
 describe('shared list styles match the operator list kit', () => {
   for (const [key, classes] of Object.entries(V2_LIST_CLASSES)) {
