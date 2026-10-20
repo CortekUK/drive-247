@@ -1,6 +1,5 @@
 import {
   BadgeCheck,
-  Bell,
   CalendarDays,
   CreditCard,
   FileSignature,
@@ -57,7 +56,6 @@ export const PORTAL_V2_NAV: readonly PortalV2NavGroup[] = [
       { href: '/portal/verification', label: 'ID verification', icon: ShieldCheck, v1Href: '/portal/verification', built: true },
       { href: '/portal/gig-driver', label: 'Gig driver', icon: BadgeCheck, v1Href: '/portal/gig-driver', built: true, requires: 'gig_driver' },
       { href: '/portal/messages', label: 'Messages', icon: MessageSquare, v1Href: '/portal/messages', built: true, badge: 'messages' },
-      { href: '/portal/notifications', label: 'Notifications', icon: Bell, v1Href: '/portal/notifications', built: true, badge: 'notifications' },
       { href: '/portal/settings', label: 'Settings', icon: Settings, v1Href: '/portal/settings', built: true },
     ],
   },

@@ -21,7 +21,7 @@
  */
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import * as Tooltip from '@radix-ui/react-tooltip';
@@ -44,6 +44,7 @@ import { PortalBoot } from '@nw/components/portal/portal-boot';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@nw/components/ui/dialog';
 import { MOTION_ANCHORED, MOTION_TOOLTIP } from '@nw/components/ui/motion';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@nw/components/ui/sheet';
+import { MessagesSheet, NotificationsSheet } from '@nw/portal-v2/top-bar-sheets';
 import { useCustomerAuth } from '@nw/contexts/CustomerAuthContext';
 import { useTenant } from '@nw/contexts/TenantContext';
 import { useCustomer } from '@nw/hooks/use-customer';
@@ -192,6 +193,21 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
 
   const onMessages = isPortalV2Active('/portal/messages', pathname);
   const messages = useUnreadMessageCount(onMessages);
+  // The top bar's two sheets, as on the operator portal: the bell opens the
+  // notification centre and the chat icon the messages sheet.
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [messagesOpen, setMessagesOpen] = useState(false);
+  // `/portal/notifications` (the old page's address, still in sent links)
+  // lands on Home with `?panel=notifications`: open the sheet, then drop the
+  // parameter so a refresh does not open it again.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const panel = searchParams?.get('panel');
+  useEffect(() => {
+    if (panel !== 'notifications') return;
+    setNotificationsOpen(true);
+    router.replace(pathname ?? '/portal');
+  }, [panel, pathname, router]);
   const { unreadCount: notifications } = useCustomerNotifications();
   const counts: Counts = { messages, notifications };
 
@@ -262,6 +278,9 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
         >
           {/* Desktop rail: 16rem, or 3rem of icons. Paints no fill of its own —
               it sits on the page wash, as the operator's does. */}
+          {/* Messages is the operator's full-window workspace: no rail and no
+              top bar, the conversation rail carrying the way back. */}
+          {onMessages ? null : (
           <aside
             data-state={collapsed ? 'collapsed' : 'expanded'}
             className={cn(
@@ -280,6 +299,7 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
               className="absolute inset-y-0 -right-2 z-20 w-4 cursor-ew-resize after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] after:transition-colors after:duration-200 hover:after:bg-pv-sidebar-border focus-visible:outline-none focus-visible:after:bg-pv-sidebar-border"
             />
           </aside>
+          )}
 
           {/* Phone: the same rail in a drawer, opened from the top bar — the one
               sheet in the portal, as on the operator portal. */}
@@ -305,17 +325,36 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
               as on the operator portal (shared/portal-v2/page-search-slot). */}
           <PageSearchProvider>
           <div className="flex min-w-0 flex-1 flex-col">
-            <TopBar counts={counts} onOpenNav={() => setNavOpen(true)} onOpenSearch={() => setSearchOpen(true)} />
-            <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-10 pt-2 outline-none sm:px-6 md:pl-4">
-              {/* Keyed on the path so every screen arrives with the Trax lift. */}
-              <div key={pathname} className="pv2-enter mx-auto w-full max-w-[1200px]">
-                {children}
-              </div>
-            </main>
+            {onMessages ? (
+              // The workspace fills the window and scrolls inside its columns.
+              <main className="min-h-0 flex-1 overflow-hidden outline-none">
+                <div key={pathname} className="pv2-enter h-full">
+                  {children}
+                </div>
+              </main>
+            ) : (
+              <>
+                <TopBar
+                  counts={counts}
+                  onOpenNav={() => setNavOpen(true)}
+                  onOpenSearch={() => setSearchOpen(true)}
+                  onOpenMessages={() => setMessagesOpen(true)}
+                  onOpenNotifications={() => setNotificationsOpen(true)}
+                />
+                <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-10 pt-2 outline-none sm:px-6 md:pl-4">
+                  {/* Keyed on the path so every screen arrives with the Trax lift. */}
+                  <div key={pathname} className="pv2-enter mx-auto w-full max-w-[1200px]">
+                    {children}
+                  </div>
+                </main>
+              </>
+            )}
           </div>
           </PageSearchProvider>
 
           <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+          <NotificationsSheet open={notificationsOpen} onOpenChange={setNotificationsOpen} />
+          <MessagesSheet open={messagesOpen} onOpenChange={setMessagesOpen} unread={counts.messages} />
         </div>
       </QuickBookProvider>
     </Tooltip.Provider>
@@ -730,10 +769,14 @@ function TopBar({
   counts,
   onOpenNav,
   onOpenSearch,
+  onOpenMessages,
+  onOpenNotifications,
 }: {
   counts: Counts;
   onOpenNav: () => void;
   onOpenSearch: () => void;
+  onOpenMessages: () => void;
+  onOpenNotifications: () => void;
 }) {
   const { initials } = useCustomer();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -776,24 +819,28 @@ function TopBar({
       <div className="ml-auto flex items-center gap-0.5">
         <span aria-hidden className="mx-1 hidden h-5 w-px bg-pv-border sm:block" />
         <Tip label="Messages">
-          <Link
-            href="/portal/messages"
+          <button
+            type="button"
+            onClick={onOpenMessages}
+            aria-haspopup="dialog"
             aria-label={counts.messages > 0 ? `Messages, ${counts.messages} unread` : 'Messages'}
             className={ICON_BUTTON}
           >
             <MessageCircle aria-hidden className="size-4" />
             <TopBadge count={counts.messages} />
-          </Link>
+          </button>
         </Tip>
         <Tip label="Notifications">
-          <Link
-            href="/portal/notifications"
+          <button
+            type="button"
+            onClick={onOpenNotifications}
+            aria-haspopup="dialog"
             aria-label={counts.notifications > 0 ? `Notifications, ${counts.notifications} unread` : 'Notifications'}
             className={ICON_BUTTON}
           >
             <Bell aria-hidden className="size-4" />
             <TopBadge count={counts.notifications} />
-          </Link>
+          </button>
         </Tip>
         <div className="ml-1 md:hidden">
           <AccountMenu open={menuOpen} onOpenChange={setMenuOpen} side="bottom" align="end">

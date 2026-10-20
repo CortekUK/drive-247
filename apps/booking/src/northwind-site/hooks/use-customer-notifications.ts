@@ -140,6 +140,10 @@ export type NotificationKind =
 const KIND_BY_TYPE: Record<string, NotificationKind> = {
   booking_confirmed: 'booking',
   booking_cancelled: 'booking',
+  // What the rental status trigger and the booking flow write today.
+  booking_approved: 'booking',
+  booking_rejected: 'booking',
+  booking_renewed: 'booking',
   booking: 'booking',
   rental_started: 'booking',
   rental_ended: 'booking',
@@ -150,6 +154,7 @@ const KIND_BY_TYPE: Record<string, NotificationKind> = {
 
   payment: 'payment',
   payment_due: 'payment',
+  payment_received: 'payment',
   refund: 'payment',
   invoice: 'payment',
 

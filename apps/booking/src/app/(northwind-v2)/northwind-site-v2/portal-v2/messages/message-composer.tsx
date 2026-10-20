@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Car, Loader2, Paperclip, Search, Send, X } from 'lucide-react-nw';
+import { AlertTriangle, Car, Loader2, MessageCircle, Paperclip, Search, Send, X } from 'lucide-react-nw';
 
 import { Button } from '@nw/components/ui/button';
 import { Input } from '@nw/components/ui/input';
@@ -28,7 +28,6 @@ import type { MessageBookingReference } from '@nw/hooks/use-customer-messages';
 import { cn } from '@nw/lib/utils';
 
 import {
-  PV_BUTTON_SM,
   PV_ICON_BUTTON,
   PV_INPUT,
 } from '../settings/_components/pv-kit';
@@ -112,7 +111,7 @@ function BookingPicker({
           variant="ghost"
           disabled={disabled}
           className={cn(PV_ICON_BUTTON, 'shrink-0')}
-          aria-label="Attach a booking"
+          aria-label="Attach a rental"
         >
           <Paperclip className="size-4" aria-hidden />
         </Button>
@@ -123,7 +122,7 @@ function BookingPicker({
         className="w-[min(22rem,calc(100vw-2rem))] rounded-2xl border-pv-border bg-pv-card p-0 shadow-lg"
       >
         <div className="px-3 pb-2 pt-3">
-          <p className="px-1 pb-2 text-[13px] font-semibold text-pv-fg">Attach a booking</p>
+          <p className="px-1 pb-2 text-[13px] font-semibold text-pv-fg">Attach a rental</p>
           <div className="relative">
             <Search
               aria-hidden
@@ -132,8 +131,8 @@ function BookingPicker({
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search your bookings"
-              aria-label="Search your bookings"
+              placeholder="Search your rentals"
+              aria-label="Search your rentals"
               className={cn(PV_INPUT, 'pl-10')}
             />
           </div>
@@ -147,8 +146,8 @@ function BookingPicker({
           ) : filtered.length === 0 ? (
             <p className="px-3 py-6 text-center text-[13px] text-pv-muted-fg">
               {rentals.length === 0
-                ? 'You have no bookings to attach yet.'
-                : 'No booking matches that search.'}
+                ? 'You have no rentals to attach yet.'
+                : 'No rental matches that search.'}
             </p>
           ) : (
             filtered.map((rental) => (
@@ -235,7 +234,7 @@ export function MessageComposer({
           <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
             <span className="inline-flex max-w-full items-center gap-2 rounded-full bg-pv-primary/10 py-1 pl-2.5 pr-1 text-[12px] font-medium text-pv-primary">
               <Car aria-hidden className="size-3.5 shrink-0" />
-              <span className="truncate">{booking.vehicle.make ?? 'Booking'}</span>
+              <span className="truncate">{booking.vehicle.make ?? 'Rental'}</span>
               {booking.rentalNumber ? (
                 <span className="truncate font-normal text-pv-primary/70">
                   {booking.rentalNumber}
@@ -245,7 +244,7 @@ export function MessageComposer({
                 type="button"
                 onClick={() => setBooking(null)}
                 className="relative grid size-5 shrink-0 place-items-center rounded-full transition-colors duration-200 ease-out before:absolute before:-inset-3 before:content-[''] hover:bg-pv-primary/15 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-pv-primary/25 motion-reduce:transition-none"
-                aria-label="Remove the attached booking"
+                aria-label="Remove the attached rental"
               >
                 <X className="size-3" aria-hidden />
               </button>
@@ -275,25 +274,29 @@ export function MessageComposer({
           )}
         />
 
-        {/* The bottom edge: attach on the left, send on the right. */}
+        {/* The bottom edge, as the operator's: how it is sent on the left (the
+            in-app thread is the customer's one channel, so its pill is the
+            only one), attach and the round send on the right. */}
         <div className="flex items-center justify-between gap-2 px-2.5 pb-2.5 pt-1">
-          <BookingPicker onSelect={setBooking} disabled={busy} />
+          <span className="flex h-8 items-center gap-1.5 rounded-full bg-pv-primary/10 px-3 text-[12.5px] font-medium text-pv-primary">
+            <MessageCircle aria-hidden className="size-3.5" />
+            In-App
+          </span>
 
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => void submit()}
-            disabled={!canSend}
-            aria-busy={isSending || undefined}
-            className={PV_BUTTON_SM}
-          >
-            {isSending ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden />
-            ) : (
-              <Send className="size-4" aria-hidden />
-            )}
-            Send
-          </Button>
+          <div className="flex items-center gap-1">
+            <BookingPicker onSelect={setBooking} disabled={busy} />
+            <button
+              type="button"
+              onClick={() => void submit()}
+              disabled={!canSend}
+              aria-busy={isSending || undefined}
+              aria-label="Send"
+              title="Send"
+              className="inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-pv-primary text-white transition-colors duration-200 hover:bg-pv-primary/80 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-pv-primary/30 disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none"
+            >
+              {isSending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Send className="size-4" aria-hidden />}
+            </button>
+          </div>
         </div>
       </div>
 
