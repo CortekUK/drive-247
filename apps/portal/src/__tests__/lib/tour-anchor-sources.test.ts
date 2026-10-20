@@ -40,7 +40,7 @@ const firstRunStep = (id: string) => FIRST_RENTAL_TOUR.find((s) => s.id === id)!
 
 describe('hero-row tour anchors: drawn where the tours look for them', () => {
   it('HeroChart writes its anchor prop out as data-tour', () => {
-    expect(codeOnly(readPortalSource('components/shared/hero-chart-v2.tsx'))).toContain('data-tour={anchor}');
+    expect(codeOnly(readPortalSource('../../../shared/portal-v2/hero-chart.tsx'))).toContain('data-tour={anchor}');
   });
 
   for (const [file, anchors] of Object.entries(DRAWN_IN)) {

@@ -274,6 +274,9 @@ export interface CustomerRentalVehicle {
   id: string;
   /** "Toyota Corolla", never the bare plate for a plate-hiding tenant. */
   displayName: string;
+  /** The two halves of the name, for the two-tone "Toyota Corolla"; null when unset. */
+  make: string | null;
+  model: string | null;
   /** "Toyota Corolla (AB12 XYZ)" where the plate may be shown. */
   displayLabel: string;
   /** null when the tenant hides plates, or when the tenant has not loaded. */
@@ -554,6 +557,8 @@ export function normalizeCustomerRental(
     ? {
         id: vehicleRow.id,
         displayName: vehicleDisplayName(vehicleRow, tenant),
+        make: vehicleRow.make?.trim() || null,
+        model: vehicleRow.model?.trim() || null,
         displayLabel: vehicleDisplayLabel(vehicleRow, tenant),
         registration: displayRegistration(vehicleRow, tenant),
         year: vehicleRow.year,

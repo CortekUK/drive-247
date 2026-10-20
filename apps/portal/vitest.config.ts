@@ -34,6 +34,11 @@ export default defineConfig({
       // logic-only suites; it only makes render tests possible at all.
       react: path.resolve(__dirname, '../../node_modules/react'),
       'react-dom': path.resolve(__dirname, '../../node_modules/react-dom'),
+      // The hero chart lives in shared/portal-v2/, where a bare `recharts`
+      // resolves to the ROOT copy (3.x) rather than this app's 2.x. Pinned so
+      // the chart, its frame and every `vi.mock('recharts')` are one module.
+      // Same alias as next.config.js `turbopack.resolveAlias`.
+      recharts: path.resolve(__dirname, './node_modules/recharts'),
     },
   },
 });

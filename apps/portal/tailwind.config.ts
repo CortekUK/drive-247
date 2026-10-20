@@ -1,8 +1,14 @@
 import type { Config } from "tailwindcss";
+import sharedV2Theme from "../../shared/portal-v2/theme.json";
+
+/** The shared portal v2 colours (`text-v2-muted-fg` …), the same names the customer portal's build generates. */
+const sharedV2Colors = Object.fromEntries(
+  Object.entries(sharedV2Theme.colors).map(([name, token]) => [name, `hsl(var(${token}))`]),
+);
 
 export default {
   darkMode: ["class"],
-  content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}", "!./src/__tests__/**", "../../shared/trax-support/**/*.{ts,tsx}"],
+  content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}", "!./src/__tests__/**", "../../shared/trax-support/**/*.{ts,tsx}", "../../shared/portal-v2/**/*.{ts,tsx}"],
   prefix: "",
   theme: {
     container: {
@@ -27,6 +33,7 @@ export default {
         ],
       },
       colors: {
+        ...sharedV2Colors,
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

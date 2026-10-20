@@ -22,6 +22,13 @@ const nextConfig = {
   allowedDevOrigins: ['test.portal.localhost', '*.portal.localhost', '**.nip.io', '**.trycloudflare.com'],
   turbopack: {
     root: workspaceRoot,
+    resolveAlias: {
+      // The hero chart lives in shared/portal-v2/ (the customer portal draws it
+      // too), where a bare `recharts` would resolve to the root copy (3.x)
+      // rather than this app's 2.x, splitting the chart from its frame. Same
+      // alias as vitest.config.ts.
+      recharts: './apps/portal/node_modules/recharts',
+    },
   },
 
   // ── Legal documents live on the marketing site, not here ──────────────────

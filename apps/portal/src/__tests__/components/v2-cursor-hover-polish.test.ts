@@ -38,13 +38,52 @@ const theme = read('styles/v2-theme.css');
 
 const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
 
+/**
+ * The colour values themselves live in shared/portal-v2/tokens.css (the
+ * customer portal imports the same file); v2-theme.css aliases its shadcn names
+ * onto them (`--primary: var(--v2-primary)`).
+ */
+const sharedTokens = readFileSync(join(SRC, '..', '..', '..', 'shared', 'portal-v2', 'tokens.css'), 'utf8');
+
 /** The first `{ … }` body whose selector is exactly `selector`. */
-function tokenBlock(selector: string): string {
-  const css = stripComments(theme);
+function ownBlock(css: string, selector: string): string | undefined {
   const re = new RegExp(`(^|\\n)${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`);
-  const m = css.match(re);
-  if (!m) throw new Error(`no block for ${selector}`);
-  return m[2];
+  return stripComments(css).match(re)?.[2];
+}
+
+/** The shared file's body for `selector`, which it names in a selector list. */
+function sharedBlock(selector: string): string | undefined {
+  for (const m of stripComments(sharedTokens).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (m[1].split(',').map((s) => s.trim()).includes(selector)) return m[2];
+  }
+  return undefined;
+}
+
+const declsOf = (block: string | undefined): [string, string][] =>
+  [...(block ?? '').matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]);
+
+/**
+ * The `{ … }` body for `selector` as the cascade sees it. For the two token
+ * blocks that is the shared file's values plus v2-theme.css's own, with each
+ * alias to a shared token inlined, so `--primary` reads as the value it
+ * computes to (in dark, through the shared dark block). Any other selector is
+ * v2-theme.css's own block, as before.
+ */
+function tokenBlock(selector: string): string {
+  const own = ownBlock(theme, selector);
+  const isDark = selector === '.dark .v2-theme';
+  if (selector !== '.v2-theme' && !isDark) {
+    if (own === undefined) throw new Error(`no block for ${selector}`);
+    return own;
+  }
+  const shared = new Map(declsOf(sharedBlock('.v2-theme')));
+  if (isDark) for (const [k, v] of declsOf(sharedBlock(selector))) shared.set(k, v);
+  const inline = (v: string) => v.replace(/var\((--v2-[\w-]+)\)/g, (m, name: string) => shared.get(name) ?? m);
+  const merged = new Map<string, string>(isDark ? declsOf(sharedBlock(selector)) : shared);
+  // Light aliases follow the shared dark values, so dark has them too.
+  if (isDark) for (const [k, v] of declsOf(ownBlock(theme, '.v2-theme'))) if (/var\(--v2-/.test(v)) merged.set(k, inline(v));
+  for (const [k, v] of declsOf(own)) merged.set(k, inline(v));
+  return [...merged].map(([k, v]) => `${k}: ${v};`).join('\n');
 }
 
 const decl = (block: string, prop: string) => {
@@ -459,7 +498,8 @@ describe('v2 dark hovers stay visible and readable', () => {
     'components/messages-v2/customer-context.tsx',
     'components/settings-v2/extras-table-v2.tsx',
     'components/settings-v2/promo-codes-table-v2.tsx',
-    'components/shared/hero-chart-v2.tsx',
+    // The hero chart lives in shared/ (the customer portal draws it too).
+    '../../../shared/portal-v2/hero-chart.tsx',
     'components/vehicles-v2/vehicles-overview.tsx',
     // InstallmentSettings and usage-dashboard are NOT here: their v1 branch
     // keeps `hover:bg-muted/40` verbatim on purpose. See the shared-markup block below.
@@ -934,9 +974,9 @@ describe('Sep 17 review: v2 row menus, chart picker and overview link follow the
   });
 
   it('hero chart: the period trigger is a pill and the tooltip is rounded-xl', () => {
-    const src = read('components/shared/hero-chart-v2.tsx');
+    const src = read('../../../shared/portal-v2/hero-chart.tsx');
     expect(src).toContain('const RANGE_PICKER = cn(PICKER, "-my-0.5 -ml-1.5 rounded-full py-0.5 pl-1.5 focus-visible:ring-inset");');
-    expect(src).toContain('<div className="min-w-[200px] rounded-xl border bg-background px-3 py-2 text-xs shadow-md">');
+    expect(src).toContain('<div className="min-w-[200px] rounded-xl border border-v2-border bg-v2-bg px-3 py-2 text-xs text-v2-fg shadow-md">');
     expect(cn('inline-flex items-center gap-1 rounded-md text-sm', 'rounded-full')).toBe('inline-flex items-center gap-1 text-sm rounded-full');
   });
 
@@ -1051,13 +1091,13 @@ describe('S20b: a saved colour re-themes the whole v2 portal (styles/v2-theme.cs
     const rowRules = allRules().filter((r) => r.selector.includes('[data-slot="table-row"]'));
     for (const body of [light, dark, ...rowRules.map((r) => r.body)]) {
       // --secondary is the neutral zinc (240 4%), not the brand.
-      const withoutNeutral = body.replace(/--secondary(-foreground)?:[^;]*;/g, '');
+      const withoutNeutral = body.replace(/--(v2-)?secondary(-foreground)?:[^;]*;/g, '');
       expect(withoutNeutral).not.toMatch(/(^|[\s(:])(23\d|24\d|25\d) \d+%/);
     }
   });
 
   it('every var the hook can write is one the stylesheet reads', () => {
-    const css = stripComments(theme);
+    const css = stripComments(theme) + stripComments(sharedTokens);
     for (const name of V2_BRAND_VAR_NAMES) expect(css, name).toContain(`var(${name}`);
   });
 });
@@ -1118,7 +1158,7 @@ describe('Sep 17 review follow-ups: missed hovers, the metric picker, a settings
   });
 
   it('hero chart: the metric picker is a pill with an inset ring, like the period picker', () => {
-    const src = read('components/shared/hero-chart-v2.tsx');
+    const src = read('../../../shared/portal-v2/hero-chart.tsx');
     expect(src).toContain('const METRIC_PICKER = cn(PICKER, "-my-0.5 -ml-1.5 self-start rounded-full py-0.5 pl-1.5 focus-visible:ring-inset");');
     expect(src).toContain('<DropdownMenuTrigger className={METRIC_PICKER}');
     expect(src).not.toContain('cn(PICKER, "self-start")');

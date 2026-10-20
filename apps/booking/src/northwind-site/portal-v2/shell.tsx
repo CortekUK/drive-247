@@ -38,6 +38,7 @@ import {
   Plus,
   Search,
   Settings,
+  X,
 } from 'lucide-react-nw';
 
 import { PortalBoot } from '@nw/components/portal/portal-boot';
@@ -512,12 +513,18 @@ function OrgRow({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: ()
   );
 }
 
+/**
+ * The operator ui-v2 primary Button's look: the rail's "Book a car", and the
+ * same action in a page header (sized there with HEADER_PRIMARY_V2).
+ */
+export const PRIMARY_CTA =
+  'inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full bg-pv-primary text-sm font-medium text-pv-primary-fg ' +
+  'transition-colors duration-200 hover:bg-pv-primary/80 active:translate-y-px motion-reduce:transition-none ' +
+  'focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-pv-ring/30';
+
 /** The rail's one call to action, as the operator ui-v2 primary Button. */
 function BookCta({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
-  const CTA =
-    'inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full bg-pv-primary text-sm font-medium text-pv-primary-fg ' +
-    'transition-colors duration-200 hover:bg-pv-primary/80 active:translate-y-px motion-reduce:transition-none ' +
-    'focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-pv-ring/30';
+  const CTA = PRIMARY_CTA;
 
   if (collapsed) {
     return (
@@ -725,6 +732,11 @@ function TopBar({
 }) {
   const { initials } = useCustomer();
   const [menuOpen, setMenuOpen] = useState(false);
+  // The list this page is, drawn in the pill as the operator's search scope
+  // chip ("in Vehicles"). Here the pill opens the one search dialog either way,
+  // so the chip only says where you are; its × is the operator's mark for
+  // "search everything", which is what the dialog does.
+  const scopeLabel = usePathname()?.startsWith('/portal/bookings') ? 'Bookings' : null;
 
   // No title here: every page carries its own big heading, as on the operator portal v2.
   return (
@@ -735,6 +747,15 @@ function TopBar({
 
       <button type="button" onClick={onOpenSearch} aria-label="Search" className={cn(FIELD, 'hidden sm:flex')}>
         <Search aria-hidden className="size-4 shrink-0 text-pv-primary" />
+        {scopeLabel ? (
+          <span className="flex shrink-0 items-center gap-1 rounded-md border border-v2-primary/30 bg-v2-bg/70 py-0.5 pl-1.5 pr-0.5 text-[11px] font-medium text-v2-fg">
+            <span className="text-v2-muted-fg">in</span>
+            {scopeLabel}
+            <span aria-hidden className="flex size-4 items-center justify-center rounded text-v2-muted-fg">
+              <X className="size-3" />
+            </span>
+          </span>
+        ) : null}
         <span className="min-w-0 flex-1 truncate text-[13px] text-pv-muted-on-tint">Search your bookings…</span>
         <kbd className="shrink-0 rounded-full bg-pv-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-pv-primary">
           ⌘K

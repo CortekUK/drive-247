@@ -1,0 +1,31 @@
+{
+  "//": "Colour utilities for shared/portal-v2 components: `text-v2-muted-fg`, `bg-v2-primary/40` … Each maps to a token in tokens.css. Read by apps/portal/tailwind.config.ts (Tailwind 3) and scripts/build-northwind-css.mjs (Tailwind 4), so both builds generate the same class names.",
+  "colors": {
+    "v2-bg": "--v2-background",
+    "v2-fg": "--v2-foreground",
+    "v2-card": "--v2-card",
+    "v2-card-fg": "--v2-card-foreground",
+    "v2-popover": "--v2-popover",
+    "v2-popover-fg": "--v2-popover-foreground",
+    "v2-primary": "--v2-primary",
+    "v2-primary-fg": "--v2-primary-foreground",
+    "v2-primary-hover": "--v2-primary-hover",
+    "v2-muted": "--v2-muted",
+    "v2-muted-fg": "--v2-muted-foreground",
+    "v2-muted-on-tint": "--v2-muted-on-tint",
+    "v2-accent-fg": "--v2-accent-foreground",
+    "v2-hover": "--v2-hover",
+    "v2-row-hover": "--v2-row-hover",
+    "v2-link": "--v2-link",
+    "v2-border": "--v2-border",
+    "v2-ring": "--v2-ring",
+    "v2-chart-1": "--v2-chart-1",
+    "v2-chart-2": "--v2-chart-2",
+    "v2-chart-3": "--v2-chart-3",
+    "v2-chart-4": "--v2-chart-4",
+    "v2-chart-5": "--v2-chart-5"
+  },
+  "fontFamily": {
+    "heading": ["var(--font-manrope)", "ui-sans-serif", "system-ui", "sans-serif"]
+  }
+}

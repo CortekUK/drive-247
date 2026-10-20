@@ -32,15 +32,15 @@ import { cn } from "@/lib/utils";
  *
  * v2 only — on a shared v1 page apply it behind the page's v2 flag.
  */
-export const HEADER_ACTIONS_V2 = "sm:self-end sm:h-6 sm:items-center";
+// Lives in shared/portal-v2/header.ts: the customer portal's header uses it too.
+export { HEADER_ACTIONS_V2 } from "../../../../../shared/portal-v2/header";
 
 /**
  * The header's one labelled button (New Rental, Add Customer, …) at the smaller
  * size: a 32px pill, 13px text, 14px icon. `!mr-0` drops the `mr-2` the v1
  * buttons put on their icon, since `gap-1.5` now spaces it.
  */
-export const HEADER_PRIMARY_V2 =
-  "h-8 gap-1.5 rounded-full px-3.5 text-[13px] [&_svg]:!size-3.5 [&_svg]:!mr-0";
+export { HEADER_PRIMARY_V2 } from "../../../../../shared/portal-v2/header";
 type Common = {
   label: string;
   /** The icon. */

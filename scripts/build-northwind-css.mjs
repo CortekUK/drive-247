@@ -58,8 +58,19 @@ for (const [spec, file] of [['tailwindcss', tailwindIndex], ['tw-animate-css', t
   if (!re.test(css)) throw new Error(`site.css no longer imports "${spec}" — update this script`);
   css = css.replace(re, `@import "${file}";`);
 }
-// Class names come from the design's code and its routes, nothing else.
-css = `@source "../../app/(northwind)";\n@source "../../app/(northwind-v2)";\n${css}`;
+// Class names come from the design's code and its routes, and from the portal
+// v2 components shared with the operator portal (shared/portal-v2), nothing else.
+css = `@source "../../app/(northwind)";\n@source "../../app/(northwind-v2)";\n@source "../../../../../shared/portal-v2";\n${css}`;
+
+// The shared components' colour utilities (`text-v2-muted-fg` …), generated
+// from the same map the operator portal's Tailwind 3 config reads, so one class
+// name means one token in both builds.
+const sharedTheme = JSON.parse(fs.readFileSync(path.join(ROOT, 'shared/portal-v2/theme.json'), 'utf8'));
+const themeLines = [
+  ...Object.entries(sharedTheme.colors).map(([name, token]) => `  --color-${name}: hsl(var(${token}));`),
+  ...Object.entries(sharedTheme.fontFamily).map(([name, stack]) => `  --font-${name}: ${stack.join(', ')};`),
+];
+css += `\n@theme inline {\n${themeLines.join('\n')}\n}\n`;
 
 const result = await postcss([
   tailwind({ base: path.join(BOOKING, 'src/northwind-site'), optimize: { minify: true } }),

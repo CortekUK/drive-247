@@ -30,6 +30,9 @@ const nextConfig: NextConfig = {
     // src/app/global-not-found.tsx: the 404 for unknown addresses. Required now
     // that the app has two root layouts ((legacy) and (northwind)).
     globalNotFound: true,
+    // shared/portal-v2/ (the portal v2 chart, card and tokens the operator
+    // portal draws too) sits outside this app; compile it like our own source.
+    externalDir: true,
   },
   // The multi-page /booking flow is deprecated — the only booking path is the
   // home-page widget — and stray links into it are sent back home. That redirect
@@ -45,6 +48,13 @@ const nextConfig: NextConfig = {
     config.resolve.extensionAlias = {
       '.js': ['.js', '.ts', '.tsx'],
       '.jsx': ['.jsx', '.tsx'],
+    };
+
+    // shared/portal-v2's chart imports `recharts`, which from there would
+    // resolve to the monorepo root's copy (3.x) instead of this app's 2.x.
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      recharts: path.join(__dirname, 'node_modules/recharts'),
     };
 
     // Fix for @supabase/supabase-js ESM module issue

@@ -26,12 +26,15 @@ export function PageHeader({
   title,
   description,
   action,
+  actionClassName,
   eyebrow,
   className,
 }: {
   title: React.ReactNode;
   description?: React.ReactNode;
   action?: React.ReactNode;
+  /** On the action cluster, e.g. HEADER_ACTIONS_V2 to centre it on the subtitle line. */
+  actionClassName?: string;
   eyebrow?: React.ReactNode;
   className?: string;
 }) {
@@ -44,7 +47,7 @@ export function PageHeader({
           <p className="mt-1 max-w-2xl text-sm text-pv-muted-fg sm:text-base">{description}</p>
         ) : null}
       </div>
-      {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
+      {action ? <div className={cn('flex shrink-0 items-center gap-2', actionClassName)}>{action}</div> : null}
     </div>
   );
 }

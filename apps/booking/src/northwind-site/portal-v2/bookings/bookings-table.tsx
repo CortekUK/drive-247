@@ -13,6 +13,11 @@
  *
  * The WHOLE row is the link. On a phone the header row is dropped and each row
  * folds into photo · name and dates · total and status.
+ *
+ * Headings, the two-tone vehicle name and the status palette are the operator
+ * Fleet table's (shared/portal-v2/list-styles.ts): bold make, lighter model,
+ * coloured status text. The header row keeps its light tint, so its labels take
+ * the muted step that still reads on a tint.
  */
 
 import Link from 'next/link';
@@ -24,6 +29,7 @@ import { PaymentStatusChip, RentalStatusChip } from '@nw/portal-v2/status-chip';
 import { bookingCompletionState, type CustomerRental } from '@nw/hooks/use-customer-rentals';
 import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { cn } from '@nw/lib/utils';
+import { V2_LIST_CLASSES } from '@portal-v2-shared/list-styles';
 
 import { formatBookingDates, formatNights } from './format';
 
@@ -35,7 +41,7 @@ const COLUMNS =
 /** Status columns: the shared chips in their text-only form, at row size. */
 const STATUS_TEXT = 'text-[14px] font-medium';
 
-const HEAD = 'text-[11px] font-semibold uppercase tracking-wider text-pv-muted-on-tint';
+const HEAD = cn(V2_LIST_CLASSES.head, 'h-auto text-v2-muted-on-tint');
 
 function HeaderRow() {
   return (
@@ -64,6 +70,22 @@ function Thumb({ url }: { url: string | null }) {
       )}
     </span>
   );
+}
+
+/**
+ * "Toyota Corolla" as the operator Fleet table draws it: the make in the row's
+ * weight, the model lighter beside it. A car with only one of the two, or
+ * neither (a plate-hiding tenant's bare plate), falls back to its display name.
+ */
+function VehicleName({ vehicle }: { vehicle: CustomerRental['vehicle'] }) {
+  if (vehicle?.make && vehicle.model) {
+    return (
+      <>
+        {vehicle.make} <span className="font-normal text-pv-muted-fg">{vehicle.model}</span>
+      </>
+    );
+  }
+  return <>{vehicle?.displayName ?? 'Vehicle'}</>;
 }
 
 /* ───────────────────────────────── rows ────────────────────────────────── */
@@ -95,7 +117,7 @@ function BookingRow({ rental }: { rental: CustomerRental }) {
           <Thumb url={rental.vehicle?.imageUrl ?? null} />
           <span className="min-w-0">
             <span className="block truncate text-[14px] font-semibold text-pv-fg">
-              {rental.vehicle?.displayName ?? 'Vehicle'}
+              <VehicleName vehicle={rental.vehicle} />
             </span>
             <span className="block truncate text-[12px] text-pv-muted-fg">
               {rental.reference}

@@ -1,5 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* The portal v2 tokens, shared with the operator portal (see the .pv2 block). */
+@import "../../../../../shared/portal-v2/tokens.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -461,46 +463,49 @@
    ───────────────────────────────────────────────────────────────────────── */
 .pv2,
 .pv2-tokens {
-  --brand-h: 248;
-  --brand-s: 68%;
-  --brand-l: 51%;
-
-  --pv-bg: hsl(0 0% 100%);
-  --pv-fg: hsl(0 0% 3.9%);
-  --pv-card: hsl(0 0% 100%);
-  --pv-muted: hsl(0 0% 96%);
-  --pv-muted-fg: hsl(0 0% 45%);
-  --pv-border: hsl(0 0% 90%);
-  --pv-primary: hsl(var(--brand-h) var(--brand-s) var(--brand-l));
-  --pv-primary-fg: hsl(226 100% 97%);
-  --pv-primary-hover: hsl(var(--brand-h) var(--brand-s) calc(var(--brand-l) - 6%));
-  --pv-tint: hsl(var(--brand-h) var(--brand-s) 95%);
-  --pv-row: hsl(var(--brand-h) var(--brand-s) 97.5%);
-  --pv-chart-3: hsl(calc(var(--brand-h) - 1) calc(var(--brand-s) + 24%) 60%);
-  --pv-chart-5: hsl(calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42%);
-  --pv-wash: hsl(var(--brand-h) var(--brand-s) 51%);
-  --pv-success: hsl(142 76% 36%);
-  --pv-success-light: hsl(142 76% 94%);
+  /* Every value comes from shared/portal-v2/tokens.css (imported at the top of
+     this file), the operator portal's own token source, so the two portals
+     cannot drift. The brand defaults live there too; the shell writes the
+     tenant's --brand-h/s/l inline. The names below are this site's short
+     aliases for those tokens. Dark values arrive with the shared file's dark
+     block, inert while the site ships light-only. */
+  --pv-bg: hsl(var(--v2-background));
+  --pv-fg: hsl(var(--v2-foreground));
+  --pv-card: hsl(var(--v2-card));
+  --pv-muted: hsl(var(--v2-muted));
+  --pv-muted-fg: hsl(var(--v2-muted-foreground));
+  --pv-border: hsl(var(--v2-border));
+  --pv-primary: hsl(var(--v2-primary));
+  --pv-primary-fg: hsl(var(--v2-primary-foreground));
+  --pv-primary-hover: hsl(var(--v2-primary-hover));
+  --pv-tint: hsl(var(--v2-primary-light));
+  --pv-row: hsl(var(--v2-row-hover));
+  --pv-chart-3: hsl(var(--v2-chart-3));
+  --pv-chart-5: hsl(var(--v2-chart-5));
+  --pv-wash: hsl(var(--v2-wash));
+  --pv-success: hsl(var(--v2-success));
+  --pv-success-light: hsl(var(--v2-success-light));
+  /* Deeper than the operator's --warning (48%): this one is mostly TEXT here
+     (the "Upload your documents" line, chips), and 48% amber reads at about
+     2:1 on white. */
   --pv-warning: hsl(41 92% 40%);
-  --pv-warning-light: hsl(41 92% 94%);
-  --pv-danger: hsl(357 100% 45%);
-  --pv-danger-light: hsl(0 84% 94%);
+  --pv-warning-light: hsl(var(--v2-warning-light));
+  --pv-danger: hsl(var(--v2-destructive));
+  --pv-danger-light: hsl(var(--v2-destructive-light));
 
-  /* The operator v2 tokens the frame reads (apps/portal/src/styles/v2-theme.css,
-     same names without the prefix). --pv-hover is the light purple every
-     control hovers with; --pv-row-hover is half of it, for list rows; --pv-link
-     is brand-coloured text; --pv-muted-on-tint is muted text that still reads
-     on one of those tints (45% grey drops under 4.5:1 there, 40% clears it). */
-  --pv-hover: hsl(var(--brand-h) var(--brand-s) 95%);
-  --pv-row-hover: hsl(var(--brand-h) var(--brand-s) 97.5%);
-  --pv-link: hsl(var(--brand-h) var(--brand-s) var(--brand-l));
-  --pv-muted-on-tint: hsl(0 0% 40%);
-  --pv-ring: hsl(0 0% 63%);
-  --pv-sidebar: hsl(var(--brand-h) calc(var(--brand-s) - 24%) 98%);
-  --pv-sidebar-fg: hsl(0 0% 3.9%);
-  --pv-sidebar-accent: hsl(var(--brand-h) calc(var(--brand-s) + 7%) 94%);
-  --pv-sidebar-border: hsl(var(--brand-h) calc(var(--brand-s) - 43%) 92%);
-  --pv-radius: 0.625rem;
+  /* --pv-hover is the light purple every control hovers with; --pv-row-hover
+     is half of it, for list rows; --pv-link is brand-coloured text;
+     --pv-muted-on-tint is muted text that still reads on one of those tints. */
+  --pv-hover: hsl(var(--v2-hover));
+  --pv-row-hover: hsl(var(--v2-row-hover));
+  --pv-link: hsl(var(--v2-link));
+  --pv-muted-on-tint: hsl(var(--v2-muted-on-tint));
+  --pv-ring: hsl(var(--v2-ring));
+  --pv-sidebar: hsl(var(--v2-sidebar-background));
+  --pv-sidebar-fg: hsl(var(--v2-sidebar-foreground));
+  --pv-sidebar-accent: hsl(var(--v2-sidebar-accent));
+  --pv-sidebar-border: hsl(var(--v2-sidebar-border));
+  --pv-radius: var(--v2-radius);
 
   font-family: var(--font-manrope), var(--font-dm-sans), system-ui, sans-serif;
   color: var(--pv-fg);

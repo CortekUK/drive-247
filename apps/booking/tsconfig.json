@@ -16,6 +16,9 @@
       ],
       "@nw/*": [
         "./src/northwind-site/*"
+      ],
+      "@portal-v2-shared/*": [
+        "../../shared/portal-v2/*"
       ]
     },
     /* Bundler mode */

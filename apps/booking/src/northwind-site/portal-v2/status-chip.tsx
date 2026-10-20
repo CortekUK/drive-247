@@ -11,6 +11,7 @@
  */
 
 import { cn } from '@nw/lib/utils';
+import { V2_LIST_TONES } from '@portal-v2-shared/list-styles';
 
 import type { RentalLifecycle, RentalPaymentState } from '@nw/hooks/use-customer-rentals';
 
@@ -25,13 +26,18 @@ const TONE_CLASS: Record<ChipTone, string> = {
   info: 'bg-pv-primary/10 text-pv-primary',
 };
 
-/** Text-only, for a table's status column (the operator tables' rule). */
+/**
+ * Text-only, for a table's status column: the operator lists' own palette
+ * (shared/portal-v2/list-styles.ts), so On rent and Paid read in the green
+ * the operator's Available does, and so on. `info` (Upcoming, Refunded) is the
+ * portal purple rather than the operator's blue.
+ */
 const PLAIN_CLASS: Record<ChipTone, string> = {
-  neutral: 'text-pv-muted-fg',
-  success: 'text-pv-success',
-  warning: 'text-pv-warning',
-  danger: 'text-pv-danger',
-  info: 'text-pv-primary',
+  neutral: V2_LIST_TONES.muted,
+  success: V2_LIST_TONES.success,
+  warning: V2_LIST_TONES.warning,
+  danger: V2_LIST_TONES.danger,
+  info: V2_LIST_TONES.brand,
 };
 
 export function StatusChip({
