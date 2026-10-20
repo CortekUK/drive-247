@@ -1,0 +1,85 @@
+/**
+ * The ui-v2 alert (apps/portal/src/components/ui-v2/alert.tsx, which now
+ * re-exports this), shared with the customer portal. Colours are the shared
+ * `v2-*` utilities (falling back to the shadcn colour outside `.v2-theme`);
+ * the radius is the operator's `rounded-2xl` value, and the border names its
+ * colour because the customer site's Tailwind 4 base does not paint borders
+ * the shadcn colour.
+ */
+
+import * as React from "react"
+import { cva, type VariantProps } from "class-variance-authority"
+
+import { cn } from "./cn"
+
+const alertVariants = cva(
+  "group/alert relative grid w-full gap-0.5 rounded-[var(--v2-radius-2xl,1rem)] border border-v2-border px-4 py-3 text-left text-sm has-[[data-slot=alert-action]]:relative has-[[data-slot=alert-action]]:pr-[4.5rem] has-[>svg]:grid-cols-[auto_1fr] has-[>svg]:gap-x-2.5 [&>svg]:row-span-2 [&>svg]:translate-y-0.5 [&>svg]:text-current [&>svg:not([class*='size-'])]:size-4",
+  {
+    variants: {
+      variant: {
+        default: "bg-v2-card text-v2-card-fg",
+        destructive:
+          "bg-v2-card text-v2-destructive [&>[data-slot=alert-description]]:text-v2-destructive/90 [&>svg]:text-current",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  }
+)
+
+function Alert({
+  className,
+  variant,
+  ...props
+}: React.ComponentProps<"div"> & VariantProps<typeof alertVariants>) {
+  return (
+    <div
+      data-slot="alert"
+      role="alert"
+      className={cn(alertVariants({ variant }), className)}
+      {...props}
+    />
+  )
+}
+
+function AlertTitle({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="alert-title"
+      className={cn(
+        "font-medium group-has-[>svg]/alert:col-start-2 [&_a]:underline [&_a]:underline-offset-[3px] [&_a]:hover:text-v2-fg",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+function AlertDescription({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="alert-description"
+      className={cn(
+        "text-sm text-balance text-v2-muted-fg md:text-pretty [&_a]:underline [&_a]:underline-offset-[3px] [&_a]:hover:text-v2-fg [&_p:not(:last-child)]:mb-4",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+function AlertAction({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="alert-action"
+      className={cn("absolute top-2.5 right-3", className)}
+      {...props}
+    />
+  )
+}
+
+export { Alert, AlertTitle, AlertDescription, AlertAction, alertVariants }

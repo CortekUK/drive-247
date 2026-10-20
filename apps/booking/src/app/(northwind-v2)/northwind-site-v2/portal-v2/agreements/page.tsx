@@ -10,87 +10,124 @@
  * to, tells the customer whose move it is, and hands over the signed PDF once
  * there is one. Nothing here pretends to an ability the app does not have.
  *
- * Laid out as the operator's lists are: stat cards, a section title, then a
- * tinted-header table whose rows open the record in a dialog.
+ * Laid out as an operator v2 list page, like Bookings:
+ *   1. the page header (one-line description; no Refresh, the agreements poll
+ *      on their own and the page updates once a document is signed);
+ *   2. when something needs signing, the operator's Alert saying so, first,
+ *      with "Open" taking the customer to that agreement;
+ *   3. the count tiles (only once there is more than one agreement);
+ *   4. the list, on the shared operator list kit, agreements that need the
+ *      customer's signature first; the whole row opens the agreement.
+ * Search and filters live in the top bar, as on Bookings: the field filters the
+ * list as you type, and its filter button opens the panel above the table.
  */
 
-import { useState } from 'react';
-import { ChevronRight, FileSignature, PenLine, RefreshCw } from 'lucide-react-nw';
+import { useMemo, useState } from 'react';
+import { FileSignature, PenLine, SearchX } from 'lucide-react-nw';
 
 import { formatDate, formatTimestamp } from '@nw/components/portal/format';
 import { formatBookingDates } from '@nw/portal-v2/bookings/format';
-import {
-  EmptyState,
-  LoadError,
-  PageHeader,
-  Panel,
-  StatTile,
-} from '@nw/portal-v2/primitives';
-import { Button } from '@nw/components/ui/button';
-import { Skeleton } from '@nw/components/ui/skeleton';
+import { EmptyState, LoadError, PageHeader, Panel, StatTile } from '@nw/portal-v2/primitives';
 import { useCustomer } from '@nw/hooks/use-customer';
-import {
-  useCustomerAgreements,
-  type CustomerAgreement,
-} from '@nw/hooks/use-customer-agreements';
+import { useCustomerAgreements, type CustomerAgreement } from '@nw/hooks/use-customer-agreements';
 import { useCustomerRentals } from '@nw/hooks/use-customer-rentals';
-
+import { cn } from '@nw/lib/utils';
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@portal-v2-shared/alert';
+import { V2_BUTTON_PRIMARY } from '@portal-v2-shared/button-styles';
+import { HEADER_PRIMARY_V2 } from '@portal-v2-shared/header';
 import {
   ListBody,
-  ListCard,
   ListCell,
   ListHead,
-  ListHeaderRow,
   ListRow,
-  RowButton,
-  SectionTitle,
-  StatusText,
-} from '../payments/_components/list-table';
+  ListStatusText,
+  ListTable,
+  ListTableHeader,
+  useProgressiveRows,
+} from '@portal-v2-shared/list-table';
+import { V2_LIST_CLASSES, type V2ListTone } from '@portal-v2-shared/list-styles';
+import { usePageSearch } from '@portal-v2-shared/page-search-slot';
 
 import { AgreementDialog, agreementTitle } from './agreement-dialog';
 import { STATE_CHIP } from './agreement-state';
+import {
+  AgreementsFilterPanel,
+  NO_AGREEMENT_FILTERS,
+  applyAgreementFilters,
+  countActiveAgreementFilters,
+  type AgreementFilters,
+} from './agreements-filter-panel';
 
-/** Sized like the stat row and the table, so the page does not jump on load. */
-function AgreementsSkeleton() {
+/** The state chip's tone, in the operator list palette. */
+const TONE: Record<string, V2ListTone> = {
+  neutral: 'muted',
+  success: 'success',
+  warning: 'warning',
+  danger: 'danger',
+  info: 'brand',
+};
+
+/** As on Bookings: every cell one line, columns sized for their longest value at this floor. */
+const MIN_WIDTH = 'min-w-[960px]';
+
+function Heads() {
   return (
-    <div className="flex flex-col gap-8" aria-hidden>
+    <ListTableHeader>
+      <ListHead className="w-[11%]">Reference</ListHead>
+      <ListHead className="w-[18%]">Agreement</ListHead>
+      <ListHead className="w-[19%]">Vehicle</ListHead>
+      <ListHead className="w-[21%]">Dates</ListHead>
+      <ListHead className="w-[13%]">Signed</ListHead>
+      <ListHead className="w-[18%]">Status</ListHead>
+    </ListTableHeader>
+  );
+}
+
+function datesOf(agreement: CustomerAgreement): string | null {
+  if (agreement.kind === 'extension') {
+    const to = formatDate(agreement.periodEndDate);
+    return to ? `Extended to ${to}` : null;
+  }
+  return agreement.rentalStartDate ? formatBookingDates(agreement.rentalStartDate, agreement.rentalEndDate) : null;
+}
+
+/** Sized like the tiles and the table, so the page does not jump on load. */
+function AgreementsSkeleton() {
+  const rows = useProgressiveRows([0, 1, 2], 'skeleton');
+  return (
+    <div className="flex flex-col gap-6" aria-hidden>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {[0, 1, 2].map((tile) => (
           <div
             key={tile}
-            className={`rounded-2xl border border-pv-border bg-pv-card px-4 py-3.5 ${tile === 2 ? 'col-span-2 sm:col-span-1' : ''}`}
-          >
-            <Skeleton className="h-3 w-20 bg-pv-tint" />
-            <Skeleton className="mt-3 h-7 w-10 bg-pv-tint" />
-          </div>
+            className={cn('h-[84px] animate-pulse rounded-2xl bg-v2-muted', tile === 2 && 'col-span-2 sm:col-span-1')}
+          />
         ))}
       </div>
-      <div className="flex flex-col gap-4">
-        <Skeleton className="h-5 w-36 bg-pv-tint" />
-        <div className="overflow-hidden rounded-2xl border border-pv-border bg-pv-card">
-          <div className="h-11 border-b border-pv-border bg-pv-tint/60" />
-          {[0, 1, 2].map((row) => (
-            <div
-              key={row}
-              className="flex items-center justify-between gap-4 border-b border-pv-border px-5 py-4 last:border-0"
-            >
-              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <Skeleton className="h-4 w-44 bg-pv-tint" />
-                <Skeleton className="h-3 w-32 bg-pv-tint" />
-              </div>
-              <Skeleton className="h-4 w-24 shrink-0 bg-pv-tint" />
-            </div>
+      <ListTable rows={{ ...rows, hasMore: false }} minWidth={MIN_WIDTH}>
+        <Heads />
+        <ListBody>
+          {rows.visible.map((row) => (
+            <ListRow key={row}>
+              {[14, 30, 28, 34, 20, 26].map((width, cell) => (
+                <ListCell key={cell}>
+                  <span
+                    className="inline-block h-3 animate-pulse rounded-full bg-v2-muted"
+                    style={{ width: `${width * 4}px`, maxWidth: '100%' }}
+                  />
+                </ListCell>
+              ))}
+            </ListRow>
           ))}
-        </div>
-      </div>
+        </ListBody>
+      </ListTable>
     </div>
   );
 }
 
 export default function PortalAgreementsPage() {
   const { email } = useCustomer();
-  const { agreements, summary, isLoading, isRefreshing, isError, error, refetch } =
-    useCustomerAgreements();
+  const { agreements, summary, isLoading, isError, error, refetch } = useCustomerAgreements();
   // The same cached query the hook already reads — free here, and it lets the
   // empty state tell a customer with no bookings something different from one
   // whose operator simply has not raised a document yet.
@@ -101,32 +138,35 @@ export default function PortalAgreementsPage() {
   // agreement on (signed, PDF filed) shows up inside an open dialog too.
   const open = openId ? (agreements.find((row) => row.id === openId) ?? null) : null;
 
+  const [term, setTerm] = useState('');
+  const [filters, setFilters] = useState<AgreementFilters>(NO_AGREEMENT_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // What needs the customer first, then the rest in the order they came.
+  const ordered = useMemo(
+    () => [...agreements.filter((row) => row.needsSignature), ...agreements.filter((row) => !row.needsSignature)],
+    [agreements],
+  );
+  const shown = useMemo(() => applyAgreementFilters(ordered, filters, term), [ordered, filters, term]);
+  const activeCount = countActiveAgreementFilters(filters);
+  const narrowed = activeCount > 0 || term.trim() !== '';
+  const rows = useProgressiveRows(shown, `${term}|${filters.state}|${filters.kind}`);
+
+  usePageSearch({
+    placeholder: 'Search agreements…',
+    value: term,
+    onChange: setTerm,
+    scopeLabel: 'Agreements',
+    resultCount: isLoading ? undefined : shown.length,
+    filters: { open: filtersOpen, onOpenChange: setFiltersOpen, activeCount },
+  });
+
   const hasBookings = rentalSummary.total > 0;
-  const awaiting = agreements.filter((row) => row.needsSignature);
+  const awaiting = ordered.filter((row) => row.needsSignature);
 
   return (
-    <div className="flex flex-col gap-8">
-      <PageHeader
-        title="Agreements"
-        description="Your rental agreements, where each one has got to, and your signed copies."
-        action={
-          <Button
-            type="button"
-            variant="brand-outline"
-            className="h-11 w-full px-5 sm:w-auto"
-            onClick={() => {
-              void refetch();
-            }}
-            disabled={isLoading || isRefreshing}
-          >
-            <RefreshCw
-              aria-hidden
-              className={isRefreshing ? 'size-4 animate-spin' : 'size-4'}
-            />
-            {isRefreshing ? 'Refreshing' : 'Refresh'}
-          </Button>
-        }
-      />
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Agreements" description="Your rental agreements and signed copies" />
 
       {isError ? (
         <LoadError
@@ -157,78 +197,76 @@ export default function PortalAgreementsPage() {
         </Panel>
       ) : (
         <>
-          {/*
-            The strip is only worth its space once there is more than one row:
-            "1 agreement, 0 signed, 1 awaiting" restates the single row beneath
-            it in three tiles.
-          */}
+          {/* The one thing to do on this page, when there is one: first. */}
+          {awaiting.length > 0 ? (
+            <Alert>
+              <PenLine aria-hidden />
+              <AlertTitle>
+                {awaiting.length === 1
+                  ? 'One agreement needs your signature'
+                  : `${awaiting.length} agreements need your signature`}
+              </AlertTitle>
+              <AlertDescription>
+                We emailed you a signing link{email ? ` at ${email}` : ''}. This page updates once you have signed.
+              </AlertDescription>
+              <AlertAction>
+                <button
+                  type="button"
+                  onClick={() => setOpenId(awaiting[0].id)}
+                  className={cn(V2_BUTTON_PRIMARY, HEADER_PRIMARY_V2)}
+                >
+                  Open
+                </button>
+              </AlertAction>
+            </Alert>
+          ) : null}
+
+          {/* Only worth its space once there is more than one row: "1, 0, 1"
+              restates the single row beneath it in three tiles. */}
           {agreements.length > 1 ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <StatTile label="Agreements" value={summary.total} />
               <StatTile label="Signed" value={summary.signed} />
-              {/* Full width on the two-column phone layout, so the odd tile out
-                  is the one carrying the caption rather than a half-empty gap. */}
               <div className="col-span-2 sm:col-span-1">
                 <StatTile
                   label="Awaiting you"
                   value={summary.awaiting}
-                  caption={
-                    summary.awaiting > 0 ? 'Needs your signature' : 'All up to date'
-                  }
+                  caption={summary.awaiting > 0 ? 'Needs your signature' : 'All up to date'}
                 />
               </div>
             </div>
           ) : null}
 
-          {/* The one thing to do on this page, when there is one. */}
-          {awaiting.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => setOpenId(awaiting[0].id)}
-              className="flex w-full items-start gap-3 rounded-2xl border border-pv-warning/25 bg-pv-warning-light px-4 py-3.5 text-left transition-opacity duration-200 ease-out hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none sm:px-5"
-            >
-              <PenLine aria-hidden strokeWidth={1.75} className="mt-0.5 size-4 shrink-0 text-pv-warning" />
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-pv-fg">
-                  {awaiting.length === 1
-                    ? 'One agreement needs your signature'
-                    : `${awaiting.length} agreements need your signature`}
-                </span>
-                <span className="mt-0.5 block text-sm leading-relaxed text-pv-muted-fg">
-                  We emailed you a signing link{email ? ` at ${email}` : ''}. This page updates on
-                  its own once you have signed.
-                </span>
-              </span>
-              <ChevronRight aria-hidden className="mt-0.5 size-4 shrink-0 text-pv-muted-fg" />
-            </button>
+          {filtersOpen ? (
+            <AgreementsFilterPanel filters={filters} onChange={setFilters} onClose={() => setFiltersOpen(false)} />
           ) : null}
 
-          <section className="flex flex-col gap-4">
-            <SectionTitle
-              title="All agreements"
-              description="Open one to see where it has got to, or to get your signed copy."
-            />
-            <ListCard>
-              <ListHeaderRow>
-                <ListHead>Agreement</ListHead>
-                <ListHead className="hidden md:table-cell">Vehicle</ListHead>
-                <ListHead className="hidden lg:table-cell">Dates</ListHead>
-                <ListHead className="hidden md:table-cell">Signed</ListHead>
-                <ListHead className="hidden sm:table-cell">Status</ListHead>
-                <ListHead className="w-10">
-                  <span className="sr-only">Open</span>
-                </ListHead>
-              </ListHeaderRow>
-              <ListBody>
-                {agreements.map((agreement) => (
-                  <AgreementRow
-                    key={agreement.id}
-                    agreement={agreement}
-                    onOpen={() => setOpenId(agreement.id)}
-                  />
-                ))}
-              </ListBody>
-            </ListCard>
+          <section className="flex flex-col gap-3">
+            {shown.length === 0 ? (
+              <Panel>
+                <EmptyState
+                  icon={SearchX}
+                  title="No agreements match"
+                  description="Try a different search, or clear the filters to see every agreement."
+                />
+              </Panel>
+            ) : (
+              <>
+                <ListTable rows={rows} fillViewport minWidth={MIN_WIDTH}>
+                  <Heads />
+                  <ListBody>
+                    {rows.visible.map((agreement) => (
+                      <AgreementRow key={agreement.id} agreement={agreement} onOpen={() => setOpenId(agreement.id)} />
+                    ))}
+                  </ListBody>
+                </ListTable>
+                <p className={V2_LIST_CLASSES.footer}>
+                  {narrowed
+                    ? `${shown.length} of ${agreements.length} agreements shown`
+                    : `All ${agreements.length} ${agreements.length === 1 ? 'agreement' : 'agreements'} shown`}
+                </p>
+              </>
+            )}
           </section>
         </>
       )}
@@ -244,62 +282,33 @@ export default function PortalAgreementsPage() {
   );
 }
 
-function datesOf(agreement: CustomerAgreement): string | null {
-  if (agreement.kind === 'extension') {
-    const to = formatDate(agreement.periodEndDate);
-    return to ? `Extended to ${to}` : null;
-  }
-  return agreement.rentalStartDate
-    ? formatBookingDates(agreement.rentalStartDate, agreement.rentalEndDate)
-    : null;
-}
-
-function AgreementRow({
-  agreement,
-  onOpen,
-}: {
-  agreement: CustomerAgreement;
-  onOpen: () => void;
-}) {
+/** One agreement, one line per cell, as on Bookings. The whole row opens it; the reference is a real button for the keyboard. */
+function AgreementRow({ agreement, onOpen }: { agreement: CustomerAgreement; onOpen: () => void }) {
   const chip = STATE_CHIP[agreement.state];
   const title = agreementTitle(agreement);
-  const dates = datesOf(agreement);
-  const meta = [agreement.vehicleLabel, dates]
-    .filter((part): part is string => typeof part === 'string' && part !== '')
-    .join(' · ');
-
   return (
     <ListRow onOpen={onOpen}>
-      <ListCell className="max-w-0 w-[60%] sm:w-[40%] md:w-[28%]">
-        <RowButton onOpen={onOpen} label={`Open ${title} ${agreement.rentalReference ?? ''}`.trim()}>
-          <span className="block truncate font-semibold tracking-tight text-pv-fg">
-            {title}
-            {agreement.rentalReference ? (
-              <span className="ml-1.5 font-medium tabular-nums text-pv-muted-fg">
-                {agreement.rentalReference}
-              </span>
-            ) : null}
-          </span>
-        </RowButton>
-        <span className="mt-0.5 block truncate text-[13px] text-pv-muted-fg md:hidden">{meta}</span>
-        <StatusText tone={chip.tone} className="mt-1 block sm:hidden">
-          {chip.label}
-        </StatusText>
+      <ListCell>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen();
+          }}
+          aria-label={`Open ${title} ${agreement.rentalReference ?? ''}`.trim()}
+          className={cn(V2_LIST_CLASSES.identifier, 'truncate text-left hover:underline')}
+        >
+          {agreement.rentalReference ?? '—'}
+        </button>
       </ListCell>
-      <ListCell className="hidden w-[20%] max-w-0 md:table-cell">
-        <span className="block truncate font-medium text-pv-fg">{agreement.vehicleLabel ?? '—'}</span>
+      <ListCell className={cn(V2_LIST_CLASSES.text, 'truncate')}>{title}</ListCell>
+      <ListCell className={cn(V2_LIST_CLASSES.text, 'truncate')}>{agreement.vehicleLabel ?? '—'}</ListCell>
+      <ListCell className={cn(V2_LIST_CLASSES.text, 'truncate')}>{datesOf(agreement) ?? '—'}</ListCell>
+      <ListCell className={cn(V2_LIST_CLASSES.text, 'truncate tabular-nums')}>
+        {formatTimestamp(agreement.completedAt) ?? <span className="text-v2-muted-fg">—</span>}
       </ListCell>
-      <ListCell className="hidden whitespace-nowrap tabular-nums text-pv-fg lg:table-cell">
-        {dates ?? '—'}
-      </ListCell>
-      <ListCell className="hidden whitespace-nowrap tabular-nums text-pv-fg md:table-cell">
-        {formatTimestamp(agreement.completedAt) ?? <span className="text-pv-muted-fg">—</span>}
-      </ListCell>
-      <ListCell className="hidden sm:table-cell">
-        <StatusText tone={chip.tone}>{chip.label}</StatusText>
-      </ListCell>
-      <ListCell className="w-10 text-right">
-        <ChevronRight aria-hidden className="ml-auto size-4 text-pv-muted-fg" />
+      <ListCell className="truncate" title={chip.label}>
+        <ListStatusText tone={TONE[chip.tone]}>{chip.label}</ListStatusText>
       </ListCell>
     </ListRow>
   );
