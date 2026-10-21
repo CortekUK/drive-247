@@ -1,46 +1,48 @@
 'use client';
 
 /**
- * Customer portal v2 — Home (owner, Oct 22 2026: "density over decoration").
- * Top to bottom:
+ * Customer portal v2 — Home, on the operator's page structure (owner, Oct 22
+ * 2026: "take their structure directly ... import the components"):
  *
- *   1. One greeting line: "Hi, Ghulam" and the date.
- *   2. The action strip — one line per thing waiting on the customer (a
- *      payment, a late instalment, ID verification): what it is, the amount or
- *      deadline, the car, the action. Nothing waiting, no strip at all.
- *   3. The current rental, as one card sized to its content; or, with nothing
- *      on rent, a single "No active rental · Book a car" line.
+ *   1. The page header: "Hi, Ghulam" and the date.
+ *   2. What needs the customer, as the operator's tinted alerts — a payment, a
+ *      late instalment, ID verification — each with its one action. Nothing
+ *      waiting, nothing drawn.
+ *   3. The operator's hero row: the Rentals tab's chart on the customer's own
+ *      rentals (booked value with what was picked up as the second line, the
+ *      same series math as the operator's, shared/portal-v2/rentals-metrics.ts)
+ *      and, as the featured card, the rental on now — dates, days left, times
+ *      and, on a plan, the instalments. Nothing on rent, "Book a car".
  *   4. Recent rentals, in the Rentals page's table.
  *
- * The three gradient cards and "Where you stand" (a count and a bar that said
- * nothing) are gone.
- *
- * `rentals.payment_status` is NOT read for the strip: it goes stale (the
- * canary's Malibu says 'pending' with every ledger charge settled), so a
- * booking counts as owing only when the ledger says so.
- *
- * Money comes from `useCustomerPayments` — the ledger Finances reads — so the
- * amount here is the amount there. The strip used to quote the rental's base
- * price, which disagreed with Finances whenever there were fees and tax.
+ * Money comes from `useCustomerPayments` — the ledger Finances reads — never
+ * from `rentals.payment_status`, which goes stale (the canary's Malibu says
+ * 'pending' with every ledger charge settled).
  */
 
+import { useMemo } from 'react';
 import Link from 'next/link';
-import { ArrowRight, CalendarClock, CreditCard, ShieldCheck, type LucideIcon } from 'lucide-react-nw';
+import { ArrowRight, CalendarClock, CreditCard, ShieldCheck } from 'lucide-react-nw';
 
 import { formatClockLabel, normalizeClock } from '@nw/components/booking/time-utils';
 import { formatDate } from '@nw/components/portal/format';
 import { Skeleton } from '@nw/components/ui/skeleton';
+import { useTenant } from '@nw/contexts/TenantContext';
 import { useCustomer } from '@nw/hooks/use-customer';
 import { useCustomerPayments } from '@nw/hooks/use-customer-payments';
 import { useCustomerRentals, type CustomerRental } from '@nw/hooks/use-customer-rentals';
 import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { parseDateOnly } from '@nw/lib/domain/date-utils';
 import { cn } from '@nw/lib/utils';
-import { CustomerRentalsTable, CustomerRentalsTableSkeleton } from '@nw/portal-v2/rentals/rentals-table';
+import { FeaturedLinkCard, HeroChartLoading, ToneAlert } from '@nw/portal-v2/hero';
+import { InstalmentTrack } from '@nw/portal-v2/instalment-track';
+import { CustomerRentalsTable, CustomerRentalsTableSkeleton, customerRentalStatus } from '@nw/portal-v2/rentals/rentals-table';
 import { formatBookingDates } from '@nw/portal-v2/rentals/format';
-import { LoadError, Panel } from '@nw/portal-v2/primitives';
-import { QuickBookTrigger } from '@nw/site-v2/quick-book/quick-book-dialog';
+import { LoadError, PageHeader } from '@nw/portal-v2/primitives';
 import { V2_BUTTON_DEFAULT_SM, V2_BUTTON_OUTLINE_SM } from '@portal-v2-shared/button-styles';
+import { HeroChart, HeroRow } from '@portal-v2-shared/hero-chart';
+import { formatCurrency as formatMoney } from '@portal-v2-shared/money';
+import { rentalsHeroMetrics } from '@portal-v2-shared/rentals-metrics';
 
 /** Hover = fade only, 200ms, ease-out on / ease-in off (V2_PLAN §12). */
 const HOVER_FADE = 'transition-colors duration-200 ease-in hover:ease-out motion-reduce:transition-none';
@@ -71,20 +73,26 @@ function clock(raw: string | null): string | null {
 
 export function PortalV2Overview() {
   const { rentals, summary, isLoading, isError, error, refetch } = useCustomerRentals();
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'USD';
   const firstName = useFirstName();
   const today = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
 
   const current = summary.current;
-  const recent = rentals.filter((rental) => rental.id !== current?.id).slice(0, 5);
+  const recent = rentals.filter((rental) => rental.id !== current?.id).slice(0, 6);
+
+  const metrics = useMemo(
+    () =>
+      rentalsHeroMetrics(
+        rentals.map((r) => ({ createdAt: r.createdAt, start: r.startDate, status: customerRentalStatus(r), amount: r.total })),
+        { format: (v) => formatMoney(v, currencyCode), countLabel: 'Rentals booked' },
+      ),
+    [rentals, currencyCode],
+  );
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h1 className="font-heading text-2xl font-bold tracking-normal text-pv-fg sm:text-3xl">
-          {firstName ? `Hi, ${firstName}` : 'Welcome back'}
-        </h1>
-        <p className="text-sm text-pv-muted-fg">{today}</p>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader title={firstName ? `Hi, ${firstName}` : 'Welcome back'} description={today} />
 
       {isError ? (
         <LoadError
@@ -96,18 +104,20 @@ export function PortalV2Overview() {
         />
       ) : null}
 
-      <ActionStrip />
+      <NeedsYou />
 
-      {isLoading ? (
-        <Skeleton className="h-[104px] w-full rounded-2xl bg-pv-tint sm:w-[640px]" />
-      ) : current ? (
-        <CurrentRentalCard rental={current} />
-      ) : (
-        <Panel className="flex w-full flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:w-fit">
-          <p className="text-[14px] text-pv-muted-fg">No active rental</p>
-          <QuickBookTrigger className={V2_BUTTON_DEFAULT_SM}>Book a car</QuickBookTrigger>
-        </Panel>
-      )}
+      <HeroRow
+        chart={isLoading ? <HeroChartLoading label="Booked value" /> : <HeroChart metrics={metrics} defaultRange="12m" />}
+        card={
+          isLoading ? (
+            <Skeleton className="min-h-[15rem] rounded-2xl bg-pv-tint" />
+          ) : current ? (
+            <CurrentRentalCard rental={current} />
+          ) : (
+            <FeaturedLinkCard title="Book a car" subtitle="No rental on right now" href="/booking" />
+          )
+        }
+      />
 
       {isLoading ? (
         <section className="flex flex-col gap-3">
@@ -138,17 +148,14 @@ export function PortalV2Overview() {
   );
 }
 
-/* ───────────────────────────── action strip ────────────────────────────── */
+/* ──────────────────────────────── needs you ────────────────────────────── */
 
 interface ActionItem {
   key: string;
-  icon: LucideIcon;
+  icon: typeof CreditCard;
   tone: 'danger' | 'warning' | 'neutral';
-  what: string;
-  /** The amount or the deadline. */
-  figure: string | null;
-  /** The car it is for, or a short reason. */
-  about: string | null;
+  title: string;
+  description: string;
   action: { label: string; href: string; primary?: boolean };
 }
 
@@ -162,28 +169,33 @@ function useActionItems(): { items: ActionItem[]; isLoading: boolean } {
   // Balances that can be paid by card from Finances.
   for (const row of payableBalances) {
     if (row.blockedReason !== null) continue;
+    const car = row.rental?.vehicle?.displayName ?? row.rental?.reference ?? 'your booking';
     items.push({
       key: `pay-${row.rentalId}`,
       icon: CreditCard,
       tone: row.isOverdue ? 'danger' : 'warning',
-      what: row.isOverdue ? 'Payment overdue' : 'Payment due',
-      figure: formatCurrency(row.amount),
-      about: row.rental?.vehicle?.displayName ?? row.rental?.reference ?? null,
+      title: `${formatCurrency(row.amount)} ${row.isOverdue ? 'overdue' : 'due'} on the ${car}`,
+      description: row.nextDueDate
+        ? `${row.isOverdue ? 'Was due' : 'Due'} ${formatDate(row.nextDueDate)}. Pay it by card.`
+        : 'Pay it by card.',
       action: { label: 'Pay now', href: '/portal/payments#pay', primary: true },
     });
   }
 
   // A plan collects its own instalments; it needs the customer only when one is late.
   for (const plan of activePlans) {
-    const late = plan.installments.find((i) => i.state === 'overdue' || i.state === 'failed');
-    if (!late) continue;
+    const late = plan.installments.filter((i) => i.state === 'overdue' || i.state === 'failed');
+    if (late.length === 0) continue;
+    const first = late[0];
+    const car = plan.rental?.vehicle?.displayName ?? plan.rental?.reference ?? 'your booking';
     items.push({
       key: `plan-${plan.id}`,
       icon: CalendarClock,
       tone: 'danger',
-      what: late.state === 'failed' ? 'Instalment failed' : 'Instalment overdue',
-      figure: formatCurrency(late.amount),
-      about: plan.rental?.vehicle?.displayName ?? plan.rental?.reference ?? null,
+      title: `Instalment ${first.number} of ${plan.count} on the ${car} ${first.state === 'failed' ? 'failed' : 'is overdue'}`,
+      description: `${formatCurrency(first.amount)}, due ${formatDate(first.dueDate)}${
+        late.length > 1 ? `, and ${late.length - 1} more after it` : ''
+      }. Check the card on file.`,
       action: { label: 'View plan', href: '/portal/payments#plans' },
     });
   }
@@ -193,9 +205,8 @@ function useActionItems(): { items: ActionItem[]; isLoading: boolean } {
       key: 'verify',
       icon: ShieldCheck,
       tone: 'neutral',
-      what: 'Verify your ID',
-      figure: 'Before pickup',
-      about: 'Driving licence or ID card',
+      title: 'Verify your ID before pickup',
+      description: 'Your driving licence or ID card, and a selfie. It takes about two minutes.',
       action: { label: 'Verify', href: '/portal/settings?section=verification', primary: true },
     });
   }
@@ -203,92 +214,92 @@ function useActionItems(): { items: ActionItem[]; isLoading: boolean } {
   return { items, isLoading };
 }
 
-function ActionStrip() {
+function NeedsYou() {
   const { items, isLoading } = useActionItems();
   if (isLoading || items.length === 0) return null;
 
+  // Two to a row when there are several; an odd last one takes the full row,
+  // so no alert sits alone beside empty space.
   return (
-    <Panel className="overflow-hidden">
-      <ul aria-label="Needs you" className="divide-y divide-pv-border">
-        {items.map((item) => (
-          <li key={item.key} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 sm:px-5">
-            <item.icon
-              aria-hidden
-              strokeWidth={1.75}
-              className={cn(
-                'size-4 shrink-0',
-                item.tone === 'danger' && 'text-pv-danger',
-                item.tone === 'warning' && 'text-pv-warning',
-                item.tone === 'neutral' && 'text-pv-muted-fg',
-              )}
-            />
-            <p className="min-w-0 flex-1 text-[14px] sm:truncate">
-              <span
-                className={cn(
-                  'font-semibold',
-                  item.tone === 'danger' ? 'text-pv-danger' : item.tone === 'warning' ? 'text-pv-warning' : 'text-pv-fg',
-                )}
-              >
-                {item.what}
-              </span>
-              {item.figure ? <span className="font-semibold tabular-nums text-pv-fg"> · {item.figure}</span> : null}
-              {item.about ? <span className="text-pv-muted-fg"> · {item.about}</span> : null}
-            </p>
+    <div aria-label="Needs you" className={cn('grid gap-3', items.length > 1 && 'lg:grid-cols-2')}>
+      {items.map((item, index) => (
+        <ToneAlert
+          key={item.key}
+          tone={item.tone}
+          title={item.title}
+          description={item.description}
+          action={
             <Link href={item.action.href} className={item.action.primary ? V2_BUTTON_DEFAULT_SM : V2_BUTTON_OUTLINE_SM}>
               {item.action.label}
             </Link>
-          </li>
-        ))}
-      </ul>
-    </Panel>
+          }
+          className={items.length > 1 && items.length % 2 === 1 && index === items.length - 1 ? 'lg:col-span-2' : undefined}
+        />
+      ))}
+    </div>
   );
 }
 
 /* ──────────────────────────── current rental ───────────────────────────── */
 
-function Fact({ label, value }: { label: string; value: React.ReactNode }) {
-  if (value === null || value === undefined || value === '') return null;
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs text-pv-muted-fg">{label}</dt>
-      <dd className="mt-0.5 whitespace-nowrap text-[14px] font-medium tabular-nums text-pv-fg">{value}</dd>
-    </div>
-  );
-}
-
+/**
+ * The featured card, on the rental the customer has right now: the car as the
+ * card's title, its dates, days left and times under it, and on an instalment
+ * plan the instalments as the segmented bar. The whole card opens the rental.
+ */
 function CurrentRentalCard({ rental }: { rental: CustomerRental }) {
+  const { activePlans } = useCustomerPayments();
+  const plan = activePlans.find((candidate) => candidate.rentalId === rental.id) ?? null;
+
   const left = daysUntil(rental.endDate);
   const remaining =
     left === null
       ? null
       : left > 1
-        ? `${left} days`
+        ? `${left} days left`
         : left === 1
-          ? '1 day'
+          ? '1 day left'
           : left === 0
             ? 'Due back today'
             : `Overdue since ${formatDate(rental.endDate)}`;
+  const pickup = clock(rental.pickupTime);
+  const dropoff = clock(rental.returnTime);
 
   return (
-    <Panel className="w-full sm:w-fit">
-      <div className="flex flex-wrap items-center gap-x-8 gap-y-4 p-4 sm:px-5">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wider text-pv-muted-fg">On rent now</p>
-          <p className="mt-1 text-[17px] font-semibold tracking-[-0.01em] text-pv-fg">
-            {rental.vehicle?.displayName ?? 'Your vehicle'}
-          </p>
-          <p className="text-[13px] text-pv-muted-fg">{rental.reference}</p>
+    <FeaturedLinkCard
+      title={rental.vehicle?.displayName ?? 'Your rental'}
+      subtitle={`On rent now · ${rental.reference}`}
+      href={`/portal/rentals/${rental.id}`}
+    >
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[12px]">
+        <div className="col-span-2">
+          <dt className="text-neutral-500 dark:text-neutral-400">Dates</dt>
+          <dd className="font-medium tabular-nums text-neutral-900 dark:text-white">
+            {formatBookingDates(rental.startDate, rental.endDate)}
+            {remaining ? <span className="text-pv-primary"> · {remaining}</span> : null}
+          </dd>
         </div>
-        <dl className="flex flex-wrap gap-x-8 gap-y-3">
-          <Fact label="Dates" value={formatBookingDates(rental.startDate, rental.endDate)} />
-          <Fact label="Days left" value={remaining} />
-          <Fact label="Pick up" value={clock(rental.pickupTime)} />
-          <Fact label="Return" value={clock(rental.returnTime)} />
-        </dl>
-        <Link href={`/portal/rentals/${rental.id}`} className={V2_BUTTON_DEFAULT_SM}>
-          View rental
-        </Link>
-      </div>
-    </Panel>
+        {pickup ? (
+          <div>
+            <dt className="text-neutral-500 dark:text-neutral-400">Pick up</dt>
+            <dd className="font-medium tabular-nums text-neutral-900 dark:text-white">{pickup}</dd>
+          </div>
+        ) : null}
+        {dropoff ? (
+          <div>
+            <dt className="text-neutral-500 dark:text-neutral-400">Return</dt>
+            <dd className="font-medium tabular-nums text-neutral-900 dark:text-white">{dropoff}</dd>
+          </div>
+        ) : null}
+      </dl>
+      {plan ? (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-[12px] text-neutral-500 dark:text-neutral-400">
+            Instalments · {plan.paidCount} of {plan.count} paid
+          </p>
+          <InstalmentTrack plan={plan} compact />
+        </div>
+      ) : null}
+    </FeaturedLinkCard>
   );
 }

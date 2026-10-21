@@ -30,48 +30,23 @@
  */
 
 import Link from 'next/link';
-import { AlertTriangle, CheckCircle2, Clock } from 'lucide-react-nw';
+import { AlertTriangle } from 'lucide-react-nw';
 
 import { formatDate, relativeDayLabel } from '@nw/components/portal/format';
-import { Panel } from '@nw/portal-v2/primitives';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@nw/components/ui/accordion';
-import type {
-  CustomerInstallment,
-  CustomerInstallmentPlan,
-  InstallmentState,
-} from '@nw/hooks/use-customer-payments';
+import type { CustomerInstallmentPlan } from '@nw/hooks/use-customer-payments';
 import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
-import { cn } from '@nw/lib/utils';
+import { InstalmentTrack } from '@nw/portal-v2/instalment-track';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@portal-v2-shared/card';
 
-import { SectionTitle, StatusText } from './list-table';
+import { StatusText } from './list-table';
 
 type ChipTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
-
-const INSTALMENT_CHIP: Record<
-  InstallmentState,
-  { label: string; tone: ChipTone }
-> = {
-  paid: { label: 'Paid', tone: 'success' },
-  failed: { label: 'Failed', tone: 'danger' },
-  overdue: { label: 'Overdue', tone: 'danger' },
-  due_today: { label: 'Due today', tone: 'warning' },
-  scheduled: { label: 'Scheduled', tone: 'neutral' },
-};
 
 export function InstalmentPlans({ plans }: { plans: readonly CustomerInstallmentPlan[] }) {
   if (plans.length === 0) return null;
 
   return (
-    <section id="plans" className="flex scroll-mt-24 flex-col gap-3">
-      <SectionTitle
-        title="Instalment plans"
-        description="Each instalment is collected from your card automatically on its due date, so there is nothing to pay by hand."
-      />
+    <section id="plans" className="flex scroll-mt-24 flex-col gap-5">
       {plans.map((plan) => (
         <PlanCard key={plan.id} plan={plan} />
       ))}
@@ -82,13 +57,13 @@ export function InstalmentPlans({ plans }: { plans: readonly CustomerInstallment
 /* ───────────────────────────── one whole plan ──────────────────────────── */
 
 /**
- * One card per plan: the car and booking, the cadence and amount, progress as
- * "2 of 4 paid", and — inline, not in a banner above — the instalment that is
- * late, or else the next one. The full schedule folds away underneath.
+ * One plan, in the operator's card: the car and booking in the header with
+ * the plan's state; the cadence and amount; the instalments drawn as a
+ * segmented bar, each with its date and state under it; and the late one, if
+ * any, named in a line of its own.
  */
 function PlanCard({ plan }: { plan: CustomerInstallmentPlan }) {
   const { formatCurrency } = useTenantBranding();
-  const percent = Math.round(plan.progress * 100);
 
   const late = plan.installments.filter((i) => i.state === 'overdue' || i.state === 'failed');
   const firstLate = late[0] ?? null;
@@ -96,61 +71,47 @@ function PlanCard({ plan }: { plan: CustomerInstallmentPlan }) {
   const nextWhen = next ? relativeDayLabel(next.dueDate) : null;
 
   const tone: ChipTone = plan.isComplete ? 'success' : late.length > 0 ? 'danger' : plan.isPending ? 'warning' : 'info';
-  const statusLabel = plan.isComplete
-    ? 'Complete'
-    : late.length > 0
-      ? 'Overdue'
-      : plan.isPending
-        ? 'Not started'
-        : 'Active';
+  const statusLabel = plan.isComplete ? 'Complete' : late.length > 0 ? 'Overdue' : plan.isPending ? 'Not started' : 'Active';
 
   return (
-    <Panel>
-      <div className="flex flex-col gap-2.5 px-4 py-3.5 sm:px-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <p className="min-w-0 text-[14px]">
-            <span className="font-semibold text-pv-fg">{plan.rental?.vehicle?.displayName ?? 'Instalment plan'}</span>
-            {plan.rental ? (
-              <>
-                <span className="text-pv-muted-fg"> · </span>
-                <Link
-                  href={`/portal/rentals/${plan.rental.id}`}
-                  className="font-medium text-pv-link underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30"
-                >
-                  {plan.rental.reference}
-                </Link>
-              </>
-            ) : null}
-          </p>
+    <Card className="gap-0 py-0">
+      <CardHeader className="border-b border-pv-border py-4">
+        <CardTitle>Instalment plan</CardTitle>
+        <CardDescription>
+          {plan.rental?.vehicle?.displayName ?? 'Your booking'}
+          {plan.rental ? (
+            <>
+              {' · '}
+              <Link
+                href={`/portal/rentals/${plan.rental.id}`}
+                className="font-medium text-pv-link underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30"
+              >
+                {plan.rental.reference}
+              </Link>
+            </>
+          ) : null}
+        </CardDescription>
+        <CardAction>
           <StatusText tone={tone}>{statusLabel}</StatusText>
+        </CardAction>
+      </CardHeader>
+
+      <CardContent className="flex flex-col gap-4 py-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <p className="text-sm text-pv-fg">
+            <span className="font-semibold">
+              {plan.paidCount} of {plan.count}
+            </span>{' '}
+            <span className="text-pv-muted-fg">
+              paid · {plan.planTypeLabel.toLowerCase()} {formatCurrency(plan.instalmentAmount)}
+            </span>
+          </p>
+          <p className="text-[12px] tabular-nums text-pv-muted-fg">
+            {formatCurrency(plan.paid)} paid · {formatCurrency(plan.remaining)} to go
+          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px]">
-          <span className="text-pv-fg">
-            {plan.planTypeLabel} · {formatCurrency(plan.instalmentAmount)} × {plan.count}
-          </span>
-          {/* By instalment COUNT, not amount: a customer tracks a plan as "2 of 4
-              gone", and the two only agree when every instalment is the same size. */}
-          <span className="flex items-center gap-2">
-            <span
-              role="progressbar"
-              aria-valuemin={0}
-              aria-valuemax={plan.count}
-              aria-valuenow={plan.paidCount}
-              aria-label="Instalments paid"
-              className="h-1.5 w-24 overflow-hidden rounded-full bg-pv-tint"
-            >
-              <span className="block h-full rounded-full bg-pv-primary" style={{ width: `${percent}%` }} />
-            </span>
-            <span className="tabular-nums text-pv-fg">
-              {plan.paidCount} of {plan.count} paid
-            </span>
-          </span>
-          <span className="tabular-nums text-pv-muted-fg">
-            {formatCurrency(plan.paid)} paid · {formatCurrency(plan.remaining)} to go
-            {plan.upfrontAmount > 0 && !plan.upfrontPaid ? ` · ${formatCurrency(plan.upfrontAmount)} upfront not yet paid` : ''}
-          </span>
-        </div>
+        <InstalmentTrack plan={plan} />
 
         {firstLate ? (
           <p className="flex items-start gap-2 text-[13px] font-medium text-pv-danger">
@@ -168,70 +129,12 @@ function PlanCard({ plan }: { plan: CustomerInstallmentPlan }) {
             {nextWhen ? ` (${nextWhen})` : ''}.
           </p>
         ) : null}
-      </div>
 
-      <Accordion type="single" collapsible className="border-t border-pv-border">
-        <AccordionItem value="schedule" className="border-b-0">
-          <AccordionTrigger className="min-h-10 px-4 py-2.5 text-[13px] font-medium text-pv-fg transition-colors duration-200 hover:bg-pv-row hover:no-underline motion-reduce:transition-none sm:px-5">
-            Payment schedule
-          </AccordionTrigger>
-          <AccordionContent className="px-4 pb-3 sm:px-5">
-            <ul className="divide-y divide-pv-border">
-              {plan.installments.map((instalment) => (
-                <InstalmentRow key={instalment.id} instalment={instalment} />
-              ))}
-            </ul>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
-    </Panel>
-  );
-}
-
-function InstalmentRow({ instalment }: { instalment: CustomerInstallment }) {
-  const { formatCurrency } = useTenantBranding();
-  const chip = INSTALMENT_CHIP[instalment.state];
-  const paid = instalment.state === 'paid';
-
-  return (
-    <li className="flex items-center gap-3 py-3">
-      {paid ? (
-        <CheckCircle2
-          aria-hidden
-          strokeWidth={1.75}
-          className="size-4 shrink-0 text-pv-success"
-        />
-      ) : instalment.state === 'overdue' || instalment.state === 'failed' ? (
-        <AlertTriangle
-          aria-hidden
-          strokeWidth={1.75}
-          className="size-4 shrink-0 text-pv-danger"
-        />
-      ) : (
-        <Clock
-          aria-hidden
-          strokeWidth={1.75}
-          className="size-4 shrink-0 text-pv-muted-fg"
-        />
-      )}
-
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm text-pv-fg">
-          Instalment {instalment.number}
+        <p className="border-t border-pv-border pt-3 text-[12px] text-pv-muted-fg">
+          Collected from your card automatically on each due date
+          {plan.upfrontAmount > 0 && !plan.upfrontPaid ? `. ${formatCurrency(plan.upfrontAmount)} upfront is not yet paid.` : '.'}
         </p>
-        <p className="truncate text-xs text-pv-muted-fg">
-          {paid && instalment.paidAt
-            ? `Paid ${formatDate(instalment.paidAt.slice(0, 10))}`
-            : formatDate(instalment.dueDate)}
-        </p>
-      </div>
-
-      <span className="shrink-0 text-sm font-medium tabular-nums text-pv-fg">
-        {formatCurrency(instalment.amount)}
-      </span>
-      <StatusText tone={chip.tone} className="w-20 shrink-0 text-right">
-        {chip.label}
-      </StatusText>
-    </li>
+      </CardContent>
+    </Card>
   );
 }

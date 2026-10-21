@@ -67,6 +67,11 @@ interface MetricBase {
   format: (value: number) => string;
   /** Words after the headline number, e.g. "of 8 cars". */
   suffix?: string;
+  /**
+   * A metric where going up is bad news (what a customer still owes): the
+   * change chip turns red going up and green going down. Off everywhere else.
+   */
+  lowerIsBetter?: boolean;
 }
 
 /**
@@ -332,6 +337,7 @@ export function HeroChart({
                 current={series.currentTotal}
                 previous={previousTotal}
                 format={metric.format}
+                lowerIsBetter={metric.lowerIsBetter}
               />
             )}
           </div>
@@ -425,7 +431,8 @@ const CHIP_TONE = {
  * STOCK (a level on a day): the change in the level itself ("↗ 5" cars), since
  * a percentage of a handful of cars reads as noise.
  *
- * Every metric on these tabs is one where more is better, so up is green.
+ * More is better on every operator metric, so up is green; a metric marked
+ * `lowerIsBetter` (the customer's outstanding balance) swaps the two colours.
  * Decorative: the sr-only summary carries both numbers. Not drawn at all on
  * "All time", which has no previous period.
  */
@@ -434,11 +441,13 @@ function ChangeChip({
   current,
   previous,
   format: formatValue,
+  lowerIsBetter = false,
 }: {
   kind: HeroMetric["kind"];
   current: number;
   previous: number;
   format: (value: number) => string;
+  lowerIsBetter?: boolean;
 }) {
   let direction: keyof typeof CHIP_TONE;
   let text: string;
@@ -459,7 +468,7 @@ function ChangeChip({
       data-change={direction}
       className={cn(
         "inline-flex h-6 items-center gap-0.5 rounded-full pl-1.5 pr-2 text-xs font-semibold tabular-nums",
-        CHIP_TONE[direction],
+        CHIP_TONE[lowerIsBetter && direction !== "flat" ? (direction === "up" ? "down" : "up") : direction],
       )}
     >
       <Icon className="size-3.5" />

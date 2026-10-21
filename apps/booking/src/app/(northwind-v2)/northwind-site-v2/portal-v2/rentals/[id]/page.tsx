@@ -4,9 +4,10 @@
  * One booking, read-only — a calmer version of the operator portal v2 rental
  * record (components/rentals-v2/rental-detail). Owner's layout, Oct 22 2026:
  * one header line (back, car, reference, chips) over the booked date; one
- * status line when money is owed; then two columns — the car and when & where
- * on the left, the price breakdown, payment and "Book another car" on the
- * right, each column ending where its content ends.
+ * tinted alert when money is owed; then two columns that end level — the car
+ * and when & where on the left, the price breakdown and "Book another car" on
+ * the right — and the payment, its progress drawn, across the full width. The
+ * cards, alert and progress bar are the operator's (shared/portal-v2).
  *
  * ── SCOPE ───────────────────────────────────────────────────────────────────
  * This page shows what the customer bought: the car, the dates and places, what
@@ -26,22 +27,12 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, CarFront, CircleAlert, CircleCheck, Clock, Gauge, IdCard, MapPin, Package } from 'lucide-react-nw';
+import { ArrowLeft, CarFront, CircleAlert, CircleCheck, Clock, Gauge, IdCard, MapPin } from 'lucide-react-nw';
 
 import { formatDate, formatDateTime, formatTimestamp } from '@nw/components/portal/format';
 import { formatBookingDates, formatNights } from '@nw/portal-v2/rentals/format';
-import {
-  DetailList,
-  DetailRow,
-  EmptyState,
-  LoadError,
-  PageHeader,
-  Panel,
-  PanelHeader,
-  StatusLine,
-} from '@nw/portal-v2/primitives';
+import { EmptyState, LoadError, PageHeader, Panel } from '@nw/portal-v2/primitives';
 import { PaymentStatusChip, RentalStatusChip, StatusChip } from '@nw/portal-v2/status-chip';
-import { Button } from '@nw/components/ui/button';
 import { Skeleton } from '@nw/components/ui/skeleton';
 import { useCustomer } from '@nw/hooks/use-customer';
 import { useCustomerPayments } from '@nw/hooks/use-customer-payments';
@@ -52,7 +43,10 @@ import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { useTenant } from '@nw/contexts/TenantContext';
 import { calculateTotalMileageAllowance } from '@nw/lib/domain';
 import { cn } from '@nw/lib/utils';
-import { V2_BUTTON_DEFAULT_SM, V2_BUTTON_OUTLINE_SM } from '@portal-v2-shared/button-styles';
+import { V2_BUTTON_DEFAULT_SM, V2_BUTTON_OUTLINE, V2_BUTTON_OUTLINE_SM } from '@portal-v2-shared/button-styles';
+import { Card, CardAction, CardHeader, CardTitle } from '@portal-v2-shared/card';
+import { ToneAlert } from '@nw/portal-v2/hero';
+import { InstalmentTrack, PaidBar } from '@nw/portal-v2/instalment-track';
 
 /** Hover = fade only, 200ms, ease-out on / ease-in off (V2_PLAN §12). */
 const HOVER_FADE = 'transition-colors duration-200 ease-in hover:ease-out motion-reduce:transition-none';
@@ -178,15 +172,19 @@ function useRentalMoney(rental: CustomerRentalDetail): {
   return null;
 }
 
-/** The Finances status line, for this one rental. */
+/** The operator's tinted alert, for this one rental's money. */
 function MoneyLine({ rental }: { rental: CustomerRentalDetail }) {
   const { formatCurrency } = useTenantBranding();
   const money = useRentalMoney(rental);
   if (money === null) return null;
 
-  const text = money.overdue
+  const title = money.overdue
     ? `${formatCurrency(money.amount)} is overdue${money.dueDate ? ` since ${formatDate(money.dueDate)}` : ''}`
-    : `${formatCurrency(money.amount)} outstanding${money.dueDate ? `, due ${formatDate(money.dueDate)}` : ''}`;
+    : `${formatCurrency(money.amount)} to pay${money.dueDate ? ` by ${formatDate(money.dueDate)}` : ''}`;
+  const description =
+    money.action === 'pay'
+      ? 'You can pay it by card from Finances.'
+      : 'Your instalment plan collects it from your card on each due date.';
 
   const action =
     money.action === 'pay' ? (
@@ -199,22 +197,44 @@ function MoneyLine({ rental }: { rental: CustomerRentalDetail }) {
       </Link>
     );
 
-  return (
-    <StatusLine tone={money.overdue ? 'danger' : 'warning'} action={action}>
-      {text}
-    </StatusLine>
-  );
+  return <ToneAlert tone={money.overdue ? 'danger' : 'warning'} title={title} description={description} action={action} />;
 }
 
 /* ─────────────────────────────── the detail ────────────────────────────── */
 
-/** A label and a value on one line, for the narrow money column. */
-function SideRow({ label, value }: { label: string; value: React.ReactNode }) {
+/** A card in the operator's form: the shared Card, a titled header over a rule, then rows. */
+function DetailCard({
+  title,
+  action,
+  children,
+  className,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <Card className={cn('gap-0 py-0', className)}>
+      <CardHeader className="border-b border-pv-border py-4">
+        <CardTitle>{title}</CardTitle>
+        {action ? <CardAction>{action}</CardAction> : null}
+      </CardHeader>
+      {children}
+    </Card>
+  );
+}
+
+/** A label beside a value, at the operator's table row height. */
+function Row({ label, value, hint }: { label: string; value: React.ReactNode; hint?: string }) {
   if (value === null || value === undefined || value === '') return null;
   return (
-    <div className="flex items-baseline justify-between gap-4 py-2.5">
-      <dt className="shrink-0 text-[13px] text-pv-muted-fg">{label}</dt>
-      <dd className="min-w-0 break-words text-right text-[13px] font-medium text-pv-fg">{value}</dd>
+    <div className="flex flex-col gap-0.5 border-b border-pv-border px-6 py-3 last:border-0 sm:flex-row sm:items-baseline sm:gap-4">
+      <dt className="shrink-0 text-[13px] text-pv-muted-fg sm:w-36">{label}</dt>
+      <dd className="min-w-0 text-sm font-medium text-pv-fg">
+        {value}
+        {hint ? <span className="mt-0.5 block text-xs font-normal text-pv-muted-fg">{hint}</span> : null}
+      </dd>
     </div>
   );
 }
@@ -257,25 +277,35 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
     <>
       {/* ── Anything the customer must know before the detail ────────────── */}
       {rental.lifecycle === 'cancelled' ? (
-        <StatusLine tone="danger">
-          This rental was cancelled
-          {rental.cancellationReason ? `: ${rental.cancellationReason}` : '. If you did not expect this, contact us.'}
-        </StatusLine>
+        <ToneAlert
+          tone="danger"
+          title="This rental was cancelled"
+          description={rental.cancellationReason ?? 'If you did not expect this, contact us and we will look into it.'}
+        />
       ) : rental.cancellationRequested ? (
-        <StatusLine tone="warning">Cancellation requested. The rental stays active until we confirm it.</StatusLine>
+        <ToneAlert
+          tone="warning"
+          title="Cancellation requested"
+          description="We have your request. The rental stays active until we confirm it."
+        />
       ) : (
         <MoneyLine rental={rental} />
       )}
 
       <DocumentsPanel rental={rental} />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-        {/* ── Left column: the record, ending where its content ends ────── */}
-        <div className="flex flex-col gap-4">
+      {/*
+        Two columns that end level: the car and when & where on the left, the
+        price on the right with "Book another car" under it. The payment, with
+        its progress drawn, runs the full width beneath both.
+      */}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-stretch">
+        {/* ── Left column: the record ──────────────────────────────────── */}
+        <div className="flex flex-col gap-5">
           {/* Vehicle */}
-          <Panel className="overflow-hidden">
-            <div className="flex flex-col gap-4 p-3.5 sm:flex-row sm:items-center sm:p-4">
-              <span className="grid aspect-[16/10] w-full shrink-0 place-items-center overflow-hidden rounded-xl bg-pv-tint sm:w-44">
+          <Card className="gap-0 py-0">
+            <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
+              <span className="grid aspect-[16/10] w-full shrink-0 place-items-center overflow-hidden rounded-2xl bg-pv-tint sm:w-44">
                 {rental.vehicle?.imageUrl ? (
                   <img
                     src={rental.vehicle.imageUrl}
@@ -290,7 +320,7 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
               </span>
               <div className="flex min-w-0 flex-1 flex-col gap-2.5">
                 <div>
-                  <p className="text-[17px] font-semibold tracking-[-0.01em] text-pv-fg">{vehicleName}</p>
+                  <p className="font-heading text-base font-semibold text-pv-fg">{vehicleName}</p>
                   {rental.vehicle?.registration ? (
                     <p className="mt-0.5 text-[13px] text-pv-muted-fg">{rental.vehicle.registration}</p>
                   ) : null}
@@ -334,100 +364,58 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
                 </p>
               </div>
             </div>
-          </Panel>
+          </Card>
 
           {/* When & where — one card, because the customer reads them together:
-              when do I collect it, and from where. */}
-          <Panel>
-            <PanelHeader title={delivered ? 'When & where · delivery' : 'When & where'} />
-            <div className="px-4 sm:px-5">
-              <DetailList>
-                <DetailRow
-                  label="Rental period"
-                  value={formatBookingDates(rental.startDate, rental.endDate)}
-                  hint={
-                    nights ? `${nights}${rental.periodType ? ` · ${rental.periodType} rate` : ''}` : undefined
-                  }
+              when do I collect it, and from where. Grows to meet the right column. */}
+          <DetailCard title={delivered ? 'When & where · delivery' : 'When & where'} className="flex-1">
+            <dl>
+              <Row
+                label="Rental period"
+                value={formatBookingDates(rental.startDate, rental.endDate)}
+                hint={nights ? `${nights}${rental.periodType ? ` · ${rental.periodType} rate` : ''}` : undefined}
+              />
+              <Row label="Pick up" value={formatDateTime(rental.startDate, rental.pickupTime)} />
+              <Row label="Return" value={formatDateTime(rental.endDate, rental.returnTime)} />
+              {/* Only on an extended booking — elsewhere `previous_end_date` is null and the row drops. */}
+              <Row
+                label="Originally due back"
+                value={rental.isExtended ? formatDate(rental.previousEndDate) : null}
+                hint={rental.isExtended ? 'This rental was extended.' : undefined}
+              />
+              <Row
+                label={delivered ? 'Delivered to' : 'Pick up from'}
+                value={pickupPlace}
+                hint={rental.deliveryFee && rental.deliveryFee > 0 ? `Delivery ${formatCurrency(rental.deliveryFee)}` : undefined}
+              />
+              <Row
+                label={rental.collectionAddress ? 'Collected from' : 'Return to'}
+                value={returnPlace}
+                hint={
+                  rental.collectionFee && rental.collectionFee > 0 ? `Collection ${formatCurrency(rental.collectionFee)}` : undefined
+                }
+              />
+              {rental.extras.length > 0 ? (
+                <Row
+                  label="Extras"
+                  value={rental.extras.map((extra) => `${extra.name}${extra.quantity > 1 ? ` × ${extra.quantity}` : ''}`).join(', ')}
                 />
-                <DetailRow label="Pick up" value={formatDateTime(rental.startDate, rental.pickupTime)} />
-                <DetailRow label="Return" value={formatDateTime(rental.endDate, rental.returnTime)} />
-                {/*
-                  Only meaningful on an extended booking — on every other rental
-                  `previous_end_date` is null, and `DetailRow` drops the row.
-                */}
-                <DetailRow
-                  label="Originally due back"
-                  value={rental.isExtended ? formatDate(rental.previousEndDate) : null}
-                  hint={rental.isExtended ? 'This rental was extended.' : undefined}
-                />
-                <DetailRow
-                  label={delivered ? 'Delivered to' : 'Pick up from'}
-                  value={pickupPlace}
-                  hint={
-                    rental.deliveryFee && rental.deliveryFee > 0
-                      ? `Delivery ${formatCurrency(rental.deliveryFee)}`
-                      : undefined
-                  }
-                />
-                <DetailRow
-                  label={rental.collectionAddress ? 'Collected from' : 'Return to'}
-                  value={returnPlace}
-                  hint={
-                    rental.collectionFee && rental.collectionFee > 0
-                      ? `Collection ${formatCurrency(rental.collectionFee)}`
-                      : undefined
-                  }
-                />
-              </DetailList>
-              {/* No place recorded on either end: say so, rather than leave a
-                  card with a header and nothing under it. */}
-              {!pickupPlace && !returnPlace ? (
-                <p className="flex items-start gap-2 border-t border-pv-border py-3 text-[13px] leading-relaxed text-pv-muted-fg">
-                  <MapPin aria-hidden strokeWidth={1.75} className="mt-0.5 size-4 shrink-0" />
-                  No pick-up or return address is recorded on this rental. Contact us if you need it.
-                </p>
               ) : null}
-            </div>
-          </Panel>
-
-          {/* Extras — what was bought, not what it cost. The money is in the
-              breakdown; repeating it here would give two places to disagree. */}
-          {rental.extras.length > 0 ? (
-            <Panel>
-              <PanelHeader title="Extras" />
-              <ul className="divide-y divide-pv-border">
-                {rental.extras.map((extra) => (
-                  <li key={extra.id} className="flex items-start gap-3 px-4 py-3.5 sm:px-5">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-pv-tint">
-                      <Package aria-hidden strokeWidth={1.75} className="size-4 text-pv-primary" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[14px] font-medium text-pv-fg">
-                        {extra.name}
-                        {extra.quantity > 1 ? (
-                          <span className="text-pv-muted-fg">
-                            {' × '}
-                            {extra.quantity}
-                          </span>
-                        ) : null}
-                      </p>
-                      {extra.description ? (
-                        <p className="mt-0.5 text-[13px] leading-relaxed text-pv-muted-fg">{extra.description}</p>
-                      ) : null}
-                    </div>
-                    {extra.perDay ? <span className="shrink-0 text-[12px] text-pv-muted-fg">per day</span> : null}
-                  </li>
-                ))}
-              </ul>
-            </Panel>
-          ) : null}
+            </dl>
+            {/* No place recorded on either end: say so, rather than leave a gap. */}
+            {!pickupPlace && !returnPlace ? (
+              <p className="flex items-start gap-2 border-t border-pv-border px-6 py-3 text-[13px] leading-relaxed text-pv-muted-fg">
+                <MapPin aria-hidden strokeWidth={1.75} className="mt-0.5 size-4 shrink-0" />
+                No pick-up or return address is recorded on this rental. Contact us if you need it.
+              </p>
+            ) : null}
+          </DetailCard>
         </div>
 
-        {/* ── Right column: the money ───────────────────────────────────── */}
-        <div className="flex flex-col gap-4">
-          <Panel>
-            <PanelHeader title="Price breakdown" />
-            <div className="px-4 py-1.5 sm:px-5">
+        {/* ── Right column: the price ───────────────────────────────────── */}
+        <div className="flex flex-col gap-5">
+          <DetailCard title="Price breakdown" className="flex-1">
+            <div className="px-6 py-2">
               {rental.breakdown.lines.map((line) => (
                 <div key={line.key} className="flex items-baseline justify-between gap-3 py-2">
                   <span className="min-w-0 text-[13px] text-pv-muted-fg">
@@ -435,10 +423,7 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
                     {line.caption ? <span className="mt-0.5 block text-[12px] text-pv-muted-fg/80">{line.caption}</span> : null}
                   </span>
                   <span
-                    className={cn(
-                      'shrink-0 text-[13px] font-medium tabular-nums',
-                      line.isCredit ? 'text-pv-success' : 'text-pv-fg',
-                    )}
+                    className={cn('shrink-0 text-[13px] font-medium tabular-nums', line.isCredit ? 'text-pv-success' : 'text-pv-fg')}
                   >
                     {line.isCredit ? '−' : ''}
                     {formatCurrency(line.amount)}
@@ -447,7 +432,7 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
               ))}
             </div>
 
-            <div className="border-t border-pv-border px-4 py-4 sm:px-5">
+            <div className="mt-auto border-t border-pv-border px-6 py-4">
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-[14px] font-semibold text-pv-fg">Total</span>
                 <span className="text-[22px] font-bold tracking-[-0.02em] tabular-nums text-pv-fg">
@@ -456,39 +441,81 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
               </div>
               {!rental.breakdown.fromInvoice ? (
                 <p className="mt-2 text-[12px] leading-relaxed text-pv-muted-fg">
-                  We do not have an itemised invoice for this rental, so this is the agreed total only. Ask us for
-                  a breakdown any time.
+                  We do not have an itemised invoice for this rental, so this is the agreed total only. Ask us for a
+                  breakdown any time.
                 </p>
               ) : null}
               {rental.breakdown.securityDeposit > 0 ? (
                 <p className="mt-2 text-[12px] leading-relaxed text-pv-muted-fg">
-                  Includes a {formatCurrency(rental.breakdown.securityDeposit)} security deposit, refunded after the
-                  car comes back.
+                  Includes a {formatCurrency(rental.breakdown.securityDeposit)} security deposit, refunded after the car
+                  comes back.
                 </p>
               ) : null}
             </div>
-          </Panel>
+          </DetailCard>
 
-          {/* Status lives in the header chip or the line above, so it is not
-              repeated here; the old note about receipts moving in is gone. */}
-          {rental.breakdown.invoiceNumber || rental.breakdown.invoiceDate || rental.breakdown.dueDate || rental.promoCode ? (
-            <Panel>
-              <PanelHeader title="Payment" />
-              <dl className="divide-y divide-pv-border px-4 sm:px-5">
-                <SideRow label="Invoice" value={rental.breakdown.invoiceNumber} />
-                <SideRow label="Issued" value={formatDate(rental.breakdown.invoiceDate)} />
-                <SideRow label="Due" value={formatDate(rental.breakdown.dueDate)} />
-                <SideRow label="Promo code" value={rental.promoCode} />
-              </dl>
-            </Panel>
-          ) : null}
-
-          <Button asChild variant="brand-outline" className="h-11 w-full">
-            <Link href="/booking">Book another car</Link>
-          </Button>
+          <Link href="/booking" className={cn(V2_BUTTON_OUTLINE, 'h-11 w-full')}>
+            Book another car
+          </Link>
         </div>
       </div>
+
+      <PaymentCard rental={rental} />
     </>
+  );
+}
+
+/**
+ * The payment, drawn: on an instalment plan, the plan's instalments as the
+ * segmented bar with each one's amount, date and state; otherwise one bar of
+ * what has been paid of the total. Beside it the invoice facts. Status is not
+ * repeated: it is the header chip or the alert above.
+ */
+function PaymentCard({ rental }: { rental: CustomerRentalDetail }) {
+  const { payableBalances, activePlans, isLoading } = useCustomerPayments();
+  if (isLoading || rental.lifecycle === 'cancelled') return null;
+
+  const plan = activePlans.find((candidate) => candidate.rentalId === rental.id) ?? null;
+  const owed = payableBalances.find((row) => row.rentalId === rental.id)?.amount ?? 0;
+  const paid = Math.max(0, rental.breakdown.total - owed);
+
+  const facts = [
+    { label: 'Invoice', value: rental.breakdown.invoiceNumber },
+    { label: 'Issued', value: formatDate(rental.breakdown.invoiceDate) },
+    { label: 'Due', value: formatDate(rental.breakdown.dueDate) },
+    { label: 'Promo code', value: rental.promoCode },
+  ].filter((fact): fact is { label: string; value: string } => typeof fact.value === 'string' && fact.value !== '');
+
+  return (
+    <DetailCard
+      title={plan ? 'Payment · instalment plan' : 'Payment'}
+      action={
+        plan ? (
+          <span className="text-[13px] text-pv-muted-fg">
+            <span className="font-semibold text-pv-fg">
+              {plan.paidCount} of {plan.count}
+            </span>{' '}
+            paid · {plan.planTypeLabel.toLowerCase()}
+          </span>
+        ) : null
+      }
+    >
+      <div className="grid gap-6 px-6 py-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="min-w-0">{plan ? <InstalmentTrack plan={plan} /> : <PaidBar paid={paid} total={rental.breakdown.total} />}</div>
+        {facts.length > 0 ? (
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 lg:border-l lg:border-pv-border lg:pl-6">
+            {facts.map((fact) => (
+              <div key={fact.label} className="min-w-0">
+                <dt className="text-[12px] text-pv-muted-fg">{fact.label}</dt>
+                <dd className="truncate text-sm font-medium tabular-nums text-pv-fg" title={fact.value}>
+                  {fact.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+      </div>
+    </DetailCard>
   );
 }
 

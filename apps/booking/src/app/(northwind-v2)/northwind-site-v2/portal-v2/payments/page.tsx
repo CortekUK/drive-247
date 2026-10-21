@@ -46,10 +46,10 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Banknote, CircleCheck, FileText, Receipt, Wallet } from 'lucide-react-nw';
+import { Banknote, FileText, Receipt } from 'lucide-react-nw';
 
-import { formatDate, relativeDayLabel } from '@nw/components/portal/format';
-import { EmptyState, LoadError, PageHeader, Panel, StatTile, StatusLine } from '@nw/portal-v2/primitives';
+import { formatDate } from '@nw/components/portal/format';
+import { EmptyState, LoadError, PageHeader, Panel } from '@nw/portal-v2/primitives';
 import { Skeleton } from '@nw/components/ui/skeleton';
 import {
   useCustomerPayments,
@@ -61,7 +61,11 @@ import {
 } from '@nw/hooks/use-customer-payments';
 import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { cn } from '@nw/lib/utils';
+import { FeaturedLinkCard, HeroChartLoading, ToneAlert, localDay } from '@nw/portal-v2/hero';
+import { useCustomerTrax } from '@nw/portal-v2/trax/trax-context';
 import { V2_BUTTON_DEFAULT_SM, V2_BUTTON_OUTLINE_SM } from '@portal-v2-shared/button-styles';
+import { Card, CardContent, CardHeader, CardTitle } from '@portal-v2-shared/card';
+import { HeroChart, HeroRow, type HeroMetric } from '@portal-v2-shared/hero-chart';
 
 import { InstalmentPlans } from './_components/instalment-plans';
 import { InvoiceDialog } from './_components/invoice-dialog';
@@ -85,7 +89,6 @@ type Tab = 'invoices' | 'payments';
 export default function PortalPaymentsPage() {
   const { balance, payableBalances, invoices, payments, activePlans, isLoading, isError, error, refetch } =
     useCustomerPayments();
-  const { formatCurrency } = useTenantBranding();
 
   const [tab, setTab] = useState<Tab>('invoices');
   const [openInvoice, setOpenInvoice] = useState<CustomerInvoice | null>(null);
@@ -98,8 +101,8 @@ export default function PortalPaymentsPage() {
   const hasAnything = invoices.length > 0 || payments.length > 0 || activePlans.length > 0 || balance.outstanding > 0;
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader title="Finances" />
+    <div className="flex flex-col gap-5">
+      <PageHeader title="Finances" description="What you owe, what you have paid, and every invoice for your bookings." />
 
       {isError ? (
         <LoadError
@@ -112,7 +115,10 @@ export default function PortalPaymentsPage() {
       ) : null}
 
       {isLoading ? (
-        <PaymentsSkeleton />
+        <>
+          <HeroRow chart={<HeroChartLoading label="Outstanding" range="Last 3 months" />} />
+          <PaymentsSkeleton />
+        </>
       ) : !hasAnything ? (
         <Panel>
           <EmptyState
@@ -124,28 +130,30 @@ export default function PortalPaymentsPage() {
         </Panel>
       ) : (
         <>
-          <BalanceStatus balance={balance} payableNow={payableNow} plans={activePlans} />
+          <BalanceAlert balance={balance} payableNow={payableNow} plans={activePlans} />
 
-          {/* Two figures only: "Next due" said the same as Outstanding whenever
-              anything was late. */}
-          <div className="grid grid-cols-2 gap-3 sm:w-fit sm:grid-cols-[repeat(2,minmax(13rem,auto))]">
-            <StatTile icon={Wallet} label="Outstanding" value={formatCurrency(balance.outstanding)} />
-            <StatTile
-              icon={CircleCheck}
-              label="Paid to date"
-              value={formatCurrency(balance.paidToDate)}
-              caption="After refunds"
-            />
-          </div>
+          {/* The operator's hero row (Finances, Customers, Rentals): the chart
+              over three columns, the featured card on the fourth. */}
+          <HeroRow
+            chart={<FinancesChart balance={balance} invoices={invoices} payments={payments} />}
+            card={<AskTraxCard />}
+          />
 
           <PayBalances payable={payableNow} unpayable={balance.unpayable} refetch={refetch} />
 
-          <BalanceBreakdown balance={balance} />
-
-          <InstalmentPlans plans={activePlans} />
+          {/* Side by side, so neither is a lone card on an empty row. */}
+          <div
+            className={cn(
+              'grid gap-5 lg:items-start',
+              balance.categories.length > 0 && activePlans.length > 0 && 'lg:grid-cols-2',
+            )}
+          >
+            <BalanceBreakdown balance={balance} />
+            <InstalmentPlans plans={activePlans} />
+          </div>
 
           {/* Operator list pattern: section title, the filter bar, the table. */}
-          <section className="flex flex-col gap-4">
+          <section id="invoices" className="flex scroll-mt-24 flex-col gap-3">
             <SectionTitle
               title={tab === 'invoices' ? 'Invoices' : 'Payments'}
               description={
@@ -206,11 +214,89 @@ export default function PortalPaymentsPage() {
 /* ────────────────────────────── the pieces ─────────────────────────────── */
 
 /**
- * The one line at the top: what is owed, whether any of it is late, and the
+ * The operator's hero chart, on the customer's own money (owner, Oct 22 2026:
+ * "a chart of what the customer has paid over time, with the outstanding
+ * amount as the headline figure").
+ *
+ *   Outstanding — the headline, a level: today's point IS the ledger balance
+ *     the rest of the page quotes, and each earlier day is worked back from it
+ *     by the invoices raised and the payments taken since. Its second line is
+ *     what has been paid to date, so the two read against each other.
+ *   Paid — the other metric in the label's menu: money paid per day, week or
+ *     month, with what was invoiced as the second line, as the operator's
+ *     Finances tab draws Invoiced against Collected.
+ */
+function FinancesChart({
+  balance,
+  invoices,
+  payments,
+}: {
+  balance: CustomerBalance;
+  invoices: readonly CustomerInvoice[];
+  payments: readonly CustomerPayment[];
+}) {
+  const { formatCurrency } = useTenantBranding();
+
+  const metrics = useMemo<HeroMetric[]>(() => {
+    const paid = payments
+      .filter((payment) => payment.net !== 0)
+      .map((payment) => ({ at: localDay(payment.date), amount: payment.net }));
+    const invoiced = invoices
+      .filter((invoice) => invoice.state !== 'cancelled')
+      .map((invoice) => ({ at: localDay(invoice.invoiceDate), amount: invoice.total }));
+
+    const after = (events: readonly { at: Date; amount: number }[], day: Date) => {
+      const end = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1).getTime();
+      return events.reduce((sum, event) => (event.at.getTime() >= end ? sum + event.amount : sum), 0);
+    };
+    const upTo = (events: readonly { at: Date; amount: number }[], day: Date) => {
+      const end = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1).getTime();
+      return events.reduce((sum, event) => (event.at.getTime() < end ? sum + event.amount : sum), 0);
+    };
+    const round = (value: number) => Math.round(value * 100) / 100;
+
+    const days = [...paid, ...invoiced].map((event) => event.at.getTime());
+    const historyStart = days.length > 0 ? new Date(Math.min(...days)) : undefined;
+
+    return [
+      {
+        key: 'outstanding',
+        kind: 'stock',
+        label: 'Outstanding',
+        description: 'What you owe today, and what you owed on each day before it.',
+        lowerIsBetter: true,
+        format: formatCurrency,
+        valueOn: (day: Date) => Math.max(0, round(balance.outstanding - after(invoiced, day) + after(paid, day))),
+        secondary: { label: 'Paid to date', valueOn: (day: Date) => round(upTo(paid, day)) },
+        historyStart,
+      },
+      {
+        key: 'paid',
+        kind: 'flow',
+        label: 'Paid',
+        description: 'Money you paid in each period, refunds taken off.',
+        format: formatCurrency,
+        events: paid,
+        secondary: { label: 'Invoiced', events: invoiced },
+      },
+    ];
+  }, [balance.outstanding, formatCurrency, invoices, payments]);
+
+  return <HeroChart metrics={metrics} defaultRange="3m" />;
+}
+
+/** The featured card: Trax, which knows this account, for a question about a charge. */
+function AskTraxCard() {
+  const { setOpen } = useCustomerTrax();
+  return <FeaturedLinkCard title="Ask Trax" subtitle="Questions about a charge or a payment" onClick={() => setOpen(true)} />;
+}
+
+/**
+ * The one alert at the top: what is owed, whether any of it is late, and the
  * single thing to do — Pay when a booking can be paid here, the plan when an
  * instalment plan collects it, otherwise a person.
  */
-function BalanceStatus({
+function BalanceAlert({
   balance,
   payableNow,
   plans,
@@ -222,18 +308,24 @@ function BalanceStatus({
   const { formatCurrency } = useTenantBranding();
 
   if (balance.outstanding === 0) {
-    return <StatusLine tone="success">Nothing outstanding. You are all settled.</StatusLine>;
+    return <ToneAlert tone="success" title="You are all settled" description="Nothing is outstanding on your account." />;
   }
 
+  // The amount is the chart's headline right below, so the alert names the
+  // state rather than quoting the figure again.
   const overdue = balance.overdue > 0;
-  const when = relativeDayLabel(balance.nextDueDate);
-  const text = overdue
+  const title = overdue
     ? balance.overdue === balance.outstanding
-      ? `${formatCurrency(balance.outstanding)} is overdue`
-      : `${formatCurrency(balance.outstanding)} outstanding, ${formatCurrency(balance.overdue)} of it overdue`
-    : `${formatCurrency(balance.outstanding)} outstanding${
-        balance.nextDueDate ? `, due ${formatDate(balance.nextDueDate)}${when ? ` (${when})` : ''}` : ''
-      }`;
+      ? 'Your balance is overdue'
+      : `${formatCurrency(balance.overdue)} of your balance is overdue`
+    : `Your balance is due${balance.nextDueDate ? ` by ${formatDate(balance.nextDueDate)}` : ''}`;
+
+  const description =
+    payableNow.length > 0
+      ? 'You can pay it by card below.'
+      : plans.length > 0
+        ? 'Your instalment plan collects it from your card on each due date.'
+        : 'This cannot be paid by card here. Get in touch and we will take it directly.';
 
   const action =
     payableNow.length > 0 ? (
@@ -250,16 +342,12 @@ function BalanceStatus({
       </Link>
     );
 
-  return (
-    <StatusLine tone={overdue ? 'danger' : 'warning'} action={action}>
-      {text}
-    </StatusLine>
-  );
+  return <ToneAlert tone={overdue ? 'danger' : 'warning'} title={title} description={description} action={action} />;
 }
 
 /**
- * What the outstanding figure is made of, as a tight table on the operator's
- * row height: the rental first, then the fees, tax last, then the total.
+ * What the outstanding figure is made of, in the operator's card: the rental
+ * first, then the fees, tax last, then the total, at the table's row height.
  */
 function BalanceBreakdown({ balance }: { balance: CustomerBalance }) {
   const { formatCurrency } = useTenantBranding();
@@ -270,39 +358,34 @@ function BalanceBreakdown({ balance }: { balance: CustomerBalance }) {
   const rows = [...balance.categories].sort((a, b) => rank(a.label) - rank(b.label) || b.amount - a.amount);
 
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-pv-fg">Balance breakdown</h2>
-      <ListCard className="sm:max-w-[560px]">
-        <ListHeaderRow>
-          <ListHead className="h-10">Charge</ListHead>
-          <ListHead className="h-10 text-right">Amount</ListHead>
-        </ListHeaderRow>
-        <ListBody>
+    <Card className="gap-0 py-0">
+      <CardHeader className="border-b border-pv-border py-4">
+        <CardTitle>Balance breakdown</CardTitle>
+      </CardHeader>
+      <CardContent className="px-0">
+        <dl>
           {rows.map((row) => (
-            <ListRow key={row.label}>
-              <ListCell className="py-3 text-pv-fg">{row.label}</ListCell>
-              <ListCell className="py-3 text-right tabular-nums text-pv-fg">{formatCurrency(row.amount)}</ListCell>
-            </ListRow>
+            <div key={row.label} className="flex items-baseline justify-between gap-4 border-b border-pv-border px-6 py-3">
+              <dt className="text-sm text-pv-fg">{row.label}</dt>
+              <dd className="text-sm tabular-nums text-pv-fg">{formatCurrency(row.amount)}</dd>
+            </div>
           ))}
-          <ListRow className="bg-pv-row">
-            <ListCell className="py-3 font-semibold text-pv-fg">Total</ListCell>
-            <ListCell
-              className={cn(
-                'py-3 text-right font-semibold tabular-nums',
-                balance.overdue > 0 ? 'text-pv-danger' : 'text-pv-fg',
-              )}
+          <div className="flex items-baseline justify-between gap-4 bg-pv-row px-6 py-3.5">
+            <dt className="text-sm font-semibold text-pv-fg">Total outstanding</dt>
+            <dd
+              className={cn('text-base font-semibold tabular-nums', balance.overdue > 0 ? 'text-pv-danger' : 'text-pv-fg')}
             >
               {formatCurrency(balance.outstanding)}
-            </ListCell>
-          </ListRow>
-        </ListBody>
-      </ListCard>
-      {balance.cancelledCharges > 0 ? (
-        <p className="text-[13px] text-pv-muted-fg">
-          {formatCurrency(balance.cancelledCharges)} of charges on cancelled bookings is not included.
-        </p>
-      ) : null}
-    </section>
+            </dd>
+          </div>
+        </dl>
+        {balance.cancelledCharges > 0 ? (
+          <p className="border-t border-pv-border px-6 py-3 text-[12px] text-pv-muted-fg">
+            {formatCurrency(balance.cancelledCharges)} of charges on cancelled bookings is not included.
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
 

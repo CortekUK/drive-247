@@ -50,7 +50,7 @@ import {
 // into, so the two paths cannot drift apart.
 import type { BookingPaymentIntentResponse } from '@nw/hooks/use-payment-intent';
 import { formatDate, relativeDayLabel } from '@nw/components/portal/format';
-import { Panel, PanelHeader } from '@nw/portal-v2/primitives';
+import { Card, CardHeader, CardTitle } from '@portal-v2-shared/card';
 import { Button } from '@nw/components/ui/button';
 import { useTenant } from '@nw/contexts/TenantContext';
 import { useCustomer } from '@nw/hooks/use-customer';
@@ -215,8 +215,10 @@ export function PayBalances({
 
   return (
     <>
-      <Panel className="scroll-mt-24" id="pay">
-        <PanelHeader title="Pay your balance" />
+      <Card id="pay" className="scroll-mt-24 gap-0 py-0">
+        <CardHeader className="border-b border-pv-border py-4">
+          <CardTitle>Pay your balance</CardTitle>
+        </CardHeader>
 
         {payable.length > 0 ? (
           <ul className="divide-y divide-pv-border">
@@ -259,7 +261,7 @@ export function PayBalances({
             </Link>
           </div>
         ) : null}
-      </Panel>
+      </Card>
 
       <PaymentPanel
         open={dialogOpen}
