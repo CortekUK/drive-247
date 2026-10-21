@@ -237,6 +237,7 @@ const KNOWN_ROUTES = new Set([
   '/portal/rentals',
   '/portal/rentals/history',
   '/portal/documents',
+  '/portal/insurances',
   '/portal/gig-driver',
   '/portal/messages',
   '/portal/notifications',

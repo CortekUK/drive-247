@@ -10,6 +10,7 @@ import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react-nw';
 
 import { Button } from '@nw/components/ui/button';
+import { V2_BUTTON_DEFAULT, V2_BUTTON_OUTLINE } from '@portal-v2-shared/button-styles';
 import { Skeleton } from '@nw/components/ui/skeleton';
 import { cn } from '@nw/lib/utils';
 
@@ -160,11 +161,11 @@ export function EmptyState({
         <p className="mt-1 text-[13px] leading-relaxed text-pv-muted-fg">{description}</p>
       </div>
       {action && 'href' in action ? (
-        <Button asChild variant="brand" className="mt-1 h-10">
+        <Button asChild variant="ghost" className={cn(V2_BUTTON_DEFAULT, 'mt-1')}>
           <Link href={action.href}>{action.label}</Link>
         </Button>
       ) : action ? (
-        <Button type="button" variant="brand" className="mt-1 h-10" onClick={action.onClick}>
+        <Button type="button" variant="ghost" className={cn(V2_BUTTON_DEFAULT, 'mt-1')} onClick={action.onClick}>
           {action.label}
         </Button>
       ) : null}
@@ -198,7 +199,7 @@ export function ComingSoon({
             </p>
           </div>
           {meanwhile ? (
-            <Button asChild variant="brand-outline" className="mt-1 h-10">
+            <Button asChild variant="ghost" className={cn(V2_BUTTON_OUTLINE, 'mt-1')}>
               <Link href={meanwhile.href}>{meanwhile.label}</Link>
             </Button>
           ) : null}
@@ -251,7 +252,7 @@ export function LoadError({
         {error?.message ?? 'Please try again in a moment.'}
       </p>
       {onRetry ? (
-        <Button type="button" variant="brand-outline" className="mt-4 h-10" onClick={onRetry}>
+        <Button type="button" variant="ghost" className={cn(V2_BUTTON_OUTLINE, 'mt-4')} onClick={onRetry}>
           Try again
         </Button>
       ) : null}

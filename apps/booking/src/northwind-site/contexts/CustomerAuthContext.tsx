@@ -92,6 +92,7 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
   // `company_name` is nullable in the schema; the fallback is what appears in
   // "not registered with …" copy, so it must never render as "null".
   const tenantName = tenant?.company_name ?? tenant?.app_name ?? "this site";
+  const tenantSlug = tenant?.slug ?? null;
 
   useEffect(() => {
     // Wait for a real answer. Calling `setTenant(null)` while the tenant query
@@ -99,8 +100,8 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
     // would settle a signed-in customer as having no account.
     if (tenantLoading) return;
 
-    setTenant(tenantId === null ? null : { id: tenantId, name: tenantName });
-  }, [tenantLoading, tenantId, tenantName, setTenant]);
+    setTenant(tenantId === null ? null : { id: tenantId, name: tenantName, slug: tenantSlug });
+  }, [tenantLoading, tenantId, tenantName, tenantSlug, setTenant]);
 
   useEffect(() => {
     // Idempotent: the store returns early once it has a listener, so React 18+

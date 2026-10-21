@@ -5,13 +5,11 @@
  * (apps/portal/src/components/agreements-v2/agreements-page-v2.tsx), for a
  * customer. Taken piece for piece:
  *
- *   - the header: "Agreements", one line under it, and the one labelled
- *     button top right ("+ Book a car", where the operator sends an
- *     agreement), in the operator's heading and primary-button style;
- *   - the overview row: the shared HeroChart with the shared Agreements
- *     metrics (Agreements sent, with Signed as the second line), and the
- *     companion card; the filter panel is the card's back face, turned by the
- *     top bar's filter button (shared overview-flip);
+ *   - the header: "Agreements" and one line under it, in the operator's
+ *     heading style. No graph and no "+ Book a car" (owner, Oct 21 2026:
+ *     booking lives in the rail only);
+ *   - the filter panel: opened by the top bar's filter button, it sits
+ *     above the table while open;
  *   - the table: the shared Agreements table, with the operator's Customer and
  *     Email swapped for the Company and its main email, and Linked to,
  *     Reference, Sent and Status as the operator has them;
@@ -25,11 +23,9 @@
  */
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
-import { FileSignature, Plus, SearchX } from 'lucide-react-nw';
+import { FileSignature, SearchX } from 'lucide-react-nw';
 
 import { EmptyState, LoadError, PageHeader, Panel } from '@nw/portal-v2/primitives';
-import { QuickBookTrigger } from '@nw/site-v2/quick-book/quick-book-dialog';
 import { useTenant } from '@nw/contexts/TenantContext';
 import {
   fetchCustomerAgreementDocument,
@@ -40,14 +36,10 @@ import { cn } from '@nw/lib/utils';
 import { AgreementsTable } from '@portal-v2-shared/agreements/table';
 import { AgreementViewDialog } from '@portal-v2-shared/agreements/view-dialog';
 import { loadAgreementDocument, type AgreementDocumentSource } from '@portal-v2-shared/agreements/document';
-import { agreementMetrics, type AgreementListRow } from '@portal-v2-shared/agreements/list';
-import { V2_BUTTON_GHOST_SM, V2_BUTTON_PRIMARY } from '@portal-v2-shared/button-styles';
-import { FEATURED_ACTION_CLASS, FeaturedCardFace, FeaturedCardShell } from '@portal-v2-shared/featured-card';
-import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2 } from '@portal-v2-shared/header';
-import { HERO_CHART_HEIGHT, HeroChart, HeroRow } from '@portal-v2-shared/hero-chart';
+import type { AgreementListRow } from '@portal-v2-shared/agreements/list';
+import { V2_BUTTON_GHOST_SM } from '@portal-v2-shared/button-styles';
 import { useProgressiveRows } from '@portal-v2-shared/list-table';
 import { V2_LIST_CLASSES } from '@portal-v2-shared/list-styles';
-import { RentalsOverviewFlip } from '@portal-v2-shared/overview-flip';
 import { usePageSearch } from '@portal-v2-shared/page-search-slot';
 
 import {
@@ -87,7 +79,6 @@ export default function PortalAgreementsPage() {
 
   const shown = useMemo(() => applyAgreementFilters(rows, filters, term), [rows, filters, term]);
   const activeCount = countActiveAgreementFilters(filters);
-  const narrowed = activeCount > 0 || term.trim() !== '';
   const noAgreements = !isLoading && !isError && rows.length === 0;
   const progressive = useProgressiveRows(shown, `${term}|${filters.status}|${filters.kind}|${filters.sentFrom?.getTime() ?? ''}|${filters.sentTo?.getTime() ?? ''}`);
 
@@ -104,24 +95,9 @@ export default function PortalAgreementsPage() {
         },
   );
 
-  const metrics = useMemo(
-    () => agreementMetrics(shown, { sentDescription: `Agreements ${companyName} sent you to sign.` }),
-    [shown, companyName],
-  );
-
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Agreements"
-        description="Your agreements for signature, and every one's signed copy."
-        actionClassName={HEADER_ACTIONS_V2}
-        action={
-          <QuickBookTrigger className={cn(V2_BUTTON_PRIMARY, HEADER_PRIMARY_V2, 'flex-1 sm:flex-none')}>
-            <Plus aria-hidden />
-            Book a car
-          </QuickBookTrigger>
-        }
-      />
+      <PageHeader title="Agreements" description="Your agreements for signature, and every one's signed copy." />
 
       {isError ? (
         <LoadError
@@ -142,27 +118,9 @@ export default function PortalAgreementsPage() {
         </Panel>
       ) : (
         <>
-          <RentalsOverviewFlip
-            flipped={filtersOpen}
-            onFlipBack={() => setFiltersOpen(false)}
-            front={
-              <HeroRow
-                chart={
-                  isLoading ? (
-                    <div className={cn(HERO_CHART_HEIGHT, 'mt-14 w-full animate-pulse rounded-xl bg-v2-muted/60')} aria-hidden />
-                  ) : (
-                    // The last 12 months, where the operator's opens on 30 days: a
-                    // customer is sent a few agreements a year (the canary
-                    // customer's five were all sent on Sep 19), so 30 days is
-                    // usually an empty window. Every period is still in the picker.
-                    <HeroChart metrics={metrics} defaultRange="12m" note={narrowed ? 'Filtered' : undefined} />
-                  )
-                }
-                card={<DocumentsCard />}
-              />
-            }
-            back={<AgreementsFilterPanel filters={filters} onChange={setFilters} onClose={() => setFiltersOpen(false)} />}
-          />
+          {filtersOpen ? (
+            <AgreementsFilterPanel filters={filters} onChange={setFilters} onClose={() => setFiltersOpen(false)} />
+          ) : null}
 
           {isLoading ? null : shown.length === 0 ? (
             <Panel>
@@ -219,20 +177,5 @@ export default function PortalAgreementsPage() {
         )}
       />
     </div>
-  );
-}
-
-/**
- * The companion card, in the slot the operator's "Template Studio" takes:
- * the same shell and face, opening Documents, where the customer's licence,
- * ID and signed copies live.
- */
-function DocumentsCard() {
-  return (
-    <FeaturedCardShell className="lg:min-h-0" aria-label="Your documents">
-      <Link href="/portal/documents" className={cn(FEATURED_ACTION_CLASS, 'pb-4')}>
-        <FeaturedCardFace title="Your Documents" subtitle="Your licence, ID and every signed copy." />
-      </Link>
-    </FeaturedCardShell>
   );
 }

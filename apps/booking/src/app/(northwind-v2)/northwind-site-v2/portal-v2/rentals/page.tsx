@@ -5,11 +5,11 @@
  * (apps/portal/src/components/rentals-v2/rentals-list-v2.tsx), for a customer.
  * Taken piece for piece rather than redesigned:
  *
- *   - the header: "Rentals", "Manage rental agreements and contracts", and the
- *     one labelled button top right ("+ Book a car", where the operator has
- *     "+ New Rental"), in the operator's heading and primary-button style;
- *   - the overview row: the shared Rentals graph (booked value) and the
- *     companion card, Calendar View; the filter panel is the card's back face
+ *   - the header: "Rentals" and one plain line, in the operator's heading
+ *     style. No "+ Book a car" here: booking lives in the rail (owner, Oct 21
+ *     2026);
+ *   - the overview slot: the Calendar view card, which took the graph's place
+ *     (the graph came out the same day). The filter panel is its back face
  *     and the top bar's filter button turns it over (shared overview-flip);
  *   - the table: the shared Rentals table (shared/portal-v2/rentals-table.tsx),
  *     Customer becoming Vehicle; rows arrive as the box scrolls, with the
@@ -25,10 +25,8 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { CarFront, Plus, SearchX } from 'lucide-react-nw';
+import { CarFront, SearchX } from 'lucide-react-nw';
 
-import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2 } from '@portal-v2-shared/header';
-import { V2_BUTTON_PRIMARY } from '@portal-v2-shared/button-styles';
 import { RentalsOverviewFlip } from '@portal-v2-shared/overview-flip';
 import { usePageSearch } from '@portal-v2-shared/page-search-slot';
 import {
@@ -42,10 +40,8 @@ import { CustomerRentalsCalendar } from '@nw/portal-v2/rentals/rentals-calendar'
 import { RentalsOverview } from '@nw/portal-v2/rentals/rentals-overview';
 import { CustomerRentalsTable, CustomerRentalsTableSkeleton } from '@nw/portal-v2/rentals/rentals-table';
 import { EmptyState, LoadError, PageHeader, Panel } from '@nw/portal-v2/primitives';
-import { QuickBookTrigger } from '@nw/site-v2/quick-book/quick-book-dialog';
 import { useCustomer } from '@nw/hooks/use-customer';
 import { useCustomerRentals } from '@nw/hooks/use-customer-rentals';
-import { cn } from '@nw/lib/utils';
 
 export default function PortalRentalsPage() {
   const router = useRouter();
@@ -97,17 +93,7 @@ export default function PortalRentalsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Rentals"
-        description="Manage rental agreements and contracts"
-        actionClassName={HEADER_ACTIONS_V2}
-        action={
-          <QuickBookTrigger className={cn(V2_BUTTON_PRIMARY, HEADER_PRIMARY_V2, 'flex-1 sm:flex-none')}>
-            <Plus aria-hidden />
-            Book a car
-          </QuickBookTrigger>
-        }
-      />
+      <PageHeader title="Rentals" description="Manage your rentals, from upcoming to completed." />
 
       {view === 'calendar' ? (
         <CustomerRentalsCalendar

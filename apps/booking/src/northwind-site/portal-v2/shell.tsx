@@ -7,11 +7,12 @@
  * (the v2 fixed frame).
  *
  * Copied, not approximated: the rail's row metrics, hover and active ring, the
- * group labels, the org row at the top, the profile row and its menu at the
- * bottom, ⌘B to collapse to icons, the search pill with ⌘K, and the icon
- * cluster with notifications at the far right. Calmer where a customer needs
- * it: one primary action in the rail (Book a car), and no operator-only
- * controls (credits, Help/Trax, the sidebar customiser).
+ * org row at the top with the customiser and the booking-site arrow, the
+ * profile row and its menu at the bottom, ⌘B to collapse to icons, the search
+ * pill with ⌘K, and the top bar's helpline, Help, messages and notifications.
+ * The rail is ONE list, straight through (owner, Oct 21 2026), with the
+ * operator's names and icons. One primary action in the rail (Book a car);
+ * no operator-only controls (credits, Trax).
  *
  * The gate is the current portal's, unchanged in substance: children never
  * mount until the customer is signed in for THIS tenant, so no page fires a
@@ -27,23 +28,26 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowUpRight,
   Bell,
-  CalendarDays,
   ChevronsUpDown,
   CornerDownLeft,
+  ExternalLink,
   LogOut,
   Menu,
   MessageCircle,
+  Moon,
   Plus,
   Search,
   Settings,
+  SlidersHorizontal,
+  Sun,
 } from 'lucide-react-nw';
 
 import { PortalBoot } from '@nw/components/portal/portal-boot';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@nw/components/ui/dialog';
 import { MOTION_ANCHORED, MOTION_TOOLTIP } from '@nw/components/ui/motion';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@nw/components/ui/sheet';
+import { Switch } from '@nw/components/ui/switch';
 import { MessagesSheet, NotificationsSheet } from '@nw/portal-v2/top-bar-sheets';
 import { useCustomerAuth } from '@nw/contexts/CustomerAuthContext';
 import { useTenant } from '@nw/contexts/TenantContext';
@@ -54,17 +58,22 @@ import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { supabase } from '@nw/integrations/supabase/client';
 import { cn } from '@nw/lib/utils';
 import { QuickBookProvider, QuickBookTrigger } from '@nw/site-v2/quick-book/quick-book-dialog';
+import { V2_BUTTON_PRIMARY } from '@portal-v2-shared/button-styles';
 import { PageSearchProvider, usePageSearchSlot } from '@portal-v2-shared/page-search-slot';
 import { SearchField } from '@portal-v2-shared/search-field';
 
 import { brandHslVars } from './brand';
+import { HelpMenu, HelplineLink } from './help-menu';
 import {
   PORTAL_V2_BASE,
+  PORTAL_V2_EXTRA_PAGES,
   PORTAL_V2_ITEMS,
-  PORTAL_V2_NAV,
+  arrangePortalV2Nav,
   isPortalV2Active,
   type PortalV2NavItem,
 } from './nav';
+import { SidebarCustomizerDialog, usePortalV2NavPreferences } from './sidebar-customizer';
+import { usePortalThemeRoot, type PortalTheme } from './theme';
 
 /* ───────────────────────────────── gate ────────────────────────────────── */
 
@@ -189,6 +198,8 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
   const [navOpen, setNavOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [customizerOpen, setCustomizerOpen] = useState(false);
+  const { theme, setTheme } = usePortalThemeRoot();
   const brandVars = brandHslVars(tenant?.primary_color);
 
   const onMessages = isPortalV2Active('/portal/messages', pathname);
@@ -288,7 +299,7 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
               collapsed ? 'w-12' : 'w-64',
             )}
           >
-            <Rail pathname={pathname} collapsed={collapsed} counts={counts} />
+            <Rail pathname={pathname} collapsed={collapsed} theme={theme} onThemeChange={setTheme} onCustomize={() => setCustomizerOpen(true)} />
             {/* The operator's SidebarRail: a 16px strip on the edge that shows a
                 2px line on hover and toggles the rail on click. */}
             <button
@@ -316,7 +327,14 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
               <SheetTitle className="sr-only">Menu</SheetTitle>
               <SheetDescription className="sr-only">Your account pages</SheetDescription>
               <div className={cn('flex h-full flex-col', fontClass)}>
-                <Rail pathname={pathname} collapsed={false} counts={counts} onNavigate={() => setNavOpen(false)} />
+                <Rail
+                  pathname={pathname}
+                  collapsed={false}
+                  theme={theme}
+                  onThemeChange={setTheme}
+                  onCustomize={() => setCustomizerOpen(true)}
+                  onNavigate={() => setNavOpen(false)}
+                />
               </div>
             </SheetContent>
           </Sheet>
@@ -336,6 +354,8 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
               <>
                 <TopBar
                   counts={counts}
+                  theme={theme}
+                  onThemeChange={setTheme}
                   onOpenNav={() => setNavOpen(true)}
                   onOpenSearch={() => setSearchOpen(true)}
                   onOpenMessages={() => setMessagesOpen(true)}
@@ -353,6 +373,7 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
           </PageSearchProvider>
 
           <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+          <SidebarCustomizerDialog open={customizerOpen} onOpenChange={setCustomizerOpen} />
           <NotificationsSheet open={notificationsOpen} onOpenChange={setNotificationsOpen} />
           <MessagesSheet open={messagesOpen} onOpenChange={setMessagesOpen} unread={counts.messages} />
         </div>
@@ -378,60 +399,44 @@ const NAV_ROW_ACTIVE =
   'shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--pv-primary)_12%,transparent),0_1px_2px_color-mix(in_srgb,var(--pv-primary)_8%,transparent)]';
 const NAV_ROW_ICON_ONLY = 'md:mx-auto md:size-8 md:justify-center md:p-0';
 
-/** The group heading: 10px, uppercase, widest tracking, muted. */
-const GROUP_LABEL = 'px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-widest text-pv-muted-fg';
-
 function Rail({
   pathname,
   collapsed,
-  counts,
+  theme,
+  onThemeChange,
+  onCustomize,
   onNavigate,
 }: {
   pathname: string | null;
   collapsed: boolean;
-  counts: Counts;
+  theme: PortalTheme;
+  onThemeChange: (theme: PortalTheme) => void;
+  onCustomize: () => void;
   onNavigate?: () => void;
 }) {
-  const { tenant } = useTenant();
-  const gigDriver = (tenant as { gig_driver_enabled?: boolean | null } | null)?.gig_driver_enabled === true;
-
-  const groups = PORTAL_V2_NAV.map((group) => ({
-    ...group,
-    items: group.items.filter((item) => item.requires !== 'gig_driver' || gigDriver),
-  })).filter((group) => group.items.length > 0);
+  const { preferences } = usePortalV2NavPreferences();
+  const items = arrangePortalV2Nav(preferences).shown;
 
   return (
     <>
       <div className="shrink-0 p-1.5 pt-4">
-        <OrgRow collapsed={collapsed} onNavigate={onNavigate} />
+        <OrgRow collapsed={collapsed} onNavigate={onNavigate} onCustomize={onCustomize} />
       </div>
 
+      {/* One list, straight through: no group headings, no split. */}
       <nav aria-label="Portal" className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden pt-1">
-        {groups.map((group, index) => (
-          <div key={group.label ?? index} className={cn('flex flex-col p-1.5', group.label ? 'pb-2 pt-1' : 'pb-0')}>
-            {group.label && !collapsed ? <p className={GROUP_LABEL}>{group.label}</p> : null}
-            <ul className="flex w-full min-w-0 flex-col gap-0.5">
-              {group.items.map((item) => (
-                <li key={item.href} className="relative">
-                  <NavRow
-                    item={item}
-                    active={isPortalV2Active(item.href, pathname)}
-                    collapsed={collapsed}
-                    count={item.badge ? counts[item.badge] : 0}
-                    onNavigate={onNavigate}
-                  />
-                </li>
-              ))}
-            </ul>
-            {/* The operator's hairline under the top-level row. */}
-            {!group.label && !collapsed ? <div className="mx-2 mt-1.5 h-px bg-pv-sidebar-border/60" /> : null}
-          </div>
-        ))}
+        <ul className="flex w-full min-w-0 flex-col gap-0.5 p-1.5">
+          {items.map((item) => (
+            <li key={item.href} className="relative">
+              <NavRow item={item} active={isPortalV2Active(item.href, pathname)} collapsed={collapsed} onNavigate={onNavigate} />
+            </li>
+          ))}
+        </ul>
       </nav>
 
       <div className="flex shrink-0 flex-col gap-2 p-1.5 pb-2">
         <BookCta collapsed={collapsed} onNavigate={onNavigate} />
-        <ProfileRow collapsed={collapsed} onNavigate={onNavigate} />
+        <ProfileRow collapsed={collapsed} theme={theme} onThemeChange={onThemeChange} onNavigate={onNavigate} />
       </div>
     </>
   );
@@ -441,24 +446,21 @@ function NavRow({
   item,
   active,
   collapsed,
-  count,
   onNavigate,
 }: {
   item: PortalV2NavItem;
   active: boolean;
   collapsed: boolean;
-  count: number;
   onNavigate?: () => void;
 }) {
   const Icon = item.icon;
-  const label = count > 0 ? `${item.label}, ${count} unread` : item.label;
 
   const row = (
     <Link
       href={item.href}
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
-      aria-label={collapsed || count > 0 ? label : undefined}
+      aria-label={collapsed ? item.label : undefined}
       className={cn(NAV_ROW, active ? NAV_ROW_ACTIVE : NAV_ROW_REST, collapsed && NAV_ROW_ICON_ONLY)}
     >
       <Icon
@@ -471,22 +473,6 @@ function NavRow({
       {collapsed ? null : (
         <span className="pv2-nav-label min-w-0 flex-1 truncate text-[15px] md:text-[13px]">{item.label}</span>
       )}
-      {count > 0 && !collapsed ? (
-        <span
-          aria-hidden
-          className="ml-auto inline-flex min-w-[18px] shrink-0 items-center justify-center rounded-full bg-pv-danger px-1.5 py-0.5 text-[10px] font-semibold leading-none tabular-nums text-white"
-        >
-          {count > 99 ? '99+' : count}
-        </span>
-      ) : null}
-      {count > 0 && collapsed ? (
-        <span
-          aria-hidden
-          className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-pv-danger px-0.5 text-[10px] font-bold leading-none tabular-nums text-white"
-        >
-          {count > 9 ? '9+' : count}
-        </span>
-      ) : null}
     </Link>
   );
 
@@ -500,11 +486,17 @@ function NavRow({
 }
 
 /**
- * The org row (org-switcher.tsx): a 32px rounded-lg mark and the name at 13px
- * semibold, the whole row hovering with the light tint. Here it leads back to
- * the tenant's website — the customer's way out of their account.
+ * The org row, as the operator's (org-switcher.tsx): the mark and the name,
+ * then — pinned to the row's right edge — the sidebar customiser and the
+ * booking-site arrow, both always visible, in the operator's 28px rounded-lg
+ * boxes. The mark and the name lead back to the tenant's website, as they
+ * always have here; the arrow opens it in a new tab, as the operator's does.
  */
-function OrgRow({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
+const ORG_CONTROL =
+  'flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-pv-muted-fg outline-none transition-colors duration-200 ' +
+  'hover:bg-pv-primary/10 hover:text-pv-primary focus-visible:ring-2 focus-visible:ring-pv-ring/50 motion-reduce:transition-none';
+
+function OrgRow({ collapsed, onNavigate, onCustomize }: { collapsed: boolean; onNavigate?: () => void; onCustomize: () => void }) {
   const { appName, faviconUrl } = useTenantBranding();
   const name = appName ?? 'Your account';
   const initials =
@@ -525,14 +517,15 @@ function OrgRow({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: ()
     </span>
   );
 
-  const ROW =
-    'group/site flex w-full cursor-pointer items-center rounded-lg outline-none transition-colors duration-200 ' +
-    'hover:bg-pv-primary/10 focus-visible:ring-2 focus-visible:ring-pv-ring/50 motion-reduce:transition-none';
-
   if (collapsed) {
     return (
       <Tip label={`${name} website`} side="right">
-        <Link href="/" onClick={onNavigate} aria-label={`Back to the ${name} website`} className={cn(ROW, 'justify-center p-1.5')}>
+        <Link
+          href="/"
+          onClick={onNavigate}
+          aria-label={`Back to the ${name} website`}
+          className="flex w-full cursor-pointer items-center justify-center rounded-lg p-1.5 outline-none transition-colors duration-200 hover:bg-pv-primary/10 focus-visible:ring-2 focus-visible:ring-pv-ring/50 motion-reduce:transition-none"
+        >
           {mark}
         </Link>
       </Tip>
@@ -540,49 +533,55 @@ function OrgRow({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: ()
   }
 
   return (
-    <Link href="/" onClick={onNavigate} title="Back to the website" className={cn(ROW, 'gap-2.5 p-1.5')}>
-      {mark}
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-semibold leading-tight text-pv-fg">{name}</span>
-        <span className="block truncate text-[11px] leading-tight text-pv-muted-fg">Your account</span>
-      </span>
-      {/* The operator row's 28px control, fading in with the row's hover. */}
-      <span
-        aria-hidden
-        className="mr-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg text-pv-muted-fg opacity-0 transition-opacity duration-200 ease-in group-hover/site:opacity-100 group-hover/site:ease-out group-focus-visible/site:opacity-100 motion-reduce:transition-none"
+    <div className="flex items-center rounded-lg transition-colors duration-200 hover:bg-pv-primary/10 motion-reduce:transition-none">
+      <Link
+        href="/"
+        onClick={onNavigate}
+        title="Back to the website"
+        className="flex min-w-0 cursor-pointer items-center gap-2.5 rounded-lg p-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-pv-ring/50"
       >
-        <ArrowUpRight className="size-4" />
-      </span>
-    </Link>
+        {mark}
+        <span className="min-w-0 truncate text-[13px] font-semibold leading-tight text-pv-fg">{name}</span>
+      </Link>
+      <span aria-hidden className="flex-1" />
+      {/* Opens a dialog over the phone drawer, so it does not close the drawer. */}
+      <button type="button" onClick={onCustomize} aria-label="Customise sidebar" title="Customise sidebar" className={ORG_CONTROL}>
+        <SlidersHorizontal aria-hidden className="size-3.5" />
+      </button>
+      <a
+        href="/"
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onNavigate}
+        aria-label={`Open the ${name} website (opens in a new tab)`}
+        title="Open the website"
+        className={ORG_CONTROL}
+      >
+        <ExternalLink aria-hidden className="size-3.5" />
+      </a>
+    </div>
   );
 }
 
 /**
- * The operator ui-v2 primary Button's look: the rail's "Book a car", and the
- * same action in a page header (sized there with HEADER_PRIMARY_V2).
+ * The rail's one call to action: the operator's primary Button exactly
+ * (shared V2_BUTTON_PRIMARY — the gradient pill, 36px, 14px medium), stretched
+ * to the rail. 44px on a phone, the touch floor.
  */
-export const PRIMARY_CTA =
-  'inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full bg-pv-primary text-sm font-medium text-pv-primary-fg ' +
-  'transition-colors duration-200 hover:bg-pv-primary/80 active:translate-y-px motion-reduce:transition-none ' +
-  'focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-pv-ring/30';
-
-/** The rail's one call to action, as the operator ui-v2 primary Button. */
 function BookCta({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
-  const CTA = PRIMARY_CTA;
-
   if (collapsed) {
     return (
       <Tip label="Book a car" side="right">
-        <QuickBookTrigger onClick={onNavigate} aria-label="Book a car" className={cn(CTA, 'mx-auto size-8')}>
-          <Plus aria-hidden className="size-4" />
+        <QuickBookTrigger onClick={onNavigate} aria-label="Book a car" className={cn(V2_BUTTON_PRIMARY, 'mx-auto size-8 gap-0 px-0')}>
+          <Plus aria-hidden />
         </QuickBookTrigger>
       </Tip>
     );
   }
 
   return (
-    <QuickBookTrigger onClick={onNavigate} className={cn(CTA, 'h-11 w-full px-3 md:h-9')}>
-      <Plus aria-hidden className="size-4" />
+    <QuickBookTrigger onClick={onNavigate} className={cn(V2_BUTTON_PRIMARY, 'h-11 w-full md:h-9')}>
+      <Plus aria-hidden />
       Book a car
     </QuickBookTrigger>
   );
@@ -595,7 +594,7 @@ const ROW_CONTROL =
   'shrink-0 cursor-pointer rounded-lg p-1.5 text-pv-muted-fg outline-none transition-colors duration-200 ' +
   'hover:bg-pv-primary/10 hover:text-pv-primary focus-visible:ring-2 focus-visible:ring-pv-ring/50 motion-reduce:transition-none';
 
-function Avatar({ initials, size = 'md' }: { initials: string | null; size?: 'md' | 'lg' }) {
+function Avatar({ initials, photo, size = 'md' }: { initials: string | null; photo?: string | null; size?: 'md' | 'lg' }) {
   return (
     <span
       className={cn(
@@ -603,18 +602,35 @@ function Avatar({ initials, size = 'md' }: { initials: string | null; size?: 'md
         size === 'lg' ? 'size-9 font-semibold ring-2 ring-pv-border/50' : 'size-8 font-medium',
       )}
     >
-      {initials ?? '·'}
+      {photo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photo} alt="" className="size-full object-cover" />
+      ) : (
+        initials ?? '·'
+      )}
     </span>
   );
 }
 
 /**
  * The profile row at the foot of the rail: avatar, name and email, then the
- * Settings gear and the menu caret, as one hover group. Collapsed, the gear
- * stacks above the avatar.
+ * Settings gear and the menu caret, as one hover group — the operator's row.
+ * The gear is the way into Settings; there is no Settings tab. Collapsed, the
+ * gear stacks above the avatar.
  */
-function ProfileRow({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
-  const { displayName, email, initials } = useCustomer();
+function ProfileRow({
+  collapsed,
+  theme,
+  onThemeChange,
+  onNavigate,
+}: {
+  collapsed: boolean;
+  theme: PortalTheme;
+  onThemeChange: (theme: PortalTheme) => void;
+  onNavigate?: () => void;
+}) {
+  const { displayName, email, initials, customer } = useCustomer();
+  const photo = customer?.profile_photo_url ?? null;
   const [open, setOpen] = useState(false);
 
   if (collapsed) {
@@ -625,9 +641,9 @@ function ProfileRow({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?
             <Settings className="size-4" />
           </Link>
         </Tip>
-        <AccountMenu open={open} onOpenChange={setOpen} side="right" align="end" onNavigate={onNavigate}>
+        <AccountMenu open={open} onOpenChange={setOpen} side="right" align="end" theme={theme} onThemeChange={onThemeChange}>
           <button type="button" aria-label="Your account" className="cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-pv-ring/50">
-            <Avatar initials={initials} />
+            <Avatar initials={initials} photo={photo} />
           </button>
         </AccountMenu>
       </div>
@@ -641,9 +657,9 @@ function ProfileRow({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?
         open && 'bg-pv-primary/10',
       )}
     >
-      <AccountMenu open={open} onOpenChange={setOpen} side="top" align="start" onNavigate={onNavigate}>
+      <AccountMenu open={open} onOpenChange={setOpen} side="top" align="start" theme={theme} onThemeChange={onThemeChange}>
         <button type="button" className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-pv-ring/50">
-          <Avatar initials={initials} />
+          <Avatar initials={initials} photo={photo} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13px] font-semibold leading-tight text-pv-fg">{displayName ?? 'Your account'}</span>
             {email ? <span className="block truncate text-[11px] leading-tight text-pv-muted-fg">{email}</span> : null}
@@ -655,6 +671,7 @@ function ProfileRow({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?
       </Link>
       <button
         type="button"
+        onPointerDown={(event) => event.stopPropagation()}
         onClick={() => setOpen((value) => !value)}
         aria-label="Open account menu"
         className={ROW_CONTROL}
@@ -669,31 +686,32 @@ const MENU_ITEM =
   'flex cursor-pointer select-none items-center rounded-lg px-2.5 py-1.5 text-[13px] text-pv-fg outline-none ' +
   'transition-colors duration-200 data-[highlighted]:bg-pv-hover motion-reduce:transition-none';
 
-/** The operator's user menu (user-menu-v2.tsx): header, then plain rows. */
+/**
+ * The operator's user menu (user-menu-v2.tsx), cut to what a customer needs:
+ * the header, Dark mode with its switch, and Sign out. Settings is the gear
+ * beside the row; Rentals and the website are in the rail.
+ */
 function AccountMenu({
   open,
   onOpenChange,
   side,
   align,
-  onNavigate,
+  theme,
+  onThemeChange,
   children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   side: 'top' | 'right' | 'bottom';
   align: 'start' | 'end';
-  onNavigate?: () => void;
+  theme: PortalTheme;
+  onThemeChange: (theme: PortalTheme) => void;
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { displayName, email, initials, signOut } = useCustomer();
-  const { appName } = useTenantBranding();
+  const { displayName, email, initials, signOut, customer } = useCustomer();
   const [signingOut, setSigningOut] = useState(false);
-
-  const go = (href: string) => {
-    onNavigate?.();
-    router.push(href);
-  };
+  const isDark = theme === 'dark';
 
   const handleSignOut = useCallback(async () => {
     setSigningOut(true);
@@ -716,7 +734,7 @@ function AccountMenu({
           className={cn('z-50 w-64 overflow-hidden rounded-xl border border-pv-border bg-pv-card p-0 text-pv-fg shadow-lg outline-none', MOTION_ANCHORED)}
         >
           <div className="flex items-center gap-2.5 p-2.5 pb-2">
-            <Avatar initials={initials} size="lg" />
+            <Avatar initials={initials} photo={customer?.profile_photo_url ?? null} size="lg" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-[13px] font-semibold leading-tight">{displayName ?? 'Your account'}</p>
               {email ? <p className="truncate text-[11px] leading-tight text-pv-muted-fg/70">{email}</p> : null}
@@ -724,17 +742,16 @@ function AccountMenu({
           </div>
           <DropdownMenu.Separator className="h-px bg-pv-border" />
           <div className="p-1.5">
-            <DropdownMenu.Item className={MENU_ITEM} onSelect={() => go('/portal/settings')}>
-              <Settings className="mr-2.5 size-4 text-pv-muted-fg" />
-              Settings
-            </DropdownMenu.Item>
-            <DropdownMenu.Item className={MENU_ITEM} onSelect={() => go('/portal/rentals')}>
-              <CalendarDays className="mr-2.5 size-4 text-pv-muted-fg" />
-              Your rentals
-            </DropdownMenu.Item>
-            <DropdownMenu.Item className={MENU_ITEM} onSelect={() => go('/')}>
-              <ArrowUpRight className="mr-2.5 size-4 text-pv-muted-fg" />
-              {appName ? `${appName} website` : 'Back to the website'}
+            <DropdownMenu.Item
+              className={MENU_ITEM}
+              onSelect={(event) => {
+                event.preventDefault();
+                onThemeChange(isDark ? 'light' : 'dark');
+              }}
+            >
+              {isDark ? <Sun className="mr-2.5 size-4 text-pv-muted-fg" /> : <Moon className="mr-2.5 size-4 text-pv-muted-fg" />}
+              <span>Dark mode</span>
+              <Switch checked={isDark} tabIndex={-1} aria-hidden className="pointer-events-none ml-auto data-[state=checked]:bg-pv-primary" />
             </DropdownMenu.Item>
           </div>
           <DropdownMenu.Separator className="h-px bg-pv-border" />
@@ -767,18 +784,22 @@ const FIELD =
 
 function TopBar({
   counts,
+  theme,
+  onThemeChange,
   onOpenNav,
   onOpenSearch,
   onOpenMessages,
   onOpenNotifications,
 }: {
   counts: Counts;
+  theme: PortalTheme;
+  onThemeChange: (theme: PortalTheme) => void;
   onOpenNav: () => void;
   onOpenSearch: () => void;
   onOpenMessages: () => void;
   onOpenNotifications: () => void;
 }) {
-  const { initials } = useCustomer();
+  const { initials, customer } = useCustomer();
   const [menuOpen, setMenuOpen] = useState(false);
   // A list page (Rentals) lends the bar its own field: it filters that list as
   // you type, and "Search everywhere" / ⌘K hand off to the search dialog.
@@ -814,10 +835,13 @@ function TopBar({
         <Search aria-hidden className="size-4" />
       </button>
 
-      {/* Order as on the operator bar: messages, then notifications at the far
-          right. The phone, which has no rail, adds the account avatar after. */}
+      {/* Order as on the operator bar: the helpline and Help, then messages,
+          then notifications at the far right. The phone, which has no rail,
+          adds the account avatar after. */}
       <div className="ml-auto flex items-center gap-0.5">
         <span aria-hidden className="mx-1 hidden h-5 w-px bg-pv-border sm:block" />
+        <HelplineLink />
+        <HelpMenu onOpenMessages={onOpenMessages} />
         <Tip label="Messages">
           <button
             type="button"
@@ -843,9 +867,9 @@ function TopBar({
           </button>
         </Tip>
         <div className="ml-1 md:hidden">
-          <AccountMenu open={menuOpen} onOpenChange={setMenuOpen} side="bottom" align="end">
+          <AccountMenu open={menuOpen} onOpenChange={setMenuOpen} side="bottom" align="end" theme={theme} onThemeChange={onThemeChange}>
             <button type="button" aria-label="Your account" className="flex cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-pv-ring/50">
-              <Avatar initials={initials} />
+              <Avatar initials={initials} photo={customer?.profile_photo_url ?? null} />
             </button>
           </AccountMenu>
         </div>
@@ -889,13 +913,10 @@ function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
 
 function SearchBody({ onDone }: { onDone: () => void }) {
   const router = useRouter();
-  const { tenant } = useTenant();
   const { rentals, isLoading } = useCustomerRentals();
   const [term, setTerm] = useState('');
   const [selected, setSelected] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
-  const gigDriver = (tenant as { gig_driver_enabled?: boolean | null } | null)?.gig_driver_enabled === true;
-
   const results = useMemo<SearchResult[]>(() => {
     const q = term.trim().toLowerCase();
     const bookings = rentals
@@ -913,7 +934,7 @@ function SearchBody({ onDone }: { onDone: () => void }) {
         subtitle: rental.reference,
         href: `/portal/rentals/${rental.id}`,
       }));
-    const pages = PORTAL_V2_ITEMS.filter((item) => item.requires !== 'gig_driver' || gigDriver)
+    const pages = [...PORTAL_V2_ITEMS, ...PORTAL_V2_EXTRA_PAGES]
       .filter((item) => !q || item.label.toLowerCase().includes(q))
       .map<SearchResult>((item) => ({
         key: `page-${item.href}`,
@@ -923,7 +944,7 @@ function SearchBody({ onDone }: { onDone: () => void }) {
         href: item.href,
       }));
     return [...bookings, ...pages];
-  }, [gigDriver, rentals, term]);
+  }, [rentals, term]);
 
   useEffect(() => setSelected(0), [term]);
 

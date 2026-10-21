@@ -6,6 +6,8 @@
    the operator portal. It reads the shadcn token names; the .pv2 block below
    points them at the v2 tokens. */
 @import "../../../../../shared/portal-v2/timeline/timeline.css";
+/* The v2 navigation icons and their hover gestures, shared with the operator rail. */
+@import "../../../../../shared/portal-v2/nav-icons/nav-icons.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -627,6 +629,18 @@
 }
 .pv2-tokens {
   font-family: var(--font-manrope), var(--font-dm-sans), system-ui, sans-serif;
+}
+/* Dark mode (the account menu's switch puts `.dark` on <html> while the
+   portal is mounted). The v2 tokens carry their own dark set; these are the
+   few site aliases above that name a fixed light value. */
+.dark .pv2,
+.dark .pv2-tokens {
+  --brand-cream: hsl(0 0% 14%);
+  --brand-text-soft: hsl(0 0% 74%);
+  --brand-text-muted: hsl(0 0% 66%);
+  --brand-placeholder: hsl(0 0% 46%);
+  --brand-border: hsl(0 0% 26%);
+  color-scheme: dark;
 }
 /* The shadcn token names the shared rentals timeline (timeline.css) reads,
    pointed at the v2 tokens exactly as the operator's v2-theme.css points them.

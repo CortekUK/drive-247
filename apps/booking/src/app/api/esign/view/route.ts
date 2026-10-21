@@ -15,9 +15,68 @@ function getBoldSignApiKey(mode: 'test' | 'live'): string {
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
+/**
+ * A stored signed copy, as the v2 drawers can draw it. Those drawers render
+ * the PDF with pdf.js, which has to `fetch()` it, so a copy hosted anywhere
+ * but our own storage (seeded rows point at outside hosts) is blocked by CORS
+ * and the drawer shows nothing. When the caller asks for `inline`, such a copy
+ * is fetched here and returned as base64 instead. Our own storage sends CORS
+ * headers, so its URL still goes back as a URL. Without `inline` (every v1
+ * caller) the response is exactly what it always was.
+ *
+ * Only an https URL to a public host, only a PDF, at most 20 MB.
+ */
+const INLINE_MAX_BYTES = 20 * 1024 * 1024;
+
+function isOwnStorage(url: string): boolean {
+    try {
+        return !!supabaseUrl && new URL(url).origin === new URL(supabaseUrl).origin;
+    } catch {
+        return false;
+    }
+}
+
+function isPublicHttps(url: string): boolean {
+    try {
+        const { protocol, hostname } = new URL(url);
+        if (protocol !== 'https:') return false;
+        const host = hostname.toLowerCase();
+        if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal')) return false;
+        // No literal addresses: a stored URL must name a host.
+        if (/^[\d.]+$/.test(host) || host.includes(':') || host.startsWith('[')) return false;
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+async function storedDocumentResponse(documentUrl: string, inline: boolean) {
+    if (inline && !isOwnStorage(documentUrl) && isPublicHttps(documentUrl)) {
+        try {
+            const response = await fetch(documentUrl, { redirect: 'follow' });
+            const length = Number(response.headers.get('content-length') ?? 0);
+            if (response.ok && length <= INLINE_MAX_BYTES) {
+                const buffer = Buffer.from(await response.arrayBuffer());
+                if (buffer.byteLength <= INLINE_MAX_BYTES && buffer.subarray(0, 5).toString('latin1') === '%PDF-') {
+                    return NextResponse.json({
+                        ok: true,
+                        documentBase64: buffer.toString('base64'),
+                        contentType: 'application/pdf',
+                        status: 'completed',
+                        source: 'stored',
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn('Stored document could not be fetched inline:', e);
+        }
+    }
+    return NextResponse.json({ ok: true, documentUrl, status: 'completed', source: 'stored' });
+}
+
 export async function POST(request: NextRequest) {
     try {
-        const { rentalId, envelopeId: providedEnvelopeId, agreementId } = await request.json();
+        const { rentalId, envelopeId: providedEnvelopeId, agreementId, inline } = await request.json();
 
         if (!rentalId && !providedEnvelopeId && !agreementId) {
             return NextResponse.json({ ok: false, error: 'rentalId, envelopeId, or agreementId required' }, { status: 400 });
@@ -54,7 +113,7 @@ export async function POST(request: NextRequest) {
                                 .getPublicUrl(doc.file_url);
                             documentUrl = urlData.publicUrl;
                         }
-                        return NextResponse.json({ ok: true, documentUrl, status: 'completed', source: 'stored' });
+                        return storedDocumentResponse(documentUrl, inline === true);
                     }
                 }
 
@@ -90,12 +149,7 @@ export async function POST(request: NextRequest) {
                         documentUrl = urlData.publicUrl;
                     }
 
-                    return NextResponse.json({
-                        ok: true,
-                        documentUrl,
-                        status: 'completed',
-                        source: 'stored'
-                    });
+                    return storedDocumentResponse(documentUrl, inline === true);
                 }
             }
 

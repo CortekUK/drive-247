@@ -52,7 +52,9 @@ export async function loadAgreementDocument(row: AgreementListRow, source: Agree
   const response = await fetch(source.viewUrl ?? "/api/esign/view", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rentalId: row.rentalId, agreementId: row.id }),
+    // `inline`: a signed copy kept outside our storage comes back as base64,
+    // which pdf.js can draw; its URL would be blocked by CORS.
+    body: JSON.stringify({ rentalId: row.rentalId, agreementId: row.id, inline: true }),
   });
   const data = await response.json().catch(() => ({}) as Record<string, any>);
   if (!response.ok || !data?.ok) {

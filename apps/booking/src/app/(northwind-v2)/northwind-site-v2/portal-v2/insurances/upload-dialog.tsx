@@ -89,11 +89,14 @@ export function UploadDocumentDialog({
   open,
   onOpenChange,
   onUploaded,
+  insuranceOnly = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Called once at least one file landed, so the page can say so. */
   onUploaded: (count: number) => void;
+  /** Insurances page: no type step, an insurance certificate is the only kind. */
+  insuranceOnly?: boolean;
 }) {
   const upload = useUploadCustomerDocument();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -107,7 +110,7 @@ export function UploadDocumentDialog({
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
-  const [step, setStep] = useState<Step>('type');
+  const [step, setStep] = useState<Step>(insuranceOnly ? 'details' : 'type');
   const [dragActive, setDragActive] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -115,7 +118,7 @@ export function UploadDocumentDialog({
   const isInsurance = documentType === INSURANCE_DOCUMENT_TYPE;
 
   const reset = () => {
-    setStep('type');
+    setStep(insuranceOnly ? 'details' : 'type');
     setDocumentType(INSURANCE_DOCUMENT_TYPE);
     setFiles([]);
     setInsuranceProvider('');
@@ -220,7 +223,7 @@ export function UploadDocumentDialog({
     setProblems(failures);
   };
 
-  const steps: Step[] = isInsurance ? ['type', 'details', 'file'] : ['type', 'file'];
+  const steps: Step[] = insuranceOnly ? ['details', 'file'] : isInsurance ? ['type', 'details', 'file'] : ['type', 'file'];
   const stepIndex = steps.indexOf(step);
   const goBack = () => {
     setProblems([]);

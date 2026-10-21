@@ -30,6 +30,42 @@ import { cn } from '@nw/lib/utils';
 
 import { PV_BUTTON_GHOST_SM, PV_BUTTON_SM } from './pv-kit';
 
+/* ──────────────────────────── page furniture ─────────────────────────── */
+
+/**
+ * The operator's settings page title and section heading
+ * (settings-kit.tsx SETTINGS_PAGE_TITLE / SETTINGS_SECTION_TITLE).
+ */
+export const SETTINGS_PAGE_TITLE = 'font-heading text-2xl font-bold tracking-tight text-pv-fg';
+export const SETTINGS_SECTION_TITLE = 'font-heading text-base font-semibold tracking-tight text-pv-fg';
+
+/**
+ * The operator's settings column (V2_SETTINGS_PAGE_COLUMN): every settings
+ * page, the index included, sits in it.
+ */
+export const SETTINGS_PAGE_COLUMN = 'w-full min-h-full max-w-[1160px] space-y-8 pb-6 md:pt-[26px]';
+
+/** A settings page's header (settings-kit.tsx SettingsPageHeader), with room for one action. */
+export function SettingsPageHeader({
+  title,
+  description,
+  action,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0 space-y-1">
+        <h1 className={SETTINGS_PAGE_TITLE}>{title}</h1>
+        {description ? <p className="max-w-2xl text-sm text-pv-muted-fg">{description}</p> : null}
+      </div>
+      {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
+    </div>
+  );
+}
+
 /* ─────────────────────────────── sections ──────────────────────────────── */
 
 /** One titled part of the page: a heading, one line on what it is, its rows. */

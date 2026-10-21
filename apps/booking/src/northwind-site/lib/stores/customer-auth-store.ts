@@ -218,6 +218,8 @@ function fail(kind: AuthFailureKind, message: string): AuthResult {
 export interface TenantIdentity {
   id: string;
   name: string;
+  /** For the auth emails' redirect, which must sit on <slug>.drive-247.com. */
+  slug?: string | null;
 }
 
 const NO_TENANT_MESSAGE =
@@ -914,23 +916,35 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => {
       const address = email.trim().toLowerCase();
 
       /*
-        `send-verification-otp` mails a six-digit code through Resend — NOT
-        through Supabase's own mailer, which is rate-limited to a couple of
-        messages an hour on this project. It always reports success, whether or
-        not the address exists, so the page cannot be used to discover which
-        emails have accounts.
+        Supabase's own recovery code (Oct 21 2026), as the operator's
+        forgot-password does: Supabase mints a single-use code and checks it
+        itself, which is what proves the customer holds the inbox. This used to
+        go through `send-verification-otp` + `verify-otp` +
+        `reset-password-with-otp`, and that last function sets ANY account's
+        password from an email address alone — it never checks a code.
+
+        `?otp=1` asks the auth email hook (custom-auth-email) for a six-digit
+        code in the tenant's branding instead of a link. It rides on the
+        tenant's drive-247.com address because that is on the auth allow-list;
+        a custom domain or localhost would be swapped for the site URL and the
+        marker lost. Supabase answers the same whether or not the address has
+        an account, so the page still cannot be used to discover accounts.
       */
-      const { error } = await supabase.functions.invoke("send-verification-otp", {
-        body: {
-          email: address,
-          tenant_id: tenant?.id ?? null,
-          type: "password_reset",
-        },
+      const origin =
+        tenant?.slug
+          ? `https://${tenant.slug}.drive-247.com`
+          : typeof window !== "undefined"
+            ? window.location.origin
+            : "";
+      const { error } = await supabase.auth.resetPasswordForEmail(address, {
+        redirectTo: `${origin}/forgot-password?otp=1`,
       });
 
       if (error) {
-        const reported = await readFunctionError(error);
-        console.error("[customer-auth] send-verification-otp failed", reported ?? error);
+        console.error("[customer-auth] resetPasswordForEmail failed", error.message);
+        if (error.status === 429) {
+          return fail("network", "Too many codes were requested. Please wait a few minutes and try again.");
+        }
         return fail(
           "network",
           "We could not send the code. Please try again in a moment.",
@@ -941,53 +955,34 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => {
     },
 
     confirmPasswordReset: async (email, code, newPassword) => {
-      const { tenant } = get();
       const address = email.trim().toLowerCase();
 
-      const verified = await supabase.functions.invoke("verify-otp", {
-        body: { email: address, code: code.trim(), tenant_id: tenant?.id ?? null },
+      // Checking the code signs the customer in for the recovery session.
+      const { error: codeError } = await supabase.auth.verifyOtp({
+        type: "recovery",
+        email: address,
+        token: code.trim(),
       });
-
-      if (verified.error) {
-        const reported = await readFunctionError(verified.error);
-        return fail(
-          "invalid-code",
-          reported ?? "That code is not right. Check it, or request a new one.",
-        );
-      }
-
-      // `verify-otp` answers 200 with `{ verified: false }` for a wrong code,
-      // so a missing error is not yet a pass.
-      if (
-        typeof verified.data !== "object" ||
-        verified.data === null ||
-        (verified.data as { verified?: unknown }).verified !== true
-      ) {
+      if (codeError) {
         return fail(
           "invalid-code",
           "That code is not right, or it has expired. Request a new one.",
         );
       }
 
-      const reset = await supabase.functions.invoke("reset-password-with-otp", {
-        body: { email: address, new_password: newPassword },
-      });
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
 
-      if (reset.error) {
-        const reported = await readFunctionError(reset.error);
+      // Either way the recovery session ends here: the customer signs in with
+      // the new password, which runs this site's membership and block checks
+      // exactly as before.
+      await supabase.auth.signOut({ scope: "local" });
 
-        if (reported?.toLowerCase().includes("no account")) {
-          return fail(
-            "no-such-account",
-            "There is no account with that email address.",
-          );
-        }
-
-        if (reported?.toLowerCase().includes("password")) {
+      if (updateError) {
+        const reported = updateError.message ?? "";
+        if (reported.toLowerCase().includes("password")) {
           return fail("weak-password", reported);
         }
-
-        console.error("[customer-auth] reset-password-with-otp failed", reported ?? reset.error);
+        console.error("[customer-auth] updateUser(password) failed", reported);
         return fail("unexpected", UNEXPECTED_MESSAGE);
       }
 

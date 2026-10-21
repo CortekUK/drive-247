@@ -1,13 +1,14 @@
 'use client';
 
 /**
- * Forgotten password v2 — login-v2's split screen, with the current reset's
- * behaviour unchanged (see v1's forgot-password-form.tsx for the why of each
- * rule): the same two store calls (`resetPassword` mails a six-digit code via
- * `send-verification-otp`; `confirmPasswordReset` verifies it and sets the
- * password), step 1 always reading as sent so the page cannot be used to test
- * which addresses have accounts, both steps on one page so the address
- * survives the trip to the inbox, and a 30s resend cooldown.
+ * Forgotten password v2 — login-v2's split screen (see v1's
+ * forgot-password-form.tsx for the why of each rule): two store calls
+ * (`resetPassword` has Supabase mail a six-digit recovery code;
+ * `confirmPasswordReset` has Supabase check it, then sets the password —
+ * since Oct 21 2026, see the store), step 1 always reading as sent so the
+ * page cannot be used to test which addresses have accounts, both steps on
+ * one page so the address survives the trip to the inbox, and a 30s resend
+ * cooldown.
  */
 
 import Link from 'next/link';

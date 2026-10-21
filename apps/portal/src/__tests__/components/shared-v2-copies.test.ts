@@ -22,6 +22,9 @@ import { toSharedClasses } from '../../../../../shared/portal-v2/class-map';
 import {
   V2_BUTTON_DEFAULT,
   V2_BUTTON_DEFAULT_SM,
+  V2_BUTTON_DESTRUCTIVE,
+  V2_BUTTON_DESTRUCTIVE_SM,
+  V2_BUTTON_GHOST,
   V2_BUTTON_GHOST_ICON_SM,
   V2_BUTTON_GHOST_SM,
   V2_BUTTON_OUTLINE,
@@ -76,6 +79,9 @@ describe('shared button styles are the operator Button', () => {
 
   it("the agreement drawer's Download: the default Button at the default size", () => {
     expect(V2_BUTTON_DEFAULT).toBe(toSharedClasses(cn(buttonVariants({}))));
+    expect(V2_BUTTON_GHOST).toBe(toSharedClasses(cn(buttonVariants({ variant: 'ghost' }))));
+    expect(V2_BUTTON_DESTRUCTIVE).toBe(toSharedClasses(cn(buttonVariants({ variant: 'destructive' }))));
+    expect(V2_BUTTON_DESTRUCTIVE_SM).toBe(toSharedClasses(cn(buttonVariants({ variant: 'destructive', size: 'sm' }))));
   });
 });
 
