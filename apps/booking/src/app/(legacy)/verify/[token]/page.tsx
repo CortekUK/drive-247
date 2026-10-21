@@ -434,13 +434,16 @@ export default function VerifyPage() {
     return null;
   };
 
-  // Get step info
+  // Get step info. `?doc=licence|id` is the document the customer chose in
+  // their portal (customer-start-verification adds it to the QR link).
   const getStepInfo = () => {
+    const doc = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('doc');
+    const name = doc === 'licence' ? 'driving licence' : doc === 'id' ? 'ID card' : 'ID';
     switch (step) {
       case 'document-front':
-        return { number: 1, total: 3, title: 'Front of ID', subtitle: 'Position your ID document in the frame' };
+        return { number: 1, total: 3, title: `Front of ${name}`, subtitle: `Position your ${name === 'ID' ? 'ID document' : name} in the frame` };
       case 'document-back':
-        return { number: 2, total: 3, title: 'Back of ID', subtitle: 'Capture the back of your ID (optional)' };
+        return { number: 2, total: 3, title: `Back of ${name}`, subtitle: `Capture the back of your ${name} (optional)` };
       case 'selfie':
         return { number: 3, total: 3, title: 'Take a Selfie', subtitle: 'Position your face in the circle' };
       default:

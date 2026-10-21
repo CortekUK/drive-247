@@ -37,6 +37,7 @@ import {
 } from './auth-fields-v2';
 import { AuthSplitShell, authLinkInk } from './auth-split-shell';
 import { ContinueWithGoogle } from './google-sign-in';
+import { PolicyConsentLine } from './policy-consent-line';
 
 interface FieldErrors {
   name?: string;
@@ -230,6 +231,8 @@ export function SignupV2() {
       <div className="mt-4">
         <ContinueWithGoogle disabled={pending} onSignedIn={goNext} onBusyChange={setGoogleBusy} />
       </div>
+
+      <PolicyConsentLine ink={ink} />
 
       <p className="mt-6 text-center text-sm text-pv-muted-fg">Already have an account? {signInLink}</p>
     </AuthSplitShell>

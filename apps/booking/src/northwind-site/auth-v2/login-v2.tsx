@@ -30,6 +30,7 @@ import { isClean, validateEmail, validateExistingPassword } from '@/app/(northwi
 import { AUTH_FIELD_CLASS as FIELD_CLASS, AUTH_FIELD_ERROR_CLASS as FIELD_ERROR_CLASS } from './auth-fields-v2';
 import { AuthSplitShell, authLinkInk } from './auth-split-shell';
 import { ContinueWithGoogle } from './google-sign-in';
+import { PolicyConsentLine } from './policy-consent-line';
 
 interface FieldErrors {
   email?: string;
@@ -212,6 +213,8 @@ export function LoginV2() {
       <div className="mt-4">
         <ContinueWithGoogle disabled={pending} onSignedIn={goNext} onBusyChange={setGoogleBusy} />
       </div>
+
+      <PolicyConsentLine ink={ink} />
 
       <p className="mt-6 text-center text-sm text-pv-muted-fg">
         New here?{' '}

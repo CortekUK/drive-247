@@ -4472,6 +4472,48 @@ export type Database = {
           },
         ]
       }
+      customer_consents: {
+        Row: {
+          accepted_at: string
+          auth_user_id: string | null
+          consent_type: string
+          created_at: string
+          customer_id: string
+          id: string
+          rental_id: string | null
+          source: string
+          tenant_id: string
+          user_agent: string | null
+          version: string | null
+        }
+        Insert: {
+          accepted_at?: string
+          auth_user_id?: string | null
+          consent_type: string
+          created_at?: string
+          customer_id: string
+          id?: string
+          rental_id?: string | null
+          source?: string
+          tenant_id: string
+          user_agent?: string | null
+          version?: string | null
+        }
+        Update: {
+          accepted_at?: string
+          auth_user_id?: string | null
+          consent_type?: string
+          created_at?: string
+          customer_id?: string
+          id?: string
+          rental_id?: string | null
+          source?: string
+          tenant_id?: string
+          user_agent?: string | null
+          version?: string | null
+        }
+        Relationships: []
+      }
       customer_documents: {
         Row: {
           ai_confidence_score: number | null
@@ -7188,6 +7230,8 @@ export type Database = {
           cmd_verification_id: string | null
           created_at: string | null
           customer_email: string | null
+          customer_corrected_at: string | null
+          customer_corrections: Json | null
           customer_id: string | null
           date_of_birth: string | null
           document_back_url: string | null
@@ -7240,6 +7284,8 @@ export type Database = {
           cmd_verification_id?: string | null
           created_at?: string | null
           customer_email?: string | null
+          customer_corrected_at?: string | null
+          customer_corrections?: Json | null
           customer_id?: string | null
           date_of_birth?: string | null
           document_back_url?: string | null
@@ -7292,6 +7338,8 @@ export type Database = {
           cmd_verification_id?: string | null
           created_at?: string | null
           customer_email?: string | null
+          customer_corrected_at?: string | null
+          customer_corrections?: Json | null
           customer_id?: string | null
           date_of_birth?: string | null
           document_back_url?: string | null
@@ -21823,6 +21871,18 @@ export type Database = {
       }
     }
     Functions: {
+      customer_correct_verification: {
+        Args: { p_fields: Json; p_verification_id: string }
+        Returns: undefined
+      }
+      record_customer_policy_consent: {
+        Args: { p_source?: string; p_tenant_id: string; p_user_agent?: string }
+        Returns: Database["public"]["Tables"]["customer_consents"]["Row"][]
+      }
+      record_customer_rental_consent: {
+        Args: { p_rental_id: string; p_types: string[]; p_user_agent?: string }
+        Returns: Database["public"]["Tables"]["customer_consents"]["Row"][]
+      }
       accounting_clear_tokens: {
         Args: {
           p_new_status?: Database["public"]["Enums"]["accounting_connection_status"]

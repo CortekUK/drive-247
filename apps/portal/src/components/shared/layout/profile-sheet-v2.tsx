@@ -20,6 +20,7 @@ import {
 } from "@/components/ui-v2/dialog";
 import { toast } from "@/hooks/use-toast";
 import { AvatarCropDialogV2 } from "./avatar-crop-dialog-v2";
+import { PasswordChangePanelV2 } from "./password-change-panel-v2";
 
 /**
  * The v2 profile — photo, display name, email and password, in a centred
@@ -102,12 +103,6 @@ export function ProfileSheetV2({
   const [verifyingEmail, setVerifyingEmail] = useState(false);
 
   const [showPassword, setShowPassword] = useState(false);
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [savingPassword, setSavingPassword] = useState(false);
-  /** Set once the confirmation code has gone to the account's address. */
-  const [codeSent, setCodeSent] = useState(false);
-  const [code, setCode] = useState("");
 
   const [uploading, setUploading] = useState(false);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
@@ -122,10 +117,6 @@ export function ProfileSheetV2({
     setEmail(appUser?.email ?? "");
     resetEmailChange();
     setShowPassword(false);
-    setNewPassword("");
-    setConfirmPassword("");
-    setCodeSent(false);
-    setCode("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -356,23 +347,8 @@ export function ProfileSheetV2({
     return data?.user?.email ?? appUser?.email ?? "";
   };
 
-  const passwordProblem = (): string | null => {
-    if (newPassword !== confirmPassword) return "Passwords do not match";
-    if (newPassword.length < 12) return "Password must be at least 12 characters long";
-    if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/\d/.test(newPassword)) {
-      return "Password must contain uppercase, lowercase, and numeric characters";
-    }
-    return null;
-  };
-
-  /** Step one: check the new password, then email the code. Nothing changes yet. */
-  const sendPasswordCode = async () => {
-    const problem = passwordProblem();
-    if (problem) {
-      toast({ title: "Error", description: problem, variant: "destructive" });
-      return;
-    }
-    setSavingPassword(true);
+  /** Step one: email the code to the account's address. Nothing changes yet. */
+  const sendPasswordCode = async (): Promise<string | null> => {
     try {
       const address = await authEmail();
       const { error } = await supabase.auth.signInWithOtp({
@@ -380,36 +356,23 @@ export function ProfileSheetV2({
         options: { shouldCreateUser: false, emailRedirectTo: codeRedirect() },
       });
       if (error) throw error;
-      setCodeSent(true);
-      toast({ title: "Check your inbox", description: `I've sent a six-digit code to ${address}.` });
+      return null;
     } catch (error: any) {
-      toast({
-        title: "Couldn't send the code",
-        description: error?.message || "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setSavingPassword(false);
+      return error?.message || "I couldn't send the code. Please try again.";
     }
   };
 
   /** Step two: check the code, then set the password. */
-  const savePassword = async () => {
-    const problem = passwordProblem();
-    if (problem) {
-      toast({ title: "Error", description: problem, variant: "destructive" });
-      return;
-    }
-    setSavingPassword(true);
+  const savePassword = async (password: string, code: string): Promise<string | null> => {
     try {
       const { error: codeError } = await supabase.auth.verifyOtp({
         type: "email",
         email: await authEmail(),
-        token: code.trim(),
+        token: code,
       });
-      if (codeError) throw new Error(`That code didn't work. ${codeError.message}`);
+      if (codeError) return "That code didn't work. Check it, or send a new one.";
 
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
 
       if (appUser?.id) {
@@ -422,18 +385,9 @@ export function ProfileSheetV2({
 
       toast({ title: "Password updated", description: "Your new password is live." });
       setShowPassword(false);
-      setNewPassword("");
-      setConfirmPassword("");
-      setCodeSent(false);
-      setCode("");
+      return null;
     } catch (error: any) {
-      toast({
-        title: "Couldn't update your password",
-        description: error?.message || "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setSavingPassword(false);
+      return error?.message || "I couldn't update your password. Please try again.";
     }
   };
 
@@ -609,101 +563,13 @@ export function ProfileSheetV2({
                     )}
                   </Button>
                 ) : (
-                  <div className="space-y-3 rounded-xl border border-border p-4">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="new-password">New password</Label>
-                        <Input
-                          id="new-password"
-                          type="password"
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          placeholder="At least 12 characters"
-                          minLength={12}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="confirm-password">Confirm password</Label>
-                        <Input
-                          id="confirm-password"
-                          type="password"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="Type it again"
-                          minLength={12}
-                        />
-                      </div>
-                    </div>
-
-                    {codeSent && (
-                      <div className="space-y-1.5">
-                        <Label htmlFor="reauth-code">Six-digit code</Label>
-                        <CodeInput
-                          id="reauth-code"
-                          value={code}
-                          onChange={setCode}
-                          disabled={savingPassword}
-                          autoFocus
-                        />
-                        <p className="text-[12px] text-muted-foreground">
-                          I emailed this to {appUser.email} to confirm it&apos;s you.{" "}
-                          <button
-                            type="button"
-                            className="font-medium text-foreground underline-offset-2 hover:underline"
-                            onClick={sendPasswordCode}
-                            disabled={savingPassword}
-                          >
-                            Send a new code
-                          </button>
-                        </p>
-                      </div>
-                    )}
-
-                    <p className="text-[12px] text-muted-foreground">
-                      At least 12 characters, with an uppercase letter, a lowercase
-                      letter and a number.
-                      {appUser.must_change_password && (
-                        <span className="ml-1 font-medium text-destructive">
-                          A password change is required before continuing.
-                        </span>
-                      )}
-                    </p>
-
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setShowPassword(false);
-                          setNewPassword("");
-                          setConfirmPassword("");
-                          setCodeSent(false);
-                          setCode("");
-                        }}
-                        disabled={savingPassword}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={codeSent ? savePassword : sendPasswordCode}
-                        disabled={
-                          !newPassword ||
-                          !confirmPassword ||
-                          savingPassword ||
-                          (codeSent && code.trim().length < 6)
-                        }
-                      >
-                        {savingPassword
-                          ? codeSent
-                            ? "Updating…"
-                            : "Sending code…"
-                          : codeSent
-                            ? "Confirm and update"
-                            : "Send code"}
-                      </Button>
-                    </div>
-                  </div>
+                  <PasswordChangePanelV2
+                    email={appUser.email ?? ""}
+                    required={appUser.must_change_password}
+                    onSendCode={sendPasswordCode}
+                    onSave={savePassword}
+                    onCancel={() => setShowPassword(false)}
+                  />
                 )}
               </div>
             )}

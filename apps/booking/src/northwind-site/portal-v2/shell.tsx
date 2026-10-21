@@ -63,7 +63,9 @@ import { PageSearchProvider, usePageSearchSlot } from '@portal-v2-shared/page-se
 import { SearchField } from '@portal-v2-shared/search-field';
 
 import { brandHslVars } from './brand';
-import { HelpMenu, HelplineLink } from './help-menu';
+import { HelpButton, HelplineLink } from './help-menu';
+import { CustomerTraxProvider } from './trax/trax-context';
+import { CustomerTraxPanel } from './trax/trax-panel';
 import {
   PORTAL_V2_BASE,
   PORTAL_V2_EXTRA_PAGES,
@@ -73,6 +75,7 @@ import {
   type PortalV2NavItem,
 } from './nav';
 import { SidebarCustomizerDialog, usePortalV2NavPreferences } from './sidebar-customizer';
+import { useRecordPolicyConsent } from './policy-consent';
 import { usePortalThemeRoot, type PortalTheme } from './theme';
 
 /* ───────────────────────────────── gate ────────────────────────────────── */
@@ -200,6 +203,7 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
   const [collapsed, setCollapsed] = useState(false);
   const [customizerOpen, setCustomizerOpen] = useState(false);
   const { theme, setTheme } = usePortalThemeRoot();
+  useRecordPolicyConsent();
   const brandVars = brandHslVars(tenant?.primary_color);
 
   const onMessages = isPortalV2Active('/portal/messages', pathname);
@@ -282,6 +286,7 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
 
   return (
     <Tooltip.Provider delayDuration={300}>
+      <CustomerTraxProvider>
       <QuickBookProvider>
         <div
           className={cn('pv2 flex h-dvh overflow-hidden', fontClass)}
@@ -376,8 +381,10 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
           <SidebarCustomizerDialog open={customizerOpen} onOpenChange={setCustomizerOpen} />
           <NotificationsSheet open={notificationsOpen} onOpenChange={setNotificationsOpen} />
           <MessagesSheet open={messagesOpen} onOpenChange={setMessagesOpen} unread={counts.messages} />
+          <CustomerTraxPanel />
         </div>
       </QuickBookProvider>
+      </CustomerTraxProvider>
     </Tooltip.Provider>
   );
 }
@@ -841,7 +848,7 @@ function TopBar({
       <div className="ml-auto flex items-center gap-0.5">
         <span aria-hidden className="mx-1 hidden h-5 w-px bg-pv-border sm:block" />
         <HelplineLink />
-        <HelpMenu onOpenMessages={onOpenMessages} />
+        <HelpButton />
         <Tip label="Messages">
           <button
             type="button"

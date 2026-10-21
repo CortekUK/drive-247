@@ -535,6 +535,16 @@
 }
 
 /* Trax motion: a screen arrives with opacity + a 12px lift, 200ms ease-out. */
+/* Trax (customer portal Help): the operator's v2-theme.css keyframes for the
+   mark's turning fill and breathing halo. */
+@keyframes v2-glow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.8; }
+}
+@keyframes v2-spin-slow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
 @keyframes pv2-enter {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: none; }

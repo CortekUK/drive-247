@@ -79,6 +79,8 @@ export type CustomerVerificationRow = Pick<
   | 'first_name'
   | 'last_name'
   | 'date_of_birth'
+  | 'address'
+  | 'customer_corrected_at'
   | 'document_front_url'
   | 'document_back_url'
   | 'selfie_image_url'
@@ -111,6 +113,8 @@ const VERIFICATION_SELECT = [
   'first_name',
   'last_name',
   'date_of_birth',
+  'address',
+  'customer_corrected_at',
   'document_front_url',
   'document_back_url',
   'selfie_image_url',

@@ -189,3 +189,25 @@ describe("shared dialog and tabs are ui-v2's", () => {
     }
   });
 });
+
+describe("shared empty-state pictures are the operator's illustrations", () => {
+  // Verbatim copies for the customer portal's empty states; only the import
+  // lines differ (`@/lib/utils` → `../cn`, `../scene-kit` → `./scene-kit`).
+  const ILLUSTRATIONS = join(SRC, 'components', 'illustrations-v2');
+  const withoutImports = (code: string) => code.replace(/^import .*$/gm, '');
+  const pairs: Array<[string, string]> = [
+    ['scene-kit.tsx', 'scene-kit.tsx'],
+    ['car-art.ts', 'car-art.ts'],
+    ['empty-scenes.tsx', 'empty-scenes.tsx'],
+    [join('scenes', 'documents.tsx'), 'documents.tsx'],
+    [join('scenes', 'add-customer.tsx'), 'add-customer.tsx'],
+  ];
+  it("timezone-flags.ts matches availability-v2's (the customer time zone picker's flags)", () => {
+    expect(read(join(SHARED, 'timezone-flags.ts'))).toBe(read(join(SRC, 'components', 'availability-v2', 'timezone-flags.ts')));
+  });
+  for (const [operator, copy] of pairs) {
+    it(`${copy} matches illustrations-v2/${operator}`, () => {
+      expect(withoutImports(read(join(SHARED, 'empty-states', copy)))).toBe(withoutImports(read(join(ILLUSTRATIONS, operator))));
+    });
+  }
+});

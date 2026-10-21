@@ -123,8 +123,6 @@ export interface ProfileDraft {
   addressCity: string;
   addressState: string;
   addressZip: string;
-  licenseNumber: string;
-  licenseState: string;
 }
 
 export interface NotificationDraft {
@@ -160,8 +158,6 @@ function toSettings(row: CustomerSettingsRow): CustomerSettings {
     addressCity: text(row.address_city),
     addressState: text(row.address_state),
     addressZip: text(row.address_zip),
-    licenseNumber: text(row.license_number),
-    licenseState: text(row.license_state),
     // `sms_consent` is NOT NULL in the schema, `whatsapp_opt_in` is nullable.
     // Both are coerced so the switches are always controlled — a switch that
     // flips from undefined to false on load logs a React warning and, worse,
@@ -373,8 +369,8 @@ export function useCustomerSettings(): UseCustomerSettingsResult {
         address_city: draft.addressCity.trim() || null,
         address_state: draft.addressState || null,
         address_zip: draft.addressZip.trim() || null,
-        license_number: draft.licenseNumber.trim() || null,
-        license_state: draft.licenseState || null,
+        // The licence number is not on this form: it is the document number
+        // from Verification, corrected there (customer_correct_verification).
       });
     },
     onSuccess: onSaved,

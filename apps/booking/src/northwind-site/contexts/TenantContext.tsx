@@ -139,6 +139,9 @@ export type Tenant = Pick<
   | "gig_driver_enabled"
   | "enquiries_enabled"
   | "hide_vehicle_registration"
+  // Settings → Consent: the versions a customer accepts at sign-in
+  | "privacy_policy_version"
+  | "terms_version"
 >;
 
 /**
@@ -244,6 +247,8 @@ const TENANT_SELECT = [
   "gig_driver_enabled",
   "enquiries_enabled",
   "hide_vehicle_registration",
+  "privacy_policy_version",
+  "terms_version",
 ] satisfies readonly (keyof Tenant)[];
 
 /**

@@ -78,10 +78,10 @@ import type { Database } from '@nw/integrations/supabase/types';
 export const GIG_MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 /** Matches the bucket's `allowed_mime_types`. Anything else is rejected server-side too. */
-export const GIG_ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png'] as const;
+export const GIG_ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'] as const;
 
 /** For the file picker. Kept next to the MIME list so the two cannot drift. */
-export const GIG_ACCEPT_ATTRIBUTE = '.jpg,.jpeg,.png,image/jpeg,image/png';
+export const GIG_ACCEPT_ATTRIBUTE = '.jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf';
 
 const BUCKET = 'gig-driver-images';
 
@@ -216,12 +216,12 @@ function validate(file: File): string | null {
   if (type !== '') {
     return (GIG_ALLOWED_TYPES as readonly string[]).includes(type)
       ? null
-      : 'only JPG and PNG images are accepted';
+      : 'only JPG and PNG images and PDF documents are accepted';
   }
 
-  return /\.(jpe?g|png)$/i.test(file.name)
+  return /\.(jpe?g|png|pdf)$/i.test(file.name)
     ? null
-    : 'only JPG and PNG images are accepted';
+    : 'only JPG and PNG images and PDF documents are accepted';
 }
 
 /**

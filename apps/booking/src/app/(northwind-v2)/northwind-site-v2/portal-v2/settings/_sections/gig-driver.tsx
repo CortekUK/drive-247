@@ -1,79 +1,44 @@
 'use client';
 
 /**
- * Gig-driver proof documents.
+ * Settings → Gig driver: the customer's gig driver proof, and nothing else
+ * (owner, Oct 21 2026). Pictures (JPG, PNG) and documents (PDF) both go up —
+ * screenshots of the Uber, Lyft or delivery app profile, or a PDF the platform
+ * issued — and each shows as a tile: the picture itself, or the PDF's first
+ * page drawn with pdf.js.
  *
- * Ported from `apps/booking/src/app/(customer-portal)/portal/gig-driver/page.tsx`.
- * Same table, same bucket, same rules; the data layer lives in
- * `use-customer-gig-driver.ts` and its header is the file to read before
- * changing anything about what is stored or who can see it.
- *
- * ── WHAT CHANGED FROM v1, AND WHY ───────────────────────────────────────────
- *
- *  1. THE ACTIONS ARE ALWAYS VISIBLE. v1 hides Open and Delete behind
- *     `opacity-0 group-hover:opacity-100`. There is no hover on a phone, so on
- *     the device most likely to be holding these screenshots the controls do
- *     not exist. They are permanent here, and 44px.
- *
- *  2. THE LAST DOCUMENT CAN BE DELETED. v1 renders the delete button only when
- *     `images.length > 1`, so a customer who uploads the wrong file as their
- *     first upload can never remove it. No rule anywhere states that a gig
- *     driver must keep at least one image on file, and trapping somebody's
- *     mis-uploaded document is worse than an empty list they can refill.
- *
- *  3. A BATCH IS NOT ALL-OR-NOTHING. v1 finds the first invalid file and
- *     abandons the whole selection with "Only JPG/PNG images under 10MB are
- *     allowed" — no file named, nothing uploaded. Here the valid files go up,
- *     and every skipped one is listed with its own reason.
- *
- *  4. FAILURES ARE STATED, NOT TOASTED. There is no `<Toaster />` mounted in
- *     this app, so a `toast.error(...)` — which is v1's only failure channel on
- *     this page — renders nowhere at all. Feedback is an inline notice that
- *     stays on screen until the next action.
- *
- *  5. THE PAGE IS TENANT-GATED. `gig_driver_enabled` is read from the tenant
- *     row; an operator who has the feature off gets a plain "not available"
- *     panel rather than a 404, because the route is linkable and a dead link
- *     reads as a broken portal rather than a disabled feature.
+ * The data layer is `use-customer-gig-driver.ts` (same bucket and table as v1;
+ * the bucket was opened to PDFs on Oct 21 2026). Kept from the v1 port: the
+ * actions are always visible (no hover on a phone), the last file can be
+ * deleted, a batch uploads what it can and names what it skipped, and failures
+ * stay on screen rather than in a toast nobody mounted.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Briefcase,
-  ExternalLink,
-  ImageOff,
-  ImageUp,
-  Loader2,
-  Plus,
-  Trash2,
-} from 'lucide-react-nw';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ExternalLink, Loader2, Trash2, Upload } from 'lucide-react-nw';
+import type { PDFDocumentProxy } from 'pdfjs-dist';
 
 import { formatTimestamp } from '@nw/components/portal/format';
-import { EmptyState, LoadError, Panel } from '@nw/portal-v2/primitives';
-import { Button } from '@nw/components/ui/button';
+import { LoadError } from '@nw/portal-v2/primitives';
 import { Skeleton } from '@nw/components/ui/skeleton';
 import { useTenant } from '@nw/contexts/TenantContext';
-import {
-  GIG_ACCEPT_ATTRIBUTE,
-  useCustomerGigDriver,
-  type GigDriverDocument,
-} from '@nw/hooks/use-customer-gig-driver';
+import { GIG_ACCEPT_ATTRIBUTE, useCustomerGigDriver, type GigDriverDocument } from '@nw/hooks/use-customer-gig-driver';
+import { cn } from '@nw/lib/utils';
+import { V2_BUTTON_GHOST_ICON_SM, V2_BUTTON_PRIMARY } from '@portal-v2-shared/button-styles';
+import { DocumentsEmptyArt } from '@portal-v2-shared/empty-states/documents';
+import { TeachingEmptyState } from '@portal-v2-shared/empty-states/teaching-empty-state';
 
-import { ConfirmDialog, IconTile, Notice, UploadZone, type Tone } from '../../insurances/_components/kit';
+import { ConfirmDialog, Notice, type Tone } from '../../insurances/_components/kit';
 import { SettingsPageHeader } from '../_components/settings-ui';
-
-/* ─────────────────────────────── feedback ──────────────────────────────── */
 
 interface Feedback {
   tone: Extract<Tone, 'success' | 'warning' | 'danger'>;
   title: string;
-  /** One line per item; rendered as a list when there is more than one. */
   lines: string[];
 }
 
-/* ─────────────────────────────── formatting ────────────────────────────── */
+const isPdf = (document: GigDriverDocument) => /\.pdf$/i.test(document.path) || /\.pdf$/i.test(document.fileName);
 
-/** `2411000` → `2.4 MB`. Null when the size is unknown, so the caller can omit it. */
 function formatBytes(bytes: number | null): string | null {
   if (bytes === null || !Number.isFinite(bytes) || bytes < 0) return null;
   if (bytes < 1024) return `${bytes} B`;
@@ -82,507 +47,269 @@ function formatBytes(bytes: number | null): string | null {
   return `${(kb / 1024).toFixed(1)} MB`;
 }
 
-function plural(count: number, singular: string, pluralForm: string): string {
-  return count === 1 ? singular : pluralForm;
+const plural = (count: number, one: string, many: string) => (count === 1 ? one : many);
+
+/* ─────────────────────────────── previews ──────────────────────────────── */
+
+/** A PDF's first page, fitted to the tile. */
+function PdfThumb({ url, onError }: { url: string; onError: () => void }) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let doc: PDFDocumentProxy | null = null;
+    (async () => {
+      try {
+        const pdfjs = await import('pdfjs-dist');
+        pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('fetch');
+        doc = await pdfjs.getDocument({ data: await response.arrayBuffer() }).promise;
+        const page = await doc.getPage(1);
+        const host = hostRef.current;
+        const canvas = canvasRef.current;
+        if (cancelled || !host || !canvas) return;
+        const base = page.getViewport({ scale: 1 });
+        const scale = Math.min(host.clientWidth / base.width, host.clientHeight / base.height) * 0.86;
+        const ratio = window.devicePixelRatio || 1;
+        const viewport = page.getViewport({ scale: scale * ratio });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.style.width = `${viewport.width / ratio}px`;
+        canvas.style.height = `${viewport.height / ratio}px`;
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('canvas');
+        await page.render({ canvasContext: context, viewport, canvas } as Parameters<typeof page.render>[0]).promise;
+        if (!cancelled) setReady(true);
+      } catch {
+        if (!cancelled) onError();
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (doc) void doc.destroy();
+    };
+  }, [url, onError]);
+
+  return (
+    <div ref={hostRef} className="flex size-full items-center justify-center">
+      {!ready ? <Loader2 aria-hidden className="absolute size-5 animate-spin text-pv-muted-fg motion-reduce:animate-none" /> : null}
+      <canvas ref={canvasRef} className={cn('rounded-sm bg-white shadow-sm', !ready && 'opacity-0')} />
+    </div>
+  );
 }
 
-/* ──────────────────────────────── the tile ─────────────────────────────── */
-
 /**
- * How many times a thumbnail is re-requested before it is called broken, and
- * how long to wait between tries.
- *
- * This is not defensive padding. Storage serves these through a CDN, and an
- * object requested within a second or two of being uploaded can 404 while the
- * edge catches up — reproduced on staging, where the two files from a fresh
- * upload rendered blank while everything older rendered fine. Without a retry
- * the first `error` latches the tile to "no longer available" for a file that
- * is perfectly fine, and only a full page reload clears it. Two extra tries a
- * second apart cover the lag and cost nothing when the object is already there.
+ * How many times a picture is re-requested before it is called broken: storage
+ * serves through a CDN and a file asked for a second after upload can 404
+ * while the edge catches up.
  */
 const IMAGE_RETRIES = 2;
 const IMAGE_RETRY_DELAY_MS = 1200;
 
-function DocumentTile({
-  document,
-  isDeleting,
-  onDelete,
-}: {
-  document: GigDriverDocument;
-  isDeleting: boolean;
-  onDelete: () => void;
-}) {
-  // A stored object can still fail to load for good — a metadata row may
-  // outlive its file. A broken-image glyph tells the customer nothing; this
-  // says what happened and keeps the tile deletable so they can clear it.
+function DocumentTile({ document, isDeleting, onDelete }: { document: GigDriverDocument; isDeleting: boolean; onDelete: () => void }) {
   const [attempt, setAttempt] = useState(0);
-  const [failedToLoad, setFailedToLoad] = useState(false);
+  const [failed, setFailed] = useState(false);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   useEffect(
     () => () => {
       if (retryTimer.current !== null) clearTimeout(retryTimer.current);
     },
     [],
   );
-
-  const handleImageError = useCallback(() => {
-    if (attempt >= IMAGE_RETRIES) {
-      setFailedToLoad(true);
-      return;
-    }
-    // A second `error` can arrive before the state update lands; without this
-    // the first timer is orphaned and fires an extra, harmless-but-untracked
-    // bump that skips a retry slot.
+  const onImageError = useCallback(() => {
+    if (attempt >= IMAGE_RETRIES) return setFailed(true);
     if (retryTimer.current !== null) clearTimeout(retryTimer.current);
-    retryTimer.current = setTimeout(
-      () => setAttempt((current) => current + 1),
-      IMAGE_RETRY_DELAY_MS,
-    );
+    retryTimer.current = setTimeout(() => setAttempt((current) => current + 1), IMAGE_RETRY_DELAY_MS);
   }, [attempt]);
+  const onPdfError = useCallback(() => setFailed(true), []);
 
-  // The query string is what forces a re-request: without it the browser serves
-  // its own cached failure and `onError` fires again immediately.
+  const pdf = isPdf(document);
   const src = attempt === 0 ? document.url : `${document.url}?retry=${attempt}`;
-
-  const size = formatBytes(document.fileSize);
-  const uploaded = formatTimestamp(document.uploadedAt);
-  const meta = [uploaded, size].filter((part): part is string => part !== null).join(' · ');
+  const meta = [pdf ? 'PDF' : null, formatTimestamp(document.uploadedAt), formatBytes(document.fileSize)].filter(Boolean).join(' · ');
 
   return (
     <li className="flex flex-col overflow-hidden rounded-2xl border border-pv-border bg-pv-card">
       <div className="relative flex aspect-[4/3] w-full items-center justify-center overflow-hidden bg-pv-muted">
-        {failedToLoad ? (
-          <div className="flex flex-col items-center gap-1 px-4 text-center text-pv-muted-fg">
-            <ImageOff aria-hidden strokeWidth={1.5} className="size-6" />
-            <span className="text-xs leading-relaxed">
-              This file is no longer available
-            </span>
-          </div>
+        {failed ? (
+          <span className="px-4 text-center text-xs leading-relaxed text-pv-muted-fg">This file could not be shown. Open it to view it.</span>
+        ) : pdf ? (
+          <PdfThumb url={document.url} onError={onPdfError} />
         ) : (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            key={src}
-            src={src}
-            alt={document.fileName}
-            loading="lazy"
-            decoding="async"
-            onError={handleImageError}
-            className="h-full w-full object-cover"
-          />
+          // eslint-disable-next-line @next/next/no-img-element
+          <img key={src} src={src} alt={document.fileName} loading="lazy" decoding="async" onError={onImageError} className="size-full object-cover" />
         )}
       </div>
-
       <div className="flex items-center gap-1 border-t border-pv-border py-2 pr-2 pl-4">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-pv-fg" title={document.fileName}>
             {document.fileName}
           </p>
-          {meta !== '' ? (
-            <p className="truncate text-xs text-pv-muted-fg">{meta}</p>
-          ) : null}
+          {meta ? <p className="truncate text-xs text-pv-muted-fg">{meta}</p> : null}
         </div>
-
-        {!failedToLoad ? (
-          <Button
-            asChild
-            variant="brand-ghost"
-            size="icon"
-            className="size-11 shrink-0 rounded-full! text-pv-muted-fg hover:text-pv-fg"
-            aria-label={`Open ${document.fileName} in a new tab`}
-          >
-            <a href={document.url} target="_blank" rel="noopener noreferrer">
-              <ExternalLink aria-hidden strokeWidth={1.75} />
-            </a>
-          </Button>
-        ) : null}
-
-        <Button
+        <a href={document.url} target="_blank" rel="noopener noreferrer" aria-label={`Open ${document.fileName}`} title="Open" className={V2_BUTTON_GHOST_ICON_SM}>
+          <ExternalLink aria-hidden />
+        </a>
+        <button
           type="button"
-          variant="brand-ghost"
-          size="icon"
-          className="size-11 shrink-0 rounded-full! text-pv-muted-fg hover:bg-pv-danger-light hover:text-pv-danger"
           aria-label={`Delete ${document.fileName}`}
+          title="Delete"
           disabled={isDeleting}
           onClick={onDelete}
+          className={cn(V2_BUTTON_GHOST_ICON_SM, 'hover:bg-pv-danger-light hover:text-pv-danger')}
         >
-          {isDeleting ? (
-            <Loader2 aria-hidden strokeWidth={1.75} className="animate-spin" />
-          ) : (
-            <Trash2 aria-hidden strokeWidth={1.75} />
-          )}
-        </Button>
+          {isDeleting ? <Loader2 aria-hidden className="animate-spin" /> : <Trash2 aria-hidden />}
+        </button>
       </div>
     </li>
   );
 }
 
-function DocumentGridSkeleton() {
-  return (
-    <div
-      aria-hidden
-      className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
-    >
-      {Array.from({ length: 3 }, (_, index) => (
-        <div
-          key={index}
-          className="overflow-hidden rounded-2xl border border-pv-border bg-pv-card"
-        >
-          <Skeleton className="aspect-[4/3] w-full rounded-none bg-pv-tint" />
-          <div className="flex flex-col gap-2 border-t border-pv-border px-4 py-4">
-            <Skeleton className="h-4 w-2/3 bg-pv-tint" />
-            <Skeleton className="h-3 w-1/2 bg-pv-tint" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /* ──────────────────────────────── the page ─────────────────────────────── */
 
-const PAGE_TITLE = 'Gig driver';
-const PAGE_DESCRIPTION =
-  'Screenshots of your Uber, Lyft or delivery app profile, for gig driver rates.';
-
 export function GigDriverSettings() {
-  const { tenant, isLoading: tenantLoading } = useTenant();
-  const {
-    documents,
-    isLoading,
-    isError,
-    error,
-    refetch,
-    hasMore,
-    unsubmittedCount,
-    metadataUnavailable,
-    upload,
-    isUploading,
-    remove,
-    removingPath,
-  } = useCustomerGigDriver();
+  const { tenant } = useTenant();
+  const operator = tenant?.company_name ?? 'the rental company';
+  const { documents, isLoading, isError, error, refetch, hasMore, unsubmittedCount, upload, isUploading, remove, removingPath } =
+    useCustomerGigDriver();
 
   const inputRef = useRef<HTMLInputElement>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [pendingDelete, setPendingDelete] = useState<GigDriverDocument | null>(null);
-  const [isConfirming, setIsConfirming] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
-  const operator = tenant?.company_name ?? 'the rental company';
+  const pick = useCallback(() => inputRef.current?.click(), []);
 
-  /*
-    Only an explicit `false` closes the page. The column is NOT NULL in the
-    schema, but a tenant row read before the grant lands, or an operator who has
-    simply never touched the setting, must not be told the feature is off — the
-    default posture for an undecided flag is "available".
-  */
-  const featureDisabled = tenant ? tenant.gig_driver_enabled === false : false;
-
-  const handlePick = useCallback(() => {
-    inputRef.current?.click();
-  }, []);
-
-  const [dragActive, setDragActive] = useState(false);
-
-  /** One path for the picker and the drop zone, so a drop is validated the same way. */
-  const handleFileList = useCallback(
+  const uploadFiles = useCallback(
     async (files: File[]) => {
       if (files.length === 0) return;
-
       setFeedback(null);
-
       try {
         const outcome = await upload(files);
-        const lines: string[] = [];
-
-        for (const item of outcome.rejected) {
-          lines.push(`${item.fileName} was skipped — ${item.reason}.`);
-        }
-        for (const item of outcome.failed) {
-          lines.push(`${item.fileName} did not upload — ${item.reason}.`);
-        }
-
+        const lines = [
+          ...outcome.rejected.map((item) => `${item.fileName} was skipped — ${item.reason}.`),
+          ...outcome.failed.map((item) => `${item.fileName} did not upload — ${item.reason}.`),
+        ];
         if (outcome.uploaded === 0) {
-          setFeedback({
-            tone: 'danger',
-            title: 'Nothing was uploaded',
-            lines:
-              lines.length > 0
-                ? lines
-                : ['We could not upload those files. Please try again.'],
-          });
+          setFeedback({ tone: 'danger', title: 'Nothing was uploaded', lines: lines.length ? lines : ['Please try again.'] });
           return;
         }
-
-        /*
-          `outcome.unsubmitted` is deliberately NOT reported here. Those files
-          are stored, visible, and invisible to the operator — which is exactly
-          what the standing banner below already says, derived from
-          `unsubmittedCount` over the whole list rather than this one batch.
-          Saying it twice, ten pixels apart, reads as two different problems.
-        */
-
         setFeedback({
-          tone: lines.length > 0 ? 'warning' : 'success',
-          title: `${outcome.uploaded} ${plural(
-            outcome.uploaded,
-            'document uploaded',
-            'documents uploaded',
-          )}`,
+          tone: lines.length ? 'warning' : 'success',
+          title: `${outcome.uploaded} ${plural(outcome.uploaded, 'file uploaded', 'files uploaded')}`,
           lines,
         });
       } catch (cause) {
-        setFeedback({
-          tone: 'danger',
-          title: 'Upload failed',
-          lines: [
-            cause instanceof Error
-              ? cause.message
-              : 'Something went wrong. Please try again.',
-          ],
-        });
+        setFeedback({ tone: 'danger', title: 'Upload failed', lines: [cause instanceof Error ? cause.message : 'Please try again.'] });
       }
     },
-    [operator, upload],
+    [upload],
   );
 
-  const handleFiles = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(event.target.files ?? []);
-      // Cleared immediately so picking the SAME file twice in a row still fires
-      // `change` — the input keeps its value otherwise and the second attempt
-      // does nothing at all.
-      event.target.value = '';
-      return handleFileList(files);
-    },
-    [handleFileList],
-  );
-
-  const handleConfirmDelete = useCallback(async () => {
+  const confirmDelete = useCallback(async () => {
     if (!pendingDelete) return;
     const target = pendingDelete;
-
-    setIsConfirming(true);
+    setConfirming(true);
     setFeedback(null);
-
     try {
-      const outcome = await remove(target);
-      setPendingDelete(null);
-
-      if (outcome.recordRemained) {
-        setFeedback({
-          tone: 'warning',
-          title: `${target.fileName} was deleted`,
-          lines: [
-            `${operator} may still hold a record of it. Please contact them if you need it removed from your file entirely.`,
-          ],
-        });
-        return;
-      }
-
-      setFeedback({
-        tone: 'success',
-        title: `${target.fileName} was deleted`,
-        lines: [],
-      });
+      await remove(target);
+      setFeedback({ tone: 'success', title: `${target.fileName} was deleted`, lines: [] });
     } catch (cause) {
-      setPendingDelete(null);
-      setFeedback({
-        tone: 'danger',
-        title: 'We could not delete that document',
-        lines: [
-          cause instanceof Error
-            ? cause.message
-            : 'Something went wrong. Please try again.',
-        ],
-      });
+      setFeedback({ tone: 'danger', title: 'We could not delete that file', lines: [cause instanceof Error ? cause.message : 'Please try again.'] });
     } finally {
-      setIsConfirming(false);
+      setPendingDelete(null);
+      setConfirming(false);
     }
-  }, [operator, pendingDelete, remove]);
+  }, [pendingDelete, remove]);
 
-  const uploadButton = useMemo(
-    () => (
-      <Button
-        type="button"
-        variant="brand"
-        className="h-11 w-full px-5 sm:w-auto"
-        disabled={isUploading}
-        onClick={handlePick}
-      >
-        {isUploading ? (
-          <>
-            <Loader2 aria-hidden className="animate-spin" />
-            Uploading…
-          </>
-        ) : (
-          <>
-            <Plus aria-hidden />
-            Add documents
-          </>
-        )}
-      </Button>
-    ),
-    [handlePick, isUploading],
-  );
-
-  /* ── tenant still resolving ───────────────────────────────────────────── */
-
-  if (tenantLoading && !tenant) {
-    return (
-      <div className="flex flex-col gap-6">
-        <SettingsPageHeader title={PAGE_TITLE} description={PAGE_DESCRIPTION} />
-        <DocumentGridSkeleton />
-      </div>
-    );
-  }
-
-  /* ── switched off for this operator ───────────────────────────────────── */
-
-  if (featureDisabled) {
-    return (
-      <div className="flex flex-col gap-6">
-        <SettingsPageHeader
-          title={PAGE_TITLE}
-          description="Proof of gig driver status, for rental companies that offer gig driver rates."
-        />
-        <Panel>
-          <EmptyState
-            icon={Briefcase}
-            title="Not available here"
-            description={`${operator} does not collect gig driver documents, so there is nothing to upload on this page. Everything else about your account is unaffected.`}
-            action={{ href: '/portal/settings', label: 'Back to Settings' }}
-          />
-        </Panel>
-      </div>
-    );
-  }
-
-  /* ── the page ─────────────────────────────────────────────────────────── */
+  const empty = !isLoading && !isError && documents.length === 0;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div
+      className={cn('flex flex-col gap-6 rounded-3xl transition-shadow duration-200', dragging && 'ring-2 ring-pv-primary/40 ring-offset-8 ring-offset-pv-bg')}
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes('Files')) return;
+        event.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        setDragging(false);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        setDragging(false);
+        void uploadFiles(Array.from(event.dataTransfer.files ?? []));
+      }}
+    >
       <SettingsPageHeader
-        title={PAGE_TITLE}
-        description={PAGE_DESCRIPTION}
-        // The empty page is itself the upload target; a second button above it
-        // would split the one action in two.
-        action={!isLoading && !isError && documents.length === 0 ? undefined : uploadButton}
+        title="Gig driver"
+        description={`Pictures or documents that show you drive for Uber, Lyft or a delivery app, for ${operator}'s gig driver rates.`}
+        action={
+          empty ? undefined : (
+            <button type="button" className={V2_BUTTON_PRIMARY} disabled={isUploading} onClick={pick}>
+              {isUploading ? <Loader2 aria-hidden className="animate-spin" /> : <Upload aria-hidden />}
+              {isUploading ? 'Uploading…' : 'Upload'}
+            </button>
+          )
+        }
       />
 
-      {/*
-        Outside the button so the picker survives the button being swapped for
-        its loading state, and so the empty state can reuse the same input.
-        `multiple` matches v1: proof is usually two or three screenshots.
-      */}
       <input
         ref={inputRef}
         type="file"
         accept={GIG_ACCEPT_ATTRIBUTE}
         multiple
         onChange={(event) => {
-          void handleFiles(event);
+          const files = Array.from(event.target.files ?? []);
+          event.target.value = '';
+          void uploadFiles(files);
         }}
         className="sr-only"
         tabIndex={-1}
         aria-hidden
       />
 
-      {feedback ? (
-        <Notice tone={feedback.tone} title={feedback.title} lines={feedback.lines} />
-      ) : null}
+      {feedback ? <Notice tone={feedback.tone} title={feedback.title} lines={feedback.lines} /> : null}
 
-      {/*
-        The operator reads the metadata table, not the bucket. A document that
-        never got a row is one the customer can see and the operator cannot, so
-        it is called out here rather than left to look filed.
-      */}
       {!isLoading && unsubmittedCount > 0 ? (
         <Notice
           tone="warning"
-          title={`${unsubmittedCount} ${plural(
-            unsubmittedCount,
-            'document has',
-            'documents have',
-          )} not reached ${operator}`}
-          lines={[
-            `${plural(
-              unsubmittedCount,
-              'It is',
-              'They are',
-            )} saved and visible to you here, but ${plural(
-              unsubmittedCount,
-              'has',
-              'have',
-            )} not been attached to your customer file. Please mention this when you contact ${operator} so they can add ${plural(unsubmittedCount, 'it', 'them')}.`,
-          ]}
-        />
-      ) : null}
-
-      {metadataUnavailable ? (
-        <Notice
-          tone="warning"
-          title="Some details could not be loaded"
-          lines={[
-            'Your documents are shown below, but the upload dates and file details we hold for them are temporarily unavailable.',
-          ]}
+          title={`${unsubmittedCount} ${plural(unsubmittedCount, 'file has', 'files have')} not reached ${operator}`}
+          lines={[`Saved here, but not attached to your customer file. Please mention it when you contact ${operator}.`]}
         />
       ) : null}
 
       {isError ? (
-        <LoadError
-          title="We could not load your documents"
-          error={error}
-          onRetry={() => {
-            void refetch();
+        <LoadError title="We could not load your files" error={error} onRetry={() => void refetch()} />
+      ) : isLoading ? (
+        <div aria-hidden className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2].map((index) => (
+            <div key={index} className="overflow-hidden rounded-2xl border border-pv-border bg-pv-card">
+              <Skeleton className="aspect-[4/3] w-full rounded-none bg-pv-tint" />
+              <div className="flex flex-col gap-2 border-t border-pv-border px-4 py-4">
+                <Skeleton className="h-4 w-2/3 bg-pv-tint" />
+                <Skeleton className="h-3 w-1/2 bg-pv-tint" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : empty ? (
+        <TeachingEmptyState
+          illustration={<DocumentsEmptyArt />}
+          headline="Show you drive for a gig app"
+          body={`Upload screenshots of your driver profile, or a PDF from the platform. ${operator} uses them for gig driver rates.`}
+          primaryAction={{
+            label: isUploading ? 'Uploading…' : 'Upload',
+            icon: Upload,
+            onClick: pick,
+            disabled: isUploading,
+            hint: 'JPG, PNG or PDF, up to 10MB each. You can also drop files here.',
           }}
         />
-      ) : isLoading ? (
-        <DocumentGridSkeleton />
-      ) : documents.length === 0 ? (
-        <Panel className="p-3 sm:p-4">
-          {/*
-            The empty page IS the drop target: the one thing to do here is add
-            a screenshot, so the whole panel takes one. The button opens the
-            same hidden picker the header uses.
-          */}
-          <UploadZone
-            active={dragActive}
-            onDragState={setDragActive}
-            onFiles={(list) => {
-              void handleFileList(Array.from(list ?? []));
-            }}
-            className="gap-4 py-14"
-          >
-            <IconTile icon={ImageUp} className="size-14 rounded-3xl [&>svg]:size-6" />
-            <div className="max-w-sm">
-              <p className="text-[15px] font-semibold text-pv-fg">No documents yet</p>
-              <p className="mt-1 text-[13px] leading-relaxed text-pv-muted-fg">
-                Drop screenshots of your active gig driver profile here. {operator} uses them to
-                confirm you qualify for gig driver rates.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="brand"
-              className="h-11 px-5"
-              disabled={isUploading}
-              onClick={handlePick}
-            >
-              {isUploading ? (
-                <>
-                  <Loader2 aria-hidden className="animate-spin" />
-                  Uploading…
-                </>
-              ) : (
-                <>
-                  <Plus aria-hidden />
-                  Upload screenshots
-                </>
-              )}
-            </Button>
-            <p className="text-xs text-pv-muted-fg">JPG or PNG, up to 10MB each.</p>
-          </UploadZone>
-        </Panel>
       ) : (
         <>
           <ul className="grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2 xl:grid-cols-3">
@@ -595,12 +322,9 @@ export function GigDriverSettings() {
               />
             ))}
           </ul>
-
           <p className="text-[13px] text-pv-muted-fg">
-            JPG or PNG, up to 10MB each.
-            {hasMore
-              ? ' Showing your 100 most recent documents — contact us if you need to see older ones.'
-              : ''}
+            JPG, PNG or PDF, up to 10MB each. You can also drop files here.
+            {hasMore ? ' Showing your 100 most recent files.' : ''}
           </p>
         </>
       )}
@@ -608,19 +332,13 @@ export function GigDriverSettings() {
       <ConfirmDialog
         open={pendingDelete !== null}
         icon={Trash2}
-        title="Delete this screenshot?"
-        description={
-          pendingDelete
-            ? `${pendingDelete.fileName} will be removed from your account. You can upload it again if you need to.`
-            : ''
-        }
-        confirmLabel="Delete screenshot"
+        title="Delete this file?"
+        description={pendingDelete ? `${pendingDelete.fileName} will be removed. You can upload it again if you need to.` : ''}
+        confirmLabel="Delete"
         busyLabel="Deleting…"
-        busy={isConfirming}
+        busy={confirming}
         onCancel={() => setPendingDelete(null)}
-        onConfirm={() => {
-          void handleConfirmDelete();
-        }}
+        onConfirm={() => void confirmDelete()}
       />
     </div>
   );

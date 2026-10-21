@@ -1,8 +1,13 @@
 'use client';
 
 /**
- * Settings → Account: how the customer signs in.
+ * Settings → Account: the customer's profile and how they sign in, on one
+ * page (owner, Oct 21 2026 — My profile folded in; pages, not dialogs).
  *
+ *   - Photo. The avatar is the control; it goes to `customer-photos`, squared
+ *     and scaled to 256px in the browser first (a centre crop — the avatar is
+ *     a 32px circle). The old file goes once the new one is saved.
+ *   - Display name. Saved to the customer's row, scoped by id AND tenant.
  *   - Email address, with its verified state. Change it with a code to the
  *     new address; an unverified address is verified with a code to it.
  *   - Password. Changed with the operator's flow (account-flows.tsx). For an
@@ -16,12 +21,15 @@
  * switched on for this on Oct 21 2026.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AlertCircle, CheckCircle2, Info, KeyRound, Loader2, Mail } from 'lucide-react-nw';
+import { useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, Camera, CheckCircle2, Info, KeyRound, Loader2, Mail } from 'lucide-react-nw';
 
 import { GoogleMark } from '@nw/auth-v2/google-sign-in';
+import { Input } from '@nw/components/ui/input';
 import { useTenant } from '@nw/contexts/TenantContext';
+import { useCustomer } from '@nw/hooks/use-customer';
 import { supabase } from '@nw/integrations/supabase/client';
 import { cn } from '@nw/lib/utils';
 
@@ -32,8 +40,33 @@ import {
   useAccountUser,
   useIdentities,
 } from '../_components/account-flows';
-import { PV_BUTTON_DANGER, PV_BUTTON_OUTLINE_SM, PV_BUTTON_SM } from '../_components/pv-kit';
-import { ReadOnlyValue, RowHint, SettingsPageHeader, SettingsRow, SettingsSection, StatusPill } from '../_components/settings-ui';
+import { PV_BUTTON_DANGER, PV_BUTTON_OUTLINE_SM, PV_BUTTON_SM, PV_INPUT } from '../_components/pv-kit';
+import { ReadOnlyValue, RowHint, SettingsPageHeader, SettingsRow, StatusPill } from '../_components/settings-ui';
+
+/** A centred square of the image, 256px, as a PNG. */
+async function squarePng(file: File): Promise<Blob> {
+  const url = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('That image could not be read.'));
+      img.src = url;
+    });
+    const side = Math.min(image.naturalWidth, image.naturalHeight);
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('That image could not be read.');
+    context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 256, 256);
+    return await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('That image could not be read.'))), 'image/png'),
+    );
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
 
 type Tone = 'success' | 'danger' | 'info';
 
@@ -60,6 +93,83 @@ export function AccountSettings() {
   const { user } = useAccountUser();
   const { identities, error: identitiesError, reload } = useIdentities();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
+  const { customer, customerId, displayName, initials, refresh } = useCustomer();
+  const photo = customer?.profile_photo_url ?? null;
+  const [name, setName] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Seeded from the row, and re-seeded when the row changes under an untouched field.
+  const savedName = customer?.name ?? '';
+  const lastSavedName = useRef(savedName);
+  useEffect(() => {
+    setName((current) => (current === '' || current === lastSavedName.current ? savedName : current));
+    lastSavedName.current = savedName;
+  }, [savedName]);
+
+  const afterWrite = async () => {
+    await refresh();
+    await queryClient.invalidateQueries({ queryKey: ['customer-settings'] });
+  };
+
+  const pickPhoto = async (file: File) => {
+    if (!file.type.startsWith('image/')) return setNotice({ tone: 'danger', message: 'Please choose an image file.' });
+    if (file.size > 5 * 1024 * 1024) return setNotice({ tone: 'danger', message: 'The image must be smaller than 5 MB.' });
+    if (!customerId || !tenant?.id) return;
+    setUploading(true);
+    setNotice(null);
+    try {
+      const blob = await squarePng(file);
+      const path = `${customerId}-${Date.now()}.png`;
+      const { error: uploadError } = await supabase.storage.from('customer-photos').upload(path, blob, { contentType: 'image/png' });
+      if (uploadError) throw uploadError;
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from('customer-photos').getPublicUrl(path);
+      const { error: updateError } = await supabase
+        .from('customers')
+        .update({ profile_photo_url: publicUrl })
+        .eq('id', customerId)
+        .eq('tenant_id', tenant.id);
+      if (updateError) throw updateError;
+      // The old photo goes once the new one is saved, never before.
+      const old = photo?.split('/customer-photos/')[1];
+      if (old) await supabase.storage.from('customer-photos').remove([decodeURIComponent(old)]);
+      await afterWrite();
+      setNotice({ tone: 'success', message: 'Photo updated.' });
+    } catch (cause) {
+      setNotice({ tone: 'danger', message: cause instanceof Error ? cause.message : 'We could not upload your photo.' });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const saveName = async () => {
+    const next = name.trim();
+    if (!next || !customerId || !tenant?.id) return;
+    setSavingName(true);
+    setNotice(null);
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .update({ name: next })
+        .eq('id', customerId)
+        .eq('tenant_id', tenant.id)
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('Your name was not saved — we could not find your account on this site.');
+      lastSavedName.current = next;
+      await afterWrite();
+      setNotice({ tone: 'success', message: "Name updated. That's how you'll appear from now on." });
+    } catch (cause) {
+      setNotice({ tone: 'danger', message: cause instanceof Error ? cause.message : 'We could not update your name.' });
+    } finally {
+      setSavingName(false);
+    }
+  };
 
   const [notice, setNotice] = useState<{ tone: Tone; message: string } | null>(null);
   const [open, setOpen] = useState<'email' | 'password' | 'verify' | 'disconnect' | null>(null);
@@ -173,12 +283,83 @@ export function AccountSettings() {
 
   return (
     <div className="flex flex-col gap-8">
-      <SettingsPageHeader title="Account" description="How you sign in: your email and password, and the Google account linked to this one." />
+      <SettingsPageHeader title="Account" description="Your photo and name, and how you sign in." />
 
       {notice ? <Banner tone={notice.tone}>{notice.message}</Banner> : null}
       {identitiesError ? <Banner tone="danger">We could not read your sign-in methods: {identitiesError}</Banner> : null}
 
-      <SettingsSection id="settings-account-email" title="Email and password">
+      <div>
+        <SettingsRow label="Photo" description="Shown on your account. JPG or PNG, up to 5 MB.">
+          <div className="flex items-center gap-4">
+            {/* The avatar is the control: hover shows a camera. */}
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              aria-label="Change photo"
+              className="group relative size-16 shrink-0 cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-pv-ring focus-visible:ring-offset-2 disabled:cursor-wait"
+            >
+              <span className="flex size-16 items-center justify-center overflow-hidden rounded-full bg-pv-primary/10 text-base font-semibold text-pv-primary ring-2 ring-pv-border/50">
+                {photo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={photo} alt={displayName ?? 'You'} className="size-full object-cover" />
+                ) : (
+                  initials ?? '·'
+                )}
+              </span>
+              <span
+                className={cn(
+                  'absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-white [transition:opacity_200ms_ease-in] group-hover:[transition:opacity_200ms_ease-out] motion-reduce:transition-none',
+                  uploading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100',
+                )}
+              >
+                {uploading ? <Loader2 className="size-5 animate-spin" /> : <Camera className="size-5" />}
+              </span>
+            </button>
+            <button type="button" className={PV_BUTTON_OUTLINE_SM} onClick={() => fileRef.current?.click()} disabled={uploading}>
+              {photo ? 'Change photo' : 'Upload photo'}
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void pickPhoto(file);
+                event.target.value = '';
+              }}
+            />
+          </div>
+        </SettingsRow>
+
+        <SettingsRow label="Display name" description="How you appear across your account." htmlFor="account-name">
+          <form
+            className="flex max-w-md gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveName();
+            }}
+          >
+            <Input
+              id="account-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              autoComplete="name"
+              placeholder="Your name"
+              className={PV_INPUT}
+            />
+            <button
+              type="submit"
+              className={cn(PV_BUTTON_SM, 'h-11 px-4')}
+              disabled={!name.trim() || name.trim() === savedName || savingName}
+            >
+              {savingName ? <Loader2 aria-hidden className="animate-spin" /> : null}
+              {savingName ? 'Saving…' : 'Save'}
+            </button>
+          </form>
+        </SettingsRow>
+
         <SettingsRow label="Email address" description="Where every booking confirmation is sent, and the address you sign in with.">
           <ReadOnlyValue
             value={email || '—'}
@@ -247,9 +428,9 @@ export function AccountSettings() {
           }
         >
           {open === 'password' ? (
-            <div className="max-w-xl">
+            <div className="max-w-2xl">
               <PasswordChangeForm
-                submitLabel={loaded && !emailIdentity ? 'Confirm and set password' : 'Confirm and update'}
+                submitLabel={loaded && !emailIdentity ? 'Set password' : 'Update password'}
                 onCancel={() => setOpen(null)}
                 onDone={async () => {
                   if (!emailIdentity) await addEmailSignIn();
@@ -283,9 +464,7 @@ export function AccountSettings() {
             />
           )}
         </SettingsRow>
-      </SettingsSection>
 
-      <SettingsSection id="settings-account-google" title="Google">
         <SettingsRow
           label="Google account"
           description={
@@ -354,7 +533,7 @@ export function AccountSettings() {
             />
           )}
         </SettingsRow>
-      </SettingsSection>
+      </div>
     </div>
   );
 }

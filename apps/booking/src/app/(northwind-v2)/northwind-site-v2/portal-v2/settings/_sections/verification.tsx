@@ -1,921 +1,775 @@
 'use client';
 
 /**
- * ID verification, read-only.
+ * Settings → Verification (owner, Oct 21 2026): who the customer is and where
+ * they are from, established from ONE document — a driving licence or an ID
+ * card, their choice, never both. It replaces the read-only ID verification
+ * page and the licence fields that used to sit under Details.
  *
- * ── WHAT THIS PAGE IS FOR ───────────────────────────────────────────────────
- * One question: where does my identity check stand, and what happens next. It
- * answers it from `identity_verifications` (the attempt) reconciled against
- * `customers.identity_verification_status` (the operator's own verdict), which
- * is the pair v1 gets wrong — see `verifiedByOperator` in the hook.
+ * ── THE FLOW ────────────────────────────────────────────────────────────────
+ *   1. Choose: driving licence or ID card.
+ *   2. Capture, two ways side by side:
+ *        - a QR code for the phone, which opens the existing capture page
+ *          (/verify/<token>) — front, back, selfie on the camera; this page
+ *          follows along every few seconds;
+ *        - or upload the three photos from this device.
+ *      Both go through the same pipeline the operator's checks use: photos to
+ *      `customer-documents/ai-verification/<session>/`, then
+ *      `process-ai-verification` (OCR + face match).
+ *      The session comes from `customer-start-verification`, which takes the
+ *      customer from the JWT — never an id from the page.
+ *   3. Result: the three pictures, and underneath them what was read off the
+ *      document, in one place. OCR gets things wrong, so the customer can
+ *      correct the details here (`customer_correct_verification`, which keeps
+ *      the originals for the operator and only touches the latest check).
+ *      Re-verify starts again from 1; a verified customer stays verified
+ *      until the new check decides.
  *
- * ── WHAT IT DELIBERATELY DOES NOT DO ────────────────────────────────────────
- * It does not START a check, and it does not let the customer EDIT the details
- * a check extracted. Both are v1 features and both are left out on purpose:
- *
- *  1. STARTING. `create-ai-verification-session` IS deployed on staging and
- *     works — but the URL it mints is built from `BOOKING_APP_URL`, which is
- *     unset there, so it falls back to `https://<slug>.drive-247.com`. Calling
- *     it from this app returns a QR pointing at a PRODUCTION hostname while the
- *     session row it just created lives in the STAGING database. On top of
- *     that, this app has no `/verify/[token]` route at all, so there is no
- *     capture page on this origin for it to point at even once that secret is
- *     set. Minting anyway would not be a partial feature: the call also flips
- *     `customers.identity_verification_status` to `pending`, so every customer
- *     who pressed the button would be left permanently mid-check with a QR code
- *     that leads nowhere. The honest state is rendered instead. See notDone.
- *
- *  2. EDITING. v1 lets the customer rewrite `first_name`, `date_of_birth`,
- *     `document_number` and the rest on their own verification row from the
- *     browser, gated on an AI "does this match the document" call. The gate is
- *     client-side only — `anon` holds UPDATE on the whole table (verified live
- *     against staging), so the validation step is advisory and anyone can PATCH
- *     the row the operator later trusts. Porting that would move a real
- *     integrity hole into v2. It belongs behind an edge function that does the
- *     matching and the write together.
+ * With a licence the "ID number" is the licence number; nothing else changes.
  */
 
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import type { LucideIcon } from 'lucide-react-nw';
-import {
-  CircleCheck,
-  CircleX,
-  Clock,
-  Hourglass,
-  IdCard,
-  Mail,
-  Phone,
-  ScanFace,
-  ShieldCheck,
-  ShieldQuestion,
-  Smartphone,
-  TriangleAlert,
-} from 'lucide-react-nw';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, Loader2, RotateCcw, Upload } from 'lucide-react-nw';
 
 import { formatDate, formatTimestamp } from '@nw/components/portal/format';
-import {
-  DetailList,
-  DetailRow,
-  LoadError,
-  Panel,
-  PanelHeader,
-} from '@nw/portal-v2/primitives';
-import { StatusChip } from '@nw/portal-v2/status-chip';
-import { Button } from '@nw/components/ui/button';
+import { LoadError } from '@nw/portal-v2/primitives';
+import { Input } from '@nw/components/ui/input';
 import { Skeleton } from '@nw/components/ui/skeleton';
 import { useTenant } from '@nw/contexts/TenantContext';
-import {
-  useCustomerVerification,
-  type CustomerVerificationRow,
-  type UseCustomerVerificationResult,
-  type VerificationOutcome,
-  type VerificationProgress,
-} from '@nw/hooks/use-customer-verification';
-import { parseDateOnly } from '@nw/lib/domain';
+import { useCustomerVerification, type CustomerVerificationRow } from '@nw/hooks/use-customer-verification';
+import { supabase } from '@nw/integrations/supabase/client';
 import { cn } from '@nw/lib/utils';
+import { AddCustomerVerifyArt } from '@portal-v2-shared/empty-states/add-customer';
+import { TeachingEmptyState } from '@portal-v2-shared/empty-states/teaching-empty-state';
 
-import { IconTile, Notice } from '../../insurances/_components/kit';
-import { SettingsPageHeader } from '../_components/settings-ui';
-import { DocumentPreview } from './document-preview';
+import { PV_BUTTON_OUTLINE_SM, PV_BUTTON_SM, PV_INPUT } from '../_components/pv-kit';
+import { RowHint, SettingsPageHeader, StatusPill } from '../_components/settings-ui';
+import { ageInYears } from './details';
 
-/* ──────────────────────────── outcome vocabulary ───────────────────────── */
+type DocumentChoice = 'drivers_license' | 'id_card';
 
-type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
-
-interface OutcomeCopy {
-  chip: string;
-  tone: Tone;
-  icon: LucideIcon;
-  headline: string;
-  body: string;
+interface Session {
+  sessionId: string;
+  qrUrl: string;
+  expiresAt: string;
+  documentType: DocumentChoice;
 }
 
-const OUTCOME: Record<VerificationOutcome, OutcomeCopy> = {
-  none: {
-    chip: 'Not verified',
-    tone: 'neutral',
-    icon: ShieldQuestion,
-    headline: 'You have not verified your ID yet',
-    body: 'An identity check confirms you are the person named on the booking. It takes a couple of minutes on your phone.',
-  },
-  in_progress: {
-    chip: 'In progress',
-    tone: 'info',
-    icon: Smartphone,
-    headline: 'Your check is in progress',
-    body: 'Finish it on the phone you opened the secure link on. This page updates on its own as each photo arrives.',
-  },
-  in_review: {
-    chip: 'Being reviewed',
-    tone: 'warning',
-    icon: Hourglass,
-    headline: 'Your documents are being reviewed',
-    body: 'Everything we need has arrived. Someone is checking it now — there is nothing else for you to do.',
-  },
-  approved: {
-    chip: 'Verified',
-    tone: 'success',
-    icon: ShieldCheck,
-    headline: 'Your identity is verified',
-    body: 'Your ID has been checked and accepted. You will not be asked for it again unless your document expires.',
-  },
-  rejected: {
-    chip: 'Not accepted',
-    tone: 'danger',
-    icon: CircleX,
-    headline: 'We could not verify your ID',
-    body: 'The photos did not pass our checks. This is usually glare, a blurred edge or a face photo that was hard to match — it can be tried again.',
-  },
-  expired: {
-    chip: 'Link expired',
-    tone: 'warning',
-    icon: Clock,
-    headline: 'Your verification link expired',
-    body: 'A secure link only lasts a few hours. The photos you had already taken were not kept, so a new link starts fresh.',
-  },
+const DOC_NAME: Record<DocumentChoice, string> = { drivers_license: 'driving licence', id_card: 'ID card' };
+
+/** 'drivers_license' / 'DRIVERS_LICENSE' / 'driving_licence' → the licence; anything else reads as an ID. */
+const isLicence = (type: string | null | undefined) => ['drivers_license', 'driving_licence', 'driver_license'].includes((type ?? '').toLowerCase());
+
+const documentLabel = (type: string | null | undefined) => {
+  const key = (type ?? '').toLowerCase();
+  if (isLicence(key)) return 'Driving licence';
+  if (key === 'id_card') return 'ID card';
+  if (key === 'passport') return 'Passport';
+  return key ? key.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()) : null;
 };
 
-/* ─────────────────────────── in-flight step labels ─────────────────────── */
-
-/**
- * `verification_step` as the capture page writes it, in customer language.
- *
- * The percentages are the same ones v1's QR panel uses, so a customer who has
- * seen the old flow sees the bar in the same place.
- */
+/** The capture page's steps, as the operator's QR screen shows them. */
 const STEP: Record<string, { label: string; percent: number }> = {
-  init: { label: 'Waiting for you to open the link', percent: 0 },
-  qr_scanned: { label: 'Link opened', percent: 10 },
-  document_front: { label: 'Photographing the front of your ID', percent: 20 },
-  document_front_captured: { label: 'Front of ID captured', percent: 35 },
-  document_back: { label: 'Photographing the back of your ID', percent: 45 },
-  document_back_captured: { label: 'Back of ID captured', percent: 55 },
+  init: { label: 'Waiting for you to scan the code', percent: 0 },
+  qr_scanned: { label: 'Code scanned', percent: 10 },
+  document_front: { label: 'Photographing the front', percent: 20 },
+  document_front_captured: { label: 'Front captured', percent: 35 },
+  document_back: { label: 'Photographing the back', percent: 45 },
+  document_back_captured: { label: 'Back captured', percent: 55 },
   selfie: { label: 'Taking your selfie', percent: 65 },
   selfie_captured: { label: 'Selfie captured', percent: 75 },
   uploading: { label: 'Uploading your photos', percent: 85 },
-  processing: { label: 'Checking your documents', percent: 95 },
+  processing: { label: 'Checking your document', percent: 95 },
   completed: { label: 'Finished', percent: 100 },
 };
 
-/* ──────────────────────────────── helpers ──────────────────────────────── */
+const decisionOf = (row: CustomerVerificationRow) => {
+  const result = (row.review_result ?? '').toUpperCase();
+  if (result === 'GREEN') return { label: 'Verified', tone: 'positive' as const };
+  if (result === 'RED') return { label: 'Not accepted', tone: 'negative' as const };
+  if (result === 'RETRY' || result === 'YELLOW') return { label: 'Being reviewed', tone: 'notice' as const };
+  return null;
+};
 
-/** 'drivers_license' → "Driver's licence". Falls back to a tidy Title Case. */
-function documentTypeLabel(value: string | null): string | null {
-  if (!value) return null;
-  const known: Record<string, string> = {
-    drivers_license: "Driver's licence",
-    driving_licence: "Driver's licence",
-    passport: 'Passport',
-    id_card: 'ID card',
-    residence_permit: 'Residence permit',
-  };
-  const key = value.toLowerCase();
-  if (known[key]) return known[key];
-  return key
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
-function providerLabel(row: CustomerVerificationRow): string | null {
-  const provider = (row.verification_provider ?? row.provider ?? '').toLowerCase();
-  if (provider === 'ai') return 'Automated photo check';
-  if (provider === 'veriff') return 'Veriff';
-  if (provider === '') return null;
-  return provider.replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
-/** Whole years between a date-only string and today. */
-function ageInYears(dateOfBirth: string, now: Date): number | null {
-  const day = dateOfBirth.slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
-  const born = parseDateOnly(day);
-  let years = now.getFullYear() - born.getFullYear();
-  const monthDelta = now.getMonth() - born.getMonth();
-  if (monthDelta < 0 || (monthDelta === 0 && now.getDate() < born.getDate())) {
-    years -= 1;
-  }
-  return years >= 0 && years < 130 ? years : null;
-}
-
-/** "2h 14m left", or null once it has run out. */
-function timeLeftLabel(expiresAt: Date, now: Date): string | null {
-  const ms = expiresAt.getTime() - now.getTime();
-  if (!Number.isFinite(ms) || ms <= 0) return null;
-  const minutes = Math.floor(ms / 60_000);
-  const hours = Math.floor(minutes / 60);
-  if (hours >= 1) return `${hours}h ${minutes % 60}m left`;
-  return `${Math.max(1, minutes)}m left`;
-}
-
-/**
- * A clock that starts AFTER mount.
- *
- * Reading `Date.now()` during the first render would make the server-rendered
- * markup and the first client render disagree. Returning null until the effect
- * runs means the countdown simply appears a tick later instead of tripping a
- * hydration mismatch.
- */
-function useNow(intervalMs: number): Date | null {
-  const [now, setNow] = useState<Date | null>(null);
-  useEffect(() => {
-    setNow(new Date());
-    const timer = window.setInterval(() => setNow(new Date()), intervalMs);
-    return () => window.clearInterval(timer);
-  }, [intervalMs]);
-  return now;
+/** An unfinished check whose link still works. */
+function isOpen(row: CustomerVerificationRow | null, now: number): boolean {
+  if (!row || row.review_result) return false;
+  const status = (row.status ?? '').toLowerCase();
+  if (status === 'processing') return true;
+  if (!['init', 'pending'].includes(status)) return false;
+  const expires = row.qr_session_expires_at ? Date.parse(row.qr_session_expires_at) : NaN;
+  return Number.isFinite(expires) ? expires > now : true;
 }
 
 /* ──────────────────────────────── the page ─────────────────────────────── */
 
 export function VerificationSettings() {
+  const { tenant } = useTenant();
+  const company = tenant?.company_name ?? 'the rental company';
   const verification = useCustomerVerification();
+  const { history, verifiedByOperator, refetch } = verification;
+
+  const [mode, setMode] = useState<'view' | 'choose' | 'capture' | 'edit'>('view');
+  const [session, setSession] = useState<Session | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const latest = history[0] ?? null;
+  const open = isOpen(latest, now) ? latest : null;
+  const decided = useMemo(() => history.find((row) => row.review_result) ?? null, [history]);
+
+  // While a check is running, follow it — the hook alone stops polling for a
+  // customer who is already verified.
+  const following = mode === 'capture' || open !== null;
+  useEffect(() => {
+    if (!following) return;
+    const timer = setInterval(() => void refetch(), 4000);
+    return () => clearInterval(timer);
+  }, [following, refetch]);
+
+  // The check finished while the capture screen was up: show the result.
+  const sessionRow = session ? history.find((row) => row.session_id === session.sessionId) ?? null : null;
+  useEffect(() => {
+    if (mode === 'capture' && sessionRow?.review_result) {
+      setMode('view');
+      setSession(null);
+      const decision = decisionOf(sessionRow);
+      setNotice(
+        decision?.tone === 'positive'
+          ? 'Your ID is verified. Check the details below and correct anything the scan read wrong.'
+          : decision?.tone === 'notice'
+            ? `Your photos are in. ${company} will review them.`
+            : 'That check was not accepted. You can try again with clearer photos.',
+      );
+    }
+  }, [mode, sessionRow, company]);
+
+  const start = async (documentType: DocumentChoice) => {
+    if (!tenant?.id) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('customer-start-verification', {
+        body: { action: 'start', tenant_id: tenant.id, document_type: documentType },
+      });
+      if (invokeError || !data?.ok) {
+        throw new Error((data as { error?: string } | null)?.error ?? 'We could not start your check. Please try again.');
+      }
+      setSession({ sessionId: data.sessionId, qrUrl: data.qrUrl, expiresAt: data.expiresAt, documentType });
+      setMode('capture');
+      void refetch();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'We could not start your check.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancel = async (sessionId: string | null) => {
+    setError(null);
+    if (sessionId && tenant?.id) {
+      setBusy(true);
+      await supabase.functions
+        .invoke('customer-start-verification', { body: { action: 'cancel', tenant_id: tenant.id, session_id: sessionId } })
+        .catch(() => undefined);
+      setBusy(false);
+    }
+    setSession(null);
+    setMode('view');
+    void refetch();
+  };
+
+  const header = (
+    <SettingsPageHeader
+      title="Verification"
+      description="Who you are and where you are from, from one document: your driving licence or your ID card."
+    />
+  );
+
+  if (verification.isError) {
+    return (
+      <div className="flex flex-col gap-6">
+        {header}
+        <LoadError title="We could not load your verification" error={verification.error} onRetry={() => void refetch()} />
+      </div>
+    );
+  }
+
+  if (verification.isLoading) {
+    return (
+      <div className="flex flex-col gap-6">
+        {header}
+        <div className="grid grid-cols-3 gap-4" aria-hidden>
+          {[0, 1, 2].map((index) => (
+            <Skeleton key={index} className="aspect-[4/3] rounded-2xl bg-pv-tint" />
+          ))}
+        </div>
+        <Skeleton className="h-56 w-full rounded-2xl bg-pv-tint/70" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
-      <SettingsPageHeader
-        title="Verification"
-        description="Where your identity check stands, and what happens next. Nothing here can be edited."
-      />
+      {header}
+      {notice ? <p className="rounded-2xl bg-pv-tint px-4 py-3 text-[13px] text-pv-fg">{notice}</p> : null}
+      {error ? <RowHint tone="danger">{error}</RowHint> : null}
 
-      {verification.isError ? (
-        <LoadError
-          title="We could not load your verification"
-          error={verification.error}
-          onRetry={() => {
-            void verification.refetch();
+      {mode === 'choose' ? (
+        <ChooseDocument busy={busy} onPick={(type) => void start(type)} onBack={() => setMode('view')} />
+      ) : mode === 'capture' && session ? (
+        <Capture session={session} row={sessionRow} onCancel={() => void cancel(session.sessionId)} onProcessed={() => void refetch()} />
+      ) : open && mode === 'view' ? (
+        <InFlight
+          row={open}
+          busy={busy}
+          onRestart={() => setMode('choose')}
+          onCancel={() => void cancel(open.session_id)}
+        />
+      ) : decided ? (
+        <Result
+          row={decided}
+          stillVerified={verification.outcome === 'approved' && (decided.review_result ?? '').toUpperCase() !== 'GREEN'}
+          editing={mode === 'edit'}
+          onEdit={() => {
+            setNotice(null);
+            setMode('edit');
+          }}
+          onEditDone={(message) => {
+            setMode('view');
+            if (message) setNotice(message);
+            void refetch();
+          }}
+          onReverify={() => {
+            setNotice(null);
+            setMode('choose');
           }}
         />
-      ) : verification.isLoading ? (
-        <VerificationSkeleton />
+      ) : verifiedByOperator ? (
+        <TeachingEmptyState
+          illustration={<AddCustomerVerifyArt />}
+          headline="Verified by the company"
+          body={`${company} checked your ID in person, so there is no online check to show. You can still verify online with your licence or ID card.`}
+          primaryAction={{ label: 'Driving licence', onClick: () => void start('drivers_license'), disabled: busy, hint: 'Verify with your driving licence.' }}
+          secondaryAction={{ label: 'ID card', onClick: () => void start('id_card'), disabled: busy, hint: 'Verify with your national ID card.' }}
+        />
       ) : (
-        <VerificationBody verification={verification} />
+        <TeachingEmptyState
+          illustration={<AddCustomerVerifyArt />}
+          headline="Verify who you are"
+          body={`Your driving licence or your ID card — one is enough. Photograph it on your phone or upload it here, then take a selfie.`}
+          primaryAction={{ label: 'Driving licence', onClick: () => void start('drivers_license'), disabled: busy, hint: 'Front, back and a selfie. The licence number is read off it.' }}
+          secondaryAction={{ label: 'ID card', onClick: () => void start('id_card'), disabled: busy, hint: 'Front, back and a selfie. The ID number is read off it.' }}
+          footnote={tenant?.require_identity_verification ? `${company} needs a verified ID before you collect a vehicle.` : undefined}
+        />
       )}
     </div>
   );
 }
 
-function VerificationBody({
-  verification,
-}: {
-  verification: UseCustomerVerificationResult;
-}) {
-  const { latest, history, outcome, verifiedByOperator, progress, documentExpiry } =
-    verification;
-  const copy = OUTCOME[outcome];
+/* ─────────────────────────────── choose ────────────────────────────────── */
 
-  return (
-    <>
-      <StatusPanel
-        copy={copy}
-        outcome={outcome}
-        verifiedByOperator={verifiedByOperator}
-        checkedOn={latest?.verification_completed_at ?? latest?.updated_at ?? null}
-        faceMatch={
-          latest && latest.ai_face_match_score !== null && !verifiedByOperator
-            ? Math.round(latest.ai_face_match_score * 100)
-            : null
-        }
-      />
-
-      {progress ? <ProgressPanel progress={progress} /> : null}
-
-      {/*
-        Only on a check that was actually accepted. "The document you verified
-        with expires soon" is untrue of a REJECTED attempt — they did not verify
-        with it — and on a half-finished one the OCR figure is not trustworthy
-        enough to warn anybody about.
-      */}
-      {(outcome === 'approved' || outcome === 'in_review') &&
-      (documentExpiry === 'expired' || documentExpiry === 'expiring') ? (
-        <ExpiryNotice
-          state={documentExpiry}
-          expiry={latest?.document_expiry_date ?? null}
-        />
-      ) : null}
-
-      {latest ? <VerificationDetails row={latest} expiry={documentExpiry} /> : null}
-
-      <NextSteps outcome={outcome} verifiedByOperator={verifiedByOperator} />
-
-      {history.length > 1 ? <HistoryPanel history={history} /> : null}
-    </>
-  );
-}
-
-/* ───────────────────────────────── status ──────────────────────────────── */
-
-function StatusPanel({
-  copy,
-  outcome,
-  verifiedByOperator,
-  checkedOn,
-  faceMatch,
-}: {
-  copy: OutcomeCopy;
-  outcome: VerificationOutcome;
-  verifiedByOperator: boolean;
-  checkedOn: string | null;
-  /** Whole percent, shown big on the right like the operator's verdict card. */
-  faceMatch: number | null;
-}) {
-  const { tenant } = useTenant();
-  const operator = tenant?.company_name ?? 'your rental company';
-  const Icon = copy.icon;
-
-  return (
-    <Panel className="px-5 py-6 sm:px-7 sm:py-7">
-      <div className="flex items-start gap-4 sm:gap-5">
-        <IconTile icon={Icon} tone={copy.tone} className="size-12 rounded-3xl" />
-
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold tracking-[-0.02em] text-pv-fg">{copy.headline}</h2>
-            <StatusChip tone={copy.tone}>{copy.chip}</StatusChip>
-          </div>
-
-          <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-pv-muted-fg">
-            {/*
-              A customer the operator vouched for in person has no photos, no
-              face-match score and no document on file. Telling them "your ID
-              has been checked and accepted" is true; letting them go on to look
-              for the paperwork behind it is not.
-            */}
-            {verifiedByOperator
-              ? `${operator} confirmed your ID directly, so there is no online check to show here. You are verified and there is nothing for you to do.`
-              : copy.body}
-          </p>
-
-          {checkedOn && outcome !== 'in_progress' ? (
-            <p className="mt-2 text-xs text-pv-muted-fg">Last updated {formatTimestamp(checkedOn)}</p>
-          ) : null}
-        </div>
-
-        {faceMatch !== null ? (
-          <div className="hidden shrink-0 text-right sm:block">
-            <p className="text-3xl font-bold tracking-[-0.03em] tabular-nums text-pv-fg">{faceMatch}%</p>
-            <p className="text-xs text-pv-muted-fg">face match</p>
-          </div>
-        ) : null}
-      </div>
-
-      {tenant?.require_identity_verification && outcome !== 'approved' ? (
-        <Notice tone="info" className="mt-5">
-          {operator} requires a verified ID before you can collect a vehicle.
-        </Notice>
-      ) : null}
-    </Panel>
-  );
-}
-
-/* ──────────────────────────────── progress ─────────────────────────────── */
-
-function ProgressPanel({ progress }: { progress: VerificationProgress }) {
-  const now = useNow(30_000);
-  const step = STEP[progress.step] ?? STEP.init;
-  const timeLeft =
-    now && progress.expiresAt ? timeLeftLabel(progress.expiresAt, now) : null;
-
-  const captured: { label: string; done: boolean }[] = [
-    { label: 'Front of ID', done: progress.documentFront },
-    { label: 'Back of ID', done: progress.documentBack },
-    { label: 'Selfie', done: progress.selfie },
+function ChooseDocument({ busy, onPick, onBack }: { busy: boolean; onPick: (type: DocumentChoice) => void; onBack: () => void }) {
+  const options: { type: DocumentChoice; title: string; body: string }[] = [
+    { type: 'drivers_license', title: 'Driving licence', body: 'Front and back of your licence, and a selfie. Your licence number becomes your ID number.' },
+    { type: 'id_card', title: 'ID card', body: 'Front and back of your national ID card, and a selfie.' },
   ];
-
   return (
-    <Panel>
-      <PanelHeader
-        title="On your phone right now"
-        action={
-          timeLeft ? (
-            <span className="text-xs text-pv-muted-fg">Link {timeLeft}</span>
-          ) : null
-        }
-      />
-      <div className="flex flex-col gap-5 px-5 py-5 sm:px-6">
-        <div>
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="text-sm font-medium text-pv-fg">{step.label}</p>
-            <span className="shrink-0 text-xs tabular-nums text-pv-muted-fg">
-              {step.percent}%
-            </span>
-          </div>
-          <div
-            className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-pv-tint"
-            role="progressbar"
-            aria-valuenow={step.percent}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label="Verification progress"
-          >
-            <div
-              className="h-full origin-left rounded-full bg-pv-primary transition-[width] duration-500 motion-reduce:transition-none"
-              style={{ width: `${step.percent}%` }}
-            />
-          </div>
-        </div>
-
-        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          {captured.map((item) => (
-            <li
-              key={item.label}
-              className={cn(
-                'flex items-center gap-2.5 rounded-2xl px-4 py-3 text-sm ring-1',
-                item.done ? 'bg-pv-success-light/60 ring-pv-success/20' : 'bg-pv-row ring-pv-border',
-              )}
-            >
-              {item.done ? (
-                <CircleCheck
-                  aria-hidden
-                  strokeWidth={1.75}
-                  className="size-4 shrink-0 text-pv-success"
-                />
-              ) : (
-                <span
-                  aria-hidden
-                  className="size-4 shrink-0 rounded-full border-[1.5px] border-pv-muted-fg/40"
-                />
-              )}
-              <span
-                className={item.done ? 'font-medium text-pv-fg' : 'text-pv-muted-fg'}
-              >
-                {item.label}
-              </span>
-              <span className="sr-only">{item.done ? 'captured' : 'not yet captured'}</span>
-            </li>
-          ))}
-        </ul>
-
-        <p className="text-xs leading-relaxed text-pv-muted-fg">
-          You can close this page — the check carries on. Come back here to see
-          the result.
-        </p>
+    <section aria-labelledby="choose-title" className="flex flex-col gap-4">
+      <div>
+        <h2 id="choose-title" className="text-[17px] font-semibold tracking-tight text-pv-fg">
+          Which document will you use?
+        </h2>
+        <p className="mt-0.5 text-[14px] text-pv-muted-fg">One is enough. Use the one you carry.</p>
       </div>
-    </Panel>
+      <div className="grid max-w-3xl gap-3 sm:grid-cols-2">
+        {options.map((option) => (
+          <button
+            key={option.type}
+            type="button"
+            disabled={busy}
+            onClick={() => onPick(option.type)}
+            className="rounded-2xl border border-pv-border bg-pv-card p-5 text-left transition-colors duration-200 hover:border-pv-primary/40 hover:bg-pv-primary/5 focus-visible:ring-3 focus-visible:ring-pv-primary/25 focus-visible:outline-none disabled:cursor-wait disabled:opacity-60"
+          >
+            <span className="block text-[15px] font-semibold text-pv-primary">{option.title}</span>
+            <span className="mt-1 block text-[13px] leading-relaxed text-pv-muted-fg">{option.body}</span>
+          </button>
+        ))}
+      </div>
+      <div>
+        <button type="button" onClick={onBack} disabled={busy} className={PV_BUTTON_OUTLINE_SM}>
+          <ArrowLeft aria-hidden />
+          Back
+        </button>
+        {busy ? <Loader2 aria-label="Starting" className="ml-3 inline size-4 animate-spin text-pv-muted-fg" /> : null}
+      </div>
+    </section>
   );
 }
 
-/* ─────────────────────────────── expiry note ───────────────────────────── */
+/* ─────────────────────────────── capture ───────────────────────────────── */
 
-function ExpiryNotice({
-  state,
-  expiry,
-}: {
-  state: 'expired' | 'expiring';
-  expiry: string | null;
-}) {
-  const date = formatDate(expiry);
-  const expired = state === 'expired';
-
+function Progress({ row }: { row: CustomerVerificationRow | null }) {
+  const step = STEP[row?.verification_step ?? 'init'] ?? STEP.init;
   return (
-    <Notice
-      tone={expired ? 'danger' : 'warning'}
-      title={
-        expired
-          ? 'The document you verified with has expired'
-          : 'The document you verified with expires soon'
-      }
-    >
-      {date ? `It runs out on ${date}. ` : ''}
-      You will need to verify again with a current document before your next
-      collection.
-    </Notice>
+    <div className="space-y-2" aria-live="polite">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-[13px] font-medium text-pv-fg">{step.label}</p>
+        <span className="text-[12px] tabular-nums text-pv-muted-fg">{step.percent}%</span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-pv-muted" role="progressbar" aria-valuenow={step.percent} aria-valuemin={0} aria-valuemax={100}>
+        <div className="h-full rounded-full bg-pv-primary transition-[width] duration-500 motion-reduce:transition-none" style={{ width: `${step.percent}%` }} />
+      </div>
+    </div>
   );
 }
 
-/* ─────────────────────────────── the details ───────────────────────────── */
+type Slot = 'front' | 'back' | 'selfie';
 
-function VerificationDetails({
+function Capture({
+  session,
   row,
-  expiry,
+  onCancel,
+  onProcessed,
 }: {
-  row: CustomerVerificationRow;
-  expiry: 'valid' | 'expiring' | 'expired' | null;
+  session: Session;
+  row: CustomerVerificationRow | null;
+  onCancel: () => void;
+  onProcessed: () => void;
 }) {
-  const { tenant } = useTenant();
-  const operator = tenant?.company_name ?? 'your rental company';
-  const now = useNow(3_600_000);
-  const age = row.date_of_birth && now ? ageInYears(row.date_of_birth, now) : null;
+  const name = DOC_NAME[session.documentType];
+  const [files, setFiles] = useState<Partial<Record<Slot, File>>>({});
+  const [previews, setPreviews] = useState<Partial<Record<Slot, string>>>({});
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const inputs = useRef<Partial<Record<Slot, HTMLInputElement | null>>>({});
 
-  const hasPersonal = Boolean(row.first_name ?? row.last_name ?? row.date_of_birth);
-  const hasDocument = Boolean(
-    row.document_type ??
-      row.document_number ??
-      row.document_country ??
-      row.document_expiry_date ??
-      row.document_issuing_date,
-  );
-  const images: { label: string; src: string; portrait?: boolean }[] = [
-    row.document_front_url
-      ? { label: 'Front of ID', src: row.document_front_url }
-      : null,
-    row.document_back_url ? { label: 'Back of ID', src: row.document_back_url } : null,
-    row.selfie_image_url
-      ? { label: 'Selfie', src: row.selfie_image_url, portrait: true }
-      : null,
-    // Veriff returns a cropped face separately from the selfie. Only shown when
-    // there is no selfie, so the same face is not printed twice.
-    !row.selfie_image_url && row.face_image_url
-      ? { label: 'Face photo', src: row.face_image_url, portrait: true }
-      : null,
-  ].filter((item): item is { label: string; src: string; portrait?: boolean } =>
-    item !== null,
+  useEffect(
+    () => () => {
+      Object.values(previews).forEach((url) => url && URL.revokeObjectURL(url));
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
   );
 
-  const faceMatch =
-    row.ai_face_match_score === null
-      ? null
-      : `${Math.round(row.ai_face_match_score * 100)}%`;
+  const choose = (slot: Slot, file: File | undefined) => {
+    if (!file) return;
+    if (!/^image\/(jpe?g|png)$/i.test(file.type)) return setError('Use a JPG or PNG photo.');
+    if (file.size > 5 * 1024 * 1024) return setError('Each photo must be smaller than 5 MB.');
+    setError(null);
+    setFiles((current) => ({ ...current, [slot]: file }));
+    setPreviews((current) => {
+      if (current[slot]) URL.revokeObjectURL(current[slot]!);
+      return { ...current, [slot]: URL.createObjectURL(file) };
+    });
+  };
+
+  const submit = async () => {
+    if (!files.front || !files.back || !files.selfie) return;
+    setError(null);
+    try {
+      const put = async (file: File, type: string) => {
+        const path = `ai-verification/${session.sessionId}/${type}.jpg`;
+        const { data, error: uploadError } = await supabase.storage
+          .from('customer-documents')
+          .upload(path, file, { contentType: file.type || 'image/jpeg', upsert: true });
+        if (uploadError) throw new Error(`Your ${type.replace('document-', '')} photo did not upload. ${uploadError.message}`);
+        return data.path;
+      };
+      setUploading('Uploading the front…');
+      const documentFrontPath = await put(files.front, 'document-front');
+      setUploading('Uploading the back…');
+      const documentBackPath = await put(files.back, 'document-back');
+      setUploading('Uploading your selfie…');
+      const selfiePath = await put(files.selfie, 'selfie');
+      setUploading(`Checking your ${name}…`);
+      const { error: processError } = await supabase.functions.invoke('process-ai-verification', {
+        body: { sessionId: session.sessionId, documentFrontPath, documentBackPath, selfiePath },
+      });
+      if (processError) throw new Error('Your photos are in, but the check did not finish. Please try again.');
+      onProcessed();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Something went wrong. Please try again.');
+      setUploading(null);
+    }
+  };
+
+  const slots: { slot: Slot; label: string; capture: 'environment' | 'user' }[] = [
+    { slot: 'front', label: `Front of ${name}`, capture: 'environment' },
+    { slot: 'back', label: `Back of ${name}`, capture: 'environment' },
+    { slot: 'selfie', label: 'Selfie', capture: 'user' },
+  ];
+  const qrImage = `https://quickchart.io/qr?text=${encodeURIComponent(session.qrUrl)}&size=400&margin=1&dark=000000&light=ffffff&ecLevel=M&format=png`;
+  const expires = (() => {
+    const at = new Date(session.expiresAt);
+    return Number.isNaN(at.getTime()) ? null : at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  })();
+  const phoneActive = (row?.verification_step ?? 'init') !== 'init';
 
   return (
-    <>
-      {hasPersonal ? (
-        <Panel>
-          <PanelHeader title="What your document says" />
-          <div className="px-5 py-1 sm:px-6">
-            <DetailList>
-              <DetailRow label="First name" value={row.first_name} />
-              <DetailRow label="Last name" value={row.last_name} />
-              <DetailRow
-                label="Date of birth"
-                value={formatDate(row.date_of_birth?.slice(0, 10) ?? null)}
-                hint={age === null ? undefined : `${age} years old`}
-              />
-            </DetailList>
-          </div>
-          <p className="rounded-b-2xl border-t border-pv-border bg-pv-row px-5 py-3.5 text-xs leading-relaxed text-pv-muted-fg sm:px-6">
-            These were read off your document automatically. If anything is
-            wrong, tell us and we will correct it — this page cannot be edited.
-          </p>
-        </Panel>
-      ) : null}
-
-      {hasDocument ? (
-        <Panel>
-          <PanelHeader title="Your document" />
-          <div className="px-5 py-1 sm:px-6">
-            <DetailList>
-              <DetailRow label="Type" value={documentTypeLabel(row.document_type)} />
-              <DetailRow label="Number" value={row.document_number} />
-              <DetailRow
-                label="Issued in"
-                value={
-                  row.document_country ? (
-                    <span className="uppercase">{row.document_country}</span>
-                  ) : null
-                }
-              />
-              <DetailRow
-                label="Issued on"
-                value={formatDate(row.document_issuing_date?.slice(0, 10) ?? null)}
-              />
-              <DetailRow
-                label="Expires"
-                value={
-                  row.document_expiry_date ? (
-                    <span className="flex flex-wrap items-center gap-2">
-                      {formatDate(row.document_expiry_date.slice(0, 10))}
-                      {expiry === 'expired' ? (
-                        <StatusChip tone="danger">Expired</StatusChip>
-                      ) : expiry === 'expiring' ? (
-                        <StatusChip tone="warning">Expires soon</StatusChip>
-                      ) : expiry === 'valid' ? (
-                        <StatusChip tone="success">Valid</StatusChip>
-                      ) : null}
-                    </span>
-                  ) : null
-                }
-              />
-            </DetailList>
-          </div>
-        </Panel>
-      ) : null}
-
-      <Panel>
-        <PanelHeader title="The check itself" />
-        <div className="px-5 py-1 sm:px-6">
-          <DetailList>
-            <DetailRow label="Method" value={providerLabel(row)} />
-            <DetailRow
-              label="Face match"
-              value={faceMatch}
-              hint={
-                faceMatch === null
-                  ? undefined
-                  : 'How closely your selfie matched the photo on your document.'
-              }
-            />
-            <DetailRow label="Started" value={formatTimestamp(row.created_at)} />
-            <DetailRow
-              label="Completed"
-              value={formatTimestamp(row.verification_completed_at)}
-            />
-            <DetailRow
-              label="Reference"
-              value={
-                row.session_id ? (
-                  <span className="font-mono text-xs break-all">{row.session_id}</span>
-                ) : null
-              }
-              hint={row.session_id ? 'Quote this if you contact us about it.' : undefined}
-            />
-          </DetailList>
-        </div>
-      </Panel>
-
-      {images.length > 0 ? (
-        <Panel>
-          <PanelHeader title="What you sent" />
-          <div className="px-5 py-5 sm:px-6">
-            <p className="mb-5 text-sm leading-relaxed text-pv-muted-fg">
-              Hidden by default, so a document number is not sitting on screen
-              when you do not need it. Only you and {operator} can see these.
+    <section aria-label={`Verify with your ${name}`} className="flex flex-col gap-6">
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="flex flex-col gap-4 rounded-2xl border border-pv-border bg-pv-card p-5">
+          <div>
+            <h2 className="text-[15px] font-semibold text-pv-fg">Use your phone</h2>
+            <p className="mt-0.5 text-[13px] leading-relaxed text-pv-muted-fg">
+              Scan the code with your phone&apos;s camera. It opens a page that photographs your {name} and takes a selfie.
             </p>
-            <div className="grid grid-cols-2 items-start gap-4 lg:grid-cols-4">
-              {images.map((image) => (
-                <DocumentPreview
-                  key={image.label}
-                  label={image.label}
-                  src={image.src}
-                  portrait={image.portrait}
-                />
-              ))}
+          </div>
+          <div className="flex items-center gap-5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={qrImage} alt={`QR code to verify your ${name} on your phone`} width={168} height={168} className="size-[168px] shrink-0 rounded-xl bg-white p-2 ring-1 ring-pv-border" />
+            <div className="min-w-0 flex-1 space-y-3">
+              <Progress row={row} />
+              {expires ? <p className="text-[12px] text-pv-muted-fg">The code works until {expires}.</p> : null}
             </div>
           </div>
-        </Panel>
-      ) : null}
-    </>
-  );
-}
+        </div>
 
-/* ──────────────────────────────── next steps ───────────────────────────── */
-
-/**
- * The honest version of v1's "Start ID Verification" button.
- *
- * See the file header for why there is no button. The point of this panel is
- * that the customer leaves knowing exactly what has to happen and who makes it
- * happen, rather than pressing something that quietly does nothing useful.
- */
-function NextSteps({
-  outcome,
-  verifiedByOperator,
-}: {
-  outcome: VerificationOutcome;
-  verifiedByOperator: boolean;
-}) {
-  const { tenant } = useTenant();
-  const operator = tenant?.company_name ?? 'your rental company';
-  const email = tenant?.contact_email ?? null;
-  const phone = tenant?.contact_phone ?? tenant?.phone ?? null;
-
-  if (outcome === 'in_review') {
-    return (
-      <Panel className="px-5 py-5 sm:px-6">
-        <p className="text-[15px] font-semibold text-pv-fg">Nothing to do</p>
-        <p className="mt-1 text-sm leading-relaxed text-pv-muted-fg">
-          {operator} will be in touch once the review is finished. This page
-          updates by itself, so you do not need to keep checking it.
-        </p>
-      </Panel>
-    );
-  }
-
-  if (outcome === 'in_progress') {
-    return (
-      <Panel className="px-5 py-5 sm:px-6">
-        <p className="text-[15px] font-semibold text-pv-fg">Finish on your phone</p>
-        <p className="mt-1 text-sm leading-relaxed text-pv-muted-fg">
-          Open the secure link {operator} sent you and keep going. If you have
-          lost it, ask for a new one — the link below reaches them.
-        </p>
-        <ContactLinks email={email} phone={phone} />
-      </Panel>
-    );
-  }
-
-  if (outcome === 'approved') {
-    if (verifiedByOperator) return null;
-    return (
-      <Panel className="px-5 py-5 sm:px-6">
-        <p className="text-[15px] font-semibold text-pv-fg">
-          Changed document, or something wrong above?
-        </p>
-        <p className="mt-1 text-sm leading-relaxed text-pv-muted-fg">
-          If you have renewed your licence or changed your name, tell {operator}
-          {' '}
-          and they will set up a fresh check.
-        </p>
-        <ContactLinks email={email} phone={phone} />
-      </Panel>
-    );
-  }
-
-  const heading =
-    outcome === 'rejected'
-      ? 'What to do next'
-      : outcome === 'expired'
-        ? 'Get a new link'
-        : 'How verification works';
-
-  return (
-    <Panel>
-      <PanelHeader title={heading} />
-      <div className="flex flex-col gap-5 px-5 py-5 sm:px-6">
-        <ol className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Step
-            index={1}
-            icon={Smartphone}
-            title="You get a secure link"
-            body={`${operator} sends you a one-time link by email or text. It only works for a few hours.`}
-          />
-          <Step
-            index={2}
-            icon={IdCard}
-            title="Photograph your ID"
-            body="Front and back of your driving licence, passport or ID card, in good light with no glare."
-          />
-          <Step
-            index={3}
-            icon={ScanFace}
-            title="Take a selfie"
-            body="Your face is compared with the photo on the document. That is the whole check."
-          />
-        </ol>
-
-        {/*
-          The one thing a customer must not be misled about. This app cannot
-          create the link — saying so plainly beats a button that appears to
-          work and leaves them stuck mid-check.
-        */}
-        <Notice tone="info" title="You cannot start a check from here yet">
-          This part of your account is still being connected. Ask {operator}
-          {' '}
-          for a verification link and it will show up on this page as soon as
-          you start it.
-          <ContactLinks email={email} phone={phone} />
-        </Notice>
-      </div>
-    </Panel>
-  );
-}
-
-function Step({
-  index,
-  icon: Icon,
-  title,
-  body,
-}: {
-  index: number;
-  icon: LucideIcon;
-  title: string;
-  body: string;
-}) {
-  return (
-    <li className="flex flex-col gap-3 rounded-2xl bg-pv-row px-4 py-4 ring-1 ring-pv-border">
-      <div className="flex items-center justify-between">
-        <IconTile icon={Icon} className="size-9 rounded-xl [&>svg]:size-4" />
-        <span aria-hidden className="text-xs font-medium tabular-nums text-pv-muted-fg">
-          {index} of 3
-        </span>
-      </div>
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-pv-fg">
-          <span className="sr-only">Step {index}: </span>
-          {title}
-        </p>
-        <p className="mt-1 text-[13px] leading-relaxed text-pv-muted-fg">{body}</p>
-      </div>
-    </li>
-  );
-}
-
-/**
- * How to reach the operator.
- *
- * `contact_email` and `contact_phone` are both nullable and are empty for real
- * tenants on staging today, so the fallback is not theoretical: without it this
- * panel tells the customer to ask somebody and gives them no way to. The site's
- * own contact page always exists, so that is the floor.
- */
-function ContactLinks({
-  email,
-  phone,
-}: {
-  email: string | null;
-  phone: string | null;
-}) {
-  if (!email && !phone) {
-    return (
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button asChild variant="brand-outline" className="h-11 px-4">
-          <Link href="/contact">
-            <Mail aria-hidden strokeWidth={1.75} className="size-4" />
-            Get in touch
-          </Link>
-        </Button>
-      </div>
-    );
-  }
-  return (
-    <div className="mt-3 flex flex-wrap gap-2">
-      {email ? (
-        <Button asChild variant="brand-outline" className="h-11 max-w-full px-4">
-          <a href={`mailto:${email}`}>
-            <Mail aria-hidden strokeWidth={1.75} className="size-4" />
-            <span className="truncate">{email}</span>
-          </a>
-        </Button>
-      ) : null}
-      {phone ? (
-        <Button asChild variant="brand-outline" className="h-11 px-4">
-          <a href={`tel:${phone.replace(/\s+/g, '')}`}>
-            <Phone aria-hidden strokeWidth={1.75} className="size-4" />
-            {phone}
-          </a>
-        </Button>
-      ) : null}
-    </div>
-  );
-}
-
-/* ──────────────────────────────── history ─────────────────────────────── */
-
-/**
- * Earlier attempts.
- *
- * A list of rows rather than a `<table>`: this has to survive 360px, and the
- * three columns v1 uses (date / method / status) wrap into an unreadable mess
- * long before that. The newest attempt is excluded — it is the whole page above.
- */
-function HistoryPanel({ history }: { history: CustomerVerificationRow[] }) {
-  const earlier = history.slice(1);
-
-  return (
-    <Panel>
-      <PanelHeader title="Earlier attempts" />
-      <ul className="divide-y divide-pv-border">
-        {earlier.map((row) => {
-          const outcome = historyOutcome(row);
-          const copy = OUTCOME[outcome];
-          return (
-            <li
-              key={row.id}
-              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-5 py-4 last:rounded-b-2xl transition-colors duration-200 ease-out hover:bg-pv-row-hover motion-reduce:transition-none sm:px-6"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-pv-fg">
-                  {formatTimestamp(row.created_at) ?? 'Unknown date'}
-                </p>
-                <p className="text-xs text-pv-muted-fg">
-                  {providerLabel(row) ?? 'Identity check'}
-                </p>
+        <div className={cn('flex flex-col gap-4 rounded-2xl border border-pv-border bg-pv-card p-5', phoneActive && 'opacity-60')}>
+          <div>
+            <h2 className="text-[15px] font-semibold text-pv-fg">Or upload from this device</h2>
+            <p className="mt-0.5 text-[13px] leading-relaxed text-pv-muted-fg">Clear photos in good light, all four corners in view, no glare. JPG or PNG.</p>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {slots.map(({ slot, label, capture }) => (
+              <div key={slot} className="flex min-w-0 flex-col gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => inputs.current[slot]?.click()}
+                  disabled={uploading !== null || phoneActive}
+                  className={cn(
+                    'relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-xl border border-dashed text-[12px] text-pv-muted-fg transition-colors duration-200',
+                    previews[slot] ? 'border-transparent' : 'border-pv-border hover:border-pv-primary/50 hover:bg-pv-primary/5',
+                  )}
+                  aria-label={previews[slot] ? `Replace: ${label}` : `Add: ${label}`}
+                >
+                  {previews[slot] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={previews[slot]} alt="" className="size-full object-cover" />
+                  ) : (
+                    <Upload aria-hidden className="size-4" />
+                  )}
+                </button>
+                <span className="truncate text-[12px] font-medium text-pv-fg">{label}</span>
+                <input
+                  ref={(element) => {
+                    inputs.current[slot] = element;
+                  }}
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  capture={capture}
+                  className="sr-only"
+                  tabIndex={-1}
+                  onChange={(event) => {
+                    choose(slot, event.target.files?.[0]);
+                    event.target.value = '';
+                  }}
+                />
               </div>
-              <StatusChip tone={copy.tone}>{copy.chip}</StatusChip>
-            </li>
-          );
-        })}
-      </ul>
-    </Panel>
-  );
-}
-
-/**
- * A past attempt's outcome.
- *
- * Anything that never reached a decision is shown as expired rather than "in
- * progress": a superseded attempt cannot still be running, and labelling it as
- * running would put two live checks on one screen.
- */
-function historyOutcome(row: CustomerVerificationRow): VerificationOutcome {
-  const result = row.review_result?.toUpperCase() ?? null;
-  if (result === 'GREEN') return 'approved';
-  if (result === 'RED') return 'rejected';
-  if (result === 'YELLOW' || result === 'RETRY') return 'in_review';
-  const status = row.status.toLowerCase();
-  if (status === 'approved' || status === 'verified') return 'approved';
-  if (status === 'rejected' || status === 'declined') return 'rejected';
-  return 'expired';
-}
-
-/* ─────────────────────────────── skeleton ─────────────────────────────── */
-
-/** Sized like the status panel plus two detail panels, so nothing jumps. */
-function VerificationSkeleton() {
-  return (
-    <div className="flex flex-col gap-6" aria-hidden>
-      <Panel className="px-5 py-6 sm:px-7 sm:py-7">
-        <div className="flex gap-5">
-          <Skeleton className="size-12 shrink-0 rounded-3xl bg-pv-tint" />
-          <div className="flex flex-1 flex-col gap-2.5">
-            <Skeleton className="h-5 w-64 max-w-full bg-pv-tint" />
-            <Skeleton className="h-4 w-full max-w-lg bg-pv-tint" />
-            <Skeleton className="h-3 w-40 bg-pv-tint" />
+            ))}
+          </div>
+          {error ? <RowHint tone="danger">{error}</RowHint> : null}
+          <div className="flex items-center justify-end gap-3">
+            {uploading ? <span className="text-[12px] text-pv-muted-fg">{uploading}</span> : null}
+            <button
+              type="button"
+              className={PV_BUTTON_SM}
+              disabled={!files.front || !files.back || !files.selfie || uploading !== null || phoneActive}
+              onClick={() => void submit()}
+            >
+              {uploading ? <Loader2 aria-hidden className="animate-spin" /> : null}
+              Submit photos
+            </button>
           </div>
         </div>
-      </Panel>
-      <Skeleton className="h-44 w-full rounded-2xl bg-pv-tint/70" />
-      <Skeleton className="h-56 w-full rounded-2xl bg-pv-tint/70" />
-    </div>
+      </div>
+
+      <div>
+        <button type="button" onClick={onCancel} disabled={uploading !== null} className={PV_BUTTON_OUTLINE_SM}>
+          Cancel this check
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/** A check already under way when the page opened: the phone has the code. */
+function InFlight({ row, busy, onRestart, onCancel }: { row: CustomerVerificationRow; busy: boolean; onRestart: () => void; onCancel: () => void }) {
+  const processing = (row.status ?? '').toLowerCase() === 'processing';
+  return (
+    <section className="flex max-w-2xl flex-col gap-4 rounded-2xl border border-pv-border bg-pv-card p-5">
+      <div>
+        <h2 className="text-[15px] font-semibold text-pv-fg">{processing ? 'Checking your document' : 'Your check is under way'}</h2>
+        <p className="mt-0.5 text-[13px] leading-relaxed text-pv-muted-fg">
+          {processing
+            ? 'Your photos are in. This page updates by itself when the check finishes.'
+            : 'Finish it on the phone you scanned the code with. Lost the code? Start again for a new one.'}
+        </p>
+      </div>
+      <Progress row={row} />
+      {processing ? null : (
+        <div className="flex gap-2">
+          <button type="button" className={PV_BUTTON_SM} onClick={onRestart} disabled={busy}>
+            <RotateCcw aria-hidden />
+            Start again
+          </button>
+          <button type="button" className={PV_BUTTON_OUTLINE_SM} onClick={onCancel} disabled={busy}>
+            Cancel this check
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ──────────────────────────────── result ───────────────────────────────── */
+
+function Picture({ label, src }: { label: string; src: string | null }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <figure className="flex min-w-0 flex-col gap-2">
+      <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-2xl bg-pv-muted">
+        {src && !failed ? (
+          <a href={src} target="_blank" rel="noopener noreferrer" className="block size-full" aria-label={`Open ${label}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={src} alt={label} onError={() => setFailed(true)} className="size-full object-cover" />
+          </a>
+        ) : (
+          <span className="px-3 text-center text-[12px] text-pv-muted-fg">{failed ? 'This picture could not be shown' : 'No picture on file'}</span>
+        )}
+      </div>
+      <figcaption className="text-[12px] font-medium text-pv-muted-fg">{label}</figcaption>
+    </figure>
+  );
+}
+
+const FIELDS = [
+  'first_name',
+  'last_name',
+  'date_of_birth',
+  'document_number',
+  'document_country',
+  'document_issuing_date',
+  'document_expiry_date',
+  'address',
+] as const;
+type Field = (typeof FIELDS)[number];
+
+function Result({
+  row,
+  stillVerified,
+  editing,
+  onEdit,
+  onEditDone,
+  onReverify,
+}: {
+  row: CustomerVerificationRow;
+  /** This check failed, but the customer is verified from an earlier one. */
+  stillVerified: boolean;
+  editing: boolean;
+  onEdit: () => void;
+  onEditDone: (message: string | null) => void;
+  onReverify: () => void;
+}) {
+  const decision = decisionOf(row);
+  const licence = isLicence(row.document_type);
+  const name = licence ? 'licence' : 'ID';
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => setNow(new Date()), []);
+  const age = row.date_of_birth && now ? ageInYears(row.date_of_birth, now) : null;
+  const today = now ? now.toISOString().slice(0, 10) : null;
+  const expired = row.document_expiry_date && today ? row.document_expiry_date.slice(0, 10) < today : false;
+
+  const labels: Record<Field, string> = {
+    first_name: 'First name',
+    last_name: 'Last name',
+    date_of_birth: 'Date of birth',
+    document_number: licence ? 'Licence number' : 'ID number',
+    document_country: 'Country of issue',
+    document_issuing_date: 'Issued',
+    document_expiry_date: 'Expires',
+    address: 'Address',
+  };
+
+  const shown: Record<Field, React.ReactNode> = {
+    first_name: row.first_name,
+    last_name: row.last_name,
+    date_of_birth: row.date_of_birth ? (
+      <>
+        {formatDate(row.date_of_birth.slice(0, 10))}
+        {age !== null ? <span className="text-pv-muted-fg"> · {age} years old</span> : null}
+      </>
+    ) : null,
+    document_number: row.document_number ? <span className="font-mono text-[13px]">{row.document_number}</span> : null,
+    document_country: row.document_country ? countryName(row.document_country) : null,
+    document_issuing_date: formatDate(row.document_issuing_date?.slice(0, 10) ?? null),
+    document_expiry_date: row.document_expiry_date ? (
+      <span className="inline-flex flex-wrap items-center gap-2">
+        {formatDate(row.document_expiry_date.slice(0, 10))}
+        {expired ? <StatusPill tone="negative">Expired</StatusPill> : null}
+      </span>
+    ) : null,
+    address: row.address,
+  };
+
+  return (
+    <section aria-label="Your verification" className="flex max-w-[960px] flex-col gap-6">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span className="text-[15px] font-semibold text-pv-fg">{documentLabel(row.document_type) ?? 'Document'}</span>
+        {decision ? <StatusPill tone={decision.tone}>{decision.label}</StatusPill> : null}
+        <span className="text-[13px] text-pv-muted-fg">
+          Checked {formatTimestamp(row.verification_completed_at ?? row.updated_at ?? row.created_at) ?? ''}
+        </span>
+        {editing ? null : (
+          <div className="ml-auto flex gap-2">
+            <button type="button" className={PV_BUTTON_OUTLINE_SM} onClick={onEdit}>
+              Edit details
+            </button>
+            <button type="button" className={PV_BUTTON_SM} onClick={onReverify}>
+              <RotateCcw aria-hidden />
+              Re-verify
+            </button>
+          </div>
+        )}
+      </div>
+
+      {stillVerified ? (
+        <p className="-mt-3 text-[13px] text-pv-muted-fg">This latest check did not go through, but you are still verified from your earlier one.</p>
+      ) : null}
+
+      <div className="grid grid-cols-3 gap-4">
+        <Picture label={`Front of ${name}`} src={row.document_front_url} />
+        <Picture label={`Back of ${name}`} src={row.document_back_url} />
+        <Picture label="Selfie" src={row.selfie_image_url ?? row.face_image_url} />
+      </div>
+
+      {editing ? (
+        <EditDetails row={row} labels={labels} onDone={onEditDone} />
+      ) : (
+        <div>
+          <dl className="grid gap-x-10 sm:grid-cols-2">
+            {FIELDS.map((field) => (
+              <div key={field} className="flex items-baseline justify-between gap-4 border-b border-pv-border/60 py-3">
+                <dt className="shrink-0 text-[13px] text-pv-muted-fg">{labels[field]}</dt>
+                <dd className="min-w-0 text-right text-[14px] break-words text-pv-fg">{shown[field] ?? <span className="text-pv-muted-fg">—</span>}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-3 text-[12px] text-pv-muted-fg">
+            {row.customer_corrected_at
+              ? `You corrected these details on ${formatTimestamp(row.customer_corrected_at)}. The company can see what the scan read and what you changed.`
+              : 'Read off your document automatically. If anything is wrong, edit it.'}
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+const regionNames = typeof Intl !== 'undefined' && 'DisplayNames' in Intl ? new Intl.DisplayNames(undefined, { type: 'region' }) : null;
+function countryName(code: string): string {
+  const value = code.trim().toUpperCase();
+  if (/^[A-Z]{2}$/.test(value) && regionNames) {
+    try {
+      return regionNames.of(value) ?? value;
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
+function EditDetails({
+  row,
+  labels,
+  onDone,
+}: {
+  row: CustomerVerificationRow;
+  labels: Record<Field, string>;
+  onDone: (message: string | null) => void;
+}) {
+  const initial = useMemo<Record<Field, string>>(
+    () => ({
+      first_name: row.first_name ?? '',
+      last_name: row.last_name ?? '',
+      date_of_birth: row.date_of_birth?.slice(0, 10) ?? '',
+      document_number: row.document_number ?? '',
+      document_country: row.document_country ?? '',
+      document_issuing_date: row.document_issuing_date?.slice(0, 10) ?? '',
+      document_expiry_date: row.document_expiry_date?.slice(0, 10) ?? '',
+      address: row.address ?? '',
+    }),
+    [row],
+  );
+  const [draft, setDraft] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const changed = FIELDS.filter((field) => draft[field].trim() !== initial[field].trim());
+  const dates: Field[] = ['date_of_birth', 'document_issuing_date', 'document_expiry_date'];
+
+  const save = useCallback(async () => {
+    if (changed.length === 0) return onDone(null);
+    if (!draft.first_name.trim() || !draft.last_name.trim()) return setError('Your first and last name are needed.');
+    setSaving(true);
+    setError(null);
+    try {
+      const fields = Object.fromEntries(changed.map((field) => [field, draft[field].trim()]));
+      const { error: rpcError } = await supabase.rpc('customer_correct_verification', { p_verification_id: row.id, p_fields: fields });
+      if (rpcError) throw new Error(rpcError.message);
+      onDone('Your details are corrected.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'We could not save your corrections.');
+    } finally {
+      setSaving(false);
+    }
+  }, [changed, draft, onDone, row.id]);
+
+  return (
+    <form
+      className="flex flex-col gap-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save();
+      }}
+    >
+      <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+        {FIELDS.map((field) => (
+          <div key={field} className={cn('space-y-1.5', field === 'address' && 'sm:col-span-2')}>
+            <label htmlFor={`verify-${field}`} className="text-[13px] font-medium text-pv-fg">
+              {labels[field]}
+            </label>
+            <Input
+              id={`verify-${field}`}
+              type={dates.includes(field) ? 'date' : 'text'}
+              value={draft[field]}
+              maxLength={field === 'document_country' ? 2 : undefined}
+              placeholder={field === 'document_country' ? 'US' : undefined}
+              onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))}
+              className={cn(PV_INPUT, field === 'document_country' && 'uppercase')}
+            />
+          </div>
+        ))}
+      </div>
+      {error ? <RowHint tone="danger">{error}</RowHint> : null}
+      <div className="flex justify-end gap-2">
+        <button type="button" className={PV_BUTTON_OUTLINE_SM} onClick={() => onDone(null)} disabled={saving}>
+          Cancel
+        </button>
+        <button type="submit" className={PV_BUTTON_SM} disabled={saving || changed.length === 0}>
+          {saving ? <Loader2 aria-hidden className="animate-spin" /> : null}
+          Save details
+        </button>
+      </div>
+    </form>
   );
 }
