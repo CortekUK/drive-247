@@ -1,0 +1,155 @@
+/*
+ * Flow "See their bookings" (bookings.tsx) — Tailwind classes of the legacy
+ * portal/bookings/page.tsx, portal/bookings/[id]/page.tsx,
+ * customer-portal/PaymentBreakdown.tsx and ui/{card,badge,tabs,input,select,
+ * table,button}.tsx, resolved at 390px with the tokens in legacy.css.
+ * The app runs in `.dark`, so the list's status colours take their dark:
+ * variants; the detail page's getRentalStatusColor has none (light pill).
+ */
+
+/* step 2: the page scrolled to its end (the header scrolls away; it is not sticky) */
+.l4-scaled .inner .fbk-end { position: absolute; left: 0; right: 0; bottom: 0; }
+
+/* ── My Bookings ── */
+/* space-y-4 */
+.l4-scaled .inner .fbk-pg { display: flex; flex-direction: column; gap: 16px; }
+/* flex-col gap-3; h1 text-xl font-bold; p text-sm text-muted-foreground */
+.l4-scaled .inner .fbk-ph { display: flex; flex-direction: column; gap: 12px; }
+.l4-scaled .inner .fbk-ph h1 { font-size: 20px; line-height: 28px; font-weight: 700; }
+.l4-scaled .inner .fbk-ph p { font-size: 14px; line-height: 20px; color: var(--fl-mfg); }
+/* Button gap-2 + the icon's mr-2 */
+.l4-scaled .inner .fbk-mr { margin-right: 8px; }
+
+/* grid grid-cols-2 gap-3 */
+.l4-scaled .inner .fbk-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+/* CardHeader flex-row items-center justify-between p-3 pb-2; CardTitle (h3) text-xs font-medium truncate leading-none tracking-tight */
+.l4-scaled .inner .fbk-sh { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 8px; }
+.l4-scaled .inner .fbk-sh h3 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 1; font-weight: 500; letter-spacing: -0.025em; }
+.l4-scaled .inner .fbk-sh svg { width: 16px; height: 16px; color: var(--fl-mfg); }
+/* CardContent p-3 pt-0; text-xl font-bold break-words */
+.l4-scaled .inner .fbk-sv { padding: 0 12px 12px; font-size: 20px; line-height: 28px; font-weight: 700; overflow-wrap: break-word; }
+
+/* flex-col gap-4 */
+.l4-scaled .inner .fbk-bar { display: flex; flex-direction: column; gap: 16px; }
+/* TabsList inline-flex h-10 rounded-md bg-muted p-1 text-muted-foreground;
+   TabsTrigger rounded-sm px-3 py-1.5 text-sm font-medium; active bg-background text-foreground shadow-sm */
+.l4-scaled .inner .fbk-tabs,
+.l4-scaled .inner .fbk-dtabs { display: inline-flex; align-items: center; align-self: flex-start; height: 40px; padding: 4px; border-radius: 10px; background: var(--fl-muted); color: var(--fl-mfg); }
+.l4-scaled .inner .fbk-tabs span,
+.l4-scaled .inner .fbk-dtabs span { display: inline-flex; align-items: center; justify-content: center; padding: 6px 12px; border-radius: 8px; font-size: 14px; line-height: 20px; font-weight: 500; white-space: nowrap; }
+.l4-scaled .inner .fbk-tabs .on,
+.l4-scaled .inner .fbk-dtabs .on { background: var(--fl-bg); color: var(--fl-fg); box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
+/* flex items-center gap-2 flex-wrap */
+.l4-scaled .inner .fbk-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* relative w-full; Input h-9 pl-8 pr-8 text-sm; Search left-2.5 h-3.5 w-3.5 */
+.l4-scaled .inner .fbk-srch { position: relative; display: flex; align-items: center; width: 100%; height: 36px; padding: 0 32px; border: 1px solid var(--fl-input); border-radius: 10px; background: var(--fl-bg); font-size: 14px; color: var(--fl-mfg); }
+.l4-scaled .inner .fbk-srch svg { position: absolute; left: 10px; top: 50%; width: 14px; height: 14px; transform: translateY(-50%); }
+/* flex w-full items-center gap-2; ArrowUpDown h-4 w-4; SelectTrigger h-11 w-full px-3 text-sm, ChevronDown h-4 opacity-50 */
+.l4-scaled .inner .fbk-sort { display: flex; align-items: center; gap: 8px; width: 100%; }
+.l4-scaled .inner .fbk-sort > svg { width: 16px; height: 16px; color: var(--fl-mfg); }
+.l4-scaled .inner .fbk-sel { display: flex; flex: 1; align-items: center; justify-content: space-between; height: 44px; padding: 8px 12px; border: 1px solid var(--fl-input); border-radius: 10px; background: var(--fl-bg); font-size: 14px; line-height: 20px; }
+.l4-scaled .inner .fbk-sel svg { width: 16px; height: 16px; opacity: 0.5; }
+
+/* border rounded-lg divide-y */
+.l4-scaled .inner .fbk-list { border: 1px solid var(--fl-border); border-radius: 12px; }
+/* flex items-center gap-4 p-4 */
+.l4-scaled .inner .fbk-row { display: flex; align-items: center; gap: 16px; padding: 16px; }
+.l4-scaled .inner .fbk-row + .fbk-row { border-top: 1px solid var(--fl-border); }
+.l4-scaled .inner .fbk-row:first-child { border-radius: 12px 12px 0 0; }
+/* h-12 w-16 rounded-md bg-muted overflow-hidden; no photo: Car h-5 w-5 muted, centred */
+.l4-scaled .inner .fbk-th { display: flex; align-items: center; justify-content: center; width: 64px; height: 48px; flex: none; overflow: hidden; border-radius: 10px; background: var(--fl-muted); }
+.l4-scaled .inner .fbk-th img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.l4-scaled .inner .fbk-th svg { width: 20px; height: 20px; color: var(--fl-mfg); }
+.l4-scaled .inner .fbk-info { flex: 1; min-width: 0; }
+/* flex items-center gap-2 flex-wrap */
+.l4-scaled .inner .fbk-l1 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* rounded-md border border-indigo-500/30 bg-indigo-500/10 px-1.5 py-0.5 font-mono text-[11px] font-semibold dark:text-indigo-300 tabular-nums */
+.l4-scaled .inner .fbk-ref { display: inline-flex; align-items: center; padding: 2px 6px; border: 1px solid rgb(99 102 241 / 0.3); border-radius: 10px; background: rgb(99 102 241 / 0.1); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; line-height: 16px; font-weight: 600; font-variant-numeric: tabular-nums; color: #a5b4fc; }
+/* font-medium truncate */
+.l4-scaled .inner .fbk-nm { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+/* flex items-center gap-3 text-xs text-muted-foreground mt-0.5 flex-wrap; spans flex items-center gap-1, icons h-3 w-3 */
+.l4-scaled .inner .fbk-l2 { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--fl-mfg); }
+.l4-scaled .inner .fbk-l2 span { display: flex; align-items: center; gap: 4px; }
+.l4-scaled .inner .fbk-l2 svg { width: 12px; height: 12px; }
+/* the (empty) alerts cell still takes its gap */
+.l4-scaled .inner .fbk-alerts { display: flex; flex: none; }
+/* Badge + getStatusColor (dark variants): green/amber/blue-900/30 with -400 text */
+.l4-scaled .inner .fbk-st { flex: none; }
+.l4-scaled .inner .fbk-st.pending { background: rgb(120 53 15 / 0.3); color: #fbbf24; }
+.l4-scaled .inner .fbk-st.active { background: rgb(20 83 45 / 0.3); color: #4ade80; }
+.l4-scaled .inner .fbk-st.completed { background: rgb(30 58 138 / 0.3); color: #60a5fa; }
+.l4-scaled .inner .fbk-chev { width: 16px; height: 16px; flex: none; color: var(--fl-mfg); }
+
+/* TraxChatButton: fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg bg-primary ([&_svg]:size-4) */
+.l4-scaled .inner .fbk-trax { position: absolute; right: 24px; bottom: 24px; z-index: 2; display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 999px; background: var(--fl-primary); color: var(--fl-primary-fg); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+.l4-scaled .inner .fbk-trax svg { width: 16px; height: 16px; }
+
+/* ── booking detail ── */
+/* space-y-6 */
+.l4-scaled .inner .fbk-dpg { display: flex; flex-direction: column; gap: 24px; }
+/* flex items-center gap-3; Button ghost size icon h-10 w-10, ArrowLeft h-4 */
+.l4-scaled .inner .fbk-dh { display: flex; align-items: center; gap: 12px; }
+.l4-scaled .inner .fbk-back { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: none; border-radius: 10px; }
+.l4-scaled .inner .fbk-back svg { width: 16px; height: 16px; }
+.l4-scaled .inner .fbk-dhm { flex: 1; min-width: 0; }
+/* flex items-center gap-3 flex-wrap; h1 text-2xl font-bold font-mono tabular-nums tracking-tight */
+.l4-scaled .inner .fbk-dh1 { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.l4-scaled .inner .fbk-dh1 h1 { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 24px; line-height: 32px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.025em; }
+/* p-1.5 rounded-md opacity-0 (group-hover) */
+.l4-scaled .inner .fbk-copy { padding: 6px; opacity: 0; }
+.l4-scaled .inner .fbk-copy svg { width: 16px; height: 16px; }
+/* bg-amber-100 text-amber-800 (no dark variant on this page) */
+.l4-scaled .inner .fbk-amber { background: #fef3c7; color: #92400e; }
+/* text-sm text-muted-foreground mt-1 truncate */
+.l4-scaled .inner .fb .fbk-dsub { margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; color: var(--fl-mfg); }
+
+/* flex flex-col gap-4; img w-full h-36 object-cover rounded-lg border */
+.l4-scaled .inner .fbk-media { display: flex; flex-direction: column; gap: 16px; }
+.l4-scaled .inner .fbk-photo { display: block; width: 100%; height: 144px; object-fit: cover; border: 1px solid var(--fl-border); border-radius: 12px; }
+/* CardContent p-6 pt-4 pb-4; grid grid-cols-1 gap-y-2 text-sm; rows flex items-center gap-2, icon h-4 w-4 muted */
+.l4-scaled .inner .fbk-info-c { display: grid; row-gap: 8px; padding: 16px 24px; font-size: 14px; line-height: 20px; }
+.l4-scaled .inner .fbk-info-c > div { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.l4-scaled .inner .fbk-info-c svg { width: 16px; height: 16px; color: var(--fl-mfg); }
+.l4-scaled .inner .fbk-info-c > div > span:not(:last-child) { flex: none; }
+.l4-scaled .inner .fbk-fm { font-weight: 500; }
+.l4-scaled .inner .fbk-fn { font-weight: 400; }
+.l4-scaled .inner .fbk-info-c .fbk-trunc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* TabsList grid grid-cols-3 w-full max-w-md */
+.l4-scaled .inner .fbk-dtabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+/* TabsContent mt-4; Card; CardHeader p-6 pb-4, CardTitle (h3) text-base font-medium leading-none */
+.l4-scaled .inner .fbk-pb { margin-top: 16px; overflow: hidden; }
+.l4-scaled .inner .fbk-pb h3 { padding: 24px 24px 16px; font-size: 16px; line-height: 1; font-weight: 500; letter-spacing: -0.025em; }
+/* Table: relative w-full overflow-auto; table w-full text-sm; thead tr border-b */
+.l4-scaled .inner .fbk-tw { width: 100%; overflow: hidden; }
+.l4-scaled .inner .fbk-tw table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 20px; }
+.l4-scaled .inner .fbk-tw tr { border-bottom: 1px solid var(--fl-border); }
+.l4-scaled .inner .fbk-tw tbody tr:last-child { border-bottom: 0; }
+/* TableHead h-12 px-4 text-left align-middle font-medium text-muted-foreground */
+.l4-scaled .inner .fbk-tw th { height: 48px; padding: 0 16px; text-align: left; vertical-align: middle; font-weight: 500; color: var(--fl-mfg); white-space: nowrap; }
+/* TableCell p-4 align-middle */
+.l4-scaled .inner .fbk-tw td { padding: 16px; vertical-align: middle; }
+.l4-scaled .inner .fbk-tw .fbk-pl6 { padding-left: 24px; }
+.l4-scaled .inner .fbk-tw .fbk-pr6 { padding-right: 24px; }
+.l4-scaled .inner .fbk-w110 { width: 110px; }
+.l4-scaled .inner .fbk-w120 { width: 120px; }
+.l4-scaled .inner .fbk-tw .fbk-c { text-align: center; }
+.l4-scaled .inner .fbk-tw .fbk-r { text-align: right; }
+/* rows: not-applied rows opacity-40 */
+.l4-scaled .inner .fbk-na { opacity: 0.4; }
+/* flex items-center gap-3; h-7 w-7 rounded-full (applied: bg-green-500/10 + text-green-500; else bg-muted/30 + muted/50) */
+.l4-scaled .inner .fbk-cat { display: flex; align-items: center; gap: 12px; }
+.l4-scaled .inner .fbk-ci { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; border-radius: 999px; background: hsl(223 49% 15% / 0.3); color: hsl(0 0% 65% / 0.5); }
+.l4-scaled .inner .fbk-ci svg { width: 14px; height: 14px; }
+.l4-scaled .inner .fbk-ci.fbk-grn { background: rgb(34 197 94 / 0.1); color: #22c55e; }
+/* label text-sm font-medium; detail text-xs text-muted-foreground */
+.l4-scaled .inner .fbk-cl { font-weight: 500; }
+.l4-scaled .inner .fbk-cd { font-size: 12px; line-height: 16px; color: var(--fl-mfg); }
+/* Badge outline text-[11px]: Regular text-muted-foreground border-muted-foreground/20; Paid text-emerald-500 border-emerald-500/30 bg-emerald-500/10 */
+.l4-scaled .inner .fbk-ob { font-size: 11px; background: transparent; }
+.l4-scaled .inner .fbk-mode { color: var(--fl-mfg); border-color: hsl(0 0% 65% / 0.2); }
+.l4-scaled .inner .fbk-paid { color: #10b981; border-color: rgb(16 185 129 / 0.3); background: rgb(16 185 129 / 0.1); }
+/* text-sm font-semibold; refunded/action "-" text-muted-foreground/40 and /30 */
+.l4-scaled .inner .fbk-amt { font-weight: 600; }
+.l4-scaled .inner .fbk-dash { color: hsl(0 0% 65% / 0.4); }
+.l4-scaled .inner .fbk-dash3 { color: hsl(0 0% 65% / 0.3); }

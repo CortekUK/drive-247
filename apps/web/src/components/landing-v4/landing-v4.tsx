@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { SignupPlan } from "@/lib/plans";
-import { Handover, LandingEffects, Pricing, Showcase } from "./interactive";
+import { FlowPicker, LandingEffects, Pricing, Showcase } from "./interactive";
 import { HeroWall } from "./hero-wall";
 import { V3Section, V3SectionsBehaviour } from "./v3-sections";
 import { V3_CTA, V3_FAQ, V3_FOOTER } from "./v3-markup";
@@ -85,7 +85,7 @@ const NAV_LINKS = [
   { href: "#x-showcase", label: "Product" },
   { href: "#x-integrations", label: "Integrations" },
   { href: "#x-trax", label: "Trax AI" },
-  { href: "#how-it-works", label: "How pickup works" },
+  { href: "#how-it-works", label: "How it works" },
   { href: "#x-pricing", label: "Pricing" },
   { href: "#x-faq", label: "FAQ" },
 ];
@@ -202,14 +202,14 @@ export function LandingV4({ plans }: { plans: readonly SignupPlan[] }) {
         {/* ---------------- how it works: the renter's phone ---------------- */}
         <section className="l4-sec soft" id="how-it-works">
           <div className="l4-wrap">
-            <Handover>
-              <span className="l4-kick">How pickup works</span>
-              <h2 className="l4-h2">Your customers pick up the car on their own</h2>
+            <FlowPicker>
+              <span className="l4-kick">How it works</span>
+              <h2 className="l4-h2">Everything your renters do, on their phone</h2>
               <p className="l4-lead">
-                This is what the people renting your cars see on their phone, from the moment they book until they
-                pick up the keys. You don’t need to be there.
+                From booking and ID checks to paying, signing and asking for more days, on your own booking site and
+                in their own account. Pick a flow to see it.
               </p>
-            </Handover>
+            </FlowPicker>
           </div>
         </section>
 

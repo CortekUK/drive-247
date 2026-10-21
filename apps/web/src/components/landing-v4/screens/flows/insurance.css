@@ -1,0 +1,175 @@
+/*
+ * "Add insurance" (insurance.tsx) — the booking widget's step 3 with Bonzah,
+ * at a 390px phone. Page, stepper, buttons and inputs come from book.css
+ * (fb-*); these are the insurance views. Tailwind resolved as in book.css
+ * (accent = primary = #6366F1 for a new signup; rounded-lg 12px, rounded-md
+ * 10px, rounded-xl 12px; Card = rounded-lg border bg-card shadow-sm).
+ */
+
+/* ── step 3 header ── */
+/* flex justify-end > Start over */
+.l4-scaled .inner .fi-over { display: flex; justify-content: flex-end; }
+/* text-center space-y-2 -mt-6 */
+.l4-scaled .inner .fi-head { margin-top: -24px; text-align: center; }
+.l4-scaled .inner .fi-head > * + * { margin-top: 8px; }
+/* inline-flex w-16 h-16 rounded-full bg-primary/10 mb-4; Shield w-8 text-primary */
+.l4-scaled .inner .fi-shield { display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; margin-bottom: 16px; border-radius: 999px; background: hsl(239 84% 67% / 0.1); color: var(--fl-primary); }
+.l4-scaled .inner .fi-shield svg { width: 32px; height: 32px; }
+.l4-scaled .inner .fi-head h3 { font-size: 24px; line-height: 32px; font-weight: 700; }
+.l4-scaled .inner .fi-head p { max-width: 672px; margin-left: auto; margin-right: auto; font-size: 16px; line-height: 24px; color: var(--fl-mfg); }
+
+/* ── step 1: "Do you have existing insurance coverage?" ── */
+/* Card overflow-hidden border-2 border-border/50 > p-8; h4 text-xl font-semibold text-center mb-8 */
+.l4-scaled .inner .fi-q { padding: 32px; overflow: hidden; border: 2px solid hsl(0 0% 25% / 0.5); border-radius: 12px; background: var(--fl-card); box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
+.l4-scaled .inner .fi-q h4 { margin-bottom: 32px; font-size: 20px; line-height: 28px; font-weight: 600; text-align: center; }
+.l4-scaled .inner .fi-opts { display: grid; gap: 24px; }
+/* option Card: border-2 border-border bg-gradient-to-br from-primary/5 (accent/5) to-transparent; p-8 text-center flex-col */
+.l4-scaled .inner .fi-opt {
+  display: flex; flex-direction: column; padding: 32px; text-align: center; border: 2px solid var(--fl-border); border-radius: 12px;
+  background: linear-gradient(to bottom right, hsl(239 84% 67% / 0.05), transparent), var(--fl-card); box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+.l4-scaled .inner .fi-optt { display: flex; flex: 1; flex-direction: column; gap: 16px; }
+/* flex justify-center items-center h-16 > w-16 h-16 rounded-full bg-primary/10, CheckCircle w-8 */
+.l4-scaled .inner .fi-ic { display: flex; align-items: center; justify-content: center; height: 64px; }
+.l4-scaled .inner .fi-ic span { display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 999px; background: hsl(239 84% 67% / 0.1); color: var(--fl-primary); }
+.l4-scaled .inner .fi-ic svg { width: 32px; height: 32px; }
+/* Bonzah logo (dark): h-8 w-auto */
+.l4-scaled .inner .fi-ic img { display: block; height: 32px; width: auto; }
+/* h5 text-lg font-semibold mb-2; p text-sm muted */
+.l4-scaled .inner .fi-opt h5 { margin: 0 0 8px; font-family: var(--font-playfair), "Playfair Display", Georgia, serif; font-size: 18px; line-height: 28px; font-weight: 600; }
+.l4-scaled .inner .fi-opt p { font-size: 14px; line-height: 20px; color: var(--fl-mfg); }
+.l4-scaled .inner .fi-optb { display: flex; flex-direction: column; gap: 16px; margin-top: auto; padding-top: 16px; }
+/* Button size lg w-full (bg-primary / bg-accent): h-11 px-8 rounded-md; icon mr-2 (16px, [&_svg]:size-4) */
+.l4-scaled .inner .fi-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 44px; padding: 0 32px; border-radius: 10px; background: var(--fl-primary); color: var(--fl-primary-fg); font-size: 14px; line-height: 20px; font-weight: 500; white-space: nowrap; }
+.l4-scaled .inner .fi-btn svg { width: 16px; height: 16px; margin-right: 8px; }
+/* pt-4 border-t border-border/50; p text-xs muted */
+.l4-scaled .inner .fi-opt .fi-foot { padding-top: 16px; border-top: 1px solid hsl(0 0% 25% / 0.5); font-size: 12px; line-height: 16px; }
+/* flex justify-center mt-6 > outline lg */
+.l4-scaled .inner .fi-backrow { display: flex; justify-content: center; margin-top: 24px; }
+.l4-scaled .inner .fi-backrow .fb-ob { width: auto; }
+
+/* ── step 2: BonzahInsuranceSelector ── */
+/* flex justify-end > ghost sm "Edit Details" (h-9 px-3 muted) */
+.l4-scaled .inner .fi-edit { display: flex; justify-content: flex-end; }
+.l4-scaled .inner .fi-edit span { display: inline-flex; align-items: center; height: 36px; padding: 0 12px; border-radius: 10px; font-size: 14px; line-height: 20px; font-weight: 500; color: var(--fl-mfg); }
+/* text-center; h3 text-2xl font-semibold mb-2; p muted */
+.l4-scaled .inner .fi-sh { text-align: center; }
+.l4-scaled .inner .fi-sh h3 { margin-bottom: 8px; font-size: 24px; line-height: 32px; font-weight: 600; }
+.l4-scaled .inner .fi-sh p { font-size: 16px; line-height: 24px; color: var(--fl-mfg); }
+/* coverage Card: border-2 overflow-hidden rounded-lg; p-4 */
+.l4-scaled .inner .fi-cov { position: relative; padding: 16px; overflow: hidden; border: 2px solid var(--fl-border); border-radius: 12px; background: var(--fl-card); box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
+/* bundled: border-muted bg-muted/30 opacity-60 — from the moment the bundle flips */
+.l4-scaled .inner .fi-cov.bundled { animation: fi-bundled 0.3s ease var(--fi-flip) both; }
+@keyframes fi-bundled { to { border-color: var(--fl-muted); background: linear-gradient(hsl(223 49% 15% / 0.3), hsl(223 49% 15% / 0.3)), var(--fl-card); opacity: 0.6; } }
+/* the bundle card when selected: border-primary bg-primary/5 */
+.l4-scaled .inner .fi-bundle { animation: fi-pick 0.3s ease var(--fi-flip) both; }
+@keyframes fi-pick { to { border-color: var(--fl-primary); background: linear-gradient(hsl(239 84% 67% / 0.05), hsl(239 84% 67% / 0.05)), var(--fl-card); } }
+.l4-scaled .inner .fi { --fi-flip: 0.9s; }
+.l4-scaled .inner .fi-covh { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.l4-scaled .inner .fi-covl { display: flex; flex: 1; align-items: flex-start; gap: 12px; min-width: 0; }
+/* icon tile w-10 h-10 rounded-lg; unselected: style var(--muted) → transparent, icon muted */
+.l4-scaled .inner .fi-tile { display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; color: var(--fl-mfg); }
+.l4-scaled .inner .fi-tile svg { width: 20px; height: 20px; }
+/* bundle tile: bg-muted → bg-primary/15, icon → text-primary */
+.l4-scaled .inner .fi-btile { background: var(--fl-muted); animation: fi-btile 0.3s ease var(--fi-flip) both; }
+@keyframes fi-btile { to { background: hsl(239 84% 67% / 0.15); color: var(--fl-primary); } }
+.l4-scaled .inner .fi-covn { flex: 1; min-width: 0; }
+.l4-scaled .inner .fi-nm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* h4 font-semibold text-sm */
+.l4-scaled .inner .fi-nm h4 { font-size: 14px; line-height: 20px; font-weight: 600; }
+/* Badge: rounded-full border px-2.5 py-0.5 text-xs font-semibold */
+.l4-scaled .inner .fi-badge { display: inline-flex; align-items: center; padding: 2px 10px; border: 1px solid transparent; border-radius: 999px; font-size: 12px; line-height: 16px; font-weight: 600; white-space: nowrap; }
+.l4-scaled .inner .fi-badge.sec { background: var(--fl-sec); color: var(--fl-fg); }
+/* "border-0 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400" */
+.l4-scaled .inner .fi-badge.em { border: 0; background: #022c22; color: #34d399; }
+.l4-scaled .inner .fi-badge.out { border-color: var(--fl-border); color: var(--fl-fg); }
+/* sub-line: text-xs muted mt-0.5; price: text-sm font-semibold text-primary + "total" text-xs ml-1 */
+.l4-scaled .inner .fi-sub { display: block; margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--fl-mfg); }
+.l4-scaled .inner .fi-price { display: block; margin-top: 2px; font-size: 14px; line-height: 20px; font-weight: 600; color: var(--fl-primary); }
+.l4-scaled .inner .fi-price span { margin-left: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: var(--fl-mfg); }
+/* Switch: h-6 w-11 rounded-full border-2 transparent; unchecked bg-input, checked bg-primary; thumb h-5 w-5 bg-background shadow-lg */
+.l4-scaled .inner .fi-sw { display: inline-flex; flex-shrink: 0; align-items: center; width: 44px; height: 24px; margin-top: 4px; border: 2px solid transparent; border-radius: 999px; background: var(--fl-input); }
+.l4-scaled .inner .fi-sw i { display: block; width: 20px; height: 20px; border-radius: 999px; background: var(--fl-bg); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+.l4-scaled .inner .fi-sw.on { background: var(--fl-primary); }
+.l4-scaled .inner .fi-sw.on i { transform: translateX(20px); }
+.l4-scaled .inner .fi-sw.dis { opacity: 0.5; }
+.l4-scaled .inner .fi-sw.flip { animation: fi-swbg 0.25s ease var(--fi-flip) both; }
+.l4-scaled .inner .fi-sw.flip i { animation: fi-swth 0.25s ease var(--fi-flip) both; }
+@keyframes fi-swbg { to { background: var(--fl-primary); } }
+@keyframes fi-swth { to { transform: translateX(20px); } }
+.l4-scaled .inner .fi-tapw { display: inline-flex; border-radius: 999px; }
+.l4-scaled .inner .fi-tapw .fi-sw { margin-top: 0; }
+.l4-scaled .inner .fi-tapw.fl-tap { margin-top: 4px; }
+.l4-scaled .inner .fi-tapw.fl-tap::after { animation-iteration-count: 1; }
+/* tagline text-xs font-medium text-foreground/80 mt-3; description text-xs muted mt-1 leading-relaxed */
+.l4-scaled .inner .fi-tag { margin-top: 12px; font-size: 12px; line-height: 16px; font-weight: 500; color: hsl(0 0% 95% / 0.8); }
+.l4-scaled .inner .fi-desc { margin-top: 4px; font-size: 12px; line-height: 1.625; color: var(--fl-mfg); }
+.l4-scaled .inner .fi-desc.mt3 { margin-top: 12px; }
+/* mt-2; second badge ml-1.5 */
+.l4-scaled .inner .fi-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+/* mt-3 grid gap-y-1; Check w-3.5 text-emerald-500 mt-0.5; text-xs muted */
+.l4-scaled .inner .fi-feats { display: grid; gap: 4px; margin-top: 12px; }
+.l4-scaled .inner .fi-feat { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; line-height: 16px; color: var(--fl-mfg); }
+.l4-scaled .inner .fi-feat svg { flex-shrink: 0; width: 14px; height: 14px; margin-top: 2px; color: #10b981; }
+/* ghost sm w-full mt-2 h-7 text-xs muted; chevron is 16px ([&_svg]:size-4) */
+.l4-scaled .inner .fi-more { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 28px; margin-top: 8px; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--fl-mfg); }
+.l4-scaled .inner .fi-more svg { width: 16px; height: 16px; margin-left: 4px; }
+.l4-scaled .inner .fi-grid { display: grid; gap: 16px; }
+/* swap cells */
+.l4-scaled .inner .fi-swap { display: grid; }
+.l4-scaled .inner .fi-swap > * { grid-area: 1 / 1; }
+.l4-scaled .inner .fi-was { animation: fi-out 0.2s ease var(--fi-flip) both; }
+.l4-scaled .inner .fi-now { animation: fi-in 0.3s ease var(--fi-flip) both; }
+@keyframes fi-out { to { opacity: 0; } }
+@keyframes fi-in { from { opacity: 0; } }
+
+/* Premium Summary: Card p-4 bg-gradient-to-r from-primary/5 to-transparent border-primary/20; flex-col gap-4 */
+.l4-scaled .inner .fi-prem { display: flex; flex-direction: column; gap: 16px; padding: 16px; border: 1px solid hsl(239 84% 67% / 0.2); border-radius: 12px; background: linear-gradient(to right, hsl(239 84% 67% / 0.05), transparent), var(--fl-card); box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
+.l4-scaled .inner .fi-premh { display: flex; align-items: center; gap: 12px; }
+/* w-12 h-12 rounded-xl bg-primary/20; ShieldCheck w-6 text-primary */
+.l4-scaled .inner .fi-premic { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 12px; background: hsl(239 84% 67% / 0.2); color: var(--fl-primary); }
+.l4-scaled .inner .fi-premic svg { width: 24px; height: 24px; }
+.l4-scaled .inner .fi-premh h4 { font-size: 16px; line-height: 24px; font-weight: 600; }
+.l4-scaled .inner .fi-premh p { font-size: 14px; line-height: 20px; color: var(--fl-mfg); }
+/* text-right flex-1: text-2xl font-bold text-primary; "One-time payment" text-xs muted */
+.l4-scaled .inner .fi-premv { width: 100%; text-align: right; }
+.l4-scaled .inner .fi-premv div { font-size: 24px; line-height: 32px; font-weight: 700; color: var(--fl-primary); }
+.l4-scaled .inner .fi-premv p { font-size: 12px; line-height: 16px; color: var(--fl-mfg); }
+/* mt-4 pt-4 border-t border-border/50 (the flex gap stands in for mt-4); grid-cols-2 gap-2 text-sm; cell flex justify-between */
+.l4-scaled .inner .fi-premb { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding-top: 16px; border-top: 1px solid hsl(0 0% 25% / 0.5); font-size: 14px; line-height: 20px; }
+.l4-scaled .inner .fi-premb div { display: flex; justify-content: space-between; }
+.l4-scaled .inner .fi-premb span:first-child { color: var(--fl-mfg); }
+.l4-scaled .inner .fi-premb span:last-child { font-weight: 500; }
+.l4-scaled .inner .fi-skiprow { display: flex; justify-content: center; }
+.l4-scaled .inner .fi-skiprow svg.mr { margin-right: 8px; }
+/* disclosure: max-w-2xl space-y-2 rounded-lg border-border/60 bg-muted/30 p-4; text-xs */
+.l4-scaled .inner .fi-disc { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid hsl(0 0% 25% / 0.6); border-radius: 12px; background: hsl(223 49% 15% / 0.3); }
+.l4-scaled .inner .fi-disc p { font-size: 12px; line-height: 1.625; color: var(--fl-mfg); }
+.l4-scaled .inner .fi-disc p.fi-dh { font-weight: 600; line-height: 16px; color: var(--fl-fg); }
+/* flex-col gap-4 pt-4 */
+.l4-scaled .inner .fi-navs { display: flex; flex-direction: column; gap: 16px; padding-top: 16px; }
+
+/* ── step 3: Your Details with the insurance address ── */
+.l4-scaled .inner .fi-s4 { display: flex; flex-direction: column; gap: 16px; }
+.l4-scaled .inner .fi-s4.pt4 { padding-top: 16px; }
+/* border-t border-border/50 pt-6; h4 text-base font-semibold mb-4 flex gap-2 + span text-xs font-normal muted */
+.l4-scaled .inner .fi-addr { padding-top: 24px; border-top: 1px solid hsl(0 0% 25% / 0.5); }
+.l4-scaled .inner .fi-addr h4 { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; font-size: 16px; line-height: 24px; font-weight: 600; }
+.l4-scaled .inner .fi-addr h4 span { font-family: var(--font-sans), Inter, system-ui, sans-serif; font-size: 12px; line-height: 16px; font-weight: 400; color: var(--fl-mfg); }
+/* SelectTrigger h-12 */
+.l4-scaled .inner .fi-sel { display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 8px 12px; border: 1px solid var(--fl-input); border-radius: 10px; background: var(--fl-bg); font-size: 14px; line-height: 20px; }
+.l4-scaled .inner .fi-sel svg { width: 16px; height: 16px; opacity: 0.5; }
+.l4-scaled .inner .fi-dob { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+/* bg-destructive/10 border-destructive/20 rounded-lg p-3; flex gap-2; AlertCircle w-5 mt-0.5 */
+.l4-scaled .inner .fi-vreq { display: flex; align-items: flex-start; gap: 8px; padding: 12px; border: 1px solid hsl(0 84.2% 60.2% / 0.2); border-radius: 12px; background: hsl(0 84.2% 60.2% / 0.1); }
+.l4-scaled .inner .fi-vreq > svg { flex-shrink: 0; width: 20px; height: 20px; margin-top: 2px; color: hsl(0 84.2% 60.2%); }
+.l4-scaled .inner .fi-vreq strong { font-weight: 700; }
+.l4-scaled .inner .fi-vreq .fb-xs { margin-bottom: 16px; }
+.l4-scaled .inner .fi-vt { margin-bottom: 8px; font-size: 14px; line-height: 20px; font-weight: 500; color: hsl(0 84.2% 60.2%); }
+/* outline sm w-full text-sm: h-9 px-3 border-accent text-accent; FileCheck mr-2 */
+.l4-scaled .inner .fi-start { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 36px; padding: 0 12px; border: 1px solid var(--fl-primary); border-radius: 10px; background: var(--fl-bg); color: var(--fl-primary); font-size: 14px; line-height: 20px; font-weight: 500; white-space: nowrap; }
+.l4-scaled .inner .fi-start svg { width: 16px; height: 16px; margin-right: 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .l4-scaled .inner .fi { --fi-flip: 0s; }
+}

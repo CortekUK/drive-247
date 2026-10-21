@@ -1,0 +1,116 @@
+/*
+ * Flow "Pay what's due" (pay-due.tsx) — the booking detail page with an
+ * approved extension, and /booking-success's InvoicePaymentSuccess, at a 390px
+ * phone. Tokens come from legacy.css (--fl-*); the detail page, table and
+ * dialog classes (fx-*) from extend.css. Tailwind classes resolved as noted:
+ * green-500 #22c55e, blue-500 #3b82f6, green-900/30 rgb(20 83 45 / 0.3),
+ * green-400 #4ade80; Footer #EAEAEA, the accent rule = the tenant accent.
+ */
+
+/* ── the renter's scroll: the portal header is not sticky, so the whole page moves ── */
+.l4-scaled .inner .fpd-scroll { position: relative; }
+.l4-scaled .inner .fpd-s0 { animation: fpd-scroll0 0.9s cubic-bezier(0.3, 0.7, 0.2, 1) 0.5s both; }
+.l4-scaled .inner .fpd-s1 { transform: translateY(-611px); }
+.l4-scaled .inner .fpd-s3 { animation: fpd-scroll3 0.9s cubic-bezier(0.3, 0.7, 0.2, 1) 0.5s both; }
+@keyframes fpd-scroll0 { to { transform: translateY(-520px); } }
+@keyframes fpd-scroll3 { to { transform: translateY(-436px); } }
+/* the table swipe (extend.css) waits for the scroll */
+.l4-scaled .inner .fp .fx-swipe { animation-delay: 1.6s; }
+@media (prefers-reduced-motion: reduce) {
+  .l4-scaled .inner .fpd-s0 { animation: none; transform: translateY(-520px); }
+  .l4-scaled .inner .fpd-s3 { animation: none; transform: translateY(-436px); }
+}
+
+/* ── Payment Breakdown with an extension: CardHeader p-6 pb-2, CardContent p-0 ── */
+.l4-scaled .inner .fx .fpd-pbt { padding: 24px 24px 8px; font-size: 16px; line-height: 1; font-weight: 500; letter-spacing: -0.025em; }
+/* Accordion w-full space-y-3 px-4 pb-4 */
+.l4-scaled .inner .fpd-acc { display: flex; flex-direction: column; gap: 12px; padding: 0 16px 16px; }
+/* AccordionItem border rounded-lg overflow-hidden */
+.l4-scaled .inner .fpd-item { overflow: hidden; border: 1px solid var(--fl-border); border-radius: 12px; }
+/* AccordionTrigger flex flex-1 items-center justify-between font-medium + px-4 py-3,
+   bg-green-500/5 or bg-blue-500/5, data-[state=open]:border-b; ChevronDown h-4 (rotate-180 open) */
+.l4-scaled .inner .fpd-trig { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; font-weight: 500; }
+.l4-scaled .inner .fpd-trig > svg { width: 16px; height: 16px; }
+.l4-scaled .inner .fpd-trig.open { border-bottom: 1px solid var(--fl-border); }
+.l4-scaled .inner .fpd-trig.open > svg { transform: rotate(180deg); }
+.l4-scaled .inner .fpd-orig { background: rgb(34 197 94 / 0.05); }
+.l4-scaled .inner .fpd-ext { background: rgb(59 130 246 / 0.05); }
+/* flex items-center gap-2; tile h-6 w-6 rounded-full bg-*-500/10, icon h-3 w-3 text-*-500 */
+.l4-scaled .inner .fpd-tl { display: flex; align-items: center; gap: 8px; }
+.l4-scaled .inner .fpd-tile { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; }
+.l4-scaled .inner .fpd-tile svg { width: 12px; height: 12px; }
+.l4-scaled .inner .fpd-orig .fpd-tile { background: rgb(34 197 94 / 0.1); color: #22c55e; }
+.l4-scaled .inner .fpd-ext .fpd-tile { background: rgb(59 130 246 / 0.1); color: #3b82f6; }
+/* text-sm font-medium */
+.l4-scaled .inner .fpd-name { font-size: 14px; line-height: 20px; font-weight: 500; }
+/* Badge outline text-[10px] ml-1 (line-height stays the button's 1.5) */
+.l4-scaled .inner .fpd-tot { display: inline-flex; align-items: center; margin-left: 4px; padding: 2px 10px; border: 1px solid var(--fl-border); border-radius: 999px; font-size: 10px; line-height: 1.5; font-weight: 600; }
+
+/* the sticky bar: border-t bg-primary/10 border-primary/30 px-6 py-3 flex items-center justify-between */
+.l4-scaled .inner .fpd-bar { display: flex; align-items: center; justify-content: space-between; gap: 0; padding: 12px 24px; border-top: 1px solid hsl(239 84% 67% / 0.3); background: hsl(239 84% 67% / 0.1); }
+/* text-sm text-muted-foreground; the total font-semibold text-foreground */
+.l4-scaled .inner .fpd-bar p { font-size: 14px; line-height: 20px; color: var(--fl-mfg); }
+.l4-scaled .inner .fpd-bar p span { font-weight: 600; color: var(--fl-fg); }
+/* Button size sm: h-9 rounded-md px-3; DollarSign mr-1.5 (svg size-4) */
+.l4-scaled .inner .fpd-paysel { flex: none; height: 36px; padding: 0 12px; }
+.l4-scaled .inner .fpd-paysel svg { margin-right: 6px; }
+
+/* ── /booking-success, type=invoice ── */
+.l4-scaled .inner .fpd-ok { position: absolute; inset: 0; overflow: hidden; background: var(--fl-bg); }
+/* Navigation is fixed top-0 inset-x-0 z-50 — the page's pt-24 starts under it */
+.l4-scaled .inner .fpd-nav { position: absolute; left: 0; right: 0; top: 0; z-index: 3; }
+/* pt-24 pb-16 px-4; max-w-lg mx-auto text-center space-y-6 */
+.l4-scaled .inner .fpd-okb { padding: 96px 16px 64px; }
+.l4-scaled .inner .fpd-okc { display: flex; flex-direction: column; gap: 24px; max-width: 512px; margin: 0 auto; text-align: center; }
+/* w-16 h-16 rounded-full dark:bg-green-900/30 flex items-center justify-center mx-auto; icon w-8 h-8 dark:text-green-400 */
+.l4-scaled .inner .fpd-circ { display: grid; place-items: center; width: 64px; height: 64px; margin: 0 auto; border-radius: 999px; background: rgb(20 83 45 / 0.3); color: #4ade80; }
+.l4-scaled .inner .fpd-circ svg { grid-area: 1 / 1; width: 32px; height: 32px; }
+@keyframes fpd-spin { to { transform: rotate(360deg); } }
+/* h1 text-3xl font-bold */
+.l4-scaled .inner .fx .fpd-okc h1 { font-size: 30px; line-height: 36px; font-weight: 700; }
+/* text-muted-foreground text-lg; then text-sm text-muted-foreground */
+.l4-scaled .inner .fpd-lead { font-size: 18px; line-height: 28px; color: var(--fl-mfg); }
+.l4-scaled .inner .fpd-close { font-size: 14px; line-height: 20px; color: var(--fl-mfg); }
+/* Button outline mt-4; Home w-4 h-4 mr-2 */
+.l4-scaled .inner .fpd-home { margin-top: 16px; }
+.l4-scaled .inner .fpd-home svg { margin-right: 8px; }
+/* processing → received: process-pending-payment confirms after the 2s delay */
+.l4-scaled .inner .fpd-sw { display: grid; }
+.l4-scaled .inner .fpd-sw > * { grid-area: 1 / 1; }
+.l4-scaled .inner .fpd-ok .fpd-was { animation: fpd-out 0.3s ease 1.5s both; }
+.l4-scaled .inner .fpd-ok .fpd-now { animation: fpd-in 0.35s ease 1.6s both; }
+/* the spinner keeps spinning while it fades */
+.l4-scaled .inner .fpd-ok .fpd-circ .fpd-spin { animation: fpd-spin 1s linear infinite, fpd-out 0.3s ease 1.5s both; }
+@keyframes fpd-out { to { opacity: 0; } }
+@keyframes fpd-in { from { opacity: 0; } }
+
+/* Footer (mobile): py-10 bg nav-bg; container px-4 */
+.l4-scaled .inner .fpd-foot { padding: 40px 16px; background: var(--fl-nav); }
+/* brand block mb-8: h3 text-lg font-display font-bold text-white mb-2 uppercase tracking-wide;
+   w-10 h-[2px] mb-3 accent; text-xs text-[#EAEAEA]/80 */
+.l4-scaled .inner .fpd-brand { margin-bottom: 32px; }
+.l4-scaled .inner .fx .fpd-brand h3 { margin-bottom: 8px; font-size: 18px; line-height: 28px; font-weight: 700; letter-spacing: 0.025em; text-transform: uppercase; color: #fff; }
+.l4-scaled .inner .fpd-rule { display: block; width: 40px; height: 2px; margin-bottom: 12px; background: var(--fl-primary); }
+.l4-scaled .inner .fpd-brand p { font-size: 12px; line-height: 16px; color: rgb(234 234 234 / 0.8); }
+/* grid grid-cols-2 gap-6; h4 text-sm font-semibold text-white mb-1.5; w-8 h-[2px] mb-2; ul space-y-1.5, links text-xs #EAEAEA */
+.l4-scaled .inner .fpd-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.l4-scaled .inner .fx .fpd-cols h4 { margin-bottom: 6px; font-size: 14px; line-height: 20px; font-weight: 600; color: #fff; }
+.l4-scaled .inner .fpd-rule2 { display: block; width: 32px; height: 2px; margin-bottom: 8px; background: var(--fl-primary); }
+.l4-scaled .inner .fpd-cols ul { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.l4-scaled .inner .fpd-cols li { font-size: 12px; line-height: 16px; color: #eaeaea; }
+
+/* confetti: a burst from the middle at 60% of the page height that rises, then falls away */
+.l4-scaled .inner .fpd-confetti { position: absolute; left: 50%; top: 60%; z-index: 4; pointer-events: none; }
+.l4-scaled .inner .fpd-confetti i { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; animation: fpd-conf 2.6s cubic-bezier(0.15, 0.6, 0.35, 1) 0.3s both; }
+.l4-scaled .inner .fpd-confetti i:nth-child(odd) { border-radius: 999px; }
+@keyframes fpd-conf {
+  0% { opacity: 1; transform: translate(0, 0) rotate(0deg); }
+  30% { opacity: 1; transform: translate(calc(var(--dx) * 0.85), calc(var(--h) * -1)) rotate(calc(var(--r) * 0.4)); }
+  100% { opacity: 0; transform: translate(var(--dx), calc(var(--h) * -1 + 260px)) rotate(var(--r)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .l4-scaled .inner .fpd-confetti { display: none; }
+  .l4-scaled .inner .fpd-ok .fpd-was { opacity: 0; animation: none; }
+  .l4-scaled .inner .fpd-ok .fpd-now { animation: none; }
+  .l4-scaled .inner .fpd-ok .fpd-circ .fpd-spin { opacity: 0; animation: none; }
+}

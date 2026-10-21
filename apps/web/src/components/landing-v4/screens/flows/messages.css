@@ -1,0 +1,174 @@
+/*
+ * Flow "Message you" (messages.tsx) — the original portal's Messages page and
+ * the Trax popup at a 390px phone. Tokens come from legacy.css (--fl-*);
+ * Tailwind classes resolved as noted. The page under the status bar is 766px
+ * tall, which stands in for 100dvh.
+ */
+
+/* the page is one max-w-4xl block, so <main>'s gap-4 has a single child */
+.l4-scaled .inner .fm-main { gap: 0; }
+/* mb-4; h1 row: flex items-center gap-2, MessageSquare h-5 w-5 text-primary */
+.l4-scaled .inner .fm-head { margin-bottom: 16px; }
+.l4-scaled .inner .fm-h1 { display: flex; align-items: center; gap: 8px; }
+.l4-scaled .inner .fm-h1 svg { width: 20px; height: 20px; color: var(--fl-primary); }
+.l4-scaled .inner .fm-h1 h1 { font-size: 20px; line-height: 28px; font-weight: 700; }
+.l4-scaled .inner .fm-head p { margin-top: 4px; font-size: 14px; line-height: 20px; color: var(--fl-mfg); }
+
+/* h-[calc(100dvh-200px)] min-h-[400px] → CustomerChatWindow:
+   flex flex-col h-full border rounded-lg bg-card overflow-hidden */
+.l4-scaled .inner .fm-win { display: flex; flex-direction: column; height: 566px; border: 1px solid var(--fl-border); border-radius: 12px; background: var(--fl-card); overflow: hidden; }
+/* header: px-3 py-2.5 border-b bg-background flex items-center gap-2 */
+.l4-scaled .inner .fm-whd { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--fl-border); background: var(--fl-bg); }
+.l4-scaled .inner .fm-whd > svg { width: 16px; height: 16px; color: var(--fl-primary); }
+.l4-scaled .inner .fm-whd-b { min-width: 0; }
+/* h2 font-semibold text-sm truncate */
+.l4-scaled .inner .fm-whd-b h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; font-weight: 600; }
+/* flex items-center gap-1.5 text-xs text-muted-foreground */
+.l4-scaled .inner .fm-pres { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; color: var(--fl-mfg); }
+/* Circle h-2 w-2 fill-green-500 text-green-500 */
+.l4-scaled .inner .fm-pres .fm-dot { width: 8px; height: 8px; fill: #22c55e; color: #22c55e; }
+/* text-primary animate-pulse */
+.l4-scaled .inner .fm-typing { color: var(--fl-primary); animation: fm-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+@keyframes fm-pulse { 50% { opacity: 0.5; } }
+
+/* ScrollArea flex-1 px-3; it scrolls to the newest message, so a full thread
+   is drawn bottom-anchored (.end) with the oldest lines clipped */
+.l4-scaled .inner .fm-list { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0 12px; overflow: hidden; }
+.l4-scaled .inner .fm-list.end { justify-content: flex-end; }
+.l4-scaled .inner .fm-list > * { flex: none; }
+
+/* DateSeparator: my-4; pill bg-muted/60 text-muted-foreground text-xs px-3 py-1 rounded-full */
+.l4-scaled .inner .fm-sep { display: flex; justify-content: center; margin: 16px 0; }
+.l4-scaled .inner .fm-sep span { padding: 4px 12px; border-radius: 999px; background: hsl(223 49% 15% / 0.6); color: var(--fl-mfg); font-size: 12px; line-height: 16px; }
+
+/* row: flex w-full mb-3 gap-2, justify-end for own */
+.l4-scaled .inner .fm-row { display: flex; gap: 8px; width: 100%; margin-bottom: 12px; }
+.l4-scaled .inner .fm-row.own { justify-content: flex-end; }
+/* bubble: max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm */
+.l4-scaled .inner .fm-bub { max-width: 75%; padding: 10px 16px; border-radius: 16px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
+/* own: bg-primary text-primary-foreground rounded-br-md (10px) */
+.l4-scaled .inner .fm-bub.own { background: var(--fl-primary); color: var(--fl-primary-fg); border-bottom-right-radius: 10px; }
+/* operator: bg-muted rounded-bl-md */
+.l4-scaled .inner .fm-bub.op { background: var(--fl-muted); border-bottom-left-radius: 10px; }
+/* sender: text-xs font-medium mb-1 text-muted-foreground */
+.l4-scaled .inner .fm-from { margin-bottom: 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--fl-mfg); }
+/* text-sm whitespace-pre-wrap break-words */
+.l4-scaled .inner .fm-txt { font-size: 14px; line-height: 20px; white-space: pre-wrap; overflow-wrap: break-word; }
+/* flex items-center gap-1 mt-1; time text-[10px]; own: justify-end, /70 */
+.l4-scaled .inner .fm-meta { display: flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 10px; line-height: 15px; color: var(--fl-mfg); }
+.l4-scaled .inner .fm-bub.own .fm-meta { justify-content: flex-end; color: hsl(0 0% 15% / 0.7); }
+.l4-scaled .inner .fm-meta svg { width: 14px; height: 14px; }
+/* own avatar: h-7 w-7 rounded-full bg-primary, User h-4 w-4 text-primary-foreground */
+.l4-scaled .inner .fm-me { display: flex; align-items: center; justify-content: center; flex: none; width: 28px; height: 28px; border-radius: 999px; background: var(--fl-primary); color: var(--fl-primary-fg); }
+.l4-scaled .inner .fm-me svg { width: 16px; height: 16px; }
+
+/* BookingReferenceCard (own): w-full mt-2 p-2.5 rounded-lg border bg-white/10 border-white/20 */
+.l4-scaled .inner .fm-ref { display: flex; align-items: flex-start; gap: 10px; width: 100%; margin-top: 8px; padding: 10px; border: 1px solid rgb(255 255 255 / 0.2); border-radius: 12px; background: rgb(255 255 255 / 0.1); }
+/* h-8 w-8 rounded-md bg-white/20; Car h-4 w-4 text-white/80 */
+.l4-scaled .inner .fm-ref-ic { display: flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; border-radius: 10px; background: rgb(255 255 255 / 0.2); color: rgb(255 255 255 / 0.8); }
+.l4-scaled .inner .fm-ref-ic svg { width: 16px; height: 16px; }
+.l4-scaled .inner .fm-ref-b { display: block; flex: 1; min-width: 0; }
+/* flex items-center gap-2 flex-wrap; name font-medium text-sm text-white */
+.l4-scaled .inner .fm-ref-t { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.l4-scaled .inner .fm-ref-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; font-weight: 500; color: #fff; }
+/* Badge outline text-[10px] px-1.5 py-0, pending (own):
+   bg-yellow-400/30 text-yellow-100 border-yellow-400/50 */
+.l4-scaled .inner .fm-ref-badge { display: inline-flex; align-items: center; padding: 0 6px; border: 1px solid rgb(250 204 21 / 0.5); border-radius: 999px; background: rgb(250 204 21 / 0.3); color: #fef9c3; font-size: 10px; line-height: 15px; font-weight: 600; }
+/* flex items-center gap-2 mt-0.5, text-xs text-white/70 (dot /50) */
+.l4-scaled .inner .fm-ref-m { display: flex; align-items: center; gap: 8px; margin-top: 2px; font-size: 12px; line-height: 16px; color: rgb(255 255 255 / 0.7); }
+.l4-scaled .inner .fm-ref-m .dot { color: rgb(255 255 255 / 0.5); }
+/* flex items-center gap-1.5 mt-1 text-xs text-white/70, Calendar h-3 w-3 */
+.l4-scaled .inner .fm-ref-d { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; line-height: 16px; color: rgb(255 255 255 / 0.7); }
+.l4-scaled .inner .fm-ref-d svg { width: 12px; height: 12px; }
+
+/* TypingIndicator: flex items-center gap-2 mb-3; bubble bg-muted rounded-2xl
+   rounded-bl-md px-4 py-2.5; dots w-2 h-2 bg-muted-foreground/50 animate-bounce
+   (600ms, 0 / 150 / 300ms delays); label text-xs text-muted-foreground */
+.l4-scaled .inner .fm-typ { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.l4-scaled .inner .fm-typ-b { display: flex; gap: 4px; padding: 10px 16px; border-radius: 16px 16px 16px 10px; background: var(--fl-muted); }
+.l4-scaled .inner .fm-typ-b span { width: 8px; height: 8px; border-radius: 999px; background: hsl(0 0% 65% / 0.5); animation: fm-bounce 600ms infinite; }
+.l4-scaled .inner .fm-typ-b span:nth-child(2) { animation-delay: 150ms; }
+.l4-scaled .inner .fm-typ-b span:nth-child(3) { animation-delay: 300ms; }
+@keyframes fm-bounce {
+  0%, 100% { transform: translateY(-25%); animation-timing-function: cubic-bezier(0.8, 0, 1, 1); }
+  50% { transform: none; animation-timing-function: cubic-bezier(0, 0, 0.2, 1); }
+}
+.l4-scaled .inner .fm-typ-n { font-size: 12px; line-height: 16px; color: var(--fl-mfg); }
+
+/* CustomerChatInput: border-t bg-background */
+.l4-scaled .inner .fm-in { flex: none; border-top: 1px solid var(--fl-border); background: var(--fl-bg); }
+/* selected booking: px-4 pt-3; chip inline-flex items-center gap-2 px-3 py-1.5 bg-muted rounded-full text-sm */
+.l4-scaled .inner .fm-chip-w { padding: 12px 16px 0; }
+.l4-scaled .inner .fm-chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--fl-muted); font-size: 14px; line-height: 20px; }
+.l4-scaled .inner .fm-chip > svg { width: 14px; height: 14px; color: var(--fl-mfg); }
+.l4-scaled .inner .fm-chip .nm { font-weight: 500; }
+.l4-scaled .inner .fm-chip .mf { color: var(--fl-mfg); }
+/* remove: ghost icon h-5 w-5 ml-1, X h-3 w-3 */
+.l4-scaled .inner .fm-chip .x { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin-left: 4px; border-radius: 10px; }
+.l4-scaled .inner .fm-chip .x svg { width: 12px; height: 12px; }
+/* input row: flex items-end gap-2 p-4 */
+.l4-scaled .inner .fm-in-r { display: flex; align-items: flex-end; gap: 8px; padding: 16px; }
+/* BookingPicker trigger: ghost icon h-[44px] w-[44px] rounded-md, Paperclip h-4 */
+.l4-scaled .inner .fm-ib { display: flex; align-items: center; justify-content: center; flex: none; width: 44px; height: 44px; border-radius: 10px; }
+.l4-scaled .inner .fm-ib svg { width: 16px; height: 16px; }
+/* Textarea rows=1: w-full min-h-[44px] rounded-md border-input bg-background px-3 py-2 text-sm.
+   It does not auto-grow, so longer text scrolls to the caret: the last line
+   shows at the bottom (flex-end) and the line above is cut by the box. */
+.l4-scaled .inner .fm-ta { display: flex; flex-direction: column; justify-content: flex-end; flex: 1; min-width: 0; height: 44px; padding: 8px 12px; border: 1px solid var(--fl-input); border-radius: 10px; background: var(--fl-bg); overflow: hidden; font-size: 14px; line-height: 20px; }
+.l4-scaled .inner .fm-ta > span { flex: none; }
+.l4-scaled .inner .fm-ta.ph { justify-content: flex-start; color: var(--fl-mfg); }
+/* Send: default icon h-[44px] w-[44px] bg-primary; disabled:opacity-50 when empty */
+.l4-scaled .inner .fm-send { display: flex; align-items: center; justify-content: center; flex: none; width: 44px; height: 44px; border-radius: 10px; background: var(--fl-primary); color: var(--fl-primary-fg); }
+.l4-scaled .inner .fm-send.off { opacity: 0.5; }
+.l4-scaled .inner .fm-send svg { width: 16px; height: 16px; }
+
+/* TraxChatButton: fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg bg-primary, MessageCircle h-6 */
+.l4-scaled .inner .fm-fab { position: absolute; right: 24px; bottom: 24px; z-index: 50; display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 999px; background: var(--fl-primary); color: var(--fl-primary-fg); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+.l4-scaled .inner .fm-fab svg { width: 24px; height: 24px; }
+/* the tap on the FAB, then it unmounts as the popup opens (TraxChatWidget) */
+.l4-scaled .inner .fm-fab.go { animation: fm-fab-go 1.1s ease both; }
+.l4-scaled .inner .fm-fab.go::after { content: ""; position: absolute; inset: -4px; border-radius: inherit; border: 2px solid hsl(239 84% 74% / 0.9); animation: fl-tap 0.7s ease-out 0.25s both; }
+@keyframes fm-fab-go { 0%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; transform: scale(0.9); visibility: hidden; } }
+
+/* TraxChatPopup: fixed z-50 inset-x-3 bottom-3 max-h-[calc(100dvh-24px)]
+   bg-background border rounded-xl (12px, Tailwind default) shadow-2xl flex flex-col overflow-hidden;
+   animate-in fade + rise 12px, 200ms ease-out (here after the FAB tap) */
+.l4-scaled .inner .fm-pop { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 50; display: flex; flex-direction: column; max-height: calc(100% - 24px); border: 1px solid var(--fl-border); border-radius: 12px; background: var(--fl-bg); box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25); overflow: hidden; animation: fm-pop 0.2s ease-out 1.05s both; }
+@keyframes fm-pop { from { opacity: 0; transform: translateY(12px); } }
+/* header: flex justify-between px-4 py-3 border-b bg-primary text-primary-foreground */
+.l4-scaled .inner .fm-pop-hd { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--fl-border); background: var(--fl-primary); color: var(--fl-primary-fg); }
+.l4-scaled .inner .fm-pop-hd .t { display: flex; align-items: center; gap: 8px; }
+.l4-scaled .inner .fm-pop-hd .t svg { width: 20px; height: 20px; }
+.l4-scaled .inner .fm-pop-hd h2 { font-size: 16px; line-height: 24px; font-weight: 600; }
+/* close: ghost icon h-8 w-8, X h-4 */
+.l4-scaled .inner .fm-pop-hd .x { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 10px; }
+.l4-scaled .inner .fm-pop-hd .x svg { width: 16px; height: 16px; }
+/* TabsList w-full rounded-none border-b bg-muted/30 p-0 h-auto text-muted-foreground;
+   TabsTrigger flex-1 py-3 px-4 text-sm font-medium border-b-2 border-transparent,
+   active border-primary bg-transparent text-foreground shadow-sm; icon h-4 mr-2 */
+.l4-scaled .inner .fm-tabs { display: flex; flex: none; border-bottom: 1px solid var(--fl-border); background: hsl(223 49% 15% / 0.3); color: var(--fl-mfg); }
+.l4-scaled .inner .fm-tab { display: flex; flex: 1; align-items: center; justify-content: center; padding: 12px 16px; border-bottom: 2px solid transparent; font-size: 14px; line-height: 20px; font-weight: 500; white-space: nowrap; }
+.l4-scaled .inner .fm-tab svg { width: 16px; height: 16px; margin-right: 8px; }
+.l4-scaled .inner .fm-tab.on { border-bottom-color: var(--fl-primary); color: var(--fl-fg); box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
+/* TraxAIChatWindow ScrollArea flex-1 px-4 pt-4 (+ the h-4 scroll anchor) */
+.l4-scaled .inner .fm-ai { flex: 1; min-height: 0; padding: 16px 16px 16px; }
+/* welcome: flex-col items-center py-8 text-center px-4 */
+.l4-scaled .inner .fm-wel { display: flex; flex-direction: column; align-items: center; padding: 32px 16px; text-align: center; }
+/* h-16 w-16 rounded-full bg-primary/10 mb-4, Bot h-8 text-primary */
+.l4-scaled .inner .fm-bot { display: flex; align-items: center; justify-content: center; width: 64px; height: 64px; margin-bottom: 16px; border-radius: 999px; background: hsl(239 84% 67% / 0.1); color: var(--fl-primary); }
+.l4-scaled .inner .fm-bot svg { width: 32px; height: 32px; }
+.l4-scaled .inner .fm-wel h3 { margin-bottom: 8px; font-size: 16px; line-height: 24px; font-weight: 600; }
+/* text-sm text-muted-foreground mb-4 */
+.l4-scaled .inner .fm-wel .d { margin-bottom: 16px; font-size: 14px; line-height: 20px; color: var(--fl-mfg); }
+/* text-xs text-muted-foreground space-y-1; suggestions italic */
+.l4-scaled .inner .fm-try { display: flex; flex-direction: column; gap: 4px; font-size: 12px; line-height: 16px; color: var(--fl-mfg); }
+.l4-scaled .inner .fm-try .i { font-style: italic; }
+/* TraxAIChatInput: flex items-end gap-2 p-4 border-t bg-background */
+.l4-scaled .inner .fm-ai-in { flex: none; border-top: 1px solid var(--fl-border); background: var(--fl-bg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .l4-scaled .inner .fm-typing,
+  .l4-scaled .inner .fm-typ-b span,
+  .l4-scaled .inner .fm-pop { animation: none; }
+  .l4-scaled .inner .fm-fab.go { animation: none; display: none; }
+}

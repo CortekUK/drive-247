@@ -1,0 +1,172 @@
+/*
+ * Flow "Pay for the booking" (pay.tsx) — Tailwind classes of
+ * BookingCheckoutStep.tsx, CheckoutProgressOverlay.tsx, InvoiceDialog.tsx +
+ * ui/dialog.tsx and (legacy)/booking-success/page.tsx, resolved at a 390px
+ * viewport (the page area is 390 × 766 under the status bar) with the tokens
+ * in legacy.css. --accent is written to the same #6366F1 as --primary by
+ * useDynamicTheme (dark_accent), so text-accent / border-accent/20 use it.
+ * (legacy)/globals.css .dark: --gradient-metal 135deg 75% → 95% → 75% grey,
+ * --shadow-metal 0 4px 20px rgba(255,255,255,0.1).
+ */
+
+/* ── the checkout page under the overlay / dialog ── */
+.l4-scaled .inner .fp-under { position: absolute; inset: 0; }
+/* Navigation is fixed top-0 z-50 */
+.l4-scaled .inner .fp-under .fl-nav { position: relative; z-index: 1; }
+/* the renter is scrolled to the foot of the Price Summary card (px-4 page gutter) */
+.l4-scaled .inner .fp-co { position: absolute; left: 0; right: 0; bottom: 28px; padding: 0 16px; }
+/* Card p-6 bg-gradient-dark (no such utility in tailwind.config → bg-card) border-accent/30 */
+.l4-scaled .inner .fp-sum { padding: 24px; border-color: hsl(239 84% 67% / 0.3); }
+/* mt-3 bg-accent/10 border-2 border-accent/30 rounded-lg p-4 -mx-2 */
+.l4-scaled .inner .fp-gt { display: flex; align-items: center; justify-content: space-between; margin: 0 -8px; padding: 16px; border: 2px solid hsl(239 84% 67% / 0.3); border-radius: 12px; background: hsl(239 84% 67% / 0.1); }
+.l4-scaled .inner .fp-gt-l { display: block; font-size: 12px; line-height: 16px; color: var(--fl-mfg); }
+.l4-scaled .inner .fp-gt-h { display: block; font-size: 18px; line-height: 28px; font-weight: 600; }
+/* text-3xl font-bold text-accent */
+.l4-scaled .inner .fp-gt-v { font-size: 30px; line-height: 36px; font-weight: 700; color: var(--fl-primary); }
+/* text-xs text-muted-foreground mt-4 */
+.l4-scaled .inner .fp .fp-rcpt { margin-top: 16px; font-size: 12px; line-height: 16px; color: var(--fl-mfg); }
+/* Promo Code: mt-4 space-y-2; flex gap-2; Input h-9; Button outline h-9 px-4 */
+.l4-scaled .inner .fp-promo { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.l4-scaled .inner .fp-promo-r { display: flex; gap: 8px; }
+/* Input h-9 keeps the base text-base (md:text-sm does not apply at 390px) */
+.l4-scaled .inner .fp-promo-r .fl-input { flex: 1; font-size: 16px; }
+.l4-scaled .inner .fp-h9 { height: 36px; }
+/* mt-4 space-y-3; Button size lg: h-11 px-8; disabled:opacity-50 */
+.l4-scaled .inner .fp-acts { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.l4-scaled .inner .fp-lg { height: 44px; padding: 0 32px; }
+.l4-scaled .inner .fp-dis { opacity: 0.5; }
+.l4-scaled .inner .fp-sp { animation: fp-spin 1s linear infinite; }
+/* Button gap-2 plus the icon's own mr-2 / ml-2 */
+.l4-scaled .inner .fp-mr { margin-right: 8px; }
+.l4-scaled .inner .fp-ml { margin-left: 8px; }
+/* gradient-accent alone (hover-lift adds no resting shadow) */
+.l4-scaled .inner .fp-flat,
+.l4-scaled .inner .fp-acts .grad { box-shadow: none; }
+/* flex items-center gap-2 text-xs text-muted-foreground justify-center pt-2 */
+.l4-scaled .inner .fp-secured { display: flex; align-items: center; justify-content: center; gap: 8px; padding-top: 8px; font-size: 12px; line-height: 16px; color: var(--fl-mfg); }
+.l4-scaled .inner .fp-secured svg { width: 16px; height: 16px; }
+
+/* ── CheckoutProgressOverlay ── */
+/* fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-md */
+.l4-scaled .inner .fp-scrim { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; background: hsl(223 49% 8% / 0.8); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+/* w-full max-w-md mx-4 p-8 rounded-2xl bg-card border border-border shadow-2xl */
+.l4-scaled .inner .fp-pcard { width: 100%; margin: 0 16px; padding: 32px; border: 1px solid var(--fl-border); border-radius: 16px; background: var(--fl-card); box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25); }
+/* flex justify-center mb-6; relative; glow absolute inset-0 rounded-full bg-primary/10 blur-xl animate-pulse */
+.l4-scaled .inner .fp-spin { position: relative; width: 64px; margin: 0 auto 24px; }
+.l4-scaled .inner .fp-glow { position: absolute; inset: 0; border-radius: 999px; background: hsl(239 84% 67% / 0.1); filter: blur(24px); animation: fp-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+/* w-16 h-16 rounded-full bg-primary/10; Loader2 w-8 h-8 text-primary animate-spin */
+.l4-scaled .inner .fp-ring { position: relative; display: flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 999px; background: hsl(239 84% 67% / 0.1); }
+.l4-scaled .inner .fp-ring svg { width: 32px; height: 32px; color: var(--fl-primary); animation: fp-spin 1s linear infinite; }
+/* h3 text-xl font-display font-semibold text-center mb-1 */
+.l4-scaled .inner .fp-pcard h3 { margin-bottom: 4px; font-size: 20px; line-height: 28px; text-align: center; }
+/* text-sm text-muted-foreground text-center mb-6 */
+.l4-scaled .inner .fp .fp-psub { margin-bottom: 24px; font-size: 14px; line-height: 20px; text-align: center; color: var(--fl-mfg); }
+/* relative h-2 rounded-full bg-muted overflow-hidden mb-2; the fill as designed (see pay.tsx) */
+.l4-scaled .inner .fp-track { height: 8px; margin-bottom: 8px; overflow: hidden; border-radius: 999px; background: var(--fl-muted); }
+.l4-scaled .inner .fp-track span { display: block; height: 100%; border-radius: 999px; background: var(--fl-primary); animation: fp-fill 0.7s ease-out 0.6s both; }
+/* text-xs text-muted-foreground text-right mb-6 tabular-nums */
+.l4-scaled .inner .fp .fp-pct { margin-bottom: 24px; font-size: 12px; line-height: 16px; text-align: right; font-variant-numeric: tabular-nums; color: var(--fl-mfg); }
+/* space-y-3; row flex items-center gap-3 */
+.l4-scaled .inner .fp-steps { display: flex; flex-direction: column; gap: 12px; }
+.l4-scaled .inner .fp-st { display: flex; align-items: center; gap: 12px; }
+/* w-6 h-6 rounded-full; done bg-green-500/15 + Check w-3.5 text-green-600;
+   active bg-primary/15 + w-2.5 dot bg-primary animate-pulse; pending bg-muted + w-2 dot bg-muted-foreground/30 */
+.l4-scaled .inner .fp-dot { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; flex: none; border-radius: 999px; background: var(--fl-muted); }
+.l4-scaled .inner .fp-dot i { display: block; width: 8px; height: 8px; border-radius: 999px; background: hsl(0 0% 65% / 0.3); }
+.l4-scaled .inner .fp-st.done .fp-dot { background: rgb(34 197 94 / 0.15); }
+.l4-scaled .inner .fp-st.done .fp-dot svg { width: 14px; height: 14px; color: #16a34a; }
+.l4-scaled .inner .fp-st.on .fp-dot { background: hsl(239 84% 67% / 0.15); }
+.l4-scaled .inner .fp-st.on .fp-dot i { width: 10px; height: 10px; background: var(--fl-primary); animation: fp-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+/* text-sm; completed text-muted-foreground, active text-foreground font-medium, pending text-muted-foreground/50 */
+.l4-scaled .inner .fp-lbl { font-size: 14px; line-height: 20px; color: var(--fl-mfg); }
+.l4-scaled .inner .fp-st.on .fp-lbl { font-weight: 500; color: var(--fl-fg); }
+.l4-scaled .inner .fp-st.todo .fp-lbl { color: hsl(0 0% 65% / 0.5); }
+/* inline-flex ml-0.5; three animate-pulse dots, 0 / 0.2s / 0.4s */
+.l4-scaled .inner .fp-ell { display: inline-flex; margin-left: 2px; }
+.l4-scaled .inner .fp-ell span { animation: fp-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.l4-scaled .inner .fp-ell span:nth-child(2) { animation-delay: 0.2s; }
+.l4-scaled .inner .fp-ell span:nth-child(3) { animation-delay: 0.4s; }
+
+/* ── InvoiceDialog ── */
+/* DialogOverlay fixed inset-0 bg-black/80 */
+.l4-scaled .inner .fp-dim { position: absolute; inset: 0; z-index: 2; background: rgb(0 0 0 / 0.8); }
+/* DialogContent centred; w-[95vw] = 370.5px, max-h-[90vh] = 689px (content is taller, so it scrolls);
+   border bg-background shadow-lg, square corners below sm. Shown scrolled to its end. */
+.l4-scaled .inner .fp-dlg { position: absolute; left: 10px; right: 10px; top: 38px; height: 689px; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; border: 1px solid var(--fl-border); background: var(--fl-bg); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+/* grid gap-4 p-6 */
+.l4-scaled .inner .fp-dscroll { flex: none; display: grid; gap: 16px; padding: 24px; }
+/* DialogTitle (h2): flex items-center gap-2 text-lg font-semibold leading-none tracking-tight; FileText h-5 w-5 text-accent */
+.l4-scaled .inner .fp-dh { display: flex; align-items: center; gap: 8px; font-family: var(--font-playfair), "Playfair Display", Georgia, serif; font-size: 18px; line-height: 1; font-weight: 600; letter-spacing: -0.025em; }
+.l4-scaled .inner .fp-dh svg { width: 20px; height: 20px; color: var(--fl-primary); }
+/* space-y-6 */
+.l4-scaled .inner .fp-sp6 { display: flex; flex-direction: column; gap: 24px; }
+/* border-b pb-6; h1 text-3xl font-bold text-accent (no logo uploaded) */
+.l4-scaled .inner .fp-co-h { padding-bottom: 24px; border-bottom: 1px solid var(--fl-border); }
+.l4-scaled .inner .fp-co-h h1 { font-size: 30px; line-height: 36px; font-weight: 700; color: var(--fl-primary); }
+/* grid grid-cols-1 gap-4; h3 font-semibold mb-2; text-sm space-y-1 */
+.l4-scaled .inner .fp-bill { display: grid; gap: 16px; }
+.l4-scaled .inner .fp-dlg h3 { font-size: 16px; line-height: 24px; }
+.l4-scaled .inner .fp-bill h3 { margin-bottom: 8px; }
+.l4-scaled .inner .fp-lines { display: flex; flex-direction: column; gap: 4px; font-size: 14px; line-height: 20px; }
+.l4-scaled .inner .fp-lines strong { font-weight: 700; }
+.l4-scaled .inner .fp-fm { font-weight: 500; }
+.l4-scaled .inner .fp-xs { font-size: 12px; line-height: 16px; }
+/* border rounded-lg p-4 bg-muted/30; h3 mb-3; grid grid-cols-1 gap-3 text-sm */
+.l4-scaled .inner .fp-ri { padding: 16px; border: 1px solid var(--fl-border); border-radius: 12px; background: hsl(223 49% 15% / 0.3); }
+.l4-scaled .inner .fp-ri h3 { margin-bottom: 12px; }
+.l4-scaled .inner .fp-ri-g { display: grid; gap: 12px; font-size: 14px; line-height: 20px; }
+.l4-scaled .inner .fp-ri-g .fp-xs { font-size: 12px; line-height: 16px; }
+/* border rounded-lg overflow-hidden table; thead bg-muted, th p-3 text-sm font-semibold; td p-3 text-sm */
+.l4-scaled .inner .fp-tbl { overflow: hidden; border: 1px solid var(--fl-border); border-radius: 12px; }
+.l4-scaled .inner .fp-tr { display: flex; justify-content: space-between; gap: 12px; padding: 12px; font-size: 14px; line-height: 20px; }
+.l4-scaled .inner .fp-tr > div { flex: 1; min-width: 0; }
+.l4-scaled .inner .fp-th { background: var(--fl-muted); font-weight: 600; }
+.l4-scaled .inner .fp-bb { border-bottom: 1px solid var(--fl-border); }
+.l4-scaled .inner .fp-top { align-self: flex-start; }
+/* breakdown: mt-1 space-y-0.5; flex justify-between text-xs text-muted-foreground/70 */
+.l4-scaled .inner .fp-bd { display: flex; justify-content: space-between; margin-top: 4px; font-size: 12px; line-height: 16px; color: hsl(0 0% 65% / 0.7); }
+/* bg-muted/50; Total text-sm font-bold; amount text-lg font-bold text-accent */
+.l4-scaled .inner .fp-tot { align-items: center; background: hsl(223 49% 15% / 0.5); font-weight: 700; }
+.l4-scaled .inner .fp-tot span:last-child { font-size: 18px; line-height: 28px; color: var(--fl-primary); }
+/* text-center text-sm text-muted-foreground border-t pt-4; second line text-xs mt-1 */
+.l4-scaled .inner .fp-foot { padding-top: 16px; border-top: 1px solid var(--fl-border); text-align: center; font-size: 14px; line-height: 20px; color: var(--fl-mfg); }
+.l4-scaled .inner .fp .fp-foot .fp-xs { margin-top: 4px; }
+/* flex flex-col-reverse items-stretch gap-3 border-t pt-4 (Continue renders above Print) */
+.l4-scaled .inner .fp-dbtns { display: flex; flex-direction: column-reverse; gap: 12px; padding-top: 16px; border-top: 1px solid var(--fl-border); }
+
+/* ── booking-success ── */
+.l4-scaled .inner .fp-navfix { position: absolute; top: 0; left: 0; right: 0; z-index: 2; }
+/* main min-h-screen bg-gradient-to-b from-background to-muted py-16; container px-6.
+   Scrolled so the buttons sit 24px above the fold: the main's bottom
+   (card pb-8 + border + main pb-16 = 97px, less those 24px) hangs 73px below. */
+.l4-scaled .inner .fp-succ { position: absolute; left: 0; right: 0; bottom: -73px; min-height: calc(100% + 73px); display: flex; flex-direction: column; justify-content: flex-end; padding: 64px 24px; background: linear-gradient(to bottom, var(--fl-bg), var(--fl-muted)); }
+/* bg-card rounded-2xl shadow-metal border border-accent/20 p-8 */
+.l4-scaled .inner .fp-scard { padding: 32px; border: 1px solid hsl(239 84% 67% / 0.2); border-radius: 16px; background: var(--fl-card); box-shadow: 0 4px 20px rgba(255, 255, 255, 0.1); }
+/* w-20 h-20 bg-green-500/10 rounded-full mx-auto mb-6; CheckCircle w-12 h-12 text-green-500 */
+.l4-scaled .inner .fp-ok { display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; margin: 0 auto 24px; border-radius: 999px; background: rgb(34 197 94 / 0.1); }
+.l4-scaled .inner .fp-ok svg { width: 48px; height: 48px; color: #22c55e; }
+/* h1 text-3xl font-display font-bold text-gradient-metal mb-2 text-center */
+.l4-scaled .inner .fp .fp-sh1 { margin-bottom: 8px; font-size: 30px; line-height: 36px; font-weight: 700; text-align: center; background-image: linear-gradient(135deg, hsl(0 0% 75%), hsl(0 0% 95%), hsl(0 0% 75%)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+/* text-lg text-center mb-6; ref font-semibold text-accent */
+.l4-scaled .inner .fp .fp-ref { margin-bottom: 24px; font-size: 18px; line-height: 28px; text-align: center; }
+.l4-scaled .inner .fp-ref span { font-weight: 600; color: var(--fl-primary); }
+/* text-lg text-muted-foreground mb-8 text-center */
+.l4-scaled .inner .fp .fp-thx { margin-bottom: 32px; font-size: 18px; line-height: 28px; text-align: center; color: var(--fl-mfg); }
+/* bg-accent/5 border border-accent/20 rounded-lg p-6 mb-8 space-y-4; h2 text-xl font-semibold mb-4 */
+.l4-scaled .inner .fp-rs { margin-bottom: 32px; padding: 24px; border: 1px solid hsl(239 84% 67% / 0.2); border-radius: 12px; background: hsl(239 84% 67% / 0.05); }
+.l4-scaled .inner .fp-rs h2 { margin-bottom: 16px; font-size: 20px; line-height: 28px; }
+/* grid gap-3 text-sm; rows flex justify-between */
+.l4-scaled .inner .fp-rs-g { display: grid; gap: 12px; font-size: 14px; line-height: 20px; }
+.l4-scaled .inner .fp-rs-g > div { display: flex; justify-content: space-between; gap: 8px; }
+/* pt-3 border-t border-accent/20; value font-bold text-accent text-lg */
+.l4-scaled .inner .fp-amt { align-items: center; padding-top: 12px; border-top: 1px solid hsl(239 84% 67% / 0.2); }
+.l4-scaled .inner .fp-amt-v { font-size: 18px; line-height: 28px; font-weight: 700; color: var(--fl-primary); }
+/* flex flex-col gap-4; each Button w-full inside its Link */
+.l4-scaled .inner .fp-sbtns { display: flex; flex-direction: column; gap: 16px; }
+
+@keyframes fp-spin { to { transform: rotate(360deg); } }
+@keyframes fp-pulse { 50% { opacity: 0.5; } }
+@keyframes fp-fill { from { width: 67%; } }
+@media (prefers-reduced-motion: reduce) {
+  .l4-scaled .inner .fp *, .l4-scaled .inner .fp *::after { animation: none !important; }
+}

@@ -1,0 +1,5 @@
+/* The old step screens, slowed down to the length of their flows (existing.tsx). */
+.l4-scaled .inner .fl-x { position: absolute; inset: 0; }
+.l4-scaled .inner .fl-x-verify .hiw-v { --hv-d: 9600ms; }
+.l4-scaled .inner .fl-x-sign .hiw-s { --hs-d: 6400ms; }
+.l4-scaled .inner .fl-x-keys .hiw-k { --hk-d: 5600ms; }

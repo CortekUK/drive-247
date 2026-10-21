@@ -355,29 +355,107 @@
   .l4-stage { margin-top: 22px; padding: 0 4%; }
 }
 
-/* the steps (How pickup works): each in its own box with a vertical progress bar */
-.l4-step { position: relative; background: #f7f7fa; box-shadow: 0 0 0 1px rgb(15 14 26 / 0.06); transition: background 0.2s, box-shadow 0.2s; }
-.l4-step:hover { background: var(--p-tint-2); box-shadow: 0 0 0 1px rgb(68 45 215 / 0.16); }
-.l4-step.on { background: #fff; box-shadow: 0 0 0 1px rgb(68 45 215 / 0.18), var(--shadow); }
-.l4-step .bar { position: absolute; left: 0; top: 16px; bottom: 16px; width: 3px; border-radius: 3px; background: var(--border); overflow: hidden; }
-.l4-step.on .bar i { position: absolute; inset: 0; background: var(--p); transform-origin: top; animation: l4-fill var(--dur, 6s) linear forwards; }
 @keyframes l4-fill { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 
 /* =====================================================================
-   HANDOVER (phone)
+   HOW IT WORKS — the renter flows (FlowPicker in interactive.tsx)
    ===================================================================== */
-.l4-hand { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
-.l4-hand .phone-col { display: flex; justify-content: center; position: relative; }
-.l4-hand .phone-col::before { content: ""; position: absolute; inset: 8% 4%; border-radius: 50%; background: radial-gradient(closest-side, rgb(68 45 215 / 0.16), transparent); z-index: 0; }
-.l4-hand .l4-phone { z-index: 1; }
-.l4-steps { display: flex; flex-direction: column; gap: 8px; margin-top: 28px; }
-.l4-step { display: grid; grid-template-columns: 36px 1fr; gap: 14px; padding: 14px 16px; border: 0; border-radius: 18px; text-align: left; cursor: pointer; }
-.l4-step .n { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; background: #f2f2f5; color: var(--muted); font-weight: 700; font-size: 14px; }
-.l4-step.on .n { background: var(--p); color: #fff; }
-.l4-step b { display: block; font-size: 16px; font-weight: 700; margin-top: 7px; }
-.l4-step span { display: block; font-size: 14px; color: var(--muted); line-height: 1.5; margin-top: 4px; }
-.l4-step small { display: inline-block; margin-top: 8px; font-size: 12px; color: var(--p); font-weight: 600; }
-@media (max-width: 900px) { .l4-hand { grid-template-columns: 1fr; gap: 40px; } .l4-hand .phone-col { order: 2; } }
+.l4-flows .l4-head { max-width: 980px; margin-bottom: 20px; }
+/* desktop: the whole section is one screen under the fixed nav (68px) */
+#how-it-works { box-sizing: border-box; min-height: calc(100svh - 68px); padding: 26px 0 22px; display: flex; align-items: center; }
+#how-it-works > .l4-wrap { width: 100%; }
+#how-it-works .l4-h2 { margin-top: 10px; font-size: clamp(30px, 2.5vw, 42px); }
+#how-it-works .l4-lead { margin-top: 10px; font-size: 16.5px; }
+@media (min-width: 961px) { #how-it-works .l4-lead { display: none; } } /* desktop: the phone takes that room */
+@media (min-width: 961px) and (max-height: 860px) { .l4-flow { padding: 10px 16px; } .l4-flows-stage { row-gap: 10px; } } /* short laptop screens: still one screen */
+/* the stage: five flows | the phone | five flows. The list's own box steps aside
+   (display: contents) so its cards sit straight in the stage's grid. */
+/* three equal columns across the screen (wider than the text column, centred on it):
+   five flows | the phone and its caption | five flows. The cards share their column's
+   height evenly, so both sides line up with the phone top and bottom. */
+.l4-flows-stage {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(5, minmax(0, 1fr)); column-gap: clamp(28px, 3.5vw, 64px); row-gap: 14px;
+  margin-inline: calc(50% - min(840px, 50vw - var(--edge)));
+}
+.l4-flows > *, .l4-flows-stage > * { min-width: 0; } /* the chip row on phones scrolls inside its column instead of widening it */
+.l4-flow-list { display: contents; }
+.l4-flow { grid-column: 1; grid-row: var(--row); align-self: stretch; width: 100%; min-height: 0; }
+.l4-flow.r { grid-column: 3; }
+/* each flow in its own card: white, a hairline and a soft shadow */
+.l4-flow {
+  position: relative; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 14px; align-items: center; padding: 15px 20px; border: 0; border-radius: 18px;
+  text-align: left; cursor: pointer; background: #fff;
+  box-shadow: 0 0 0 1px rgb(15 14 26 / 0.07), 0 6px 18px -12px rgb(30 22 90 / 0.25);
+  transition: box-shadow 0.25s, transform 0.25s;
+}
+/* the right-hand cards mirror the left: number on the outside edge */
+.l4-flow.r { grid-template-columns: minmax(0, 1fr) 34px; text-align: right; }
+.l4-flow.r .no { order: 2; }
+.l4-flow.r .tx { align-items: flex-end; }
+.l4-flow:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px rgb(68 45 215 / 0.2), 0 14px 28px -16px rgb(30 22 90 / 0.35); }
+.l4-flow .no { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: #f2f1f8; font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; color: #8d8b9e; transition: background 0.25s, color 0.25s; }
+.l4-flow .tx { display: flex; flex-direction: column; min-width: 0; }
+.l4-flow b { font-size: 16px; font-weight: 700; line-height: 1.3; letter-spacing: -0.015em; color: var(--fg); }
+.l4-flow .bl { margin-top: 2px; font-size: 13.5px; line-height: 1.4; color: var(--muted); }
+.l4-flow small { align-self: flex-start; margin-top: 6px; padding: 1px 8px; border-radius: 999px; background: #f2f1f8; color: #77758a; font-size: 11px; font-weight: 700; }
+.l4-flow.r small { align-self: flex-end; }
+/* the open flow: a purple ring and glow, the number filled */
+.l4-flow.on { box-shadow: 0 0 0 2px var(--p), 0 18px 40px -18px rgb(68 45 215 / 0.55); }
+.l4-flow.on .no { background: var(--p); color: #fff; }
+.l4-flow.on small { background: var(--p-tint); color: var(--p); }
+/* the step clock (Progress) runs out of sight */
+.l4-flow > .bar { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+.l4-flow > .bar i { display: block; width: 1px; height: 1px; animation: l4-fill-x var(--dur, 3s) linear forwards; } /* its end moves the flow on */
+
+.l4-flows-r { grid-column: 2; grid-row: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
+.l4-flows-r .phone-col { display: flex; justify-content: center; }
+.l4-flows-r .phone-col::before { content: ""; position: absolute; inset: 6% -18%; border-radius: 50%; background: radial-gradient(closest-side, rgb(68 45 215 / 0.18), transparent); z-index: 0; }
+/* the phone, as big as the screen's height allows with the heading and caption on the same screen */
+.l4-flows-r .l4-phone {
+  z-index: 1; width: max(240px, min(400px, 26vw, calc((100svh - 300px) * 0.476)));
+  padding: 12px; border-radius: 58px;
+  /* a titanium band: lit edges, a darker middle, a chamfer and a thin black bezel inside */
+  background: linear-gradient(150deg, #5b5b64 0%, #26262c 18%, #121215 45%, #1c1c21 75%, #4a4a52 100%);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.22), inset 0 0 0 2.5px #0a0a0c, inset 0 2px 3px 3px rgb(255 255 255 / 0.06),
+    0 0 0 1px rgb(10 8 30 / 0.35),
+    0 2px 4px rgb(10 8 30 / 0.15), 0 40px 70px -30px rgb(30 22 90 / 0.55), 0 90px 140px -70px rgb(30 22 90 / 0.45);
+}
+.l4-flows-r .l4-phone .screen { border-radius: 46px; clip-path: inset(0 round 46px); } /* clip the scaled screen to the glass, corners included */
+.l4-flows-r .l4-phone::before, .l4-flows-r .l4-phone::after { width: 3.5px; background: linear-gradient(90deg, #6a6a74, #24242a); }
+.l4-flow-screen { position: absolute; inset: 0; }
+/* which flow and step this is, and what the renter is doing, under the phone */
+.l4-flow-cap { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 100%; min-height: 50px; margin: 14px 0 0; text-align: center; }
+.l4-flow-cap .n { font-size: 11.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--p); }
+.l4-flow-cap .t { font-size: 15px; line-height: 1.5; color: var(--body); animation: l4-cap-in 0.35s ease both; }
+@keyframes l4-cap-in { from { opacity: 0; transform: translateY(4px); } }
+
+@media (prefers-reduced-motion: reduce) { .l4-flow-cap .t { animation: none; } }
+@media (max-width: 1180px) { .l4-flow .bl { display: none; } }
+
+/* below 960px: the heading, then the flows as one row of chips that slides sideways
+   (the open one kept in the middle), then the phone and its caption */
+@media (max-width: 960px) {
+  .l4-flows .l4-head { margin-bottom: 20px; }
+  #how-it-works { min-height: 0; padding: var(--sec) 0; display: block; }
+  .l4-flows-r .l4-phone { width: min(300px, 78vw); }
+  .l4-flows-stage { display: flex; flex-direction: column; align-items: stretch; gap: 26px; margin-inline: 0; }
+  .l4-flow-list {
+    display: flex; flex-direction: row; gap: 8px; margin: 0 calc(var(--edge) * -1); padding: 4px var(--edge) 8px; overflow-x: auto;
+    scrollbar-width: none; scroll-snap-type: x proximity;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  }
+  .l4-flow-list::-webkit-scrollbar { display: none; }
+  .l4-flow, .l4-flow.on, .l4-flow.r, .l4-flow.r.on { flex: none; width: auto; max-width: none; grid-template-columns: auto auto; align-items: baseline; gap: 6px; padding: 8px 14px; border-radius: 999px; text-align: left; background: #fff; box-shadow: 0 0 0 1px var(--border); scroll-snap-align: center; }
+  .l4-flow.on { background: var(--p-tint); box-shadow: 0 0 0 1.5px var(--p); }
+  .l4-flow::after { display: none; }
+  .l4-flow.r .no { order: 0; }
+  .l4-flow .no { font-size: 12px; }
+  .l4-flow b { font-size: 14px; line-height: 1.2; white-space: nowrap; }
+  .l4-flow .bl, .l4-flow small { display: none; }
+  .l4-flows-r .l4-phone { width: min(300px, 78vw); }
+  .l4-flow-cap { width: auto; max-width: 360px; margin-top: 22px; }
+}
 
 /* =====================================================================
    TRAX — the portal's live Trax panel, replicated (trax-portal.tsx).

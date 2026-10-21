@@ -4,9 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { SignupPlan } from "@/lib/plans";
 import { ArrowDown, ArrowRight, Check } from "lucide-react";
 import { Laptop, Phone } from "./frames";
-import { PhoneVerifyScreen, VERIFY_MS } from "./screens/phone-verify";
-import { PhoneSignScreen, SIGN_MS } from "./screens/phone-sign";
-import { PhoneKeysScreen, KEYS_MS } from "./screens/phone-keys";
+import { FLOWS } from "./screens/flows";
 import { DashboardScreen } from "./screens/dashboard";
 import { VerificationScreen } from "./screens/verification";
 import { FinancesScreen } from "./screens/finances";
@@ -284,88 +282,95 @@ export function Showcase() {
 }
 
 /* ---------------------------------------------------------------------------
- * Handover — the renter's phone: verify, sign, get the lockbox code.
+ * How it works — what renters do on their phone, flow by flow.
  *
- * Every claim below is what the code does for an ordinary tenant (every tenant
- * but `northwind`, so every new signup, gets the ORIGINAL booking design —
- * apps/booking/src/lib/booking-design.ts, src/middleware.ts):
- *  1. MultiStepBookingWidget → create-ai-verification-session returns
- *     {booking site}/verify/{token}; AIVerificationQR shows it as a QR code
- *     (with a manual link). app/(legacy)/verify/[token]/page.tsx runs in the
- *     phone's browser: front of ID, back (optional), selfie. process-ai-
- *     verification: OpenAI reads the ID (ai-document-ocr), ai-face-match
- *     compares the selfie — ≥90% verified, 70–89% "Manual Review Required".
- *  2. InvoiceDialog "Continue to Sign Agreement" → /api/esign (BoldSign,
- *     DisableEmails) → send-signing-email: our "Rental Agreement Ready to
- *     Sign" email with a "Review and Sign" button. boldsign-webhook sets
- *     'completed'; portal/agreements/page.tsx shows Completed, Signed
- *     Document, and View / Download.
- *  3. notify-lockbox-code: default SMS "{tenant}: Your lockbox code is …
- *     Vehicle: … Address: … Do not share this code." via the tenant's Twilio
- *     number, sent when staff confirm a Lockbox handover
- *     (key-handover-section.tsx) or by send-lockbox-scheduled. Lockbox is
- *     opt-in (lockbox_enabled default false) and SMS must be one of
- *     lockbox_notification_methods (default ["email"]).
- * Each step lasts as long as its phone animation (min 1.5s).
+ * A list of real renter flows (screens/flows/index.ts: each is a flow of the
+ * ORIGINAL booking design every new tenant gets, drawn from its code) and one
+ * phone that plays the chosen flow step by step, with a caption under it that
+ * says which step this is and what the renter is doing. The steps run on the
+ * progress bar's own clock (Progress); after a flow's last step the next flow
+ * opens. Hovering the list, or scrolling away, pauses it.
  * ------------------------------------------------------------------------- */
-const STEPS = [
-  {
-    b: "They prove who they are",
-    s: "When they book, they scan a QR code and take a photo of their licence and a selfie. We check that the face matches the ID, and anything unclear comes to you to review.",
-    by: "ID and face check",
-    ms: VERIFY_MS,
-  },
-  {
-    b: "They sign the rental agreement",
-    s: "We email them the agreement to sign on their phone. Once it's signed, they can see it and download it in their account.",
-    by: "E-signature by BoldSign",
-    ms: SIGN_MS,
-  },
-  {
-    b: "They get the key code by text",
-    s: "If you use a lockbox, we text them the code, which car it is and the address. They collect the keys themselves.",
-    by: "Sent from your Twilio number",
-    ms: KEYS_MS,
-  },
-].map((s) => ({ ...s, ms: Math.max(1500, s.ms) }));
 
-export function Handover({ children, after }: { children?: ReactNode; after?: ReactNode }) {
+const HALF = Math.ceil(FLOWS.length / 2);
+
+export function FlowPicker({ children }: { children?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLDivElement>(null);
   const visible = useOnScreen(ref);
-  const [i, setI] = useState(0);
+  const [f, setF] = useState(0);
+  const [s, setS] = useState(0);
   const [hover, setHover] = useState(false);
   const paused = hover || !visible;
+  const flow = FLOWS[f];
+  const step = flow.steps[s];
+
+  const choose = (k: number) => {
+    setF(k);
+    setS(0);
+  };
+  const next = () => {
+    if (s + 1 < flow.steps.length) setS(s + 1);
+    else choose((f + 1) % FLOWS.length);
+  };
+
+  // on a phone the list is a row that scrolls sideways: keep the open flow in its middle
+  useEffect(() => {
+    const row = list.current;
+    const item = row?.children[f] as HTMLElement | undefined;
+    if (!row || !item || row.scrollWidth <= row.clientWidth) return;
+    row.scrollTo({ left: item.offsetLeft - (row.clientWidth - item.offsetWidth) / 2, behavior: "smooth" });
+  }, [f]);
 
   return (
-    <div ref={ref} className="l4-hand">
-      <div className="phone-col l4-rv">
-        {/* hiw-paused freezes the phone's animation with the progress bar. On its own
-            (display: contents) wrapper: LandingEffects adds `is-in` to .l4-rv by hand,
-            and a changing className here would let React wipe it. */}
-        <div className={paused ? "hiw-paused" : undefined} style={{ display: "contents" }}>
-          <Phone>
-            <PhoneVerifyScreen on={i === 0} />
-            <PhoneSignScreen on={i === 1} />
-            <PhoneKeysScreen on={i === 2} />
-          </Phone>
+    <div ref={ref} className="l4-flows">
+      <div className="l4-head l4-rv">{children}</div>
+      {/* the phone in the middle, five flows either side of it (one sideways row on phones) */}
+      <div className="l4-flows-stage l4-rv">
+        <div ref={list} className="l4-flow-list" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+          {FLOWS.map((fl, k) => {
+            const on = k === f;
+            return (
+              <button
+                key={fl.id}
+                type="button"
+                className={`l4-flow${on ? " on" : ""}${k >= HALF ? " r" : ""}`}
+                style={{ ["--row" as string]: (k % HALF) + 1 }}
+                onClick={() => choose(k)}
+                aria-pressed={on}
+              >
+                <span className="no">{String(k + 1).padStart(2, "0")}</span>
+                <span className="tx">
+                  <b>{fl.title}</b>
+                  <span className="bl">{fl.blurb}</span>
+                  {fl.note ? <small>{fl.note}</small> : null}
+                </span>
+                {/* the open flow's clock (invisible): when a step's time is up, the next one plays */}
+                {on ? <Progress key={`${f}-${s}`} ms={step.ms} paused={paused} onDone={next} /> : null}
+              </button>
+            );
+          })}
         </div>
-      </div>
-      <div className="l4-rv">
-        {children}
-        <div className="l4-steps" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
-          {STEPS.map((s, k) => (
-            <button key={s.b} className={`l4-step${k === i ? " on" : ""}`} onClick={() => setI(k)}>
-              <span className="n">{k + 1}</span>
-              <span>
-                <b>{s.b}</b>
-                <span>{s.s}</span>
-                <small>{s.by}</small>
-              </span>
-              {k === i ? <Progress key={k} ms={s.ms} paused={paused} onDone={() => setI((k + 1) % STEPS.length)} /> : null}
-            </button>
-          ))}
+        <div className="l4-flows-r">
+          <div className="phone-col">
+            {/* hiw-paused freezes the screens' own animations with the progress bar */}
+            <div className={paused ? "hiw-paused" : undefined} style={{ display: "contents" }}>
+              <Phone>
+                <div key={flow.id} className="l4-flow-screen">
+                  <flow.Screen step={s} />
+                </div>
+              </Phone>
+            </div>
+          </div>
+          <p className="l4-flow-cap" aria-live="polite">
+            <span className="n">
+              {flow.title} · Step {s + 1} of {flow.steps.length}
+            </span>
+            <span key={`${f}-${s}`} className="t">
+              {step.caption}
+            </span>
+          </p>
         </div>
-        {after}
       </div>
     </div>
   );

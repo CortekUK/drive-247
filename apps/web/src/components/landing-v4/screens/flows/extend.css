@@ -1,0 +1,231 @@
+/*
+ * Flow "Ask for more days" (extend.tsx) — the original portal's booking detail
+ * page and ExtendRentalDialog at a 390px phone. Tokens come from legacy.css
+ * (--fl-*); Tailwind classes resolved as noted. The detail page, its Payment
+ * Breakdown table and the Trax button are shared with pay-due.tsx.
+ * Colours used straight from Tailwind's palette (none have dark: variants
+ * unless noted): green-100 #dcfce7 / green-800 #166534, amber-100 #fef3c7 /
+ * amber-800 #92400e, amber-500 #f59e0b, amber-600 #d97706, amber-400 #fbbf24,
+ * blue-600 #2563eb, blue-400 #60a5fa, blue-300 #93c5fd, blue-500 #3b82f6,
+ * --destructive 0 84.2% 60.2%, --accent = the tenant accent (#6366F1).
+ */
+
+/* page root: space-y-6 */
+.l4-scaled .inner .fx-pg { display: flex; flex-direction: column; gap: 24px; }
+
+/* ── header: flex items-center gap-3 ── */
+.l4-scaled .inner .fx-hd { display: flex; align-items: center; gap: 12px; }
+/* Button ghost size icon: h-10 w-10 rounded-md, icon h-4 */
+.l4-scaled .inner .fx-back { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: none; border-radius: 10px; }
+.l4-scaled .inner .fx-back svg { width: 16px; height: 16px; }
+/* flex-1 min-w-0 */
+.l4-scaled .inner .fx-tt { flex: 1; min-width: 0; }
+/* flex items-center gap-3 flex-wrap */
+.l4-scaled .inner .fx-tl { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+/* h1 text-2xl font-bold font-mono tabular-nums tracking-tight (font-mono beats the base h1 font) */
+.l4-scaled .inner .fx .fx-tl h1 {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 24px; line-height: 32px; font-weight: 700; letter-spacing: -0.025em; font-variant-numeric: tabular-nums;
+}
+/* the Copy button: p-1.5 rounded-md, opacity-0 until hover — it still takes its place in the row */
+.l4-scaled .inner .fx-copy { display: flex; padding: 6px; border-radius: 10px; opacity: 0; }
+.l4-scaled .inner .fx-copy svg { width: 16px; height: 16px; }
+/* Badge (default variant) + bg-green-100 text-green-800 / bg-amber-100 text-amber-800;
+   ui/badge has no whitespace-nowrap, so a squeezed badge wraps its words */
+.l4-scaled .inner .fx-b-grn { background: #dcfce7; color: #166534; }
+.l4-scaled .inner .fx-b-amb { background: #fef3c7; color: #92400e; width: auto; white-space: normal; }
+/* text-sm text-muted-foreground mt-1 truncate */
+.l4-scaled .inner .fx-sub { margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; color: var(--fl-mfg); }
+/* Button default (h-10 px-4) / outline; icon h-4 mr-2 on top of gap-2 */
+.l4-scaled .inner .fx-act { flex: none; }
+.l4-scaled .inner .fx-act svg { margin-right: 8px; }
+/* outline + border-destructive/40 text-destructive */
+.l4-scaled .inner .fx-cxl { border-color: hsl(0 84.2% 60.2% / 0.4); color: hsl(0 84.2% 60.2%); }
+
+/* ── photo + quick info: flex flex-col gap-4 ── */
+.l4-scaled .inner .fx-veh { display: flex; flex-direction: column; gap: 16px; }
+/* w-full h-36 object-cover rounded-lg border */
+.l4-scaled .inner .fx-veh img { display: block; width: 100%; height: 144px; object-fit: cover; border: 1px solid var(--fl-border); border-radius: 12px; }
+/* CardContent pt-4 pb-4 (p-6 sides); grid grid-cols-1 gap-y-2 text-sm */
+.l4-scaled .inner .fx-info { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 8px; padding: 16px 24px; font-size: 14px; line-height: 20px; }
+/* each row: flex items-center gap-2, icon h-4 w-4 text-muted-foreground flex-shrink-0 */
+.l4-scaled .inner .fx-info > div { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.l4-scaled .inner .fx-info svg { width: 16px; height: 16px; color: var(--fl-mfg); }
+.l4-scaled .inner .fx-strong { font-weight: 500; }
+.l4-scaled .inner .fx-norm { font-weight: 400; }
+.l4-scaled .inner .fx-trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Outstanding Balance: border-amber-200 dark:border-amber-900; CardContent pt-4 pb-4 ── */
+.l4-scaled .inner .fx-bal { display: flex; align-items: center; gap: 8px; padding: 16px 24px; border-color: #78350f; }
+.l4-scaled .inner .fx-bal svg { width: 20px; height: 20px; color: #f59e0b; }
+/* text-xs text-muted-foreground uppercase tracking-wider */
+.l4-scaled .inner .fx-bal-l { font-size: 12px; line-height: 16px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--fl-mfg); }
+/* text-lg font-semibold dark:text-amber-400 */
+.l4-scaled .inner .fx-bal-v { font-size: 18px; line-height: 28px; font-weight: 600; color: #fbbf24; }
+
+/* ── Tabs: TabsList grid grid-cols-3 w-full h-10 rounded-md bg-muted p-1 text-muted-foreground ── */
+.l4-scaled .inner .fx-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; height: 40px; padding: 4px; border-radius: 10px; background: var(--fl-muted); color: var(--fl-mfg); }
+/* TabsTrigger rounded-sm px-3 py-1.5 text-sm font-medium; active bg-background text-foreground shadow-sm */
+.l4-scaled .inner .fx-tabs span { display: flex; align-items: center; justify-content: center; padding: 6px 12px; border-radius: 8px; font-size: 14px; line-height: 20px; font-weight: 500; white-space: nowrap; }
+.l4-scaled .inner .fx-tabs .on { background: var(--fl-bg); color: var(--fl-fg); box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
+/* TabsContent mt-4 space-y-4 */
+.l4-scaled .inner .fx-tabc { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+
+/* ── Payment Breakdown: CardHeader p-6 pb-4, CardTitle text-base font-medium leading-none tracking-tight ── */
+.l4-scaled .inner .fx .fx-pbt { padding: 24px 24px 16px; font-size: 16px; line-height: 1; font-weight: 500; letter-spacing: -0.025em; }
+
+/* Table: wrapper relative w-full overflow-auto; table w-full caption-bottom text-sm */
+.l4-scaled .inner .fx-tw { position: relative; width: 100%; overflow: hidden; }
+.l4-scaled .inner .fx-t { width: 100%; border-collapse: collapse; border-spacing: 0; font-size: 14px; line-height: 20px; }
+/* thead [&_tr]:border-b; TableRow border-b; tbody last row border-0 */
+.l4-scaled .inner .fx-t tr { border-bottom: 1px solid var(--fl-border); }
+.l4-scaled .inner .fx-t tbody tr:last-child { border-bottom: 0; }
+/* TableHead: h-12 px-4 text-left align-middle font-medium text-muted-foreground */
+.l4-scaled .inner .fx-t th { height: 48px; padding: 0 16px; text-align: left; vertical-align: middle; font-weight: 500; color: var(--fl-mfg); }
+/* TableCell: p-4 align-middle */
+.l4-scaled .inner .fx-t td { padding: 16px; vertical-align: middle; }
+/* the checkbox column: pl-6 w-10, [&:has([role=checkbox])]:pr-0 */
+.l4-scaled .inner .fx-t .fx-ck { width: 40px; padding-left: 24px; padding-right: 0; }
+.l4-scaled .inner .fx-t .fx-pl6 { padding-left: 24px; }
+.l4-scaled .inner .fx-t .fx-pr6 { padding-right: 24px; }
+.l4-scaled .inner .fx-t .fx-w110 { width: 110px; }
+.l4-scaled .inner .fx-t .fx-w120 { width: 120px; }
+.l4-scaled .inner .fx-t .fx-c { text-align: center; }
+.l4-scaled .inner .fx-t .fx-r { text-align: right; }
+/* opacity-40 for a $0 row */
+.l4-scaled .inner .fx-t .fx-dim { opacity: 0.4; }
+/* the renter swipes the overflowing table to see Status and Amount */
+.l4-scaled .inner .fx-swipe { animation: fx-swipe 0.9s cubic-bezier(0.3, 0.7, 0.2, 1) 1.1s both; }
+@keyframes fx-swipe { to { transform: translateX(-200px); } }
+
+/* Checkbox: h-4 w-4 rounded-sm (8px) border border-primary; checked bg-primary text-primary-foreground */
+.l4-scaled .inner .fx-box { display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; border: 1px solid var(--fl-primary); border-radius: 8px; }
+.l4-scaled .inner .fx-box.on { background: var(--fl-primary); color: var(--fl-primary-fg); }
+.l4-scaled .inner .fx-box svg { width: 16px; height: 16px; margin: -1px; }
+
+/* Category cell: flex items-center gap-3; tile h-7 w-7 rounded-full (bg-muted/30 when $0), icon h-3.5 */
+.l4-scaled .inner .fx-cat { display: flex; align-items: center; gap: 12px; }
+.l4-scaled .inner .fx-ico { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; border-radius: 999px; background: hsl(223 49% 15% / 0.3); color: hsl(0 0% 65% / 0.5); }
+.l4-scaled .inner .fx-ico svg { width: 14px; height: 14px; }
+.l4-scaled .inner .fx-ico.fx-grn { background: rgb(34 197 94 / 0.1); color: #22c55e; }
+.l4-scaled .inner .fx-ico.fx-blu { background: rgb(59 130 246 / 0.1); color: #3b82f6; }
+.l4-scaled .inner .fx-ico.fx-teal { background: rgb(20 184 166 / 0.1); color: #14b8a6; }
+.l4-scaled .inner .fx-ico.fx-pur { background: rgb(168 85 247 / 0.1); color: #a855f7; }
+.l4-scaled .inner .fx-ico.fx-amb { background: rgb(245 158 11 / 0.1); color: #f59e0b; }
+.l4-scaled .inner .fx-ico.fx-cyan { background: rgb(6 182 212 / 0.1); color: #06b6d4; }
+.l4-scaled .inner .fx-ico.fx-rose { background: rgb(244 63 94 / 0.1); color: #f43f5e; }
+.l4-scaled .inner .fx-ico.fx-ind { background: rgb(99 102 241 / 0.1); color: #6366f1; }
+/* label text-sm font-medium; detail text-xs text-muted-foreground */
+.l4-scaled .inner .fx-lb { font-size: 14px; line-height: 20px; font-weight: 500; }
+.l4-scaled .inner .fx-dt { font-size: 12px; line-height: 16px; color: var(--fl-mfg); }
+
+/* Badge variant outline + text-[11px] (line-height stays the cell's 20px) */
+.l4-scaled .inner .fx-bd { display: inline-flex; align-items: center; padding: 2px 10px; border: 1px solid; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+/* text-muted-foreground border-muted-foreground/20 */
+.l4-scaled .inner .fx-bd-mode { color: var(--fl-mfg); border-color: hsl(0 0% 65% / 0.2); }
+/* "Not Applied" / "No Hold": text-muted-foreground/60 border-muted-foreground/20 */
+.l4-scaled .inner .fx-bd-na { color: hsl(0 0% 65% / 0.6); border-color: hsl(0 0% 65% / 0.2); }
+/* "Not Paid": text-red-500 border-red-500/30 bg-red-500/10 */
+.l4-scaled .inner .fx-bd-due { color: #ef4444; border-color: rgb(239 68 68 / 0.3); background: rgb(239 68 68 / 0.1); }
+/* "Paid": text-emerald-500 border-emerald-500/30 bg-emerald-500/10 */
+.l4-scaled .inner .fx-bd-paid { color: #10b981; border-color: rgb(16 185 129 / 0.3); background: rgb(16 185 129 / 0.1); }
+/* amount text-sm font-semibold (text-muted-foreground/50 at $0); refunded "-" text-muted-foreground/40 */
+.l4-scaled .inner .fx-amt { font-weight: 600; }
+.l4-scaled .inner .fx-amt-na { color: hsl(0 0% 65% / 0.5); }
+.l4-scaled .inner .fx-dash { color: hsl(0 0% 65% / 0.4); }
+.l4-scaled .inner .fx-dash2 { color: hsl(0 0% 65% / 0.3); }
+/* the per-row "Pay": text-xs font-medium text-blue-500 */
+.l4-scaled .inner .fx-pay { font-size: 12px; line-height: 16px; font-weight: 500; color: #3b82f6; }
+
+/* ── TraxChatButton: fixed bottom-6 right-6 h-14 w-14 rounded-full bg-primary shadow-lg (svg size-4) ── */
+.l4-scaled .inner .fx-trax { position: absolute; right: 24px; bottom: 24px; display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 999px; background: var(--fl-primary); color: var(--fl-primary-fg); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+.l4-scaled .inner .fx-trax svg { width: 16px; height: 16px; }
+
+/* ── Dialog: overlay fixed inset-0 bg-black/80; content centred, w-full max-w-[90vw] (351px),
+   grid gap-4 border bg-background p-6 shadow-lg (rounded only from sm:) ── */
+.l4-scaled .inner .fx-ov { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; background: rgb(0 0 0 / 0.8); animation: fx-fade 0.3s ease-out 0.4s both; }
+@keyframes fx-fade { from { opacity: 0; } }
+.l4-scaled .inner .fx-dlg { position: relative; display: grid; gap: 16px; width: 100%; max-width: 351px; padding: 24px; border: 1px solid var(--fl-border); background: var(--fl-bg); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+/* Close: absolute right-4 top-4 rounded-sm opacity-70, data-[state=open]:bg-accent text-muted-foreground */
+.l4-scaled .inner .fx-x { position: absolute; right: 16px; top: 16px; display: flex; border-radius: 8px; background: var(--fl-primary); color: var(--fl-mfg); opacity: 0.7; }
+.l4-scaled .inner .fx-x svg { width: 16px; height: 16px; }
+/* DialogHeader: flex flex-col space-y-1.5 text-center (sm:text-left) */
+.l4-scaled .inner .fx-dh { display: flex; flex-direction: column; gap: 6px; text-align: center; }
+/* DialogTitle: text-lg font-semibold leading-none tracking-tight */
+.l4-scaled .inner .fx .fx-dh h2 { font-size: 18px; line-height: 1; font-weight: 600; letter-spacing: -0.025em; }
+.l4-scaled .inner .fx-dh p { font-size: 14px; line-height: 20px; color: var(--fl-mfg); }
+/* the confirm title: flex items-center gap-2 text-amber-600, AlertTriangle h-5 (flex, so not centred) */
+.l4-scaled .inner .fx .fx-dh .fx-warn { display: flex; align-items: center; gap: 8px; color: #d97706; }
+.l4-scaled .inner .fx-warn svg { width: 20px; height: 20px; }
+/* space-y-4 mt-2 */
+.l4-scaled .inner .fx-db { display: flex; flex-direction: column; gap: 16px; margin-top: 8px; }
+
+/* Current End Date: flex items-center gap-3 p-3 rounded-lg bg-muted; Calendar h-5 */
+.l4-scaled .inner .fx-cur { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; background: var(--fl-muted); }
+.l4-scaled .inner .fx-cur svg { width: 20px; height: 20px; color: var(--fl-mfg); }
+.l4-scaled .inner .fx-cur p { font-size: 14px; line-height: 20px; color: var(--fl-mfg); }
+.l4-scaled .inner .fx-cur .fx-cur-v { font-size: 16px; line-height: 24px; font-weight: 500; color: var(--fl-fg); }
+/* space-y-2: Label (text-sm font-medium leading-none), the calendar trigger, the hint */
+.l4-scaled .inner .fx-pick { display: flex; flex-direction: column; gap: 8px; }
+.l4-scaled .inner .fx-lab { font-size: 14px; line-height: 1; font-weight: 500; }
+/* Button outline justify-start text-left font-normal w-full; CalendarIcon mr-2 */
+.l4-scaled .inner .fx-trig { justify-content: flex-start; width: 100%; font-weight: 400; }
+.l4-scaled .inner .fx-trig svg { margin-right: 8px; }
+.l4-scaled .inner .fx-help { font-size: 12px; line-height: 16px; color: var(--fl-mfg); }
+
+/* Estimated Extension Cost: border rounded-lg p-3, dark:bg-blue-900/20 dark:border-blue-800 */
+.l4-scaled .inner .fx-est { padding: 12px; border: 1px solid #1e40af; border-radius: 12px; background: rgb(30 58 138 / 0.2); }
+/* flex items-center gap-2 mb-2; CreditCard h-4 text-blue-600; text-xs uppercase tracking-wider font-medium dark:text-blue-400 */
+.l4-scaled .inner .fx-est-h { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.l4-scaled .inner .fx-est-h svg { width: 16px; height: 16px; color: #2563eb; }
+.l4-scaled .inner .fx-est-h span { font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; color: #60a5fa; }
+/* text-lg font-bold dark:text-blue-300; then text-xs dark:text-blue-400 */
+.l4-scaled .inner .fx-est-v { font-size: 18px; line-height: 28px; font-weight: 700; color: #93c5fd; }
+.l4-scaled .inner .fx-est-d { font-size: 12px; line-height: 16px; color: #60a5fa; }
+
+/* Alert: relative w-full rounded-lg border p-4 bg-background; svg absolute left-4 top-4;
+   [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px]; AlertDescription text-sm */
+.l4-scaled .inner .fx-alert { position: relative; padding: 16px; border: 1px solid var(--fl-border); border-radius: 12px; background: var(--fl-bg); font-size: 14px; line-height: 20px; }
+.l4-scaled .inner .fx-alert > svg { position: absolute; left: 16px; top: 16px; width: 16px; height: 16px; color: var(--fl-fg); }
+.l4-scaled .inner .fx-alert > div { padding-left: 28px; transform: translateY(-3px); }
+/* variant destructive + border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-400:
+   in dark the variant's dark:border-destructive outranks border-amber-500, and the
+   icon keeps [&>svg]:text-destructive; AlertDescription font-medium */
+.l4-scaled .inner .fx-undo { border-color: hsl(0 84.2% 60.2%); background: rgb(245 158 11 / 0.1); color: #fbbf24; }
+.l4-scaled .inner .fx-undo > svg { color: hsl(0 84.2% 60.2%); }
+.l4-scaled .inner .fx-undo > div { font-weight: 500; }
+
+/* buttons: flex gap-2 pt-1, each flex-1 h-9 */
+.l4-scaled .inner .fx-btns { display: flex; gap: 8px; padding-top: 4px; }
+.l4-scaled .inner .fx-btns .fl-btn { flex: 1; height: 36px; padding: 0 16px; }
+/* bg-amber-600 */
+.l4-scaled .inner .fx-btns .fx-amber { background: #d97706; }
+
+/* summary: p-4 rounded-lg border bg-muted/50 space-y-3 */
+.l4-scaled .inner .fx-sum { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--fl-border); border-radius: 12px; background: hsl(223 49% 15% / 0.5); }
+.l4-scaled .inner .fx-row { display: flex; align-items: center; justify-content: space-between; }
+.l4-scaled .inner .fx-row > span:first-child { font-size: 14px; line-height: 20px; }
+.l4-scaled .inner .fx-v { font-weight: 500; }
+.l4-scaled .inner .fx-pri { color: var(--fl-primary); }
+/* border-t pt-3; text-sm font-medium; font-bold text-lg text-amber-600 */
+.l4-scaled .inner .fx-sep { padding-top: 12px; border-top: 1px solid var(--fl-border); }
+.l4-scaled .inner .fx-row .fx-per { font-weight: 500; }
+.l4-scaled .inner .fx-plus { font-size: 18px; line-height: 28px; font-weight: 700; color: #d97706; }
+/* border-t pt-3 space-y-2 */
+.l4-scaled .inner .fx-cost { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--fl-border); }
+.l4-scaled .inner .fx-sm { font-size: 14px; line-height: 20px; font-weight: 500; }
+/* pt-1 border-t; text-sm font-semibold; font-bold text-lg */
+.l4-scaled .inner .fx-tot { padding-top: 4px; border-top: 1px solid var(--fl-border); }
+.l4-scaled .inner .fx-row.fx-tot > span:first-child { font-weight: 600; }
+.l4-scaled .inner .fx-big { font-size: 18px; line-height: 28px; font-weight: 700; }
+/* text-sm text-muted-foreground text-center */
+.l4-scaled .inner .fx-by { font-size: 14px; line-height: 20px; text-align: center; color: var(--fl-mfg); }
+.l4-scaled .inner .fx-by strong { font-weight: 700; }
+
+/* ── sonner toast at a phone: 16px from the edges, bg-background border shadow-lg,
+   13px, the success icon (16px slot) then the title (font-medium) ── */
+.l4-scaled .inner .fx-toast { position: absolute; left: 16px; right: 16px; bottom: 16px; z-index: 6; display: flex; align-items: center; gap: 6px; padding: 16px; border: 1px solid var(--fl-border); border-radius: 8px; background: var(--fl-bg); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); font-size: 13px; line-height: 1.5; font-weight: 500; }
+/* sonner's success icon is a filled circle with the check cut out */
+.l4-scaled .inner .fx-toast svg { width: 18px; height: 18px; margin-left: -3px; margin-right: 4px; }
+.l4-scaled .inner .fx-toast svg circle { fill: currentColor; }
+.l4-scaled .inner .fx-toast svg path { stroke: var(--fl-bg); }
