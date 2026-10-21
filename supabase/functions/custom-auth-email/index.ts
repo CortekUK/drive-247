@@ -73,6 +73,18 @@ function isAllowedRedirect(url: string | undefined): url is string {
   }
 }
 
+/** Is this the project's site URL itself, with no path of its own? */
+function isBareSiteUrl(url: string | undefined, siteUrl: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    const target = new URL(url);
+    const site = new URL(siteUrl || "https://drive-247.com");
+    return target.origin === site.origin && (target.pathname === "/" || target.pathname === "") && !target.search;
+  } catch {
+    return false;
+  }
+}
+
 interface AuthEmailHookPayload {
   user: {
     id: string;
@@ -470,8 +482,18 @@ Deno.serve(async (req) => {
 
     // Use the client-provided redirect URL if it's a valid production URL,
     // otherwise build one from the tenant slug (covers localhost/missing cases)
+    //
+    // A recovery link that comes back as the bare site URL was SWAPPED, not
+    // asked for: Supabase replaces a redirect_to missing from the auth allow
+    // list with the site URL (drive-247.com, the sales page). That is how the
+    // custom-domain tenants' reset links landed staff on the sales page (Oct 21
+    // 2026, Posh2Lux at portal.posh2luxcars.com). Their domains are on the list
+    // now; a domain added later and not listed falls back to the tenant's
+    // *.portal.drive-247.com address, which always is.
     const clientRedirect = email_data.redirect_to;
-    const redirectTo = isAllowedRedirect(clientRedirect)
+    const swappedForSiteUrl =
+      email_data.email_action_type === "recovery" && isBareSiteUrl(clientRedirect, email_data.site_url);
+    const redirectTo = isAllowedRedirect(clientRedirect) && !swappedForSiteUrl
       ? clientRedirect
       : buildRedirectUrl(
           tenantSlug || (tenantId ? branding.slug : undefined),
