@@ -131,7 +131,7 @@ const dayLabel = (i: number) => {
 const TICKS = [5, 10, 15, 20, 25, 30, 36];
 const LAST_TICK_SHIFT = 15.49; // half the "27 Oct" label
 
-function RevenueLine() {
+export function RevenueLine() {
   return (
     <div className="db-rev">
       <header className="db-rev-head">
@@ -216,7 +216,7 @@ function LockboxArt() {
   );
 }
 
-function FeatureCard() {
+export function FeatureCard() {
   return (
     <section className="db-feat" aria-roledescription="carousel" aria-label="What's new">
       <span className="db-feat-slide">
@@ -297,7 +297,7 @@ const Emphasis = ({ text }: { text: string }) => (
   <>{text.split(FIGURE).map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : <Fragment key={i}>{part}</Fragment>))}</>
 );
 
-function TraxCard() {
+export function TraxCard() {
   return (
     <div className="db-card db-trax">
       <span className="db-trax-wash" aria-hidden="true" />
@@ -365,7 +365,7 @@ const REQUESTS: { name: string; kind: Kind; ask: string; wait: string; photo: st
   { name: "Emma Stone", kind: "cancellation", ask: "Cancel the Mazda CX-5 · “Found a closer pickup”", wait: "7h", photo: "/landing-v3/avatars/a3.webp" },
 ];
 
-function RequestsCard() {
+export function RequestsCard() {
   return (
     <div className="db-card db-req">
       <header className="db-head">
@@ -426,7 +426,7 @@ const TODOS: { text: string; when?: string; overdue?: boolean; done?: boolean }[
   { text: "Approve Sophia Martinez’s Tesla booking", done: true },
 ];
 
-function TodoCard() {
+export function TodoCard() {
   return (
     <div className="db-card db-todo">
       <header className="db-head">

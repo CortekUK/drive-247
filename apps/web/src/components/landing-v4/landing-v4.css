@@ -130,7 +130,34 @@
 .l4-nav .links a:hover { background: var(--p-tint); color: var(--fg); }
 .l4-nav .ctas { display: flex; gap: 8px; }
 @media (max-width: 1060px) { .l4-nav .links { display: none; } .l4-nav .ctas { margin-left: auto; } }
-@media (max-width: 480px) { .l4-nav .ctas .outline { display: none; } }
+@media (max-width: 640px) { .l4-nav .ctas .outline { display: none; } .l4-nav .bar { gap: 12px; height: 60px; } .l4-nav .logo img { height: 22px; } .l4-nav .ctas .l4-btn { padding: 9px 14px; font-size: 13.5px; } }
+@media (max-width: 380px) { .l4-nav .ctas { display: none; } .l4-burger { margin-left: auto; } }
+
+/* the menu button and the full-screen menu sheet (nav-menu.tsx), below 1060px */
+.l4-burger { display: none; place-items: center; width: 42px; height: 42px; flex: none; padding: 0; border: 1px solid var(--border); border-radius: 12px; background: #fff; color: var(--fg); cursor: pointer; }
+.l4-burger svg { width: 20px; height: 20px; }
+@media (max-width: 1060px) { .l4-nav .bar > .l4-burger { display: grid; } }
+.l4-sheet {
+  position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: #fff;
+  opacity: 0; visibility: hidden; transform: translateY(-12px);
+  transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0.3s;
+}
+.l4-sheet.is-open { opacity: 1; visibility: visible; transform: none; transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.l4-sheet .top { display: flex; align-items: center; justify-content: space-between; height: 68px; flex: none; padding: 0 var(--edge); border-bottom: 1px solid var(--border); }
+.l4-sheet .top img { height: 24px; width: auto; }
+.l4-sheet .top .l4-burger { display: grid; }
+.l4-sheet nav { flex: 1; overflow-y: auto; display: flex; flex-direction: column; padding: 16px var(--edge); }
+.l4-sheet nav a {
+  display: block; padding: 22px 0; text-align: center; border-bottom: 1px solid var(--border);
+  font-size: 20px; font-weight: 650; letter-spacing: -0.01em; color: var(--fg);
+}
+.l4-sheet nav a:hover, .l4-sheet nav a:focus-visible { color: var(--p); }
+/* the links drop in one after another as the sheet opens */
+.l4-sheet.is-open nav a { animation: l4-sheet-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(0.05s + var(--i) * 0.04s); }
+@keyframes l4-sheet-in { from { opacity: 0; transform: translateY(-8px); } }
+.l4-sheet .foot { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; flex: none; padding: 16px var(--edge) calc(20px + env(safe-area-inset-bottom, 0px)); }
+.l4-sheet .foot .l4-btn { justify-content: center; gap: 8px; }
+@media (prefers-reduced-motion: reduce) { .l4-sheet, .l4-sheet.is-open { transition: none; transform: none; } .l4-sheet.is-open nav a { animation: none; } }
 
 /* =====================================================================
    HERO — DRIVE / 24⁄7 / Rent cars, cut by one diagonal. The cut is the
@@ -297,34 +324,44 @@
 /* =====================================================================
    PRODUCT SHOWCASE (tabs + laptop)
    ===================================================================== */
-.l4-show { display: grid; grid-template-columns: 340px 1fr; gap: 48px; align-items: center; }
-.l4-tabs { display: flex; flex-direction: column; gap: 8px; }
+/* the tabs are one centred row above the screen; the laptop takes the full width */
+/* the showcase runs straight into Integrations: less air above and below the laptop */
+#x-showcase { padding-top: 64px; padding-bottom: 40px; }
+#x-showcase + .l4-ix { padding-top: 64px; }
+.l4-show { display: flex; flex-direction: column; align-items: center; }
+.l4-tabs { position: relative; display: inline-flex; gap: 4px; padding: 5px; border-radius: 999px; background: #f4f4f8; box-shadow: inset 0 0 0 1px rgb(15 14 26 / 0.06); }
 .l4-tab {
-  position: relative; display: block; width: 100%; padding: 16px 18px 16px 20px; border: 0; border-radius: 18px;
-  text-align: left; cursor: pointer;
+  position: relative; overflow: hidden; padding: 10px 20px; border: 0; border-radius: 999px; background: transparent;
+  font-size: 15px; font-weight: 650; letter-spacing: -0.01em; color: var(--muted); cursor: pointer; white-space: nowrap;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
 }
-/* every tab and step sits in its own box; the open one is white and lifted, the rest a softer box */
-.l4-tab, .l4-step { background: #f7f7fa; box-shadow: 0 0 0 1px rgb(15 14 26 / 0.06); transition: background 0.2s, box-shadow 0.2s; }
-.l4-tab:hover, .l4-step:hover { background: var(--p-tint-2); box-shadow: 0 0 0 1px rgb(68 45 215 / 0.16); }
-.l4-tab.on, .l4-step.on { background: #fff; box-shadow: 0 0 0 1px rgb(68 45 215 / 0.18), var(--shadow); }
-.l4-tab .t { display: block; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
-.l4-tab .d { display: block; margin-top: 4px; font-size: 14px; line-height: 1.5; color: var(--muted); }
-.l4-tab:not(.on) .d { display: none; }
-.l4-step { position: relative; }
-.l4-tab .bar, .l4-step .bar { position: absolute; left: 0; top: 16px; bottom: 16px; width: 3px; border-radius: 3px; background: var(--border); overflow: hidden; }
-.l4-tab.on .bar i, .l4-step.on .bar i { position: absolute; inset: 0; background: var(--p); transform-origin: top; animation: l4-fill var(--dur, 6s) linear forwards; }
-@keyframes l4-fill { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.l4-tab:hover { color: var(--ink, #0f0e1a); }
+.l4-tab.on { background: #fff; color: #0f0e1a; box-shadow: 0 0 0 1px rgb(68 45 215 / 0.14), 0 4px 14px -6px rgb(30 22 90 / 0.3); }
+/* the open tab's progress runs along its bottom edge and drives the auto-advance */
+.l4-tab .bar { position: absolute; left: 18px; right: 18px; bottom: 4px; height: 2px; border-radius: 2px; overflow: hidden; }
+.l4-tab.on .bar i { position: absolute; inset: 0; background: var(--p); transform-origin: left; animation: l4-fill-x var(--dur, 6s) linear forwards; }
+@keyframes l4-fill-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.l4-show-d { min-height: 1.5em; margin: 12px 0 0; max-width: 640px; text-align: center; font-size: 15px; line-height: 1.5; color: var(--muted); }
+/* the stage is wider than the text column (it overflows .l4-wrap evenly, centred), so the
+   laptop fills the width */
+.l4-stage { position: relative; flex: none; width: min(1480px, calc(100vw - 48px)); margin-top: 24px; padding: 0 5%; } /* room either side for the laptop base, which is wider than the lid */
+#x-showcase .l4-head { margin-bottom: 26px; }
 .l4-show .stack { position: relative; }
 .l4-show .pane { transition: opacity 0.35s ease; }
 .l4-show .pane:not(.is-on) { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
-@media (max-width: 960px) {
-  .l4-show { grid-template-columns: 1fr; gap: 28px; }
-  .l4-tabs { flex-direction: row; overflow-x: auto; scrollbar-width: none; margin: 0 -24px; padding: 4px 24px; }
-  .l4-tab { flex: none; width: auto; padding: 10px 16px; }
-  .l4-tab .d { display: none !important; }
-  .l4-tab .bar { opacity: 0; } /* still animating: it drives the auto-advance */
-  .l4-tab .t { font-size: 14px; }
+@media (max-width: 760px) {
+  .l4-tabs { max-width: calc(100% + 48px); margin: 0 -24px; overflow-x: auto; scrollbar-width: none; border-radius: 0; background: none; box-shadow: none; padding: 4px 24px; }
+  .l4-tab { flex: none; padding: 9px 15px; font-size: 14px; background: #f4f4f8; }
+  .l4-stage { margin-top: 22px; padding: 0 4%; }
 }
+
+/* the steps (How pickup works): each in its own box with a vertical progress bar */
+.l4-step { position: relative; background: #f7f7fa; box-shadow: 0 0 0 1px rgb(15 14 26 / 0.06); transition: background 0.2s, box-shadow 0.2s; }
+.l4-step:hover { background: var(--p-tint-2); box-shadow: 0 0 0 1px rgb(68 45 215 / 0.16); }
+.l4-step.on { background: #fff; box-shadow: 0 0 0 1px rgb(68 45 215 / 0.18), var(--shadow); }
+.l4-step .bar { position: absolute; left: 0; top: 16px; bottom: 16px; width: 3px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.l4-step.on .bar i { position: absolute; inset: 0; background: var(--p); transform-origin: top; animation: l4-fill var(--dur, 6s) linear forwards; }
+@keyframes l4-fill { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 
 /* =====================================================================
    HANDOVER (phone)
@@ -372,6 +409,40 @@
 .l4-trax2 .asks button.on svg { color: var(--p); }
 @media (max-width: 960px) { .l4-trax2 .grid { grid-template-columns: 1fr; gap: 36px; } .l4-tx { max-width: 460px; width: 100%; margin: 0 auto; } }
 
+/* On a desktop the whole section fits one screen under the fixed nav (68px):
+   the section is exactly that tall and the panel shrinks to fit inside it. */
+@media (min-width: 961px) and (min-height: 600px) {
+  .l4-trax2 { box-sizing: border-box; height: calc(100svh - 68px); max-height: 900px; padding: 28px 0; display: flex; align-items: center; }
+  .l4-trax2 > .l4-wrap { width: 100%; }
+  .l4-trax2 .l4-tx { height: min(680px, calc(100svh - 68px - 56px)); }
+}
+
+/* The entrance follows the scroll (trax-portal.tsx sets --in, 0 → 1): the panel
+   rises from below, tilted back, and stands up to full size; the copy slides in
+   from the left. Once it has landed (.is-up) the panel's insides play in. */
+.l4-trax2 { --in: 1; }
+.l4.js .l4-trax2 .l4-tx {
+  transform-origin: 50% 100%;
+  transform: perspective(1400px) translateY(calc((1 - var(--in)) * 160px)) rotateX(calc((1 - var(--in)) * 18deg)) scale(calc(0.86 + var(--in) * 0.14));
+  opacity: calc(0.1 + var(--in) * 0.9);
+}
+.l4.js .l4-trax2 .tx-copy { transform: translateX(calc((1 - var(--in)) * -70px)); opacity: var(--in); }
+.l4.js .l4-trax2 .l4-tx > * { opacity: 0; }
+.l4.js .l4-trax2.is-up .l4-tx > * { animation: l4-tx-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+.l4.js .l4-trax2.is-up .l4-tx > :nth-child(2) { animation-delay: 0.12s; }
+.l4.js .l4-trax2.is-up .l4-tx > :nth-child(3) { animation-delay: 0.24s; }
+@keyframes l4-tx-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+/* the greeting's Trax mark pops in with a burst of its glow */
+.l4.js .l4-trax2 .hello .l4-tx-mark { transform: scale(0); }
+.l4.js .l4-trax2.is-up .hello .l4-tx-mark { animation: l4-tx-pop 0.7s cubic-bezier(0.3, 1.6, 0.4, 1) 0.2s forwards; }
+.l4.js .l4-trax2.is-up .hello .l4-tx-mark .halo { animation: l4-tx-burst 1.2s ease-out 0.25s both, l4-glow 4s ease-in-out 1.45s infinite; }
+@keyframes l4-tx-pop { to { transform: scale(1); } }
+@keyframes l4-tx-burst { from { opacity: 0; transform: scale(0.3); } 40% { opacity: 1; transform: scale(1.6); } to { opacity: 0.6; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .l4.js .l4-trax2 .l4-tx, .l4.js .l4-trax2 .tx-copy { transform: none; opacity: 1; }
+  .l4.js .l4-trax2 .l4-tx > *, .l4.js .l4-trax2 .hello .l4-tx-mark { opacity: 1; transform: none; animation: none !important; }
+}
+
 /* the panel */
 .l4-tx {
   position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column;
@@ -388,9 +459,9 @@
 }
 .l4-tx header { display: flex; align-items: center; gap: 8px; height: 64px; flex: none; padding: 0 8px 0 12px; }
 .l4-tx .switch { display: inline-flex; padding: 2px; border-radius: 999px; background: rgb(68 45 215 / 0.07); }
-.l4-tx .switch span { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 500; color: #737373; }
-.l4-tx .switch span.on { background: rgb(68 45 215 / 0.14); color: var(--p); }
-.l4-tx .switch span svg { width: 12px; height: 12px; }
+.l4-tx .switch > span { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 500; color: #737373; }
+.l4-tx .switch > span.on { background: rgb(68 45 215 / 0.14); color: var(--p); }
+.l4-tx .switch > span > svg { width: 12px; height: 12px; } /* direct children only: the Trax mark inside has its own spans */
 .l4-tx .acts { margin-left: auto; display: flex; gap: 2px; color: #737373; }
 .l4-tx .acts svg { box-sizing: content-box; width: 16px; height: 16px; padding: 8px; border-radius: 8px; }
 
@@ -476,30 +547,31 @@
 /* =====================================================================
    INTEGRATIONS
    ===================================================================== */
-/* a field of glass tiles: staggered columns, faded at the edges; hover/focus a logo for its card */
-.l4-ix { --tile: 92px; --gap: 10px; background: linear-gradient(180deg, #fff, #f3f3f6 30%, #f3f3f6); overflow: hidden; }
+/* one glass tile per integration, in staggered columns (no empty tiles): the logo large,
+   its name and category under it; hover/focus a tile for its card */
+.l4-ix { --tw: 150px; --th: 164px; --gap: 16px; background: linear-gradient(180deg, #fff, #f3f3f6 30%, #f3f3f6); overflow: hidden; }
 .ix-head { max-width: 860px; }
 .ix-head .l4-h2 span { color: var(--p); }
 .ix-field {
-  display: flex; justify-content: center; gap: var(--gap); margin-top: -70px; padding: 170px 0 calc(var(--tile) * 0.5); /* headroom so a top-row hover card is not masked */
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent), linear-gradient(180deg, #000 70%, transparent);
-  -webkit-mask-composite: source-in; mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent), linear-gradient(180deg, #000 70%, transparent);
-  mask-composite: intersect;
+  display: flex; justify-content: center; align-items: flex-start; gap: var(--gap);
+  margin-top: -110px; padding: 170px 24px calc(var(--th) * 0.5); /* headroom so a top-row hover card has room */
 }
-.ix-col { display: flex; flex-direction: column; gap: var(--gap); margin-top: calc(var(--y) * (var(--tile) + var(--gap))); }
+.ix-col { display: flex; flex-direction: column; gap: var(--gap); margin-top: calc(var(--y) * var(--th)); }
 .ix-tile {
-  position: relative; display: grid; place-items: center; width: var(--tile); height: var(--tile); padding: 0; border-radius: 24px;
-  background: rgb(255 255 255 / 0.6); border: 1px solid rgb(255 255 255 / 0.95);
-  box-shadow: inset 0 1px 0 #fff, 0 12px 26px -16px rgb(30 25 80 / 0.35), 0 0 0 1px rgb(15 14 26 / 0.04);
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
+  width: var(--tw); height: var(--th); padding: 14px 10px; border-radius: 28px; text-align: center;
+  background: rgb(255 255 255 / 0.7); border: 1px solid rgb(255 255 255 / 0.95);
+  box-shadow: inset 0 1px 0 #fff, 0 14px 30px -18px rgb(30 25 80 / 0.4), 0 0 0 1px rgb(15 14 26 / 0.05);
   cursor: pointer; transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.35s;
 }
-/* empty glass, fainter the further it sits from the middle of the wall */
-.ix-tile.empty { --o: calc(0.62 - var(--far) * 0.5); background: rgb(255 255 255 / 0.32); border-color: rgb(255 255 255 / 0.6); box-shadow: 0 0 0 1px rgb(15 14 26 / 0.025); cursor: default; }
-/* the logo's own colours, blurred into the glass behind it */
-.ix-tile .glow { position: absolute; inset: 18%; width: 64%; height: 64%; object-fit: contain; filter: blur(16px) saturate(1.6); opacity: 0.55; border-radius: 50%; overflow: hidden; }
-.ix-tile .lg { position: relative; width: 50%; height: 50%; object-fit: contain; border-radius: 12px; }
-.ix-tile .ic { position: relative; width: 40%; height: 40%; color: var(--p); }
-.ix-tile:not(.empty):hover, .ix-tile:not(.empty):focus-visible { z-index: 5; transform: translateY(-6px) scale(1.06); box-shadow: inset 0 1px 0 #fff, 0 22px 40px -18px rgb(30 25 80 / 0.45), 0 0 0 2px rgb(68 45 215 / 0.35); outline: none; }
+/* the logo, its own colours blurred into the glass behind it */
+.ix-tile .mk { position: relative; display: grid; place-items: center; width: 64px; height: 64px; }
+.ix-tile .glow { position: absolute; inset: 6px; width: 52px; height: 52px; object-fit: contain; filter: blur(16px) saturate(1.6); opacity: 0.55; border-radius: 50%; }
+.ix-tile .lg { position: relative; width: 60px; height: 60px; object-fit: contain; border-radius: 15px; }
+.ix-tile .ic { position: relative; width: 44px; height: 44px; color: var(--p); }
+.ix-tile .nm { margin-top: 14px; font-size: 14.5px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; color: #0f0e1a; }
+.ix-tile .ct { margin-top: 3px; font-size: 12px; font-weight: 500; color: var(--muted); }
+.ix-tile:hover, .ix-tile:focus-visible { z-index: 5; transform: translateY(-6px) scale(1.04); box-shadow: inset 0 1px 0 #fff, 0 24px 44px -20px rgb(30 25 80 / 0.45), 0 0 0 2px rgb(68 45 215 / 0.35); outline: none; }
 
 /* the hover card */
 .ix-tile .tip {
@@ -517,32 +589,30 @@
 .ix-tile .td { display: block; margin-top: 10px; }
 .ix-tile .tf { display: block; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11.5px; font-weight: 600; color: var(--muted); }
 
-/* tiles rise in, column by column, when the field scrolls into view */
+/* The wall's entrance, played as it comes near the screen (LandingEffects adds
+   .ix-on, and takes it off once the wall is well away so it replays): each
+   integration pops in with a small overshoot, one after another (--n).
+   `translate` and `scale`, not transform, so the hover lift still applies afterwards. */
 .l4.js .ix-field.l4-rv { opacity: 1; transform: none; }
-/* The wall's entrance, played when it is a third in view (LandingEffects adds
-   .ix-on, and takes it off once the wall leaves the screen so it replays):
-   the empty glass ripples out from the middle (--k), then each integration pops
-   in after it with a small overshoot, one after another (--n). `translate` and
-   `scale`, not transform, so the hover lift still applies afterwards. */
 .l4.js .ix-field .ix-tile { opacity: 0; translate: 0 56px; scale: 0.55; }
-.l4.js .ix-field.ix-on .ix-tile { animation: ix-pop 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; animation-delay: calc(var(--k) * 32ms); }
-.l4.js .ix-field.ix-on .ix-tile:not(.empty) { animation: ix-pop-logo 0.75s cubic-bezier(0.3, 1.5, 0.45, 1) forwards; animation-delay: calc(0.35s + var(--n, 0) * 90ms); }
-@keyframes ix-pop { to { opacity: var(--o, 1); translate: 0 0; scale: 1; } }
+.l4.js .ix-field.ix-on .ix-tile { animation: ix-pop-logo 0.45s cubic-bezier(0.3, 1.5, 0.45, 1) forwards; animation-delay: calc(0.05s + var(--n, 0) * 30ms); }
 @keyframes ix-pop-logo { 0% { opacity: 0; } 35% { opacity: 1; } 100% { opacity: 1; translate: 0 0; scale: 1; } }
-@media (prefers-reduced-motion: reduce) { .l4.js .ix-field .ix-tile { opacity: var(--o, 1); translate: none; scale: none; animation: none !important; } }
-/* At rest the logos hold still; the only ambient motion is a light passing over the glass:
-   - a soft light sweeps across the whole wall every 7s */
-.ix-field { position: relative; }
-.ix-field::after {
-  content: ""; position: absolute; inset: 150px 0 0; pointer-events: none; /* below the headroom, so it never crosses the heading */
-  background: linear-gradient(105deg, transparent 40%, rgb(255 255 255 / 0.55) 50%, transparent 60%);
-  background-size: 250% 100%; animation: ix-sweep 7s ease-in-out infinite;
+@media (prefers-reduced-motion: reduce) { .l4.js .ix-field .ix-tile { opacity: 1; translate: none; scale: none; animation: none !important; } }
+
+@media (max-width: 1180px) { .l4-ix { --tw: 128px; --th: 146px; --gap: 12px; } .ix-tile .mk { width: 54px; height: 54px; } .ix-tile .lg { width: 50px; height: 50px; } .ix-tile .nm { font-size: 13.5px; } }
+/* below 900px the columns give way to a plain grid of the same tiles */
+/* below 900px the columns give way to a two-row strip of the same tiles that slides sideways */
+@media (max-width: 900px) {
+  .ix-field {
+    display: grid; grid-auto-flow: column; grid-template-rows: repeat(2, auto); grid-auto-columns: 132px; justify-content: start;
+    margin-top: 28px; padding: 6px 24px 18px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 0 24px;
+    scrollbar-width: none; overscroll-behavior-x: contain;
+  }
+  .ix-field::-webkit-scrollbar { display: none; }
+  .ix-col { display: contents; }
+  .ix-tile { width: auto; height: 140px; border-radius: 22px; scroll-snap-align: start; }
+  .ix-tile .tip { display: none; }
 }
-@keyframes ix-sweep { 0% { background-position: 130% 0; } 60%, 100% { background-position: -30% 0; } }
-@media (prefers-reduced-motion: reduce) {
-  .ix-field::after { animation: none; }
-}
-@media (max-width: 900px) { .l4-ix { --tile: 70px; --gap: 8px; } .ix-tile { border-radius: 18px; } .ix-field { justify-content: flex-start; margin-left: -60px; } }
 
 /* =====================================================================
    PRICING (light cards)
@@ -647,6 +717,12 @@
 
 /* Testimonials wall (testimonials.tsx) — text and video cards straight on the old section's artwork */
 .l4 .d3s .tc.tw { padding: clamp(72px, 9vw, 120px) var(--edge); }
+/* a deeper lavender than the sections either side (How pickup works above, Pricing
+   below, both near-white), with the dashed curves and rings drawn stronger on it,
+   so the testimonials read as their own band */
+.l4 .d3s .tc.tw { background: linear-gradient(180deg, #e6e3f7, #dedaf3); }
+.l4 .d3s .tw .tc-deco path { stroke: rgb(68 45 215 / 0.38); stroke-width: 1.75; }
+.l4 .d3s .tw .tc-deco i { border-color: rgb(68 45 215 / 0.34); border-width: 2px; }
 .l4 .tw-panel {
   max-width: 1180px; margin: 0 auto;
   font-family: var(--font-manrope), Manrope, sans-serif;
@@ -656,6 +732,14 @@
 
 .l4 .tw-grid { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 16px; align-items: start; margin-top: clamp(32px, 4vw, 56px); }
 .l4 .tw-col { display: flex; flex-direction: column; gap: 16px; }
+/* one column (phones): the cards slide sideways, each 84% wide so the next one peeks in */
+.l4 .tw-grid.c1 { margin-left: calc(var(--edge) * -1); margin-right: calc(var(--edge) * -1); }
+.l4 .tw-grid.c1 .tw-col {
+  flex-direction: row; align-items: flex-start; gap: 12px; padding: 4px var(--edge) 12px; overflow-x: auto;
+  scroll-snap-type: x mandatory; scroll-padding: 0 var(--edge); scrollbar-width: none; overscroll-behavior-x: contain;
+}
+.l4 .tw-grid.c1 .tw-col::-webkit-scrollbar { display: none; }
+.l4 .tw-grid.c1 .tw-slot { flex: 0 0 84%; scroll-snap-align: start; }
 /* the middle column sits a little higher, as in the reference */
 .l4 .tw-grid.c3 .tw-col:nth-child(1),
 .l4 .tw-grid.c3 .tw-col:nth-child(3) { margin-top: 36px; }
@@ -681,27 +765,33 @@
 .l4 .tw-quote p + p { margin-top: 8px; }
 
 .l4 .tw-video { overflow: hidden; aspect-ratio: 720 / 880; background: #0c0a24; color: #fff; }
-.l4 .tw-video video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.l4 .tw-shade { position: absolute; inset: 0; background: linear-gradient(to bottom, rgb(0 0 0 / 0.18), transparent 28%, transparent 48%, rgb(0 0 0 / 0.72)); pointer-events: none; }
+/* the person's photo fills the card and drifts very slowly, like the hero's tiles come alive */
+.l4 .tw-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: tw-drift 14s ease-in-out infinite alternate; }
+@keyframes tw-drift { from { scale: 1; } to { scale: 1.07; } }
+.l4 .tw-video video { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; }
+.l4 .tw-shade { position: absolute; inset: 0; z-index: 1; background: linear-gradient(to bottom, rgb(0 0 0 / 0.08), transparent 30%, transparent 46%, rgb(12 10 36 / 0.78)); pointer-events: none; }
 .l4 .tw-ctl {
-  position: absolute; top: 16px; display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 1px solid rgb(255 255 255 / 0.35);
-  border-radius: 50%; background: rgb(255 255 255 / 0.2); color: #fff; cursor: pointer; backdrop-filter: blur(8px); transition: background 0.2s, transform 0.2s;
+  position: absolute; z-index: 2; top: 16px; display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 1px solid rgb(255 255 255 / 0.35);
+  border-radius: 50%; background: rgb(20 16 50 / 0.4); color: #fff; cursor: pointer; transition: background 0.2s, transform 0.2s;
 }
-.l4 .tw-ctl:hover { background: rgb(255 255 255 / 0.32); transform: scale(1.06); }
+.l4 .tw-ctl:hover { background: rgb(20 16 50 / 0.6); transform: scale(1.06); }
 .l4 .tw-ctl svg { width: 16px; height: 16px; }
 .l4 .tw-pp { left: 16px; }
 .l4 .tw-pp svg { fill: currentColor; }
 .l4 .tw-snd { right: 16px; }
-.l4 .tw-cap { position: absolute; left: 22px; right: 22px; bottom: 24px; }
-.l4 .tw-co { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; }
-.l4 .tw-co i { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; background: #fff; color: #0f0e1a; font-size: 10px; font-style: normal; font-weight: 800; }
-.l4 .tw-cap h3 { margin: 10px 0 0; font-size: clamp(19px, 1.7vw, 23px); line-height: 1.2; font-weight: 600; letter-spacing: -0.02em; color: #fff; text-wrap: balance; }
-.l4 .tw-cap small { display: block; margin-top: 8px; font-size: 12.5px; color: rgb(255 255 255 / 0.72); }
-.l4 .tw-prog { position: absolute; left: 22px; right: 22px; bottom: 12px; height: 3px; border-radius: 3px; background: rgb(255 255 255 / 0.22); overflow: hidden; }
+.l4 .tw-cap { position: absolute; z-index: 2; left: 14px; right: 14px; bottom: 14px; }
+.l4 .tw-cap h3 { margin: 0 6px 12px; font-size: clamp(18px, 1.6vw, 22px); line-height: 1.22; font-weight: 600; letter-spacing: -0.02em; color: #fff; text-wrap: balance; }
+/* the hero tiles' name bar: avatar, name, role and company on a dark tint */
+.l4 .tw-bar { display: flex; align-items: center; gap: 10px; padding: 9px 12px 9px 9px; border-radius: 14px; background: rgb(30 24 80 / 0.62); border: 1px solid rgb(255 255 255 / 0.22); }
+.l4 .tw-bar .av { flex: none; width: 30px; height: 30px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 1.5px #fff; }
+.l4 .tw-bar b { display: block; font-size: 13.5px; font-weight: 700; line-height: 1.2; }
+.l4 .tw-bar small { display: block; margin-top: 2px; font-size: 11.5px; color: rgb(255 255 255 / 0.78); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.l4 .tw-bar > span { min-width: 0; }
+.l4 .tw-prog { position: absolute; z-index: 2; left: 22px; right: 22px; top: 62px; height: 3px; border-radius: 3px; background: rgb(255 255 255 / 0.22); overflow: hidden; }
 .l4 .tw-prog i { display: block; height: 100%; background: #fff; transform-origin: left; transition: transform 0.26s linear; }
 
 @media (prefers-reduced-motion: reduce) {
-  .l4 .tw-card { animation: none; }
+  .l4 .tw-card, .l4 .tw-photo { animation: none; }
   .l4 .tw-slot, .l4 .tw-slot > div { transition: none; }
 }
 
@@ -709,7 +799,7 @@
 .l4 .d3s .y-cb .y-kick.sh-dk::after { content: ""; width: 28px; height: 1px; background: currentColor; opacity: 0.55; }
 
 /* FAQ at the same scale as the other sections (.l4-kick / .l4-h2 / .l4-lead); the old page set it display-sized */
-.l4 .d3s .fq2 { padding: 56px 0 var(--sec); } /* a short gap after pricing, which ends just above */
+.l4 .d3s .fq2 { padding: var(--sec) 0; background: #f1f0f7; } /* its own tint, so it reads apart from the white Pricing section above */
 .l4 .d3s .fq2 .y-wrap { max-width: 920px; }
 .l4 .d3s .fq2 .y-kick,
 .l4 .d3s .tw .y-kick { font-size: 12px; } /* the FAQ's "Good to know" line, reused by testimonials */
@@ -735,6 +825,7 @@
 /* the nav is tucked away over the hero and slides down after it */
 .l4-nav { transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .l4-nav.is-tucked { transform: translateY(-100%); }
+@media (max-width: 1060px) { .l4-nav.is-tucked { transform: none; } } /* phones and tablets: the menu stays reachable over the hero */
 
 .l4-hw {
   --part: 0;
@@ -759,6 +850,8 @@
 .hw-lead { margin: 18px 0 0; max-width: 440px; font-size: 16px; line-height: 1.6; color: var(--body); }
 .hw-ctas { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
 .hw-ctas .l4-btn { gap: 8px; }
+.hw-cta-note { display: flex; align-items: center; gap: 7px; margin: 14px 0 0; font-size: 13.5px; color: var(--muted); }
+.hw-cta-note svg { color: var(--p); flex: none; }
 .hw-stats { display: flex; gap: clamp(20px, 2.6vw, 40px); margin: 34px 0 0; padding: 0; }
 .hw-stats dt { font-size: clamp(24px, 2.2vw, 32px); line-height: 1; font-weight: 800; letter-spacing: -0.04em; color: #0f0e1a; }
 .hw-stats div:first-child dt { color: var(--p); }
@@ -772,47 +865,41 @@
 .hw-partners .p:hover { filter: none; opacity: 1; }
 .hw-partners img { height: 18px; width: auto; }
 
-/* the wall: right of the copy; its left columns fade away step by step toward the text */
+/* the wall: right of the copy. It fades in only at its top and in a narrow band at
+   its edge next to the copy — not at the bottom, and never over the middle. */
 .hw-wall {
-  --fade: linear-gradient(90deg, transparent 0%, rgb(0 0 0 / 0.1) 8%, rgb(0 0 0 / 0.35) 18%, rgb(0 0 0 / 0.7) 30%, #000 44%);
+  --fade: linear-gradient(90deg, transparent, #000 7%);
   position: absolute; z-index: 1; top: 0; bottom: 0; right: 0; left: calc(var(--edge) + var(--copy) + clamp(24px, 3vw, 56px)); overflow: hidden;
-  -webkit-mask-image: var(--fade), linear-gradient(180deg, transparent, #000 10%, #000 90%, transparent);
-  -webkit-mask-composite: source-in; mask-image: var(--fade), linear-gradient(180deg, transparent, #000 10%, #000 90%, transparent);
+  -webkit-mask-image: var(--fade), linear-gradient(180deg, transparent, #000 14%);
+  -webkit-mask-composite: source-in; mask-image: var(--fade), linear-gradient(180deg, transparent, #000 14%);
   mask-composite: intersect;
   transform: translateX(calc(var(--part) * 24vw)); opacity: calc(1 - var(--part) * 0.9);
   will-change: transform, opacity;
 }
-.hw-plane { position: absolute; inset: -12% 0 -12% 0; display: flex; gap: 12px; padding-left: 12px; transform: perspective(1800px) rotateY(-20deg) rotateZ(-4deg) scale(1.1); transform-origin: 0 50%; }
-/* depth, as in the reference: --d is 1 for the column nearest the copy and 0 for the
-   farthest right, so columns grow and sharpen from left to right */
-.hw-col {
-  --d: calc((6 - var(--c)) / 6);
-  position: relative; flex: none; width: calc(clamp(150px, 11vw, 214px) * (1 - var(--d) * 0.42)); height: 100%;
-}
+.hw-plane { position: absolute; inset: 0; display: flex; gap: 14px; padding-left: 14px; } /* straight: no tilt, no perspective */
+/* every size in a column is a whole pixel (round()), so the tiles keep exact distances
+   from each other while the column moves — fractional sizes let each tile's edges round
+   on their own, and in Firefox/Zen the photos, name bars and gaps then jiggle by a pixel */
+.hw-col { --w: round(clamp(150px, 10.5vw, 204px), 1px); position: relative; flex: none; width: var(--w); height: 100%; }
 .hw-col:hover { z-index: 2; } /* the hovered card zooms over its neighbours */
-.hw-track { display: flex; flex-direction: column; will-change: transform; backface-visibility: hidden; animation: calc(140s + var(--c) * 14s) linear infinite; /* slow drift: one full loop every 2.3–3.7 min */ }
-.hw-col.up .hw-track { animation-name: hw-up; }
-.hw-col.down .hw-track { animation-name: hw-down; }
-.hw-col:nth-child(3n + 1) .hw-track { animation-delay: -42s; }
-.hw-col:nth-child(3n + 2) .hw-track { animation-delay: -85s; }
-/* translate3d keeps each column on its own GPU layer, so it glides instead of snapping pixel to pixel */
-@keyframes hw-up { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, -50%, 0); } }
-@keyframes hw-down { from { transform: translate3d(0, -50%, 0); } to { transform: translate3d(0, 0, 0); } }
-.hw-set { display: flex; flex-direction: column; gap: 12px; padding-bottom: 12px; }
-/* hovering a card stops only its own column; the rest keep moving */
-.hw-col:hover .hw-track { animation-play-state: paused; }
+/* the columns drift slowly, alternately up and down. HeroWall moves each track from
+   JavaScript in whole device pixels only: at sub-pixel positions the browser rounds a
+   card's text and its photo to pixels separately, so the names shook against the
+   pictures. In whole steps every card moves as one solid piece. */
+.hw-track { display: flex; flex-direction: column; will-change: transform; }
+.hw-set { display: flex; flex-direction: column; gap: 14px; padding-bottom: 14px; }
 
 .hw-tile {
-  position: relative; margin: 0; overflow: hidden; border-radius: calc(20px * (1 - var(--d) * 0.4)); background: #dcdae8;
+  position: relative; margin: 0; overflow: hidden; border-radius: 20px; background: #dcdae8;
   box-shadow: 0 1px 0 rgb(255 255 255 / 0.6) inset, 0 14px 30px -20px rgb(30 20 90 / 0.45);
   animation: hw-in 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; animation-delay: calc(0.15s + var(--i) * 0.03s); /* backwards: nothing lingers on the tile once it is in */
   transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.4s;
 }
 @keyframes hw-in { from { opacity: 0; transform: scale(0.92); } }
 .hw-tile:hover { transform: scale(1.12); box-shadow: 0 34px 60px -24px rgb(30 20 90 / 0.65), 0 0 0 2px #fff; z-index: 1; }
-.hw-tile.tall { aspect-ratio: 1 / 1.08; }
-.hw-tile.square { aspect-ratio: 1; }
-.hw-tile.wide { aspect-ratio: 5 / 4; }
+/* a big tile then a small one, down every column */
+.hw-tile.big { height: round(var(--w) * 1.3, 1px); } /* 4 / 5.2 */
+.hw-tile.small { height: round(var(--w) * 0.8, 1px); } /* 5 / 4 */
 .hw-tile img, .hw-tile video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .hw-tile.vid::after { content: ""; position: absolute; inset: 50% 0 0; background: linear-gradient(to bottom, transparent, rgb(12 10 36 / 0.5)); pointer-events: none; }
 .hw-play {
@@ -836,7 +923,7 @@
 .hw-bar .n b { font-size: 13px; letter-spacing: -0.02em; }
 
 @media (prefers-reduced-motion: reduce) {
-  .hw-track, .hw-tile { animation: none; }
+  .hw-tile { animation: none; }
 }
 
 /* below 980px the wall becomes a band under the copy */
@@ -844,13 +931,37 @@
   .l4-hw { flex-direction: column; align-items: stretch; min-height: 0; }
   .hw-left { order: -1; width: auto; padding: 88px var(--edge) 0; box-sizing: border-box; transform: none; opacity: 1; }
   .hw-partners { position: static; margin-top: 32px; }
-  .hw-col { --d: 0; width: 132px; filter: none; }
+  /* three whole columns that fill the width exactly (no tiles cut at the screen edges) */
+  .hw-col { --w: round(down, calc((100vw - 2 * var(--edge) - 20px) / 3), 1px); }
+  .hw-col:nth-child(n + 4) { display: none; }
   .hw-wall {
-    position: relative; left: auto; height: 420px; margin-top: 32px; transform: none; opacity: 1;
+    position: relative; left: auto; height: clamp(380px, 110vw, 520px); margin-top: 36px; transform: none; opacity: 1;
     -webkit-mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
     mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
   }
-  .hw-plane { inset: 0; padding-left: 0; justify-content: center; transform: none; }
+  .hw-plane { inset: 0; gap: 10px; padding-left: 0; justify-content: center; transform: none; }
+  /* the copy centred above the band */
+  .hw-left { align-items: center; text-align: center; }
+  .hw-lead { margin-left: auto; margin-right: auto; }
+  .hw-ctas, .hw-cta-note { justify-content: center; }
+  .hw-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; width: 100%; max-width: 480px; margin-left: auto; margin-right: auto; }
+  .hw-stats dd { max-width: none; margin-left: auto; margin-right: auto; }
+  .hw-partners { display: flex; flex-direction: column; align-items: center; }
+  .hw-partners > div { justify-content: center; }
+}
+/* tablets: five columns, so the tiles stay photo-sized */
+@media (min-width: 600px) and (max-width: 980px) {
+  .hw-col { --w: round(down, calc((100vw - 2 * var(--edge) - 40px) / 5), 1px); }
+  .hw-col:nth-child(-n + 5) { display: block; }
+  .hw-wall { height: clamp(380px, 62vw, 560px); }
+}
+@media (max-width: 480px) {
+  .hw-h { font-size: clamp(34px, 10vw, 44px); }
+  .hw-ctas { width: 100%; flex-direction: column; }
+  .hw-ctas .l4-btn { width: 100%; justify-content: center; }
+  .hw-stats dt { font-size: 24px; }
+  .hw-stats dd { font-size: 11.5px; }
+  .hw-partners > div { gap: 16px 20px; }
 }
 @media (max-width: 560px) {
   .hw-stats { flex-wrap: wrap; gap: 18px 26px; }
@@ -877,3 +988,17 @@
 .l4-plan:only-child .amt b { color: var(--p); }
 .l4-plan:only-child .l4-btn.outline { background: var(--p); border-color: var(--p); color: #fff; box-shadow: 0 12px 24px -12px rgb(68 45 215 / 0.7); }
 .l4-plan:only-child .l4-btn.outline:hover { background: var(--p-hover); border-color: var(--p-hover); }
+
+/* =====================================================================
+   PHONES AND TABLETS — small fixes across sections
+   ===================================================================== */
+@media (max-width: 1060px) {
+  .l4 .hw-logo { display: none; } /* the nav bar, with the logo, stays down here */
+}
+@media (max-width: 960px) {
+  .l4-trax2 .l4-tx { height: min(600px, calc(100svh - 120px)); } /* the panel fits a phone screen under the nav */
+}
+@media (max-width: 760px) {
+  /* the showcase tabs scroll sideways (the open one is kept in the middle); the fades at the edges say there is more */
+  #x-showcase .l4-tabs { -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); }
+}

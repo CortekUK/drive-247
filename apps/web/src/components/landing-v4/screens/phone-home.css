@@ -1,0 +1,65 @@
+/*
+ * The portal's Home on a phone (phone-home.tsx), 390 × 820. The cards keep the
+ * laptop's dashboard.css; these rules only re-lay them the way the portal does
+ * under 768px (max-md: variants), plus the phone's own chrome.
+ */
+.l4-scaled .inner .ph-home { position: relative; width: 100%; height: 100%; overflow: hidden; }
+
+/* top-bar-v2.tsx at phone width: h-16 px-3, no fill — it sits on the wash */
+.l4-scaled .inner .ph-top { position: absolute; z-index: 3; left: 0; right: 0; top: 54px; height: 64px; display: flex; align-items: center; gap: 8px; padding: 0 12px; line-height: 20px; }
+.l4-scaled .inner .ph-search { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid rgb(68 45 215 / 0.25); background: rgb(68 45 215 / 0.07); color: #442dd7; }
+.l4-scaled .inner .ph-search svg { width: 16px; height: 16px; }
+.l4-scaled .inner .ph-right { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+.l4-scaled .inner .ph-right .ib { position: relative; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: #737373; }
+.l4-scaled .inner .ph-right .ib.tel { color: #442dd7; }
+.l4-scaled .inner .ph-right .ib svg { width: 16px; height: 16px; }
+.l4-scaled .inner .ph-right .ib em { position: absolute; right: -2px; top: -2px; min-width: 16px; height: 16px; padding: 0 4px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #dc2626; color: #fff; font-size: 9px; font-weight: 700; font-style: normal; line-height: 1; }
+.l4-scaled .inner .ph-right .help { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px 0 6px; font-size: 13px; font-weight: 500; color: #442dd7; }
+
+/* <main>: p-4, the dashboard root px-2 inside it; the page scrolls under the bar */
+.l4-scaled .inner .ph-main { position: absolute; left: 0; right: 0; top: 118px; bottom: 94px; overflow: hidden; }
+.l4-scaled .inner .ph-home .ph-scroll { display: block; flex: none; max-width: none; margin: 0; padding: 0 24px 24px; animation: ph-flick 15s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+/* a thumb's flicks down the page, a pause on each screenful, then back to the top */
+@keyframes ph-flick {
+  0%, 14% { transform: translateY(0); }
+  19%, 38% { transform: translateY(-320px); }
+  43%, 62% { transform: translateY(-660px); }
+  67%, 86% { transform: translateY(-980px); }
+  92%, 100% { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) { .l4-scaled .inner .ph-home .ph-scroll { animation: none; } }
+
+/* dashboard-v2.tsx, md:hidden: the iOS large title (-mb-5 px-1 pt-1); space-y-10 then puts the desk 20px under it */
+.l4-scaled .inner .ph-title { padding: 4px 4px 0; margin-bottom: 20px; }
+.l4-scaled .inner .ph-title p { margin: 0; font-size: 12px; font-weight: 600; line-height: 16px; letter-spacing: 0.08em; text-transform: uppercase; color: #737373; }
+.l4-scaled .inner .ph-title h1 { margin: 2px 0 0; font-size: 34px; font-weight: 700; line-height: 1.1; letter-spacing: -0.03em; color: #0a0a0a; }
+
+/* phone-carousel.tsx: -mx-2, the row px-2 gap-3, each card 86% wide, then the dots */
+.l4-scaled .inner .ph-desk { margin: 0 -8px; }
+.l4-scaled .inner .ph-carousel { display: flex; gap: 12px; padding: 0 8px; overflow: hidden; }
+.l4-scaled .inner .ph-carousel > * { flex: 0 0 86%; }
+.l4-scaled .inner .ph-home .scr-dash .ph-carousel .db-feat { width: auto; margin-top: 10px; }
+.l4-scaled .inner .ph-dots { margin-top: 12px; display: flex; justify-content: center; gap: 6px; }
+.l4-scaled .inner .ph-dots span { width: 6px; height: 6px; border-radius: 999px; background: #d8d8d8; }
+.l4-scaled .inner .ph-dots span.on { width: 16px; background: #442dd7; }
+
+/* home-bands.tsx: grid-cols-1 gap-5, 30px under the desk; the cards take their own height */
+.l4-scaled .inner .ph-ops { margin-top: 30px; display: flex; flex-direction: column; gap: 20px; }
+.l4-scaled .inner .ph-home .scr-dash .db-grip { display: none; } /* sortable-cards.tsx: max-md:hidden */
+.l4-scaled .inner .ph-home .scr-dash .db-trax-fit { flex: none; }
+.l4-scaled .inner .ph-home .scr-dash .db-trax-fit li[style] { display: none; }
+.l4-scaled .inner .ph-home .scr-dash .db-trax-chips { flex-wrap: nowrap; overflow: hidden; margin-right: -24px; }
+.l4-scaled .inner .ph-home .scr-dash .db-req-list,
+.l4-scaled .inner .ph-home .scr-dash .db-todo-list { flex: none; }
+.l4-scaled .inner .ph-home .scr-dash .db-req-list li:nth-child(n + 6) { display: none; } /* requests-card.tsx: five rows */
+/* todo-card.tsx max-md: the text at 15px, the time under it as plain 12px text */
+.l4-scaled .inner .ph-home .scr-dash .db-todo-main { flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 2px; }
+.l4-scaled .inner .ph-home .scr-dash .db-todo-text { width: 100%; font-size: 15px; line-height: 20px; }
+.l4-scaled .inner .ph-home .scr-dash .db-when { margin-top: 0; padding: 0; background: transparent; font-size: 12px; }
+
+/* mobile-tab-bar.tsx: flat, the page colour, one hairline on top; 60px + the home-indicator inset */
+.l4-scaled .inner .ph-tabs { position: absolute; z-index: 3; left: 0; right: 0; bottom: 0; height: 94px; padding: 0 4px 34px; display: flex; border-top: 1px solid #e5e5e5; background: #fff; }
+.l4-scaled .inner .ph-tabs > span { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; font-size: 11.5px; font-weight: 500; line-height: 1; letter-spacing: 0.01em; color: #737373; }
+.l4-scaled .inner .ph-tabs > span.on { font-weight: 600; color: #442dd7; }
+.l4-scaled .inner .ph-tabs svg { width: 20px; height: 20px; }
+.l4-scaled .inner .ph-tabs::after { content: ""; position: absolute; left: 50%; bottom: 9px; width: 134px; height: 5px; margin-left: -67px; border-radius: 999px; background: #0a0a0a; } /* the phone's home indicator */

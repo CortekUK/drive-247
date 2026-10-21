@@ -5,6 +5,7 @@ import {
   ArrowUp,
   CalendarClock,
   CreditCard,
+  HelpCircle,
   History,
   KeyRound,
   LifeBuoy,
@@ -32,10 +33,11 @@ import {
  * is the portal's, verbatim. The answers are a scripted demo.
  */
 
-/** The portal's starter prompts (TraxSupportThread), label → what is sent. */
+/** The portal's starter prompts (TraxSupportThread STARTERS + PAYMENT_SUGGESTION), label → what is sent. */
 const PROMPTS = [
   { Icon: KeyRound, label: "Vehicles out now", q: "Which vehicles are out on rent right now?" },
   { Icon: CalendarClock, label: "Today's pickups and returns", q: "What pickups and returns are scheduled for today?" },
+  { Icon: HelpCircle, label: "How to create a rental", q: "How do I create a new rental?" },
   { Icon: CreditCard, label: "Check a rental's payments", q: "I want to check the payments for a rental." },
 ];
 
@@ -136,6 +138,23 @@ const ANSWERS: Answer[] = [
     nav: ["Open calendar"],
   },
   {
+    status: "Checking guidance and authorized records…",
+    body: (
+      <>
+        <p>
+          Open <strong>Rentals</strong> and select <strong>New Rental</strong>.
+        </p>
+        <ul>
+          <li>Pick the customer and the car.</li>
+          <li>Set the pickup and return dates and times.</li>
+          <li>Create the rental. It then shows on your booking calendar.</li>
+        </ul>
+      </>
+    ),
+    evidence: null,
+    nav: ["New rental"],
+  },
+  {
     status: "Checking rental payments… Verifying with Stripe…",
     body: (
       <>
@@ -176,12 +195,36 @@ export function TraxPortal() {
   const [visible, setVisible] = useState(false);
   const [turn, setTurn] = useState<Turn | null>(null);
 
+  // The entrance is tied to the scroll: as the section comes up the screen,
+  // --in runs 0 → 1 and the panel rises, tilts upright and comes to full size
+  // (landing-v4.css). Once it has landed the panel's insides play in and the
+  // demo starts; scrolling the section away resets it, so it plays again.
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const io = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), { threshold: 0.3 });
-    io.observe(el);
-    return () => io.disconnect();
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let raf = 0;
+    const measure = () => {
+      raf = 0;
+      const r = el.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const p = reduce ? 1 : Math.min(1, Math.max(0, (vh - r.top) / (vh * 0.8)));
+      el.style.setProperty("--in", p.toFixed(3));
+      const onScreen = r.bottom > 0 && r.top < vh;
+      setVisible(onScreen && p > 0.97);
+      if (!onScreen) setTurn(null);
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(measure);
+    };
+    measure();
+    addEventListener("scroll", onScroll, { passive: true });
+    addEventListener("resize", onScroll);
+    return () => {
+      cancelAnimationFrame(raf);
+      removeEventListener("scroll", onScroll);
+      removeEventListener("resize", onScroll);
+    };
   }, []);
 
   // Greeting first; once on screen the first starter prompt is asked. Each
@@ -200,11 +243,11 @@ export function TraxPortal() {
   const a = turn ? ANSWERS[turn.k] : null;
 
   return (
-    <section ref={ref} className="l4-sec l4-trax2" id="x-trax">
+    <section ref={ref} className={`l4-sec l4-trax2${visible ? " is-up" : ""}`} id="x-trax">
       <div className="tg-mesh" aria-hidden="true" />
       <div className="tg-grain" aria-hidden="true" />
       <div className="l4-wrap grid">
-        <div className="l4-rv">
+        <div className="tx-copy">
           <span className="l4-kick">Trax AI</span>
           <h2 className="l4-h2">Ask your business anything</h2>
           <p className="l4-lead">
@@ -221,7 +264,7 @@ export function TraxPortal() {
           </div>
         </div>
 
-        <aside className="l4-tx l4-rv" aria-label="Trax, as it appears in the Drive247 portal">
+        <aside className="l4-tx" aria-label="Trax, as it appears in the Drive247 portal">
           <header>
             <div className="switch">
               <span className="on">

@@ -5,16 +5,18 @@
  *
  *   text   { kind: "text",  name, role, quote, … }
  *          `quote` is a string, or an array of strings for separate paragraphs.
- *   video  { kind: "video", name, role, company, title, video, poster, … }
- *          `video` is an .mp4 under public/ (or any URL a <video> can play),
- *          shown muted and swapped out when it ends; `poster` is the still
- *          shown while it loads; `title` is the headline over it.
+ *   video  { kind: "video", name, role, company, title, video, photo, … }
+ *          `photo` is the still the card shows before and around the clip;
+ *          `video` (an .mp4 under public/, or any URL a <video> can play) plays
+ *          over it; `title` is the headline.
  *
  * `avatar` is optional; without one the card shows the initials on `color`.
  *
- * PLACEHOLDERS: every entry below is demo content, and the videos are
- * generated stand-in clips (public/landing-v4/testimonials/clip-*.mp4).
- * Replace them with real customers before this page goes live.
+ * PLACEHOLDERS: every text entry below is demo content. The video cards are
+ * REAL footage used as stand-ins until customer videos exist: short cuts of
+ * the founder's strategy-call videos (public/strategy-call/videos, cut to
+ * public/landing-v4/testimonials/founder-*.mp4), labelled as the founder, not
+ * as customers. Replace them with real customer videos before this page goes live.
  */
 
 type Base = {
@@ -25,38 +27,18 @@ type Base = {
 };
 
 export type TextTestimonial = Base & { kind: "text"; quote: string | string[] };
-export type VideoTestimonial = Base & { kind: "video"; company: string; title: string; video: string; poster: string };
+export type VideoTestimonial = Base & { kind: "video"; company: string; title: string; video: string; photo: string };
 export type Testimonial = TextTestimonial | VideoTestimonial;
 
-const clip = (n: number) => ({ video: `/landing-v4/testimonials/clip-${n}.mp4`, poster: `/landing-v4/testimonials/clip-${n}.jpg` });
+const T = "/landing-v4/testimonials";
+const founder = (slug: string) => ({ video: `${T}/${slug}.mp4`, photo: `${T}/${slug}.webp` });
 
 export const TESTIMONIALS: Testimonial[] = [
-  { kind: "video", name: "Marcus Thompson", role: "Owner", company: "Peachtree Rentals", color: "#442dd7", title: "How Marcus moved his bookings off the marketplace", ...clip(1) },
-  { kind: "video", name: "Sarah Alvarez", role: "Operations manager", company: "Bayside Car Hire", color: "#12a594", title: "Running checks and handovers without a counter", ...clip(2) },
-  { kind: "video", name: "Kwame Mensah", role: "Founder", company: "Mensah Motors", color: "#e5484d", title: "From spreadsheets to one portal in a weekend", ...clip(3) },
-  { kind: "video", name: "Elena Petrova", role: "Co-owner", company: "Desert Drive Co.", color: "#f76b15", title: "Why insurance at checkout changed our bookings", ...clip(4) },
-  { kind: "video", name: "Ravi Kapoor", role: "General manager", company: "Harbor Fleet", color: "#0090ff", title: "Letting Trax chase the late payments", ...clip(5) },
-  { kind: "video", name: "Hannah Brooks", role: "Owner", company: "Brooks EV Rentals", color: "#8e4ec6", title: "Lockbox pickups, any hour of the day", ...clip(6) },
+  { kind: "video", name: "From the founder", role: "Founder", company: "Drive247", color: "#442dd7", title: "If your Turo account went tomorrow, how much would go with it?", ...founder("founder-turo") },
+  { kind: "video", name: "From the founder", role: "Founder", company: "Drive247", color: "#442dd7", title: "On a marketplace, the customer isn\u2019t yours", ...founder("founder-own-customers") },
+  { kind: "video", name: "From the founder", role: "Founder", company: "Drive247", color: "#442dd7", title: "Why renters trust your own booking site", ...founder("founder-trust") },
+  { kind: "video", name: "From the founder", role: "Founder", company: "Drive247", color: "#442dd7", title: "Who Drive247 is built for", ...founder("founder-who-for") },
 
-  {
-    kind: "text",
-    name: "Maya Okafor",
-    role: "Owner · 14-car fleet, LA",
-    avatar: "/landing-v3/avatars/a1.webp",
-    color: "#5b5bd6",
-    quote: [
-      "Drive247 replaced a spreadsheet, two inboxes and a very tired phone.",
-      "I check one screen in the morning and the day just runs: bookings, deposits, keys, all of it.",
-    ],
-  },
-  {
-    kind: "text",
-    name: "Daniel Reyes",
-    role: "Founder · Luxury rentals, Miami",
-    avatar: "/landing-v3/avatars/a2.webp",
-    color: "#12a594",
-    quote: "Customers book at 2am and I wake up to a signed agreement and a paid deposit. My team finally gets weekends back.",
-  },
   {
     kind: "text",
     name: "Priya Shah",
@@ -83,14 +65,6 @@ export const TESTIMONIALS: Testimonial[] = [
     avatar: "/landing-v3/avatars/a5.webp",
     color: "#8e4ec6",
     quote: "Lockbox handovers changed our weekends. No one waits at the counter any more. The code arrives by text and the van is gone.",
-  },
-  {
-    kind: "text",
-    name: "Jonas Weber",
-    role: "Owner · 9 EVs, Denver",
-    avatar: "/landing-v3/avatars/a6.webp",
-    color: "#0090ff",
-    quote: "The ID checks are the quiet hero. Licence and selfie verified before pickup means fewer awkward conversations at the car.",
   },
   {
     kind: "text",
@@ -135,16 +109,6 @@ export const TESTIMONIALS: Testimonial[] = [
   },
   {
     kind: "text",
-    name: "Sofia Romano",
-    role: "Co-founder · Boutique rentals, Las Vegas",
-    color: "#8e4ec6",
-    quote: [
-      "Our booking site looks like us, not like a marketplace listing.",
-      "Our colours, our cars, our domain, and repeat customers book direct instead of paying someone else's fees.",
-    ],
-  },
-  {
-    kind: "text",
     name: "James Whitfield",
     role: "Owner · Trucks & vans, Nashville",
     color: "#0090ff",
@@ -180,12 +144,5 @@ export const TESTIMONIALS: Testimonial[] = [
     role: "Owner · Exotic fleet, Scottsdale",
     color: "#e5484d",
     quote: "Face match against the licence gives me confidence handing over a six-figure car to someone I've never met.",
-  },
-  {
-    kind: "text",
-    name: "Rachel Kim",
-    role: "Manager · 18 cars, Portland",
-    color: "#5b5bd6",
-    quote: "I can give my staff exactly the tabs they need and nothing else. Setting up a new hire takes two minutes.",
   },
 ];

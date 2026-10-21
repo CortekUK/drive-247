@@ -10,6 +10,7 @@ import { V3Section, V3SectionsBehaviour } from "./v3-sections";
 import { V3_CTA, V3_FAQ, V3_FOOTER } from "./v3-markup";
 import { Testimonials } from "./testimonials";
 import { TraxPortal } from "./trax-portal";
+import { NavMenu } from "./nav-menu";
 import "./landing-v4.css";
 import "./portal-screens.css";
 
@@ -62,34 +63,32 @@ const INTEGRATIONS: Integration[] = [
   { name: "Zoho", cat: "Accounting", d: "Sync books & CRM with Zoho.", mark: logoDev("zoho.com") },
 ];
 
-// The integrations field: a full-width wall of glass tiles, IX_COLS columns of
-// IX_ROWS, each column nudged down a little. Real integrations sit in the
-// middle (column, row below); every other tile is empty glass that fades the
-// further it is from the middle, so the wall reads as wide without inventing
-// integrations Drive247 does not have.
-const IX_COLS = 21;
-const IX_ROWS = 4;
-const IX_AT: Record<string, [number, number]> = {
-  "Turo Sync": [5, 2],
-  "Stripe Connect": [6, 1],
-  Square: [7, 2],
-  Bonzah: [8, 1],
-  BoldSign: [9, 0],
-  "Twilio Messages": [10, 1],
-  "Twilio Calling": [15, 0], // apart from Twilio Messages: they share a logo
-  Xero: [11, 0],
-  Tesla: [12, 1],
-  Zoho: [12, 2],
-  CheckMyDriver: [13, 0],
-  Inshur: [14, 1],
-  "Custom Domain": [15, 2],
-};
-const IX_COLUMNS = Array.from({ length: IX_COLS }, (_, c) => ({
-  y: Math.round((Math.sin(c * 1.3) * 0.45 + Math.cos(c * 0.55) * 0.3) * 100) / 100,
-  // 0 at the middle of the wall, 1 at its edges
-  far: Math.round(Math.min(1, Math.abs(c - 10) / 10) * 100) / 100,
-  cells: Array.from({ length: IX_ROWS }, (_, r) => INTEGRATIONS.find((it) => IX_AT[it.name]?.[0] === c && IX_AT[it.name]?.[1] === r) ?? null),
+// The integrations field: one glass tile per integration (no empty tiles), the
+// logo large with its name and category under it, in staggered columns like
+// keys. `y` nudges a column down, in tile heights. The two Twilio tiles sit
+// apart because they share a logo.
+const IX_LAYOUT: { y: number; names: string[] }[] = [
+  { y: 0.45, names: ["Turo Sync", "Stripe Connect"] },
+  { y: 0, names: ["Square", "Bonzah"] },
+  { y: 0.6, names: ["BoldSign", "Twilio Messages"] },
+  { y: 0.55, names: ["Xero"] },
+  { y: 0.1, names: ["Tesla", "Zoho"] },
+  { y: 0.5, names: ["CheckMyDriver", "Inshur"] },
+  { y: 0.15, names: ["Twilio Calling", "Custom Domain"] },
+];
+const IX_COLUMNS = IX_LAYOUT.map((col) => ({
+  y: col.y,
+  cells: col.names.map((n) => INTEGRATIONS.find((it) => it.name === n)).filter((it): it is Integration => !!it),
 }));
+
+const NAV_LINKS = [
+  { href: "#x-showcase", label: "Product" },
+  { href: "#x-integrations", label: "Integrations" },
+  { href: "#x-trax", label: "Trax AI" },
+  { href: "#how-it-works", label: "How pickup works" },
+  { href: "#x-pricing", label: "Pricing" },
+  { href: "#x-faq", label: "FAQ" },
+];
 
 export function LandingV4({ plans }: { plans: readonly SignupPlan[] }) {
   return (
@@ -103,12 +102,11 @@ export function LandingV4({ plans }: { plans: readonly SignupPlan[] }) {
             <img src="/logo-light.png" alt="Drive247" />
           </Link>
           <nav className="links" aria-label="Sections">
-            <a href="#x-showcase">Product</a>
-            <a href="#x-integrations">Integrations</a>
-            <a href="#x-trax">Trax AI</a>
-            <a href="#how-it-works">How pickup works</a>
-            <a href="#x-pricing">Pricing</a>
-            <a href="#x-faq">FAQ</a>
+            {NAV_LINKS.map((l) => (
+              <a key={l.href} href={l.href}>
+                {l.label}
+              </a>
+            ))}
           </nav>
           <div className="ctas">
             <a className="l4-btn outline" href="#x-pricing">
@@ -118,6 +116,7 @@ export function LandingV4({ plans }: { plans: readonly SignupPlan[] }) {
               Book a demo
             </a>
           </div>
+          <NavMenu links={NAV_LINKS} />
         </div>
       </header>
 
@@ -152,30 +151,32 @@ export function LandingV4({ plans }: { plans: readonly SignupPlan[] }) {
               </p>
             </div>
           </div>
-          {/* a field of glass tiles, columns staggered like keys; hover or focus a logo for what it does */}
+          {/* one glass tile per integration, columns staggered like keys; hover or focus one for what it does */}
           <div className="ix-field l4-rv">
             {IX_COLUMNS.map((col, c) => (
-              <div key={c} className="ix-col" style={{ ["--y" as string]: col.y, ["--far" as string]: col.far }}>
-                {col.cells.map((it, r) => {
-                  const k = Math.abs(c - 10) * 2 + r; // rises in from the middle outward
-                  if (!it) return <span key={r} className="ix-tile empty" style={{ ["--k" as string]: k }} />;
+              <div key={c} className="ix-col" style={{ ["--y" as string]: col.y }}>
+                {col.cells.map((it) => {
                   const src = it.mark ?? it.logo;
                   return (
                     <button
-                      key={r}
+                      key={it.name}
                       type="button"
                       className="ix-tile"
-                      style={{ ["--k" as string]: k, ["--n" as string]: INTEGRATIONS.indexOf(it) }}
+                      style={{ ["--n" as string]: INTEGRATIONS.indexOf(it) }}
                       aria-label={`${it.name}: ${it.d}`}
                     >
-                      {src ? (
-                        <>
-                          <img className="glow" src={src} alt="" loading="lazy" />
-                          <img className="lg" src={src} alt="" loading="lazy" />
-                        </>
-                      ) : it.Icon ? (
-                        <it.Icon className="ic" style={{ color: it.tint }} />
-                      ) : null}
+                      <span className="mk">
+                        {src ? (
+                          <>
+                            <img className="glow" src={src} alt="" loading="lazy" />
+                            <img className="lg" src={src} alt="" loading="lazy" />
+                          </>
+                        ) : it.Icon ? (
+                          <it.Icon className="ic" style={{ color: it.tint }} />
+                        ) : null}
+                      </span>
+                      <span className="nm">{it.name}</span>
+                      <span className="ct">{it.cat}</span>
                       <span className="tip" role="tooltip">
                         <span className="th">
                           {src ? <img src={src} alt="" /> : it.Icon ? <it.Icon style={{ color: it.tint }} /> : null}

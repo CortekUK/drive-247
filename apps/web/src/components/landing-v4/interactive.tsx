@@ -39,15 +39,13 @@ export function LandingEffects() {
     const nav = root.querySelector(".l4-nav");
     const onScroll = () => nav?.classList.toggle("scrolled", scrollY > 8);
 
-    // the integrations wall plays its entrance once a third of it is on screen,
-    // and resets when it has left, so scrolling back to it plays it again (landing-v4.css)
+    // the integrations wall plays its entrance as it comes within a third of a
+    // screen of the viewport — before it is visible, so a fast scroll finds it
+    // built — and resets once it is well away, so coming back plays it again (landing-v4.css)
     const ix = root.querySelector(".ix-field");
     const ixIo = new IntersectionObserver(
-      ([e]) => {
-        if (e.intersectionRatio >= 0.3) e.target.classList.add("ix-on");
-        else if (!e.isIntersecting) e.target.classList.remove("ix-on");
-      },
-      { threshold: [0, 0.3] },
+      ([e]) => e.target.classList.toggle("ix-on", e.isIntersecting),
+      { rootMargin: "35% 0px 35% 0px" },
     );
     if (ix) ixIo.observe(ix);
 
@@ -241,10 +239,21 @@ export function Showcase() {
   const [i, setI] = useState(0);
   const [hover, setHover] = useState(false);
   const paused = hover || !visible;
+  const tabs = useRef<HTMLDivElement>(null);
+
+  // On a phone the tab row scrolls sideways: keep the open tab in its middle.
+  // Only the row scrolls (scrollIntoView would move the page too).
+  useEffect(() => {
+    const row = tabs.current;
+    const tab = row?.children[i] as HTMLElement | undefined;
+    if (!row || !tab || row.scrollWidth <= row.clientWidth) return;
+    row.scrollTo({ left: tab.offsetLeft - (row.clientWidth - tab.offsetWidth) / 2, behavior: "smooth" });
+  }, [i]);
 
   return (
     <div ref={ref} className="l4-show l4-rv">
-      <div className="l4-tabs" role="tablist" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+      {/* the tabs sit in one row above the screen, so the laptop gets the section's full width */}
+      <div ref={tabs} className="l4-tabs" role="tablist" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
         {SHOW.map((s, k) => (
           <button
             key={s.t}
@@ -253,13 +262,13 @@ export function Showcase() {
             className={`l4-tab${k === i ? " on" : ""}`}
             onClick={() => setI(k)}
           >
+            {s.t}
             {k === i ? <Progress key={k} ms={1500} paused={paused} onDone={() => setI((k + 1) % SHOW.length)} /> : <span className="bar" />}
-            <span className="t">{s.t}</span>
-            <span className="d">{s.d}</span>
           </button>
         ))}
       </div>
-      <div>
+      <p className="l4-show-d" aria-live="polite">{SHOW[i].d}</p>
+      <div className="l4-stage">
         <div className="stack">
           {SHOW.map(({ t, Screen }, k) => (
             <div key={t} className={`pane${k === i ? " is-on" : ""}`} aria-hidden={k !== i}>

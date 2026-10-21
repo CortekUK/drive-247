@@ -1,69 +1,80 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ArrowRight, Play } from "lucide-react";
+import { ArrowRight, CalendarCheck, Play } from "lucide-react";
 
 /*
- * Hero — copy on the left, a wall of operators, cars and product clips on the
- * right, kept clear of the copy and fading in at its own left edge. Each
- * column is an endless loop, alternately scrolling up and down, so the wall
- * always looks busy. Scrolling parts the two halves — the copy slides left,
- * the wall slides right — and the nav stays tucked away until the hero has
- * scrolled past, then slides down from the top.
+ * Hero — copy on the left, a straight wall of operators, cars and the founder's
+ * clips on the right. Each column alternates big and small tiles (offset from
+ * its neighbours, so the wall has a rhythm) and loops slowly, alternately up
+ * and down. The wall fades in at its top and at its edge next to the copy —
+ * not at the bottom, and never over the middle. Scrolling parts the two halves
+ * (copy left, wall right); the nav stays tucked away until the hero has gone.
  *
  * Numbers in the copy: 24/7 booking and the cheapest plan's price (read from the
  * plan catalogue) are facts; the renter count (RENTERS_JOINED) is the team's
- * figure and still needs confirming.
+ * figure and still needs confirming. "Free 20-minute call" is the strategy-call
+ * page's own offer.
  *
- * PLACEHOLDERS: the people on the wall (names, cities, fleet sizes) are stand-ins
- * like the testimonials; replace them with real operators before go-live. The
- * clips are the product's own screen recordings and the founder's strategy-call
- * videos, cut to short loops (public/landing-v4/hero/). The "Works with" row is
- * the integrations Drive247 really ships; swap in partner logos when there are some.
+ * PLACEHOLDERS: the people on the wall (names, cities) are stand-ins like the
+ * testimonials; replace them with real operators before go-live. The clips are
+ * the founder's strategy-call videos cut to short loops (public/landing-v4/hero/).
+ * The product screen recordings that used to be here showed the portal before
+ * v2, so they are gone. The "Works with" row is the integrations Drive247 really
+ * ships; swap in partner logos when there are some.
  */
 
+type Size = "big" | "small";
 type Tile =
-  | { kind: "person"; src: string; name: string; place: string; stat: string; unit: string; shape: Shape }
-  | { kind: "video"; src: string; poster: string; label: string; shape: Shape }
-  | { kind: "photo"; src: string; shape: Shape };
-type Shape = "tall" | "square" | "wide";
+  | { kind: "person"; src: string; name: string; place: string }
+  | { kind: "video"; src: string; poster: string; label: string }
+  | { kind: "photo"; src: string };
 
 const H = "/landing-v4/hero";
-const vid = (name: string, label: string, shape: Shape): Tile => ({ kind: "video", src: `${H}/${name}.mp4`, poster: `${H}/${name}.webp`, label, shape });
-const photo = (name: string, shape: Shape): Tile => ({ kind: "photo", src: `${H}/${name}.webp`, shape });
+const vid = (name: string, label: string): Tile => ({ kind: "video", src: `${H}/${name}.mp4`, poster: `${H}/${name}.webp`, label });
+const photo = (src: string): Tile => ({ kind: "photo", src });
+const person = (src: string, name: string, place: string): Tile => ({ kind: "person", src, name, place });
 
-const person = (src: string, name: string, place: string, stat: string, unit: string, shape: Shape): Tile => ({ kind: "person", src, name, place, stat, unit, shape });
-
-// Every tile once. Columns draw from this in steps of 3, so column c holds the
-// tiles at one residue mod 3 and its neighbours hold the other two — adjacent
-// columns never share a tile. Videos sit at 0/12, 4/16 and 8/20 to land two in each class.
-const POOL: Tile[] = [
-  vid("website", "Booking website", "wide"), //            0
-  person("/landing-v2/people/person-5.jpg", "Maya O.", "Los Angeles, CA", "14", "cars", "tall"),
-  photo("fleet-hero", "square"),
-  person("/landing-v2/people/person-1.jpg", "Daniel R.", "Miami, FL", "22", "cars", "tall"),
-  vid("founder-1", "Leaving the marketplace", "tall"), //   4
-  photo("promo-ev-explorer", "wide"),
-  photo("about-hero", "square"),
-  person("/landing-v2/people/person-3.jpg", "Rachel K.", "Portland, OR", "18", "cars", "tall"),
-  vid("trax", "Trax AI", "wide"), //                        8
-  photo("promo-early-bird", "tall"),
-  person("/landing-v3/avatars/a5.webp", "Aisha B.", "Austin, TX", "11", "vans", "square"),
-  photo("promotions-hero", "wide"),
-  vid("renter", "Renter portal", "tall"), //               12
-  photo("contact-hero", "square"),
-  person("/landing-v2/people/person-2.jpg", "Sofia R.", "Las Vegas, NV", "16", "cars", "tall"),
-  photo("promo-business-class", "wide"),
-  vid("dashboard", "Dashboard", "wide"), //                16
-  person("/landing-v2/people/person-4.jpg", "Jonas W.", "Denver, CO", "9", "EVs", "tall"),
-  photo("about-interior", "square"),
-  photo("reviews-hero", "wide"),
-  vid("founder-2", "Who it's for", "tall"), //             20
-  person("/landing-v3/avatars/a4.webp", "Tom L.", "Phoenix, AZ", "40", "cars", "square"),
-  photo("promo-weekend-escape", "wide"),
-  person("/landing-v3/avatars/a3.webp", "Priya S.", "Dallas, TX", "32", "cars", "square"),
+// Big tiles want sharp, portrait-friendly images; small ones take the cars and
+// the two low-resolution portraits.
+const BIGS: Tile[] = [
+  person("/landing-v2/people/person-5.jpg", "Maya O.", "Los Angeles, CA"),
+  photo(`${H}/about-interior.webp`),
+  person("/landing-v2/people/person-1.jpg", "Daniel R.", "Miami, FL"),
+  vid("founder-1", "Leaving the marketplace"),
+  person("/landing-v2/people/person-3.jpg", "Rachel K.", "Portland, OR"),
+  photo(`${H}/promo-early-bird.webp`),
+  person("/landing-v2/people/person-2.jpg", "Sofia R.", "Las Vegas, NV"),
+  vid("founder-2", "Who it's for"),
+  person("/landing-v2/people/person-4.jpg", "Jonas W.", "Denver, CO"),
+  person(`${H}/reviews-hero.webp`, "Hannah B.", "San Diego, CA"),
 ];
-const COLUMNS: Tile[][] = Array.from({ length: 7 }, (_, c) => Array.from({ length: 8 }, (_, k) => POOL[(c * 7 + k * 3) % POOL.length]));
+const SMALLS: Tile[] = [
+  photo(`${H}/fleet-hero.webp`),
+  person("/landing-v3/avatars/a5.webp", "Aisha B.", "Austin, TX"),
+  photo(`${H}/about-hero.webp`),
+  photo(`${H}/promo-ev-explorer.webp`),
+  photo("/landing-v4/site/car1.webp"),
+  photo(`${H}/promotions-hero.webp`),
+  person("/landing-v3/avatars/a3.webp", "Priya S.", "Dallas, TX"),
+  photo(`${H}/promo-business-class.webp`),
+  photo(`${H}/contact-hero.webp`),
+  photo(`${H}/promo-weekend-escape.webp`),
+];
+
+// 7 columns of 6 tiles, big and small in turn; even columns start big, odd ones
+// small, so a big tile always sits beside a small one. Column c takes three of
+// BIGS and SMALLS from c·7 on: neighbouring columns never share a tile, and the
+// same face is at least two columns away from itself.
+const COLUMNS: { t: Tile; size: Size }[][] = Array.from({ length: 7 }, (_, c) => {
+  let b = 0;
+  let m = 0;
+  return Array.from({ length: 6 }, (_, k) =>
+    (k + c) % 2 === 0
+      ? { t: BIGS[(c * 7 + b++) % BIGS.length], size: "big" as const }
+      : { t: SMALLS[(c * 7 + m++ + 5) % SMALLS.length], size: "small" as const },
+  );
+});
 
 // UNVERIFIED — the figure the team asked for. Confirm it against real booking data
 // before go-live: a public user count has to be true.
@@ -77,17 +88,17 @@ const PARTNERS = [
   { name: "Twilio", src: "/landing-v3/partners/twilio-logo.svg", wordmark: false },
 ];
 
-function TileView({ t, i }: { t: Tile; i: number }) {
+function TileView({ t, size, i }: { t: Tile; size: Size; i: number }) {
   const style = { ["--i" as string]: i };
   if (t.kind === "photo")
     return (
-      <figure className={`hw-tile ${t.shape}`} style={style}>
+      <figure className={`hw-tile ${size}`} style={style}>
         <img src={t.src} alt="" />
       </figure>
     );
   if (t.kind === "video")
     return (
-      <figure className={`hw-tile ${t.shape} vid`} style={style}>
+      <figure className={`hw-tile ${size} vid`} style={style}>
         <video src={t.src} poster={t.poster} muted loop playsInline preload="metadata" />
         <span className="hw-play">
           <Play />
@@ -101,17 +112,13 @@ function TileView({ t, i }: { t: Tile; i: number }) {
       </figure>
     );
   return (
-    <figure className={`hw-tile ${t.shape} who`} style={style}>
+    <figure className={`hw-tile ${size} who`} style={style}>
       <img src={t.src} alt="" />
       <figcaption className="hw-bar">
         <img className="av" src={t.src} alt="" />
         <span>
           <b>{t.name}</b>
           <small>{t.place}</small>
-        </span>
-        <span className="n">
-          <b>{t.stat}</b>
-          <small>{t.unit}</small>
         </span>
       </figcaption>
     </figure>
@@ -153,7 +160,49 @@ export function HeroWall({ fromPrice }: { fromPrice: number | null }) {
     );
     videos.forEach((v) => io.observe(v));
 
+    // The drift. Each track moves in whole device pixels only — at sub-pixel positions
+    // the browser rounds a card's text and photo separately, so the names shook against
+    // the pictures. A column loops one set (half its track) every 140s + c·14s, starts
+    // part-way through its loop, and stops while the pointer is over it.
+    const cols = [...el.querySelectorAll<HTMLElement>(".hw-col")].map((col, c) => {
+      const s = { col, track: col.querySelector<HTMLElement>(".hw-track")!, up: c % 2 === 0, secs: 140 + c * 14, pos: 0, held: false, last: NaN };
+      s.pos = [42, 85, 0][c % 3] / s.secs; // fraction of the loop already run
+      col.addEventListener("pointerenter", () => (s.held = true));
+      col.addEventListener("pointerleave", () => (s.held = false));
+      return s;
+    });
+    let drift = 0;
+    let prev = 0;
+    let onScreen = true;
+    const step = (now: number) => {
+      const dt = prev ? Math.min(0.1, (now - prev) / 1000) : 0;
+      prev = now;
+      const dpr = window.devicePixelRatio || 1;
+      for (const s of cols) {
+        if (!s.held) s.pos = (s.pos + dt / s.secs) % 1;
+        const loop = s.track.offsetHeight / 2;
+        const y = Math.round((s.up ? -s.pos : s.pos - 1) * loop * dpr) / dpr;
+        if (y !== s.last) {
+          s.track.style.transform = `translate3d(0, ${y}px, 0)`;
+          s.last = y;
+        }
+      }
+      drift = onScreen ? requestAnimationFrame(step) : 0;
+    };
+    // run only while the hero is on screen
+    const seen = new IntersectionObserver(([e]) => {
+      onScreen = e.isIntersecting;
+      if (onScreen && !drift && !reduce) {
+        prev = 0;
+        drift = requestAnimationFrame(step);
+      }
+    });
+    if (reduce) step(0);
+    else seen.observe(el);
+
     return () => {
+      cancelAnimationFrame(drift);
+      seen.disconnect();
       cancelAnimationFrame(raf);
       window.removeEventListener("scroll", onScroll);
       io.disconnect();
@@ -172,8 +221,8 @@ export function HeroWall({ fromPrice }: { fromPrice: number | null }) {
               <div className="hw-track">
                 {[0, 1].map((copy) => (
                   <div className="hw-set" key={copy}>
-                    {col.map((t, k) => (
-                      <TileView key={k} t={t} i={copy ? 0 : n++} />
+                    {col.map(({ t, size }, k) => (
+                      <TileView key={k} t={t} size={size} i={copy ? 0 : n++} />
                     ))}
                   </div>
                 ))}
@@ -197,14 +246,18 @@ export function HeroWall({ fromPrice }: { fromPrice: number | null }) {
           that takes bookings around the clock.
         </p>
         <div className="hw-ctas">
-          <a className="l4-btn primary" href="/strategy-call">
+          <a className="l4-btn primary lg" href="/strategy-call">
             Book a demo
             <ArrowRight size={16} />
           </a>
-          <a className="l4-btn outline" href="#x-showcase">
+          <a className="l4-btn outline lg" href="#x-showcase">
             See the product
           </a>
         </div>
+        <p className="hw-cta-note">
+          <CalendarCheck size={15} />
+          Free 20-minute call with our team
+        </p>
         <dl className="hw-stats">
           <div>
             <dt>24/7</dt>

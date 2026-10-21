@@ -155,7 +155,7 @@ function NavRow({ label, active, badge }: { label: string; active?: boolean; bad
 }
 
 /** TraxMark size="xs" (trax-greeting.tsx) — the conic sparkle disc, 20px. */
-function TraxDot() {
+export function TraxDot() {
   return (
     <span className="trax-dot" aria-hidden="true">
       <span className="lift">
