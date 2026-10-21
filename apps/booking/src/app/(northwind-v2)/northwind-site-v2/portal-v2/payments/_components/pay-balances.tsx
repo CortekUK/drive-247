@@ -215,7 +215,7 @@ export function PayBalances({
 
   return (
     <>
-      <Panel>
+      <Panel className="scroll-mt-24" id="pay">
         <PanelHeader title="Pay your balance" />
 
         {payable.length > 0 ? (
@@ -323,59 +323,39 @@ function PayableRow({
   const reference = row.rental?.reference ?? null;
   const when = relativeDayLabel(row.nextDueDate);
 
+  // One line per booking: what it is, when it was due, the amount and the
+  // button. The failure note, when there is one, sits underneath.
   return (
-    <div className="flex flex-col gap-3 px-4 py-4 sm:px-5">
-      <div className="flex items-start gap-3">
+    <div className="flex flex-col gap-2.5 px-4 py-3 sm:px-5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <CreditCard
+          aria-hidden
+          strokeWidth={1.75}
+          className={cn('size-4 shrink-0', row.isOverdue ? 'text-pv-danger' : 'text-pv-muted-fg')}
+        />
+        <p className="min-w-0 flex-1 truncate text-[14px]">
+          <span className="font-semibold text-pv-fg">{vehicle}</span>
+          <span className="text-pv-muted-fg">
+            {[reference, row.nextDueDate ? `${row.isOverdue ? 'was due' : 'due'} ${formatDate(row.nextDueDate)}` : null]
+              .filter((part): part is string => part !== null)
+              .map((part) => ` · ${part}`)
+              .join('')}
+            {row.isOverdue ? '' : when ? ` (${when})` : ''}
+          </span>
+        </p>
         <span
           className={cn(
-            'grid size-9 shrink-0 place-items-center rounded-xl',
-            row.isOverdue ? 'bg-pv-danger-light' : 'bg-pv-tint',
-          )}
-        >
-          <CreditCard
-            aria-hidden
-            strokeWidth={1.75}
-            className={cn(
-              'size-4',
-              row.isOverdue ? 'text-pv-danger' : 'text-pv-muted-fg',
-            )}
-          />
-        </span>
-
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <p className="truncate text-sm font-semibold text-pv-fg">
-            {vehicle}
-          </p>
-          <p className="truncate text-[13px] text-pv-muted-fg">
-            {[reference, row.nextDueDate ? `Due ${formatDate(row.nextDueDate)}` : null]
-              .filter((part): part is string => part !== null)
-              .join(' · ')}
-            {row.isOverdue ? '' : when ? ` (${when})` : ''}
-          </p>
-        </div>
-
-        <p
-          className={cn(
-            'shrink-0 text-[15px] font-semibold tabular-nums',
+            'shrink-0 text-[14px] font-semibold tabular-nums',
             row.isOverdue ? 'text-pv-danger' : 'text-pv-fg',
           )}
         >
           {formatCurrency(row.amount)}
-        </p>
-      </div>
-
-      {row.blockedReason !== null ? (
-        <p className="rounded-xl bg-pv-row px-3 py-2.5 text-[13px] leading-relaxed text-pv-muted-fg">
-          {row.blockedReason}
-        </p>
-      ) : watchPhase !== null ? (
-        <SettlementNotice phase={watchPhase} />
-      ) : (
-        <>
+        </span>
+        {watchPhase === null ? (
           <Button
             type="button"
             variant="brand"
-            className="h-11 w-full px-6 sm:w-auto sm:self-end"
+            className="h-9 shrink-0 px-4"
             disabled={disabled || busy}
             onClick={onPay}
           >
@@ -385,35 +365,28 @@ function PayableRow({
                 Starting…
               </>
             ) : (
-              <>Pay {formatCurrency(row.amount)}</>
+              'Pay'
             )}
           </Button>
+        ) : null}
+      </div>
 
-          {failure !== null ? (
-            <div className="flex items-start gap-2.5 rounded-xl border border-pv-danger/20 bg-pv-danger-light px-3 py-2.5">
-              <TriangleAlert
-                aria-hidden
-                strokeWidth={1.75}
-                className="mt-px size-4 shrink-0 text-pv-danger"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="text-[13px] leading-relaxed text-pv-fg">
-                  {failure.message}
-                </p>
-                {/* No "Try again" button: the Pay button directly above IS the
-                    retry, and the endpoint hands back the same in-flight intent
-                    rather than minting a second one. A second button would just
-                    be two controls doing one thing. */}
-                {failure.retryable ? (
-                  <p className="mt-1 text-[13px] text-pv-muted-fg">
-                    You can try the button above again.
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-        </>
-      )}
+      {watchPhase !== null ? (
+        <SettlementNotice phase={watchPhase} />
+      ) : failure !== null ? (
+        <div className="flex items-start gap-2.5 rounded-xl border border-pv-danger/20 bg-pv-danger-light px-3 py-2.5">
+          <TriangleAlert aria-hidden strokeWidth={1.75} className="mt-px size-4 shrink-0 text-pv-danger" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] leading-relaxed text-pv-fg">{failure.message}</p>
+            {/* No "Try again" button: Pay above IS the retry, and the endpoint
+                hands back the same in-flight intent rather than minting a
+                second one. */}
+            {failure.retryable ? (
+              <p className="mt-1 text-[13px] text-pv-muted-fg">You can press Pay again.</p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -146,13 +146,16 @@ export function SectionTitle({
   description?: string;
   action?: React.ReactNode;
 }) {
+  // Title and control share the top line; the description runs underneath at
+  // full width. With the description beside the tabs, the pill track ran into
+  // it on narrower screens (owner, Oct 22 2026).
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div className="min-w-0">
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-pv-fg">{title}</h2>
-        {description ? <p className="mt-0.5 text-[13px] text-pv-muted-fg">{description}</p> : null}
+        {action ? <div className="w-full shrink-0 sm:w-auto">{action}</div> : null}
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+      {description ? <p className="text-[13px] text-pv-muted-fg">{description}</p> : null}
     </div>
   );
 }

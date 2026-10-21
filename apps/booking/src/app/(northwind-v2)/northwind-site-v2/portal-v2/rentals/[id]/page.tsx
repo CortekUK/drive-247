@@ -2,10 +2,11 @@
 
 /**
  * One booking, read-only — a calmer version of the operator portal v2 rental
- * record (components/rentals-v2/rental-detail): a page header naming the car,
- * a short stage rail saying where the booking has got to, then the record in
- * cards — the car, when and where, extras — with the money in a column of its
- * own beside them.
+ * record (components/rentals-v2/rental-detail). Owner's layout, Oct 22 2026:
+ * one header line (back, car, reference, chips) over the booked date; one
+ * status line when money is owed; then two columns — the car and when & where
+ * on the left, the price breakdown, payment and "Book another car" on the
+ * right, each column ending where its content ends.
  *
  * ── SCOPE ───────────────────────────────────────────────────────────────────
  * This page shows what the customer bought: the car, the dates and places, what
@@ -25,20 +26,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import {
-  ArrowLeft,
-  CalendarDays,
-  CarFront,
-  Check,
-  CircleAlert,
-  CircleCheck,
-  Clock,
-  Gauge,
-  IdCard,
-  MapPin,
-  Package,
-  Receipt,
-} from 'lucide-react-nw';
+import { ArrowLeft, CarFront, CircleAlert, CircleCheck, Clock, Gauge, IdCard, MapPin, Package } from 'lucide-react-nw';
 
 import { formatDate, formatDateTime, formatTimestamp } from '@nw/components/portal/format';
 import { formatBookingDates, formatNights } from '@nw/portal-v2/rentals/format';
@@ -50,11 +38,13 @@ import {
   PageHeader,
   Panel,
   PanelHeader,
+  StatusLine,
 } from '@nw/portal-v2/primitives';
 import { PaymentStatusChip, RentalStatusChip, StatusChip } from '@nw/portal-v2/status-chip';
 import { Button } from '@nw/components/ui/button';
 import { Skeleton } from '@nw/components/ui/skeleton';
 import { useCustomer } from '@nw/hooks/use-customer';
+import { useCustomerPayments } from '@nw/hooks/use-customer-payments';
 import { useCustomerRental } from '@nw/hooks/use-customer-rental';
 import type { CustomerRentalDetail } from '@nw/hooks/use-customer-rental';
 import { bookingCompletionState, type BookingCompletionState } from '@nw/hooks/use-customer-rentals';
@@ -62,6 +52,7 @@ import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { useTenant } from '@nw/contexts/TenantContext';
 import { calculateTotalMileageAllowance } from '@nw/lib/domain';
 import { cn } from '@nw/lib/utils';
+import { V2_BUTTON_DEFAULT_SM, V2_BUTTON_OUTLINE_SM } from '@portal-v2-shared/button-styles';
 
 /** Hover = fade only, 200ms, ease-out on / ease-in off (V2_PLAN §12). */
 const HOVER_FADE = 'transition-colors duration-200 ease-in hover:ease-out motion-reduce:transition-none';
@@ -77,41 +68,15 @@ export default function RentalDetailPage() {
   const { rental, notFound, isLoading, isError, error, refetch } = useCustomerRental(rentalId);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <Link
-          href="/portal/rentals"
-          className={cn(
-            '-ml-2 inline-flex h-9 w-fit items-center gap-1.5 rounded-full px-2 text-[13px] font-medium text-pv-muted-fg hover:bg-pv-hover hover:text-pv-fg',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-ring/50',
-            HOVER_FADE,
-          )}
-        >
-          <ArrowLeft aria-hidden className="size-4" />
-          All rentals
-        </Link>
-
-        {isError || isLoading || notFound || !rental ? (
-          <PageHeader
-            title={isLoading ? 'Your rental' : 'Rental'}
-            description="The car, your dates and pickup, and what you paid."
-          />
-        ) : (
-          <PageHeader
-            title={rental.vehicle?.displayName ?? 'Your rental'}
-            description={`Rental ${rental.reference}${
-              rental.createdAt ? `, made ${formatTimestamp(rental.createdAt)}` : ''
-            }. Your dates, pickup and what you paid.`}
-            action={
-              <div className="flex flex-wrap items-center gap-1.5">
-                <RentalStatusChip lifecycle={rental.lifecycle} />
-                <PaymentStatusChip state={rental.paymentState} />
-                {rental.isExtended ? <StatusChip tone="info">Extended</StatusChip> : null}
-              </div>
-            }
-          />
-        )}
-      </div>
+    <div className="flex flex-col gap-5">
+      {isError || isLoading || notFound || !rental ? (
+        <div className="flex flex-col gap-2">
+          <BackLink />
+          <PageHeader title={isLoading ? 'Your rental' : 'Rental'} />
+        </div>
+      ) : (
+        <RentalHeader rental={rental} />
+      )}
 
       {isError ? (
         <LoadError
@@ -139,75 +104,105 @@ export default function RentalDetailPage() {
   );
 }
 
-/* ─────────────────────────────── stage rail ────────────────────────────── */
+/* ──────────────────────────────── header ───────────────────────────────── */
+
+function BackLink() {
+  return (
+    <Link
+      href="/portal/rentals"
+      aria-label="All rentals"
+      className={cn(
+        '-ml-2 grid size-9 shrink-0 place-items-center rounded-full text-pv-muted-fg hover:bg-pv-hover hover:text-pv-fg',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-ring/50',
+        HOVER_FADE,
+      )}
+    >
+      <ArrowLeft aria-hidden className="size-4" />
+    </Link>
+  );
+}
 
 /**
- * Where the booking has got to, as four steps — the operator record's stage
- * rail, reduced to the moments a customer lives through. Every step is read
- * straight off fields the page already has (`paymentState`, `lifecycle`);
- * nothing is inferred, so the rail can never say a car was collected that was
- * not. The first step not yet done is the one marked as current.
+ * Back, the car, the reference and the chips on one line, the booked date
+ * under it (owner, Oct 22 2026). The payment chip is left off while the
+ * status line below says the same thing.
  *
- * Not drawn for a cancelled booking: the cancellation notice is the whole story.
+ * The Booked / Paid / Picked up / Returned rail that sat under this is gone:
+ * payment and pickup happen in no fixed order (a car goes out on an
+ * instalment plan before it is paid off), so the rail drew ticks after an
+ * unticked step, and the chips already say where the rental is.
  */
-function StageRail({ rental }: { rental: CustomerRentalDetail }) {
-  const pickedUp = rental.lifecycle === 'on_rent' || rental.lifecycle === 'completed';
-  const steps = [
-    { key: 'booked', label: 'Booked', done: true },
-    {
-      key: 'paid',
-      label: rental.paymentState === 'refunded' ? 'Refunded' : 'Paid',
-      done: rental.paymentState === 'paid' || rental.paymentState === 'refunded',
-    },
-    { key: 'pickup', label: 'Picked up', done: pickedUp },
-    { key: 'return', label: 'Returned', done: rental.lifecycle === 'completed' },
-  ];
-  const currentIndex = steps.findIndex((step) => !step.done);
+function RentalHeader({ rental }: { rental: CustomerRentalDetail }) {
+  const money = useRentalMoney(rental);
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <BackLink />
+        <h1 className="font-heading text-2xl font-bold tracking-normal text-pv-fg sm:text-3xl">
+          {rental.vehicle?.displayName ?? 'Your rental'}
+        </h1>
+        <span className="text-[15px] tabular-nums text-pv-muted-fg">{rental.reference}</span>
+        <span className="flex flex-wrap items-center gap-1.5">
+          <RentalStatusChip lifecycle={rental.lifecycle} />
+          {/* An "unpaid" chip only ever came from `rentals.payment_status`,
+              which goes stale; what is owed is the line below, from the ledger. */}
+          {money === null && rental.paymentState !== 'unpaid' ? <PaymentStatusChip state={rental.paymentState} /> : null}
+          {rental.isExtended ? <StatusChip tone="info">Extended</StatusChip> : null}
+        </span>
+      </div>
+      {rental.createdAt ? (
+        <p className="text-sm text-pv-muted-fg">Booked {formatTimestamp(rental.createdAt)}</p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * What this rental still owes, from the ledger Finances reads, and the one
+ * thing to do about it; null when nothing is owed.
+ */
+function useRentalMoney(rental: CustomerRentalDetail): {
+  amount: number;
+  overdue: boolean;
+  dueDate: string | null;
+  action: 'pay' | 'plan';
+} | null {
+  const { payableBalances, activePlans, isLoading } = useCustomerPayments();
+  if (rental.lifecycle === 'cancelled' || isLoading) return null;
+
+  const row = payableBalances.find((candidate) => candidate.rentalId === rental.id);
+  if (row) {
+    const onPlan = row.blockedReason !== null || activePlans.some((plan) => plan.rentalId === rental.id);
+    return { amount: row.amount, overdue: row.isOverdue, dueDate: row.nextDueDate, action: onPlan ? 'plan' : 'pay' };
+  }
+  return null;
+}
+
+/** The Finances status line, for this one rental. */
+function MoneyLine({ rental }: { rental: CustomerRentalDetail }) {
+  const { formatCurrency } = useTenantBranding();
+  const money = useRentalMoney(rental);
+  if (money === null) return null;
+
+  const text = money.overdue
+    ? `${formatCurrency(money.amount)} is overdue${money.dueDate ? ` since ${formatDate(money.dueDate)}` : ''}`
+    : `${formatCurrency(money.amount)} outstanding${money.dueDate ? `, due ${formatDate(money.dueDate)}` : ''}`;
+
+  const action =
+    money.action === 'pay' ? (
+      <Link href="/portal/payments#pay" className={V2_BUTTON_DEFAULT_SM}>
+        Pay now
+      </Link>
+    ) : (
+      <Link href="/portal/payments#plans" className={V2_BUTTON_OUTLINE_SM}>
+        View plan
+      </Link>
+    );
 
   return (
-    <Panel className="px-4 py-4 sm:px-6">
-      <ol className="flex items-center">
-        {steps.map((step, index) => {
-          const current = index === currentIndex;
-          return (
-            <li key={step.key} className={cn('flex items-center', index < steps.length - 1 && 'flex-1')}>
-              <span className="flex flex-col items-center gap-1.5 sm:flex-row sm:gap-2.5">
-                <span
-                  className={cn(
-                    'grid size-7 shrink-0 place-items-center rounded-full text-[12px] font-semibold tabular-nums',
-                    step.done
-                      ? 'bg-pv-primary text-white'
-                      : current
-                        ? 'bg-pv-card text-pv-primary ring-2 ring-pv-primary'
-                        : 'bg-pv-muted text-pv-muted-fg',
-                  )}
-                >
-                  {step.done ? <Check aria-hidden className="size-4" /> : index + 1}
-                </span>
-                <span
-                  className={cn(
-                    'whitespace-nowrap text-[12px] sm:text-[13px]',
-                    step.done || current ? 'font-semibold text-pv-fg' : 'font-medium text-pv-muted-fg',
-                  )}
-                >
-                  {step.label}
-                  <span className="sr-only">{step.done ? ' (done)' : current ? ' (next)' : ''}</span>
-                </span>
-              </span>
-              {index < steps.length - 1 ? (
-                <span
-                  aria-hidden
-                  className={cn(
-                    'mx-2 mb-5 h-0.5 flex-1 rounded-full sm:mx-4 sm:mb-0',
-                    step.done && steps[index + 1].done ? 'bg-pv-primary' : 'bg-pv-border',
-                  )}
-                />
-              ) : null}
-            </li>
-          );
-        })}
-      </ol>
-    </Panel>
+    <StatusLine tone={money.overdue ? 'danger' : 'warning'} action={action}>
+      {text}
+    </StatusLine>
   );
 }
 
@@ -262,33 +257,25 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
     <>
       {/* ── Anything the customer must know before the detail ────────────── */}
       {rental.lifecycle === 'cancelled' ? (
-        <Notice tone="danger" title="This rental was cancelled">
-          {rental.cancellationReason
-            ? `Reason recorded: ${rental.cancellationReason}.`
-            : 'If you did not expect this, contact us and we will look into it.'}
-        </Notice>
+        <StatusLine tone="danger">
+          This rental was cancelled
+          {rental.cancellationReason ? `: ${rental.cancellationReason}` : '. If you did not expect this, contact us.'}
+        </StatusLine>
       ) : rental.cancellationRequested ? (
-        <Notice tone="warning" title="Cancellation requested">
-          We have your request and are processing it. The rental stays active until we confirm.
-        </Notice>
-      ) : rental.paymentState === 'unpaid' ? (
-        <Notice tone="warning" title="Payment outstanding">
-          {formatCurrency(rental.breakdown.total)} has not been settled yet. Your reservation is not
-          confirmed until it clears — contact us if you have already paid.
-        </Notice>
-      ) : null}
-
-      {rental.lifecycle !== 'cancelled' ? <StageRail rental={rental} /> : null}
+        <StatusLine tone="warning">Cancellation requested. The rental stays active until we confirm it.</StatusLine>
+      ) : (
+        <MoneyLine rental={rental} />
+      )}
 
       <DocumentsPanel rental={rental} />
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-        {/* ── Left column: the record ───────────────────────────────────── */}
-        <div className="flex flex-col gap-5">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+        {/* ── Left column: the record, ending where its content ends ────── */}
+        <div className="flex flex-col gap-4">
           {/* Vehicle */}
           <Panel className="overflow-hidden">
-            <div className="flex flex-col gap-5 p-4 sm:flex-row sm:items-center sm:p-5">
-              <span className="grid aspect-[16/10] w-full shrink-0 place-items-center overflow-hidden rounded-xl bg-pv-tint sm:w-52">
+            <div className="flex flex-col gap-4 p-3.5 sm:flex-row sm:items-center sm:p-4">
+              <span className="grid aspect-[16/10] w-full shrink-0 place-items-center overflow-hidden rounded-xl bg-pv-tint sm:w-44">
                 {rental.vehicle?.imageUrl ? (
                   <img
                     src={rental.vehicle.imageUrl}
@@ -301,9 +288,9 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
                   <CarFront aria-hidden strokeWidth={1.5} className="size-8 text-pv-primary" />
                 )}
               </span>
-              <div className="flex min-w-0 flex-1 flex-col gap-3">
+              <div className="flex min-w-0 flex-1 flex-col gap-2.5">
                 <div>
-                  <p className="text-[18px] font-semibold tracking-[-0.01em] text-pv-fg">{vehicleName}</p>
+                  <p className="text-[17px] font-semibold tracking-[-0.01em] text-pv-fg">{vehicleName}</p>
                   {rental.vehicle?.registration ? (
                     <p className="mt-0.5 text-[13px] text-pv-muted-fg">{rental.vehicle.registration}</p>
                   ) : null}
@@ -437,7 +424,7 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
         </div>
 
         {/* ── Right column: the money ───────────────────────────────────── */}
-        <div className="flex flex-col gap-5 lg:sticky lg:top-2">
+        <div className="flex flex-col gap-4">
           <Panel>
             <PanelHeader title="Price breakdown" />
             <div className="px-4 py-1.5 sm:px-5">
@@ -482,25 +469,19 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
             </div>
           </Panel>
 
-          <Panel>
-            <PanelHeader title="Payment" />
-            <dl className="divide-y divide-pv-border px-4 sm:px-5">
-              <SideRow label="Status" value={<PaymentStatusChip state={rental.paymentState} />} />
-              <SideRow label="Invoice" value={rental.breakdown.invoiceNumber} />
-              <SideRow label="Issued" value={formatDate(rental.breakdown.invoiceDate)} />
-              <SideRow label="Due" value={formatDate(rental.breakdown.dueDate)} />
-              <SideRow label="Promo code" value={rental.promoCode} />
-            </dl>
-            <div className="border-t border-pv-border px-4 py-3.5 sm:px-5">
-              <p className="flex items-start gap-2 text-[12px] leading-relaxed text-pv-muted-fg">
-                <Receipt aria-hidden strokeWidth={1.75} className="mt-px size-3.5 shrink-0" />
-                <span>
-                  Receipts and saved payment methods are moving into this portal shortly. In the meantime, email us
-                  for a copy of any invoice.
-                </span>
-              </p>
-            </div>
-          </Panel>
+          {/* Status lives in the header chip or the line above, so it is not
+              repeated here; the old note about receipts moving in is gone. */}
+          {rental.breakdown.invoiceNumber || rental.breakdown.invoiceDate || rental.breakdown.dueDate || rental.promoCode ? (
+            <Panel>
+              <PanelHeader title="Payment" />
+              <dl className="divide-y divide-pv-border px-4 sm:px-5">
+                <SideRow label="Invoice" value={rental.breakdown.invoiceNumber} />
+                <SideRow label="Issued" value={formatDate(rental.breakdown.invoiceDate)} />
+                <SideRow label="Due" value={formatDate(rental.breakdown.dueDate)} />
+                <SideRow label="Promo code" value={rental.promoCode} />
+              </dl>
+            </Panel>
+          ) : null}
 
           <Button asChild variant="brand-outline" className="h-11 w-full">
             <Link href="/booking">Book another car</Link>
@@ -715,45 +696,12 @@ function DocumentsPanel({ rental }: { rental: CustomerRentalDetail }) {
   );
 }
 
-/* ──────────────────────────────── notices ──────────────────────────────── */
-
-function Notice({
-  tone,
-  title,
-  children,
-}: {
-  tone: 'warning' | 'danger';
-  title: string;
-  children: React.ReactNode;
-}) {
-  const Icon = tone === 'danger' ? CircleAlert : CalendarDays;
-  return (
-    <div
-      className={cn(
-        'flex items-start gap-3.5 rounded-2xl border px-4 py-4 sm:px-5',
-        tone === 'danger' ? 'border-pv-danger/25 bg-pv-danger-light' : 'border-pv-warning/30 bg-pv-warning-light',
-      )}
-    >
-      <Icon
-        aria-hidden
-        strokeWidth={1.75}
-        className={cn('mt-0.5 size-5 shrink-0', tone === 'danger' ? 'text-pv-danger' : 'text-pv-warning')}
-      />
-      <div className="min-w-0">
-        <p className="text-[15px] font-semibold text-pv-fg">{title}</p>
-        <p className="mt-0.5 text-[14px] leading-relaxed text-pv-fg/75">{children}</p>
-      </div>
-    </div>
-  );
-}
-
 /* ─────────────────────────────── skeleton ──────────────────────────────── */
 
 function DetailSkeleton() {
   return (
     <div className="flex flex-col gap-5" aria-hidden>
-      <Skeleton className="h-[60px] w-full rounded-2xl bg-pv-tint" />
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
         <div className="flex flex-col gap-5">
           <Skeleton className="h-44 w-full rounded-2xl bg-pv-tint" />
           <Skeleton className="h-64 w-full rounded-2xl bg-pv-tint" />

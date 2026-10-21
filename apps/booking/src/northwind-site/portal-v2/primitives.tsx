@@ -7,7 +7,7 @@
  */
 
 import Link from 'next/link';
-import type { LucideIcon } from 'lucide-react-nw';
+import { CircleCheck, Clock, Info, TriangleAlert, type LucideIcon } from 'lucide-react-nw';
 
 import { Button } from '@nw/components/ui/button';
 import { V2_BUTTON_DEFAULT, V2_BUTTON_OUTLINE } from '@portal-v2-shared/button-styles';
@@ -56,8 +56,12 @@ export function PageHeader({
 }
 
 /** The standard card surface. */
-export function Panel({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <section className={cn('rounded-2xl border border-pv-border bg-pv-card', className)}>{children}</section>;
+export function Panel({ children, className, id }: { children: React.ReactNode; className?: string; id?: string }) {
+  return (
+    <section id={id} className={cn('rounded-2xl border border-pv-border bg-pv-card', className)}>
+      {children}
+    </section>
+  );
 }
 
 export function PanelHeader({
@@ -84,6 +88,59 @@ export function PanelHeader({
         {description ? <p className="mt-0.5 text-xs text-pv-muted-fg">{description}</p> : null}
       </div>
       {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
+    </div>
+  );
+}
+
+/**
+ * One line saying where the money stands, and the one thing to do about it
+ * (owner, Oct 22 2026: "one line, one colour", in place of the banner blocks).
+ * The tone colours the icon and the words; the action is the only accent.
+ * Finances and the rental page draw the same line.
+ */
+export function StatusLine({
+  tone,
+  children,
+  action,
+  className,
+}: {
+  tone: 'danger' | 'warning' | 'success' | 'neutral';
+  children: React.ReactNode;
+  action?: React.ReactNode;
+  className?: string;
+}) {
+  const Icon = tone === 'danger' ? TriangleAlert : tone === 'warning' ? Clock : tone === 'success' ? CircleCheck : Info;
+  return (
+    <div
+      role="status"
+      className={cn(
+        'flex min-h-12 flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-pv-border bg-pv-card px-4 py-2',
+        className,
+      )}
+    >
+      <Icon
+        aria-hidden
+        strokeWidth={1.75}
+        className={cn(
+          'size-4 shrink-0',
+          tone === 'danger' && 'text-pv-danger',
+          tone === 'warning' && 'text-pv-warning',
+          tone === 'success' && 'text-pv-success',
+          tone === 'neutral' && 'text-pv-muted-fg',
+        )}
+      />
+      <p
+        className={cn(
+          'min-w-0 flex-1 text-[14px] font-medium',
+          tone === 'danger' && 'text-pv-danger',
+          tone === 'warning' && 'text-pv-warning',
+          tone === 'success' && 'text-pv-success',
+          tone === 'neutral' && 'text-pv-fg',
+        )}
+      >
+        {children}
+      </p>
+      {action ? <div className="flex shrink-0 items-center">{action}</div> : null}
     </div>
   );
 }
@@ -117,7 +174,7 @@ export function StatTile({
   icon: Icon,
 }: {
   label: string;
-  value: string | number;
+  value: React.ReactNode;
   caption?: string;
   icon?: LucideIcon;
 }) {

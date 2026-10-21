@@ -1,82 +1,70 @@
 'use client';
 
 /**
- * Customer portal v2 — Home. Laid out like the operator portal v2 dashboard
- * (components/dashboard-v2): a page header, a top row of three cards on one
- * brand ramp — the lead booking on the full gradient, what needs the customer
- * on a lighter print of it, where they stand on the flat accent tint, exactly
- * the three strengths `card-surface.tsx` uses — then recent rentals in the
- * same table as the Rentals page.
+ * Customer portal v2 — Home (owner, Oct 22 2026: "density over decoration").
+ * Top to bottom:
  *
- * Everything comes from the single `useCustomerRentals` fetch (scoped by
- * `customer_id` AND `tenant_id` inside the hook), so a number here can never
- * disagree with the bookings list.
+ *   1. One greeting line: "Hi, Ghulam" and the date.
+ *   2. The action strip — one line per thing waiting on the customer (a
+ *      payment, a late instalment, ID verification): what it is, the amount or
+ *      deadline, the car, the action. Nothing waiting, no strip at all.
+ *   3. The current rental, as one card sized to its content; or, with nothing
+ *      on rent, a single "No active rental · Book a car" line.
+ *   4. Recent rentals, in the Rentals page's table.
+ *
+ * The three gradient cards and "Where you stand" (a count and a bar that said
+ * nothing) are gone.
+ *
+ * `rentals.payment_status` is NOT read for the strip: it goes stale (the
+ * canary's Malibu says 'pending' with every ledger charge settled), so a
+ * booking counts as owing only when the ledger says so.
+ *
+ * Money comes from `useCustomerPayments` — the ledger Finances reads — so the
+ * amount here is the amount there. The strip used to quote the rental's base
+ * price, which disagreed with Finances whenever there were fees and tax.
  */
 
 import Link from 'next/link';
-import { ArrowRight, ArrowUpRight, CalendarDays, Check, ChevronRight, CreditCard, MapPin, ShieldCheck } from 'lucide-react-nw';
+import { ArrowRight, CalendarClock, CreditCard, ShieldCheck, type LucideIcon } from 'lucide-react-nw';
 
-import { relativeDayLabel } from '@nw/components/portal/format';
+import { formatClockLabel, normalizeClock } from '@nw/components/booking/time-utils';
+import { formatDate } from '@nw/components/portal/format';
 import { Skeleton } from '@nw/components/ui/skeleton';
 import { useCustomer } from '@nw/hooks/use-customer';
+import { useCustomerPayments } from '@nw/hooks/use-customer-payments';
 import { useCustomerRentals, type CustomerRental } from '@nw/hooks/use-customer-rentals';
 import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
+import { parseDateOnly } from '@nw/lib/domain/date-utils';
 import { cn } from '@nw/lib/utils';
 import { CustomerRentalsTable, CustomerRentalsTableSkeleton } from '@nw/portal-v2/rentals/rentals-table';
 import { formatBookingDates } from '@nw/portal-v2/rentals/format';
-import { LoadError, PageHeader, Panel } from '@nw/portal-v2/primitives';
+import { LoadError, Panel } from '@nw/portal-v2/primitives';
 import { QuickBookTrigger } from '@nw/site-v2/quick-book/quick-book-dialog';
-
-/* ─────────────────────────────── pieces ────────────────────────────────── */
-
-/** A top-row card: the Panel frame (radius, padding rhythm) with the paint behind it. */
-const TOP_CARD = 'relative isolate flex min-h-[180px] flex-col overflow-hidden p-5 lg:min-h-[236px]';
-
-/** The card label, as the operator dashboard sets it: 12px, uppercase, wide. */
-const CARD_LABEL = 'text-xs font-semibold uppercase tracking-wider';
+import { V2_BUTTON_DEFAULT_SM, V2_BUTTON_OUTLINE_SM } from '@portal-v2-shared/button-styles';
 
 /** Hover = fade only, 200ms, ease-out on / ease-in off (V2_PLAN §12). */
 const HOVER_FADE = 'transition-colors duration-200 ease-in hover:ease-out motion-reduce:transition-none';
-
-type Surface = 'lead' | 'needs-you' | 'where-you-stand';
-
-/**
- * `card-surface.tsx`'s three strengths, on the `--pv-*` set: the full gradient,
- * the gradient at 0.88 under 20% white, and a flat accent at 0.45 under 34%
- * white. Two layers at `-z-10`, so the host needs `relative isolate`.
- */
-function CardSurface({ surface }: { surface: Surface }) {
-  if (surface === 'where-you-stand') {
-    return (
-      <>
-        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-pv-primary opacity-45" />
-        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-white opacity-[0.34]" />
-      </>
-    );
-  }
-  return (
-    <>
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 bg-linear-to-br from-pv-chart-3 via-pv-primary to-pv-chart-5"
-        style={{ opacity: surface === 'lead' ? 1 : 0.88 }}
-      />
-      {surface === 'needs-you' ? (
-        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-white opacity-20" />
-      ) : null}
-    </>
-  );
-}
-
-function bookingHref(rental: CustomerRental): string {
-  return `/portal/rentals/${rental.id}`;
-}
 
 function useFirstName(): string | null {
   const { displayName } = useCustomer();
   if (!displayName) return null;
   const first = displayName.split(/\s+/)[0];
   return first && first.length > 1 ? first : displayName;
+}
+
+/** Whole days from today to a DATE-only string; negative once it has passed. */
+function daysUntil(iso: string | null): number | null {
+  if (!iso) return null;
+  const target = parseDateOnly(iso);
+  const now = new Date();
+  const a = Date.UTC(target.getFullYear(), target.getMonth(), target.getDate());
+  const b = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((a - b) / 86_400_000);
+}
+
+function clock(raw: string | null): string | null {
+  const normalized = normalizeClock(raw);
+  return normalized ? formatClockLabel(normalized) : null;
 }
 
 /* ──────────────────────────────── page ─────────────────────────────────── */
@@ -86,16 +74,17 @@ export function PortalV2Overview() {
   const firstName = useFirstName();
   const today = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
 
-  const lead = summary.current ?? summary.next;
-  const recent = rentals.filter((rental) => rental.id !== lead?.id).slice(0, 5);
+  const current = summary.current;
+  const recent = rentals.filter((rental) => rental.id !== current?.id).slice(0, 5);
 
   return (
-    <div className="flex flex-col gap-8">
-      <PageHeader
-        eyebrow={today}
-        title={firstName ? `Hi, ${firstName}` : 'Welcome back'}
-        description="Your next rental, anything we need from you, and your recent rentals."
-      />
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h1 className="font-heading text-2xl font-bold tracking-normal text-pv-fg sm:text-3xl">
+          {firstName ? `Hi, ${firstName}` : 'Welcome back'}
+        </h1>
+        <p className="text-sm text-pv-muted-fg">{today}</p>
+      </div>
 
       {isError ? (
         <LoadError
@@ -107,27 +96,18 @@ export function PortalV2Overview() {
         />
       ) : null}
 
-      <section aria-label="At a glance" className="grid gap-5 lg:grid-cols-3">
-        {isLoading ? (
-          <>
-            <Skeleton className="h-[236px] rounded-2xl bg-pv-tint" />
-            <Skeleton className="h-[236px] rounded-2xl bg-pv-tint" />
-            <Skeleton className="h-[236px] rounded-2xl bg-pv-tint" />
-          </>
-        ) : (
-          <>
-            <LeadCard lead={lead} isOnRent={!!summary.current} hasAny={rentals.length > 0} />
-            <NeedsYouCard awaitingPayment={summary.awaitingPayment} />
-            <WhereYouStandCard
-              onRent={summary.onRent}
-              upcoming={summary.upcoming}
-              completed={summary.past}
-              total={summary.total}
-              cancelled={summary.cancelled}
-            />
-          </>
-        )}
-      </section>
+      <ActionStrip />
+
+      {isLoading ? (
+        <Skeleton className="h-[104px] w-full rounded-2xl bg-pv-tint sm:w-[640px]" />
+      ) : current ? (
+        <CurrentRentalCard rental={current} />
+      ) : (
+        <Panel className="flex w-full flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:w-fit">
+          <p className="text-[14px] text-pv-muted-fg">No active rental</p>
+          <QuickBookTrigger className={V2_BUTTON_DEFAULT_SM}>Book a car</QuickBookTrigger>
+        </Panel>
+      )}
 
       {isLoading ? (
         <section className="flex flex-col gap-3">
@@ -136,8 +116,8 @@ export function PortalV2Overview() {
         </section>
       ) : recent.length > 0 ? (
         <section aria-labelledby="recent-rentals" className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3 px-1">
-            <h2 id="recent-rentals" className="text-[18px] font-semibold tracking-[-0.01em] text-pv-fg">
+          <div className="flex items-center justify-between gap-3">
+            <h2 id="recent-rentals" className="text-[17px] font-semibold tracking-[-0.01em] text-pv-fg">
               Recent rentals
             </h2>
             <Link
@@ -158,208 +138,157 @@ export function PortalV2Overview() {
   );
 }
 
-/* ──────────────────────────────── cards ────────────────────────────────── */
+/* ───────────────────────────── action strip ────────────────────────────── */
 
-const WHITE_BUTTON = cn(
-  'inline-flex h-10 items-center gap-1.5 rounded-full bg-white px-4 text-[13px] font-semibold text-pv-primary hover:bg-white/85',
-  HOVER_FADE,
-);
-
-function LeadCard({ lead, isOnRent, hasAny }: { lead: CustomerRental | null; isOnRent: boolean; hasAny: boolean }) {
-  // "Due back in 11 days" while on rent, "Starts tomorrow" before; nothing
-  // when the date is far enough out that a countdown stops being useful.
-  const countdown = lead ? relativeDayLabel(isOnRent ? lead.endDate : lead.startDate) : null;
-  const countdownLabel = countdown ? (isOnRent ? `Due back ${countdown}` : `Starts ${countdown}`) : null;
-
-  return (
-    <Panel className={cn(TOP_CARD, 'border-transparent bg-transparent text-white')}>
-      <CardSurface surface="lead" />
-      <p className={cn(CARD_LABEL, 'text-white/70')}>{isOnRent ? 'On rent now' : 'Your next rental'}</p>
-
-      {lead ? (
-        <>
-          <h3 className="mt-2 text-[22px] font-bold leading-tight tracking-[-0.02em]">
-            {lead.vehicle?.displayName ?? 'Your vehicle'}
-          </h3>
-          <div className="mt-3 flex flex-col gap-1.5 text-[13px] text-white/85">
-            <span className="flex items-center gap-2">
-              <CalendarDays aria-hidden className="size-4 shrink-0" />
-              {formatBookingDates(lead.startDate, lead.endDate)}
-            </span>
-            {lead.deliveryAddress ?? lead.pickupLocation ? (
-              <span className="flex items-center gap-2">
-                <MapPin aria-hidden className="size-4 shrink-0" />
-                <span className="truncate">{lead.deliveryAddress ?? lead.pickupLocation}</span>
-              </span>
-            ) : null}
-          </div>
-          <div className="mt-auto flex items-end justify-between gap-3 pt-5">
-            <span className="min-w-0">
-              {countdownLabel ? (
-                <span className="block text-[13px] font-semibold">{countdownLabel}</span>
-              ) : null}
-              <span className="block text-[12px] text-white/70">{lead.reference}</span>
-            </span>
-            <Link href={bookingHref(lead)} className={WHITE_BUTTON}>
-              View rental
-              <ArrowUpRight aria-hidden className="size-4" />
-            </Link>
-          </div>
-        </>
-      ) : (
-        <>
-          <h3 className="mt-2 text-[22px] font-bold leading-tight tracking-[-0.02em]">
-            {hasAny ? 'Nothing coming up' : 'No rentals yet'}
-          </h3>
-          <p className="mt-2 text-[13px] leading-relaxed text-white/85">
-            {hasAny
-              ? 'Your past rentals are still under Rentals.'
-              : 'When you book a car it shows here, with your dates and pickup.'}
-          </p>
-          <div className="mt-auto pt-5">
-            <QuickBookTrigger className={WHITE_BUTTON}>
-              Book a car
-              <ArrowUpRight aria-hidden className="size-4" />
-            </QuickBookTrigger>
-          </div>
-        </>
-      )}
-    </Panel>
-  );
+interface ActionItem {
+  key: string;
+  icon: LucideIcon;
+  tone: 'danger' | 'warning' | 'neutral';
+  what: string;
+  /** The amount or the deadline. */
+  figure: string | null;
+  /** The car it is for, or a short reason. */
+  about: string | null;
+  action: { label: string; href: string; primary?: boolean };
 }
 
-function NeedsYouCard({ awaitingPayment }: { awaitingPayment: CustomerRental[] }) {
-  const { isIdentityVerified } = useCustomer();
+function useActionItems(): { items: ActionItem[]; isLoading: boolean } {
   const { formatCurrency } = useTenantBranding();
+  const { isIdentityVerified, isLoading: customerLoading } = useCustomer();
+  const { payableBalances, activePlans, isLoading } = useCustomerPayments();
 
-  const tasks: Array<{ key: string; href: string; icon: typeof CreditCard; label: string; hint: string }> = [];
-  for (const rental of awaitingPayment.slice(0, 2)) {
-    tasks.push({
-      key: `pay-${rental.id}`,
-      href: bookingHref(rental),
+  const items: ActionItem[] = [];
+
+  // Balances that can be paid by card from Finances.
+  for (const row of payableBalances) {
+    if (row.blockedReason !== null) continue;
+    items.push({
+      key: `pay-${row.rentalId}`,
       icon: CreditCard,
-      label: `Pay for ${rental.reference}`,
-      hint: `${formatCurrency(rental.total)} · ${rental.vehicle?.displayName ?? 'Rental'}`,
+      tone: row.isOverdue ? 'danger' : 'warning',
+      what: row.isOverdue ? 'Payment overdue' : 'Payment due',
+      figure: formatCurrency(row.amount),
+      about: row.rental?.vehicle?.displayName ?? row.rental?.reference ?? null,
+      action: { label: 'Pay now', href: '/portal/payments#pay', primary: true },
     });
   }
-  if (!isIdentityVerified) {
-    tasks.push({
+
+  // A plan collects its own instalments; it needs the customer only when one is late.
+  for (const plan of activePlans) {
+    const late = plan.installments.find((i) => i.state === 'overdue' || i.state === 'failed');
+    if (!late) continue;
+    items.push({
+      key: `plan-${plan.id}`,
+      icon: CalendarClock,
+      tone: 'danger',
+      what: late.state === 'failed' ? 'Instalment failed' : 'Instalment overdue',
+      figure: formatCurrency(late.amount),
+      about: plan.rental?.vehicle?.displayName ?? plan.rental?.reference ?? null,
+      action: { label: 'View plan', href: '/portal/payments#plans' },
+    });
+  }
+
+  if (!customerLoading && !isIdentityVerified) {
+    items.push({
       key: 'verify',
-      href: '/portal/verification',
       icon: ShieldCheck,
-      label: 'Verify your ID',
-      hint: 'Needed before pickup',
+      tone: 'neutral',
+      what: 'Verify your ID',
+      figure: 'Before pickup',
+      about: 'Driving licence or ID card',
+      action: { label: 'Verify', href: '/portal/settings?section=verification', primary: true },
     });
   }
+
+  return { items, isLoading };
+}
+
+function ActionStrip() {
+  const { items, isLoading } = useActionItems();
+  if (isLoading || items.length === 0) return null;
 
   return (
-    <Panel className={cn(TOP_CARD, 'border-transparent bg-transparent text-white')}>
-      <CardSurface surface="needs-you" />
-      <p className={cn(CARD_LABEL, 'flex items-center justify-between gap-2 text-white/70')}>
-        Needs you
-        {tasks.length > 0 ? <span className="tabular-nums">{tasks.length}</span> : null}
-      </p>
-
-      {tasks.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-1.5 py-4 text-center">
-          <span className="grid size-10 place-items-center rounded-full bg-white/80 text-pv-success">
-            <Check aria-hidden className="size-5" />
-          </span>
-          <p className="mt-1 text-[15px] font-semibold">You&apos;re all set</p>
-          <p className="text-[13px] text-white/75">Nothing to pay and nothing to sign right now.</p>
-        </div>
-      ) : (
-        <ul className="-mx-2 mt-2 flex flex-1 flex-col justify-center gap-0.5">
-          {tasks.map((task) => (
-            <li key={task.key}>
-              <Link
-                href={task.href}
-                className={cn('group flex items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-white/15', HOVER_FADE)}
+    <Panel className="overflow-hidden">
+      <ul aria-label="Needs you" className="divide-y divide-pv-border">
+        {items.map((item) => (
+          <li key={item.key} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 sm:px-5">
+            <item.icon
+              aria-hidden
+              strokeWidth={1.75}
+              className={cn(
+                'size-4 shrink-0',
+                item.tone === 'danger' && 'text-pv-danger',
+                item.tone === 'warning' && 'text-pv-warning',
+                item.tone === 'neutral' && 'text-pv-muted-fg',
+              )}
+            />
+            <p className="min-w-0 flex-1 text-[14px] sm:truncate">
+              <span
+                className={cn(
+                  'font-semibold',
+                  item.tone === 'danger' ? 'text-pv-danger' : item.tone === 'warning' ? 'text-pv-warning' : 'text-pv-fg',
+                )}
               >
-                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white/20">
-                  <task.icon aria-hidden className="size-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] font-semibold">{task.label}</span>
-                  <span className="block truncate text-[12px] text-white/75">{task.hint}</span>
-                </span>
-                <ChevronRight
-                  aria-hidden
-                  className="size-4 shrink-0 text-white/50 transition-colors duration-200 ease-in group-hover:text-white group-hover:ease-out motion-reduce:transition-none"
-                />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+                {item.what}
+              </span>
+              {item.figure ? <span className="font-semibold tabular-nums text-pv-fg"> · {item.figure}</span> : null}
+              {item.about ? <span className="text-pv-muted-fg"> · {item.about}</span> : null}
+            </p>
+            <Link href={item.action.href} className={item.action.primary ? V2_BUTTON_DEFAULT_SM : V2_BUTTON_OUTLINE_SM}>
+              {item.action.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
     </Panel>
   );
 }
 
-function WhereYouStandCard({
-  onRent,
-  upcoming,
-  completed,
-  total,
-  cancelled,
-}: {
-  onRent: number;
-  upcoming: number;
-  completed: number;
-  total: number;
-  cancelled: number;
-}) {
-  // The bar is the operator card's fleet bar: one segment per state that has
-  // any bookings, sized by its share, on a faint track when there are none.
-  const segments = [
-    { key: 'on-rent', label: 'On rent', value: onRent, bar: 'bg-pv-primary', dot: 'bg-pv-primary' },
-    { key: 'upcoming', label: 'Upcoming', value: upcoming, bar: 'bg-pv-primary/45', dot: 'bg-pv-primary/45' },
-    { key: 'completed', label: 'Completed', value: completed, bar: 'bg-pv-fg/20', dot: 'bg-pv-fg/25' },
-  ];
-  const counted = onRent + upcoming + completed;
+/* ──────────────────────────── current rental ───────────────────────────── */
+
+function Fact({ label, value }: { label: string; value: React.ReactNode }) {
+  if (value === null || value === undefined || value === '') return null;
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs text-pv-muted-fg">{label}</dt>
+      <dd className="mt-0.5 whitespace-nowrap text-[14px] font-medium tabular-nums text-pv-fg">{value}</dd>
+    </div>
+  );
+}
+
+function CurrentRentalCard({ rental }: { rental: CustomerRental }) {
+  const left = daysUntil(rental.endDate);
+  const remaining =
+    left === null
+      ? null
+      : left > 1
+        ? `${left} days`
+        : left === 1
+          ? '1 day'
+          : left === 0
+            ? 'Due back today'
+            : `Overdue since ${formatDate(rental.endDate)}`;
 
   return (
-    <Panel className={cn(TOP_CARD, 'border-transparent bg-transparent')}>
-      <CardSurface surface="where-you-stand" />
-      <p className={cn(CARD_LABEL, 'text-pv-muted-on-tint')}>Where you stand</p>
-
-      <Link
-        href="/portal/rentals"
-        className={cn('group -mx-2 my-auto flex flex-col gap-3 rounded-xl px-2 py-2 hover:bg-white/40', HOVER_FADE)}
-      >
-        <span className="flex items-baseline gap-2">
-          <span className="text-[34px] font-semibold leading-none tabular-nums text-pv-fg">{total}</span>
-          <span className="text-[13px] text-pv-muted-on-tint">
-            {total === 1 ? 'rental' : 'rentals'} in total{cancelled > 0 ? ` · ${cancelled} cancelled` : ''}
-          </span>
-          <ArrowUpRight
-            aria-hidden
-            className="ml-auto size-4 shrink-0 self-center text-transparent transition-colors duration-200 ease-in group-hover:text-pv-muted-on-tint group-hover:ease-out motion-reduce:transition-none"
-          />
-        </span>
-
-        <span className="flex h-2 gap-0.5 overflow-hidden rounded-full">
-          {counted === 0 ? (
-            <span className="flex-1 rounded-full bg-pv-fg/10" />
-          ) : (
-            segments
-              .filter((segment) => segment.value > 0)
-              .map((segment) => (
-                <span key={segment.key} className={cn('rounded-full', segment.bar)} style={{ flexGrow: segment.value }} />
-              ))
-          )}
-        </span>
-
-        <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]">
-          {segments.map((segment) => (
-            <span key={segment.key} className="flex items-center gap-1.5">
-              <span className={cn('size-1.5 rounded-full', segment.dot)} />
-              <span className="font-semibold tabular-nums text-pv-fg">{segment.value}</span>
-              <span className="text-pv-muted-on-tint">{segment.label}</span>
-            </span>
-          ))}
-        </span>
-      </Link>
+    <Panel className="w-full sm:w-fit">
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-4 p-4 sm:px-5">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wider text-pv-muted-fg">On rent now</p>
+          <p className="mt-1 text-[17px] font-semibold tracking-[-0.01em] text-pv-fg">
+            {rental.vehicle?.displayName ?? 'Your vehicle'}
+          </p>
+          <p className="text-[13px] text-pv-muted-fg">{rental.reference}</p>
+        </div>
+        <dl className="flex flex-wrap gap-x-8 gap-y-3">
+          <Fact label="Dates" value={formatBookingDates(rental.startDate, rental.endDate)} />
+          <Fact label="Days left" value={remaining} />
+          <Fact label="Pick up" value={clock(rental.pickupTime)} />
+          <Fact label="Return" value={clock(rental.returnTime)} />
+        </dl>
+        <Link href={`/portal/rentals/${rental.id}`} className={V2_BUTTON_DEFAULT_SM}>
+          View rental
+        </Link>
+      </div>
     </Panel>
   );
 }

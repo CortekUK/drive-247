@@ -1,7 +1,14 @@
 'use client';
 
 /**
- * Payments — what the customer owes, what they have paid, and every invoice.
+ * Finances — what the customer owes, what they have paid, and every invoice.
+ *
+ * ── THE LAYOUT (owner, Oct 22 2026) ─────────────────────────────────────────
+ * The overdue figure used to appear six times. Now, top to bottom: one status
+ * line (the amount, whether it is late, the one action); two figures,
+ * Outstanding and Paid to date; Pay rows only for bookings that can be paid
+ * here; the balance as a tight table; one card per instalment plan with its
+ * overdue instalment named inside it; then Invoices / Payments.
  *
  * ── ONE BALANCE, ONE SOURCE ─────────────────────────────────────────────────
  * The headline figure comes from `ledger_entries` and nothing else. The invoice
@@ -39,35 +46,22 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import {
-  ArrowRight,
-  Banknote,
-  CalendarClock,
-  CircleCheck,
-  FileText,
-  Receipt,
-  TriangleAlert,
-  Wallet,
-} from 'lucide-react-nw';
+import { Banknote, CircleCheck, FileText, Receipt, Wallet } from 'lucide-react-nw';
 
 import { formatDate, relativeDayLabel } from '@nw/components/portal/format';
-import {
-  EmptyState,
-  LoadError,
-  PageHeader,
-  Panel,
-  PanelHeader,
-  StatTile,
-} from '@nw/portal-v2/primitives';
+import { EmptyState, LoadError, PageHeader, Panel, StatTile, StatusLine } from '@nw/portal-v2/primitives';
 import { Skeleton } from '@nw/components/ui/skeleton';
 import {
   useCustomerPayments,
   type CustomerBalance,
+  type CustomerInstallmentPlan,
   type CustomerInvoice,
   type CustomerPayment,
+  type PayableBalance,
 } from '@nw/hooks/use-customer-payments';
 import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { cn } from '@nw/lib/utils';
+import { V2_BUTTON_DEFAULT_SM, V2_BUTTON_OUTLINE_SM } from '@portal-v2-shared/button-styles';
 
 import { InstalmentPlans } from './_components/instalment-plans';
 import { InvoiceDialog } from './_components/invoice-dialog';
@@ -89,34 +83,23 @@ import { PayBalances } from './_components/pay-balances';
 type Tab = 'invoices' | 'payments';
 
 export default function PortalPaymentsPage() {
-  const {
-    balance,
-    payableBalances,
-    invoices,
-    payments,
-    activePlans,
-    nextInstallment,
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useCustomerPayments();
+  const { balance, payableBalances, invoices, payments, activePlans, isLoading, isError, error, refetch } =
+    useCustomerPayments();
+  const { formatCurrency } = useTenantBranding();
 
   const [tab, setTab] = useState<Tab>('invoices');
   const [openInvoice, setOpenInvoice] = useState<CustomerInvoice | null>(null);
 
-  const hasAnything =
-    invoices.length > 0 ||
-    payments.length > 0 ||
-    activePlans.length > 0 ||
-    balance.outstanding > 0;
+  // A booking on an instalment plan is collected by the plan, so it gets no Pay
+  // button: its plan card says so once, rather than a pay row that shows an
+  // amount and then says there is nothing to pay (owner, Oct 22 2026).
+  const payableNow = useMemo(() => payableBalances.filter((row) => row.blockedReason === null), [payableBalances]);
+
+  const hasAnything = invoices.length > 0 || payments.length > 0 || activePlans.length > 0 || balance.outstanding > 0;
 
   return (
-    <div className="flex flex-col gap-8">
-      <PageHeader
-        title="Payments"
-        description="What you owe, what you have paid, and every invoice for your bookings."
-      />
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Finances" />
 
       {isError ? (
         <LoadError
@@ -141,20 +124,25 @@ export default function PortalPaymentsPage() {
         </Panel>
       ) : (
         <>
-          <div className="flex flex-col gap-4">
-            {balance.overdue > 0 ? <OverdueBanner amount={balance.overdue} /> : null}
-            <BalanceTiles balance={balance} />
+          <BalanceStatus balance={balance} payableNow={payableNow} plans={activePlans} />
+
+          {/* Two figures only: "Next due" said the same as Outstanding whenever
+              anything was late. */}
+          <div className="grid grid-cols-2 gap-3 sm:w-fit sm:grid-cols-[repeat(2,minmax(13rem,auto))]">
+            <StatTile icon={Wallet} label="Outstanding" value={formatCurrency(balance.outstanding)} />
+            <StatTile
+              icon={CircleCheck}
+              label="Paid to date"
+              value={formatCurrency(balance.paidToDate)}
+              caption="After refunds"
+            />
           </div>
 
-          <PayBalances
-            payable={payableBalances}
-            unpayable={balance.unpayable}
-            refetch={refetch}
-          />
+          <PayBalances payable={payableNow} unpayable={balance.unpayable} refetch={refetch} />
 
           <BalanceBreakdown balance={balance} />
 
-          <InstalmentPlans plans={activePlans} next={nextInstallment} />
+          <InstalmentPlans plans={activePlans} />
 
           {/* Operator list pattern: section title, the filter bar, the table. */}
           <section className="flex flex-col gap-4">
@@ -217,153 +205,104 @@ export default function PortalPaymentsPage() {
 
 /* ────────────────────────────── the pieces ─────────────────────────────── */
 
-/** The operator's stat-card row: three headline figures, nothing else. */
-function BalanceTiles({ balance }: { balance: CustomerBalance }) {
+/**
+ * The one line at the top: what is owed, whether any of it is late, and the
+ * single thing to do — Pay when a booking can be paid here, the plan when an
+ * instalment plan collects it, otherwise a person.
+ */
+function BalanceStatus({
+  balance,
+  payableNow,
+  plans,
+}: {
+  balance: CustomerBalance;
+  payableNow: readonly PayableBalance[];
+  plans: readonly CustomerInstallmentPlan[];
+}) {
   const { formatCurrency } = useTenantBranding();
-  const settled = balance.outstanding === 0;
+
+  if (balance.outstanding === 0) {
+    return <StatusLine tone="success">Nothing outstanding. You are all settled.</StatusLine>;
+  }
+
+  const overdue = balance.overdue > 0;
   const when = relativeDayLabel(balance.nextDueDate);
+  const text = overdue
+    ? balance.overdue === balance.outstanding
+      ? `${formatCurrency(balance.outstanding)} is overdue`
+      : `${formatCurrency(balance.outstanding)} outstanding, ${formatCurrency(balance.overdue)} of it overdue`
+    : `${formatCurrency(balance.outstanding)} outstanding${
+        balance.nextDueDate ? `, due ${formatDate(balance.nextDueDate)}${when ? ` (${when})` : ''}` : ''
+      }`;
+
+  const action =
+    payableNow.length > 0 ? (
+      <a href="#pay" className={V2_BUTTON_DEFAULT_SM}>
+        Pay now
+      </a>
+    ) : plans.length > 0 ? (
+      <a href="#plans" className={V2_BUTTON_OUTLINE_SM}>
+        View plan
+      </a>
+    ) : (
+      <Link href="/contact" className={V2_BUTTON_OUTLINE_SM}>
+        Contact us
+      </Link>
+    );
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-      {/* Full width on a phone: the one figure the page is about. */}
-      <div className="col-span-2 sm:col-span-1">
-        <StatTile
-          icon={Wallet}
-          label="Outstanding"
-          value={formatCurrency(balance.outstanding)}
-          caption={
-            settled
-              ? 'You are all settled'
-              : balance.overdue > 0
-                ? `${formatCurrency(balance.overdue)} is past its due date`
-                : 'Not yet due'
-          }
-        />
-      </div>
-      <StatTile
-        icon={CircleCheck}
-        label="Paid to date"
-        value={formatCurrency(balance.paidToDate)}
-        caption="After refunds"
-      />
-      <StatTile
-        icon={CalendarClock}
-        label="Next due"
-        value={
-          settled
-            ? '—'
-            : balance.overdue > 0
-              ? 'Overdue'
-              : (formatDate(balance.nextDueDate) ?? 'Not set')
-        }
-        caption={
-          settled
-            ? 'Nothing due'
-            : balance.overdue > 0
-              ? 'Past its due date'
-              : balance.nextDueDate
-              ? (when ?? 'Due date')
-              : 'No due date set'
-        }
-      />
-    </div>
+    <StatusLine tone={overdue ? 'danger' : 'warning'} action={action}>
+      {text}
+    </StatusLine>
   );
 }
 
 /**
- * What the outstanding figure is made of. Only drawn when there is something
- * to break down — a settled account has nothing to itemise.
+ * What the outstanding figure is made of, as a tight table on the operator's
+ * row height: the rental first, then the fees, tax last, then the total.
  */
 function BalanceBreakdown({ balance }: { balance: CustomerBalance }) {
   const { formatCurrency } = useTenantBranding();
-  const settled = balance.outstanding === 0;
+  if (balance.categories.length === 0) return null;
 
-  if (balance.categories.length === 0 && balance.cancelledCharges === 0) return null;
+  const rank = (label: string) =>
+    /^rental$/i.test(label) ? 0 : /discount/i.test(label) ? 1 : /^tax/i.test(label) ? 3 : 2;
+  const rows = [...balance.categories].sort((a, b) => rank(a.label) - rank(b.label) || b.amount - a.amount);
 
   return (
-    <Panel className="overflow-hidden">
-      <PanelHeader title="What makes up your balance" />
-
-      {balance.categories.length > 0 ? (
-        <dl className="divide-y divide-pv-border">
-          {balance.categories.map((category) => (
-            <div
-              key={category.label}
-              className="flex items-baseline justify-between gap-4 px-4 py-3 sm:px-5"
-            >
-              <dt className="min-w-0 truncate text-sm text-pv-muted-fg">{category.label}</dt>
-              <dd className="shrink-0 text-sm font-medium tabular-nums text-pv-fg">
-                {formatCurrency(category.amount)}
-              </dd>
-            </div>
+    <section className="flex flex-col gap-3">
+      <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-pv-fg">Balance breakdown</h2>
+      <ListCard className="sm:max-w-[560px]">
+        <ListHeaderRow>
+          <ListHead className="h-10">Charge</ListHead>
+          <ListHead className="h-10 text-right">Amount</ListHead>
+        </ListHeaderRow>
+        <ListBody>
+          {rows.map((row) => (
+            <ListRow key={row.label}>
+              <ListCell className="py-3 text-pv-fg">{row.label}</ListCell>
+              <ListCell className="py-3 text-right tabular-nums text-pv-fg">{formatCurrency(row.amount)}</ListCell>
+            </ListRow>
           ))}
-          <div className="flex items-baseline justify-between gap-4 bg-pv-row px-4 py-3 sm:px-5">
-            <dt className="text-sm font-semibold text-pv-fg">Total outstanding</dt>
-            <dd
+          <ListRow className="bg-pv-row">
+            <ListCell className="py-3 font-semibold text-pv-fg">Total</ListCell>
+            <ListCell
               className={cn(
-                'shrink-0 text-sm font-semibold tabular-nums',
+                'py-3 text-right font-semibold tabular-nums',
                 balance.overdue > 0 ? 'text-pv-danger' : 'text-pv-fg',
               )}
             >
               {formatCurrency(balance.outstanding)}
-            </dd>
-          </div>
-        </dl>
-      ) : null}
-
-      {balance.cancelledCharges > 0 || (!settled && balance.overdue === 0) ? (
-        <div className="flex flex-col gap-1 border-t border-pv-border px-4 py-3 sm:px-5">
-          {balance.cancelledCharges > 0 ? (
-            <p className="text-[13px] leading-relaxed text-pv-muted-fg">
-              {formatCurrency(balance.cancelledCharges)} of charges on cancelled bookings is
-              excluded from this balance.
-            </p>
-          ) : null}
-          {/* The route to a human: some of the balance may not be payable by
-              card, and something on this page may simply look wrong. Its own
-              row rather than a link inside a sentence, so it is a 44px tap
-              target. Suppressed when the overdue banner is up — that already
-              carries the same link, and two of them read as a dead end. */}
-          {!settled && balance.overdue === 0 ? <ContactLink /> : null}
-        </div>
-      ) : null}
-    </Panel>
-  );
-}
-
-function ContactLink({ className }: { className?: string }) {
-  return (
-    <Link
-      href="/contact"
-      className={cn(
-        'inline-flex min-h-11 w-fit items-center gap-1.5 text-sm font-medium text-pv-link underline-offset-4 transition-colors duration-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none',
-        className,
-      )}
-    >
-      Contact us
-      <ArrowRight aria-hidden className="size-3.5" />
-    </Link>
-  );
-}
-
-function OverdueBanner({ amount }: { amount: number }) {
-  const { formatCurrency } = useTenantBranding();
-  return (
-    <div className="flex items-start gap-3 rounded-2xl border border-pv-danger/20 bg-pv-danger-light px-4 py-3.5 sm:px-5">
-      <TriangleAlert
-        aria-hidden
-        strokeWidth={1.75}
-        className="mt-0.5 size-4 shrink-0 text-pv-danger"
-      />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-pv-fg">{formatCurrency(amount)} is overdue</p>
-        <p className="mt-0.5 text-sm leading-relaxed text-pv-muted-fg">
-          These charges passed their due date. If you have already paid, it can take a day or two
-          to show — otherwise please contact us so it does not affect your booking.
+            </ListCell>
+          </ListRow>
+        </ListBody>
+      </ListCard>
+      {balance.cancelledCharges > 0 ? (
+        <p className="text-[13px] text-pv-muted-fg">
+          {formatCurrency(balance.cancelledCharges)} of charges on cancelled bookings is not included.
         </p>
-        <ContactLink className="mt-1" />
-      </div>
-    </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -540,10 +479,11 @@ function PaymentRow({ payment }: { payment: CustomerPayment }) {
 /** Sized like the stat row, the pay panel and the list, so nothing jumps on load. */
 function PaymentsSkeleton() {
   return (
-    <div className="flex flex-col gap-8" aria-hidden>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {[0, 1, 2].map((tile) => (
-          <div key={tile} className={cn('rounded-2xl border border-pv-border bg-pv-card px-4 py-3.5', tile === 0 && 'col-span-2 sm:col-span-1')}>
+    <div className="flex flex-col gap-6" aria-hidden>
+      <Skeleton className="h-12 w-full rounded-xl bg-pv-tint" />
+      <div className="grid grid-cols-2 gap-3 sm:w-fit sm:grid-cols-[repeat(2,minmax(13rem,auto))]">
+        {[0, 1].map((tile) => (
+          <div key={tile} className="rounded-2xl border border-pv-border bg-pv-card px-4 py-3.5">
             <div className="flex items-center gap-2">
               <Skeleton className="size-7 rounded-lg bg-pv-tint" />
               <Skeleton className="h-3 w-20 bg-pv-tint" />
