@@ -113,7 +113,7 @@ export function SettingsIndex() {
           }
         />
       ) : (
-        <div className="grid max-w-[760px] gap-x-8 gap-y-2 sm:grid-cols-2">
+        <div className="grid max-w-[1160px] gap-x-8 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
           {tiles.map((item) => (
             <Link key={item.key} href={`/portal/settings?section=${item.key}`} className={TILE}>
               <span className="text-[15px] font-medium text-pv-primary">{item.title}</span>
