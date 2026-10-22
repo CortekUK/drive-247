@@ -8,13 +8,13 @@
  *   - the header: "Rentals" and one plain line, in the operator's heading
  *     style. No "+ Book a car" here: booking lives in the rail (owner, Oct 21
  *     2026);
- *   - the overview slot: the Calendar view card, which took the graph's place
- *     (the graph came out the same day). The filter panel is its back face
- *     and the top bar's filter button turns it over (shared overview-flip);
+ *   - no overview card: "Calendar view" is a button in the header (owner,
+ *     Oct 22 2026); the top bar's filter button opens the filter panel above
+ *     the table;
  *   - the table: the shared Rentals table (shared/portal-v2/rentals-table.tsx),
  *     Customer becoming Vehicle; rows arrive as the box scrolls, with the
  *     "All N rentals shown" line under it;
- *   - the calendar: `?view=calendar`, opened from the companion card, the
+ *   - the calendar: `?view=calendar`, opened from the header button, the
  *     shared rentals timeline with this customer's rentals.
  *
  * Search and filters live in the top bar, as on the operator page: the page
@@ -27,7 +27,7 @@ import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CarFront, SearchX } from 'lucide-react-nw';
 
-import { RentalsOverviewFlip } from '@portal-v2-shared/overview-flip';
+import { V2_BUTTON_OUTLINE } from '@portal-v2-shared/button-styles';
 import { usePageSearch } from '@portal-v2-shared/page-search-slot';
 import {
   NO_RENTAL_FILTERS,
@@ -37,7 +37,6 @@ import {
   type RentalFilters,
 } from '@nw/portal-v2/rentals/rentals-filter-panel';
 import { CustomerRentalsCalendar } from '@nw/portal-v2/rentals/rentals-calendar';
-import { RentalsOverview } from '@nw/portal-v2/rentals/rentals-overview';
 import { CustomerRentalsTable, CustomerRentalsTableSkeleton } from '@nw/portal-v2/rentals/rentals-table';
 import { EmptyState, LoadError, PageHeader, Panel } from '@nw/portal-v2/primitives';
 import { useCustomer } from '@nw/hooks/use-customer';
@@ -93,7 +92,17 @@ export default function PortalRentalsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Rentals" description="Manage your rentals, from upcoming to completed." />
+      <PageHeader
+        title="Rentals"
+        description="Manage your rentals, from upcoming to completed."
+        action={
+          view === 'list' && !noRentals ? (
+            <button type="button" onClick={() => setView('calendar')} className={V2_BUTTON_OUTLINE}>
+              Calendar view
+            </button>
+          ) : null
+        }
+      />
 
       {view === 'calendar' ? (
         <CustomerRentalsCalendar
@@ -125,19 +134,10 @@ export default function PortalRentalsPage() {
         </Panel>
       ) : (
         <>
-          <RentalsOverviewFlip
-            flipped={filtersFlipped}
-            onFlipBack={() => setFiltersOpen(false)}
-            front={
-              <RentalsOverview
-                rentals={shown}
-                filtered={narrowed}
-                isLoading={isLoading}
-                onOpenCalendar={() => setView('calendar')}
-              />
-            }
-            back={<RentalsFilterPanel filters={filters} onChange={setFilters} onClose={() => setFiltersOpen(false)} />}
-          />
+          {/* The filter panel opens above the table from the top bar's button. */}
+          {filtersFlipped ? (
+            <RentalsFilterPanel filters={filters} onChange={setFilters} onClose={() => setFiltersOpen(false)} />
+          ) : null}
 
           {isLoading ? (
             <CustomerRentalsTableSkeleton rows={4} />
