@@ -45,11 +45,13 @@ import {
 import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { cn } from '@nw/lib/utils';
 import { PvDialogContent } from '@nw/portal-v2/dialog';
-import { FeaturedLinkCard, HeroChartLoading, localDay } from '@nw/portal-v2/hero';
+import { HeroChartLoading, localDay } from '@nw/portal-v2/hero';
 import { PayButton } from '@nw/portal-v2/pay/pay-provider';
 import { LoadError, PageHeader } from '@nw/portal-v2/primitives';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { V2_BUTTON_OUTLINE_SM } from '@portal-v2-shared/button-styles';
+import { V2_BUTTON_OUTLINE_SM, V2_BUTTON_PRIMARY } from '@portal-v2-shared/button-styles';
+import { RentalsOverviewFlip } from '@portal-v2-shared/overview-flip';
+import { usePageSearch } from '@portal-v2-shared/page-search-slot';
 import { HeroChart, HeroRow, type HeroMetric } from '@portal-v2-shared/hero-chart';
 import {
   ListBody,
@@ -64,12 +66,15 @@ import {
 import { V2_LIST_CLASSES, type V2ListTone } from '@portal-v2-shared/list-styles';
 import { ROW_OPEN_CELL, RowOpenIndicator } from '@portal-v2-shared/row-open';
 
-import { CardsSection } from './_components/cards';
+import { CardsFeatured } from './_components/cards';
+import {
+  FinanceFilterPanel,
+  NO_FINANCE_FILTERS,
+  countActiveFinanceFilters,
+  type FinanceFilters,
+} from './_components/finance-filter-panel';
 import { InvoiceDialog } from './_components/invoice-dialog';
 import { INVOICE_CHIP, PAYMENT_CHIP } from './_components/invoice-state';
-import { SegmentedTabs } from './_components/list-table';
-
-type Tab = 'invoices' | 'payments';
 
 /** The chips' tones in the shared list's palette. */
 const TONE: Record<string, V2ListTone> = { success: 'success', info: 'info', warning: 'warning', danger: 'danger', neutral: 'muted' };
@@ -77,13 +82,61 @@ const TONE: Record<string, V2ListTone> = { success: 'success', info: 'info', war
 export default function PortalPaymentsPage() {
   const { balance, payableBalances, invoices, payments, isLoading, isError, error, refetch } = useCustomerPayments();
 
-  const [tab, setTab] = useState<Tab>('invoices');
+  const [filters, setFilters] = useState<FinanceFilters>(NO_FINANCE_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [term, setTerm] = useState('');
   const [openInvoice, setOpenInvoice] = useState<CustomerInvoice | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const tab = filters.list;
+
+  // What the list shows: the chosen list, its status, and the top bar's search.
+  const q = term.trim().toLowerCase();
+  const shownInvoices = useMemo(
+    () =>
+      invoices.filter(
+        (i) =>
+          (filters.invoiceState === 'all' || i.state === filters.invoiceState) &&
+          (!q || [i.number, i.rental?.reference, i.rental?.vehicle?.displayName].some((v) => v?.toLowerCase().includes(q))),
+      ),
+    [filters.invoiceState, invoices, q],
+  );
+  const shownPayments = useMemo(
+    () =>
+      payments.filter(
+        (p) =>
+          (filters.paymentState === 'all' || p.state === filters.paymentState) &&
+          (!q || [p.typeLabel, p.rental?.reference, p.method].some((v) => v?.toLowerCase().includes(q))),
+      ),
+    [filters.paymentState, payments, q],
+  );
+
+  // The top bar's field and filter button, as Rentals lends them: the button
+  // turns the hero row over to the filter panel (shared overview-flip).
+  usePageSearch({
+    placeholder: tab === 'invoices' ? 'Search invoices…' : 'Search payments…',
+    value: term,
+    onChange: setTerm,
+    scopeLabel: 'Finances',
+    resultCount: isLoading ? undefined : tab === 'invoices' ? shownInvoices.length : shownPayments.length,
+    filters: { open: filtersOpen, onOpenChange: setFiltersOpen, activeCount: countActiveFinanceFilters(filters) },
+  });
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Finances" description="What you owe, what you have paid, and every invoice for your bookings." />
+      <PageHeader
+        title="Finances"
+        description="What you owe, what you have paid, and every invoice for your bookings."
+        action={
+          <button
+            type="button"
+            onClick={() => (tab === 'invoices' ? exportInvoices(shownInvoices) : exportPayments(shownPayments))}
+            disabled={isLoading || (tab === 'invoices' ? shownInvoices.length === 0 : shownPayments.length === 0)}
+            className={V2_BUTTON_PRIMARY}
+          >
+            Export CSV
+          </button>
+        }
+      />
 
       {isError ? (
         <LoadError
@@ -108,60 +161,51 @@ export default function PortalPaymentsPage() {
           {/* Phone: the status first, as one row — the card form would take
               half the screen to say "All settled". */}
           <BalanceStatusRow balance={balance} onOpen={() => setDetailOpen(true)} />
-          <HeroRow
-            chart={<FinancesChart balance={balance} invoices={invoices} payments={payments} />}
-            card={
-              <div className="contents max-lg:hidden">
-                <BalanceStatus balance={balance} onOpen={() => setDetailOpen(true)} />
-              </div>
+          <RentalsOverviewFlip
+            flipped={filtersOpen}
+            onFlipBack={() => setFiltersOpen(false)}
+            front={
+              <HeroRow
+                chart={<FinancesChart balance={balance} invoices={invoices} payments={payments} />}
+                card={<CardsFeatured />}
+              />
+            }
+            back={
+              <FinanceFilterPanel
+                filters={filters}
+                counts={{ invoices: invoices.length, payments: payments.length }}
+                onChange={setFilters}
+                onClose={() => setFiltersOpen(false)}
+              />
             }
           />
 
-          <CardsSection />
-
           <section id="invoices" aria-labelledby="money-list-title" className="flex scroll-mt-24 flex-col gap-3">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 id="money-list-title" className="text-[17px] font-semibold tracking-[-0.01em] text-pv-fg">
-                  {tab === 'invoices' ? 'Invoices' : 'Payments'}
-                </h2>
-                <p className="text-sm text-pv-muted-fg">
-                  {tab === 'invoices'
-                    ? 'Every invoice raised for your bookings. Open one for the full breakdown.'
-                    : 'Every card payment, hold and refund on your account.'}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => (tab === 'invoices' ? exportInvoices(invoices) : exportPayments(payments))}
-                  disabled={tab === 'invoices' ? invoices.length === 0 : payments.length === 0}
-                  className={V2_BUTTON_OUTLINE_SM}
-                >
-                  Export CSV
-                </button>
-                <SegmentedTabs
-                  label="Choose a list"
-                  value={tab}
-                  onChange={(value) => setTab(value as Tab)}
-                  options={[
-                    { value: 'invoices', label: 'Invoices', count: invoices.length },
-                    { value: 'payments', label: 'Payments', count: payments.length },
-                  ]}
-                />
-              </div>
+            <div>
+              <h2 id="money-list-title" className="text-[17px] font-semibold tracking-[-0.01em] text-pv-fg">
+                {tab === 'invoices' ? 'Invoices' : 'Payments'}
+              </h2>
+              <p className="text-sm text-pv-muted-fg">
+                {tab === 'invoices'
+                  ? 'Every invoice raised for your bookings. Open one for the full breakdown.'
+                  : 'Every card payment, hold and refund on your account.'}
+              </p>
             </div>
 
             {tab === 'invoices' ? (
               invoices.length === 0 ? (
                 <EmptyLine>No invoices yet. One is raised when a booking is confirmed.</EmptyLine>
+              ) : shownInvoices.length === 0 ? (
+                <EmptyLine>No invoices match your search or filters.</EmptyLine>
               ) : (
-                <InvoiceTable invoices={invoices} onOpen={setOpenInvoice} />
+                <InvoiceTable invoices={shownInvoices} onOpen={setOpenInvoice} />
               )
             ) : payments.length === 0 ? (
               <EmptyLine>No payments yet. Every card payment and refund will be listed here.</EmptyLine>
+            ) : shownPayments.length === 0 ? (
+              <EmptyLine>No payments match your search or filters.</EmptyLine>
             ) : (
-              <PaymentTable payments={payments} />
+              <PaymentTable payments={shownPayments} />
             )}
           </section>
         </>
@@ -254,28 +298,6 @@ function FinancesChart({
 }
 
 /* ─────────────────────────────── the status ─────────────────────────────── */
-
-/** "All settled", or the amount due — nothing more. It opens the detail. */
-function BalanceStatus({ balance, onOpen }: { balance: CustomerBalance; onOpen: () => void }) {
-  const { formatCurrency } = useTenantBranding();
-  if (balance.outstanding === 0) {
-    return <FeaturedLinkCard title="All settled" subtitle="Nothing is due on your account" onClick={onOpen} />;
-  }
-  const overdue = balance.overdue > 0;
-  return (
-    <FeaturedLinkCard
-      title={`${formatCurrency(balance.outstanding)} due`}
-      subtitle={
-        overdue
-          ? `${formatCurrency(balance.overdue)} overdue`
-          : balance.nextDueDate
-            ? `Due ${formatDate(balance.nextDueDate)}`
-            : 'See what it is made of'
-      }
-      onClick={onOpen}
-    />
-  );
-}
 
 /** The status on a phone: one tappable row, the same words as the card. */
 function BalanceStatusRow({ balance, onOpen }: { balance: CustomerBalance; onOpen: () => void }) {

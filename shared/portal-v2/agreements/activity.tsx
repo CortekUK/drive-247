@@ -21,7 +21,6 @@ import {
   FilePlus2,
   Mail,
   PenLine,
-  RefreshCw,
   Send,
   XCircle,
   type LucideIcon,
@@ -98,14 +97,15 @@ export function AgreementActivity({
     <aside aria-label="Activity" className={cn("flex min-h-0 flex-col bg-v2-bg", className)}>
       <div className="flex items-center justify-between gap-2 px-5 pt-3">
         <p className="text-xs text-v2-muted-fg">Every step, oldest first</p>
+        {/* Words, not the circular-arrows icon (owner, Oct 22 2026). */}
         <Button
           variant="ghost"
-          size="icon-sm"
+          size="sm"
           aria-label="Refresh activity"
           onClick={() => void query.refetch()}
           disabled={query.isFetching}
         >
-          <RefreshCw className={cn(query.isFetching && "animate-spin motion-reduce:animate-none")} />
+          {query.isFetching ? "Refreshing…" : "Refresh"}
         </Button>
       </div>
 

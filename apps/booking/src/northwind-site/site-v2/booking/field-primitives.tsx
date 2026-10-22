@@ -409,7 +409,10 @@ export function DateField({
         <PopoverContent
           align="start"
           collisionPadding={12}
-          className="w-auto max-w-[calc(100vw-1.5rem)] rounded-2xl border-pv-border bg-pv-card p-2 text-pv-fg shadow-lg"
+          // Capped at the room Radix measures on its side, scrolling inside
+          // rather than running off the screen: in a dialog the calendar
+          // could open upward past the top edge and lose its month heading.
+          className="max-h-[var(--radix-popover-content-available-height)] w-auto max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-2xl border-pv-border bg-pv-card p-2 text-pv-fg shadow-lg"
         >
           <Calendar
             mode="single"

@@ -46,22 +46,20 @@ function expiry(month: number | null, year: number | null): string | null {
   return `${String(month).padStart(2, '0')}/${String(year).slice(-2)}`;
 }
 
-/** The section on the page: the default card's face, or an Add a card face. */
-export function CardsSection() {
+/**
+ * The card on file, in the hero row's featured slot (where the operator's
+ * Billing puts it): the default card's face, which opens "Cards", or an "Add
+ * a card" face when there is none. Sized to the slot (`fit`), as Billing does.
+ */
+export function CardsFeatured() {
   const { cards, isLoading, isError, error } = useCustomerCards();
   const [open, setOpen] = useState(false);
   const primary = cards.find((card) => card.isDefault) ?? cards[0] ?? null;
 
   return (
-    <section aria-labelledby="cards-title" className="flex flex-col gap-3">
-      <div>
-        <h2 id="cards-title" className="text-[17px] font-semibold tracking-[-0.01em] text-pv-fg">
-          Cards
-        </h2>
-        <p className="text-sm text-pv-muted-fg">The card your bookings and instalments are charged to.</p>
-      </div>
+    <div className="flex min-h-0 flex-col justify-center md:[container-type:size] lg:h-full">
       {isLoading ? (
-        <div className="aspect-[1.586] w-full max-w-[340px] animate-pulse rounded-2xl bg-pv-muted" aria-hidden />
+        <div className="aspect-[1.586] w-full max-w-[440px] animate-pulse rounded-2xl bg-pv-muted" aria-hidden />
       ) : isError ? (
         <p className="text-sm text-pv-danger">{error?.message ?? 'Your cards could not be loaded.'}</p>
       ) : primary && primary.last4 ? (
@@ -69,7 +67,7 @@ export function CardsSection() {
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Manage cards"
-          className="group block w-full max-w-[340px] cursor-pointer rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-ring/50 focus-visible:ring-offset-2"
+          className="group block w-fit cursor-pointer rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-ring/50 focus-visible:ring-offset-2"
         >
           <PaymentCard3D
             brand={primary.brand}
@@ -79,21 +77,20 @@ export function CardsSection() {
             name={primary.name}
             isPrimary={primary.isDefault}
             actionLabel={cards.length > 1 ? `Manage ${cards.length} cards` : 'Manage card'}
-            fit={false}
           />
         </button>
       ) : (
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex w-full max-w-[340px] cursor-pointer items-center justify-between gap-3 rounded-2xl border border-dashed border-pv-border bg-pv-card px-5 py-4 text-left transition-colors duration-200 hover:border-pv-primary/40 hover:bg-pv-hover/40 motion-reduce:transition-none"
+          className="flex aspect-[1.586] w-full max-w-[440px] cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-pv-border bg-pv-card text-center transition-colors duration-200 hover:border-pv-primary/40 hover:bg-pv-hover/40 motion-reduce:transition-none"
         >
+          <span className="text-[15px] font-semibold text-pv-link">Add a card</span>
           <span className="text-[13px] text-pv-muted-fg">No card on file yet</span>
-          <span className="text-[14px] font-semibold text-pv-link">Add a card</span>
         </button>
       )}
       <CardManagerDialog open={open} onOpenChange={setOpen} />
-    </section>
+    </div>
   );
 }
 
