@@ -15,7 +15,7 @@
  */
 
 import Link from 'next/link';
-import type { SVGProps } from 'react';
+import { useSyncExternalStore, type SVGProps } from 'react';
 
 import { formatDate } from '@nw/components/portal/format';
 import { useCustomer } from '@nw/hooks/use-customer';
@@ -104,8 +104,67 @@ const ICON: Record<AlertBarVariant, (props: SVGProps<SVGSVGElement>) => JSX.Elem
   grey: IconStep,
 };
 
+/* ─────────────────────────────── dismissing ─────────────────────────────── */
+
+/**
+ * The customer can close a stripe with its ×. Remembered per browser, and
+ * keyed on what the stripe SAYS (key + title), so it comes back the moment
+ * the situation changes — a new amount, a new due date. One store for every
+ * bar on every page, so closing it here closes it everywhere.
+ */
+const DISMISSED_KEY = 'pv2-dismissed-alerts';
+const listeners = new Set<() => void>();
+let dismissedCache: string[] | null = null;
+
+function readDismissed(): string[] {
+  if (dismissedCache) return dismissedCache;
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(DISMISSED_KEY) ?? '[]');
+    dismissedCache = Array.isArray(raw) ? raw.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    dismissedCache = [];
+  }
+  return dismissedCache;
+}
+
+const signature = (item: AlertBarItem) => `${item.key}|${item.title}`;
+
+function dismiss(item: AlertBarItem) {
+  // Keep the list short: only the last 50 closed stripes are remembered.
+  dismissedCache = [...readDismissed().filter((v) => v !== signature(item)), signature(item)].slice(-50);
+  try {
+    window.localStorage.setItem(DISMISSED_KEY, JSON.stringify(dismissedCache));
+  } catch {
+    /* storage blocked: closed for this page view only */
+  }
+  listeners.forEach((listener) => listener());
+}
+
+const EMPTY: string[] = [];
+function useDismissed(): string[] {
+  return useSyncExternalStore(
+    (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    readDismissed,
+    () => EMPTY,
+  );
+}
+
 /** One stripe. Exported so a page (or a preview) can draw a given variant. */
-export function AlertStripe({ item, className }: { item: AlertBarItem; className?: string }) {
+export function AlertStripe({
+  item,
+  className,
+  dismissible = true,
+}: {
+  item: AlertBarItem;
+  className?: string;
+  /** The × that closes it. On by default; a page-owned stripe can turn it off. */
+  dismissible?: boolean;
+}) {
+  const dismissed = useDismissed();
+  if (dismissible && dismissed.includes(signature(item))) return null;
   const Icon = ICON[item.variant];
   return (
     <div
@@ -123,6 +182,19 @@ export function AlertStripe({ item, className }: { item: AlertBarItem; className
         {item.description ? <span className="text-pv-fg/70 max-sm:hidden"> · {item.description}</span> : null}
       </p>
       {item.action ? <StripeAction item={item} /> : null}
+      {dismissible ? (
+        <button
+          type="button"
+          onClick={() => dismiss(item)}
+          aria-label="Dismiss"
+          title="Dismiss"
+          className="-mr-1 inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-current opacity-60 outline-none transition-opacity duration-200 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-current/40 motion-reduce:transition-none"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" className="size-4" aria-hidden>
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -206,7 +278,9 @@ export function useActionItems(): { items: AlertBarItem[]; isLoading: boolean } 
 
 /** Every stripe that applies, most severe first; nothing while loading or when all is well. */
 export function PortalAlertBar({ className }: { className?: string }) {
-  const { items, isLoading } = useActionItems();
+  const { items: all, isLoading } = useActionItems();
+  const dismissed = useDismissed();
+  const items = all.filter((item) => !dismissed.includes(signature(item)));
   if (isLoading || items.length === 0) return null;
   return (
     <div aria-label="Needs you" className={cn('flex flex-col gap-2', className)}>
