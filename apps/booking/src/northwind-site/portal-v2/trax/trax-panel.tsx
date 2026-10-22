@@ -390,9 +390,6 @@ export function CustomerTraxPanel() {
 
   // Focus goes back where it was when the panel closes with focus inside it.
   const asideRef = useRef<HTMLElement>(null);
-  // The phone sheet's drag-to-close, from its handle.
-  const dragStart = useRef<number | null>(null);
-  const [drag, setDrag] = useState(0);
   const lastOutside = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const onFocusIn = (event: FocusEvent) => {
@@ -444,17 +441,16 @@ export function CustomerTraxPanel() {
         aria-label="Trax"
         data-state={open ? 'open' : 'closed'}
         onKeyDown={onKeyDown}
-        style={{
-          ...(visualHeight ? { maxHeight: `${Math.round(visualHeight)}px` } : null),
-          // Following the finger while the sheet is dragged down by its handle.
-          ...(drag > 0 ? { transform: `translateY(${drag}px)`, transition: 'none' } : null),
-        }}
+        style={visualHeight ? { maxHeight: `${Math.round(visualHeight)}px` } : undefined}
         className={[
           'pv2 fixed z-40 flex flex-col overflow-hidden text-pv-fg',
           'rounded-2xl border border-pv-border/70 bg-pv-bg shadow-[0_28px_70px_-28px_rgb(0_0_0/0.45)]',
           // Phone: a native bottom sheet — rises from the bottom edge to just
           // under the status bar, rounded on top, padded for the home indicator.
-          'max-md:inset-x-0 max-md:bottom-0 max-md:top-[calc(env(safe-area-inset-top,0px)+0.75rem)] max-md:rounded-b-none max-md:rounded-t-[1.25rem] max-md:border-x-0 max-md:border-b-0 max-md:pb-[env(safe-area-inset-bottom)] max-md:shadow-[0_-12px_40px_-12px_rgb(0_0_0/0.25)]',
+          // Phone: full screen, as the operator's Trax (trax/trax-panel.tsx),
+          // rising from the bottom edge, padded for the status bar and the
+          // home indicator.
+          'max-md:inset-0 max-md:rounded-none max-md:border-0 max-md:shadow-none max-md:pt-[env(safe-area-inset-top)] max-md:pb-[env(safe-area-inset-bottom)]',
           expanded
             ? 'md:inset-auto md:right-8 md:bottom-8 md:h-[min(900px,calc(100dvh-7rem))] md:w-[min(1100px,calc(100vw-4rem))]'
             : 'md:inset-auto md:right-5 md:bottom-5 md:h-[min(720px,calc(100dvh-7rem))] md:w-[clamp(400px,30vw,480px)]',
@@ -464,36 +460,11 @@ export function CustomerTraxPanel() {
           'motion-reduce:transition-none',
         ].join(' ')}
       >
-        {/* Phone: the grab handle. Drag it down to close, as a native sheet. */}
-        <div
-          aria-hidden
-          onPointerDown={(event) => {
-            dragStart.current = event.clientY;
-            (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-          }}
-          onPointerMove={(event) => {
-            if (dragStart.current === null) return;
-            setDrag(Math.max(0, event.clientY - dragStart.current));
-          }}
-          onPointerUp={() => {
-            if (dragStart.current === null) return;
-            dragStart.current = null;
-            if (drag > 110) setOpen(false);
-            setDrag(0);
-          }}
-          onPointerCancel={() => {
-            dragStart.current = null;
-            setDrag(0);
-          }}
-          className="relative z-10 flex h-5 shrink-0 cursor-grab touch-none items-end justify-center md:hidden"
-        >
-          <span className="h-[5px] w-10 rounded-full bg-pv-muted-fg/30" />
-        </div>
         <span
           aria-hidden
           className="pointer-events-none absolute inset-0 -z-0 bg-[radial-gradient(120%_60%_at_100%_0%,hsl(var(--v2-primary)/0.07),transparent_60%)]"
         />
-        <header className="relative flex h-16 shrink-0 items-center gap-2 pr-2 pl-3 max-md:h-12">
+        <header className="relative flex h-16 shrink-0 items-center gap-2 pr-2 pl-3">
           <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-pv-primary/[0.07] px-2.5 text-[12px] font-medium text-pv-link">
             <TraxMark size="xs" />
             Trax

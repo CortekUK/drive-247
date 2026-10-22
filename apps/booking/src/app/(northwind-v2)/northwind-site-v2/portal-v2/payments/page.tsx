@@ -59,7 +59,8 @@ import { HeroChartLoading, localDay } from '@nw/portal-v2/hero';
 import { PayButton } from '@nw/portal-v2/pay/pay-provider';
 import { LoadError, PageHeader } from '@nw/portal-v2/primitives';
 import { V2_BUTTON_OUTLINE_SM, V2_BUTTON_PRIMARY } from '@portal-v2-shared/button-styles';
-import { HEADER_ACTIONS_V2 } from '@portal-v2-shared/header';
+import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2 } from '@portal-v2-shared/header';
+import { PhoneCarousel } from '@nw/portal-v2/phone-carousel';
 import { MOTION_FLOATING } from '@portal-v2-shared/menu';
 import { RentalsOverviewFlip } from '@portal-v2-shared/overview-flip';
 import { usePageSearch } from '@portal-v2-shared/page-search-slot';
@@ -194,10 +195,14 @@ export default function PortalPaymentsPage() {
               flipped={filtersOpen}
               onFlipBack={() => setFiltersOpen(false)}
               front={
-                <HeroRow
-                  chart={<FinancesChart balance={balance} invoices={invoices} payments={payments} />}
-                  card={<CardsFeatured />}
-                />
+                // Phone: the graph and the card swipe as a pair, the next one
+                // peeking, with page dots (the operator Home's carousel).
+                <PhoneCarousel count={2}>
+                  <HeroRow
+                    chart={<FinancesChart balance={balance} invoices={invoices} payments={payments} />}
+                    card={<CardsFeatured />}
+                  />
+                </PhoneCarousel>
               }
               back={
                 <FinanceFilterPanel
@@ -261,7 +266,7 @@ export default function PortalPaymentsPage() {
  * Export CSV on the header line (admin's HEADER_ACTIONS_V2 alignment), in the
  * rail's Book a car colour — the owner asked for that colour (Oct 22 2026).
  */
-const HEADER_EXPORT = cn(V2_BUTTON_PRIMARY, '[&_svg]:size-3.5');
+const HEADER_EXPORT = cn(V2_BUTTON_PRIMARY, HEADER_PRIMARY_V2, 'flex-1 sm:flex-none');
 
 function EmptyLine({ children }: { children: React.ReactNode }) {
   return <p className="rounded-2xl border border-pv-border bg-pv-card px-5 py-8 text-center text-sm text-pv-muted-fg">{children}</p>;

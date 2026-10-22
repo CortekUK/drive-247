@@ -55,7 +55,9 @@ export function PageHeader({
         <h1 className="font-heading text-2xl font-bold tracking-normal text-pv-fg sm:text-3xl">{title}</h1>
         {description ? <p className="text-sm text-pv-muted-fg sm:text-base">{description}</p> : null}
       </div>
-      {action ? <div className={cn('flex shrink-0 items-center gap-2', actionClassName)}>{action}</div> : null}
+      {/* Phone: the cluster takes the row and the labelled button stretches
+          (admin rentals-list-v2: flex-1 sm:flex-none on the primary). */}
+      {action ? <div className={cn('flex shrink-0 items-center gap-2 max-sm:w-full', actionClassName)}>{action}</div> : null}
     </div>
     {alerts ? <PortalAlertBar /> : null}
     </div>

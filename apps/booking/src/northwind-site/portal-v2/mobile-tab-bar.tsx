@@ -26,13 +26,13 @@ import { arrangePortalV2Nav, isPortalV2Active, type PortalV2NavIcon } from './na
 import { usePortalV2NavPreferences } from './sidebar-customizer';
 
 const ITEM =
-  'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-[5px] text-[11px] leading-none font-medium tracking-[0.01em] ' +
+  'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-[5px] text-[11.5px] leading-none font-medium tracking-[0.01em] ' +
   'outline-none transition-[color,transform] duration-200 ease-out active:scale-[0.94] focus-visible:text-pv-primary motion-reduce:transition-none';
 const ACTIVE_TEXT = 'font-semibold text-pv-primary';
 const IDLE_TEXT = 'text-pv-muted-fg';
 
 function TabIcon({ icon: Icon, on }: { icon: PortalV2NavIcon; on: boolean }) {
-  return <Icon aria-hidden className="size-[22px]" strokeWidth={on ? 2.5 : 2} />;
+  return <Icon aria-hidden className="size-5" strokeWidth={on ? 2.4 : 1.75} />;
 }
 
 function AccountIcon({ on }: { on: boolean }) {
@@ -42,7 +42,7 @@ function AccountIcon({ on }: { on: boolean }) {
     <span
       aria-hidden
       className={cn(
-        'flex size-[22px] items-center justify-center overflow-hidden rounded-full bg-pv-primary/10 text-[9px] font-semibold text-pv-primary',
+        'flex size-5 items-center justify-center overflow-hidden rounded-full bg-pv-primary/10 text-[9px] font-semibold text-pv-primary',
         on ? 'ring-2 ring-pv-primary ring-offset-1 ring-offset-pv-bg' : 'ring-1 ring-pv-border',
       )}
     >
@@ -64,7 +64,8 @@ export function MobileTabBar({ pathname }: { pathname: string | null }) {
   return (
     <div
       data-mobile-tab-bar=""
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-pv-border bg-pv-bg pb-[env(safe-area-inset-bottom,0px)] md:hidden"
+      // Record screens (a rental) bring their own dock; this bar gives way to it.
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-pv-border bg-pv-bg pb-[env(safe-area-inset-bottom,0px)] md:hidden [body:has([data-record-dock])_&]:hidden"
     >
       <nav aria-label="Portal" className="mx-auto flex h-[60px] max-w-lg items-stretch px-1">
         {tabs.map((tab) => {

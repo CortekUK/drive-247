@@ -25,7 +25,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { CarFront, SearchX } from 'lucide-react-nw';
+import { CalendarDays, CarFront, List, Plus, SearchX } from 'lucide-react-nw';
 
 import { V2_BUTTON_PRIMARY } from '@portal-v2-shared/button-styles';
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2 } from '@portal-v2-shared/header';
@@ -43,6 +43,7 @@ import { CustomerRentalsTable, CustomerRentalsTableSkeleton } from '@nw/portal-v
 import { EmptyState, LoadError, PageHeader, Panel } from '@nw/portal-v2/primitives';
 import { useCustomer } from '@nw/hooks/use-customer';
 import { useCustomerRentals } from '@nw/hooks/use-customer-rentals';
+import { QuickBookTrigger } from '@nw/site-v2/quick-book/quick-book-dialog';
 
 export default function PortalRentalsPage() {
   const router = useRouter();
@@ -101,16 +102,32 @@ export default function PortalRentalsPage() {
         actionClassName={HEADER_ACTIONS_V2}
         action={
           // One button that toggles: it says where it takes you, so the way
-          // out of the calendar is the same button that took you in.
+          // out of the calendar is the same button that took you in. On a
+          // phone it is an icon beside Book a car, which has no rail there
+          // (admin: one labelled button, the rest 32px icons).
           noRentals ? null : (
-            <button
-              type="button"
-              onClick={() => setView(view === 'calendar' ? 'list' : 'calendar')}
-              aria-pressed={view === 'calendar'}
-              className={cn(V2_BUTTON_PRIMARY, HEADER_PRIMARY_V2)}
-            >
-              {view === 'calendar' ? 'List view' : 'Calendar view'}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setView(view === 'calendar' ? 'list' : 'calendar')}
+                aria-pressed={view === 'calendar'}
+                className={cn(V2_BUTTON_PRIMARY, HEADER_PRIMARY_V2, 'max-sm:hidden')}
+              >
+                {view === 'calendar' ? 'List view' : 'Calendar view'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setView(view === 'calendar' ? 'list' : 'calendar')}
+                aria-label={view === 'calendar' ? 'List view' : 'Calendar view'}
+                className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-pv-primary/30 bg-pv-primary/5 text-pv-primary sm:hidden"
+              >
+                {view === 'calendar' ? <List aria-hidden className="size-3.5" /> : <CalendarDays aria-hidden className="size-3.5" />}
+              </button>
+              <QuickBookTrigger className={cn(V2_BUTTON_PRIMARY, HEADER_PRIMARY_V2, 'flex-1 sm:hidden')}>
+                <Plus aria-hidden />
+                Book a car
+              </QuickBookTrigger>
+            </>
           )
         }
       />

@@ -27,7 +27,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, CircleAlert } from 'lucide-react-nw';
+import { ArrowLeft, CircleAlert, Receipt } from 'lucide-react-nw';
 
 import { formatDate, formatDateTime, formatTimestamp } from '@nw/components/portal/format';
 import { formatBookingDates, formatNights } from '@nw/portal-v2/rentals/format';
@@ -46,6 +46,8 @@ import { cn } from '@nw/lib/utils';
 import { V2_BUTTON_OUTLINE } from '@portal-v2-shared/button-styles';
 import { Card, CardAction, CardHeader, CardTitle } from '@portal-v2-shared/card';
 import { AlertStripe } from '@nw/portal-v2/alert-bar';
+import { PayButton } from '@nw/portal-v2/pay/pay-provider';
+import { RecordDock, useBelow } from '@nw/portal-v2/record-dock';
 import { InstalmentTrack, PaidBar } from '@nw/portal-v2/instalment-track';
 
 /** Hover = fade only, 200ms, ease-out on / ease-in off (V2_PLAN §12). */
@@ -62,7 +64,8 @@ export default function RentalDetailPage() {
   const { rental, notFound, isLoading, isError, error, refetch } = useCustomerRental(rentalId);
 
   return (
-    <div className="flex flex-col gap-5">
+    // Room under the last card for the record dock, which floats there below lg.
+    <div className="flex flex-col gap-5 max-lg:pb-[calc(env(safe-area-inset-bottom,0px)+5.5rem)]">
       {isError || isLoading || notFound || !rental ? (
         <div className="flex flex-col gap-2">
           <BackLink />
@@ -240,6 +243,7 @@ function Row({ label, value, hint }: { label: string; value: React.ReactNode; hi
 
 function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
   const { formatCurrency, distanceLabel } = useTenantBranding();
+  const belowLg = useBelow(1024);
   const { tenant } = useTenant();
 
   const vehicleName = rental.vehicle?.displayName ?? 'Vehicle';
@@ -413,47 +417,9 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
           </DetailCard>
         </div>
 
-        {/* ── Right column: the price ───────────────────────────────────── */}
-        <div className="flex flex-col gap-5">
-          <DetailCard title="Price breakdown" className="flex-1">
-            <div className="px-6 py-2">
-              {rental.breakdown.lines.map((line) => (
-                <div key={line.key} className="flex items-baseline justify-between gap-3 py-2">
-                  <span className="min-w-0 text-[13px] text-pv-muted-fg">
-                    {line.label}
-                    {line.caption ? <span className="mt-0.5 block text-[12px] text-pv-muted-fg/80">{line.caption}</span> : null}
-                  </span>
-                  <span
-                    className={cn('shrink-0 text-[13px] font-medium tabular-nums', line.isCredit ? 'text-pv-success' : 'text-pv-fg')}
-                  >
-                    {line.isCredit ? '−' : ''}
-                    {formatCurrency(line.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-auto border-t border-pv-border px-6 py-4">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-[14px] font-semibold text-pv-fg">Total</span>
-                <span className="text-[22px] font-bold tracking-[-0.02em] tabular-nums text-pv-fg">
-                  {formatCurrency(rental.breakdown.total)}
-                </span>
-              </div>
-              {!rental.breakdown.fromInvoice ? (
-                <p className="mt-2 text-[12px] leading-relaxed text-pv-muted-fg">
-                  We do not have an itemised invoice for this rental, so this is the agreed total only. Ask us for a
-                  breakdown any time.
-                </p>
-              ) : null}
-              {rental.breakdown.securityDeposit > 0 ? (
-                <p className="mt-2 text-[12px] leading-relaxed text-pv-muted-fg">
-                  Includes a {formatCurrency(rental.breakdown.securityDeposit)} security deposit, refunded after the car
-                  comes back.
-                </p>
-              ) : null}
-            </div>
-          </DetailCard>
+        {/* ── Right column: the price. Below lg it is the dock's sheet. ─── */}
+        <div className="flex flex-col gap-5 max-lg:hidden">
+          <PriceBreakdownCard rental={rental} className="flex-1" />
 
           <Link href="/booking" className={cn(V2_BUTTON_OUTLINE, 'h-11 w-full')}>
             Book another car
@@ -461,10 +427,83 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
         </div>
       </div>
 
-      <PaymentCard rental={rental} />
+      <div className="max-lg:hidden">
+        <PaymentCard rental={rental} />
+      </div>
+
+      {/* Below lg the right column and the payment are not on the page: they
+          are the dock's one panel (the operator's record dock), with Pay. */}
+      {belowLg ? (
+        <RecordDock
+          back={{ href: '/portal/rentals', label: 'All rentals', icon: ArrowLeft }}
+          primary={{
+            id: 'price',
+            label: 'Price & payment',
+            icon: Receipt,
+            description: `${rental.vehicle?.displayName ?? 'This rental'} · ${rental.reference}`,
+            content: () => (
+              <div className="flex flex-col gap-4">
+                <PayButton rentalId={rental.id} className="h-11 w-full" />
+                <PriceBreakdownCard rental={rental} />
+                <PaymentCard rental={rental} />
+                <Link href="/booking" className={cn(V2_BUTTON_OUTLINE, 'h-11 w-full')}>
+                  Book another car
+                </Link>
+              </div>
+            ),
+          }}
+        />
+      ) : null}
     </>
   );
 }
+
+/** The price, itemised, with the total — the right column on a desktop, the dock's sheet on a phone. */
+function PriceBreakdownCard({ rental, className }: { rental: CustomerRentalDetail; className?: string }) {
+  const { formatCurrency } = useTenantBranding();
+  return (
+    <DetailCard title="Price breakdown" className={className}>
+      <div className="px-6 py-2">
+        {rental.breakdown.lines.map((line) => (
+          <div key={line.key} className="flex items-baseline justify-between gap-3 py-2">
+            <span className="min-w-0 text-[13px] text-pv-muted-fg">
+              {line.label}
+              {line.caption ? <span className="mt-0.5 block text-[12px] text-pv-muted-fg/80">{line.caption}</span> : null}
+            </span>
+            <span
+              className={cn('shrink-0 text-[13px] font-medium tabular-nums', line.isCredit ? 'text-pv-success' : 'text-pv-fg')}
+            >
+              {line.isCredit ? '−' : ''}
+              {formatCurrency(line.amount)}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-auto border-t border-pv-border px-6 py-4">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="text-[14px] font-semibold text-pv-fg">Total</span>
+          <span className="text-[22px] font-bold tracking-[-0.02em] tabular-nums text-pv-fg">
+            {formatCurrency(rental.breakdown.total)}
+          </span>
+        </div>
+        {!rental.breakdown.fromInvoice ? (
+          <p className="mt-2 text-[12px] leading-relaxed text-pv-muted-fg">
+            We do not have an itemised invoice for this rental, so this is the agreed total only. Ask us for a
+            breakdown any time.
+          </p>
+        ) : null}
+        {rental.breakdown.securityDeposit > 0 ? (
+          <p className="mt-2 text-[12px] leading-relaxed text-pv-muted-fg">
+            Includes a {formatCurrency(rental.breakdown.securityDeposit)} security deposit, refunded after the car
+            comes back.
+          </p>
+        ) : null}
+      </div>
+    </DetailCard>
+  );
+}
+
 
 /**
  * The payment, drawn: on an instalment plan, the plan's instalments as the

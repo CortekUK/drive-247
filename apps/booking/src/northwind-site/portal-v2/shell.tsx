@@ -40,6 +40,7 @@ import {
   Settings,
   SlidersHorizontal,
   Sun,
+  X,
 } from 'lucide-react-nw';
 
 import { PortalBoot } from '@nw/components/portal/portal-boot';
@@ -349,7 +350,7 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
                 {/* On a phone the bottom tab bar (mobile-tab-bar.tsx) overlays the
                     foot of the window: the scroll reserves its height plus the
                     home indicator so the last row clears it. */}
-                <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-10 pt-2 outline-none max-md:pb-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] sm:px-6 md:pl-4">
+                <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-10 pt-2 outline-none max-md:pb-[calc(env(safe-area-inset-bottom,0px)+4.5rem)] md:pl-4">
                   {/* Keyed on the path so every screen arrives with the Trax lift. */}
                   <div key={pathname} className="pv2-enter mx-auto w-full max-w-[1200px]">
                     {children}
@@ -772,30 +773,6 @@ function AccountMenu({
 
 /* ──────────────────────────────── top bar ──────────────────────────────── */
 
-/** The phone's left cluster: the company mark (back to the website) and Book a car. */
-function MobileBrand() {
-  const { appName, faviconUrl } = useTenantBranding();
-  const name = appName ?? 'Home';
-  return (
-    <div className="flex shrink-0 items-center gap-2 md:hidden">
-      <Link href="/" aria-label={`Back to the ${name} website`} className="flex shrink-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-pv-ring/50">
-        {faviconUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={faviconUrl} alt="" className="size-8 rounded-lg object-contain" />
-        ) : (
-          <span className="flex size-8 items-center justify-center rounded-lg bg-pv-primary text-[12px] font-semibold text-pv-primary-fg">
-            {name.slice(0, 1).toUpperCase()}
-          </span>
-        )}
-      </Link>
-      <QuickBookTrigger className={cn(V2_BUTTON_PRIMARY, BOOK_CTA_SHAPE, 'h-8 gap-1 px-2.5 text-[13px]')}>
-        <Plus aria-hidden className="size-3.5" />
-        Book
-      </QuickBookTrigger>
-    </div>
-  );
-}
-
 /** The operator's search pill (top-bar-v2.tsx, FIELD). */
 const FIELD =
   'group relative flex h-8 w-full max-w-[380px] cursor-pointer items-center gap-2 overflow-hidden rounded-full ' +
@@ -817,17 +794,25 @@ function TopBar({
   // you type, and "Search everywhere" / ⌘K hand off to the search dialog.
   // Everywhere else the bar keeps the pill that opens the dialog.
   const slot = usePageSearchSlot();
+  // Phone: the round search button opens the page's own field inline in the
+  // bar, filter button and all (admin top-bar-v2 phoneFieldOpen); with no
+  // field lent, it opens the search dialog.
+  const [phoneField, setPhoneField] = useState(false);
+  const fieldRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!slot) setPhoneField(false);
+  }, [slot]);
+  useEffect(() => {
+    if (phoneField) fieldRef.current?.querySelector('input')?.focus();
+  }, [phoneField]);
 
   // No title here: every page carries its own big heading, as on the operator portal v2.
   return (
     // On a phone the app runs under the status bar (black-translucent), so the
     // bar starts below the safe area.
     <header className="flex h-16 shrink-0 items-center gap-2 bg-transparent px-3 max-md:h-[calc(4rem+env(safe-area-inset-top,0px))] max-md:pt-[env(safe-area-inset-top,0px)] sm:px-4">
-      {/* Phone: no rail, so the company mark and Book a car lead the bar. */}
-      <MobileBrand />
-
       {slot ? (
-        <div className="hidden w-full max-w-[440px] sm:block">
+        <div ref={fieldRef} className={cn('relative w-full max-w-[440px]', phoneField ? 'block' : 'hidden sm:block')}>
           <SearchField slot={slot} onSearchEverywhere={onOpenSearch} />
         </div>
       ) : (
@@ -839,19 +824,33 @@ function TopBar({
           </kbd>
         </button>
       )}
-      <button
-        type="button"
-        onClick={onOpenSearch}
-        aria-label="Search"
-        className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-pv-primary/25 bg-pv-primary/[0.07] text-pv-primary sm:hidden"
-      >
-        <Search aria-hidden className="size-4" />
-      </button>
+      {phoneField ? (
+        <button
+          type="button"
+          onClick={() => {
+            slot?.onChange('');
+            setPhoneField(false);
+          }}
+          aria-label="Close search"
+          className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-pv-muted-fg hover:bg-pv-primary/10 sm:hidden"
+        >
+          <X aria-hidden className="size-4" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={slot ? () => setPhoneField(true) : onOpenSearch}
+          aria-label="Search"
+          className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-pv-primary/25 bg-pv-primary/[0.07] text-pv-primary sm:hidden"
+        >
+          <Search aria-hidden className="size-4" />
+        </button>
+      )}
 
       {/* Order as on the operator bar: the helpline and Help, then messages,
-          then notifications at the far right. The phone, which has no rail,
-          adds the account avatar after. */}
-      <div className="ml-auto flex items-center gap-0.5">
+          then notifications at the far right. Out of the way while the
+          phone's search field is open. */}
+      <div className={cn('ml-auto flex items-center gap-0.5', phoneField && 'max-sm:hidden')}>
         <span aria-hidden className="mx-1 hidden h-5 w-px bg-pv-border sm:block" />
         <HelplineLink />
         <HelpButton />
