@@ -4,7 +4,7 @@
  * "Customise sidebar" — the operator's dialog (sidebar-customizer-dialog.tsx)
  * for the customer's five tabs: drag to reorder, hide what you do not use, a
  * live picture of the rail beside the list, and Reset / Cancel / Save along
- * the foot. Home stays put (the lock), as the operator's permanent rows do.
+ * the foot. Rentals stays put (the lock), as the operator's permanent rows do.
  *
  * The operator stores the arrangement on their account; a customer's lives in
  * this browser, keyed by the customer (`usePortalV2NavPreferences`). It only
@@ -212,7 +212,7 @@ export function SidebarCustomizerDialog({ open, onOpenChange }: { open: boolean;
         <DialogHeader className="border-b border-pv-border px-7 py-5">
           <DialogTitle className="text-[17px] font-semibold tracking-tight text-pv-fg">Customise sidebar</DialogTitle>
           <DialogDescription>
-            Drag to reorder and hide anything you don&apos;t use. Home stays put. This only changes your own sidebar.
+            Drag to reorder and hide anything you don&apos;t use. Rentals stays put. This only changes your own sidebar.
           </DialogDescription>
         </DialogHeader>
 

@@ -17,7 +17,7 @@
  */
 
 import { useMemo } from 'react';
-import { ArrowRight, CalendarDays } from 'lucide-react-nw';
+import { ArrowRight } from 'lucide-react-nw';
 
 import type { CustomerRental } from '@nw/hooks/use-customer-rentals';
 import { FEATURED_SHELL_CLASS } from '@portal-v2-shared/featured-card';
@@ -106,9 +106,6 @@ export function RentalsOverview({
         className="group/cal grid w-full cursor-pointer grid-cols-1 gap-6 rounded-2xl p-5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-pv-ring/50 sm:p-6 md:grid-cols-[minmax(0,280px)_minmax(0,1fr)] md:items-center md:gap-8"
       >
         <div className="flex min-w-0 flex-col gap-4">
-          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-pv-primary/10 text-pv-primary ring-1 ring-inset ring-pv-primary/15">
-            <CalendarDays aria-hidden className="size-5" />
-          </span>
           <div className="min-w-0">
             <h2 className="text-[22px] font-semibold leading-tight tracking-[-0.02em] text-pv-fg">Calendar view</h2>
             <p className="mt-1 text-[13px] leading-5 text-pv-muted-fg">

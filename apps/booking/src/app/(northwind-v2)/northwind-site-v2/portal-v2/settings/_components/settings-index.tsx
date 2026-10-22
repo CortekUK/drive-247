@@ -20,6 +20,8 @@ import { SearchEmptyArt } from '@portal-v2-shared/empty-states/empty-scenes';
 import { TeachingEmptyState } from '@portal-v2-shared/empty-states/teaching-empty-state';
 import { usePageSearch } from '@portal-v2-shared/page-search-slot';
 
+import { PortalAlertBar } from '@nw/portal-v2/alert-bar';
+
 import { SETTINGS_PAGE_TITLE } from './settings-ui';
 
 export type SettingsSectionKey = 'details' | 'verification' | 'gig-driver' | 'consent' | 'account';
@@ -87,7 +89,10 @@ export function SettingsIndex() {
 
   return (
     <div className="w-full max-w-[1160px] space-y-9 pb-6 md:pt-[26px]">
-      <h1 className={SETTINGS_PAGE_TITLE}>Settings</h1>
+      <div className="flex flex-col gap-4">
+        <h1 className={SETTINGS_PAGE_TITLE}>Settings</h1>
+        <PortalAlertBar />
+      </div>
 
       {tiles.length === 0 ? (
         <TeachingEmptyState

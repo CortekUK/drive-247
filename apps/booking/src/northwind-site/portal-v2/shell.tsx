@@ -66,6 +66,7 @@ import { brandHslVars } from './brand';
 import { HelpButton, HelplineLink } from './help-menu';
 import { CustomerTraxProvider } from './trax/trax-context';
 import { CustomerTraxPanel } from './trax/trax-panel';
+import { PayProvider } from './pay/pay-provider';
 import {
   PORTAL_V2_BASE,
   PORTAL_V2_EXTRA_PAGES,
@@ -288,6 +289,8 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
     <Tooltip.Provider delayDuration={300}>
       <CustomerTraxProvider>
       <QuickBookProvider>
+      {/* The one payment path, for every Pay button in the portal. */}
+      <PayProvider>
         <div
           className={cn('pv2 flex h-dvh overflow-hidden', fontClass)}
           style={(brandVars ?? undefined) as React.CSSProperties | undefined}
@@ -383,6 +386,7 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
           <MessagesSheet open={messagesOpen} onOpenChange={setMessagesOpen} unread={counts.messages} />
           <CustomerTraxPanel />
         </div>
+      </PayProvider>
       </QuickBookProvider>
       </CustomerTraxProvider>
     </Tooltip.Provider>
@@ -426,12 +430,14 @@ function Rail({
 
   return (
     <>
-      <div className="shrink-0 p-1.5 pt-4">
+      <div className="flex shrink-0 flex-col gap-2 p-1.5 pt-4">
         <OrgRow collapsed={collapsed} onNavigate={onNavigate} onCustomize={onCustomize} />
+        {/* The one call to action leads the rail, under the org row (owner, Oct 22 2026). */}
+        <BookCta collapsed={collapsed} onNavigate={onNavigate} />
       </div>
 
       {/* One list, straight through: no group headings, no split. */}
-      <nav aria-label="Portal" className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden pt-1">
+      <nav aria-label="Portal" className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden">
         <ul className="flex w-full min-w-0 flex-col gap-0.5 p-1.5">
           {items.map((item) => (
             <li key={item.href} className="relative">
@@ -442,7 +448,6 @@ function Rail({
       </nav>
 
       <div className="flex shrink-0 flex-col gap-2 p-1.5 pb-2">
-        <BookCta collapsed={collapsed} onNavigate={onNavigate} />
         <ProfileRow collapsed={collapsed} theme={theme} onThemeChange={onThemeChange} onNavigate={onNavigate} />
       </div>
     </>
@@ -571,15 +576,17 @@ function OrgRow({ collapsed, onNavigate, onCustomize }: { collapsed: boolean; on
 }
 
 /**
- * The rail's one call to action: the operator's primary Button exactly
- * (shared V2_BUTTON_PRIMARY — the gradient pill, 36px, 14px medium), stretched
- * to the rail. 44px on a phone, the touch floor.
+ * The rail's one call to action, at the top of the rail: the operator's
+ * primary Button (shared V2_BUTTON_PRIMARY — the gradient, 36px, 14px medium)
+ * stretched to the rail, with the rail rows' 8px radius rather than the pill,
+ * so it reads as part of the rail. 44px on a phone, the touch floor.
  */
+const BOOK_CTA_SHAPE = 'rounded-lg';
 function BookCta({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   if (collapsed) {
     return (
       <Tip label="Book a car" side="right">
-        <QuickBookTrigger onClick={onNavigate} aria-label="Book a car" className={cn(V2_BUTTON_PRIMARY, 'mx-auto size-8 gap-0 px-0')}>
+        <QuickBookTrigger onClick={onNavigate} aria-label="Book a car" className={cn(V2_BUTTON_PRIMARY, BOOK_CTA_SHAPE, 'mx-auto size-8 gap-0 px-0')}>
           <Plus aria-hidden />
         </QuickBookTrigger>
       </Tip>
@@ -587,7 +594,7 @@ function BookCta({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: (
   }
 
   return (
-    <QuickBookTrigger onClick={onNavigate} className={cn(V2_BUTTON_PRIMARY, 'h-11 w-full md:h-9')}>
+    <QuickBookTrigger onClick={onNavigate} className={cn(V2_BUTTON_PRIMARY, BOOK_CTA_SHAPE, 'h-11 w-full md:h-9')}>
       <Plus aria-hidden />
       Book a car
     </QuickBookTrigger>

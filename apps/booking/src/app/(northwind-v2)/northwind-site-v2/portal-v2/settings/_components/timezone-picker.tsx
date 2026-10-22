@@ -12,16 +12,25 @@
  * copy of the operator's (shared-v2-copies.test.ts). The flag is drawn as the
  * flagcdn.com picture the operator's other country lists use (Twilio setup,
  * accounting): Windows has no flag emoji and shows two letters instead.
+ *
+ * Every zone carries its UTC offset beside the clock ("UTC+5"). The overlay is
+ * the customer portal's own dialog (`@nw/portal-v2/dialog`): it opens from the
+ * centre of the screen with the operator's fade and 12px rise. The shared
+ * operator copy carries Tailwind 3 centring offsets in its keyframe, which in
+ * this Tailwind 4 stylesheet add to the `translate` centring and threw the
+ * panel in from the top left.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, Search } from 'lucide-react-nw';
 
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+
 import { cn } from '@nw/lib/utils';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@portal-v2-shared/dialog';
+import { PvDialogContent } from '@nw/portal-v2/dialog';
 import { timezoneCountry, timezoneFlag } from '@portal-v2-shared/timezone-flags';
 
-import { PV_DIALOG_TITLE, PV_INPUT } from './pv-kit';
+import { PV_DIALOG_DESCRIPTION, PV_DIALOG_TITLE, PV_INPUT } from './pv-kit';
 
 /** The operator's list: every zone the browser knows, the current one always in it. */
 function buildTimezoneOptions(current: string): string[] {
@@ -47,6 +56,28 @@ function clockIn(tz: string | null | undefined, now: Date): string {
       clockFormats.set(tz, fmt);
     }
     return fmt.format(now);
+  } catch {
+    return '';
+  }
+}
+
+const offsetFormats = new Map<string, Intl.DateTimeFormat>();
+/**
+ * The zone's UTC offset right now (so it follows daylight saving): "UTC+5",
+ * "UTC-7", "UTC+5:30", "UTC" for zero.
+ */
+export function utcOffsetIn(tz: string | null | undefined, now: Date): string {
+  if (!tz) return '';
+  try {
+    let fmt = offsetFormats.get(tz);
+    if (!fmt) {
+      fmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' });
+      offsetFormats.set(tz, fmt);
+    }
+    const name = fmt.formatToParts(now).find((part) => part.type === 'timeZoneName')?.value ?? '';
+    const match = /^GMT([+-]\d{1,2}(?::\d{2})?)?$/.exec(name);
+    if (!match) return '';
+    return match[1] ? `UTC${match[1]}` : 'UTC';
   } catch {
     return '';
   }
@@ -125,7 +156,12 @@ export function TimezonePicker({
               {timezoneLabel(value)}
               {country ? <span className="text-pv-muted-fg"> · {country}</span> : null}
             </span>
-            {now ? <span className="shrink-0 tabular-nums text-pv-muted-fg">{clockIn(value, now)}</span> : null}
+            {now ? (
+              <span className="shrink-0 tabular-nums text-pv-muted-fg">
+                {clockIn(value, now)}
+                {utcOffsetIn(value, now) ? <span> · {utcOffsetIn(value, now)}</span> : null}
+              </span>
+            ) : null}
           </>
         ) : (
           <span className="flex-1 text-pv-muted-fg/70">Choose your time zone</span>
@@ -133,25 +169,27 @@ export function TimezonePicker({
         <ChevronDown aria-hidden className="size-4 shrink-0 text-pv-muted-fg" />
       </button>
 
-      <Dialog
+      <DialogPrimitive.Root
         open={open}
         onOpenChange={(next) => {
           setOpen(next);
           if (!next) setSearch('');
         }}
       >
-        <DialogContent
-          className="flex max-h-[min(720px,calc(100dvh-4rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-md"
+        <PvDialogContent
+          className="flex max-h-[min(720px,calc(100dvh-4rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-md sm:p-0"
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             searchRef.current?.focus();
             selectedRef.current?.scrollIntoView({ block: 'center' });
           }}
         >
-          <DialogHeader className="px-6 pt-6 pb-3">
-            <DialogTitle className={PV_DIALOG_TITLE}>Time zone</DialogTitle>
-            <DialogDescription>Pickup and return times are shown in this zone.</DialogDescription>
-          </DialogHeader>
+          <div className="flex flex-col gap-1.5 px-6 pt-6 pb-3">
+            <DialogPrimitive.Title className={PV_DIALOG_TITLE}>Time zone</DialogPrimitive.Title>
+            <DialogPrimitive.Description className={PV_DIALOG_DESCRIPTION}>
+              Pickup and return times are shown in this zone.
+            </DialogPrimitive.Description>
+          </div>
           <div className="border-b border-pv-border px-6 pb-3">
             <div className="flex h-9 items-center gap-2 rounded-full bg-pv-muted px-3.5">
               <Search aria-hidden className="size-3.5 shrink-0 text-pv-muted-fg" />
@@ -197,14 +235,19 @@ export function TimezonePicker({
                       {timezoneLabel(tz)}
                       <span className="ml-1.5 text-pv-muted-fg">{timezoneCountry(tz)}</span>
                     </span>
-                    {now ? <span className="shrink-0 tabular-nums text-pv-muted-fg">{clockIn(tz, now)}</span> : null}
+                    {now ? (
+                      <span className="shrink-0 tabular-nums text-pv-muted-fg">
+                        {clockIn(tz, now)}
+                        <span className="inline-block w-[4.5rem] text-right">{utcOffsetIn(tz, now)}</span>
+                      </span>
+                    ) : null}
                   </button>
                 );
               })
             )}
           </div>
-        </DialogContent>
-      </Dialog>
+        </PvDialogContent>
+      </DialogPrimitive.Root>
     </>
   );
 }

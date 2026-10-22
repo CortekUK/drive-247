@@ -11,19 +11,14 @@
  *     fourth — the operator's Customers, Rentals, Agreements and Finances tabs;
  *   - the featured card (featured-card.tsx): "Calendar View", "Template
  *     Studio", "Auto-charge";
- *   - the alert (alert.tsx), tinted the way the operator's customer record
- *     tints its verdict ("Not ready"): the tone at a few percent behind it and a
- *     ring of the same tone.
  *
- * What is local is only the wiring: a loading face sized like the chart, a
- * featured card that is a link, and the alert's tones.
+ * What is local is only the wiring: a loading face sized like the chart and a
+ * featured card that is a link. (Alerts are the alert bar's: alert-bar.tsx.)
  */
 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { CircleCheck, Clock, Info, TriangleAlert, type LucideIcon } from 'lucide-react-nw';
 
-import { Alert, AlertDescription, AlertTitle } from '@portal-v2-shared/alert';
 import { FEATURED_ACTION_CLASS, FeaturedCardFace, FeaturedCardShell } from '@portal-v2-shared/featured-card';
 import { HERO_CHART_HEIGHT } from '@portal-v2-shared/hero-chart';
 import { cn } from '@nw/lib/utils';
@@ -123,54 +118,5 @@ function FeaturedCardFaceFooter({ subtitle }: { subtitle: string }) {
         <span aria-hidden>→</span>
       </span>
     </div>
-  );
-}
-
-type Tone = 'danger' | 'warning' | 'success' | 'neutral';
-
-/** The operator's verdict tints (customers-v2/customer-detail/overview-rail.tsx). */
-const TONE_CLASS: Record<Tone, string> = {
-  danger: 'border-transparent bg-pv-danger/[0.07] ring-1 ring-pv-danger/20 text-pv-danger',
-  warning: 'border-transparent bg-pv-warning-light/60 ring-1 ring-pv-warning/25 text-pv-warning',
-  success: 'border-transparent bg-pv-success-light/70 ring-1 ring-pv-success/25 text-pv-success',
-  neutral: 'border-transparent bg-pv-primary/[0.06] ring-1 ring-pv-primary/20 text-pv-primary',
-};
-
-const TONE_ICON: Record<Tone, LucideIcon> = {
-  danger: TriangleAlert,
-  warning: Clock,
-  success: CircleCheck,
-  neutral: Info,
-};
-
-/**
- * The shared alert, tinted: icon, a title in the tone, one muted line, and the
- * action on the right.
- */
-export function ToneAlert({
-  tone,
-  title,
-  description,
-  action,
-  className,
-}: {
-  tone: Tone;
-  title: ReactNode;
-  description?: ReactNode;
-  action?: ReactNode;
-  className?: string;
-}) {
-  const Icon = TONE_ICON[tone];
-  return (
-    <Alert className={cn('flex items-center gap-3 rounded-3xl px-4 py-3', TONE_CLASS[tone], className)}>
-      <Icon aria-hidden className="size-4 shrink-0" />
-      <div className="min-w-0 flex-1">
-        <AlertTitle className="font-heading text-sm font-semibold">{title}</AlertTitle>
-        {description ? (
-          <AlertDescription className="mt-0.5 text-[12px] leading-relaxed text-pv-fg/70">{description}</AlertDescription>
-        ) : null}
-      </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
-    </Alert>
   );
 }

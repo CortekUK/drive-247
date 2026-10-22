@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ExternalLink, Loader2, Trash2, Upload } from 'lucide-react-nw';
+import { ExternalLink, Loader2, Trash2 } from 'lucide-react-nw';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 
 import { formatTimestamp } from '@nw/components/portal/format';
@@ -251,7 +251,7 @@ export function GigDriverSettings() {
         action={
           empty ? undefined : (
             <button type="button" className={V2_BUTTON_PRIMARY} disabled={isUploading} onClick={pick}>
-              {isUploading ? <Loader2 aria-hidden className="animate-spin" /> : <Upload aria-hidden />}
+              {isUploading ? <Loader2 aria-hidden className="animate-spin" /> : null}
               {isUploading ? 'Uploading…' : 'Upload'}
             </button>
           )
@@ -304,7 +304,6 @@ export function GigDriverSettings() {
           body={`Upload screenshots of your driver profile, or a PDF from the platform. ${operator} uses them for gig driver rates.`}
           primaryAction={{
             label: isUploading ? 'Uploading…' : 'Upload',
-            icon: Upload,
             onClick: pick,
             disabled: isUploading,
             hint: 'JPG, PNG or PDF, up to 10MB each. You can also drop files here.',

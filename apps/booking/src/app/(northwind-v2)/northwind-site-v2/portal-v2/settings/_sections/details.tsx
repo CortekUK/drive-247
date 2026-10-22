@@ -19,7 +19,6 @@
  * changed, and a background refetch never wipes what is being typed.
  */
 
-import { AlertCircle, CheckCircle2, Info } from 'lucide-react-nw';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 
@@ -250,7 +249,6 @@ export function DetailsSettings() {
               description={
                 dateOfBirth ? (
                   <span className="inline-flex items-center gap-1.5 text-pv-success">
-                    <CheckCircle2 aria-hidden className="size-3.5" />
                     From your verified ID
                   </span>
                 ) : (
@@ -375,7 +373,6 @@ export function DetailsSettings() {
 
 /** A page-level notice in the v2 tints. */
 function Banner({ tone, children }: { tone: NoticeTone; children: React.ReactNode }) {
-  const Icon = tone === 'success' ? CheckCircle2 : tone === 'danger' ? AlertCircle : Info;
   return (
     <div
       role={tone === 'danger' ? 'alert' : 'status'}
@@ -386,7 +383,6 @@ function Banner({ tone, children }: { tone: NoticeTone; children: React.ReactNod
         tone === 'info' && 'bg-pv-tint text-pv-fg',
       )}
     >
-      <Icon aria-hidden className="mt-0.5 size-4 shrink-0" />
       <p className="flex-1">{children}</p>
     </div>
   );

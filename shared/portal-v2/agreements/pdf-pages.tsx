@@ -19,7 +19,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 
 type Load = { status: "loading" } | { status: "ready"; pdf: PDFDocumentProxy } | { status: "error" };
@@ -89,9 +89,7 @@ export function AgreementPdfPages({ url, title }: { url: string; title: string }
   return (
     <div ref={hostRef} className={`h-full w-full overflow-y-auto ${AGREEMENT_PAGE_BACKDROP}`} aria-label={title} role="document">
       {load.status === "loading" || !box ? (
-        <div className="flex h-full items-center justify-center" role="status">
-          <Loader2 className="size-7 animate-spin text-v2-primary motion-reduce:animate-none" aria-label="Loading the agreement" />
-        </div>
+        <AgreementPageSkeleton />
       ) : load.status === "error" ? (
         <div className="flex h-full items-center justify-center p-6" role="alert">
           <div className="max-w-sm text-center">
@@ -157,5 +155,24 @@ function PdfPage({ pdf, number, box }: { pdf: PDFDocumentProxy; number: number; 
       className="block shrink-0 rounded-sm bg-white ring-1 ring-black/10"
       style={cssSize ? { width: cssSize.w, height: cssSize.h } : { width: 0, height: 0 }}
     />
+  );
+}
+
+/**
+ * The agreement while it loads: the shape of a page, its lines pulsing softly,
+ * in place of a spinner (owner, Oct 22 2026: no oversized spinning icon).
+ */
+export function AgreementPageSkeleton() {
+  const lines = ["w-2/5", "w-full", "w-11/12", "w-full", "w-4/5", "w-full", "w-3/4", "w-full", "w-2/3"];
+  return (
+    <div className="flex h-full items-start justify-center overflow-hidden p-6" role="status" aria-label="Loading the agreement">
+      <div className="aspect-[1/1.294] w-full max-w-[560px] rounded-sm bg-white p-10 shadow-sm">
+        <div className="flex flex-col gap-3 motion-safe:animate-pulse">
+          {lines.map((width, i) => (
+            <span key={i} className={`h-2.5 rounded-full bg-neutral-200 ${width} ${i === 0 ? "mb-3 h-3.5" : ""}`} />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

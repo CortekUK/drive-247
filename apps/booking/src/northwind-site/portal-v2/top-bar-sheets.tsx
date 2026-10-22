@@ -169,8 +169,9 @@ const CATEGORY_OF: Record<NotificationKind, Category> = {
   info: 'system',
 };
 
-const FILTERS: { key: Exclude<Filter, 'critical'>; label: string }[] = [
+const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'All' },
+  { key: 'critical', label: 'Critical' },
   { key: 'payments', label: 'Payments' },
   { key: 'rentals', label: 'Rentals' },
   { key: 'documents', label: 'Documents' },
@@ -328,8 +329,11 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
     return out;
   }, [notifications]);
 
-  // All always, the active pill always, and any category with something in it.
-  const visibleFilters = FILTERS.filter(({ key }) => key === 'all' || key === filter || counts[key] > 0);
+  // All and Critical always (as on the operator's centre), the active pill
+  // always, and any category with something in it.
+  const visibleFilters = FILTERS.filter(
+    ({ key }) => key === 'all' || key === 'critical' || key === filter || counts[key] > 0,
+  );
 
   const shown = notifications.filter((n) => matches(n, filter));
   const grouped: Record<Bucket, CustomerNotification[]> = { today: [], yesterday: [], earlier: [] };
@@ -352,26 +356,6 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
             <span className="inline-flex items-center">
               Notifications
               {unreadCount > 0 ? <span className={COUNT_PILL}>{unreadCount}</span> : null}
-              {/* Critical as a severity chip, present only when there is
-                  something critical (or while it is the active filter, so the
-                  way back is never hidden). Pressing it filters; again returns
-                  to All. */}
-              {counts.critical > 0 || filter === 'critical' ? (
-                <button
-                  type="button"
-                  aria-pressed={filter === 'critical'}
-                  onClick={() => setFilter(filter === 'critical' ? 'all' : 'critical')}
-                  className={cn(
-                    'ml-2 inline-flex h-5 shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded-full px-2 text-[11px] font-semibold transition-colors duration-200 motion-reduce:transition-none',
-                    filter === 'critical'
-                      ? 'bg-pv-danger text-white'
-                      : 'border border-pv-danger/40 bg-pv-danger-light text-pv-danger hover:bg-pv-danger/15',
-                  )}
-                >
-                  <AlertTriangle aria-hidden className="size-2.5" />
-                  {counts.critical} critical
-                </button>
-              ) : null}
             </span>
           }
         >
@@ -401,12 +385,25 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
                 aria-pressed={active}
                 className={cn(
                   'inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[12px] font-medium transition-colors duration-200 motion-reduce:transition-none',
-                  active ? 'bg-pv-primary/10 text-pv-primary' : 'text-pv-muted-fg hover:bg-pv-hover hover:text-pv-fg',
+                  key === 'critical'
+                    ? active
+                      ? 'bg-pv-danger/10 text-pv-danger'
+                      : 'text-pv-danger/80 hover:bg-pv-danger/10 hover:text-pv-danger'
+                    : active
+                      ? 'bg-pv-primary/10 text-pv-primary'
+                      : 'text-pv-muted-fg hover:bg-pv-hover hover:text-pv-fg',
                 )}
               >
                 {label}
                 {!isLoading ? (
-                  <span className={cn('tabular-nums', active ? 'text-pv-primary/70' : 'text-pv-muted-fg/70')}>{counts[key]}</span>
+                  <span
+                    className={cn(
+                      'tabular-nums',
+                      key === 'critical' ? 'text-pv-danger/70' : active ? 'text-pv-primary/70' : 'text-pv-muted-fg/70',
+                    )}
+                  >
+                    {counts[key]}
+                  </span>
                 ) : null}
               </button>
             );

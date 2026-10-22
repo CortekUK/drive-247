@@ -65,7 +65,7 @@ export {
  * that on <body>) and reading the computed colour back yields a literal the
  * Appearance API accepts.
  */
-function resolvePvColours(names: readonly string[]): Record<string, string> | null {
+export function resolvePvColours(names: readonly string[]): Record<string, string> | null {
   if (typeof document === "undefined") return null;
   const host = document.querySelector(".pv2") ?? document.body;
   const probe = document.createElement("span");
@@ -99,7 +99,7 @@ const PV_COLOURS = [
 const V2_FONT_STACK = "Manrope, system-ui, -apple-system, sans-serif";
 
 /** Manrope for the iframe — `next/font`'s self-hosted copy cannot reach it. */
-const V2_ELEMENTS_FONTS = [
+export const V2_ELEMENTS_FONTS = [
   { cssSrc: "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" },
 ] as const;
 
@@ -108,7 +108,7 @@ const V2_ELEMENTS_FONTS = [
  * `pv-border` rim, and the accent rim plus a soft ring on focus. Module-level,
  * so the controller's memo sees one stable reference.
  */
-function buildSiteV2Appearance(): Appearance {
+export function buildSiteV2Appearance(): Appearance {
   const c = resolvePvColours(PV_COLOURS);
   const base: Appearance = {
     theme: "stripe",

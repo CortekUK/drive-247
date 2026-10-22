@@ -1,4 +1,4 @@
-import { House, type LucideIcon } from 'lucide-react-nw';
+import type { LucideIcon } from 'lucide-react-nw';
 import type { ComponentType, SVGProps } from 'react';
 
 import { NavAgreements, NavFinances, NavInsurances, NavRentals } from '@portal-v2-shared/nav-icons/nav-icons';
@@ -10,7 +10,8 @@ import { NavAgreements, NavFinances, NavInsurances, NavRentals } from '@portal-v
  * NAMES AND ICONS ARE THE OPERATOR RAIL'S (app-sidebar-v2.tsx). Every tab that
  * also exists there carries its name and its icon from the shared v2 set
  * (shared/portal-v2/nav-icons), in the operator's order: Rentals, Insurances,
- * Agreements, Finances. Home is the one the operator does not have.
+ * Agreements, Finances. There is no Home (owner, Oct 22 2026): Rentals is the
+ * first page and the one the portal opens on.
  *
  * Settings is not a tab: it is the gear on the profile row, as on the
  * operator rail, and ID verification and Gig driver live inside it. Messages
@@ -29,8 +30,7 @@ export interface PortalV2NavItem {
 export const PORTAL_V2_BASE = '/portal';
 
 export const PORTAL_V2_ITEMS: readonly PortalV2NavItem[] = [
-  { href: '/portal', label: 'Home', icon: House, locked: true },
-  { href: '/portal/rentals', label: 'Rentals', icon: NavRentals },
+  { href: '/portal/rentals', label: 'Rentals', icon: NavRentals, locked: true },
   { href: '/portal/insurances', label: 'Insurances', icon: NavInsurances },
   { href: '/portal/agreements', label: 'Agreements', icon: NavAgreements },
   { href: '/portal/payments', label: 'Finances', icon: NavFinances },
@@ -78,10 +78,10 @@ export function arrangePortalV2Nav(prefs: PortalV2NavPreferences): { shown: Port
     if (item && !ordered.includes(item)) ordered.push(item);
   }
   for (const item of PORTAL_V2_ITEMS) if (!ordered.includes(item)) ordered.push(item);
-  // Home leads, always.
-  const home = ordered.filter((item) => item.locked);
+  // Rentals (the locked tab, the portal's first page) leads, always.
+  const first = ordered.filter((item) => item.locked);
   const rest = ordered.filter((item) => !item.locked);
-  const all = [...home, ...rest];
+  const all = [...first, ...rest];
   return {
     shown: all.filter((item) => item.locked || !prefs.hidden.includes(item.href)),
     hidden: all.filter((item) => !item.locked && prefs.hidden.includes(item.href)),

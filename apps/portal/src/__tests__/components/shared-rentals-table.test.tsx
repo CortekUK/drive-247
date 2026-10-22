@@ -38,16 +38,17 @@ describe('shared Rentals table', () => {
     }
   });
 
-  it('shows the open chevron at the row end only on hover or focus', () => {
+  it('shows the open indicator at the row end only on hover or focus', () => {
     const { container } = render(<RentalsTable partyLabel="Customer" rows={ROWS} onOpen={() => {}} />);
     const rows = container.querySelectorAll('tbody tr');
     for (const row of rows) {
       expect(classes(row)).toEqual(expect.arrayContaining(['group/row', 'cursor-pointer']));
       const cells = row.querySelectorAll('td');
-      const chevron = cells[cells.length - 1].querySelector('svg')!;
-      expect(chevron).not.toBeNull();
-      expect(chevron.getAttribute('aria-hidden')).toBe('true');
-      const c = classes(chevron);
+      // shared/portal-v2/row-open.tsx: a chevron inside a round tint, the tint carrying the motion.
+      const indicator = cells[cells.length - 1].querySelector('svg')!.parentElement!;
+      expect(indicator).not.toBeNull();
+      expect(indicator.getAttribute('aria-hidden')).toBe('true');
+      const c = classes(indicator);
       expect(c).toEqual(expect.arrayContaining(['opacity-0', 'group-hover/row:opacity-100', 'group-focus-visible/row:opacity-100', 'absolute', 'right-3']));
       // Only the last cell carries one.
       for (const cell of [...cells].slice(0, -1)) expect(cell.querySelector('svg')).toBeNull();

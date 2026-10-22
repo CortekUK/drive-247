@@ -129,7 +129,7 @@ export default function PortalMessagesPage() {
       <div className="hidden min-h-0 w-[320px] shrink-0 flex-col md:flex lg:w-[360px]">
         <div className="shrink-0 space-y-3 px-3 py-3">
           <div className="flex min-w-0 items-center gap-1.5">
-            <Link href="/portal" title="Back to the portal" aria-label="Back to the portal" className={cn(ROUND_ICON, '-ml-1')}>
+            <Link href="/portal/rentals" title="Back to the portal" aria-label="Back to the portal" className={cn(ROUND_ICON, '-ml-1')}>
               <ArrowLeft aria-hidden className="size-4" />
             </Link>
             <h1 className="truncate text-[15px] font-semibold tracking-tight text-pv-fg">Messages</h1>
@@ -201,7 +201,7 @@ export default function PortalMessagesPage() {
         {/* Below md there is no rail: the thread carries its own way back and
             names who it is with, as the operator's does on a narrow window. */}
         <header className="flex shrink-0 items-center gap-2 px-3 py-3 md:hidden">
-          <Link href="/portal" aria-label="Back to the portal" className={ROUND_ICON}>
+          <Link href="/portal/rentals" aria-label="Back to the portal" className={ROUND_ICON}>
             <ArrowLeft aria-hidden className="size-4" />
           </Link>
           <CompanyAvatar name={companyName} className="size-8" />

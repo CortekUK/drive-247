@@ -1,10 +1,18 @@
-import { redirect } from 'next/navigation';
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 /**
  * Notifications left the rail: they open in the top bar's sheet, from any
  * page. This address stays alive for links already sent, and opens the sheet
- * over Home (the shell reads `?panel=notifications`).
+ * over Rentals, the first page (the shell reads `?panel=notifications`).
+ * Client-side for the same reason as the portal index (../page.tsx).
  */
 export default function PortalNotificationsRedirect() {
-  redirect('/portal?panel=notifications');
+  const router = useRouter();
+  useEffect(() => {
+    router.replace('/portal/rentals?panel=notifications');
+  }, [router]);
+  return null;
 }

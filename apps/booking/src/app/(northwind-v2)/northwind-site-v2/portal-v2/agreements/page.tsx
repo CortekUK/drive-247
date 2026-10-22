@@ -141,7 +141,7 @@ export default function PortalAgreementsPage() {
             <section className="flex flex-col gap-3" aria-label="Your agreements">
               <AgreementsTable
                 rows={progressive}
-                party={{ label: 'Company', name: () => companyName, email: () => companyEmail }}
+                party={{ label: 'Company', name: () => companyName, email: () => companyEmail, emailLabel: 'Company email' }}
                 onOpen={setViewRow}
               />
               <div className={V2_LIST_CLASSES.footer}>
@@ -169,7 +169,7 @@ export default function PortalAgreementsPage() {
         }}
         loadDocument={(row) => loadAgreementDocument(row, CUSTOMER_SOURCE)}
         fetchHistory={fetchCustomerAgreementHistory}
-        party={{ label: 'Company', name: companyName, email: companyEmail }}
+        party={{ label: 'Company', name: companyName, email: companyEmail, emailLabel: 'Company email' }}
         renderHtml={(html) => (
           // An agreement that never reached the signing service exists only as
           // the html that was sent; drawn in a sandboxed frame, no script.

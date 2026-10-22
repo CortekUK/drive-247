@@ -29,7 +29,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { OTPInput, REGEXP_ONLY_DIGITS, type SlotProps } from 'input-otp';
-import { ArrowLeft, Check, Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react-nw';
+import { Check, Eye, EyeOff, Loader2 } from 'lucide-react-nw';
 
 import { Input } from '@nw/components/ui/input';
 import { useCustomerAuth } from '@nw/contexts/CustomerAuthContext';
@@ -400,7 +400,6 @@ export function PasswordChangeForm({
           <div className="space-y-1">
             <p className="text-[15px] font-semibold text-pv-fg">Enter the code we emailed you</p>
             <p className="text-[13px] text-pv-muted-fg">
-              <ShieldCheck aria-hidden className="mr-1 inline size-3.5 align-[-2px]" />
               Sent to <span className="font-medium text-pv-fg">{address}</span>. Your password changes once it checks out.
             </p>
           </div>
@@ -436,7 +435,6 @@ export function PasswordChangeForm({
               disabled={busy}
               className="inline-flex items-center gap-1.5 text-[13px] font-medium text-pv-muted-fg hover:text-pv-fg"
             >
-              <ArrowLeft aria-hidden className="size-3.5" />
               Change the password
             </button>
             <div className="ml-auto flex gap-2">
@@ -518,7 +516,6 @@ export function EmailChangeForm({ onCancel, onDone }: { onCancel: () => void; on
           </label>
           <CodeInput id="email-code" value={code} onChange={setCode} onComplete={(value) => void verify(value)} disabled={busy} autoFocus />
           <p className="text-[12px] text-pv-muted-fg">
-            <ShieldCheck aria-hidden className="mr-1 inline size-3.5" />
             Until you enter it, you sign in with {current}.
           </p>
         </div>

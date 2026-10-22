@@ -29,7 +29,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Loader2, RotateCcw, Upload } from 'lucide-react-nw';
+import { Loader2, Pencil } from 'lucide-react-nw';
 
 import { formatDate, formatTimestamp } from '@nw/components/portal/format';
 import { LoadError } from '@nw/portal-v2/primitives';
@@ -41,8 +41,9 @@ import { supabase } from '@nw/integrations/supabase/client';
 import { cn } from '@nw/lib/utils';
 import { AddCustomerVerifyArt } from '@portal-v2-shared/empty-states/add-customer';
 import { TeachingEmptyState } from '@portal-v2-shared/empty-states/teaching-empty-state';
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@portal-v2-shared/card';
 
-import { PV_BUTTON_OUTLINE_SM, PV_BUTTON_SM, PV_INPUT } from '../_components/pv-kit';
+import { PV_BUTTON, PV_BUTTON_OUTLINE_SM, PV_BUTTON_SM, PV_ICON_BUTTON, PV_INPUT } from '../_components/pv-kit';
 import { RowHint, SettingsPageHeader, StatusPill } from '../_components/settings-ui';
 import { ageInYears } from './details';
 
@@ -187,10 +188,43 @@ export function VerificationSettings() {
     void refetch();
   };
 
+  // The decided check is on screen (not choosing, capturing or following one).
+  const showingResult = decided !== null && (mode === 'view' || mode === 'edit') && !(open && mode === 'view');
+  const decision = decided ? decisionOf(decided) : null;
+  const stillVerified =
+    decided !== null && verification.outcome === 'approved' && (decided.review_result ?? '').toUpperCase() !== 'GREEN';
+
+  // Owner, Oct 22 2026: the status sits up in the header row, and Re-verify
+  // is the page's one main action, on its right.
   const header = (
     <SettingsPageHeader
       title="Verification"
-      description="Who you are and where you are from, from one document: your driving licence or your ID card."
+      description={
+        showingResult && decided ? (
+          <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-medium text-pv-fg">{documentLabel(decided.document_type) ?? 'Document'}</span>
+            {decision ? <StatusPill tone={decision.tone}>{decision.label}</StatusPill> : null}
+            <span>Checked {formatTimestamp(decided.verification_completed_at ?? decided.updated_at ?? decided.created_at) ?? ''}</span>
+            {stillVerified ? <span>· You are still verified from your earlier check.</span> : null}
+          </span>
+        ) : (
+          'Who you are and where you are from, from one document: your driving licence or your ID card.'
+        )
+      }
+      action={
+        showingResult && mode === 'view' ? (
+          <button
+            type="button"
+            className={cn(PV_BUTTON, 'min-w-[132px]')}
+            onClick={() => {
+              setNotice(null);
+              setMode('choose');
+            }}
+          >
+            Re-verify
+          </button>
+        ) : undefined
+      }
     />
   );
 
@@ -220,7 +254,7 @@ export function VerificationSettings() {
   return (
     <div className="flex flex-col gap-6">
       {header}
-      {notice ? <p className="rounded-2xl bg-pv-tint px-4 py-3 text-[13px] text-pv-fg">{notice}</p> : null}
+      {notice ? <p className="text-[13px] text-pv-fg">{notice}</p> : null}
       {error ? <RowHint tone="danger">{error}</RowHint> : null}
 
       {mode === 'choose' ? (
@@ -237,7 +271,6 @@ export function VerificationSettings() {
       ) : decided ? (
         <Result
           row={decided}
-          stillVerified={verification.outcome === 'approved' && (decided.review_result ?? '').toUpperCase() !== 'GREEN'}
           editing={mode === 'edit'}
           onEdit={() => {
             setNotice(null);
@@ -247,10 +280,6 @@ export function VerificationSettings() {
             setMode('view');
             if (message) setNotice(message);
             void refetch();
-          }}
-          onReverify={() => {
-            setNotice(null);
-            setMode('choose');
           }}
         />
       ) : verifiedByOperator ? (
@@ -306,7 +335,6 @@ function ChooseDocument({ busy, onPick, onBack }: { busy: boolean; onPick: (type
       </div>
       <div>
         <button type="button" onClick={onBack} disabled={busy} className={PV_BUTTON_OUTLINE_SM}>
-          <ArrowLeft aria-hidden />
           Back
         </button>
         {busy ? <Loader2 aria-label="Starting" className="ml-3 inline size-4 animate-spin text-pv-muted-fg" /> : null}
@@ -456,7 +484,7 @@ function Capture({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={previews[slot]} alt="" className="size-full object-cover" />
                   ) : (
-                    <Upload aria-hidden className="size-4" />
+                    'Add photo'
                   )}
                 </button>
                 <span className="truncate text-[12px] font-medium text-pv-fg">{label}</span>
@@ -519,7 +547,6 @@ function InFlight({ row, busy, onRestart, onCancel }: { row: CustomerVerificatio
       {processing ? null : (
         <div className="flex gap-2">
           <button type="button" className={PV_BUTTON_SM} onClick={onRestart} disabled={busy}>
-            <RotateCcw aria-hidden />
             Start again
           </button>
           <button type="button" className={PV_BUTTON_OUTLINE_SM} onClick={onCancel} disabled={busy}>
@@ -533,20 +560,26 @@ function InFlight({ row, busy, onRestart, onCancel }: { row: CustomerVerificatio
 
 /* ──────────────────────────────── result ───────────────────────────────── */
 
-function Picture({ label, src }: { label: string; src: string | null }) {
+/**
+ * One picture from the check. Drawn only when the check stored it (owner, Oct
+ * 22 2026: no "No picture on file" tiles); one the browser cannot load takes
+ * itself out rather than showing a broken frame.
+ */
+function Picture({ label, src }: { label: string; src: string }) {
   const [failed, setFailed] = useState(false);
+  if (failed) return null;
   return (
     <figure className="flex min-w-0 flex-col gap-2">
-      <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-2xl bg-pv-muted">
-        {src && !failed ? (
-          <a href={src} target="_blank" rel="noopener noreferrer" className="block size-full" aria-label={`Open ${label}`}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={src} alt={label} onError={() => setFailed(true)} className="size-full object-cover" />
-          </a>
-        ) : (
-          <span className="px-3 text-center text-[12px] text-pv-muted-fg">{failed ? 'This picture could not be shown' : 'No picture on file'}</span>
-        )}
-      </div>
+      <a
+        href={src}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block aspect-[4/3] overflow-hidden rounded-2xl bg-pv-muted"
+        aria-label={`Open ${label}`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt={label} onError={() => setFailed(true)} className="size-full object-cover" />
+      </a>
       <figcaption className="text-[12px] font-medium text-pv-muted-fg">{label}</figcaption>
     </figure>
   );
@@ -566,21 +599,15 @@ type Field = (typeof FIELDS)[number];
 
 function Result({
   row,
-  stillVerified,
   editing,
   onEdit,
   onEditDone,
-  onReverify,
 }: {
   row: CustomerVerificationRow;
-  /** This check failed, but the customer is verified from an earlier one. */
-  stillVerified: boolean;
   editing: boolean;
   onEdit: () => void;
   onEditDone: (message: string | null) => void;
-  onReverify: () => void;
 }) {
-  const decision = decisionOf(row);
   const licence = isLicence(row.document_type);
   const name = licence ? 'licence' : 'ID';
   const [now, setNow] = useState<Date | null>(null);
@@ -613,7 +640,7 @@ function Result({
     document_country: row.document_country ? countryName(row.document_country) : null,
     document_issuing_date: formatDate(row.document_issuing_date?.slice(0, 10) ?? null),
     document_expiry_date: row.document_expiry_date ? (
-      <span className="inline-flex flex-wrap items-center gap-2">
+      <span className="inline-flex flex-wrap items-center justify-end gap-2">
         {formatDate(row.document_expiry_date.slice(0, 10))}
         {expired ? <StatusPill tone="negative">Expired</StatusPill> : null}
       </span>
@@ -621,56 +648,56 @@ function Result({
     address: row.address,
   };
 
-  return (
-    <section aria-label="Your verification" className="flex max-w-[960px] flex-col gap-6">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="text-[15px] font-semibold text-pv-fg">{documentLabel(row.document_type) ?? 'Document'}</span>
-        {decision ? <StatusPill tone={decision.tone}>{decision.label}</StatusPill> : null}
-        <span className="text-[13px] text-pv-muted-fg">
-          Checked {formatTimestamp(row.verification_completed_at ?? row.updated_at ?? row.created_at) ?? ''}
-        </span>
+  // Only the pictures this check actually stored.
+  const pictures = [
+    { label: `Front of ${name}`, src: row.document_front_url },
+    { label: `Back of ${name}`, src: row.document_back_url },
+    { label: 'Selfie', src: row.selfie_image_url ?? row.face_image_url },
+  ].filter((picture): picture is { label: string; src: string } => Boolean(picture.src));
+  const hasPictures = pictures.length > 0;
+
+  // Owner, Oct 22 2026: everything read off the document in ONE white card,
+  // with a pencil on the card to correct it. No separate button, no
+  // explanation: the pencil says it.
+  const details = (
+    <Card className="gap-3 py-5">
+      <CardHeader className="px-6">
+        <CardTitle className="text-[15px] font-semibold text-pv-fg">{licence ? 'Your driving licence' : 'Your ID card'}</CardTitle>
         {editing ? null : (
-          <div className="ml-auto flex gap-2">
-            <button type="button" className={PV_BUTTON_OUTLINE_SM} onClick={onEdit}>
-              Edit details
+          <CardAction>
+            <button type="button" className={PV_ICON_BUTTON} onClick={onEdit} aria-label="Edit details" title="Edit details">
+              <Pencil aria-hidden />
             </button>
-            <button type="button" className={PV_BUTTON_SM} onClick={onReverify}>
-              <RotateCcw aria-hidden />
-              Re-verify
-            </button>
-          </div>
+          </CardAction>
         )}
-      </div>
-
-      {stillVerified ? (
-        <p className="-mt-3 text-[13px] text-pv-muted-fg">This latest check did not go through, but you are still verified from your earlier one.</p>
-      ) : null}
-
-      <div className="grid grid-cols-3 gap-4">
-        <Picture label={`Front of ${name}`} src={row.document_front_url} />
-        <Picture label={`Back of ${name}`} src={row.document_back_url} />
-        <Picture label="Selfie" src={row.selfie_image_url ?? row.face_image_url} />
-      </div>
-
-      {editing ? (
-        <EditDetails row={row} labels={labels} onDone={onEditDone} />
-      ) : (
-        <div>
-          <dl className="grid gap-x-10 sm:grid-cols-2">
+      </CardHeader>
+      <CardContent className="px-6">
+        {editing ? (
+          <EditDetails row={row} labels={labels} onDone={onEditDone} />
+        ) : (
+          <dl className={cn('grid gap-x-10', !hasPictures && 'sm:grid-cols-2')}>
             {FIELDS.map((field) => (
-              <div key={field} className="flex items-baseline justify-between gap-4 border-b border-pv-border/60 py-3">
+              <div key={field} className="flex items-baseline justify-between gap-4 border-b border-pv-border/60 py-2.5 last:border-b-0">
                 <dt className="shrink-0 text-[13px] text-pv-muted-fg">{labels[field]}</dt>
                 <dd className="min-w-0 text-right text-[14px] break-words text-pv-fg">{shown[field] ?? <span className="text-pv-muted-fg">—</span>}</dd>
               </div>
             ))}
           </dl>
-          <p className="mt-3 text-[12px] text-pv-muted-fg">
-            {row.customer_corrected_at
-              ? `You corrected these details on ${formatTimestamp(row.customer_corrected_at)}. The company can see what the scan read and what you changed.`
-              : 'Read off your document automatically. If anything is wrong, edit it.'}
-          </p>
-        </div>
-      )}
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  if (!hasPictures) return <section aria-label="Your verification">{details}</section>;
+
+  return (
+    <section aria-label="Your verification" className="grid items-start gap-6 lg:grid-cols-2">
+      {details}
+      <div className="grid grid-cols-2 gap-4">
+        {pictures.map((picture) => (
+          <Picture key={picture.label} label={picture.label} src={picture.src} />
+        ))}
+      </div>
     </section>
   );
 }

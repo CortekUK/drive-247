@@ -27,7 +27,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, CarFront, CircleAlert, CircleCheck, Clock, Gauge, IdCard, MapPin } from 'lucide-react-nw';
+import { ArrowLeft, CircleAlert } from 'lucide-react-nw';
 
 import { formatDate, formatDateTime, formatTimestamp } from '@nw/components/portal/format';
 import { formatBookingDates, formatNights } from '@nw/portal-v2/rentals/format';
@@ -43,9 +43,9 @@ import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { useTenant } from '@nw/contexts/TenantContext';
 import { calculateTotalMileageAllowance } from '@nw/lib/domain';
 import { cn } from '@nw/lib/utils';
-import { V2_BUTTON_DEFAULT_SM, V2_BUTTON_OUTLINE, V2_BUTTON_OUTLINE_SM } from '@portal-v2-shared/button-styles';
+import { V2_BUTTON_OUTLINE } from '@portal-v2-shared/button-styles';
 import { Card, CardAction, CardHeader, CardTitle } from '@portal-v2-shared/card';
-import { ToneAlert } from '@nw/portal-v2/hero';
+import { AlertStripe } from '@nw/portal-v2/alert-bar';
 import { InstalmentTrack, PaidBar } from '@nw/portal-v2/instalment-track';
 
 /** Hover = fade only, 200ms, ease-out on / ease-in off (V2_PLAN §12). */
@@ -172,7 +172,11 @@ function useRentalMoney(rental: CustomerRentalDetail): {
   return null;
 }
 
-/** The operator's tinted alert, for this one rental's money. */
+/**
+ * This rental's money, as an alert stripe (alert-bar.tsx): the amount, and Pay
+ * right there — the customer pays every rental here, including ones the
+ * operator created. A plan-collected balance says so instead.
+ */
 function MoneyLine({ rental }: { rental: CustomerRentalDetail }) {
   const { formatCurrency } = useTenantBranding();
   const money = useRentalMoney(rental);
@@ -181,23 +185,18 @@ function MoneyLine({ rental }: { rental: CustomerRentalDetail }) {
   const title = money.overdue
     ? `${formatCurrency(money.amount)} is overdue${money.dueDate ? ` since ${formatDate(money.dueDate)}` : ''}`
     : `${formatCurrency(money.amount)} to pay${money.dueDate ? ` by ${formatDate(money.dueDate)}` : ''}`;
-  const description =
-    money.action === 'pay'
-      ? 'You can pay it by card from Finances.'
-      : 'Your instalment plan collects it from your card on each due date.';
 
-  const action =
-    money.action === 'pay' ? (
-      <Link href="/portal/payments#pay" className={V2_BUTTON_DEFAULT_SM}>
-        Pay now
-      </Link>
-    ) : (
-      <Link href="/portal/payments#plans" className={V2_BUTTON_OUTLINE_SM}>
-        View plan
-      </Link>
-    );
-
-  return <ToneAlert tone={money.overdue ? 'danger' : 'warning'} title={title} description={description} action={action} />;
+  return (
+    <AlertStripe
+      item={{
+        key: 'money',
+        variant: money.overdue ? 'red' : 'yellow',
+        title,
+        description: money.action === 'pay' ? 'Pay it by card now' : 'Your instalment plan collects it from your card on each due date',
+        action: money.action === 'pay' ? { label: 'Pay now', payRentalId: rental.id } : undefined,
+      }}
+    />
+  );
 }
 
 /* ─────────────────────────────── the detail ────────────────────────────── */
@@ -277,16 +276,22 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
     <>
       {/* ── Anything the customer must know before the detail ────────────── */}
       {rental.lifecycle === 'cancelled' ? (
-        <ToneAlert
-          tone="danger"
-          title="This rental was cancelled"
-          description={rental.cancellationReason ?? 'If you did not expect this, contact us and we will look into it.'}
+        <AlertStripe
+          item={{
+            key: 'cancelled',
+            variant: 'red',
+            title: 'This rental was cancelled',
+            description: rental.cancellationReason ?? 'If you did not expect this, contact us and we will look into it',
+          }}
         />
       ) : rental.cancellationRequested ? (
-        <ToneAlert
-          tone="warning"
-          title="Cancellation requested"
-          description="We have your request. The rental stays active until we confirm it."
+        <AlertStripe
+          item={{
+            key: 'cancel-requested',
+            variant: 'yellow',
+            title: 'Cancellation requested',
+            description: 'We have your request. The rental stays active until we confirm it',
+          }}
         />
       ) : (
         <MoneyLine rental={rental} />
@@ -314,9 +319,7 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
                     decoding="async"
                     className="size-full object-cover"
                   />
-                ) : (
-                  <CarFront aria-hidden strokeWidth={1.5} className="size-8 text-pv-primary" />
-                )}
+                ) : null}
               </span>
               <div className="flex min-w-0 flex-1 flex-col gap-2.5">
                 <div>
@@ -340,7 +343,6 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
                 ) : null}
 
                 <p className="flex items-start gap-2 text-[13px] leading-relaxed text-pv-muted-fg">
-                  <Gauge aria-hidden strokeWidth={1.75} className="mt-0.5 size-4 shrink-0" />
                   <span>
                     {rental.isUnlimitedMileage ? (
                       <span className="font-medium text-pv-fg">Unlimited mileage included</span>
@@ -405,7 +407,6 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
             {/* No place recorded on either end: say so, rather than leave a gap. */}
             {!pickupPlace && !returnPlace ? (
               <p className="flex items-start gap-2 border-t border-pv-border px-6 py-3 text-[13px] leading-relaxed text-pv-muted-fg">
-                <MapPin aria-hidden strokeWidth={1.75} className="mt-0.5 size-4 shrink-0" />
                 No pick-up or return address is recorded on this rental. Contact us if you need it.
               </p>
             ) : null}
@@ -541,7 +542,6 @@ const DOCUMENT_STEP: Partial<
     {
       title: string;
       tone: 'warning' | 'info' | 'success';
-      icon: typeof IdCard;
       /** Chip text mirroring the state, so the panel says it as well as shows it. */
       chip: string;
     }
@@ -550,7 +550,6 @@ const DOCUMENT_STEP: Partial<
   awaiting_documents: {
     title: 'We need your documents',
     tone: 'warning',
-    icon: IdCard,
     chip: 'Action needed',
   },
   documents_in_review: {
@@ -558,19 +557,16 @@ const DOCUMENT_STEP: Partial<
     // have not reached yet.
     title: 'Documents received — being checked',
     tone: 'info',
-    icon: Clock,
     chip: 'Under review',
   },
   awaiting_approval: {
     title: 'Documents accepted — with our team',
     tone: 'info',
-    icon: Clock,
     chip: 'Under review',
   },
   approved: {
     title: 'Rental confirmed',
     tone: 'success',
-    icon: CircleCheck,
     chip: 'Confirmed',
   },
 };
@@ -625,8 +621,6 @@ function DocumentsPanel({ rental }: { rental: CustomerRentalDetail }) {
     return null;
   }
 
-  const Icon = step.icon;
-
   // The address the link was sent to. `useCustomer` reads `customers.email`,
   // which is the same row the booking hangs off (`rentals.customer_id`), so
   // this really is where it went. Falls back to a description rather than a
@@ -641,16 +635,7 @@ function DocumentsPanel({ rental }: { rental: CustomerRentalDetail }) {
       )}
     >
       <div className="flex items-start gap-3.5 px-4 py-4 sm:px-5">
-        <Icon
-          aria-hidden
-          strokeWidth={1.75}
-          className={cn(
-            'mt-0.5 size-5 shrink-0',
-            step.tone === 'warning' && 'text-pv-warning',
-            step.tone === 'info' && 'text-pv-primary',
-            step.tone === 'success' && 'text-pv-success',
-          )}
-        />
+
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-[15px] font-semibold text-pv-fg">{step.title}</h2>

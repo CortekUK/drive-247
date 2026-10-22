@@ -84,8 +84,11 @@ export function Notice({
   lines,
   children,
   className,
+  plain = false,
 }: {
   tone: Tone;
+  /** No leading glyph: the tinted ground already carries the tone. */
+  plain?: boolean;
   title?: string;
   /** One line per item; rendered as a list. */
   lines?: string[];
@@ -100,7 +103,7 @@ export function Notice({
       role={tone === 'danger' ? 'alert' : 'status'}
       className={cn('flex items-start gap-3 rounded-2xl px-5 py-4 ring-1', NOTICE_GROUND[tone], className)}
     >
-      <Icon aria-hidden strokeWidth={1.75} className={cn('mt-0.5 size-4 shrink-0', NOTICE_INK[tone])} />
+      {plain ? null : <Icon aria-hidden strokeWidth={1.75} className={cn('mt-0.5 size-4 shrink-0', NOTICE_INK[tone])} />}
       <div className="min-w-0 flex-1">
         {title ? <p className="text-sm font-semibold text-pv-fg">{title}</p> : null}
         {lines && lines.length > 0 ? (
@@ -203,15 +206,16 @@ export function DialogScreenHeader({
   title,
   description,
 }: {
-  icon: LucideIcon;
+  /** Optional art. The Insurances screens go without (owner: icons read cheap). */
+  icon?: LucideIcon;
   tone?: Tone;
   title: string;
   description?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center pt-2 text-center">
-      <IconTile icon={icon} tone={tone} className="size-14 rounded-3xl [&>svg]:size-6" />
-      <DialogPrimitive.Title className="mt-5 text-xl font-semibold tracking-[-0.02em] text-pv-fg [text-wrap:balance]">
+    <div className={cn('flex flex-col items-center text-center', icon ? 'pt-2' : 'pt-1')}>
+      {icon ? <IconTile icon={icon} tone={tone} className="mb-5 size-14 rounded-3xl [&>svg]:size-6" /> : null}
+      <DialogPrimitive.Title className="text-xl font-semibold tracking-[-0.02em] text-pv-fg [text-wrap:balance]">
         {title}
       </DialogPrimitive.Title>
       {description ? (
@@ -245,7 +249,7 @@ export function ConfirmDialog({
   onConfirm,
 }: {
   open: boolean;
-  icon: LucideIcon;
+  icon?: LucideIcon;
   tone?: Tone;
   title: string;
   description: React.ReactNode;

@@ -1,107 +1,88 @@
 'use client';
 
 /**
- * Finances — what the customer owes, what they have paid, and every invoice.
+ * Finances — what the customer owes, what they have paid, every invoice, and
+ * the card we charge.
  *
- * ── THE LAYOUT (owner, Oct 22 2026) ─────────────────────────────────────────
- * The overdue figure used to appear six times. Now, top to bottom: one status
- * line (the amount, whether it is late, the one action); two figures,
- * Outstanding and Paid to date; Pay rows only for bookings that can be paid
- * here; the balance as a tight table; one card per instalment plan with its
- * overdue instalment named inside it; then Invoices / Payments.
+ * ── THE LAYOUT (owner, Oct 22 2026, second pass) ────────────────────────────
+ * Top to bottom: the page header (and the alert bar under it, as on every
+ * page); the one graph in the portal — the balance, what is still to pay and
+ * what has been paid — beside a simple status: "All settled", or the amount
+ * due and nothing more. The status opens the detail (what the balance is made
+ * of, and a Pay button per booking). Then the card on file, then Invoices /
+ * Payments in the same table the other tabs use.
+ *
+ * Gone on purpose: the help card (Ask Trax is in the top bar), the elaborate
+ * balance panel, and the instalment plan / pay-as-you-go / auto-extension UI,
+ * which will be designed on their own later.
+ *
+ * ── PAYING ──────────────────────────────────────────────────────────────────
+ * The customer pays for every rental, including ones the operator created.
+ * Pay sits on each invoice row with an amount due, in the invoice dialog, in
+ * the status detail, on the rental page and in the alert bar — all through
+ * the shell's PayProvider (northwind-site/portal-v2/pay), one booking at a
+ * time because that is the unit `create-booking-payment-intent` prices.
  *
  * ── ONE BALANCE, ONE SOURCE ─────────────────────────────────────────────────
- * The headline figure comes from `ledger_entries` and nothing else. The invoice
- * list beneath it carries per-invoice states but deliberately no second
- * aggregate: two totals on one screen that are computed differently WILL
- * disagree eventually, and the customer has no way to tell which one to believe.
- * See the header of `use-customer-payments.ts` for which table answers what.
- *
- * ── WHAT CAN BE PAID FROM HERE, AND WHAT CANNOT ─────────────────────────────
- * An outstanding balance can now be settled by card, one booking at a time —
- * see `_components/pay-balances.tsx` for why a booking is the unit and
- * `settlement-watch.tsx` for how the result is confirmed. This became possible
- * when staging got its OWN Stripe webhook endpoint; before that, staging's
- * webhooks fired into the production project and no payment button could be
- * exercised end to end, which is why this page shipped read-only.
- *
- * Still deliberately absent, because each needs server work that does not
- * exist yet rather than a button:
- *
- *   Update card    — needs a SetupIntent endpoint. There is none: every
- *                    function here mints PAYMENT intents against a rental.
- *                    Stripe's Billing Portal is not a substitute either — the
- *                    tenant-facing portal session is for PLATFORM subscription
- *                    billing on a different Stripe account entirely.
- *   Pay an instalment early / activate a plan — the collections are driven
- *                    server-side off `scheduled_installments`, and paying the
- *                    underlying charge in one go would leave the schedule
- *                    collecting against a zero balance. That is an operator
- *                    action, not a customer one.
- *   Statement download — no endpoint renders one.
- *
- * Each of those states its reason on screen rather than showing a control that
- * does nothing.
+ * The headline figure comes from `ledger_entries` and nothing else. See the
+ * header of `use-customer-payments.ts` for which table answers what.
  */
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Banknote, FileText, Receipt } from 'lucide-react-nw';
 
 import { formatDate } from '@nw/components/portal/format';
-import { EmptyState, LoadError, PageHeader, Panel } from '@nw/portal-v2/primitives';
 import { Skeleton } from '@nw/components/ui/skeleton';
+import { Dialog } from '@nw/components/ui/dialog';
+import { useTenant } from '@nw/contexts/TenantContext';
 import {
   useCustomerPayments,
   type CustomerBalance,
-  type CustomerInstallmentPlan,
   type CustomerInvoice,
   type CustomerPayment,
   type PayableBalance,
 } from '@nw/hooks/use-customer-payments';
 import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { cn } from '@nw/lib/utils';
-import { FeaturedLinkCard, HeroChartLoading, ToneAlert, localDay } from '@nw/portal-v2/hero';
-import { useCustomerTrax } from '@nw/portal-v2/trax/trax-context';
-import { V2_BUTTON_DEFAULT_SM, V2_BUTTON_OUTLINE_SM } from '@portal-v2-shared/button-styles';
-import { Card, CardContent, CardHeader, CardTitle } from '@portal-v2-shared/card';
+import { PvDialogContent } from '@nw/portal-v2/dialog';
+import { FeaturedLinkCard, HeroChartLoading, localDay } from '@nw/portal-v2/hero';
+import { PayButton } from '@nw/portal-v2/pay/pay-provider';
+import { LoadError, PageHeader } from '@nw/portal-v2/primitives';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { V2_BUTTON_OUTLINE_SM } from '@portal-v2-shared/button-styles';
 import { HeroChart, HeroRow, type HeroMetric } from '@portal-v2-shared/hero-chart';
-
-import { InstalmentPlans } from './_components/instalment-plans';
-import { InvoiceDialog } from './_components/invoice-dialog';
-import { INVOICE_CHIP, PAYMENT_CHIP } from './_components/invoice-state';
 import {
   ListBody,
-  ListCard,
   ListCell,
   ListHead,
-  ListHeaderRow,
   ListRow,
-  RowButton,
-  SectionTitle,
-  SegmentedTabs,
-  StatusText,
-} from './_components/list-table';
-import { PayBalances } from './_components/pay-balances';
+  ListStatusText,
+  ListTable,
+  ListTableHeader,
+  useProgressiveRows,
+} from '@portal-v2-shared/list-table';
+import { V2_LIST_CLASSES, type V2ListTone } from '@portal-v2-shared/list-styles';
+import { ROW_OPEN_CELL, RowOpenIndicator } from '@portal-v2-shared/row-open';
+
+import { CardsSection } from './_components/cards';
+import { InvoiceDialog } from './_components/invoice-dialog';
+import { INVOICE_CHIP, PAYMENT_CHIP } from './_components/invoice-state';
+import { SegmentedTabs } from './_components/list-table';
 
 type Tab = 'invoices' | 'payments';
 
+/** The chips' tones in the shared list's palette. */
+const TONE: Record<string, V2ListTone> = { success: 'success', info: 'info', warning: 'warning', danger: 'danger', neutral: 'muted' };
+
 export default function PortalPaymentsPage() {
-  const { balance, payableBalances, invoices, payments, activePlans, isLoading, isError, error, refetch } =
-    useCustomerPayments();
+  const { balance, payableBalances, invoices, payments, isLoading, isError, error, refetch } = useCustomerPayments();
 
   const [tab, setTab] = useState<Tab>('invoices');
   const [openInvoice, setOpenInvoice] = useState<CustomerInvoice | null>(null);
-
-  // A booking on an instalment plan is collected by the plan, so it gets no Pay
-  // button: its plan card says so once, rather than a pay row that shows an
-  // amount and then says there is nothing to pay (owner, Oct 22 2026).
-  const payableNow = useMemo(() => payableBalances.filter((row) => row.blockedReason === null), [payableBalances]);
-
-  const hasAnything = invoices.length > 0 || payments.length > 0 || activePlans.length > 0 || balance.outstanding > 0;
+  const [detailOpen, setDetailOpen] = useState(false);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       <PageHeader title="Finances" description="What you owe, what you have paid, and every invoice for your bookings." />
 
       {isError ? (
@@ -116,84 +97,62 @@ export default function PortalPaymentsPage() {
 
       {isLoading ? (
         <>
-          <HeroRow chart={<HeroChartLoading label="Outstanding" range="Last 3 months" />} />
-          <PaymentsSkeleton />
-        </>
-      ) : !hasAnything ? (
-        <Panel>
-          <EmptyState
-            icon={Receipt}
-            title="Nothing to pay"
-            description="When you book a car, the invoice and every payment taken against it will appear here."
-            action={{ href: '/booking', label: 'Browse the fleet' }}
+          <HeroRow
+            chart={<HeroChartLoading label="Still to pay" range="Last 3 months" />}
+            card={<Skeleton className="min-h-[15rem] rounded-2xl bg-pv-tint" />}
           />
-        </Panel>
+          <Skeleton className="h-64 w-full rounded-2xl bg-pv-tint" />
+        </>
       ) : (
         <>
-          <BalanceAlert balance={balance} payableNow={payableNow} plans={activePlans} />
-
-          {/* The operator's hero row (Finances, Customers, Rentals): the chart
-              over three columns, the featured card on the fourth. */}
           <HeroRow
             chart={<FinancesChart balance={balance} invoices={invoices} payments={payments} />}
-            card={<AskTraxCard />}
+            card={<BalanceStatus balance={balance} onOpen={() => setDetailOpen(true)} />}
           />
 
-          <PayBalances payable={payableNow} unpayable={balance.unpayable} refetch={refetch} />
+          <CardsSection />
 
-          {/* Side by side, so neither is a lone card on an empty row. */}
-          <div
-            className={cn(
-              'grid gap-5 lg:items-start',
-              balance.categories.length > 0 && activePlans.length > 0 && 'lg:grid-cols-2',
-            )}
-          >
-            <BalanceBreakdown balance={balance} />
-            <InstalmentPlans plans={activePlans} />
-          </div>
-
-          {/* Operator list pattern: section title, the filter bar, the table. */}
-          <section id="invoices" className="flex scroll-mt-24 flex-col gap-3">
-            <SectionTitle
-              title={tab === 'invoices' ? 'Invoices' : 'Payments'}
-              description={
-                tab === 'invoices'
-                  ? 'Every invoice raised for your bookings. Open one for the full breakdown.'
-                  : 'Every card payment, hold and refund on your account.'
-              }
-              action={
+          <section id="invoices" aria-labelledby="money-list-title" className="flex scroll-mt-24 flex-col gap-3">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 id="money-list-title" className="text-[17px] font-semibold tracking-[-0.01em] text-pv-fg">
+                  {tab === 'invoices' ? 'Invoices' : 'Payments'}
+                </h2>
+                <p className="text-sm text-pv-muted-fg">
+                  {tab === 'invoices'
+                    ? 'Every invoice raised for your bookings. Open one for the full breakdown.'
+                    : 'Every card payment, hold and refund on your account.'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => (tab === 'invoices' ? exportInvoices(invoices) : exportPayments(payments))}
+                  disabled={tab === 'invoices' ? invoices.length === 0 : payments.length === 0}
+                  className={V2_BUTTON_OUTLINE_SM}
+                >
+                  Export CSV
+                </button>
                 <SegmentedTabs
                   label="Choose a list"
                   value={tab}
-                  onChange={setTab}
+                  onChange={(value) => setTab(value as Tab)}
                   options={[
                     { value: 'invoices', label: 'Invoices', count: invoices.length },
                     { value: 'payments', label: 'Payments', count: payments.length },
                   ]}
                 />
-              }
-            />
+              </div>
+            </div>
 
             {tab === 'invoices' ? (
               invoices.length === 0 ? (
-                <Panel>
-                  <EmptyState
-                    icon={FileText}
-                    title="No invoices yet"
-                    description="An invoice is raised when a booking is confirmed. Yours will show up here with a full breakdown."
-                  />
-                </Panel>
+                <EmptyLine>No invoices yet. One is raised when a booking is confirmed.</EmptyLine>
               ) : (
                 <InvoiceTable invoices={invoices} onOpen={setOpenInvoice} />
               )
             ) : payments.length === 0 ? (
-              <Panel>
-                <EmptyState
-                  icon={Banknote}
-                  title="No payments yet"
-                  description="Every card payment and refund on your account will be listed here once one has been taken."
-                />
-              </Panel>
+              <EmptyLine>No payments yet. Every card payment and refund will be listed here.</EmptyLine>
             ) : (
               <PaymentTable payments={payments} />
             )}
@@ -206,25 +165,32 @@ export default function PortalPaymentsPage() {
         onOpenChange={(open) => {
           if (!open) setOpenInvoice(null);
         }}
+        footer={openInvoice && openInvoice.outstanding > 0 ? <PayButton rentalId={openInvoice.rentalId} /> : null}
+      />
+      <BalanceDetailDialog
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        balance={balance}
+        payable={payableBalances}
       />
     </div>
   );
 }
 
-/* ────────────────────────────── the pieces ─────────────────────────────── */
+function EmptyLine({ children }: { children: React.ReactNode }) {
+  return <p className="rounded-2xl border border-pv-border bg-pv-card px-5 py-8 text-center text-sm text-pv-muted-fg">{children}</p>;
+}
+
+/* ─────────────────────────────── the graph ──────────────────────────────── */
 
 /**
- * The operator's hero chart, on the customer's own money (owner, Oct 22 2026:
- * "a chart of what the customer has paid over time, with the outstanding
- * amount as the headline figure").
+ * The balance over time (owner, Oct 22 2026: "a graph showing the balance, how
+ * much is still to pay, and how much has been paid").
  *
- *   Outstanding — the headline, a level: today's point IS the ledger balance
- *     the rest of the page quotes, and each earlier day is worked back from it
- *     by the invoices raised and the payments taken since. Its second line is
- *     what has been paid to date, so the two read against each other.
- *   Paid — the other metric in the label's menu: money paid per day, week or
- *     month, with what was invoiced as the second line, as the operator's
- *     Finances tab draws Invoiced against Collected.
+ *   Still to pay — a level: today's point IS the ledger balance, each earlier
+ *     day worked back from it by the invoices raised and payments taken since;
+ *     its second line is what has been paid to date.
+ *   Paid — money paid per period, with what was invoiced as the second line.
  */
 function FinancesChart({
   balance,
@@ -238,32 +204,27 @@ function FinancesChart({
   const { formatCurrency } = useTenantBranding();
 
   const metrics = useMemo<HeroMetric[]>(() => {
-    const paid = payments
-      .filter((payment) => payment.net !== 0)
-      .map((payment) => ({ at: localDay(payment.date), amount: payment.net }));
+    const paid = payments.filter((p) => p.net !== 0).map((p) => ({ at: localDay(p.date), amount: p.net }));
     const invoiced = invoices
       .filter((invoice) => invoice.state !== 'cancelled')
       .map((invoice) => ({ at: localDay(invoice.invoiceDate), amount: invoice.total }));
 
-    const after = (events: readonly { at: Date; amount: number }[], day: Date) => {
-      const end = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1).getTime();
-      return events.reduce((sum, event) => (event.at.getTime() >= end ? sum + event.amount : sum), 0);
-    };
-    const upTo = (events: readonly { at: Date; amount: number }[], day: Date) => {
-      const end = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1).getTime();
-      return events.reduce((sum, event) => (event.at.getTime() < end ? sum + event.amount : sum), 0);
-    };
+    const endOf = (day: Date) => new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1).getTime();
+    const after = (events: readonly { at: Date; amount: number }[], day: Date) =>
+      events.reduce((sum, e) => (e.at.getTime() >= endOf(day) ? sum + e.amount : sum), 0);
+    const upTo = (events: readonly { at: Date; amount: number }[], day: Date) =>
+      events.reduce((sum, e) => (e.at.getTime() < endOf(day) ? sum + e.amount : sum), 0);
     const round = (value: number) => Math.round(value * 100) / 100;
 
-    const days = [...paid, ...invoiced].map((event) => event.at.getTime());
+    const days = [...paid, ...invoiced].map((e) => e.at.getTime());
     const historyStart = days.length > 0 ? new Date(Math.min(...days)) : undefined;
 
     return [
       {
         key: 'outstanding',
         kind: 'stock',
-        label: 'Outstanding',
-        description: 'What you owe today, and what you owed on each day before it.',
+        label: 'Still to pay',
+        description: 'Your balance: what you owe today, and on each day before it.',
         lowerIsBetter: true,
         format: formatCurrency,
         valueOn: (day: Date) => Math.max(0, round(balance.outstanding - after(invoiced, day) + after(paid, day))),
@@ -285,329 +246,347 @@ function FinancesChart({
   return <HeroChart metrics={metrics} defaultRange="3m" />;
 }
 
-/** The featured card: Trax, which knows this account, for a question about a charge. */
-function AskTraxCard() {
-  const { setOpen } = useCustomerTrax();
-  return <FeaturedLinkCard title="Ask Trax" subtitle="Questions about a charge or a payment" onClick={() => setOpen(true)} />;
+/* ─────────────────────────────── the status ─────────────────────────────── */
+
+/** "All settled", or the amount due — nothing more. It opens the detail. */
+function BalanceStatus({ balance, onOpen }: { balance: CustomerBalance; onOpen: () => void }) {
+  const { formatCurrency } = useTenantBranding();
+  if (balance.outstanding === 0) {
+    return <FeaturedLinkCard title="All settled" subtitle="Nothing is due on your account" onClick={onOpen} />;
+  }
+  const overdue = balance.overdue > 0;
+  return (
+    <FeaturedLinkCard
+      title={`${formatCurrency(balance.outstanding)} due`}
+      subtitle={
+        overdue
+          ? `${formatCurrency(balance.overdue)} overdue`
+          : balance.nextDueDate
+            ? `Due ${formatDate(balance.nextDueDate)}`
+            : 'See what it is made of'
+      }
+      onClick={onOpen}
+    />
+  );
 }
 
 /**
- * The one alert at the top: what is owed, whether any of it is late, and the
- * single thing to do — Pay when a booking can be paid here, the plan when an
- * instalment plan collects it, otherwise a person.
+ * Behind the status: what the balance is made of, then each booking with
+ * money open on it and its Pay button.
  */
-function BalanceAlert({
+function BalanceDetailDialog({
+  open,
+  onOpenChange,
   balance,
-  payableNow,
-  plans,
+  payable,
 }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   balance: CustomerBalance;
-  payableNow: readonly PayableBalance[];
-  plans: readonly CustomerInstallmentPlan[];
+  payable: readonly PayableBalance[];
 }) {
   const { formatCurrency } = useTenantBranding();
-
-  if (balance.outstanding === 0) {
-    return <ToneAlert tone="success" title="You are all settled" description="Nothing is outstanding on your account." />;
-  }
-
-  // The amount is the chart's headline right below, so the alert names the
-  // state rather than quoting the figure again.
-  const overdue = balance.overdue > 0;
-  const title = overdue
-    ? balance.overdue === balance.outstanding
-      ? 'Your balance is overdue'
-      : `${formatCurrency(balance.overdue)} of your balance is overdue`
-    : `Your balance is due${balance.nextDueDate ? ` by ${formatDate(balance.nextDueDate)}` : ''}`;
-
-  const description =
-    payableNow.length > 0
-      ? 'You can pay it by card below.'
-      : plans.length > 0
-        ? 'Your instalment plan collects it from your card on each due date.'
-        : 'This cannot be paid by card here. Get in touch and we will take it directly.';
-
-  const action =
-    payableNow.length > 0 ? (
-      <a href="#pay" className={V2_BUTTON_DEFAULT_SM}>
-        Pay now
-      </a>
-    ) : plans.length > 0 ? (
-      <a href="#plans" className={V2_BUTTON_OUTLINE_SM}>
-        View plan
-      </a>
-    ) : (
-      <Link href="/contact" className={V2_BUTTON_OUTLINE_SM}>
-        Contact us
-      </Link>
-    );
-
-  return <ToneAlert tone={overdue ? 'danger' : 'warning'} title={title} description={description} action={action} />;
-}
-
-/**
- * What the outstanding figure is made of, in the operator's card: the rental
- * first, then the fees, tax last, then the total, at the table's row height.
- */
-function BalanceBreakdown({ balance }: { balance: CustomerBalance }) {
-  const { formatCurrency } = useTenantBranding();
-  if (balance.categories.length === 0) return null;
-
-  const rank = (label: string) =>
-    /^rental$/i.test(label) ? 0 : /discount/i.test(label) ? 1 : /^tax/i.test(label) ? 3 : 2;
-  const rows = [...balance.categories].sort((a, b) => rank(a.label) - rank(b.label) || b.amount - a.amount);
+  const rank = (label: string) => (/^rental$/i.test(label) ? 0 : /discount/i.test(label) ? 1 : /^tax/i.test(label) ? 3 : 2);
+  const categories = [...balance.categories].sort((a, b) => rank(a.label) - rank(b.label) || b.amount - a.amount);
 
   return (
-    <Card className="gap-0 py-0">
-      <CardHeader className="border-b border-pv-border py-4">
-        <CardTitle>Balance breakdown</CardTitle>
-      </CardHeader>
-      <CardContent className="px-0">
-        <dl>
-          {rows.map((row) => (
-            <div key={row.label} className="flex items-baseline justify-between gap-4 border-b border-pv-border px-6 py-3">
-              <dt className="text-sm text-pv-fg">{row.label}</dt>
-              <dd className="text-sm tabular-nums text-pv-fg">{formatCurrency(row.amount)}</dd>
-            </div>
-          ))}
-          <div className="flex items-baseline justify-between gap-4 bg-pv-row px-6 py-3.5">
-            <dt className="text-sm font-semibold text-pv-fg">Total outstanding</dt>
-            <dd
-              className={cn('text-base font-semibold tabular-nums', balance.overdue > 0 ? 'text-pv-danger' : 'text-pv-fg')}
-            >
-              {formatCurrency(balance.outstanding)}
-            </dd>
-          </div>
-        </dl>
-        {balance.cancelledCharges > 0 ? (
-          <p className="border-t border-pv-border px-6 py-3 text-[12px] text-pv-muted-fg">
-            {formatCurrency(balance.cancelledCharges)} of charges on cancelled bookings is not included.
-          </p>
-        ) : null}
-      </CardContent>
-    </Card>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <PvDialogContent className="max-h-[85vh] gap-0 overflow-hidden p-0 sm:max-w-lg sm:p-0">
+        <div className="px-7 pb-4 pt-7">
+          <DialogPrimitive.Title className="text-lg font-semibold tracking-tight text-pv-fg">
+            {balance.outstanding === 0 ? 'All settled' : `${formatCurrency(balance.outstanding)} due`}
+          </DialogPrimitive.Title>
+          <DialogPrimitive.Description className="mt-1 text-sm text-pv-muted-fg">
+            {balance.outstanding === 0
+              ? `You have paid ${formatCurrency(balance.paidToDate)} in total. Nothing is outstanding.`
+              : balance.overdue > 0
+                ? `${formatCurrency(balance.overdue)} of it is overdue.`
+                : balance.nextDueDate
+                  ? `Due ${formatDate(balance.nextDueDate)}.`
+                  : 'What it is made of, and what you can pay now.'}
+          </DialogPrimitive.Description>
+        </div>
+
+        <div className="min-h-0 overflow-y-auto border-t border-pv-border">
+          {payable.length > 0 ? (
+            <ul className="divide-y divide-pv-border">
+              {payable.map((row) => (
+                <li key={row.rentalId} className="flex items-center gap-3 px-7 py-3.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-pv-fg">{row.rental?.vehicle?.displayName ?? 'Booking'}</p>
+                    <p className="truncate text-[12px] text-pv-muted-fg">
+                      {[
+                        row.rental?.reference,
+                        row.nextDueDate ? `${row.isOverdue ? 'was due' : 'due'} ${formatDate(row.nextDueDate)}` : null,
+                        row.blockedReason ? 'collected by your instalment plan' : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  </div>
+                  <span className={cn('shrink-0 text-sm font-semibold tabular-nums', row.isOverdue ? 'text-pv-danger' : 'text-pv-fg')}>
+                    {formatCurrency(row.amount)}
+                  </span>
+                  <PayButton rentalId={row.rentalId} compact />
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {categories.length > 0 ? (
+            <dl className="border-t border-pv-border px-7 py-3">
+              {categories.map((row) => (
+                <div key={row.label} className="flex items-baseline justify-between gap-4 py-1.5">
+                  <dt className="text-sm text-pv-muted-fg">{row.label}</dt>
+                  <dd className="text-sm tabular-nums text-pv-fg">{formatCurrency(row.amount)}</dd>
+                </div>
+              ))}
+              <div className="mt-1 flex items-baseline justify-between gap-4 border-t border-pv-border pt-2.5">
+                <dt className="text-sm font-semibold text-pv-fg">Total</dt>
+                <dd className="text-sm font-semibold tabular-nums text-pv-fg">{formatCurrency(balance.outstanding)}</dd>
+              </div>
+            </dl>
+          ) : null}
+
+          {balance.unpayable > 0 ? (
+            <p className="border-t border-pv-border px-7 py-3 text-[13px] text-pv-muted-fg">
+              {formatCurrency(balance.unpayable)} is not linked to a booking, so it cannot be paid here.{' '}
+              <Link href="/contact" className="font-medium text-pv-link hover:underline">
+                Contact us
+              </Link>{' '}
+              and we will take it directly.
+            </p>
+          ) : null}
+          {balance.cancelledCharges > 0 ? (
+            <p className="border-t border-pv-border px-7 py-3 text-[12px] text-pv-muted-fg">
+              {formatCurrency(balance.cancelledCharges)} of charges on cancelled bookings is not included.
+            </p>
+          ) : null}
+        </div>
+      </PvDialogContent>
+    </Dialog>
   );
 }
 
 /* ──────────────────────────────── the lists ──────────────────────────────── */
 
-function InvoiceTable({
-  invoices,
-  onOpen,
-}: {
-  invoices: readonly CustomerInvoice[];
-  onOpen: (invoice: CustomerInvoice) => void;
-}) {
+/** A reference with a copy button at its end: references get copied a lot. */
+function CopyableReference({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
   return (
-    <ListCard>
-      <ListHeaderRow>
-        <ListHead>Invoice</ListHead>
-        <ListHead className="hidden md:table-cell">Booking</ListHead>
-        <ListHead className="hidden md:table-cell">Issued</ListHead>
-        <ListHead className="hidden sm:table-cell">Status</ListHead>
-        <ListHead className="text-right">Amount</ListHead>
-      </ListHeaderRow>
-      <ListBody>
-        {invoices.map((invoice) => (
-          <InvoiceRow key={invoice.id} invoice={invoice} onOpen={() => onOpen(invoice)} />
-        ))}
-      </ListBody>
-    </ListCard>
+    <span className="inline-flex min-w-0 max-w-full items-center gap-1">
+      <span className={cn('truncate', V2_LIST_CLASSES.identifier)}>{value}</span>
+      <button
+        type="button"
+        aria-label={copied ? 'Copied' : `Copy ${value}`}
+        title={copied ? 'Copied' : 'Copy'}
+        onClick={(event) => {
+          event.stopPropagation();
+          void navigator.clipboard?.writeText(value).then(() => {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1400);
+          });
+        }}
+        className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-pv-muted-fg transition-colors duration-200 hover:bg-pv-hover hover:text-pv-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-ring/50 motion-reduce:transition-none"
+      >
+        {copied ? (
+          <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="m5 12.5 4.5 4.5L19 7.5" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <rect x="8.5" y="8.5" width="11" height="11" rx="2.5" />
+            <path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2" />
+          </svg>
+        )}
+      </button>
+    </span>
   );
 }
 
-function InvoiceRow({
-  invoice,
-  onOpen,
-}: {
-  invoice: CustomerInvoice;
-  onOpen: () => void;
-}) {
+/**
+ * Invoices in the table every other tab uses (shared list-table): reference
+ * (with copy), what it is for, the company, due date, total, status, and Pay
+ * where something is due. Customer → Company: the customer is the viewer.
+ */
+function InvoiceTable({ invoices, onOpen }: { invoices: readonly CustomerInvoice[]; onOpen: (invoice: CustomerInvoice) => void }) {
   const { formatCurrency } = useTenantBranding();
-  const chip = INVOICE_CHIP[invoice.state];
-
-  // The phone's second line: what it is for and when it was raised. The booking
-  // reference is included because it is the string a customer quotes on the
-  // phone — the invoice number means nothing to them until support asks.
-  const meta = useMemo(() => {
-    const parts = [
-      invoice.rental?.vehicle?.displayName,
-      invoice.rental?.reference,
-      formatDate(invoice.invoiceDate),
-    ].filter((part): part is string => typeof part === 'string' && part !== '');
-    return parts.join(' · ');
-  }, [invoice]);
+  const { tenant } = useTenant();
+  const company = tenant?.company_name ?? '—';
+  const rows = useProgressiveRows(invoices, 'invoices');
 
   return (
-    <ListRow onOpen={onOpen}>
-      <ListCell className="max-w-0 w-[68%] sm:w-[40%] md:w-[24%]">
-        <RowButton onOpen={onOpen} label={`Open invoice ${invoice.number}`}>
-          <span className="block truncate font-semibold tabular-nums tracking-tight text-pv-fg">
-            {invoice.number}
-          </span>
-        </RowButton>
-        <span className="mt-0.5 block truncate text-[13px] text-pv-muted-fg md:hidden">{meta}</span>
-      </ListCell>
-      <ListCell className="hidden max-w-0 md:table-cell">
-        <span className="block truncate font-medium text-pv-fg">
-          {invoice.rental?.vehicle?.displayName ?? '—'}
-        </span>
-        {invoice.rental?.reference ? (
-          <span className="block truncate text-[13px] text-pv-muted-fg">{invoice.rental.reference}</span>
-        ) : null}
-      </ListCell>
-      <ListCell className="hidden whitespace-nowrap tabular-nums text-pv-fg md:table-cell">
-        {formatDate(invoice.invoiceDate)}
-      </ListCell>
-      <ListCell className="hidden sm:table-cell">
-        <StatusText tone={chip.tone}>{chip.label}</StatusText>
-      </ListCell>
-      <ListCell className="text-right">
-        <span className="block whitespace-nowrap font-semibold tabular-nums text-pv-fg">
-          {formatCurrency(invoice.total)}
-        </span>
-        <StatusText tone={chip.tone} className="sm:hidden">
-          {chip.label}
-        </StatusText>
-      </ListCell>
-    </ListRow>
+    <div className="flex flex-col gap-3">
+      <ListTable rows={rows} minWidth="min-w-[880px]">
+        <ListTableHeader>
+          <ListHead className="w-[24%]">Reference</ListHead>
+          <ListHead className="w-[11%]">Rental</ListHead>
+          <ListHead className="w-[16%]">Company</ListHead>
+          <ListHead className="w-[12%]">Due date</ListHead>
+          <ListHead className="w-[11%]">Total</ListHead>
+          <ListHead className="w-[11%]">Status</ListHead>
+          <ListHead className="w-[15%]">
+            <span className="sr-only">Pay</span>
+          </ListHead>
+        </ListTableHeader>
+        <ListBody>
+          {rows.visible.map((invoice) => {
+            const chip = INVOICE_CHIP[invoice.state];
+            return (
+              <ListRow
+                key={invoice.id}
+                onOpen={() => onOpen(invoice)}
+                tabIndex={0}
+                aria-label={`Open invoice ${invoice.number}`}
+                onKeyDown={(event) => {
+                  if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+                    event.preventDefault();
+                    onOpen(invoice);
+                  }
+                }}
+                className="group/row focus-visible:bg-v2-muted/60 focus-visible:outline-none"
+              >
+                <ListCell>
+                  <CopyableReference value={invoice.number} />
+                </ListCell>
+                <ListCell className="tabular-nums">
+                  <span className={V2_LIST_CLASSES.text}>{invoice.rental?.reference ?? '—'}</span>
+                </ListCell>
+                <ListCell>
+                  <span className={cn('block truncate', V2_LIST_CLASSES.text)} title={company}>
+                    {company}
+                  </span>
+                </ListCell>
+                <ListCell className="tabular-nums">
+                  <span className={V2_LIST_CLASSES.text}>{invoice.dueDate ? formatDate(invoice.dueDate) : '—'}</span>
+                </ListCell>
+                <ListCell className="tabular-nums">
+                  <span className={V2_LIST_CLASSES.text}>{formatCurrency(invoice.total)}</span>
+                </ListCell>
+                <ListCell>
+                  <ListStatusText tone={TONE[chip.tone]}>{chip.label}</ListStatusText>
+                </ListCell>
+                <ListCell className={ROW_OPEN_CELL}>
+                  {invoice.outstanding > 0 ? <PayButton rentalId={invoice.rentalId} compact /> : null}
+                  <RowOpenIndicator />
+                </ListCell>
+              </ListRow>
+            );
+          })}
+        </ListBody>
+      </ListTable>
+      <ListFooter shown={rows.visible.length} total={rows.total} hasMore={rows.hasMore} onMore={rows.showMore} noun="invoice" />
+    </div>
   );
 }
 
 function PaymentTable({ payments }: { payments: readonly CustomerPayment[] }) {
-  return (
-    <ListCard>
-      <ListHeaderRow>
-        <ListHead>Payment</ListHead>
-        <ListHead className="hidden md:table-cell">Date</ListHead>
-        <ListHead className="hidden md:table-cell">Booking</ListHead>
-        <ListHead className="hidden sm:table-cell">Status</ListHead>
-        <ListHead className="text-right">Amount</ListHead>
-      </ListHeaderRow>
-      <ListBody>
-        {payments.map((payment) => (
-          <PaymentRow key={payment.id} payment={payment} />
-        ))}
-      </ListBody>
-    </ListCard>
-  );
-}
-
-function PaymentRow({ payment }: { payment: CustomerPayment }) {
   const { formatCurrency } = useTenantBranding();
-  const chip = PAYMENT_CHIP[payment.state];
-
-  const meta = [formatDate(payment.date), payment.method, payment.rental?.reference]
-    .filter((part): part is string => typeof part === 'string' && part !== '')
-    .join(' · ');
-
+  const rows = useProgressiveRows(payments, 'payments');
   return (
-    <ListRow>
-      <ListCell className="max-w-0 w-[68%] sm:w-[46%] md:w-[38%]">
-        <span className="block truncate font-semibold tracking-tight text-pv-fg">
-          {payment.typeLabel}
-        </span>
-        <span className="mt-0.5 block truncate text-[13px] text-pv-muted-fg md:hidden">{meta}</span>
-        <span className="hidden truncate text-[13px] text-pv-muted-fg md:block">
-          {payment.method ?? ''}
-        </span>
-        {/* A hold reserves money without taking it. Saying so is the whole
-            point of showing the row: the customer can see the amount on their
-            bank statement and needs to know it is not a charge. */}
-        {payment.state === 'hold' ? (
-          <span className="mt-0.5 block whitespace-normal text-[13px] leading-relaxed text-pv-primary">
-            Reserved on your card, not charged
-            {payment.holdExpiresAt
-              ? ` — releases ${formatDate(payment.holdExpiresAt.slice(0, 10))}`
-              : ''}
-            .
-          </span>
-        ) : null}
-        {payment.refunded > 0 ? (
-          <span className="mt-0.5 block text-[13px] text-pv-muted-fg">
-            {formatCurrency(payment.refunded)} refunded
-          </span>
-        ) : null}
-      </ListCell>
-      <ListCell className="hidden whitespace-nowrap tabular-nums text-pv-fg md:table-cell">
-        {formatDate(payment.date)}
-      </ListCell>
-      <ListCell className="hidden max-w-0 md:table-cell">
-        <span className="block truncate font-medium text-pv-fg">
-          {payment.rental?.reference ?? '—'}
-        </span>
-      </ListCell>
-      <ListCell className="hidden sm:table-cell">
-        <StatusText tone={chip.tone}>{chip.label}</StatusText>
-      </ListCell>
-      <ListCell className="text-right">
-        <span
-          className={cn(
-            'block whitespace-nowrap font-semibold tabular-nums',
-            payment.state === 'received' ? 'text-pv-success' : 'text-pv-fg',
-          )}
-        >
-          {formatCurrency(payment.amount)}
-        </span>
-        <StatusText tone={chip.tone} className="sm:hidden">
-          {chip.label}
-        </StatusText>
-      </ListCell>
-    </ListRow>
-  );
-}
-
-/* ─────────────────────────────── skeleton ──────────────────────────────── */
-
-/** Sized like the stat row, the pay panel and the list, so nothing jumps on load. */
-function PaymentsSkeleton() {
-  return (
-    <div className="flex flex-col gap-6" aria-hidden>
-      <Skeleton className="h-12 w-full rounded-xl bg-pv-tint" />
-      <div className="grid grid-cols-2 gap-3 sm:w-fit sm:grid-cols-[repeat(2,minmax(13rem,auto))]">
-        {[0, 1].map((tile) => (
-          <div key={tile} className="rounded-2xl border border-pv-border bg-pv-card px-4 py-3.5">
-            <div className="flex items-center gap-2">
-              <Skeleton className="size-7 rounded-lg bg-pv-tint" />
-              <Skeleton className="h-3 w-20 bg-pv-tint" />
-            </div>
-            <Skeleton className="mt-3 h-7 w-28 bg-pv-tint" />
-            <Skeleton className="mt-2 h-3 w-36 bg-pv-tint" />
-          </div>
-        ))}
-      </div>
-
-      <div className="rounded-2xl border border-pv-border bg-pv-card">
-        <div className="rounded-t-2xl border-b border-pv-border bg-pv-tint/60 px-4 py-3 sm:px-5">
-          <Skeleton className="h-4 w-32 bg-pv-tint" />
-        </div>
-        <div className="flex flex-col gap-3 px-4 py-4 sm:px-5">
-          <Skeleton className="h-4 w-48 bg-pv-tint" />
-          <Skeleton className="h-11 w-full rounded-full bg-pv-tint" />
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-4">
-        <div className="flex items-end justify-between gap-3">
-          <Skeleton className="h-5 w-28 bg-pv-tint" />
-          <Skeleton className="h-11 w-56 rounded-full bg-pv-tint" />
-        </div>
-        <div className="overflow-hidden rounded-2xl border border-pv-border bg-pv-card">
-          <div className="h-11 border-b border-pv-border bg-pv-tint/60" />
-          {[0, 1, 2].map((row) => (
-            <div
-              key={row}
-              className="flex items-center justify-between gap-4 border-b border-pv-border px-5 py-4 last:border-0"
-            >
-              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <Skeleton className="h-4 w-36 bg-pv-tint" />
-                <Skeleton className="h-3 w-48 bg-pv-tint" />
-              </div>
-              <Skeleton className="h-4 w-16 shrink-0 bg-pv-tint" />
-            </div>
-          ))}
-        </div>
-      </div>
+    <div className="flex flex-col gap-3">
+      <ListTable rows={rows} minWidth="min-w-[760px]">
+        <ListTableHeader>
+          <ListHead className="w-[26%]">Payment</ListHead>
+          <ListHead className="w-[16%]">Date</ListHead>
+          <ListHead className="w-[16%]">Rental</ListHead>
+          <ListHead className="w-[16%]">Amount</ListHead>
+          <ListHead className="w-[26%]">Status</ListHead>
+        </ListTableHeader>
+        <ListBody>
+          {rows.visible.map((payment) => {
+            const chip = PAYMENT_CHIP[payment.state];
+            return (
+              <ListRow key={payment.id}>
+                <ListCell>
+                  <span className={cn('block truncate', V2_LIST_CLASSES.identifier)}>{payment.typeLabel}</span>
+                </ListCell>
+                <ListCell className="tabular-nums">
+                  <span className={V2_LIST_CLASSES.text}>{formatDate(payment.date)}</span>
+                </ListCell>
+                <ListCell className="tabular-nums">
+                  <span className={V2_LIST_CLASSES.text}>{payment.rental?.reference ?? '—'}</span>
+                </ListCell>
+                <ListCell className="tabular-nums">
+                  <span className={V2_LIST_CLASSES.text}>{formatCurrency(payment.amount)}</span>
+                </ListCell>
+                <ListCell>
+                  <ListStatusText tone={TONE[chip.tone]}>{chip.label}</ListStatusText>
+                  {/* A hold reserves money without taking it; a refund is part of the row. */}
+                  {payment.state === 'hold' ? (
+                    <span className="ml-2 text-[13px] text-pv-muted-fg">
+                      not charged{payment.holdExpiresAt ? `, releases ${formatDate(payment.holdExpiresAt.slice(0, 10))}` : ''}
+                    </span>
+                  ) : payment.refunded > 0 && payment.state !== 'refunded' ? (
+                    <span className="ml-2 text-[13px] text-pv-muted-fg">{formatCurrency(payment.refunded)} refunded</span>
+                  ) : null}
+                </ListCell>
+              </ListRow>
+            );
+          })}
+        </ListBody>
+      </ListTable>
+      <ListFooter shown={rows.visible.length} total={rows.total} hasMore={rows.hasMore} onMore={rows.showMore} noun="payment" />
     </div>
   );
+}
+
+function ListFooter({
+  shown,
+  total,
+  hasMore,
+  onMore,
+  noun,
+}: {
+  shown: number;
+  total: number;
+  hasMore: boolean;
+  onMore: () => void;
+  noun: string;
+}) {
+  return (
+    <div className={V2_LIST_CLASSES.footer}>
+      <span>{hasMore ? `Showing ${shown} of ${total} ${noun}s` : `All ${total} ${total === 1 ? noun : `${noun}s`} shown`}</span>
+      {hasMore ? (
+        <button type="button" onClick={onMore} className={cn(V2_BUTTON_OUTLINE_SM, V2_LIST_CLASSES.showMore)}>
+          Show more
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/* ─────────────────────────────── CSV export ─────────────────────────────── */
+
+function download(name: string, rows: (string | number)[][]) {
+  const csv = rows
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const link = Object.assign(document.createElement('a'), { href: url, download: name });
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportInvoices(invoices: readonly CustomerInvoice[]) {
+  download('invoices.csv', [
+    ['Reference', 'Rental', 'Invoice date', 'Due date', 'Total', 'Paid', 'Due', 'Status'],
+    ...invoices.map((i) => [
+      i.number,
+      i.rental?.reference ?? '',
+      i.invoiceDate,
+      i.dueDate ?? '',
+      i.total.toFixed(2),
+      i.paid.toFixed(2),
+      i.outstanding.toFixed(2),
+      INVOICE_CHIP[i.state].label,
+    ]),
+  ]);
+}
+
+function exportPayments(payments: readonly CustomerPayment[]) {
+  download('payments.csv', [
+    ['Payment', 'Date', 'Rental', 'Amount', 'Refunded', 'Status'],
+    ...payments.map((p) => [p.typeLabel, p.date, p.rental?.reference ?? '', p.amount.toFixed(2), p.refunded.toFixed(2), PAYMENT_CHIP[p.state].label]),
+  ]);
 }

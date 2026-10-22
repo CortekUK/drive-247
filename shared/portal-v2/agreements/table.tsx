@@ -25,6 +25,7 @@ import {
   formatAgreementSentAt,
   type AgreementListRow,
 } from "./list";
+import { ROW_OPEN_CELL, RowOpenIndicator } from "../row-open";
 
 const Blank = () => <span className="text-v2-muted-fg">—</span>;
 
@@ -33,6 +34,8 @@ export interface AgreementPartyColumns<T> {
   label: string;
   name: (row: T) => string;
   email: (row: T) => string | null;
+  /** The email heading. "Email" by default; the customer's says whose ("Company email"). */
+  emailLabel?: string;
   /** The name cell's tooltip. */
   title?: (row: T) => string | undefined;
 }
@@ -58,7 +61,7 @@ export function AgreementsTable<T extends AgreementListRow>({
     <ListTable rows={rows} minWidth="min-w-[920px]">
       <ListTableHeader>
         <ListHead className="w-[20%]">{party.label}</ListHead>
-        <ListHead className="w-[25%]">Email</ListHead>
+        <ListHead className="w-[25%]">{party.emailLabel ?? "Email"}</ListHead>
         <ListHead className="w-[12%]">Linked to</ListHead>
         <ListHead className="w-[12%]">Reference</ListHead>
         <ListHead className="w-[19%]">Sent</ListHead>
@@ -82,7 +85,7 @@ export function AgreementsTable<T extends AgreementListRow>({
               tabIndex={0}
               aria-label={`Open the agreement ${reference ?? ""}`.trim()}
               onKeyDown={onKeyDown}
-              className="focus-visible:bg-v2-muted/60 focus-visible:outline-none"
+              className="group/row focus-visible:bg-v2-muted/60 focus-visible:outline-none"
               {...rowProps?.(row)}
             >
               <ListCell>
@@ -115,8 +118,9 @@ export function AgreementsTable<T extends AgreementListRow>({
                 <span className={V2_LIST_CLASSES.text}>{formatAgreementSentAt(row.sentAt, now)}</span>
               </ListCell>
               {/* Never truncated: a cut status is a different status. */}
-              <ListCell>
+              <ListCell className={ROW_OPEN_CELL}>
                 <ListStatusText tone={AGREEMENT_STATUS_TONE[row.status]}>{AGREEMENT_STATUS_LABEL[row.status]}</ListStatusText>
+                <RowOpenIndicator />
               </ListCell>
             </ListRow>
           );

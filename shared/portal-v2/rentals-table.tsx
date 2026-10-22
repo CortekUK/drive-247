@@ -24,12 +24,12 @@
  */
 
 import type { CSSProperties, KeyboardEvent, ReactNode, Ref, RefObject } from "react";
-import { ChevronRight } from "lucide-react";
 import { Card, CardContent } from "./card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./table";
 import { cn } from "./cn";
 import { V2_LIST_CLASSES, V2_LIST_TONES, type V2ListTone } from "./list-styles";
 import { parseLocalDate } from "./timeline/dates";
+import { ROW_OPEN_CELL, RowOpenIndicator } from "./row-open";
 
 /**
  * `30 Sep`, or `30 Sep 2027` when the year is not the current one.
@@ -243,9 +243,9 @@ function RentalRow({ row, onOpen }: { row: RentalsTableRow; onOpen: (id: string)
       </TableCell>
 
       {/* Status — one treatment for every value, hue the only thing that
-          changes. The open chevron sits at the row's end, in room the cell
-          keeps for it, and shows only while the row is hovered or focused. */}
-      <TableCell className={cn(V2_LIST_CLASSES.cell, "relative pr-9")}>
+          changes. The open indicator (row-open.tsx) sits at the row's end, in
+          room the cell keeps for it, while the row is hovered or focused. */}
+      <TableCell className={cn(V2_LIST_CLASSES.cell, ROW_OPEN_CELL)}>
         <div className="flex flex-wrap items-center justify-start gap-1.5">
           <span className={cn("text-sm font-medium", V2_LIST_TONES[RENTAL_STATUS_TONE[row.status] ?? "muted"])}>{row.status}</span>
           {row.meta?.map((chip) => (
@@ -254,10 +254,7 @@ function RentalRow({ row, onOpen }: { row: RentalsTableRow; onOpen: (id: string)
             </span>
           ))}
         </div>
-        <ChevronRight
-          aria-hidden
-          className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-v2-muted-fg opacity-0 transition-opacity duration-150 group-hover/row:opacity-100 group-focus-visible/row:opacity-100 motion-reduce:transition-none"
-        />
+        <RowOpenIndicator />
       </TableCell>
     </TableRow>
   );

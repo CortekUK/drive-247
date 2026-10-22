@@ -3,14 +3,12 @@
 /**
  * Confirm removing a document.
  *
- * One dialog screen: the art, the question, one button. Built on the local
+ * One dialog screen: the question, one button. Built on the local
  * `ConfirmDialog` (a plain Radix dialog in the operator's ui-v2 skin) rather
  * than an AlertDialog, which this app has not generated. The behaviour that
  * matters is kept by hand: the destructive action is not the default focus,
  * and the dialog cannot be dismissed mid-delete.
  */
-
-import { Trash2 } from 'lucide-react-nw';
 
 import type { CustomerDocument } from '@nw/hooks/use-customer-documents';
 
@@ -33,14 +31,13 @@ export function DeleteDocumentDialog({
   return (
     <ConfirmDialog
       open={doc !== null}
-      icon={Trash2}
-      title="Remove this document?"
+      title="Remove this insurance?"
       description={
         doc
           ? `“${doc.name}” and the file you uploaded will be deleted. You can upload it again at any time.`
           : ''
       }
-      confirmLabel="Remove document"
+      confirmLabel="Remove insurance"
       busyLabel="Removing…"
       busy={isDeleting}
       error={error}

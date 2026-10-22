@@ -13,22 +13,23 @@
  *    here against the operator's 420px — a customer's page is half as wide in
  *    practice, and its controls need the room more than the labels do.
  *  - ONE SOFT HAIRLINE under each row, none under the last.
- *  - ONE SAVE BAR for the page, floating at the foot while something is
- *    unsaved — the operator's `SettingsStickySaveBar`.
+ *  - ONE SAVE BAR for the page, always floating at the foot, its buttons
+ *    disabled until something changes — the operator's `SettingsStickySaveBar`.
  *
  * Local to this route rather than in the shared primitives because none of it
  * has a second caller yet.
  */
 
-import { Check, Loader2 } from 'lucide-react-nw';
+import { Loader2 } from 'lucide-react-nw';
 import type { ReactNode } from 'react';
 
 import { Button } from '@nw/components/ui/button';
 import { Skeleton } from '@nw/components/ui/skeleton';
 import { Switch } from '@nw/components/ui/switch';
 import { cn } from '@nw/lib/utils';
+import { PortalAlertBar } from '@nw/portal-v2/alert-bar';
 
-import { PV_BUTTON_GHOST_SM, PV_BUTTON_SM } from './pv-kit';
+import { PV_BUTTON_OUTLINE_SM, PV_BUTTON_SM } from './pv-kit';
 
 /* ──────────────────────────── page furniture ─────────────────────────── */
 
@@ -56,12 +57,16 @@ export function SettingsPageHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0 space-y-1">
-        <h1 className={SETTINGS_PAGE_TITLE}>{title}</h1>
-        {description ? <p className="max-w-2xl text-sm text-pv-muted-fg">{description}</p> : null}
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <h1 className={SETTINGS_PAGE_TITLE}>{title}</h1>
+          {description ? <p className="max-w-2xl text-sm text-pv-muted-fg">{description}</p> : null}
+        </div>
+        {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
       </div>
-      {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
+      {/* The alert bar, under every page header (alert-bar.tsx). */}
+      <PortalAlertBar />
     </div>
   );
 }
@@ -280,20 +285,18 @@ export function SwitchRow({
 /* ─────────────────────────────── save bar ──────────────────────────────── */
 
 /**
- * The page's one Save — the operator's `SettingsStickySaveBar`: a floating
- * pill at the foot of the scroll area with the state on the left and Reset /
- * Save on the right.
+ * The page's one Save — the operator's `SettingsStickySaveBar`, exactly: a
+ * floating pill at the foot of the scroll area with the state on the left and
+ * Reset / Save changes on the right.
  *
- * It is only on screen while it has something to say (unsaved, saving, or
- * "Saved" for a few seconds): a customer opens this page to look as often as
- * to change, and a permanent bar of two disabled buttons would be noise. It
- * arrives and leaves with the §12 motion — fade plus a 12px lift, 200ms — and
- * stays painted until it has left (`visibility` is delayed by the 200ms).
+ * ALWAYS on screen (owner, Oct 22 2026): both buttons wait, disabled, for a
+ * genuine change. A bar that only arrived after the first edit moved the page
+ * under the customer's cursor.
  *
  * Save is `type="submit"` for the page's `<form>` (by `form={formId}` — the
  * bar sits after it, at the foot of the page), whose `onSubmit` performs the
- * save. No `onClick` as well — one click would then
- * save twice. Enter in any field submits the same way.
+ * save. No `onClick` as well — one click would then save twice. Enter in any
+ * field submits the same way.
  */
 export function SettingsSaveBar({
   formId,
@@ -309,50 +312,31 @@ export function SettingsSaveBar({
   saved: boolean;
   onReset: () => void;
 }) {
-  const shown = dirty || saving || saved;
-
   return (
-    <div
-      className={cn(
-        'pointer-events-none sticky bottom-4 z-30 -mt-8 flex justify-end',
-        shown
-          ? 'visible translate-y-0 opacity-100 [transition:transform_200ms_ease-out,opacity_200ms_ease-out]'
-          : 'invisible translate-y-3 opacity-0 [transition:transform_200ms_ease-in,opacity_200ms_ease-in,visibility_0s_linear_200ms]',
-        'motion-reduce:transition-none',
-      )}
-    >
+    <div data-settings-save-bar="" className="pointer-events-none sticky bottom-4 z-30 flex justify-end pt-2">
       <div
         role="region"
         aria-label="Save changes"
-        className="pointer-events-auto flex max-w-full flex-wrap items-center justify-end gap-2 rounded-full border border-pv-border bg-pv-card p-1.5 pl-5 shadow-lg"
+        className="pointer-events-auto flex max-w-full flex-wrap items-center justify-end gap-2 rounded-full border border-pv-border bg-pv-card p-1.5 pl-4 shadow-lg"
       >
         <p
           className={cn(
-            'mr-1 text-[13px]',
+            'text-[13px] empty:hidden',
             saved && !dirty ? 'text-pv-success' : 'text-pv-muted-fg',
+            (saving || dirty || saved) && 'mr-1',
           )}
           // The result of a save has to reach a screen reader that never sees
           // the bar move. `polite` so it does not interrupt typing.
           aria-live="polite"
         >
-          {saving ? (
-            'Saving…'
-          ) : dirty ? (
-            'You have unsaved changes'
-          ) : saved ? (
-            <span className="inline-flex items-center gap-1.5">
-              <Check aria-hidden className="size-3.5" />
-              Saved
-            </span>
-          ) : null}
+          {saving ? 'Saving…' : dirty ? 'You have unsaved changes' : saved ? 'Saved' : null}
         </p>
         <Button
           type="button"
           variant="ghost"
           onClick={onReset}
           disabled={!dirty || saving}
-          tabIndex={shown ? undefined : -1}
-          className={PV_BUTTON_GHOST_SM}
+          className={PV_BUTTON_OUTLINE_SM}
         >
           Reset
         </Button>
@@ -362,8 +346,7 @@ export function SettingsSaveBar({
           variant="ghost"
           disabled={!dirty || saving}
           aria-busy={saving || undefined}
-          tabIndex={shown ? undefined : -1}
-          className={cn(PV_BUTTON_SM, 'min-w-[124px]')}
+          className={cn(PV_BUTTON_SM, 'min-w-[112px]')}
         >
           {saving ? <Loader2 aria-hidden className="size-4 animate-spin" /> : null}
           Save changes

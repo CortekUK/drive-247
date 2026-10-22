@@ -7,12 +7,13 @@
  */
 
 import Link from 'next/link';
-import { CircleCheck, Clock, Info, TriangleAlert, type LucideIcon } from 'lucide-react-nw';
+import type { LucideIcon } from 'lucide-react-nw';
 
 import { Button } from '@nw/components/ui/button';
 import { V2_BUTTON_DEFAULT, V2_BUTTON_OUTLINE } from '@portal-v2-shared/button-styles';
 import { Skeleton } from '@nw/components/ui/skeleton';
 import { cn } from '@nw/lib/utils';
+import { PortalAlertBar } from '@nw/portal-v2/alert-bar';
 
 /* ──────────────────────────── page furniture ───────────────────────────── */
 
@@ -30,6 +31,7 @@ export function PageHeader({
   actionClassName,
   eyebrow,
   className,
+  alerts = true,
 }: {
   title: React.ReactNode;
   description?: React.ReactNode;
@@ -38,12 +40,15 @@ export function PageHeader({
   actionClassName?: string;
   eyebrow?: React.ReactNode;
   className?: string;
+  /** The alert bar under the header. Every page has it; turn it off only for a page drawn inside another. */
+  alerts?: boolean;
 }) {
   return (
-    // The operator v2 page header (Customers, Vehicles): the same row, heading
-    // and one-line description. The heading names its font and tracking because
-    // the site's base styles give every h1 DM Sans at -0.02em, which set it
-    // wider than the operator's Manrope at the same 30px.
+    <div className="flex flex-col gap-4">
+    {/* The operator v2 page header (Customers, Vehicles): the same row, heading
+        and one-line description. The heading names its font and tracking because
+        the site's base styles give every h1 DM Sans at -0.02em, which set it
+        wider than the operator's Manrope at the same 30px. */}
     <div className={cn('flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between', className)}>
       <div className="min-w-0">
         {eyebrow ? <p className="mb-1 text-xs font-medium text-pv-muted-fg">{eyebrow}</p> : null}
@@ -51,6 +56,8 @@ export function PageHeader({
         {description ? <p className="text-sm text-pv-muted-fg sm:text-base">{description}</p> : null}
       </div>
       {action ? <div className={cn('flex shrink-0 items-center gap-2', actionClassName)}>{action}</div> : null}
+    </div>
+    {alerts ? <PortalAlertBar /> : null}
     </div>
   );
 }
@@ -109,7 +116,6 @@ export function StatusLine({
   action?: React.ReactNode;
   className?: string;
 }) {
-  const Icon = tone === 'danger' ? TriangleAlert : tone === 'warning' ? Clock : tone === 'success' ? CircleCheck : Info;
   return (
     <div
       role="status"
@@ -118,17 +124,6 @@ export function StatusLine({
         className,
       )}
     >
-      <Icon
-        aria-hidden
-        strokeWidth={1.75}
-        className={cn(
-          'size-4 shrink-0',
-          tone === 'danger' && 'text-pv-danger',
-          tone === 'warning' && 'text-pv-warning',
-          tone === 'success' && 'text-pv-success',
-          tone === 'neutral' && 'text-pv-muted-fg',
-        )}
-      />
       <p
         className={cn(
           'min-w-0 flex-1 text-[14px] font-medium',
@@ -171,23 +166,16 @@ export function StatTile({
   label,
   value,
   caption,
-  icon: Icon,
 }: {
   label: string;
   value: React.ReactNode;
   caption?: string;
+  /** Kept for callers; not drawn. */
   icon?: LucideIcon;
 }) {
   return (
     <div className="rounded-2xl border border-pv-border bg-pv-card px-4 py-3.5">
-      <div className="flex items-center gap-2">
-        {Icon ? (
-          <span className="grid size-7 place-items-center rounded-lg bg-pv-tint">
-            <Icon aria-hidden strokeWidth={1.75} className="size-4 shrink-0 text-pv-primary" />
-          </span>
-        ) : null}
-        <span className="truncate text-xs font-medium text-pv-muted-fg">{label}</span>
-      </div>
+      <span className="block truncate text-xs font-medium text-pv-muted-fg">{label}</span>
       <p className="mt-2 text-2xl font-bold tracking-[-0.02em] tabular-nums text-pv-fg">{value}</p>
       {caption ? <p className="mt-0.5 truncate text-xs text-pv-muted-fg">{caption}</p> : null}
     </div>
@@ -197,12 +185,12 @@ export function StatTile({
 /* ────────────────────────────── empty states ───────────────────────────── */
 
 export function EmptyState({
-  icon: Icon,
   title,
   description,
   action,
 }: {
-  icon: LucideIcon;
+  /** Kept for callers; not drawn (owner, Oct 22 2026: no decorative icons). */
+  icon?: LucideIcon;
   title: string;
   description: string;
   /** A link, or a button for an action on the page itself (Clear Filters). */
@@ -210,9 +198,6 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
-      <span className="grid size-12 place-items-center rounded-2xl bg-pv-tint">
-        <Icon aria-hidden strokeWidth={1.75} className="size-5 text-pv-primary" />
-      </span>
       <div className="max-w-sm">
         <p className="text-[15px] font-semibold text-pv-fg">{title}</p>
         <p className="mt-1 text-[13px] leading-relaxed text-pv-muted-fg">{description}</p>
@@ -231,12 +216,12 @@ export function EmptyState({
 }
 
 export function ComingSoon({
-  icon: Icon,
   title,
   description,
   meanwhile,
 }: {
-  icon: LucideIcon;
+  /** Kept for callers; not drawn. */
+  icon?: LucideIcon;
   title: string;
   description: string;
   meanwhile?: { href: string; label: string };
@@ -246,9 +231,6 @@ export function ComingSoon({
       <PageHeader title={title} description={description} />
       <Panel>
         <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
-          <span className="grid size-12 place-items-center rounded-2xl bg-pv-tint">
-            <Icon aria-hidden strokeWidth={1.75} className="size-5 text-pv-primary" />
-          </span>
           <div className="max-w-sm">
             <p className="text-[15px] font-semibold text-pv-fg">Not here yet</p>
             <p className="mt-1 text-[13px] leading-relaxed text-pv-muted-fg">

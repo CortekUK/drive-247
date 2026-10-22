@@ -33,7 +33,7 @@ import {
   formatAgreementSentAt,
   type AgreementListRow,
 } from "./list";
-import { AGREEMENT_PAGE_BACKDROP, AgreementPdfPages } from "./pdf-pages";
+import { AGREEMENT_PAGE_BACKDROP, AgreementPageSkeleton, AgreementPdfPages } from "./pdf-pages";
 
 /**
  * The Details / Activity switch: a rounded rectangle, and the chosen tab a
@@ -57,6 +57,8 @@ export interface AgreementParty {
   label: string;
   name: string;
   email: string | null;
+  /** The email row's label. "Email" by default; the customer's says whose ("Company email"). */
+  emailLabel?: string;
 }
 
 export interface AgreementViewDialogProps {
@@ -163,12 +165,7 @@ export function AgreementViewDialog({
       <DialogContent className="grid h-[92dvh] grid-rows-[minmax(0,1fr)_minmax(0,45%)] gap-0 overflow-hidden p-0 sm:max-w-[min(96vw,1400px)] md:grid-cols-[minmax(0,1fr)_340px] md:grid-rows-1">
         <div className={`min-h-0 overflow-hidden ${AGREEMENT_PAGE_BACKDROP}`}>
           {state.status === "loading" || state.status === "idle" ? (
-            <div className="flex h-full items-center justify-center" role="status">
-              <div className="text-center">
-                <Loader2 className="mx-auto size-7 animate-spin text-v2-primary dark:text-v2-link" />
-                <p className="mt-2 text-sm text-v2-muted-fg">Loading the agreement…</p>
-              </div>
-            </div>
+            <AgreementPageSkeleton />
           ) : state.status === "error" ? (
             <div className="flex h-full items-center justify-center p-6" role="alert">
               <div className="max-w-sm text-center">
@@ -223,7 +220,7 @@ export function AgreementViewDialog({
                     <dd className="min-w-0 truncate font-medium text-v2-fg">{who.name || "—"}</dd>
                     {who.email && (
                       <>
-                        <dt className="font-medium">Email</dt>
+                        <dt className="font-medium">{who.emailLabel ?? "Email"}</dt>
                         <dd className="min-w-0 truncate text-v2-fg" title={who.email}>{who.email}</dd>
                       </>
                     )}

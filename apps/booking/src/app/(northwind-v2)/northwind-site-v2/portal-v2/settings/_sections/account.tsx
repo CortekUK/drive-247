@@ -24,7 +24,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Camera, CheckCircle2, Info, KeyRound, Loader2, Mail } from 'lucide-react-nw';
+import { Camera, Loader2 } from 'lucide-react-nw';
 
 import { GoogleMark } from '@nw/auth-v2/google-sign-in';
 import { Input } from '@nw/components/ui/input';
@@ -71,7 +71,6 @@ async function squarePng(file: File): Promise<Blob> {
 type Tone = 'success' | 'danger' | 'info';
 
 function Banner({ tone, children }: { tone: Tone; children: React.ReactNode }) {
-  const Icon = tone === 'success' ? CheckCircle2 : tone === 'danger' ? AlertCircle : Info;
   return (
     <div
       role={tone === 'danger' ? 'alert' : 'status'}
@@ -82,7 +81,6 @@ function Banner({ tone, children }: { tone: Tone; children: React.ReactNode }) {
         tone === 'info' && 'bg-pv-tint text-pv-fg',
       )}
     >
-      <Icon aria-hidden className="mt-0.5 size-4 shrink-0" />
       <p className="flex-1">{children}</p>
     </div>
   );
@@ -373,7 +371,6 @@ export function AccountSettings() {
                     </button>
                   ) : null}
                   <button type="button" className={PV_BUTTON_OUTLINE_SM} onClick={() => setOpen('email')} disabled={!email}>
-                    <Mail aria-hidden />
                     Change
                   </button>
                 </span>
@@ -457,7 +454,6 @@ export function AccountSettings() {
               }
               action={
                 <button type="button" className={PV_BUTTON_OUTLINE_SM} onClick={() => setOpen('password')} disabled={!email}>
-                  <KeyRound aria-hidden />
                   {loaded && !emailIdentity ? 'Set a password' : 'Change'}
                 </button>
               }
