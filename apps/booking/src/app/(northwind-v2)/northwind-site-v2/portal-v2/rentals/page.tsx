@@ -28,6 +28,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { CarFront, SearchX } from 'lucide-react-nw';
 
 import { V2_BUTTON_PRIMARY } from '@portal-v2-shared/button-styles';
+import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2 } from '@portal-v2-shared/header';
+import { cn } from '@nw/lib/utils';
 import { usePageSearch } from '@portal-v2-shared/page-search-slot';
 import {
   NO_RENTAL_FILTERS,
@@ -95,6 +97,8 @@ export default function PortalRentalsPage() {
       <PageHeader
         title="Rentals"
         description="Manage your rentals, from upcoming to completed."
+        // On the subtitle line, as the operator header's actions sit.
+        actionClassName={HEADER_ACTIONS_V2}
         action={
           // One button that toggles: it says where it takes you, so the way
           // out of the calendar is the same button that took you in.
@@ -103,7 +107,7 @@ export default function PortalRentalsPage() {
               type="button"
               onClick={() => setView(view === 'calendar' ? 'list' : 'calendar')}
               aria-pressed={view === 'calendar'}
-              className={V2_BUTTON_PRIMARY}
+              className={cn(V2_BUTTON_PRIMARY, HEADER_PRIMARY_V2)}
             >
               {view === 'calendar' ? 'List view' : 'Calendar view'}
             </button>

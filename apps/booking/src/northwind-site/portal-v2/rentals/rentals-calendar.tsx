@@ -20,11 +20,9 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { List } from 'lucide-react-nw';
 
 import { useTenant } from '@nw/contexts/TenantContext';
 import type { CustomerRental } from '@nw/hooks/use-customer-rentals';
-import { Button } from '@portal-v2-shared/timeline/button';
 import { EMPTY_TIMELINE, shiftDay, tenantToday, type TimelineData } from '@portal-v2-shared/timeline/model';
 import { TimelineBoard, type TimelineRange } from '@portal-v2-shared/timeline/timeline-board';
 
@@ -98,12 +96,7 @@ export function CustomerRentalsCalendar({
       error={error}
       onRetry={onRetry}
       onOpenRental={(id) => router.push(`/portal/rentals/${id}`)}
-      actions={
-        <Button variant="outline" size="sm" onClick={onExit}>
-          <List size={14} />
-          List view
-        </Button>
-      }
+      // No "List view" here: the page header's button toggles back (owner, Oct 22 2026).
     />
   );
 }
