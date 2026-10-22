@@ -328,6 +328,68 @@ export function Testimonials() {
     setShown(next);
   }, []);
 
+  // The phone strip: a real sideways scroller, so a finger can swipe it either way,
+  // moved on by script at the Integrations marquee's speed. It holds while touched
+  // or hovered and picks up again a moment after; at either end of the first copy
+  // it jumps by one copy, which looks the same, so it never runs out.
+  const strip = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = strip.current;
+    if (cols !== 1 || !inView || !el) return;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const SPEED = 24; // px a second
+    let pos = el.scrollLeft;
+    let held = false;
+    let resume = 0;
+    let last = 0;
+    let raf = 0;
+    const hold = () => {
+      held = true;
+      clearTimeout(resume);
+    };
+    const release = () => {
+      clearTimeout(resume);
+      resume = window.setTimeout(() => {
+        held = false;
+        pos = el.scrollLeft;
+      }, 1200);
+    };
+    const wrap = () => {
+      const half = el.scrollWidth / 2;
+      if (el.scrollLeft >= half) el.scrollLeft -= half;
+      else if (el.scrollLeft <= 0) el.scrollLeft += half;
+    };
+    const tick = (now: number) => {
+      const dt = last ? Math.min(0.1, (now - last) / 1000) : 0;
+      last = now;
+      if (!held) {
+        pos += SPEED * dt;
+        const half = el.scrollWidth / 2;
+        if (pos >= half) pos -= half;
+        el.scrollLeft = pos;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    el.addEventListener("touchstart", hold, { passive: true });
+    el.addEventListener("touchend", release);
+    el.addEventListener("touchcancel", release);
+    el.addEventListener("mouseenter", hold);
+    el.addEventListener("mouseleave", release);
+    const onScroll = () => held && wrap();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(resume);
+      el.removeEventListener("touchstart", hold);
+      el.removeEventListener("touchend", release);
+      el.removeEventListener("touchcancel", release);
+      el.removeEventListener("mouseenter", hold);
+      el.removeEventListener("mouseleave", release);
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, [cols, inView]);
+
   // Only run (and only play videos) while the section is on screen.
   useEffect(() => {
     const el = section.current;
@@ -391,10 +453,10 @@ export function Testimonials() {
               <span className="y-kick">Testimonials</span>
               <h2 className="tw-h">What operators are saying</h2>
             </div>
-            {/* phones: every testimonial on one strip that drifts left to right on
-                its own, endlessly (the cards go twice; the track moves by one copy) */}
+            {/* phones: every testimonial on one strip that scrolls right to left on its
+                own, endlessly, and can be swiped either way (the cards go twice) */}
             {cols === 1 ? (
-              <div className="tw-marquee">
+              <div className="tw-marquee" ref={strip}>
                 <div className="tw-mtrack">
                   {[0, 1].flatMap((copy) =>
                     TESTIMONIALS.map((t, id) => (
