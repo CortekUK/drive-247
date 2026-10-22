@@ -1116,15 +1116,16 @@
 .l4 .d3s .fq2-curve path:first-child { display: none; }
 
 
-/* Testimonials on phones: one strip drifting left to right, endlessly; touching it holds it */
+/* Testimonials on phones: the same marquee as Integrations — right to left at the same
+   speed (~25px a second), endlessly; hovering, touching or focusing it holds it */
 .l4 .tw-marquee {
   margin: clamp(28px, 6vw, 40px) calc(var(--edge) * -1) 0; overflow: hidden;
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
 }
-.l4 .tw-mtrack { display: flex; align-items: center; gap: 14px; width: max-content; padding: 6px 0 14px; animation: tw-drift 90s linear infinite; }
+.l4 .tw-mtrack { display: flex; align-items: center; gap: 14px; width: max-content; padding: 6px 14px 14px 0; animation: tw-drift 220s linear infinite; } /* the right padding makes one copy exactly half the track */
 .l4 .tw-mtrack > .tw-mslot { flex: none; width: min(300px, 78vw); }
-.l4 .tw-marquee:active .tw-mtrack, .l4 .tw-marquee:focus-within .tw-mtrack { animation-play-state: paused; }
-@keyframes tw-drift { from { transform: translateX(calc(-50% - 7px)); } to { transform: translateX(0); } }
+.l4 .tw-marquee:hover .tw-mtrack, .l4 .tw-marquee:active .tw-mtrack, .l4 .tw-marquee:focus-within .tw-mtrack { animation-play-state: paused; }
+@keyframes tw-drift { to { transform: translateX(-50%); } }
 @media (prefers-reduced-motion: reduce) { .l4 .tw-mtrack { animation: none; } }
 
 /* line art on phones: small pieces in two corners only (top-left, bottom-right), scaled
