@@ -9,14 +9,15 @@
  *   - the insurance certificates the customer uploaded (`customer_documents`,
  *     `document_type = 'Insurance Certificate'`, via useCustomerDocuments);
  *   - the Bonzah policies bought with a booking (`bonzah_insurance_policies`,
- *     via useCustomerInsurancePolicies), each carrying the Bonzah logo inline
- *     so it is plain which cover came from Bonzah and which is the customer's own.
+ *     via useCustomerInsurancePolicies). Bonzah's branding lives in ONE place:
+ *     its logo in the Provider column, nowhere else (owner, Oct 22 2026).
  *
  * Owner's pass, Oct 22 2026: no decorative icons; one fact per cell, one line
  * per row (Insurance · Provider · Policy number · Coverage dates · Status);
- * the row's actions behind a three-dot menu; clicking a row opens a detail
- * dialog that holds what no longer fits in the row (rental, upload date, file,
- * the full policy number).
+ * the row's actions behind a three-dot menu — View (the document itself, in
+ * the browser's PDF viewer, in a new tab), Download (straight from the row),
+ * Delete (asks first). No dialog opens from the table, and a row is not a
+ * link: as in the operator's insurances table, the menu is where things happen.
  *
  * The table is the shared v2 list (shared/portal-v2/list-table), as the
  * Rentals and Agreements tables are. Search lives in the top bar. Both hooks
@@ -24,6 +25,7 @@
  */
 
 import { useMemo, useState } from 'react';
+import { Plus } from 'lucide-react-nw';
 
 import { LoadError, PageHeader, Panel } from '@nw/portal-v2/primitives';
 import {
@@ -50,13 +52,12 @@ import {
 } from '@portal-v2-shared/list-table';
 import { V2_LIST_CLASSES } from '@portal-v2-shared/list-styles';
 import { usePageSearch } from '@portal-v2-shared/page-search-slot';
-import { ROW_OPEN_CELL, RowOpenIndicator } from '@portal-v2-shared/row-open';
 
 import { Notice } from './_components/kit';
 import { RowMenu } from './_components/row-menu';
 import { BonzahLogo, coverRange, toRows, type InsuranceRow } from './_components/rows';
+import { downloadExternal, externalFileUrl, useViewDocument } from './_components/use-view-document';
 import { DeleteDocumentDialog } from './delete-dialog';
-import { InsuranceDetailDialog } from './detail-dialog';
 import { UploadDocumentDialog } from './upload-dialog';
 
 type PolicyPdf = CustomerInsurancePolicy['pdfIds'][number];
@@ -91,19 +92,17 @@ export default function PortalInsurancesPage() {
   const { policies, isLoading: policiesLoading, isError: policiesError } = useCustomerInsurancePolicies();
   const download = useDocumentDownload();
   const policyPdf = usePolicyPdfDownload();
+  const viewer = useViewDocument();
   const remove = useDeleteCustomerDocument();
 
   const [term, setTerm] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [openKey, setOpenKey] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<CustomerDocument | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<string | null>(null);
 
   const isLoading = docsLoading || policiesLoading;
   const rows = useMemo(() => toRows(documents, policies), [documents, policies]);
-  // By key, so the open dialog follows a refetch (and closes if the row goes).
-  const openRow = useMemo(() => rows.find((row) => row.key === openKey) ?? null, [rows, openKey]);
   const shown = useMemo(() => {
     const q = term.trim().toLowerCase();
     if (!q) return rows;
@@ -132,8 +131,20 @@ export default function PortalInsurancesPage() {
     row.kind === 'upload'
       ? download.downloadingId === row.document.id
       : Boolean(policyPdf.downloadingKey?.startsWith(`${row.policy.id}:`));
+  const isViewing = (row: InsuranceRow) =>
+    row.kind === 'upload'
+      ? viewer.viewingKey === row.document.id
+      : Boolean(viewer.viewingKey?.startsWith(`${row.policy.id}:`));
+  const viewDocument = (row: InsuranceRow) => {
+    if (row.kind === 'upload') void viewer.viewDocument(row.document);
+  };
+  const viewPolicy = (row: InsuranceRow, entry: PolicyPdf | undefined) => {
+    if (row.kind === 'bonzah' && entry) void viewer.viewPolicy(row.policy, entry);
+  };
   const downloadDocument = (row: InsuranceRow) => {
-    if (row.kind === 'upload') void download.download(row.document);
+    if (row.kind !== 'upload') return;
+    const external = externalFileUrl(row.document);
+    void (external ? downloadExternal(row.document, external) : download.download(row.document));
   };
   const downloadPolicy = (row: InsuranceRow, entry: PolicyPdf | undefined) => {
     if (row.kind === 'bonzah' && entry) void policyPdf.download(row.policy, entry);
@@ -141,7 +152,6 @@ export default function PortalInsurancesPage() {
   const askDelete = (row: InsuranceRow) => {
     if (row.kind !== 'upload' || !row.document.canDelete) return;
     setDeleteError(null);
-    setOpenKey(null);
     setPendingDelete(row.document);
   };
 
@@ -157,13 +167,13 @@ export default function PortalInsurancesPage() {
     }
   };
 
-  const downloadError = download.error ?? policyPdf.error;
+  const downloadError = viewer.error ?? download.error ?? policyPdf.error;
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Insurances"
-        description="Every insurance you have uploaded, and your Bonzah cover, in one place."
+        description="Every insurance you have uploaded, and the cover bought with your rentals, in one place."
         actionClassName={HEADER_ACTIONS_V2}
         action={
           <button
@@ -171,6 +181,7 @@ export default function PortalInsurancesPage() {
             onClick={() => setUploadOpen(true)}
             className={cn(V2_BUTTON_PRIMARY, HEADER_PRIMARY_V2, 'flex-1 sm:flex-none')}
           >
+            <Plus aria-hidden />
             Upload insurance
           </button>
         }
@@ -214,8 +225,7 @@ export default function PortalInsurancesPage() {
         <section className="flex flex-col gap-3" aria-label="Your insurances">
           {/*
             One fact per cell, one line per row. A long policy number truncates
-            here and is shown whole in the detail dialog; the rental, the upload
-            date and the file live there too.
+            and is shown whole on hover.
           */}
           <ListTable rows={progressive} minWidth="min-w-[860px]">
             <ListTableHeader>
@@ -242,29 +252,21 @@ export default function PortalInsurancesPage() {
                     </ListRow>
                   ))
                 : progressive.visible.map((row) => (
-                    <ListRow
-                      key={row.key}
-                      onOpen={() => setOpenKey(row.key)}
-                      tabIndex={0}
-                      aria-label={`Open ${row.name}`}
-                      onKeyDown={(event) => {
-                        if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
-                          event.preventDefault();
-                          setOpenKey(row.key);
-                        }
-                      }}
-                      className="group/row focus-visible:bg-v2-muted/60 focus-visible:outline-none"
-                    >
+                    <ListRow key={row.key}>
                       <ListCell>
-                        <span className="flex min-w-0 items-center gap-2.5">
-                          <span className={cn(V2_LIST_CLASSES.identifier, 'truncate')} title={row.name}>
-                            {row.name}
-                          </span>
-                          {row.kind === 'bonzah' ? <BonzahLogo /> : null}
+                        <span className={cn(V2_LIST_CLASSES.identifier, 'block truncate')} title={row.name}>
+                          {row.name}
                         </span>
                       </ListCell>
                       <ListCell>
-                        <span className={cn(V2_LIST_CLASSES.text, 'block truncate')}>{row.provider ?? '—'}</span>
+                        {/* Bonzah's one mark on the page: the logo, not the word. */}
+                        {row.kind === 'bonzah' ? (
+                          <BonzahLogo />
+                        ) : (
+                          <span className={cn(V2_LIST_CLASSES.text, 'block truncate')} title={row.provider ?? undefined}>
+                            {row.provider ?? '—'}
+                          </span>
+                        )}
                       </ListCell>
                       <ListCell>
                         {row.policyNumber ? (
@@ -280,16 +282,16 @@ export default function PortalInsurancesPage() {
                           {coverRange(row.start, row.end)}
                         </span>
                       </ListCell>
-                      {/* The open chevron sits in the last data cell; the menu has its own. */}
-                      <ListCell className={ROW_OPEN_CELL}>
+                      <ListCell>
                         <ListStatusText tone={row.status.tone}>{row.status.label}</ListStatusText>
-                        <RowOpenIndicator />
                       </ListCell>
                       <ListCell className="pl-0 text-right">
                         <RowMenu
                           row={row}
                           downloading={isDownloading(row)}
-                          onView={() => setOpenKey(row.key)}
+                          viewing={isViewing(row)}
+                          onViewDocument={() => viewDocument(row)}
+                          onViewPolicy={(entry) => viewPolicy(row, entry)}
                           onDownloadDocument={() => downloadDocument(row)}
                           onDownloadPolicy={(entry) => downloadPolicy(row, entry)}
                           onDelete={() => askDelete(row)}
@@ -315,23 +317,6 @@ export default function PortalInsurancesPage() {
           )}
         </section>
       )}
-
-      <InsuranceDetailDialog
-        row={openRow}
-        onOpenChange={(open) => {
-          if (!open) setOpenKey(null);
-        }}
-        downloading={openRow ? isDownloading(openRow) : false}
-        onDownloadDocument={() => {
-          if (openRow) downloadDocument(openRow);
-        }}
-        onDownloadPolicy={(entry) => {
-          if (openRow) downloadPolicy(openRow, entry);
-        }}
-        onDelete={() => {
-          if (openRow) askDelete(openRow);
-        }}
-      />
 
       <UploadDocumentDialog
         open={uploadOpen}

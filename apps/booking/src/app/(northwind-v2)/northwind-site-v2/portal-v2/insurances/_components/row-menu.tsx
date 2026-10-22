@@ -2,14 +2,16 @@
 
 /**
  * The row's three actions — View, Download, Delete — behind one vertical
- * three-dot trigger (owner, Oct 22 2026: "not inline buttons"). Text items, no
- * glyphs. A Bonzah policy with several PDFs (one per coverage) gets a Download
- * submenu, one item per PDF; with none yet, Download is disabled and says so.
- * Delete is offered only where it can happen, and disabled with the reason
- * otherwise, so the three actions keep their places on every row.
+ * three-dot trigger (owner, Oct 22 2026: "not inline buttons"; "no dialog
+ * here. Row actions only: view, download, delete"). Text items, no glyphs.
  *
- * React events bubble through portals, so the content stops clicks from
- * reaching the row (which would open the detail dialog behind the menu).
+ *   - View opens the document itself in a new tab, in the browser's PDF viewer.
+ *   - Download saves it straight from the row.
+ *   - Delete asks first; offered only where it can happen, and disabled with
+ *     the reason otherwise, so the three actions keep their places on every row.
+ *
+ * A Bonzah policy with several PDFs (one per coverage) gets a View and a
+ * Download submenu, one item per PDF; with none yet, both are disabled and say so.
  */
 
 import type { SyntheticEvent } from 'react';
@@ -35,23 +37,29 @@ const stop = (event: SyntheticEvent) => event.stopPropagation();
 
 export function RowMenu({
   row,
-  onView,
+  onViewDocument,
+  onViewPolicy,
   onDownloadDocument,
   onDownloadPolicy,
   onDelete,
   downloading,
+  viewing,
 }: {
   row: InsuranceRow;
-  onView: () => void;
+  onViewDocument: () => void;
+  onViewPolicy: (entry: CustomerInsurancePolicy['pdfIds'][number]) => void;
   onDownloadDocument: () => void;
   onDownloadPolicy: (entry: CustomerInsurancePolicy['pdfIds'][number]) => void;
   onDelete: () => void;
   downloading: boolean;
+  viewing: boolean;
 }) {
   const pdfs = row.kind === 'bonzah' ? row.policy.pdfIds : [];
   const canDownload = row.kind === 'upload' ? Boolean(row.document.storagePath) : pdfs.length > 0;
   const canDelete = row.kind === 'upload' && row.document.canDelete;
-  const downloadHint = downloading ? 'Downloading…' : !canDownload && row.kind === 'bonzah' ? 'No PDF yet' : null;
+  const noPdfHint = !canDownload && row.kind === 'bonzah' ? 'No PDF yet' : null;
+  const viewHint = viewing ? 'Opening…' : noPdfHint;
+  const downloadHint = downloading ? 'Downloading…' : noPdfHint;
   const deleteHint =
     row.kind === 'bonzah' ? 'Bonzah policy' : canDelete ? null : 'Filed with a rental';
 
@@ -75,9 +83,32 @@ export function RowMenu({
           onClick={stop}
           className={cn(CONTENT, MOTION_ANCHORED)}
         >
-          <DropdownMenu.Item className={ITEM} onSelect={onView}>
-            View
-          </DropdownMenu.Item>
+          {pdfs.length > 1 ? (
+            <DropdownMenu.Sub>
+              <DropdownMenu.SubTrigger className={ITEM} disabled={viewing}>
+                {viewing ? 'Opening…' : 'View'}
+                <ChevronRight aria-hidden className="size-3.5 text-pv-muted-fg" />
+              </DropdownMenu.SubTrigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.SubContent sideOffset={6} onClick={stop} className={cn(CONTENT, MOTION_ANCHORED)}>
+                  {pdfs.map((entry) => (
+                    <DropdownMenu.Item key={entry.coverage} className={ITEM} onSelect={() => onViewPolicy(entry)}>
+                      {entry.label} policy
+                    </DropdownMenu.Item>
+                  ))}
+                </DropdownMenu.SubContent>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Sub>
+          ) : (
+            <DropdownMenu.Item
+              className={ITEM}
+              disabled={!canDownload || viewing}
+              onSelect={() => (row.kind === 'upload' ? onViewDocument() : onViewPolicy(pdfs[0]))}
+            >
+              View
+              {viewHint ? <span className="text-xs text-pv-muted-fg">{viewHint}</span> : null}
+            </DropdownMenu.Item>
+          )}
 
           {pdfs.length > 1 ? (
             <DropdownMenu.Sub>

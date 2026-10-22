@@ -19,7 +19,6 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { CardCvcElement, CardExpiryElement, CardNumberElement, Elements, useElements, useStripe } from '@stripe/react-stripe-js';
 
 import { Dialog } from '@nw/components/ui/dialog';
@@ -27,8 +26,9 @@ import { useCustomer } from '@nw/hooks/use-customer';
 import { useCustomerCards, type CardSetup, type CustomerCard } from '@nw/hooks/use-customer-cards';
 import { getStripeForAccount } from '@nw/lib/stripe/load-stripe';
 import { cn } from '@nw/lib/utils';
-import { PvDialogContent } from '@nw/portal-v2/dialog';
+import { PvDialogContent, PvDialogHeader, PvStatus } from '@nw/portal-v2/dialog';
 import { resolvePvColours, V2_ELEMENTS_FONTS } from '@nw/site-v2/booking/payment-panel';
+import { FEATURED_SHELL_CLASS } from '@portal-v2-shared/featured-card';
 import { cardBrandLabel } from '@portal-v2-shared/payment-card/card-brand-icon';
 import { CardThumb, PaymentCard3D } from '@portal-v2-shared/payment-card/payment-card-3d';
 
@@ -47,9 +47,14 @@ function expiry(month: number | null, year: number | null): string | null {
 }
 
 /**
- * The card on file, in the hero row's featured slot (where the operator's
- * Billing puts it): the default card's face, which opens "Cards", or an "Add
- * a card" face when there is none. Sized to the slot (`fit`), as Billing does.
+ * The card on file, in the hero row's featured slot: the default card's face,
+ * which opens "Cards", or an "Add a card" face when there is none.
+ *
+ * The slot is the operator's featured card (FeaturedCardShell, passed
+ * `lg:min-h-0` as finances-overview.tsx passes FeaturedDeck): a panel that
+ * fills the row from the top of the graph's header line to the bottom of the
+ * plot, so its edges ARE the graph's edges. The card face sits inside it,
+ * sized to the room left (`fit`, as Billing does).
  */
 export function CardsFeatured() {
   const { cards, isLoading, isError, error } = useCustomerCards();
@@ -57,7 +62,8 @@ export function CardsFeatured() {
   const primary = cards.find((card) => card.isDefault) ?? cards[0] ?? null;
 
   return (
-    <div className="flex min-h-0 flex-col justify-center md:[container-type:size] lg:h-full">
+    <div className={cn(FEATURED_SHELL_CLASS, 'items-center justify-center p-4 lg:min-h-0')}>
+      <div className="flex w-full min-h-0 flex-1 items-center justify-center md:[container-type:size]">
       {isLoading ? (
         <div className="aspect-[1.586] w-full max-w-[440px] animate-pulse rounded-2xl bg-pv-muted" aria-hidden />
       ) : isError ? (
@@ -89,6 +95,7 @@ export function CardsFeatured() {
           <span className="text-[13px] text-pv-muted-fg">No card on file yet</span>
         </button>
       )}
+      </div>
       <CardManagerDialog open={open} onOpenChange={setOpen} />
     </div>
   );
@@ -100,6 +107,7 @@ export function CardManagerDialog({ open, onOpenChange }: { open: boolean; onOpe
   const [adding, setAdding] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const busy = setDefault.isPending || remove.isPending;
+  const defaultCard = cards.find((card) => card.isDefault && card.last4) ?? null;
 
   const close = (next: boolean) => {
     onOpenChange(next);
@@ -116,15 +124,21 @@ export function CardManagerDialog({ open, onOpenChange }: { open: boolean; onOpe
 
   return (
     <Dialog open={open} onOpenChange={close}>
-      <PvDialogContent className={cn('max-h-[85vh] gap-0 overflow-hidden p-0 sm:p-0', adding ? 'sm:max-w-3xl' : 'sm:max-w-xl')}>
-        <div className="px-7 pb-2 pt-7 text-left">
-          <DialogPrimitive.Title className="text-lg font-semibold tracking-tight text-pv-fg">
-            {adding ? 'Add card' : 'Cards'}
-          </DialogPrimitive.Title>
-          <DialogPrimitive.Description className="mt-1 text-sm text-pv-muted-fg">
-            {adding ? 'Card details go straight to Stripe. We never see the number.' : 'The starred card is the one we charge.'}
-          </DialogPrimitive.Description>
-        </div>
+      <PvDialogContent className={cn('max-h-[85vh] gap-0 overflow-hidden p-0 sm:p-0', adding ? 'sm:max-w-4xl' : 'sm:max-w-2xl')}>
+        <PvDialogHeader
+          className="shrink-0 px-8 pb-3 pt-8 text-left"
+          title={adding ? 'Add card' : 'Cards'}
+          description={adding ? 'Card details go straight to Stripe. We never see the number.' : 'The starred card is the one we charge.'}
+          status={
+            adding ? (
+              <PvStatus tone="info">Secured by Stripe</PvStatus>
+            ) : defaultCard ? (
+              <PvStatus tone="success">Default card</PvStatus>
+            ) : (
+              <PvStatus tone="neutral">No card</PvStatus>
+            )
+          }
+        />
 
         {adding ? (
           <AddCardForm
@@ -134,7 +148,7 @@ export function CardManagerDialog({ open, onOpenChange }: { open: boolean; onOpe
           />
         ) : (
           <>
-            <div className="min-h-0 overflow-y-auto px-7 pb-2 pt-2">
+            <div className="min-h-0 overflow-y-auto px-8 pb-2 pt-2">
               {cards.length === 0 ? (
                 <p className="py-6 text-sm text-pv-muted-fg">No card on file yet. Add one so your bookings can be charged.</p>
               ) : (
@@ -152,11 +166,12 @@ export function CardManagerDialog({ open, onOpenChange }: { open: boolean; onOpe
               )}
               {problem ? <p className="pb-3 text-[13px] text-pv-danger">{problem}</p> : null}
             </div>
-            <div className="flex shrink-0 flex-col gap-3 border-t border-pv-border px-7 py-5">
-              <button type="button" onClick={() => setAdding(true)} disabled={busy} className={cn(PRIMARY_BUTTON, 'w-full')}>
+            {/* The footer: the note left, the one action right (the dialog's button row). */}
+            <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-pv-border px-8 py-5 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-pv-muted-fg">Card details are handled securely by Stripe.</p>
+              <button type="button" onClick={() => setAdding(true)} disabled={busy} className={cn(PRIMARY_BUTTON, 'w-full sm:w-auto')}>
                 Add card
               </button>
-              <p className="text-center text-xs text-pv-muted-fg">Card details are handled securely by Stripe.</p>
             </div>
           </>
         )}
@@ -257,7 +272,7 @@ function AddCardForm({ hasCards, onCancel, onAdded }: { hasCards: boolean; onCan
 
   if (failed) {
     return (
-      <div className="flex flex-col gap-4 px-7 pb-6 pt-4">
+      <div className="flex flex-col gap-4 px-8 pb-6 pt-4">
         <p className="text-sm text-pv-danger">{failed}</p>
         <div>
           <button type="button" onClick={onCancel} className={QUIET_BUTTON}>
@@ -273,7 +288,7 @@ function AddCardForm({ hasCards, onCancel, onAdded }: { hasCards: boolean; onCan
       <SetupForm clientSecret={setup.clientSecret} hasCards={hasCards} onCancel={onCancel} onAdded={onAdded} />
     </Elements>
   ) : (
-    <div className="grid gap-6 px-7 pb-6 pt-4 sm:grid-cols-[280px_minmax(0,1fr)]" aria-busy aria-label="Preparing a secure form">
+    <div className="grid gap-6 px-8 pb-6 pt-4 sm:grid-cols-[320px_minmax(0,1fr)]" aria-busy aria-label="Preparing a secure form">
       <div className="hidden aspect-[1.586] animate-pulse rounded-2xl bg-pv-muted sm:block" />
       <div className="flex flex-col gap-3">
         {[0, 1, 2].map((i) => (
@@ -366,7 +381,7 @@ function SetupForm({
 
   return (
     <form
-      className="grid min-h-0 gap-6 overflow-y-auto px-7 pb-6 pt-4 sm:grid-cols-[280px_minmax(0,1fr)]"
+      className="grid min-h-0 gap-6 overflow-y-auto px-8 pb-8 pt-4 sm:grid-cols-[320px_minmax(0,1fr)]"
       onSubmit={(event) => {
         event.preventDefault();
         void save();

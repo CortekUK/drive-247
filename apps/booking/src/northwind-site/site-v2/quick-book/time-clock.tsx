@@ -51,7 +51,7 @@ export function TimeClockDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {open ? (
-        <PvDialogContent className="w-[calc(100%-2rem)] max-w-[380px] gap-0 rounded-[36px] p-6 sm:max-w-[380px] sm:p-7">
+        <PvDialogContent variant="site" className="w-[calc(100%-2rem)] max-w-[380px] gap-0 rounded-[36px] p-6 sm:max-w-[380px] sm:p-7">
           <ClockBody title={title} dateIso={dateIso} value={value} slots={slots} onSet={onSet} confirmLabel={confirmLabel} />
         </PvDialogContent>
       ) : null}

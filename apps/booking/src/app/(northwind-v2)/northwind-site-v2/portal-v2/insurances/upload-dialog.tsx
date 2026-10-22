@@ -5,8 +5,9 @@
  *
  * ── ONE SCREEN ──────────────────────────────────────────────────────────────
  * The cover details and the file are asked together (owner, Oct 22 2026: "policy
- * number and upload are two steps — merge them"). No step bar, no back button,
- * no art: the title, four optional fields, the drop zone, one button.
+ * number and upload are two steps — merge them"). No step bar, no back button:
+ * the operator's dialog header (art, status, title), four optional fields, the
+ * drop zone, and one footer row — Cancel and Upload, equal height, right-aligned.
  *
  * ── MANY FILES, ONE COVER ───────────────────────────────────────────────────
  * The picker and the drop zone take several files at once. Each file is filed
@@ -39,7 +40,9 @@ import {
 import { DateField, TextField } from '@nw/site-v2/booking/field-primitives';
 import { cn } from '@nw/lib/utils';
 
-import { DialogScreenHeader, Notice, PvDialogContent, UploadZone } from './_components/kit';
+import { PvDialogContent, PvDialogHeader, PvStatus } from '@nw/portal-v2/dialog';
+
+import { Notice, UploadZone } from './_components/kit';
 
 function formatSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -181,11 +184,13 @@ export function UploadDocumentDialog({
     <DialogPrimitive.Root open={open} onOpenChange={close}>
       <PvDialogContent
         showCloseButton={!busy}
-        className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg"
+        className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl"
       >
-        <DialogScreenHeader
+        <PvDialogHeader
           title="Upload insurance"
           description="Add your certificate and, if you have them, the policy details. We will review it shortly."
+          // A status only while something is happening; the file list says what is ready.
+          status={busy ? <PvStatus tone="info">Uploading</PvStatus> : undefined}
         />
 
         <div className="grid grid-cols-1 gap-x-3 gap-y-4 sm:grid-cols-2">
@@ -291,17 +296,28 @@ export function UploadDocumentDialog({
 
         {problems.length > 0 ? <Notice plain tone="danger" lines={problems} /> : null}
 
-        <Button
-          type="button"
-          variant="brand"
-          className="h-11 w-full"
-          disabled={busy || files.length === 0}
-          onClick={() => {
-            void handleSubmit();
-          }}
-        >
-          {submitLabel}
-        </Button>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+          <Button
+            type="button"
+            variant="brand-ghost"
+            className="h-11 w-full px-6 sm:w-auto sm:min-w-[9rem]"
+            disabled={busy}
+            onClick={() => close(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="brand"
+            className="h-11 w-full px-6 sm:w-auto sm:min-w-[9rem]"
+            disabled={busy || files.length === 0}
+            onClick={() => {
+              void handleSubmit();
+            }}
+          >
+            {submitLabel}
+          </Button>
+        </div>
       </PvDialogContent>
     </DialogPrimitive.Root>
   );

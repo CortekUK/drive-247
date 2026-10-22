@@ -77,7 +77,7 @@ export function FleetBrowser({ seed = null }: FleetBrowserProps) {
       )}
 
       <Dialog open={filtersOpen} onOpenChange={setFiltersOpen}>
-        <PvDialogContent className="max-h-[calc(100dvh-2rem)] gap-0 p-0 sm:max-w-md sm:p-0">
+        <PvDialogContent variant="site" className="max-h-[calc(100dvh-2rem)] gap-0 p-0 sm:max-w-md sm:p-0">
           <DialogHeader className="shrink-0 gap-1 px-6 pb-3 pr-14 pt-6 text-left">
             <DialogTitle className="text-[17px] font-semibold tracking-tight text-pv-fg">Filter the fleet</DialogTitle>
             <DialogDescription className="text-[13px] text-pv-muted-fg">

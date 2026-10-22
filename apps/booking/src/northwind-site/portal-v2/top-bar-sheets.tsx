@@ -99,14 +99,26 @@ function relativeTime(iso: string | null | undefined, addSuffix = true): string 
   }
 }
 
-function SheetHeaderRow({ title, count, children }: { title: React.ReactNode; count?: number; children: React.ReactNode }) {
+function SheetHeaderRow({
+  title,
+  count,
+  aside,
+  children,
+}: {
+  title: React.ReactNode;
+  count?: number;
+  /** Beside the title, as the operator's Critical chip (notification-sheet-v2.tsx). */
+  aside?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="flex min-w-0 items-center gap-2">
-        <SheetTitle className="text-[15px] font-semibold tracking-tight text-pv-fg">
+        <SheetTitle className="shrink-0 text-[15px] font-semibold tracking-tight text-pv-fg">
           {title}
           {count ? <span className={COUNT_PILL}>{count}</span> : null}
         </SheetTitle>
+        {aside}
       </div>
       <div className="flex shrink-0 items-center gap-0.5">{children}</div>
     </div>
@@ -152,40 +164,53 @@ function ListSkeleton({ avatar = false }: { avatar?: boolean }) {
 /* ───────────────────────────── notifications ───────────────────────────── */
 
 /**
- * The customer's categories, the operator's pills for a customer's world:
- * Payments and Rentals as there, Documents for agreements and verification
- * (the operator's Customers has no meaning here), System for the rest.
- * "Critical" is not a category but a severity: alerts, shown as a red chip
- * beside the title, as the operator's.
+ * The filters, built the way the operator's are
+ * (components/notifications/notification-filters.ts): ONE list of keys that is
+ * both the pills and the only values the panel may filter by, and ONE predicate
+ * (`matches`, the counterpart of the operator's `applyFilter`) used by the list
+ * AND by every count, so the number on a pill is a promise about the rows under it.
+ *
+ * Critical is NOT a category but a severity (the operator's reasoning in
+ * notification-sheet-v2.tsx): a failed payment is a Payment and Critical and
+ * shows under both. So, as there, it is a chip beside the title, not a pill.
+ * Unlike there it shows even at zero: a customer has no other way to learn the
+ * filter exists, and "0 critical" is itself an answer.
+ *
+ * System is gone. On the operator's side it is the complement of the
+ * categories; for a customer that is a welcome note and generic info/success
+ * messages, nothing anyone filters FOR. Those rows stay in All, and the alerts
+ * among them are one tap away on the Critical chip. Without it the row is All +
+ * three categories, which fits 390px with no sideways scroll.
  */
-type Category = 'payments' | 'rentals' | 'documents' | 'system';
+type Category = 'payments' | 'rentals' | 'documents';
 type Filter = 'all' | Category | 'critical';
 
-const CATEGORY_OF: Record<NotificationKind, Category> = {
+/** `null`: in All only (what the operator calls System; not offered here). */
+const CATEGORY_OF: Record<NotificationKind, Category | null> = {
   payment: 'payments',
   booking: 'rentals',
   agreement: 'documents',
   verification: 'documents',
-  welcome: 'system',
-  alert: 'system',
-  success: 'system',
-  info: 'system',
+  welcome: null,
+  alert: null,
+  success: null,
+  info: null,
 };
 
-const FILTERS: { key: Filter; label: string }[] = [
+/** The pills, in order. Critical is the chip beside the title. */
+const NOTIFICATION_FILTERS: { key: Exclude<Filter, 'critical'>; label: string }[] = [
   { key: 'all', label: 'All' },
-  { key: 'critical', label: 'Critical' },
   { key: 'payments', label: 'Payments' },
   { key: 'rentals', label: 'Rentals' },
   { key: 'documents', label: 'Documents' },
-  { key: 'system', label: 'System' },
 ];
+
+const FILTER_KEYS: Filter[] = ['all', 'payments', 'rentals', 'documents', 'critical'];
 
 const CATEGORY_LABEL: Record<Category, string> = {
   payments: 'Payment',
   rentals: 'Rental',
   documents: 'Document',
-  system: 'System',
 };
 
 /** The operator's category tones (notifications/taxonomy.ts). */
@@ -193,24 +218,32 @@ const CATEGORY_TONE: Record<Category, string> = {
   payments: 'bg-emerald-500/10 text-emerald-700',
   rentals: 'bg-blue-500/10 text-blue-700',
   documents: 'bg-violet-500/10 text-violet-700',
-  system: 'bg-pv-muted text-pv-muted-fg',
 };
 
+/** The sentence an empty list should say, which depends on why it is empty. */
 const EMPTY_COPY: Record<Filter, string> = {
   all: 'Nothing here yet. Updates about your rentals, payments and documents will appear as they happen.',
   payments: 'No payment notifications yet.',
   rentals: 'No rental notifications yet.',
   documents: 'No document notifications yet.',
-  system: 'No other notifications yet.',
   critical: 'Nothing needs your attention right now.',
 };
 
 const isCritical = (n: CustomerNotification) => n.kind === 'alert';
 
+/** The filter as a predicate: the one used for the list and for every count. */
 function matches(n: CustomerNotification, filter: Filter): boolean {
-  if (filter === 'all') return true;
-  if (filter === 'critical') return isCritical(n);
-  return CATEGORY_OF[n.kind] === filter;
+  switch (filter) {
+    case 'critical':
+      return isCritical(n);
+    case 'payments':
+    case 'rentals':
+    case 'documents':
+      return CATEGORY_OF[n.kind] === filter;
+    case 'all':
+    default:
+      return true;
+  }
 }
 
 function NotificationRow({
@@ -267,9 +300,11 @@ function NotificationRow({
           ) : null}
 
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className={cn('inline-flex h-5 items-center rounded-full px-2 text-[10px] font-medium', CATEGORY_TONE[category])}>
-              {CATEGORY_LABEL[category]}
-            </span>
+            {category ? (
+              <span className={cn('inline-flex h-5 items-center rounded-full px-2 text-[10px] font-medium', CATEGORY_TONE[category])}>
+                {CATEGORY_LABEL[category]}
+              </span>
+            ) : null}
             {critical ? (
               <span className="inline-flex h-5 items-center gap-1 rounded-full bg-pv-danger-light px-2 text-[10px] font-medium text-pv-danger">
                 <AlertTriangle aria-hidden className="size-2.5" />
@@ -322,21 +357,15 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
   const notifications = useMemo(() => all.filter((n) => n.typeRaw !== 'chat_message'), [all]);
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
+  // Each count is the list's own predicate over the same rows, so a pill's
+  // number and the rows under it cannot disagree (the operator's applyFilter).
   const counts = useMemo(() => {
-    const out: Record<Filter, number> = { all: 0, payments: 0, rentals: 0, documents: 0, system: 0, critical: 0 };
-    for (const n of notifications) {
-      out.all += 1;
-      out[CATEGORY_OF[n.kind]] += 1;
-      if (isCritical(n)) out.critical += 1;
-    }
+    const out = {} as Record<Filter, number>;
+    for (const key of FILTER_KEYS) out[key] = notifications.filter((n) => matches(n, key)).length;
     return out;
   }, [notifications]);
-
-  // All and Critical always (as on the operator's centre), the active pill
-  // always, and any category with something in it.
-  const visibleFilters = FILTERS.filter(
-    ({ key }) => key === 'all' || key === 'critical' || key === filter || counts[key] > 0,
-  );
+  const criticalCount = counts.critical;
+  const criticalActive = filter === 'critical';
 
   const shown = notifications.filter((n) => matches(n, filter));
   const grouped: Record<Bucket, CustomerNotification[]> = { today: [], yesterday: [], earlier: [] };
@@ -361,6 +390,29 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
               {unreadCount > 0 ? <span className={COUNT_PILL}>{unreadCount}</span> : null}
             </span>
           }
+          aside={
+            /* Critical as a severity chip beside the title, as the operator's.
+               Pressing it filters; pressing it again returns to All. Always
+               present (the customer has no other route to it); red only when
+               there is something critical. */
+            <button
+              type="button"
+              aria-pressed={criticalActive}
+              onClick={() => setFilter(criticalActive ? 'all' : 'critical')}
+              className={cn(
+                'inline-flex h-5 shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded-full px-2 text-[11px] font-semibold transition-colors duration-200 motion-reduce:transition-none',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-ring/50',
+                criticalActive
+                  ? 'bg-pv-danger text-white'
+                  : criticalCount > 0
+                    ? 'bg-pv-danger-light text-pv-danger hover:bg-pv-danger/15'
+                    : 'bg-pv-muted text-pv-muted-fg hover:bg-pv-hover hover:text-pv-fg',
+              )}
+            >
+              <AlertTriangle aria-hidden className="size-2.5" />
+              {isLoading ? 'Critical' : `${criticalCount} critical`}
+            </button>
+          }
         >
           <button
             type="button"
@@ -376,9 +428,14 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
         </SheetHeaderRow>
         <SheetDescription className="sr-only">Updates about your rentals, payments and documents.</SheetDescription>
 
-        {/* Filters: one row that scrolls sideways rather than wrapping. */}
-        <div className={cn('-mx-5 mt-3 flex gap-1 overflow-x-auto overscroll-x-contain px-5', NO_SCROLLBAR)}>
-          {visibleFilters.map(({ key, label }) => {
+        {/* Filters: All + the three categories, one row that never scrolls.
+            Each pill sized to its label and sharing the slack (`flex-auto`), so
+            every pill is in view at 390px as at 420px, never cut or scrolled.
+            All four always shown: a customer's list is short, and a pill that
+            comes and goes hides the very filter it is. Counts shown even at
+            zero, and only once loaded, as the operator's. */}
+        <div role="group" aria-label="Filter notifications" className="mt-3 flex gap-1">
+          {NOTIFICATION_FILTERS.map(({ key, label }) => {
             const active = filter === key;
             return (
               <button
@@ -387,24 +444,14 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
                 onClick={() => setFilter(key)}
                 aria-pressed={active}
                 className={cn(
-                  'inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[12px] font-medium transition-colors duration-200 motion-reduce:transition-none',
-                  key === 'critical'
-                    ? active
-                      ? 'bg-pv-danger/10 text-pv-danger'
-                      : 'text-pv-danger/80 hover:bg-pv-danger/10 hover:text-pv-danger'
-                    : active
-                      ? 'bg-pv-primary/10 text-pv-primary'
-                      : 'text-pv-muted-fg hover:bg-pv-hover hover:text-pv-fg',
+                  'inline-flex h-7 min-w-0 flex-auto cursor-pointer items-center justify-center gap-1 whitespace-nowrap rounded-full px-2 text-[12px] font-medium transition-colors duration-200 motion-reduce:transition-none',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-ring/50',
+                  active ? 'bg-pv-primary/10 text-pv-primary' : 'text-pv-muted-fg hover:bg-pv-hover hover:text-pv-fg',
                 )}
               >
-                {label}
+                <span className="truncate">{label}</span>
                 {!isLoading ? (
-                  <span
-                    className={cn(
-                      'tabular-nums',
-                      key === 'critical' ? 'text-pv-danger/70' : active ? 'text-pv-primary/70' : 'text-pv-muted-fg/70',
-                    )}
-                  >
+                  <span className={cn('tabular-nums', active ? 'text-pv-primary/70' : 'text-pv-muted-fg/70')}>
                     {counts[key]}
                   </span>
                 ) : null}

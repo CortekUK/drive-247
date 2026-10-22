@@ -28,7 +28,8 @@ import { Eye, EyeOff, GripVertical, Lock } from 'lucide-react-nw';
 import { useCustomer } from '@nw/hooks/use-customer';
 import { cn } from '@nw/lib/utils';
 import { V2_BUTTON_DEFAULT_SM, V2_BUTTON_GHOST_SM, V2_BUTTON_OUTLINE_SM } from '@portal-v2-shared/button-styles';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@portal-v2-shared/dialog';
+import { Dialog } from '@nw/components/ui/dialog';
+import { PvDialogContent, PvDialogHeader } from '@nw/portal-v2/dialog';
 
 import {
   DEFAULT_NAV_PREFERENCES,
@@ -208,13 +209,12 @@ export function SidebarCustomizerDialog({ open, onOpenChange }: { open: boolean;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto p-0 sm:max-w-3xl">
-        <DialogHeader className="border-b border-pv-border px-7 py-5">
-          <DialogTitle className="text-[17px] font-semibold tracking-tight text-pv-fg">Customise sidebar</DialogTitle>
-          <DialogDescription>
-            Drag to reorder and hide anything you don&apos;t use. Rentals stays put. This only changes your own sidebar.
-          </DialogDescription>
-        </DialogHeader>
+      <PvDialogContent className="max-h-[92vh] gap-0 overflow-y-auto p-0 sm:max-w-3xl sm:p-0">
+        <PvDialogHeader
+          className="border-b border-pv-border px-7 pt-7 pb-5"
+          title="Customise sidebar"
+          description="Drag to reorder and hide anything you don't use. Rentals stays put. This only changes your own sidebar."
+        />
 
         <div className="grid gap-6 px-7 py-6 md:grid-cols-[minmax(0,1fr)_240px]">
           <div className="flex min-w-0 flex-col gap-5">
@@ -283,7 +283,7 @@ export function SidebarCustomizerDialog({ open, onOpenChange }: { open: boolean;
             </button>
           </div>
         </div>
-      </DialogContent>
+      </PvDialogContent>
     </Dialog>
   );
 }

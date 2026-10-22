@@ -94,7 +94,7 @@ function QuickBookBody({ onClose }: { onClose: () => void }) {
   const back = BACK_TO[qb.step];
 
   return (
-    <PvDialogContent className="max-h-[calc(100svh-1rem)] w-[calc(100%-1rem)] max-w-[880px] gap-0 overflow-hidden rounded-[36px] p-0 sm:max-h-[calc(100svh-2rem)] sm:max-w-[880px] sm:rounded-[40px] sm:p-0">
+    <PvDialogContent variant="site" className="max-h-[calc(100svh-1rem)] w-[calc(100%-1rem)] max-w-[880px] gap-0 overflow-hidden rounded-[36px] p-0 sm:max-h-[calc(100svh-2rem)] sm:max-w-[880px] sm:rounded-[40px] sm:p-0">
       <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
         {/* The controls float in the title's row, so no height goes to them. */}
         <div className="absolute inset-x-0 top-0 z-10 flex h-[72px] items-center gap-2 px-5 pr-14 sm:px-7">

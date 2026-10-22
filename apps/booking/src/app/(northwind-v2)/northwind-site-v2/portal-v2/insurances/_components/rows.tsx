@@ -3,8 +3,7 @@
 /**
  * One row per insurance, whichever table it came from: the certificates the
  * customer uploaded (`customer_documents`) and the Bonzah policies bought with a
- * booking (`bonzah_insurance_policies`). The table, the row menu and the detail
- * dialog all read this shape.
+ * booking (`bonzah_insurance_policies`). The table and the row menu read this shape.
  */
 
 import { formatDate } from '@nw/components/portal/format';
@@ -20,7 +19,7 @@ interface BaseRow {
   start: string | null;
   end: string | null;
   status: { label: string; tone: V2ListTone };
-  /** When it was uploaded or issued. Ordering and the detail dialog only. */
+  /** When it was uploaded or issued. Ordering only. */
   addedAt: string | null;
   booking: { id: string; reference: string } | null;
 }
@@ -75,7 +74,10 @@ export function toRows(documents: readonly CustomerDocument[], policies: readonl
   const bonzah: InsuranceRow[] = policies.map((policy) => ({
     kind: 'bonzah',
     key: `bonzah-${policy.id}`,
-    name: policy.title,
+    // Bonzah's brand is its logo in the Provider column, once (owner, Oct 22
+    // 2026: "shown twice … show it once"), so the name does not repeat the word.
+    // 'Bonzah' stays as the provider value so a search for it still finds the row.
+    name: policy.title.replace(/^Bonzah\s+/i, 'Rental '),
     provider: 'Bonzah',
     policyNumber: policy.policyNumber,
     start: policy.startDate || null,
@@ -101,14 +103,18 @@ export function coverRange(start: string | null, end: string | null): string {
   return '—';
 }
 
-/** Bonzah's wordmark, bare — no pill, no glyph beside it. */
+/**
+ * Bonzah's wordmark, bare — no pill, no glyph beside it — in light and dark,
+ * as the operator portal draws it (`/bonzah-logo.svg`, `/bonzah-logo-dark.svg`).
+ * Used once: the Provider cell. The name column never repeats it.
+ */
 export function BonzahLogo({ className }: { className?: string }) {
   return (
     <span title="Bonzah insurance" className={cn('inline-flex shrink-0 items-center', className)}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/bonzah-logo.svg" alt="Bonzah" className="h-3.5 w-auto dark:hidden" />
+      <img src="/bonzah-logo.svg" alt="Bonzah" className="h-4 w-auto dark:hidden" />
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="hidden h-3.5 w-auto dark:block" />
+      <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="hidden h-4 w-auto dark:block" />
     </span>
   );
 }

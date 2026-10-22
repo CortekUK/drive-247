@@ -37,6 +37,7 @@
  * and the invoice's `notes`. How a payment was taken is told from `method` only.
  */
 
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { supabase, supabaseUntyped } from '@nw/integrations/supabase/client';
@@ -335,7 +336,10 @@ export function buildInvoiceBreakdown(
     ? Math.max(0, raw.charges.reduce((s, c) => s + remainingOf(c), 0))
     : total;
   const paid = Math.max(0, total - remaining);
-  const cancelled = invoice.state === 'cancelled' || invoice.statusRaw === 'cancelled';
+  // The operator's rule (invoice-payments-table.tsx / invoice-detail-sheet.tsx):
+  // an invoice is cancelled when ITS status says so — not when its booking
+  // closed. The table and this sheet must call the same invoices cancelled.
+  const cancelled = invoice.statusRaw === 'cancelled';
 
   return {
     charges,
@@ -435,6 +439,190 @@ export function useCustomerInvoiceBreakdown(
   return {
     breakdown: invoice && query.data ? buildInvoiceBreakdown(invoice, query.data) : null,
     isLoading: !!rentalId && (query.isLoading || query.isPending) && !query.data,
+    error: (query.error as Error | null) ?? null,
+  };
+}
+
+/* ─────────────────────────── the list's figures ──────────────────────────── */
+
+/**
+ * Every invoice's row in the Finances table, figured exactly as the operator's
+ * table figures it (invoice-payments-table.tsx, with `invoiceTotals`,
+ * `paymentState`, `dueState`, `dueDateOf` and `entityLabel` from
+ * finance-data.ts):
+ *
+ *   Total − Paid = Remaining, summed from the RENTAL's charges (extensions
+ *   included), never from the invoice row's booking-time snapshot. No charges
+ *   → the invoice's own total, owed in full.
+ *
+ * Same isolation as the breakdown above: every read carries the customer id and
+ * tenant id from the auth store; `payment_applications` is scoped by the charge
+ * ids those reads returned.
+ */
+
+export interface InvoiceRowFigures {
+  /** "Rental" | "Customer": the operator's `entityLabel` for a live invoice. */
+  entity: string;
+  total: number;
+  /** Paid and kept (no credit notes in live data, so equal to `settled`). */
+  paid: number;
+  settled: number;
+  owes: number;
+  cancelled: boolean;
+  /** Paid · Part paid · Unpaid · Cancelled. */
+  status: BreakdownState;
+  /** Overdue · 3 days, Upcoming · 5 days … null when nothing is owed. */
+  due: BreakdownState | null;
+  /** The date the row shows: the earliest unpaid charge's while money is owed, else the invoice's. */
+  dueDate: string | null;
+  chargeCount: number;
+  /** Separate payments (money landed) toward these charges. */
+  paymentCount: number;
+}
+
+interface FigureChargeRow extends ChargeRow {
+  rental_id: string;
+}
+
+interface FiguresRaw {
+  types: { id: string; invoice_type: string | null }[];
+  charges: FigureChargeRow[];
+  allocations: Pick<AllocationRow, 'payment_id' | 'charge_entry_id'>[];
+  payments: { id: string; status: string | null }[];
+}
+
+/** The operator's `entityLabel` for an invoice without an explicit entity (every live row). */
+export const entityLabelOf = (invoiceType: string | null | undefined) =>
+  invoiceType === 'standalone' ? 'Customer' : 'Rental';
+
+type FigureInput = Pick<CustomerInvoice, 'id' | 'rentalId' | 'invoiceDate' | 'dueDate' | 'total' | 'statusRaw'>;
+
+/** Pure: the raw rows → one row of figures per invoice. Exported for tests. */
+export function buildInvoiceFigures(
+  invoices: readonly FigureInput[],
+  raw: FiguresRaw,
+  today = new Date(),
+): Map<string, InvoiceRowFigures> {
+  const typeById = new Map(raw.types.map((t) => [t.id, t.invoice_type]));
+  const chargesByRental = new Map<string, FigureChargeRow[]>();
+  for (const c of raw.charges) {
+    const list = chargesByRental.get(c.rental_id);
+    if (list) list.push(c);
+    else chargesByRental.set(c.rental_id, [c]);
+  }
+  const landed = new Set(raw.payments.filter((p) => LANDED.has(p.status ?? '')).map((p) => p.id));
+  const paymentsByCharge = new Map<string, string[]>();
+  for (const a of raw.allocations) {
+    const list = paymentsByCharge.get(a.charge_entry_id);
+    if (list) list.push(a.payment_id);
+    else paymentsByCharge.set(a.charge_entry_id, [a.payment_id]);
+  }
+
+  const out = new Map<string, InvoiceRowFigures>();
+  for (const invoice of invoices) {
+    const charges = (invoice.rentalId && chargesByRental.get(invoice.rentalId)) || [];
+    const total = charges.length ? charges.reduce((s, c) => s + num(c.amount), 0) : Number(invoice.total || 0);
+    const owes = charges.length ? Math.max(0, charges.reduce((s, c) => s + remainingOf(c), 0)) : total;
+    const settled = Math.max(0, total - owes);
+    const cancelled = invoice.statusRaw === 'cancelled';
+    const paidBy = new Set<string>();
+    for (const c of charges) {
+      for (const pid of paymentsByCharge.get(c.id) ?? []) if (landed.has(pid)) paidBy.add(pid);
+    }
+    out.set(invoice.id, {
+      entity: entityLabelOf(typeById.get(invoice.id)),
+      total,
+      paid: settled,
+      settled,
+      owes,
+      cancelled,
+      status: paymentState(total, settled, cancelled),
+      due: dueState(invoice, charges, owes, cancelled, today),
+      dueDate: owes > EPS && !cancelled ? dueDateOf(invoice.dueDate, charges) : invoice.dueDate,
+      chargeCount: charges.length,
+      paymentCount: paidBy.size,
+    });
+  }
+  return out;
+}
+
+/** Ids per request for an `.in()` filter, so the list never outgrows a URL. */
+const IN_CHUNK = 150;
+
+export function useCustomerInvoiceFigures(invoices: readonly FigureInput[]): {
+  figures: Map<string, InvoiceRowFigures>;
+  isLoading: boolean;
+  error: Error | null;
+} {
+  const { tenant } = useTenant();
+  const { customerId } = useCustomer();
+  const tenantId = tenant?.id ?? null;
+
+  const query = useQuery({
+    queryKey: ['customer-invoice-figures', tenantId, customerId],
+    enabled: !!tenantId && !!customerId,
+    queryFn: async (): Promise<FiguresRaw> => {
+      if (!tenantId || !customerId) return { types: [], charges: [], allocations: [], payments: [] };
+
+      const [typesRes, chargesRes] = await Promise.all([
+        supabaseUntyped
+          .from('invoices')
+          .select('id, invoice_type')
+          // Read the file header before touching either of these.
+          .eq('customer_id', customerId)
+          .eq('tenant_id', tenantId),
+        supabaseUntyped
+          .from('ledger_entries')
+          .select(`rental_id, ${CHARGE_COLUMNS}`)
+          .eq('customer_id', customerId)
+          .eq('tenant_id', tenantId)
+          .eq('type', 'Charge')
+          .not('rental_id', 'is', null)
+          .order('entry_date', { ascending: true })
+          .order('id'),
+      ]);
+      if (typesRes.error) throw new Error(typesRes.error.message || 'Failed to load your invoices');
+      if (chargesRes.error) throw new Error(chargesRes.error.message || 'Failed to load your invoices');
+      const charges = (chargesRes.data ?? []) as FigureChargeRow[];
+
+      // No customer_id on this table: the charge ids ARE the scope.
+      const allocations: FiguresRaw['allocations'] = [];
+      const chargeIds = charges.map((c) => c.id);
+      for (let i = 0; i < chargeIds.length; i += IN_CHUNK) {
+        const { data, error } = await supabaseUntyped
+          .from('payment_applications')
+          .select('payment_id, charge_entry_id')
+          .eq('tenant_id', tenantId)
+          .in('charge_entry_id', chargeIds.slice(i, i + IN_CHUNK));
+        if (error) throw new Error(error.message || 'Failed to load your invoices');
+        allocations.push(...((data ?? []) as FiguresRaw['allocations']));
+      }
+
+      const paymentIds = [...new Set(allocations.map((a) => a.payment_id))];
+      const payments: FiguresRaw['payments'] = [];
+      for (let i = 0; i < paymentIds.length; i += IN_CHUNK) {
+        const { data, error } = await supabaseUntyped
+          .from('payments')
+          .select('id, status')
+          .eq('customer_id', customerId)
+          .eq('tenant_id', tenantId)
+          .in('id', paymentIds.slice(i, i + IN_CHUNK));
+        if (error) throw new Error(error.message || 'Failed to load your invoices');
+        payments.push(...((data ?? []) as FiguresRaw['payments']));
+      }
+
+      return { types: (typesRes.data ?? []) as FiguresRaw['types'], charges, allocations, payments };
+    },
+  });
+
+  const figures = useMemo(
+    () => (query.data ? buildInvoiceFigures(invoices, query.data) : new Map<string, InvoiceRowFigures>()),
+    [invoices, query.data],
+  );
+
+  return {
+    figures,
+    isLoading: !!tenantId && !!customerId && !query.data && !query.error,
     error: (query.error as Error | null) ?? null,
   };
 }

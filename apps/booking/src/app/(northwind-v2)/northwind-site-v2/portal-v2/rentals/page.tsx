@@ -96,11 +96,18 @@ export default function PortalRentalsPage() {
         title="Rentals"
         description="Manage your rentals, from upcoming to completed."
         action={
-          view === 'list' && !noRentals ? (
-            <button type="button" onClick={() => setView('calendar')} className={V2_BUTTON_PRIMARY}>
-              Calendar view
+          // One button that toggles: it says where it takes you, so the way
+          // out of the calendar is the same button that took you in.
+          noRentals ? null : (
+            <button
+              type="button"
+              onClick={() => setView(view === 'calendar' ? 'list' : 'calendar')}
+              aria-pressed={view === 'calendar'}
+              className={V2_BUTTON_PRIMARY}
+            >
+              {view === 'calendar' ? 'List view' : 'Calendar view'}
             </button>
-          ) : null
+          )
         }
       />
 

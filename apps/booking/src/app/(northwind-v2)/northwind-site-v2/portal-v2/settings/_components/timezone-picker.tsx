@@ -27,10 +27,10 @@ import { Check, ChevronDown, Search } from 'lucide-react-nw';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 
 import { cn } from '@nw/lib/utils';
-import { PvDialogContent } from '@nw/portal-v2/dialog';
+import { PvDialogContent, PvDialogHeader, PvStatus } from '@nw/portal-v2/dialog';
 import { timezoneCountry, timezoneFlag } from '@portal-v2-shared/timezone-flags';
 
-import { PV_DIALOG_DESCRIPTION, PV_DIALOG_TITLE, PV_INPUT } from './pv-kit';
+import { PV_INPUT } from './pv-kit';
 
 /** The operator's list: every zone the browser knows, the current one always in it. */
 function buildTimezoneOptions(current: string): string[] {
@@ -177,19 +177,19 @@ export function TimezonePicker({
         }}
       >
         <PvDialogContent
-          className="flex max-h-[min(720px,calc(100dvh-4rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-md sm:p-0"
+          className="flex max-h-[min(760px,calc(100dvh-4rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg sm:p-0"
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             searchRef.current?.focus();
             selectedRef.current?.scrollIntoView({ block: 'center' });
           }}
         >
-          <div className="flex flex-col gap-1.5 px-6 pt-6 pb-3">
-            <DialogPrimitive.Title className={PV_DIALOG_TITLE}>Time zone</DialogPrimitive.Title>
-            <DialogPrimitive.Description className={PV_DIALOG_DESCRIPTION}>
-              Pickup and return times are shown in this zone.
-            </DialogPrimitive.Description>
-          </div>
+          <PvDialogHeader
+            className="px-7 pt-7 pb-4"
+            title="Time zone"
+            description="Pickup and return times are shown in this zone."
+            status={value ? <PvStatus tone="info">{value.split('/').pop()?.replace(/_/g, ' ')}</PvStatus> : undefined}
+          />
           <div className="border-b border-pv-border px-6 pb-3">
             <div className="flex h-9 items-center gap-2 rounded-full bg-pv-muted px-3.5">
               <Search aria-hidden className="size-3.5 shrink-0 text-pv-muted-fg" />

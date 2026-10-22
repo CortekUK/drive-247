@@ -407,12 +407,10 @@ function Rail({
     <>
       <div className="flex shrink-0 flex-col gap-2 p-1.5 pt-4">
         <OrgRow collapsed={collapsed} onNavigate={onNavigate} onCustomize={onCustomize} />
-        {/* The one call to action leads the rail, under the org row (owner, Oct 22 2026). */}
-        <BookCta collapsed={collapsed} onNavigate={onNavigate} />
       </div>
 
       {/* One list, straight through: no group headings, no split. */}
-      <nav aria-label="Portal" className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden">
+      <nav aria-label="Portal" className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden pt-1">
         <ul className="flex w-full min-w-0 flex-col gap-0.5 p-1.5">
           {items.map((item) => (
             <li key={item.href} className="relative">
@@ -423,6 +421,8 @@ function Rail({
       </nav>
 
       <div className="flex shrink-0 flex-col gap-2 p-1.5 pb-2">
+        {/* The one call to action, at the foot of the rail above the profile (owner, Oct 22 2026, second pass). */}
+        <BookCta collapsed={collapsed} onNavigate={onNavigate} />
         <ProfileRow collapsed={collapsed} theme={theme} onThemeChange={onThemeChange} onNavigate={onNavigate} />
       </div>
     </>
@@ -551,7 +551,7 @@ function OrgRow({ collapsed, onNavigate, onCustomize }: { collapsed: boolean; on
 }
 
 /**
- * The rail's one call to action, at the top of the rail: the operator's
+ * The rail's one call to action, at the foot of the rail: the operator's
  * primary Button (shared V2_BUTTON_PRIMARY — the gradient, 36px, 14px medium)
  * stretched to the rail, with the rail rows' 8px radius rather than the pill,
  * so it reads as part of the rail. 44px on a phone, the touch floor.

@@ -252,7 +252,7 @@ export function PaymentPanel({
         Stripe's own layout starts stacking. Outside clicks are ignored — a
         half-typed card must not vanish on a stray tap.
       */}
-      <PvDialogContent
+      <PvDialogContent variant="site"
         showCloseButton={false}
         className="max-h-[calc(100svh-1.5rem)] w-[calc(100%-1.5rem)] max-w-[460px] gap-0 overflow-hidden p-0 sm:max-h-[calc(100svh-4rem)] sm:max-w-[460px] sm:p-0"
         onInteractOutside={(event) => event.preventDefault()}
