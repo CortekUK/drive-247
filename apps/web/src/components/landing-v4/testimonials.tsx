@@ -19,7 +19,7 @@ import {
  * Testimonials — a three-column wall of text and video cards on the old
  * section's background artwork. Nine cards show at a time and they keep
  * changing: every 2–3s one text card is swapped, and a video card (its clip
- * plays on its own, muted) when the clip ends. A swap can bring in either kind, never a testimonial
+ * plays on its own, muted; click it to pause, hover for sound) when the clip ends. A swap can bring in either kind, never a testimonial
  * already on screen (nor one that just left), and keeps 3–4 videos showing
  * on desktop.
  * Hovering a card holds it. Content lives in testimonials-data.ts.
@@ -125,9 +125,10 @@ function TextCard({ t }: { t: TextTestimonial }) {
   );
 }
 
-// The person's photo with the hero tiles' name bar; the clip starts on its own,
-// muted, over the photo once the card is on screen (the sound button turns its
-// sound on — one card at a time), and the card moves on when the clip ends.
+// The person's photo with the hero tiles' name bar; the clip plays over it, muted,
+// once the card is on screen, and the card moves on when the clip ends. Clicking
+// the card pauses and resumes it; the speaker that shows on hover turns its sound
+// on or off (one card at a time). Nothing sits on the card until it is hovered.
 function VideoCard({
   t,
   active,
@@ -135,6 +136,7 @@ function VideoCard({
   onToggleSound,
   onPlaying,
   onEnded,
+  loop,
 }: {
   t: VideoTestimonial;
   active: boolean;
@@ -142,10 +144,10 @@ function VideoCard({
   onToggleSound: () => void;
   onPlaying: (playing: boolean) => void;
   onEnded: () => void;
+  loop?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [held, setHeld] = useState(false); // paused by the viewer
-  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     const v = ref.current;
@@ -156,13 +158,26 @@ function VideoCard({
   }, [active, held, muted]);
 
   return (
-    <article className="tw-card tw-video">
+    <article
+      className={`tw-card tw-video${held ? " is-held" : ""}`}
+      role="button"
+      tabIndex={0}
+      aria-label={held ? `Play ${t.name}'s video` : `Pause ${t.name}'s video`}
+      onClick={() => setHeld((h) => !h)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setHeld((h) => !h);
+        }
+      }}
+    >
       <img className="tw-photo" src={t.photo} alt="" loading="lazy" />
       <video
         ref={ref}
         src={t.video}
         poster={t.photo}
         muted
+        loop={loop}
         playsInline
         preload="metadata"
         onPlay={() => onPlaying(true)}
@@ -172,31 +187,23 @@ function VideoCard({
           onEnded();
         }}
         onError={onEnded}
-        onTimeUpdate={(e) => {
-          const v = e.currentTarget;
-          if (v.duration) setProgress(v.currentTime / v.duration);
-        }}
       />
       <span className="tw-shade" />
-      <button
-        type="button"
-        className="tw-ctl tw-pp"
-        onClick={() => setHeld((h) => !h)}
-        aria-label={held ? `Play ${t.name}'s video` : `Pause ${t.name}'s video`}
-      >
+      {/* the centre button: Pause shows while the card is hovered, Play stays while it is paused */}
+      <span className="tw-held" aria-hidden="true">
         {held ? <Play /> : <Pause />}
-      </button>
+      </span>
       <button
         type="button"
-        className="tw-ctl tw-snd"
-        onClick={onToggleSound}
+        className="tw-snd"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleSound();
+        }}
         aria-label={muted ? "Turn sound on" : "Turn sound off"}
       >
         {muted ? <VolumeX /> : <Volume2 />}
       </button>
-      <span className="tw-prog">
-        <i style={{ transform: `scaleX(${progress})` }} />
-      </span>
       <div className="tw-cap">
         <h3>{t.title}</h3>
         <span className="tw-bar">
@@ -384,6 +391,33 @@ export function Testimonials() {
               <span className="y-kick">Testimonials</span>
               <h2 className="tw-h">What operators are saying</h2>
             </div>
+            {/* phones: every testimonial on one strip that drifts left to right on
+                its own, endlessly (the cards go twice; the track moves by one copy) */}
+            {cols === 1 ? (
+              <div className="tw-marquee">
+                <div className="tw-mtrack">
+                  {[0, 1].flatMap((copy) =>
+                    TESTIMONIALS.map((t, id) => (
+                      <div className="tw-mslot" key={`${copy}-${id}`} aria-hidden={copy ? true : undefined}>
+                        {t.kind === "video" ? (
+                          <VideoCard
+                            t={t}
+                            active={inView}
+                            loop
+                            muted={audible !== id}
+                            onToggleSound={() => setAudible((a) => (a === id ? null : id))}
+                            onPlaying={() => {}}
+                            onEnded={() => {}}
+                          />
+                        ) : (
+                          <TextCard t={t} />
+                        )}
+                      </div>
+                    )),
+                  )}
+                </div>
+              </div>
+            ) : (
             <div
               className={`tw-grid c${cols}`}
               style={{ ["--cols" as string]: cols }}
@@ -409,11 +443,7 @@ export function Testimonials() {
                             t={t}
                             active={inView && visible.includes(slot)}
                             muted={audible !== shown[slot]}
-                            onToggleSound={() =>
-                              setAudible((a) =>
-                                a === shown[slot] ? null : shown[slot],
-                              )
-                            }
+                            onToggleSound={() => setAudible((a) => (a === shown[slot] ? null : shown[slot]))}
                             onPlaying={(on) =>
                               on
                                 ? playing.current.add(slot)
@@ -430,6 +460,7 @@ export function Testimonials() {
                 </div>
               ))}
             </div>
+            )}
           </div>
         </section>
       </div>

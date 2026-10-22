@@ -1,80 +1,57 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ArrowRight, CalendarCheck, Play } from "lucide-react";
+import { ArrowRight, CalendarCheck } from "lucide-react";
 
 /*
- * Hero — copy on the left, a straight wall of operators, cars and the founder's
- * clips on the right. Each column alternates big and small tiles (offset from
- * its neighbours, so the wall has a rhythm) and loops slowly, alternately up
- * and down. The wall fades in at its top and at its edge next to the copy —
- * not at the bottom, and never over the middle. Scrolling parts the two halves
- * (copy left, wall right); the nav stays tucked away until the hero has gone.
+ * Hero — copy on the left, a straight wall of video testimonials on the right:
+ * each card plays a person talking to camera (muted, looping) with their words,
+ * name and city at the bottom. Each column alternates tall and short cards
+ * (offset from its neighbours, so the wall has a rhythm) and loops slowly,
+ * alternately up and down. The wall fades in at its top and at its edge next to
+ * the copy — not at the bottom, and never over the middle. Scrolling parts the
+ * two halves; the nav stays tucked away until the hero has gone.
  *
  * Numbers in the copy: 24/7 booking and the cheapest plan's price (read from the
  * plan catalogue) are facts; the renter count (RENTERS_JOINED) is the team's
  * figure and still needs confirming. "Free 20-minute call" is the strategy-call
  * page's own offer.
  *
- * PLACEHOLDERS: the people on the wall (names, cities) are stand-ins like the
- * testimonials; replace them with real operators before go-live. The clips are
- * the founder's strategy-call videos cut to short loops (public/landing-v4/hero/).
- * The product screen recordings that used to be here showed the portal before
- * v2, so they are gone. The "Works with" row is the integrations Drive247 really
+ * PLACEHOLDERS: the clips are free-licence stock footage (Pexels) and the names,
+ * cities and quotes are demo copy (PEOPLE below); swap in real customers' videos
+ * and words before go-live. The "Works with" row is the integrations Drive247 really
  * ships; swap in partner logos when there are some.
  */
 
 type Size = "big" | "small";
-type Tile =
-  | { kind: "person"; src: string; name: string; place: string }
-  | { kind: "video"; src: string; poster: string; label: string }
-  | { kind: "photo"; src: string };
+type Person = { id: string; name: string; place: string; quote: string };
 
-const H = "/landing-v4/hero";
-const vid = (name: string, label: string): Tile => ({ kind: "video", src: `${H}/${name}.mp4`, poster: `${H}/${name}.webp`, label });
-const photo = (src: string): Tile => ({ kind: "photo", src });
-const person = (src: string, name: string, place: string): Tile => ({ kind: "person", src, name, place });
-
-// Big tiles want sharp, portrait-friendly images; small ones take the cars and
-// the two low-resolution portraits.
-const BIGS: Tile[] = [
-  person("/landing-v2/people/person-5.jpg", "Maya O.", "Los Angeles, CA"),
-  photo(`${H}/about-interior.webp`),
-  person("/landing-v2/people/person-1.jpg", "Daniel R.", "Miami, FL"),
-  vid("founder-1", "Leaving the marketplace"),
-  person("/landing-v2/people/person-3.jpg", "Rachel K.", "Portland, OR"),
-  photo(`${H}/promo-early-bird.webp`),
-  person("/landing-v2/people/person-2.jpg", "Sofia R.", "Las Vegas, NV"),
-  vid("founder-2", "Who it's for"),
-  person("/landing-v2/people/person-4.jpg", "Jonas W.", "Denver, CO"),
-  person(`${H}/reviews-hero.webp`, "Hannah B.", "San Diego, CA"),
-];
-const SMALLS: Tile[] = [
-  photo(`${H}/fleet-hero.webp`),
-  person("/landing-v3/avatars/a5.webp", "Aisha B.", "Austin, TX"),
-  photo(`${H}/about-hero.webp`),
-  photo(`${H}/promo-ev-explorer.webp`),
-  photo("/landing-v4/site/car1.webp"),
-  photo(`${H}/promotions-hero.webp`),
-  person("/landing-v3/avatars/a3.webp", "Priya S.", "Dallas, TX"),
-  photo(`${H}/promo-business-class.webp`),
-  photo(`${H}/contact-hero.webp`),
-  photo(`${H}/promo-weekend-escape.webp`),
+const P = "/landing-v4/hero/people";
+// Nine people, each a short silent loop of them talking to camera (Pexels, free
+// licence) with a one-line testimonial. PLACEHOLDERS: the clips are stock footage
+// and the names and words are demo copy — swap in real customers' videos and
+// words before go-live.
+const PEOPLE: Person[] = [
+  { id: "4962731", name: "Chloe M.", place: "Austin, TX", quote: "I wake up to bookings that are already paid." },
+  { id: "7261920", name: "Ryan P.", place: "Chicago, IL", quote: "The money lands upfront. No more chasing deposits." },
+  { id: "5940726", name: "Emma R.", place: "Denver, CO", quote: "Every renter is ID-checked before they get the keys." },
+  { id: "6332572", name: "Lukas B.", place: "Seattle, WA", quote: "My own booking site, my brand, no marketplace cut." },
+  { id: "6965116", name: "Grace L.", place: "San Francisco, CA", quote: "Agreements get signed on their phone before pickup." },
+  { id: "4994156", name: "Marcus J.", place: "Atlanta, GA", quote: "Lockbox pickups gave me my weekends back." },
+  { id: "9032398", name: "Sofia D.", place: "Miami, FL", quote: "Renters book at 2am and I don't lift a finger." },
+  { id: "7643836", name: "Kevin T.", place: "Houston, TX", quote: "Trax tells me what needs me first every morning." },
+  { id: "8048247", name: "Jason L.", place: "Phoenix, AZ", quote: "Live in a week, taking direct bookings ever since." },
 ];
 
-// 7 columns of 6 tiles, big and small in turn; even columns start big, odd ones
-// small, so a big tile always sits beside a small one. Column c takes three of
-// BIGS and SMALLS from c·7 on: neighbouring columns never share a tile, and the
-// same face is at least two columns away from itself.
-const COLUMNS: { t: Tile; size: Size }[][] = Array.from({ length: 7 }, (_, c) => {
-  let b = 0;
-  let m = 0;
-  return Array.from({ length: 6 }, (_, k) =>
-    (k + c) % 2 === 0
-      ? { t: BIGS[(c * 7 + b++) % BIGS.length], size: "big" as const }
-      : { t: SMALLS[(c * 7 + m++ + 5) % SMALLS.length], size: "small" as const },
-  );
-});
+// 7 columns of 6 cards, tall and short in turn; even columns start tall, odd ones
+// short, so a tall card always sits beside a short one. Column c starts c·4 into
+// the list, so a face never sits next to itself, across or down.
+const COLUMNS: { t: Person; size: Size }[][] = Array.from({ length: 7 }, (_, c) =>
+  Array.from({ length: 6 }, (_, k) => ({
+    t: PEOPLE[(c * 4 + k) % PEOPLE.length],
+    size: (k + c) % 2 === 0 ? ("big" as const) : ("small" as const),
+  })),
+);
 
 // UNVERIFIED — the figure the team asked for. Confirm it against real booking data
 // before go-live: a public user count has to be true.
@@ -88,37 +65,14 @@ const PARTNERS = [
   { name: "Twilio", src: "/landing-v3/partners/twilio-logo.svg", wordmark: false },
 ];
 
-function TileView({ t, size, i }: { t: Tile; size: Size; i: number }) {
-  const style = { ["--i" as string]: i };
-  if (t.kind === "photo")
-    return (
-      <figure className={`hw-tile ${size}`} style={style}>
-        <img src={t.src} alt="" />
-      </figure>
-    );
-  if (t.kind === "video")
-    return (
-      <figure className={`hw-tile ${size} vid`} style={style}>
-        <video src={t.src} poster={t.poster} muted loop playsInline preload="metadata" />
-        <span className="hw-play">
-          <Play />
-        </span>
-        <figcaption className="hw-bar">
-          <span>
-            <b>{t.label}</b>
-            <small>Drive247</small>
-          </span>
-        </figcaption>
-      </figure>
-    );
+function TileView({ t, size, i }: { t: Person; size: Size; i: number }) {
   return (
-    <figure className={`hw-tile ${size} who`} style={style}>
-      <img src={t.src} alt="" />
-      <figcaption className="hw-bar">
-        <img className="av" src={t.src} alt="" />
+    <figure className={`hw-tile ${size}`} style={{ ["--i" as string]: i }}>
+      <video src={`${P}/p-${t.id}.mp4`} poster={`${P}/p-${t.id}.webp`} muted loop playsInline preload="none" />
+      <figcaption className="hw-quote">
+        <q>{t.quote}</q>
         <span>
-          <b>{t.name}</b>
-          <small>{t.place}</small>
+          <b>{t.name}</b> · {t.place}
         </span>
       </figcaption>
     </figure>

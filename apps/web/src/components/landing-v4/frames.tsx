@@ -49,12 +49,12 @@ export function Laptop({ children, width = 1280, height = 800 }: { children: Rea
   );
 }
 
-export function Phone({ children }: { children: ReactNode }) {
+export function Phone({ children, width = 390 }: { children: ReactNode; width?: number }) {
   return (
     <div className="l4-phone">
       <div className="screen">
         <span className="notch" />
-        <Scaled width={390} height={820}>
+        <Scaled width={width} height={820}>
           {children}
         </Scaled>
       </div>

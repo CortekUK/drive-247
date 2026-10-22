@@ -326,7 +326,13 @@
    ===================================================================== */
 /* the tabs are one centred row above the screen; the laptop takes the full width */
 /* the showcase runs straight into Integrations: less air above and below the laptop */
-#x-showcase { padding-top: 64px; padding-bottom: 40px; }
+/* the portal section is one screen under the fixed nav (68px) on laptops and tablets:
+   tight spacing, and the laptop sized from the screen's height (it is ~0.64 as tall as wide) */
+#x-showcase { box-sizing: border-box; min-height: calc(100svh - 68px); padding: 14px 0 18px; display: flex; align-items: center; }
+#x-showcase > .l4-wrap { width: 100%; }
+#x-showcase .l4-h2 { margin-top: 10px; font-size: clamp(28px, 2.6vw, 42px); }
+#x-showcase .l4-lead { margin-top: 8px; font-size: 16.5px; }
+@media (min-width: 761px) { #x-showcase .l4-lead { display: none; } } /* the tab's own line says it; the laptop takes the room */
 #x-showcase + .l4-ix { padding-top: 64px; }
 .l4-show { display: flex; flex-direction: column; align-items: center; }
 .l4-tabs { position: relative; display: inline-flex; gap: 4px; padding: 5px; border-radius: 999px; background: #f4f4f8; box-shadow: inset 0 0 0 1px rgb(15 14 26 / 0.06); }
@@ -341,11 +347,11 @@
 .l4-tab .bar { position: absolute; left: 18px; right: 18px; bottom: 4px; height: 2px; border-radius: 2px; overflow: hidden; }
 .l4-tab.on .bar i { position: absolute; inset: 0; background: var(--p); transform-origin: left; animation: l4-fill-x var(--dur, 6s) linear forwards; }
 @keyframes l4-fill-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-.l4-show-d { min-height: 1.5em; margin: 12px 0 0; max-width: 640px; text-align: center; font-size: 15px; line-height: 1.5; color: var(--muted); }
+.l4-show-d { min-height: 1.5em; margin: 10px 0 0; max-width: 960px; text-align: center; font-size: 15px; line-height: 1.5; color: var(--muted); }
 /* the stage is wider than the text column (it overflows .l4-wrap evenly, centred), so the
    laptop fills the width */
-.l4-stage { position: relative; flex: none; width: min(1480px, calc(100vw - 48px)); margin-top: 24px; padding: 0 5%; } /* room either side for the laptop base, which is wider than the lid */
-#x-showcase .l4-head { margin-bottom: 26px; }
+.l4-stage { position: relative; flex: none; width: min(1600px, calc(100vw - 48px), max(74vw, calc((100svh - 300px) * 1.64))); margin-top: 16px; padding: 0 4%; } /* the laptop is sized from the screen width (its base spans ~3/4 of it) and may run over the background art */
+#x-showcase .l4-head { margin-bottom: 18px; }
 .l4-show .stack { position: relative; }
 .l4-show .pane { transition: opacity 0.35s ease; }
 .l4-show .pane:not(.is-on) { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
@@ -353,6 +359,7 @@
   .l4-tabs { max-width: calc(100% + 48px); margin: 0 -24px; overflow-x: auto; scrollbar-width: none; border-radius: 0; background: none; box-shadow: none; padding: 4px 24px; }
   .l4-tab { flex: none; padding: 9px 15px; font-size: 14px; background: #f4f4f8; }
   .l4-stage { margin-top: 22px; padding: 0 4%; }
+  #x-showcase { min-height: 0; padding: var(--sec) 0; display: block; }
 }
 
 @keyframes l4-fill { from { transform: scaleY(0); } to { transform: scaleY(1); } }
@@ -360,27 +367,26 @@
 /* =====================================================================
    HOW IT WORKS — the renter flows (FlowPicker in interactive.tsx)
    ===================================================================== */
-.l4-flows .l4-head { max-width: 980px; margin-bottom: 20px; }
-/* desktop: the whole section is one screen under the fixed nav (68px) */
-#how-it-works { box-sizing: border-box; min-height: calc(100svh - 68px); padding: 26px 0 22px; display: flex; align-items: center; }
-#how-it-works > .l4-wrap { width: 100%; }
-#how-it-works .l4-h2 { margin-top: 10px; font-size: clamp(30px, 2.5vw, 42px); }
+.l4-flows .l4-head { max-width: 980px; margin-bottom: clamp(40px, 4vw, 64px); }
+/* normal section spacing, no one-screen squeeze */
+#how-it-works { padding: clamp(72px, 7vw, 112px) 0; }
+#how-it-works .l4-h2 { margin-top: 14px; font-size: clamp(32px, 2.8vw, 48px); }
+#how-it-works .l4-h2 span { color: var(--p); }
 #how-it-works .l4-lead { margin-top: 10px; font-size: 16.5px; }
-@media (min-width: 961px) { #how-it-works .l4-lead { display: none; } } /* desktop: the phone takes that room */
-@media (min-width: 961px) and (max-height: 860px) { .l4-flow { padding: 10px 16px; } .l4-flows-stage { row-gap: 10px; } } /* short laptop screens: still one screen */
 /* the stage: five flows | the phone | five flows. The list's own box steps aside
    (display: contents) so its cards sit straight in the stage's grid. */
 /* three equal columns across the screen (wider than the text column, centred on it):
    five flows | the phone and its caption | five flows. The cards share their column's
    height evenly, so both sides line up with the phone top and bottom. */
 .l4-flows-stage {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(5, minmax(0, 1fr)); column-gap: clamp(28px, 3.5vw, 64px); row-gap: 14px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); grid-template-rows: repeat(5, minmax(0, 1fr)); column-gap: clamp(36px, 4.5vw, 80px); row-gap: 20px;
   margin-inline: calc(50% - min(840px, 50vw - var(--edge)));
 }
 .l4-flows > *, .l4-flows-stage > * { min-width: 0; } /* the chip row on phones scrolls inside its column instead of widening it */
 .l4-flow-list { display: contents; }
-.l4-flow { grid-column: 1; grid-row: var(--row); align-self: stretch; width: 100%; min-height: 0; }
-.l4-flow.r { grid-column: 3; }
+/* compact cards, centred in their row, sitting close to the phone */
+.l4-flow { grid-column: 1; grid-row: var(--row); align-self: center; justify-self: end; width: min(320px, 100%); height: 112px; } /* every card the same fixed size */
+.l4-flow.r { grid-column: 3; justify-self: start; }
 /* each flow in its own card: white, a hairline and a soft shadow */
 .l4-flow {
   position: relative; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 14px; align-items: center; padding: 15px 20px; border: 0; border-radius: 18px;
@@ -396,7 +402,7 @@
 .l4-flow .no { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: #f2f1f8; font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; color: #8d8b9e; transition: background 0.25s, color 0.25s; }
 .l4-flow .tx { display: flex; flex-direction: column; min-width: 0; }
 .l4-flow b { font-size: 16px; font-weight: 700; line-height: 1.3; letter-spacing: -0.015em; color: var(--fg); }
-.l4-flow .bl { margin-top: 2px; font-size: 13.5px; line-height: 1.4; color: var(--muted); }
+.l4-flow .bl { margin-top: 2px; font-size: 13.5px; line-height: 1.4; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } /* at most two lines, so no card grows */
 .l4-flow small { align-self: flex-start; margin-top: 6px; padding: 1px 8px; border-radius: 999px; background: #f2f1f8; color: #77758a; font-size: 11px; font-weight: 700; }
 .l4-flow.r small { align-self: flex-end; }
 /* the open flow: a purple ring and glow, the number filled */
@@ -412,7 +418,7 @@
 .l4-flows-r .phone-col::before { content: ""; position: absolute; inset: 6% -18%; border-radius: 50%; background: radial-gradient(closest-side, rgb(68 45 215 / 0.18), transparent); z-index: 0; }
 /* the phone, as big as the screen's height allows with the heading and caption on the same screen */
 .l4-flows-r .l4-phone {
-  z-index: 1; width: max(240px, min(400px, 26vw, calc((100svh - 300px) * 0.476)));
+  z-index: 1; width: max(240px, min(540px, 32vw, calc((100svh - 68px - 40px) * 0.6))); /* the phone is as tall as the screen under the nav allows (it is ~1.67× as tall as wide) */
   padding: 12px; border-radius: 58px;
   /* a titanium band: lit edges, a darker middle, a chamfer and a thin black bezel inside */
   background: linear-gradient(150deg, #5b5b64 0%, #26262c 18%, #121215 45%, #1c1c21 75%, #4a4a52 100%);
@@ -425,7 +431,9 @@
 .l4-flows-r .l4-phone::before, .l4-flows-r .l4-phone::after { width: 3.5px; background: linear-gradient(90deg, #6a6a74, #24242a); }
 .l4-flow-screen { position: absolute; inset: 0; }
 /* which flow and step this is, and what the renter is doing, under the phone */
-.l4-flow-cap { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 100%; min-height: 50px; margin: 14px 0 0; text-align: center; }
+/* a fixed box: it never widens the phone's column (contain: inline-size) and always keeps
+   room for two lines, so a long caption never moves the cards or the phone */
+.l4-flow-cap { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 3px; width: 100%; contain: inline-size; height: 76px; margin: 22px 0 0; text-align: center; }
 .l4-flow-cap .n { font-size: 11.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--p); }
 .l4-flow-cap .t { font-size: 15px; line-height: 1.5; color: var(--body); animation: l4-cap-in 0.35s ease both; }
 @keyframes l4-cap-in { from { opacity: 0; transform: translateY(4px); } }
@@ -438,7 +446,7 @@
 @media (max-width: 960px) {
   .l4-flows .l4-head { margin-bottom: 20px; }
   #how-it-works { min-height: 0; padding: var(--sec) 0; display: block; }
-  .l4-flows-r .l4-phone { width: min(300px, 78vw); }
+  .l4-flows-r .l4-phone { width: min(330px, 86vw); }
   .l4-flows-stage { display: flex; flex-direction: column; align-items: stretch; gap: 26px; margin-inline: 0; }
   .l4-flow-list {
     display: flex; flex-direction: row; gap: 8px; margin: 0 calc(var(--edge) * -1); padding: 4px var(--edge) 8px; overflow-x: auto;
@@ -446,7 +454,7 @@
     -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
   }
   .l4-flow-list::-webkit-scrollbar { display: none; }
-  .l4-flow, .l4-flow.on, .l4-flow.r, .l4-flow.r.on { flex: none; width: auto; max-width: none; grid-template-columns: auto auto; align-items: baseline; gap: 6px; padding: 8px 14px; border-radius: 999px; text-align: left; background: #fff; box-shadow: 0 0 0 1px var(--border); scroll-snap-align: center; }
+  .l4-flow, .l4-flow.on, .l4-flow.r, .l4-flow.r.on { flex: none; width: auto; height: auto; max-width: none; justify-self: auto; grid-template-columns: auto auto; align-items: baseline; gap: 6px; padding: 8px 14px; border-radius: 999px; text-align: left; background: #fff; box-shadow: 0 0 0 1px var(--border); scroll-snap-align: center; }
   .l4-flow.on { background: var(--p-tint); box-shadow: 0 0 0 1.5px var(--p); }
   .l4-flow::after { display: none; }
   .l4-flow.r .no { order: 0; }
@@ -679,18 +687,28 @@
 
 @media (max-width: 1180px) { .l4-ix { --tw: 128px; --th: 146px; --gap: 12px; } .ix-tile .mk { width: 54px; height: 54px; } .ix-tile .lg { width: 50px; height: 50px; } .ix-tile .nm { font-size: 13.5px; } }
 /* below 900px the columns give way to a plain grid of the same tiles */
-/* below 900px the columns give way to a two-row strip of the same tiles that slides sideways */
+/* the track is just the wall on desktop; the second copy of the tiles is for the loop below */
+.ix-track { display: contents; }
+.ix-col.dup { display: none; }
+/* below 900px the columns give way to a two-row strip that scrolls sideways on its own,
+   endlessly: the tiles go twice and the track moves by exactly one copy, then repeats */
 @media (max-width: 900px) {
   .ix-field {
-    display: grid; grid-auto-flow: column; grid-template-rows: repeat(2, auto); grid-auto-columns: 132px; justify-content: start;
-    margin-top: 28px; padding: 6px 24px 18px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 0 24px;
-    scrollbar-width: none; overscroll-behavior-x: contain;
+    display: block; margin-top: 28px; padding: 6px 0 18px; overflow: hidden;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
   }
-  .ix-field::-webkit-scrollbar { display: none; }
-  .ix-col { display: contents; }
-  .ix-tile { width: auto; height: 140px; border-radius: 22px; scroll-snap-align: start; }
+  .ix-track {
+    display: grid; grid-auto-flow: column; grid-template-rows: repeat(2, auto); grid-auto-columns: 132px; gap: var(--gap);
+    width: max-content; padding-right: var(--gap); /* one copy + its gaps = exactly half the track */
+    animation: ix-loop 40s linear infinite;
+  }
+  .ix-field:hover .ix-track, .ix-field:focus-within .ix-track { animation-play-state: paused; }
+  .ix-col, .ix-col.dup { display: contents; }
+  .ix-tile { width: auto; height: 140px; border-radius: 22px; }
   .ix-tile .tip { display: none; }
 }
+@keyframes ix-loop { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .ix-track { animation: none !important; } }
 
 /* =====================================================================
    PRICING (light cards)
@@ -848,15 +866,29 @@
 @keyframes tw-drift { from { scale: 1; } to { scale: 1.07; } }
 .l4 .tw-video video { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; }
 .l4 .tw-shade { position: absolute; inset: 0; z-index: 1; background: linear-gradient(to bottom, rgb(0 0 0 / 0.08), transparent 30%, transparent 46%, rgb(12 10 36 / 0.78)); pointer-events: none; }
-.l4 .tw-ctl {
-  position: absolute; z-index: 2; top: 16px; display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 1px solid rgb(255 255 255 / 0.35);
-  border-radius: 50%; background: rgb(20 16 50 / 0.4); color: #fff; cursor: pointer; transition: background 0.2s, transform 0.2s;
+.l4 .tw-video { cursor: pointer; }
+/* the centre button: Pause fades in while a playing card is hovered; once clicked it
+   becomes Play and stays. A paused card turns brand purple and its video eases in a little. */
+.l4 .tw-held {
+  position: absolute; z-index: 2; left: 50%; top: 42%; display: grid; place-items: center; width: 68px; height: 68px; margin: -34px 0 0 -34px;
+  border-radius: 50%; background: rgb(20 16 50 / 0.45); border: 1px solid rgb(255 255 255 / 0.45); color: #fff; backdrop-filter: blur(6px);
+  opacity: 0; transform: scale(0.7); transition: opacity 0.35s ease, transform 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.25), background 0.35s; pointer-events: none;
 }
-.l4 .tw-ctl:hover { background: rgb(20 16 50 / 0.6); transform: scale(1.06); }
-.l4 .tw-ctl svg { width: 16px; height: 16px; }
-.l4 .tw-pp { left: 16px; }
-.l4 .tw-pp svg { fill: currentColor; }
-.l4 .tw-snd { right: 16px; }
+.l4 .tw-held svg { width: 24px; height: 24px; fill: currentColor; }
+.l4 .tw-video.is-held .tw-held svg { margin-left: 3px; }
+.l4 .tw-video:hover .tw-held { opacity: 0.9; transform: scale(1); }
+.l4 .tw-video.is-held .tw-held { opacity: 1; transform: scale(1); background: rgb(68 45 215 / 0.85); border-color: rgb(255 255 255 / 0.6); box-shadow: 0 10px 30px -8px rgb(68 45 215 / 0.8); }
+.l4 .tw-video video, .l4 .tw-video .tw-photo { transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.6s ease; }
+.l4 .tw-video.is-held video, .l4 .tw-video.is-held .tw-photo { transform: scale(1.06); filter: saturate(0.85); }
+.l4 .tw-video::after { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; background: linear-gradient(160deg, rgb(68 45 215 / 0.42), rgb(42 27 143 / 0.55)); opacity: 0; transition: opacity 0.5s ease; pointer-events: none; }
+.l4 .tw-video.is-held::after { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .l4 .tw-held, .l4 .tw-video video, .l4 .tw-video::after { transition: none; } }
+/* the speaker: only while the card is hovered (or the sound is on, so it can be turned off) */
+.l4 .tw-snd { position: absolute; z-index: 3; top: 14px; right: 14px; display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border-radius: 50%; border: 1px solid rgb(255 255 255 / 0.35); background: rgb(20 16 50 / 0.45); color: #fff; cursor: pointer; opacity: 0; transition: opacity 0.2s, background 0.2s; }
+.l4 .tw-snd svg { width: 16px; height: 16px; }
+.l4 .tw-video:hover .tw-snd, .l4 .tw-video:focus-within .tw-snd, .l4 .tw-snd[aria-label="Turn sound off"] { opacity: 1; }
+.l4 .tw-snd:hover { background: rgb(20 16 50 / 0.7); }
+@media (hover: none) { .l4 .tw-snd { opacity: 1; } } /* touch screens have no hover */
 .l4 .tw-cap { position: absolute; z-index: 2; left: 14px; right: 14px; bottom: 14px; }
 .l4 .tw-cap h3 { margin: 0 6px 12px; font-size: clamp(18px, 1.6vw, 22px); line-height: 1.22; font-weight: 600; letter-spacing: -0.02em; color: #fff; text-wrap: balance; }
 /* the hero tiles' name bar: avatar, name, role and company on a dark tint */
@@ -865,8 +897,6 @@
 .l4 .tw-bar b { display: block; font-size: 13.5px; font-weight: 700; line-height: 1.2; }
 .l4 .tw-bar small { display: block; margin-top: 2px; font-size: 11.5px; color: rgb(255 255 255 / 0.78); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .l4 .tw-bar > span { min-width: 0; }
-.l4 .tw-prog { position: absolute; z-index: 2; left: 22px; right: 22px; top: 62px; height: 3px; border-radius: 3px; background: rgb(255 255 255 / 0.22); overflow: hidden; }
-.l4 .tw-prog i { display: block; height: 100%; background: #fff; transform-origin: left; transition: transform 0.26s linear; }
 
 @media (prefers-reduced-motion: reduce) {
   .l4 .tw-card, .l4 .tw-photo { animation: none; }
@@ -976,29 +1006,16 @@
 @keyframes hw-in { from { opacity: 0; transform: scale(0.92); } }
 .hw-tile:hover { transform: scale(1.12); box-shadow: 0 34px 60px -24px rgb(30 20 90 / 0.65), 0 0 0 2px #fff; z-index: 1; }
 /* a big tile then a small one, down every column */
-.hw-tile.big { height: round(var(--w) * 1.3, 1px); } /* 4 / 5.2 */
-.hw-tile.small { height: round(var(--w) * 0.8, 1px); } /* 5 / 4 */
-.hw-tile img, .hw-tile video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.hw-tile.vid::after { content: ""; position: absolute; inset: 50% 0 0; background: linear-gradient(to bottom, transparent, rgb(12 10 36 / 0.5)); pointer-events: none; }
-.hw-play {
-  position: absolute; z-index: 1; left: 50%; top: 44%; display: grid; place-items: center; width: 34px; height: 34px; margin: -17px 0 0 -17px;
-  border-radius: 50%; background: rgb(20 16 50 / 0.38); border: 1px solid rgb(255 255 255 / 0.5); color: #fff;
-}
-.hw-play svg { width: 13px; height: 13px; margin-left: 2px; fill: currentColor; }
-
-
-.hw-tile.who::after { content: ""; position: absolute; inset: 50% 0 0; background: linear-gradient(to bottom, transparent, rgb(12 10 36 / 0.55)); pointer-events: none; }
-.hw-bar {
-  position: absolute; z-index: 1; left: 6px; right: 6px; bottom: 6px; display: flex; align-items: center; justify-content: space-between; gap: 6px;
-  padding: 6px 8px 6px 6px; border-radius: 12px; background: rgb(30 24 80 / 0.62); border: 1px solid rgb(255 255 255 / 0.22); color: #fff;
-}
-.hw-bar b { display: block; font-size: 11px; font-weight: 700; line-height: 1.2; }
-.hw-bar small { display: block; font-size: 9px; line-height: 1.3; opacity: 0.82; white-space: nowrap; }
-.hw-bar > span:not(.n) { flex: 1; min-width: 0; }
-.hw-bar small { overflow: hidden; text-overflow: ellipsis; }
-.hw-bar .av { position: static; flex: none; width: 20px; height: 20px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 1.5px #fff; }
-.hw-bar .n { text-align: right; }
-.hw-bar .n b { font-size: 13px; letter-spacing: -0.02em; }
+.hw-tile.big { height: round(var(--w) * 1.4, 1px); } /* tall */
+.hw-tile.small { height: round(var(--w) * 1.08, 1px); } /* shorter, still room for the quote */
+.hw-tile video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* each card: the person's clip, then their words, name and city on a dark fade at the bottom */
+.hw-tile::after { content: ""; position: absolute; inset: 38% 0 0; background: linear-gradient(to bottom, transparent, rgb(12 10 36 / 0.82)); pointer-events: none; }
+.hw-quote { position: absolute; z-index: 1; left: 10px; right: 10px; bottom: 10px; margin: 0; color: #fff; }
+.hw-quote q { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 12px; font-weight: 600; line-height: 1.35; letter-spacing: -0.01em; quotes: "\201C" "\201D"; }
+.hw-quote span { display: block; margin-top: 5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 10px; color: rgb(255 255 255 / 0.75); }
+.hw-quote b { font-weight: 700; color: #fff; }
+@media (max-width: 600px) { .hw-quote { left: 8px; right: 8px; bottom: 8px; } .hw-quote q { font-size: 10.5px; -webkit-line-clamp: 3; } .hw-quote span { font-size: 9px; } }
 
 @media (prefers-reduced-motion: reduce) {
   .hw-tile { animation: none; }
@@ -1047,16 +1064,11 @@
 }
 
 /* Pricing hands straight on to the FAQ: trim its bottom padding so the two don't sit a screen apart */
-.l4 #x-pricing { padding-bottom: 40px; }
+.l4 #x-pricing { padding-bottom: 40px; background: #fff; } /* plain white: only the ribbon art behind it */
 
 /* A lone plan (the admin has switched the others off) is presented as the featured
    one: an indigo outline, a top wash, a soft glow behind it and a filled button,
    so a single card reads as deliberate rather than empty. Applies only then. */
-.l4-plans-grid:has(> .l4-plan:only-child) { position: relative; isolation: isolate; }
-.l4-plans-grid:has(> .l4-plan:only-child)::before {
-  content: ""; position: absolute; z-index: -1; left: 50%; top: 8%; width: min(760px, 100%); height: 84%; translate: -50% 0;
-  border-radius: 50%; background: radial-gradient(closest-side, rgb(68 45 215 / 0.18), rgb(68 45 215 / 0.06) 60%, transparent); filter: blur(30px);
-}
 .l4-plan:only-child {
   background: linear-gradient(180deg, var(--p-tint-2), #fff 38%);
   box-shadow: 0 0 0 2px var(--p), 0 44px 90px -40px rgb(42 27 143 / 0.5), 0 14px 30px -18px rgb(0 0 0 / 0.14);
@@ -1080,3 +1092,50 @@
   /* the showcase tabs scroll sideways (the open one is kept in the middle); the fades at the edges say there is more */
   #x-showcase .l4-tabs { -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); }
 }
+
+/* =====================================================================
+   SECTION LINE ART (deco.tsx) — the testimonials' and FAQ's lines, on the
+   sections with empty space either side
+   ===================================================================== */
+#x-showcase, #x-pricing { position: relative; isolation: isolate; overflow: hidden; }
+.l4-deco { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+/* two edge pieces, each a third of the width at most, so the middle stays clear */
+.l4-deco svg { position: absolute; top: 0; bottom: 0; width: min(520px, 30vw); height: 100%; overflow: visible; }
+.l4-deco svg.l { left: 0; }
+.l4-deco svg.r { right: 0; }
+.l4-deco .fill { fill: rgb(68 45 215 / 0.06); stroke: none; }
+.l4-deco .ribbon { fill: none; stroke: rgb(68 45 215 / 0.08); stroke-width: 34; stroke-linecap: round; }
+.l4-deco .line { fill: none; stroke: rgb(68 45 215 / 0.45); stroke-width: 1.3; vector-effect: non-scaling-stroke; }
+.l4-deco .line.soft { stroke: rgb(68 45 215 / 0.28); }
+.l4-deco .ring { fill: none; stroke: rgb(68 45 215 / 0.22); stroke-width: 1.5; stroke-dasharray: 6 8; vector-effect: non-scaling-stroke; }
+.l4-deco .dots circle { fill: rgb(68 45 215 / 0.35); }
+/* phones: the content fills the width, so only a faint trace stays */
+@media (max-width: 760px) { .l4-deco { opacity: 0.55; } }
+
+/* FAQ: only the bottom-right curve of its line art stays (the top-left one is removed) */
+.l4 .d3s .fq2-curve path:first-child { display: none; }
+
+
+/* Testimonials on phones: one strip drifting left to right, endlessly; touching it holds it */
+.l4 .tw-marquee {
+  margin: clamp(28px, 6vw, 40px) calc(var(--edge) * -1) 0; overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+.l4 .tw-mtrack { display: flex; align-items: center; gap: 14px; width: max-content; padding: 6px 0 14px; animation: tw-drift 90s linear infinite; }
+.l4 .tw-mtrack > .tw-mslot { flex: none; width: min(300px, 78vw); }
+.l4 .tw-marquee:active .tw-mtrack, .l4 .tw-marquee:focus-within .tw-mtrack { animation-play-state: paused; }
+@keyframes tw-drift { from { transform: translateX(calc(-50% - 7px)); } to { transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) { .l4 .tw-mtrack { animation: none; } }
+
+/* line art on phones: small pieces in two corners only (top-left, bottom-right), scaled
+   by width, not stretched down the whole section */
+@media (max-width: 760px) {
+  .l4-deco { opacity: 0.6; }
+  .l4-deco svg { width: 46vw; height: auto; }
+  .l4-deco svg.l { top: 0; bottom: auto; }
+  .l4-deco svg.r { top: auto; bottom: 0; }
+  .l4-deco .ribbon { stroke-width: 22; }
+}
+
+/* buttons: their label centred at every width */
+.l4 .l4-btn, .l4 .d3s .y-b1, .l4 .d3s .y-b2, .l4 .d3s .y-cta .row a { justify-content: center; text-align: center; }

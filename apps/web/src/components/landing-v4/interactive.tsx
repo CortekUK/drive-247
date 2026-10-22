@@ -286,8 +286,7 @@ export function Showcase() {
  *
  * A list of real renter flows (screens/flows/index.ts: each is a flow of the
  * ORIGINAL booking design every new tenant gets, drawn from its code) and one
- * phone that plays the chosen flow step by step, with a caption under it that
- * says which step this is and what the renter is doing. The steps run on the
+ * phone that plays the chosen flow step by step. The steps run on the
  * progress bar's own clock (Progress); after a flow's last step the next flow
  * opens. Hovering the list, or scrolling away, pauses it.
  * ------------------------------------------------------------------------- */
@@ -355,21 +354,14 @@ export function FlowPicker({ children }: { children?: ReactNode }) {
           <div className="phone-col">
             {/* hiw-paused freezes the screens' own animations with the progress bar */}
             <div className={paused ? "hiw-paused" : undefined} style={{ display: "contents" }}>
-              <Phone>
+              {/* a wide phone screen (480 design px across, vs the 390 default), so the screens read larger */}
+              <Phone width={480}>
                 <div key={flow.id} className="l4-flow-screen">
                   <flow.Screen step={s} />
                 </div>
               </Phone>
             </div>
           </div>
-          <p className="l4-flow-cap" aria-live="polite">
-            <span className="n">
-              {flow.title} · Step {s + 1} of {flow.steps.length}
-            </span>
-            <span key={`${f}-${s}`} className="t">
-              {step.caption}
-            </span>
-          </p>
         </div>
       </div>
     </div>

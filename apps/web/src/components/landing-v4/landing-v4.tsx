@@ -11,6 +11,7 @@ import { V3_CTA, V3_FAQ, V3_FOOTER } from "./v3-markup";
 import { Testimonials } from "./testimonials";
 import { TraxPortal } from "./trax-portal";
 import { NavMenu } from "./nav-menu";
+import { SectionDeco } from "./deco";
 import "./landing-v4.css";
 import "./portal-screens.css";
 
@@ -126,6 +127,7 @@ export function LandingV4({ plans }: { plans: readonly SignupPlan[] }) {
 
         {/* ---------------- the portal, tab by tab ---------------- */}
         <section className="l4-sec" id="x-showcase">
+          <SectionDeco variant="portal" />
           <div className="l4-wrap">
             <div className="l4-head l4-rv">
               <span className="l4-kick">The portal</span>
@@ -153,8 +155,11 @@ export function LandingV4({ plans }: { plans: readonly SignupPlan[] }) {
           </div>
           {/* one glass tile per integration, columns staggered like keys; hover or focus one for what it does */}
           <div className="ix-field l4-rv">
-            {IX_COLUMNS.map((col, c) => (
-              <div key={c} className="ix-col" style={{ ["--y" as string]: col.y }}>
+            {/* the track is the wall on desktop; on small screens it scrolls sideways in a
+                loop, so the tiles go twice (the second copy only shows there) */}
+            <div className="ix-track">
+            {[0, 1].flatMap((copy) => IX_COLUMNS.map((col, c) => (
+              <div key={`${copy}-${c}`} className={`ix-col${copy ? " dup" : ""}`} style={{ ["--y" as string]: col.y }} aria-hidden={copy ? true : undefined}>
                 {col.cells.map((it) => {
                   const src = it.mark ?? it.logo;
                   return (
@@ -162,6 +167,7 @@ export function LandingV4({ plans }: { plans: readonly SignupPlan[] }) {
                       key={it.name}
                       type="button"
                       className="ix-tile"
+                      tabIndex={copy ? -1 : undefined}
                       style={{ ["--n" as string]: INTEGRATIONS.indexOf(it) }}
                       aria-label={`${it.name}: ${it.d}`}
                     >
@@ -192,7 +198,8 @@ export function LandingV4({ plans }: { plans: readonly SignupPlan[] }) {
                   );
                 })}
               </div>
-            ))}
+            )))}
+            </div>
           </div>
         </section>
 
@@ -204,7 +211,9 @@ export function LandingV4({ plans }: { plans: readonly SignupPlan[] }) {
           <div className="l4-wrap">
             <FlowPicker>
               <span className="l4-kick">How it works</span>
-              <h2 className="l4-h2">Everything your renters do, on their phone</h2>
+              <h2 className="l4-h2">
+                Everything your renters do, <span>on their phone</span>
+              </h2>
               <p className="l4-lead">
                 From booking and ID checks to paying, signing and asking for more days, on your own booking site and
                 in their own account. Pick a flow to see it.
@@ -218,6 +227,7 @@ export function LandingV4({ plans }: { plans: readonly SignupPlan[] }) {
 
         {/* ---------------- pricing ---------------- */}
         <section className="l4-sec" id="x-pricing">
+          <SectionDeco variant="pricing" />
           <div className="l4-wrap">
             <Pricing plans={plans} />
           </div>
