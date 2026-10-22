@@ -65,6 +65,7 @@ import { HelpButton, HelplineLink } from './help-menu';
 import { CustomerTraxProvider } from './trax/trax-context';
 import { CustomerTraxPanel } from './trax/trax-panel';
 import { PayProvider } from './pay/pay-provider';
+import { resetDismissedAlerts } from './alert-bar';
 import {
   PORTAL_V2_BASE,
   PORTAL_V2_EXTRA_PAGES,
@@ -203,6 +204,12 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
   const [customizerOpen, setCustomizerOpen] = useState(false);
   const { theme, setTheme } = usePortalThemeRoot();
   useRecordPolicyConsent();
+  // A fresh portal (signing in, coming back, signing out and in) shows every
+  // alert again, closed or not (alert-bar.tsx).
+  useEffect(() => {
+    resetDismissedAlerts();
+    return () => resetDismissedAlerts();
+  }, []);
   const brandVars = brandHslVars(tenant?.primary_color);
 
   const onMessages = isPortalV2Active('/portal/messages', pathname);

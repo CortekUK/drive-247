@@ -107,37 +107,40 @@ const ICON: Record<AlertBarVariant, (props: SVGProps<SVGSVGElement>) => JSX.Elem
 /* ─────────────────────────────── dismissing ─────────────────────────────── */
 
 /**
- * The customer can close a stripe with its ×. Remembered per browser, and
- * keyed on what the stripe SAYS (key + title), so it comes back the moment
- * the situation changes — a new amount, a new due date. One store for every
- * bar on every page, so closing it here closes it everywhere.
+ * The customer can close a stripe with its ×, but only for now (owner, Oct 22
+ * 2026): it must be back after a refresh, after signing out and in again, and
+ * when they come back to the portal later. So the closed set lives in memory
+ * only — a reload wipes it — the shell clears it whenever the portal mounts
+ * (resetDismissedAlerts), and each close lapses after DISMISS_FOR_MS.
+ *
+ * Keyed on what the stripe SAYS (key + title), so a changed situation — a new
+ * amount, a new due date — shows at once. One store for every bar on every
+ * page, so closing it here closes it everywhere.
  */
-const DISMISSED_KEY = 'pv2-dismissed-alerts';
+const DISMISS_FOR_MS = 30 * 60 * 1000;
 const listeners = new Set<() => void>();
-let dismissedCache: string[] | null = null;
+let dismissedAt = new Map<string, number>();
+let snapshot: string[] = [];
 
-function readDismissed(): string[] {
-  if (dismissedCache) return dismissedCache;
-  try {
-    const raw = JSON.parse(window.localStorage.getItem(DISMISSED_KEY) ?? '[]');
-    dismissedCache = Array.isArray(raw) ? raw.filter((v): v is string => typeof v === 'string') : [];
-  } catch {
-    dismissedCache = [];
-  }
-  return dismissedCache;
+function publish() {
+  const now = Date.now();
+  snapshot = [...dismissedAt].filter(([, at]) => now - at < DISMISS_FOR_MS).map(([sig]) => sig);
+  listeners.forEach((listener) => listener());
 }
 
 const signature = (item: AlertBarItem) => `${item.key}|${item.title}`;
 
 function dismiss(item: AlertBarItem) {
-  // Keep the list short: only the last 50 closed stripes are remembered.
-  dismissedCache = [...readDismissed().filter((v) => v !== signature(item)), signature(item)].slice(-50);
-  try {
-    window.localStorage.setItem(DISMISSED_KEY, JSON.stringify(dismissedCache));
-  } catch {
-    /* storage blocked: closed for this page view only */
-  }
-  listeners.forEach((listener) => listener());
+  dismissedAt.set(signature(item), Date.now());
+  publish();
+  // Lapse on its own, even if nothing else re-renders the bar.
+  window.setTimeout(publish, DISMISS_FOR_MS + 1000);
+}
+
+/** Every closed stripe back. The shell calls it when the portal mounts (sign-in, a fresh visit). */
+export function resetDismissedAlerts() {
+  dismissedAt = new Map();
+  publish();
 }
 
 const EMPTY: string[] = [];
@@ -147,7 +150,7 @@ function useDismissed(): string[] {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    readDismissed,
+    () => snapshot,
     () => EMPTY,
   );
 }
