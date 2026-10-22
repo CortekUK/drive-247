@@ -14,8 +14,12 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
+import { Switch } from '@nw/components/ui/switch';
 import { useTenant } from '@nw/contexts/TenantContext';
+import { useCustomer } from '@nw/hooks/use-customer';
+import { usePortalTheme } from '@nw/portal-v2/theme';
 import { SearchEmptyArt } from '@portal-v2-shared/empty-states/empty-scenes';
 import { TeachingEmptyState } from '@portal-v2-shared/empty-states/teaching-empty-state';
 import { usePageSearch } from '@portal-v2-shared/page-search-slot';
@@ -118,6 +122,50 @@ export function SettingsIndex() {
           ))}
         </div>
       )}
+
+      <PhoneAccountRows />
+    </div>
+  );
+}
+
+/**
+ * On a phone the Account tab is the only way in here, and there is no
+ * profile menu: Dark mode and Sign out live at the foot of the page instead.
+ */
+function PhoneAccountRows() {
+  const router = useRouter();
+  const theme = usePortalTheme();
+  const { signOut } = useCustomer();
+  const [signingOut, setSigningOut] = useState(false);
+  const dark = theme?.theme === 'dark';
+
+  return (
+    <div className="max-w-[760px] divide-y divide-pv-border rounded-2xl border border-pv-border bg-pv-card md:hidden">
+      {theme ? (
+        <label className="flex min-h-12 cursor-pointer items-center justify-between gap-3 px-4">
+          <span className="text-[15px] text-pv-fg">Dark mode</span>
+          <Switch
+            checked={dark}
+            onCheckedChange={(on) => theme.setTheme(on ? 'dark' : 'light')}
+            className="data-[state=checked]:bg-pv-primary"
+          />
+        </label>
+      ) : null}
+      <button
+        type="button"
+        disabled={signingOut}
+        onClick={async () => {
+          setSigningOut(true);
+          try {
+            await signOut();
+          } finally {
+            router.replace('/');
+          }
+        }}
+        className="flex min-h-12 w-full cursor-pointer items-center px-4 text-left text-[15px] font-medium text-pv-danger disabled:cursor-wait disabled:opacity-60"
+      >
+        {signingOut ? 'Signing out…' : 'Sign out'}
+      </button>
     </div>
   );
 }

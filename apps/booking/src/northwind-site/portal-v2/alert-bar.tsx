@@ -111,7 +111,7 @@ export function AlertStripe({ item, className }: { item: AlertBarItem; className
     <div
       role={item.variant === 'red' ? 'alert' : 'status'}
       className={cn(
-        'flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 rounded-md border px-3 py-2 sm:flex-nowrap sm:pl-3.5',
+        'flex min-h-11 items-center gap-x-3 gap-y-2 rounded-md border px-3 py-2 sm:pl-3.5',
         BAR[item.variant],
         className,
       )}
@@ -119,7 +119,8 @@ export function AlertStripe({ item, className }: { item: AlertBarItem; className
       <Icon className="size-[18px] shrink-0" />
       <p className="min-w-0 flex-1 text-[13px] leading-snug">
         <span className="font-semibold">{item.title}</span>
-        {item.description ? <span className="text-pv-fg/70"> · {item.description}</span> : null}
+        {/* A phone has room for the headline and the button; the detail is a tap away. */}
+        {item.description ? <span className="text-pv-fg/70 max-sm:hidden"> · {item.description}</span> : null}
       </p>
       {item.action ? <StripeAction item={item} /> : null}
     </div>

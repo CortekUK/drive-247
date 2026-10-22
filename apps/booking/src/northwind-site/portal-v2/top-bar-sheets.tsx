@@ -49,7 +49,10 @@ import { cn } from '@nw/lib/utils';
 /* ─────────────────────────────── shared bits ───────────────────────────── */
 
 /** The operator sheets' shell: full height, 420px wide, one scroll region. */
-const SHEET_SHELL = 'flex w-full flex-col gap-0 overflow-hidden border-l border-pv-border bg-pv-card p-0 sm:max-w-[420px]';
+/** Full screen on a phone, so it starts under the status bar and ends above the home indicator. */
+const SHEET_SHELL =
+  'flex w-full flex-col gap-0 overflow-hidden border-l border-pv-border bg-pv-card p-0 sm:max-w-[420px] ' +
+  'max-sm:border-l-0 max-sm:pt-[env(safe-area-inset-top,0px)] max-sm:pb-[env(safe-area-inset-bottom,0px)]';
 
 /** No visible bar on the scroll region (the operator's NO_SCROLLBAR). */
 const NO_SCROLLBAR = '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden';

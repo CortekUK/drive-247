@@ -1,0 +1,86 @@
+'use client';
+
+/**
+ * The phone tab bar — the operator's (apps/portal components/shared/layout/
+ * mobile-tab-bar.tsx), for the customer: the portal is a PWA opened from the
+ * Home Screen, so on a phone every place is one thumb-tap away along the
+ * bottom edge, the way a native app moves.
+ *
+ * Five tabs, so there is no "More": the four rail tabs in the customer's own
+ * order (sidebar customiser) and Account, which is Settings — the gear on the
+ * desktop rail. Account carries the customer's avatar, as a native profile
+ * tab does.
+ *
+ * As the operator's: phone only (`md:hidden`); flat and attached to the bottom
+ * edge — solid page colour, one hairline on top, no float, no shadow; padded
+ * for the home indicator with env(safe-area-inset-bottom); the active tab
+ * marked by colour and weight alone. The shell's <main> reserves the room.
+ */
+
+import Link from 'next/link';
+
+import { useCustomer } from '@nw/hooks/use-customer';
+import { cn } from '@nw/lib/utils';
+
+import { arrangePortalV2Nav, isPortalV2Active, type PortalV2NavIcon } from './nav';
+import { usePortalV2NavPreferences } from './sidebar-customizer';
+
+const ITEM =
+  'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-[5px] text-[11px] leading-none font-medium tracking-[0.01em] ' +
+  'outline-none transition-[color,transform] duration-200 ease-out active:scale-[0.94] focus-visible:text-pv-primary motion-reduce:transition-none';
+const ACTIVE_TEXT = 'font-semibold text-pv-primary';
+const IDLE_TEXT = 'text-pv-muted-fg';
+
+function TabIcon({ icon: Icon, on }: { icon: PortalV2NavIcon; on: boolean }) {
+  return <Icon aria-hidden className="size-[22px]" strokeWidth={on ? 2.5 : 2} />;
+}
+
+function AccountIcon({ on }: { on: boolean }) {
+  const { initials, customer } = useCustomer();
+  const photo = customer?.profile_photo_url ?? null;
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'flex size-[22px] items-center justify-center overflow-hidden rounded-full bg-pv-primary/10 text-[9px] font-semibold text-pv-primary',
+        on ? 'ring-2 ring-pv-primary ring-offset-1 ring-offset-pv-bg' : 'ring-1 ring-pv-border',
+      )}
+    >
+      {photo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photo} alt="" className="size-full object-cover" />
+      ) : (
+        initials ?? '·'
+      )}
+    </span>
+  );
+}
+
+export function MobileTabBar({ pathname }: { pathname: string | null }) {
+  const { preferences } = usePortalV2NavPreferences();
+  const tabs = arrangePortalV2Nav(preferences).shown;
+  const onAccount = isPortalV2Active('/portal/settings', pathname);
+
+  return (
+    <div
+      data-mobile-tab-bar=""
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-pv-border bg-pv-bg pb-[env(safe-area-inset-bottom,0px)] md:hidden"
+    >
+      <nav aria-label="Portal" className="mx-auto flex h-[60px] max-w-lg items-stretch px-1">
+        {tabs.map((tab) => {
+          const active = isPortalV2Active(tab.href, pathname);
+          return (
+            <Link key={tab.href} href={tab.href} aria-current={active ? 'page' : undefined} className={cn(ITEM, active ? ACTIVE_TEXT : IDLE_TEXT)}>
+              <TabIcon icon={tab.icon} on={active} />
+              {tab.label}
+            </Link>
+          );
+        })}
+        <Link href="/portal/settings" aria-current={onAccount ? 'page' : undefined} className={cn(ITEM, onAccount ? ACTIVE_TEXT : IDLE_TEXT)}>
+          <AccountIcon on={onAccount} />
+          Account
+        </Link>
+      </nav>
+    </div>
+  );
+}

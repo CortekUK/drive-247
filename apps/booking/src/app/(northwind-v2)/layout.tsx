@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { DM_Sans } from "next/font/google";
 import { headers } from "next/headers";
 
@@ -32,6 +32,20 @@ export const dynamic = "force-dynamic";
 const NEUTRAL_TITLE = "Premium Car Rentals";
 const NEUTRAL_DESCRIPTION = "Premium car rentals with exceptional service";
 
+/**
+ * The customer portal is installed as a PWA and opened from the Home Screen,
+ * so it runs edge to edge (`viewport-fit=cover`: the tab bar pads for the home
+ * indicator with env(safe-area-inset-bottom)) and carries the manifest and
+ * Apple web-app tags — on every branch, as (legacy)/layout.tsx explains: iOS
+ * reads them only at "Add to Home Screen".
+ */
+export const viewport: Viewport = { viewportFit: "cover" };
+
+const PWA_METADATA = {
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent" as const },
+};
+
 export async function generateMetadata(): Promise<Metadata> {
   const tenant = await resolveTenant();
   const name = tenant?.app_name || tenant?.company_name || null;
@@ -39,6 +53,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: { default: title, template: name ? `%s · ${name}` : "%s" },
     description: tenant?.meta_description || NEUTRAL_DESCRIPTION,
+    ...PWA_METADATA,
   };
 }
 

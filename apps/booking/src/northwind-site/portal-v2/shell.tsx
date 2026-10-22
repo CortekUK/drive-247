@@ -33,7 +33,6 @@ import {
   CornerDownLeft,
   ExternalLink,
   LogOut,
-  Menu,
   MessageCircle,
   Moon,
   Plus,
@@ -46,7 +45,6 @@ import {
 import { PortalBoot } from '@nw/components/portal/portal-boot';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@nw/components/ui/dialog';
 import { MOTION_ANCHORED, MOTION_TOOLTIP } from '@nw/components/ui/motion';
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@nw/components/ui/sheet';
 import { Switch } from '@nw/components/ui/switch';
 import { MessagesSheet, NotificationsSheet } from '@nw/portal-v2/top-bar-sheets';
 import { useCustomerAuth } from '@nw/contexts/CustomerAuthContext';
@@ -75,9 +73,10 @@ import {
   isPortalV2Active,
   type PortalV2NavItem,
 } from './nav';
+import { MobileTabBar } from './mobile-tab-bar';
 import { SidebarCustomizerDialog, usePortalV2NavPreferences } from './sidebar-customizer';
 import { useRecordPolicyConsent } from './policy-consent';
-import { usePortalThemeRoot, type PortalTheme } from './theme';
+import { PortalThemeContext, usePortalThemeRoot, type PortalTheme } from './theme';
 
 /* ───────────────────────────────── gate ────────────────────────────────── */
 
@@ -199,7 +198,6 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
-  const [navOpen, setNavOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [customizerOpen, setCustomizerOpen] = useState(false);
@@ -286,6 +284,7 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
   }, [toggleRail]);
 
   return (
+    <PortalThemeContext.Provider value={{ theme, setTheme }}>
     <Tooltip.Provider delayDuration={300}>
       <CustomerTraxProvider>
       <QuickBookProvider>
@@ -320,32 +319,6 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
           </aside>
           )}
 
-          {/* Phone: the same rail in a drawer, opened from the top bar — the one
-              sheet in the portal, as on the operator portal. */}
-          <Sheet open={navOpen} onOpenChange={setNavOpen}>
-            <SheetContent
-              side="left"
-              showCloseButton={false}
-              // Focus lands on the drawer itself, not on its first link — which
-              // would otherwise open the drawer looking hovered.
-              onOpenAutoFocus={(event) => event.preventDefault()}
-              className="pv2 w-72 max-w-none gap-0 border-0 bg-pv-sidebar p-0 sm:max-w-none"
-              style={(brandVars ?? undefined) as React.CSSProperties | undefined}
-            >
-              <SheetTitle className="sr-only">Menu</SheetTitle>
-              <SheetDescription className="sr-only">Your account pages</SheetDescription>
-              <div className={cn('flex h-full flex-col', fontClass)}>
-                <Rail
-                  pathname={pathname}
-                  collapsed={false}
-                  theme={theme}
-                  onThemeChange={setTheme}
-                  onCustomize={() => setCustomizerOpen(true)}
-                  onNavigate={() => setNavOpen(false)}
-                />
-              </div>
-            </SheetContent>
-          </Sheet>
 
           {/* A list page lends the top bar its search field and filter button,
               as on the operator portal (shared/portal-v2/page-search-slot). */}
@@ -362,19 +335,20 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
               <>
                 <TopBar
                   counts={counts}
-                  theme={theme}
-                  onThemeChange={setTheme}
-                  onOpenNav={() => setNavOpen(true)}
                   onOpenSearch={() => setSearchOpen(true)}
                   onOpenMessages={() => setMessagesOpen(true)}
                   onOpenNotifications={() => setNotificationsOpen(true)}
                 />
-                <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-10 pt-2 outline-none sm:px-6 md:pl-4">
+                {/* On a phone the bottom tab bar (mobile-tab-bar.tsx) overlays the
+                    foot of the window: the scroll reserves its height plus the
+                    home indicator so the last row clears it. */}
+                <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-10 pt-2 outline-none max-md:pb-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] sm:px-6 md:pl-4">
                   {/* Keyed on the path so every screen arrives with the Trax lift. */}
                   <div key={pathname} className="pv2-enter mx-auto w-full max-w-[1200px]">
                     {children}
                   </div>
                 </main>
+                <MobileTabBar pathname={pathname} />
               </>
             )}
           </div>
@@ -390,6 +364,7 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
       </QuickBookProvider>
       </CustomerTraxProvider>
     </Tooltip.Provider>
+    </PortalThemeContext.Provider>
   );
 }
 
@@ -790,6 +765,30 @@ function AccountMenu({
 
 /* ──────────────────────────────── top bar ──────────────────────────────── */
 
+/** The phone's left cluster: the company mark (back to the website) and Book a car. */
+function MobileBrand() {
+  const { appName, faviconUrl } = useTenantBranding();
+  const name = appName ?? 'Home';
+  return (
+    <div className="flex shrink-0 items-center gap-2 md:hidden">
+      <Link href="/" aria-label={`Back to the ${name} website`} className="flex shrink-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-pv-ring/50">
+        {faviconUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={faviconUrl} alt="" className="size-8 rounded-lg object-contain" />
+        ) : (
+          <span className="flex size-8 items-center justify-center rounded-lg bg-pv-primary text-[12px] font-semibold text-pv-primary-fg">
+            {name.slice(0, 1).toUpperCase()}
+          </span>
+        )}
+      </Link>
+      <QuickBookTrigger className={cn(V2_BUTTON_PRIMARY, BOOK_CTA_SHAPE, 'h-8 gap-1 px-2.5 text-[13px]')}>
+        <Plus aria-hidden className="size-3.5" />
+        Book
+      </QuickBookTrigger>
+    </div>
+  );
+}
+
 /** The operator's search pill (top-bar-v2.tsx, FIELD). */
 const FIELD =
   'group relative flex h-8 w-full max-w-[380px] cursor-pointer items-center gap-2 overflow-hidden rounded-full ' +
@@ -798,23 +797,15 @@ const FIELD =
 
 function TopBar({
   counts,
-  theme,
-  onThemeChange,
-  onOpenNav,
   onOpenSearch,
   onOpenMessages,
   onOpenNotifications,
 }: {
   counts: Counts;
-  theme: PortalTheme;
-  onThemeChange: (theme: PortalTheme) => void;
-  onOpenNav: () => void;
   onOpenSearch: () => void;
   onOpenMessages: () => void;
   onOpenNotifications: () => void;
 }) {
-  const { initials, customer } = useCustomer();
-  const [menuOpen, setMenuOpen] = useState(false);
   // A list page (Rentals) lends the bar its own field: it filters that list as
   // you type, and "Search everywhere" / ⌘K hand off to the search dialog.
   // Everywhere else the bar keeps the pill that opens the dialog.
@@ -822,10 +813,11 @@ function TopBar({
 
   // No title here: every page carries its own big heading, as on the operator portal v2.
   return (
-    <header className="flex h-16 shrink-0 items-center gap-2 bg-transparent px-3 sm:px-4">
-      <button type="button" onClick={onOpenNav} aria-label="Open menu" className={cn(ICON_BUTTON, '-ml-1 md:hidden')}>
-        <Menu aria-hidden className="size-4" />
-      </button>
+    // On a phone the app runs under the status bar (black-translucent), so the
+    // bar starts below the safe area.
+    <header className="flex h-16 shrink-0 items-center gap-2 bg-transparent px-3 max-md:h-[calc(4rem+env(safe-area-inset-top,0px))] max-md:pt-[env(safe-area-inset-top,0px)] sm:px-4">
+      {/* Phone: no rail, so the company mark and Book a car lead the bar. */}
+      <MobileBrand />
 
       {slot ? (
         <div className="hidden w-full max-w-[440px] sm:block">
@@ -880,13 +872,6 @@ function TopBar({
             <TopBadge count={counts.notifications} />
           </button>
         </Tip>
-        <div className="ml-1 md:hidden">
-          <AccountMenu open={menuOpen} onOpenChange={setMenuOpen} side="bottom" align="end" theme={theme} onThemeChange={onThemeChange}>
-            <button type="button" aria-label="Your account" className="flex cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-pv-ring/50">
-              <Avatar initials={initials} photo={customer?.profile_photo_url ?? null} />
-            </button>
-          </AccountMenu>
-        </div>
       </div>
     </header>
   );

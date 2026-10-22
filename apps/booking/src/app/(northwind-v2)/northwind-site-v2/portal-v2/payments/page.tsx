@@ -105,9 +105,16 @@ export default function PortalPaymentsPage() {
         </>
       ) : (
         <>
+          {/* Phone: the status first, as one row — the card form would take
+              half the screen to say "All settled". */}
+          <BalanceStatusRow balance={balance} onOpen={() => setDetailOpen(true)} />
           <HeroRow
             chart={<FinancesChart balance={balance} invoices={invoices} payments={payments} />}
-            card={<BalanceStatus balance={balance} onOpen={() => setDetailOpen(true)} />}
+            card={
+              <div className="contents max-lg:hidden">
+                <BalanceStatus balance={balance} onOpen={() => setDetailOpen(true)} />
+              </div>
+            }
           />
 
           <CardsSection />
@@ -267,6 +274,37 @@ function BalanceStatus({ balance, onOpen }: { balance: CustomerBalance; onOpen: 
       }
       onClick={onOpen}
     />
+  );
+}
+
+/** The status on a phone: one tappable row, the same words as the card. */
+function BalanceStatusRow({ balance, onOpen }: { balance: CustomerBalance; onOpen: () => void }) {
+  const { formatCurrency } = useTenantBranding();
+  const settled = balance.outstanding === 0;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-2xl border border-pv-border bg-pv-card px-4 py-3.5 text-left active:bg-pv-hover lg:hidden"
+    >
+      <span className="min-w-0">
+        <span className={cn('block text-[17px] font-semibold tracking-[-0.01em]', settled ? 'text-pv-fg' : balance.overdue > 0 ? 'text-pv-danger' : 'text-pv-fg')}>
+          {settled ? 'All settled' : `${formatCurrency(balance.outstanding)} due`}
+        </span>
+        <span className="block truncate text-[13px] text-pv-muted-fg">
+          {settled
+            ? 'Nothing is due on your account'
+            : balance.overdue > 0
+              ? `${formatCurrency(balance.overdue)} overdue`
+              : balance.nextDueDate
+                ? `Due ${formatDate(balance.nextDueDate)}`
+                : 'See what it is made of'}
+        </span>
+      </span>
+      <span aria-hidden className="text-[13px] font-semibold text-pv-link">
+        Details
+      </span>
+    </button>
   );
 }
 

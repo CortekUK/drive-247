@@ -12,7 +12,7 @@
  * keyed on a `.dark` ancestor), so nothing else has to change.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useState } from 'react';
 
 const THEME_KEY = 'pv2-theme';
 
@@ -58,4 +58,14 @@ export function usePortalThemeRoot(): { theme: PortalTheme; setTheme: (theme: Po
   }, []);
 
   return { theme, setTheme };
+}
+
+/**
+ * The shell's theme, for pages that switch it themselves — the phone's
+ * Account page carries Dark mode, which the desktop keeps in the profile menu.
+ */
+export const PortalThemeContext = createContext<{ theme: PortalTheme; setTheme: (theme: PortalTheme) => void } | null>(null);
+
+export function usePortalTheme() {
+  return useContext(PortalThemeContext);
 }
