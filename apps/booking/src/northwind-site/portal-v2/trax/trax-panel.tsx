@@ -20,7 +20,7 @@
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUp, CalendarClock, CreditCard, IdCard, Loader2, Maximize2, Minimize2, Sparkles, SquarePen, User, X } from 'lucide-react-nw';
+import { ArrowUp, CalendarClock, CreditCard, IdCard, Loader2, Sparkles, SquarePen, User, X } from 'lucide-react-nw';
 
 import { useCustomer } from '@nw/hooks/use-customer';
 import { cn } from '@nw/lib/utils';
@@ -234,7 +234,7 @@ function Composer({ busy, autoFocus, onSend }: { busy: boolean; autoFocus: boole
             }}
             placeholder="Ask about your rentals, payments or documents…"
             aria-label="Ask Trax"
-            className="block max-h-60 min-h-10 w-full resize-none overflow-y-auto bg-transparent px-4 pt-3 pb-1 text-[14px] leading-6 text-pv-fg outline-none placeholder:text-pv-muted-fg"
+            className="block max-h-60 min-h-10 w-full resize-none overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden bg-transparent px-4 pt-3 pb-1 text-[14px] leading-6 text-pv-fg outline-none placeholder:text-pv-muted-fg"
           />
           <div className="flex items-center gap-2 px-2.5 pt-1 pb-2.5">
             <span className="pl-1.5 text-[11px] text-pv-muted-fg">Reads your own account only</span>
@@ -277,7 +277,7 @@ function Thread({ autoFocus }: { autoFocus: boolean }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className={cn('flex min-h-0 flex-1 flex-col', empty && 'overflow-y-auto')}>
+      <div className={cn('flex min-h-0 flex-1 flex-col', empty && 'overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden')}>
         {empty ? (
           <div className="flex flex-[1_0_auto] flex-col items-center justify-end px-4 pt-10">
             <div className="relative isolate flex w-full flex-col items-center gap-3 text-center">
@@ -296,7 +296,7 @@ function Thread({ autoFocus }: { autoFocus: boolean }) {
             </p>
           </div>
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto [mask-image:linear-gradient(to_bottom,black_calc(100%-24px),transparent)]">
+          <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_bottom,black_calc(100%-24px),transparent)]">
             <div className="flex w-full min-w-0 flex-col gap-1 px-3.5 py-4">
               {messages.map((message) => (
                 <Message key={message.id} message={message} photo={customer?.profile_photo_url ?? null} initials={initials ?? null} />
@@ -500,14 +500,6 @@ export function CustomerTraxPanel() {
           </span>
           <div className="ml-auto flex items-center gap-0.5">
             <PanelAction label="New conversation" icon={<SquarePen />} disabled={isLoading || messages.length === 0} onClick={startNew} />
-            <span className="hidden md:inline-flex">
-              <PanelAction
-                label={expanded ? 'Restore size' : 'Expand'}
-                icon={expanded ? <Minimize2 /> : <Maximize2 />}
-                active={expanded}
-                onClick={() => setExpanded((value) => !value)}
-              />
-            </span>
             <PanelAction label="Close · ⌘J" icon={<X />} onClick={() => setOpen(false)} />
           </div>
         </header>
