@@ -27,7 +27,7 @@ import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CarFront, SearchX } from 'lucide-react-nw';
 
-import { V2_BUTTON_OUTLINE } from '@portal-v2-shared/button-styles';
+import { V2_BUTTON_PRIMARY } from '@portal-v2-shared/button-styles';
 import { usePageSearch } from '@portal-v2-shared/page-search-slot';
 import {
   NO_RENTAL_FILTERS,
@@ -97,7 +97,7 @@ export default function PortalRentalsPage() {
         description="Manage your rentals, from upcoming to completed."
         action={
           view === 'list' && !noRentals ? (
-            <button type="button" onClick={() => setView('calendar')} className={V2_BUTTON_OUTLINE}>
+            <button type="button" onClick={() => setView('calendar')} className={V2_BUTTON_PRIMARY}>
               Calendar view
             </button>
           ) : null
