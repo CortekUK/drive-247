@@ -73,7 +73,7 @@ export function CardsFeatured() {
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Manage cards"
-          className="group block w-fit cursor-pointer rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-ring/50 focus-visible:ring-offset-2"
+          className="group block w-full max-w-[440px] cursor-pointer rounded-2xl text-left md:w-fit md:max-w-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-ring/50 focus-visible:ring-offset-2"
         >
           <PaymentCard3D
             brand={primary.brand}

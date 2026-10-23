@@ -22,7 +22,11 @@ export const PHONE_CAROUSEL =
   'max-md:[&>div:first-child]:gap-3 max-md:[&>div:first-child]:overflow-x-auto max-md:[&>div:first-child]:px-2 ' +
   'max-md:[&>div:first-child]:[scrollbar-width:none] max-md:[&>div:first-child::-webkit-scrollbar]:hidden ' +
   'max-md:[&>div:first-child>*]:basis-[86%] max-md:[&>div:first-child>*]:grow-0 max-md:[&>div:first-child>*]:shrink-0 ' +
-  'max-md:[&>div:first-child>*]:snap-center';
+  'max-md:[&>div:first-child>*]:snap-center ' +
+  // HeroRow's card wrapper is `display: contents`, so the card itself is the
+  // flex item: give it the same slide width and snap.
+  'max-md:[&>div:first-child>[data-hero-card]>*]:basis-[86%] max-md:[&>div:first-child>[data-hero-card]>*]:grow-0 ' +
+  'max-md:[&>div:first-child>[data-hero-card]>*]:shrink-0 max-md:[&>div:first-child>[data-hero-card]>*]:snap-center';
 
 /** The section, the row inside it, and the dots under it. */
 export function PhoneCarousel({ count, children, className }: { count: number; children: ReactNode; className?: string }) {
