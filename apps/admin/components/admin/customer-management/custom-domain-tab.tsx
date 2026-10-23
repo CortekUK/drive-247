@@ -24,9 +24,9 @@ import { useAuthStore } from '@/store/authStore';
 import { toast } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LogEntry, LogList, LogRailCard, LogRailLayout } from './log-rail';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -147,7 +147,66 @@ export function CustomDomainTab({ canEdit }: { canEdit: boolean }) {
   const live = withDomain.filter((t) => t.custom_domain_status === 'active').length;
   const pending = withDomain.filter((t) => t.custom_domain_status === 'pending').length;
 
+  // The read-only record is the right-hand column (log-rail.tsx).
+  const rail = (
+    <LogRailCard
+      title="Domains"
+      description={`${live} live · ${pending} waiting for DNS · ${withDomain.length} in total`}
+      actions={
+        <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+      }
+    >
+      {withDomain.length === 0 ? (
+        <EmptyState
+          size="section"
+          illustration={<CustomDomainArt />}
+          headline="No custom domains yet"
+          body="Operators who put their booking site on their own address show up here, with its status."
+        />
+      ) : (
+        <LogList>
+          {withDomain.map((t) => {
+            const st = STATUS[t.custom_domain_status ?? 'manual'];
+            return (
+              <LogEntry
+                key={t.id}
+                who={
+                  <>
+                    {t.company_name || t.slug}
+                    <span className="ml-1.5 text-[11px] font-normal uppercase text-muted-foreground">{t.portal_experience ?? 'v1'}</span>
+                  </>
+                }
+                status={<span className={`text-xs font-medium ${st.cls}`}>{st.label}</span>}
+                what={
+                  <>
+                    <a href={`https://${t.custom_booking_domain}`} target="_blank" rel="noreferrer" className="hover:underline">
+                      {t.custom_booking_domain ?? '—'}
+                    </a>
+                    {t.custom_portal_domain && <span className="text-muted-foreground"> · {t.custom_portal_domain}</span>}
+                  </>
+                }
+                when={
+                  t.custom_domain_checked_at || t.custom_domain_live_at ? (
+                    <>
+                      {t.custom_domain_checked_at && <span>Checked {fmtWhen(t.custom_domain_checked_at)}</span>}
+                      {t.custom_domain_live_at && <span>Live since {fmtWhen(t.custom_domain_live_at)}</span>}
+                    </>
+                  ) : null
+                }
+                detail={t.custom_domain_detail && t.custom_domain_status !== 'active' ? t.custom_domain_detail : null}
+              />
+            );
+          })}
+        </LogList>
+      )}
+    </LogRailCard>
+  );
+
   return (
+    <LogRailLayout label="Domains" rail={rail}>
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Custom Domain</h1>
@@ -190,74 +249,7 @@ export function CustomDomainTab({ canEdit }: { canEdit: boolean }) {
         </CardContent>
       </Card>
 
-      {/* ── every domain ──────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-          <div className="space-y-1.5">
-            <CardTitle>Domains</CardTitle>
-            <CardDescription>
-              {live} live · {pending} waiting for DNS · {withDomain.length} in total
-            </CardDescription>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {withDomain.length === 0 ? (
-            <EmptyState
-              size="section"
-              illustration={<CustomDomainArt />}
-              headline="No custom domains yet"
-              body="Operators who put their booking site on their own address show up here, with its status."
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Domain</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Last checked</TableHead>
-                  <TableHead>Live since</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {withDomain.map((t) => {
-                  const st = STATUS[t.custom_domain_status ?? 'manual'];
-                  return (
-                    <TableRow key={t.id}>
-                      <TableCell className="font-medium">
-                        {t.company_name || t.slug}
-                        <span className="ml-2 text-xs uppercase text-muted-foreground">{t.portal_experience ?? 'v1'}</span>
-                      </TableCell>
-                      <TableCell>
-                        <a href={`https://${t.custom_booking_domain}`} target="_blank" rel="noreferrer" className="hover:underline">
-                          {t.custom_booking_domain ?? '—'}
-                        </a>
-                        {t.custom_portal_domain && (
-                          <p className="text-xs text-muted-foreground">{t.custom_portal_domain}</p>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <span className={`text-sm ${st.cls}`}>{st.label}</span>
-                        {t.custom_domain_detail && t.custom_domain_status !== 'active' && (
-                          <p className="mt-1 max-w-xs truncate text-xs text-muted-foreground" title={t.custom_domain_detail}>
-                            {t.custom_domain_detail}
-                          </p>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{fmtWhen(t.custom_domain_checked_at)}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{fmtWhen(t.custom_domain_live_at)}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
     </div>
+    </LogRailLayout>
   );
 }
