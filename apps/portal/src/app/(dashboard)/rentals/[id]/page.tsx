@@ -15,7 +15,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, AlertCircle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge, Briefcase, Bell, Eye, EyeOff, Pencil, MoreHorizontal } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, AlertCircle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, CalendarClock, CalendarMinus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge, Briefcase, Bell, Eye, EyeOff, Pencil, MoreHorizontal } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { BlurredImage } from "@/components/ui/blurred-image";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -54,6 +54,9 @@ import RejectionDialog from "@/components/rentals/rejection-dialog";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
 import { AdminExtendRentalDialog } from "@/components/rentals/AdminExtendRentalDialog";
 import { EditPickupReturnDialog } from "@/components/rentals/edit-pickup-return-dialog";
+import { ChangeReturnDateDialog } from "@/components/rentals/change-return-date-dialog";
+import { formatLocalDate } from "@/lib/date-utils";
+import { AdjustExtensionDialog, type AdjustableExtension } from "@/components/rentals/adjust-extension-dialog";
 import { SwapVehicleDialog } from "@/components/rentals/swap-vehicle-dialog";
 import InstallmentPlanCard from "@/components/rentals/InstallmentPlanCard";
 import { AccountingSyncStripe } from "@/components/rentals/accounting-sync-stripe";
@@ -625,6 +628,10 @@ const RentalDetail = () => {
 
   // Edit pickup/return dialog state
   const [showEditPickupReturn, setShowEditPickupReturn] = useState(false);
+  // Dates-only return change and the extension undo (Oct 23 2026): operators
+  // could only ever add time, so early returns went through support.
+  const [showChangeReturnDate, setShowChangeReturnDate] = useState(false);
+  const [adjustingExtension, setAdjustingExtension] = useState<AdjustableExtension | null>(null);
   const [showSwapVehicle, setShowSwapVehicle] = useState(false);
 
   // Extension payment state
@@ -5764,15 +5771,28 @@ const RentalDetail = () => {
                   the rental's dates. Calling it restores the gate the author
                   plainly intended. */}
               {canEdit('rentals') && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => setShowEditPickupReturn(true)}
-                >
-                  <Pencil className="w-3 h-3" />
-                  Edit
-                </Button>
+                <div className="flex items-center gap-1">
+                  {!(rental as any)?.is_pay_as_you_go && rental.end_date && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowChangeReturnDate(true)}
+                    >
+                      <CalendarClock className="w-3 h-3" />
+                      Change return date
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowEditPickupReturn(true)}
+                  >
+                    <Pencil className="w-3 h-3" />
+                    Edit
+                  </Button>
+                </div>
               )}
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
@@ -5826,20 +5846,42 @@ const RentalDetail = () => {
             {extensionGroups.length > 0 && (
               <div className="mt-4 pt-3 border-t space-y-1.5">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Extension History</p>
-                {extensionGroups.map((group) => {
-                  const refCharge = group.rentalCharge;
-                  const refMatch = refCharge?.reference?.match(/\(([^)]+)\)/);
-                  const dateRange = refMatch?.[1] || '';
-                  return (
-                    <div key={group.extensionNumber} className="flex items-center gap-2 text-sm">
-                      <CalendarPlus className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                      <span className="text-muted-foreground">Extension #{group.extensionNumber}:</span>
-                      <span className="font-medium">{dateRange || `${group.charges.length} charges`}</span>
-                      <span className="text-muted-foreground">·</span>
-                      <span className="text-sm">{formatCurrencyUtil(group.totalAmount + (group.charges.some(c => c.category === 'Extension Insurance') ? 0 : (group.insurancePolicy?.premium_amount || 0)), tenant?.currency_code || 'USD')}</span>
-                    </div>
-                  );
-                })}
+                {(() => {
+                  // Only the latest live extension can be shortened or removed
+                  // (operator_adjust_extension), so the periods never get a gap.
+                  const liveExts = (extensionTotals || []).filter((e: any) => e.status !== 'cancelled' && e.status !== 'refunded');
+                  const latestLive = liveExts.reduce<any>((top, e: any) => (!top || Number(e.sequence_number) > Number(top.sequence_number) ? e : top), null);
+                  return extensionGroups.map((group) => {
+                    const refCharge = group.rentalCharge;
+                    const refMatch = refCharge?.reference?.match(/\(([^)]+)\)/);
+                    const extRow = (extensionTotals || []).find((e: any) => Number(e.sequence_number) === group.extensionNumber) as any;
+                    const removed = extRow?.status === 'cancelled' || extRow?.status === 'refunded';
+                    const dateRange = extRow?.previous_end_date && extRow?.new_end_date
+                      ? `${formatLocalDate(extRow.previous_end_date)} → ${formatLocalDate(extRow.new_end_date)}`
+                      : refMatch?.[1] || '';
+                    return (
+                      <div key={group.extensionNumber} className="flex items-center gap-2 text-sm">
+                        <CalendarPlus className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                        <span className="text-muted-foreground">Extension #{group.extensionNumber}:</span>
+                        <span className={removed ? 'font-medium text-muted-foreground line-through' : 'font-medium'}>{dateRange || `${group.charges.length} charges`}</span>
+                        <span className="text-muted-foreground">·</span>
+                        <span className="text-sm">{formatCurrencyUtil(group.totalAmount + (group.charges.some(c => c.category === 'Extension Insurance') ? 0 : (group.insurancePolicy?.premium_amount || 0)), tenant?.currency_code || 'USD')}</span>
+                        {removed && <span className="text-xs text-muted-foreground">Removed</span>}
+                        {!removed && extRow && latestLive?.id === extRow.id && canEdit('rentals') && extRow.previous_end_date && extRow.new_end_date && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="ml-auto h-6 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+                            onClick={() => setAdjustingExtension(extRow as AdjustableExtension)}
+                          >
+                            <CalendarMinus className="h-3 w-3" />
+                            Shorten or remove
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             )}
 
@@ -5910,6 +5952,22 @@ const RentalDetail = () => {
             open={showEditPickupReturn}
             onOpenChange={setShowEditPickupReturn}
             rental={rental}
+          />
+
+          <ChangeReturnDateDialog
+            open={showChangeReturnDate}
+            onOpenChange={setShowChangeReturnDate}
+            rental={rental as any}
+            extensions={extensionTotals as any}
+          />
+
+          <AdjustExtensionDialog
+            open={!!adjustingExtension}
+            onOpenChange={(o) => !o && setAdjustingExtension(null)}
+            rentalId={rental.id}
+            vehicleId={(rental as any).vehicle_id}
+            extension={adjustingExtension}
+            currencyCode={tenant?.currency_code || 'USD'}
           />
 
           <SwapVehicleDialog
