@@ -4,12 +4,11 @@
  * The operator portal v2's dialog surface for every customer portal v2 screen,
  * in the operator's Integrations standard (integrations-board.tsx, Stripe and
  * the rest): the page wash as the dialog's background — brand-derived radial
- * layers, so it follows the tenant's colour and dark mode — an illustration
- * top-left, the status top-right, and no corner ×.
+ * layers, so it follows the tenant's colour and dark mode — the status
+ * top-left, then the title.
  *
- * Close is a word, not an icon (owner, Oct 22 2026): a "Close" pill in the
- * top-right corner, beside the status when there is one. Esc and a click
- * outside still close.
+ * No illustration and no Close control (owner, Oct 23 2026): the status takes
+ * the illustration's place, and Esc or a click outside closes.
  *
  *   <PvDialogContent className="sm:max-w-xl">
  *     <PvDialogHeader title="Cards" description="…" status={<PvStatus tone="success">Active</PvStatus>} />
@@ -47,8 +46,8 @@ export function PvDialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
   /**
-   * 'portal' (default): the customer portal's dialog — the wash and the Close
-   * pill. 'site': the public booking site's (quick book, fleet, time clock,
+   * 'portal' (default): the customer portal's dialog — the wash, no close
+   * control. 'site': the public booking site's (quick book, fleet, time clock,
    * the booking payment panel) — plain card and the round × chip, as before.
    */
   variant?: 'portal' | 'site';
@@ -69,22 +68,18 @@ export function PvDialogContent({
         {...props}
       >
         {children}
-        {showCloseButton ? (
-          portal ? (
-            <DialogPrimitive.Close className={PV_DIALOG_CLOSE}>Close</DialogPrimitive.Close>
-          ) : (
-            <DialogPrimitive.Close className="absolute top-4 right-4 inline-flex size-8 cursor-pointer items-center justify-center rounded-full bg-pv-muted text-pv-muted-fg transition-colors duration-200 ease-out outline-none hover:bg-pv-tint hover:text-pv-fg focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none">
-              <X aria-hidden className="size-4" />
-              <span className="sr-only">Close</span>
-            </DialogPrimitive.Close>
-          )
+        {showCloseButton && !portal ? (
+          <DialogPrimitive.Close className="absolute top-4 right-4 inline-flex size-8 cursor-pointer items-center justify-center rounded-full bg-pv-muted text-pv-muted-fg transition-colors duration-200 ease-out outline-none hover:bg-pv-tint hover:text-pv-fg focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none">
+            <X aria-hidden className="size-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
         ) : null}
       </DialogPrimitive.Content>
     </DialogPortal>
   );
 }
 
-/** The "Close" pill: a word in the corner, where the × was. */
+/** The "Close" pill: a word in the corner. Only the invoice sheet's phone layout still uses it. */
 export const PV_DIALOG_CLOSE =
   'absolute top-5 right-5 inline-flex h-7 cursor-pointer items-center rounded-full border border-pv-border bg-pv-card/70 px-3 text-[12px] font-medium text-pv-fg/80 backdrop-blur-sm ' +
   'transition-colors duration-200 ease-out outline-none hover:bg-pv-card hover:text-pv-fg focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none';
@@ -123,30 +118,23 @@ export function PvStatus({ tone, children }: { tone: StatusTone; children: React
 }
 
 /**
- * The header every dialog opens on: the illustration (or the default mark)
- * top-left with the status beside the corner Close, then the title and one
- * muted line. Status is optional; the wash is always there.
+ * The header every dialog opens on: the status top-left (when there is one),
+ * then the title and one muted line. The wash is always there.
  */
 export function PvDialogHeader({
   title,
   description,
   status,
-  art,
   className,
 }: {
   title: React.ReactNode;
   description?: React.ReactNode;
   status?: React.ReactNode;
-  /** The illustration top-left. Defaults to the portal's mark. */
-  art?: React.ReactNode;
   className?: string;
 }) {
   return (
     <div className={cn('flex flex-col gap-4', className)}>
-      {/* The art top-left. The status rides the Close pill's line, just to its
-          left (top-5, the same 28px height), so the two read as one row. */}
-      <div className="flex h-12 items-center">{art ?? <DialogArt />}</div>
-      {status ? <div className="absolute top-5 right-[5.75rem] flex h-7 items-center">{status}</div> : null}
+      {status ? <div className="flex h-7 items-center">{status}</div> : null}
       <div>
         <DialogPrimitive.Title className="font-heading text-xl font-semibold tracking-tight text-pv-fg">{title}</DialogPrimitive.Title>
         {description ? (
@@ -156,21 +144,5 @@ export function PvDialogHeader({
         )}
       </div>
     </div>
-  );
-}
-
-/**
- * The default illustration: three rounded sheets fanned in the brand tints,
- * the front one carrying two lines — a document, without an icon set's look.
- */
-export function DialogArt({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 64 48" aria-hidden className={cn('h-12 w-16 shrink-0', className)}>
-      <rect x="10" y="8" width="34" height="34" rx="8" transform="rotate(-12 27 25)" fill="var(--pv-chart-3)" opacity="0.35" />
-      <rect x="18" y="6" width="34" height="34" rx="8" transform="rotate(8 35 23)" fill="var(--pv-wash)" opacity="0.55" />
-      <rect x="14" y="8" width="34" height="34" rx="8" fill="var(--pv-card)" stroke="var(--pv-primary)" strokeOpacity="0.25" />
-      <rect x="21" y="17" width="18" height="3.5" rx="1.75" fill="var(--pv-primary)" opacity="0.75" />
-      <rect x="21" y="25" width="13" height="3" rx="1.5" fill="var(--pv-primary)" opacity="0.3" />
-    </svg>
   );
 }

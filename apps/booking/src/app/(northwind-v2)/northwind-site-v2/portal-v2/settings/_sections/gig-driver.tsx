@@ -330,7 +330,6 @@ export function GigDriverSettings() {
 
       <ConfirmDialog
         open={pendingDelete !== null}
-        icon={Trash2}
         title="Delete this file?"
         description={pendingDelete ? `${pendingDelete.fileName} will be removed. You can upload it again if you need to.` : ''}
         confirmLabel="Delete"

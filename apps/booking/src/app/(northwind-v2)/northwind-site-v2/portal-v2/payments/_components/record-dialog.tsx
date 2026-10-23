@@ -43,7 +43,7 @@ export function RecordDialog({
       <PvDialogContent
         className={cn('max-h-[calc(100dvh-2rem)] gap-0 overflow-hidden p-0 sm:p-0', className)}
       >
-        <div className="flex flex-col gap-1.5 px-6 pt-6 pr-14">
+        <div className="flex flex-col gap-1.5 px-6 pt-6">
           <DialogPrimitive.Title className="text-[18px] font-semibold leading-snug tracking-[-0.01em] text-pv-fg">
             {title}
           </DialogPrimitive.Title>

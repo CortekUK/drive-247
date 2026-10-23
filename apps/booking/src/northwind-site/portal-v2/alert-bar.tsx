@@ -15,7 +15,7 @@
  */
 
 import Link from 'next/link';
-import { useSyncExternalStore, type SVGProps } from 'react';
+import { useSyncExternalStore } from 'react';
 
 import { formatDate } from '@nw/components/portal/format';
 import { useCustomer } from '@nw/hooks/use-customer';
@@ -47,67 +47,11 @@ const BUTTON: Record<AlertBarVariant, string> = {
   grey: 'bg-pv-fg/80 text-pv-card hover:bg-pv-fg',
 };
 
-/* The bar's icons, drawn in the v2 nav set's manner (shared/portal-v2/
-   nav-icons): one even 2.2 stroke on the 24 grid, round caps, no fills. */
-function Svg({ children, ...props }: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      {...props}
-    >
-      {children}
-    </svg>
-  );
-}
-
-/** Red: an octagon, the stop sign — something is wrong and needs you now. */
-function IconUrgent(props: SVGProps<SVGSVGElement>) {
-  return (
-    <Svg {...props}>
-      <path d="M8.3 2.8h7.4l5.5 5.5v7.4l-5.5 5.5H8.3l-5.5-5.5V8.3z" />
-      <path d="M12 7.6v5" />
-      <path d="M12 16.4h.01" />
-    </Svg>
-  );
-}
-
-/** Yellow: a clock face — something is due. */
-function IconDue(props: SVGProps<SVGSVGElement>) {
-  return (
-    <Svg {...props}>
-      <circle cx="12" cy="12" r="9.2" />
-      <path d="M12 7v5l3.2 2" />
-    </Svg>
-  );
-}
-
-/** Grey: an arrow into a box — a step to take. */
-function IconStep(props: SVGProps<SVGSVGElement>) {
-  return (
-    <Svg {...props}>
-      <rect x="3" y="3" width="18" height="18" rx="4" />
-      <path d="M9 12h6" />
-      <path d="m12.5 9 3 3-3 3" />
-    </Svg>
-  );
-}
-
-const ICON: Record<AlertBarVariant, (props: SVGProps<SVGSVGElement>) => JSX.Element> = {
-  red: IconUrgent,
-  yellow: IconDue,
-  grey: IconStep,
-};
-
 /* ─────────────────────────────── dismissing ─────────────────────────────── */
 
 /**
- * The customer can close a stripe with its ×, but only for now (owner, Oct 22
+ * The customer can close a stripe with its × (at the start of the stripe, where
+ * the severity icon used to be — owner, Oct 23 2026), but only for now (owner, Oct 22
  * 2026): it must be back after a refresh, after signing out and in again, and
  * when they come back to the portal later. So the closed set lives in memory
  * only — a reload wipes it — the shell clears it whenever the portal mounts
@@ -168,7 +112,6 @@ export function AlertStripe({
 }) {
   const dismissed = useDismissed();
   if (dismissible && dismissed.includes(signature(item))) return null;
-  const Icon = ICON[item.variant];
   return (
     <div
       role={item.variant === 'red' ? 'alert' : 'status'}
@@ -178,26 +121,25 @@ export function AlertStripe({
         className,
       )}
     >
-      <Icon className="size-[18px] shrink-0" />
-      <p className="min-w-0 flex-1 text-[13px] leading-snug">
-        <span className="font-semibold">{item.title}</span>
-        {/* A phone has room for the headline and the button; the detail is a tap away. */}
-        {item.description ? <span className="text-pv-fg/70 max-sm:hidden"> · {item.description}</span> : null}
-      </p>
-      {item.action ? <StripeAction item={item} /> : null}
       {dismissible ? (
         <button
           type="button"
           onClick={() => dismiss(item)}
           aria-label="Dismiss"
           title="Dismiss"
-          className="-mr-1 inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-current opacity-60 outline-none transition-opacity duration-200 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-current/40 motion-reduce:transition-none"
+          className="-ml-1 inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-current opacity-60 outline-none transition-opacity duration-200 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-current/40 motion-reduce:transition-none"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" className="size-4" aria-hidden>
             <path d="M6 6l12 12M18 6 6 18" />
           </svg>
         </button>
       ) : null}
+      <p className="min-w-0 flex-1 text-[13px] leading-snug">
+        <span className="font-semibold">{item.title}</span>
+        {/* A phone has room for the headline and the button; the detail is a tap away. */}
+        {item.description ? <span className="text-pv-fg/70 max-sm:hidden"> · {item.description}</span> : null}
+      </p>
+      {item.action ? <StripeAction item={item} /> : null}
     </div>
   );
 }
