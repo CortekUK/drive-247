@@ -8,11 +8,10 @@
  *
  * At most five slots, and they never scroll sideways (owner, Oct 23 2026: a
  * cut-off row wrongly says there is more to find): up to BAR_TABS rail tabs in
- * the customer's own order (sidebar customiser), then Account. Account is the
- * "More" of the operator's bar — it opens the More screen (mobile-more-screen
- * .tsx: Dark mode, Settings, Sign out, and any tab that did not fit), and a
- * small arrow beside its label says there is more beyond it. It carries the
- * customer's avatar, as a native profile tab does.
+ * the customer's own order (sidebar customiser), then More — the operator's
+ * bar, ditto (owner, Oct 23 2026): the ellipsis opens the More screen
+ * (mobile-more-screen.tsx: the account, Settings, Dark mode, Sign out, and any
+ * tab that did not fit), and stays lit while it is open.
  *
  * As the operator's: phone only (`md:hidden`); flat and attached to the bottom
  * edge — solid page colour, one hairline on top, no float, no shadow; padded
@@ -22,9 +21,8 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { ChevronRight } from 'lucide-react-nw';
+import { Ellipsis } from 'lucide-react-nw';
 
-import { useCustomer } from '@nw/hooks/use-customer';
 import { cn } from '@nw/lib/utils';
 
 import { arrangePortalV2Nav, isPortalV2Active, type PortalV2NavIcon } from './nav';
@@ -44,27 +42,6 @@ function TabIcon({ icon: Icon, on }: { icon: PortalV2NavIcon; on: boolean }) {
   return <Icon aria-hidden className="size-5" strokeWidth={on ? 2.4 : 1.75} />;
 }
 
-function AccountIcon({ on }: { on: boolean }) {
-  const { initials, customer } = useCustomer();
-  const photo = customer?.profile_photo_url ?? null;
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        'flex size-5 items-center justify-center overflow-hidden rounded-full bg-pv-primary/10 text-[9px] font-semibold text-pv-primary',
-        on ? 'ring-2 ring-pv-primary ring-offset-1 ring-offset-pv-bg' : 'ring-1 ring-pv-border',
-      )}
-    >
-      {photo ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={photo} alt="" className="size-full object-cover" />
-      ) : (
-        initials ?? '·'
-      )}
-    </span>
-  );
-}
-
 export function MobileTabBar({ pathname }: { pathname: string | null }) {
   const { preferences } = usePortalV2NavPreferences();
   const shown = arrangePortalV2Nav(preferences).shown;
@@ -78,8 +55,8 @@ export function MobileTabBar({ pathname }: { pathname: string | null }) {
   }, [pathname]);
 
   const anyTabActive = tabs.some((tab) => isPortalV2Active(tab.href, pathname));
-  // Account is lit while More is open, and on any page no bar tab owns (Settings, an overflow tab).
-  const accountLit = moreOpen || !anyTabActive;
+  // More is lit while it is open, and on any page no bar tab owns (Settings, an overflow tab).
+  const moreLit = moreOpen || !anyTabActive;
 
   return (
     <>
@@ -112,13 +89,10 @@ export function MobileTabBar({ pathname }: { pathname: string | null }) {
           onClick={() => setMoreOpen((open) => !open)}
           aria-label="More"
           aria-expanded={moreOpen}
-          className={cn(ITEM, accountLit ? ACTIVE_TEXT : IDLE_TEXT)}
+          className={cn(ITEM, moreLit ? ACTIVE_TEXT : IDLE_TEXT)}
         >
-          <AccountIcon on={accountLit} />
-          <span className="flex items-center gap-px">
-            Account
-            <ChevronRight aria-hidden className={cn('size-3 transition-transform duration-200 motion-reduce:transition-none', moreOpen && '-rotate-90')} strokeWidth={2.4} />
-          </span>
+          <TabIcon icon={Ellipsis} on={moreLit} />
+          More
         </button>
       </nav>
     </div>

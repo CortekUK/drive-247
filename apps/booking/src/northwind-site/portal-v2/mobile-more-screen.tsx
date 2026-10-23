@@ -15,9 +15,9 @@
  *
  * For now: Dark mode, Settings, Sign out.
  *
- * SETTINGS PLACEMENT IS PROVISIONAL (owner, Oct 23 2026): Account used to open
- * Settings directly; it now opens this screen, and Settings is a row here with
- * the gear. Where Settings finally lives has to match the operator portal and
+ * SETTINGS PLACEMENT IS PROVISIONAL (owner, Oct 23 2026): the Account tab used
+ * to open Settings directly; the bar now ends in More, and Settings is a row
+ * here with the gear, as on the operator's. Where Settings finally lives has to match the operator portal and
  * super admin — revisit when that is decided.
  *
  * Phone only (`md:hidden`); mounted by MobileTabBar.
@@ -26,10 +26,11 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
-import { ChevronRight, LogOut, Moon, Settings } from 'lucide-react-nw';
+import { ChevronRight, ExternalLink, LogOut, Moon, Settings } from 'lucide-react-nw';
 
 import { Switch } from '@nw/components/ui/switch';
 import { useCustomer } from '@nw/hooks/use-customer';
+import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { cn } from '@nw/lib/utils';
 
 import { isPortalV2Active, type PortalV2NavItem } from './nav';
@@ -73,7 +74,7 @@ export function MobileMoreScreen({
     >
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pt-[env(safe-area-inset-top,0px)] pb-[calc(env(safe-area-inset-bottom,0px)+5.5rem)]">
         <div className="mx-auto flex max-w-lg flex-col gap-5 px-4">
-          <h1 className="pt-4 font-heading text-[30px] font-semibold leading-tight tracking-[-0.01em] text-pv-fg">More</h1>
+          <h1 className="pt-4 font-heading text-[30px] font-medium leading-tight tracking-[-0.01em] text-pv-fg">More</h1>
 
           <AccountCard onNavigate={onClose} />
 
@@ -134,14 +135,48 @@ function NavRow({
   );
 }
 
-/** Who is signed in. */
+/** The business the customer rents from, and who is signed in — the operator's account card. */
 function AccountCard({ onNavigate }: { onNavigate: () => void }) {
   const { displayName, email, initials, customer } = useCustomer();
+  const { appName, faviconUrl } = useTenantBranding();
   const photo = customer?.profile_photo_url ?? null;
+  const orgName = appName ?? 'Your rental company';
+  const orgInitials =
+    orgName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word[0])
+      .join('')
+      .toUpperCase() || 'A';
+
   return (
-    <div className={CARD}>
+    <div className={cn(CARD, DIVIDED)}>
+      <div className="flex items-center gap-3 px-4 py-3.5">
+        {faviconUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={faviconUrl} alt="" className="size-10 shrink-0 rounded-xl object-contain" />
+        ) : (
+          <span aria-hidden className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-pv-primary text-[13px] font-semibold text-pv-primary-fg">
+            {orgInitials}
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[16px] font-medium text-pv-fg">{orgName}</div>
+          <a
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`${orgName} booking site (opens in a new tab)`}
+            className="inline-flex items-center gap-1 text-[13px] text-pv-primary"
+          >
+            View booking site
+            <ExternalLink aria-hidden className="size-3" />
+          </a>
+        </div>
+      </div>
       <Link href="/portal/settings" onClick={onNavigate} className="flex items-center gap-3 px-4 py-3 transition-colors duration-200 active:bg-pv-primary/[0.06]">
-        <span aria-hidden className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-pv-primary/10 text-[13px] font-semibold text-pv-primary">
+        <span aria-hidden className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-pv-primary/10 text-[12px] font-medium text-pv-primary">
           {photo ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={photo} alt="" className="size-full object-cover" />
@@ -150,7 +185,7 @@ function AccountCard({ onNavigate }: { onNavigate: () => void }) {
           )}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[15px] font-medium text-pv-fg">{displayName ?? 'Your account'}</div>
+          <div className="truncate text-[14px] font-medium text-pv-fg">{displayName ?? 'Your account'}</div>
           {email ? <div className="truncate text-[12px] text-pv-muted-fg">{email}</div> : null}
         </div>
         <ChevronRight aria-hidden className="size-4 shrink-0 text-pv-muted-fg/60" />
