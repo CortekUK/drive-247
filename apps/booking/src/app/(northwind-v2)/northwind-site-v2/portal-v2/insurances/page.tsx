@@ -50,11 +50,12 @@ import {
   ListTableHeader,
   useProgressiveRows,
 } from '@portal-v2-shared/list-table';
-import { V2_LIST_CLASSES } from '@portal-v2-shared/list-styles';
+import { V2_LIST_TONES, V2_LIST_CLASSES } from '@portal-v2-shared/list-styles';
 import { usePageSearch } from '@portal-v2-shared/page-search-slot';
 
 import { Notice } from './_components/kit';
 import { RowMenu } from './_components/row-menu';
+import { PhoneList, PhoneRow } from '@nw/portal-v2/phone-list';
 import { BonzahLogo, coverRange, toRows, type InsuranceRow } from './_components/rows';
 import { downloadExternal, externalFileUrl, useViewDocument } from './_components/use-view-document';
 import { DeleteDocumentDialog } from './delete-dialog';
@@ -227,6 +228,34 @@ export default function PortalInsurancesPage() {
             One fact per cell, one line per row. A long policy number truncates
             and is shown whole on hover.
           */}
+          {/* Phone: name and cover dates, the provider and status on the right,
+              and the same ⋮ menu. The table from md up. */}
+          {isLoading ? null : (
+            <PhoneList>
+              {progressive.visible.map((row) => (
+                <PhoneRow
+                  key={row.key}
+                  title={row.name}
+                  detail={coverRange(row.start, row.end)}
+                  value={row.kind === 'bonzah' ? <BonzahLogo /> : (row.provider ?? '—')}
+                  valueDetail={<span className={V2_LIST_TONES[row.status.tone]}>{row.status.label}</span>}
+                  trailing={
+                    <RowMenu
+                      row={row}
+                      downloading={isDownloading(row)}
+                      viewing={isViewing(row)}
+                      onViewDocument={() => viewDocument(row)}
+                      onViewPolicy={(entry) => viewPolicy(row, entry)}
+                      onDownloadDocument={() => downloadDocument(row)}
+                      onDownloadPolicy={(entry) => downloadPolicy(row, entry)}
+                      onDelete={() => askDelete(row)}
+                    />
+                  }
+                />
+              ))}
+            </PhoneList>
+          )}
+          <div className="max-md:hidden">
           <ListTable rows={progressive} minWidth="min-w-[860px]">
             <ListTableHeader>
               <ListHead className="w-[26%]">Insurance</ListHead>
@@ -301,6 +330,7 @@ export default function PortalInsurancesPage() {
                   ))}
             </ListBody>
           </ListTable>
+          </div>
           {isLoading ? null : (
             <div className={V2_LIST_CLASSES.footer}>
               <span>

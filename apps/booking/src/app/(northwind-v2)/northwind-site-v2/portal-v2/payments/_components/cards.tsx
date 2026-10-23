@@ -197,7 +197,7 @@ function CardRow({
       <div className="flex items-center gap-4">
         <CardThumb brand={card.brand} last4={card.last4 ?? '····'} />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-pv-fg">
+          <p className="whitespace-nowrap text-sm font-medium text-pv-fg">
             {cardBrandLabel(card.brand)} •••• {card.last4}
           </p>
           <p className="mt-0.5 truncate text-xs text-pv-muted-fg">

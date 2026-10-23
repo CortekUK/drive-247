@@ -174,12 +174,15 @@ export function InvoiceSheet({
                   <CopyOnHover value={shown.number} label="Copy invoice number" />
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  {/* Pay: on an invoice that still owes money (operator rule). */}
-                  {!cancelled && owes > EPS ? <PayButton rentalId={shown.rentalId} /> : null}
+                  {/* Pay: on an invoice that still owes money (operator rule).
+                      Beside the number from sm; on a phone it gets its own
+                      full-width row below, so the number is never cut. */}
+                  {!cancelled && owes > EPS ? <PayButton rentalId={shown.rentalId} className="max-sm:hidden" /> : null}
                   {/* The portal's Close pill, on a phone only. */}
                   <SheetClose className={cn(PV_DIALOG_CLOSE, 'static sm:hidden')}>Close</SheetClose>
                 </div>
               </div>
+              {!cancelled && owes > EPS ? <PayButton rentalId={shown.rentalId} className="mt-2 h-11 w-full text-[14px] sm:hidden" /> : null}
               <SheetDescription className="sr-only">
                 {[tenant?.company_name, vehicle].filter(Boolean).join(' · ')}
                 {` · Issued ${format(parseDateOnly(shown.invoiceDate.slice(0, 10)), 'PP')}`}
