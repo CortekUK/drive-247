@@ -6,10 +6,13 @@
  * Home Screen, so on a phone every place is one thumb-tap away along the
  * bottom edge, the way a native app moves.
  *
- * Five tabs, so there is no "More": the four rail tabs in the customer's own
- * order (sidebar customiser) and Account, which is Settings — the gear on the
- * desktop rail. Account carries the customer's avatar, as a native profile
- * tab does.
+ * At most five slots, and they never scroll sideways (owner, Oct 23 2026: a
+ * cut-off row wrongly says there is more to find): up to BAR_TABS rail tabs in
+ * the customer's own order (sidebar customiser), then Account. Account is the
+ * "More" of the operator's bar — it opens the More screen (mobile-more-screen
+ * .tsx: Dark mode, Settings, Sign out, and any tab that did not fit), and a
+ * small arrow beside its label says there is more beyond it. It carries the
+ * customer's avatar, as a native profile tab does.
  *
  * As the operator's: phone only (`md:hidden`); flat and attached to the bottom
  * edge — solid page colour, one hairline on top, no float, no shadow; padded
@@ -18,12 +21,18 @@
  */
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { ChevronRight } from 'lucide-react-nw';
 
 import { useCustomer } from '@nw/hooks/use-customer';
 import { cn } from '@nw/lib/utils';
 
 import { arrangePortalV2Nav, isPortalV2Active, type PortalV2NavIcon } from './nav';
+import { MobileMoreScreen } from './mobile-more-screen';
 import { usePortalV2NavPreferences } from './sidebar-customizer';
+
+/** Rail tabs on the bar; the rest go to More, so the row never overflows. */
+const BAR_TABS = 4;
 
 const ITEM =
   'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-[5px] text-[11.5px] leading-none font-medium tracking-[0.01em] ' +
@@ -58,30 +67,61 @@ function AccountIcon({ on }: { on: boolean }) {
 
 export function MobileTabBar({ pathname }: { pathname: string | null }) {
   const { preferences } = usePortalV2NavPreferences();
-  const tabs = arrangePortalV2Nav(preferences).shown;
-  const onAccount = isPortalV2Active('/portal/settings', pathname);
+  const shown = arrangePortalV2Nav(preferences).shown;
+  const tabs = shown.slice(0, BAR_TABS);
+  const overflow = shown.slice(BAR_TABS);
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  // Any navigation closes More — a row tap, a tab tap, a link elsewhere.
+  useEffect(() => {
+    setMoreOpen(false);
+  }, [pathname]);
+
+  const anyTabActive = tabs.some((tab) => isPortalV2Active(tab.href, pathname));
+  // Account is lit while More is open, and on any page no bar tab owns (Settings, an overflow tab).
+  const accountLit = moreOpen || !anyTabActive;
 
   return (
+    <>
+    <MobileMoreScreen open={moreOpen} onClose={() => setMoreOpen(false)} pathname={pathname} overflow={overflow} />
     <div
       data-mobile-tab-bar=""
       // Record screens (a rental) bring their own dock; this bar gives way to it.
       className="fixed inset-x-0 bottom-0 z-40 border-t border-pv-border bg-pv-bg pb-[env(safe-area-inset-bottom,0px)] md:hidden [body:has([data-record-dock])_&]:hidden"
     >
-      <nav aria-label="Portal" className="mx-auto flex h-[60px] max-w-lg items-stretch px-1">
+      <nav aria-label="Portal" className="mx-auto flex h-[60px] max-w-lg items-stretch overflow-hidden px-1">
         {tabs.map((tab) => {
-          const active = isPortalV2Active(tab.href, pathname);
+          const active = !moreOpen && isPortalV2Active(tab.href, pathname);
           return (
-            <Link key={tab.href} href={tab.href} aria-current={active ? 'page' : undefined} className={cn(ITEM, active ? ACTIVE_TEXT : IDLE_TEXT)}>
+            <Link
+              key={tab.href}
+              href={tab.href}
+              // A tab whose page is already open would not change the route,
+              // so the route-change close would never fire.
+              onClick={() => setMoreOpen(false)}
+              aria-current={active ? 'page' : undefined}
+              className={cn(ITEM, active ? ACTIVE_TEXT : IDLE_TEXT)}
+            >
               <TabIcon icon={tab.icon} on={active} />
               {tab.label}
             </Link>
           );
         })}
-        <Link href="/portal/settings" aria-current={onAccount ? 'page' : undefined} className={cn(ITEM, onAccount ? ACTIVE_TEXT : IDLE_TEXT)}>
-          <AccountIcon on={onAccount} />
-          Account
-        </Link>
+        <button
+          type="button"
+          onClick={() => setMoreOpen((open) => !open)}
+          aria-label="More"
+          aria-expanded={moreOpen}
+          className={cn(ITEM, accountLit ? ACTIVE_TEXT : IDLE_TEXT)}
+        >
+          <AccountIcon on={accountLit} />
+          <span className="flex items-center gap-px">
+            Account
+            <ChevronRight aria-hidden className={cn('size-3 transition-transform duration-200 motion-reduce:transition-none', moreOpen && '-rotate-90')} strokeWidth={2.4} />
+          </span>
+        </button>
       </nav>
     </div>
+    </>
   );
 }
