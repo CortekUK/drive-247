@@ -13,12 +13,11 @@
  * tabs that do not fit the bar land here (`overflow`). New entries go in as a
  * <Section> of rows; nothing else needs to change.
  *
- * For now: Dark mode, Settings, Sign out.
+ * For now: the account card (its row opens Settings), Dark mode, Sign out.
  *
- * SETTINGS PLACEMENT IS PROVISIONAL (owner, Oct 23 2026): the Account tab used
- * to open Settings directly; the bar now ends in More, and Settings is a row
- * here with the gear, as on the operator's. Where Settings finally lives has to match the operator portal and
- * super admin — revisit when that is decided.
+ * SETTINGS PLACEMENT IS PROVISIONAL (owner, Oct 23 2026): no Settings row for
+ * now (owner took it out); the account row is the way in. Where Settings
+ * finally lives has to match the operator portal and super admin.
  *
  * Phone only (`md:hidden`); mounted by MobileTabBar.
  */
@@ -26,7 +25,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
-import { ChevronRight, ExternalLink, LogOut, Moon, Settings } from 'lucide-react-nw';
+import { ChevronRight, ExternalLink, LogOut, Moon } from 'lucide-react-nw';
 
 import { Switch } from '@nw/components/ui/switch';
 import { useCustomer } from '@nw/hooks/use-customer';
@@ -85,10 +84,6 @@ export function MobileMoreScreen({
               ))}
             </Section>
           ) : null}
-
-          <Section label="Account">
-            <NavRow href="/portal/settings" label="Settings" icon={Settings} active={isPortalV2Active('/portal/settings', pathname)} onNavigate={onClose} />
-          </Section>
 
           <PreferencesSection />
 
