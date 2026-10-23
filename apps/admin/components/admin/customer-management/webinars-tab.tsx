@@ -43,12 +43,12 @@ import { toast } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LogEntry, LogList, LogRailCard, LogRailLayout } from './log-rail';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 
 type Status = 'draft' | 'published' | 'cancelled';
@@ -372,7 +372,51 @@ export function WebinarsTab({ canEdit }: { canEdit: boolean }) {
 
   const tracked = webinars.find((w) => w.id === trackId) ?? null;
 
+  // The read-only record is the right-hand column (log-rail.tsx).
+  const rail = (
+    <LogRailCard
+      title={
+        <span className="flex items-center gap-2">
+          Registrations
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+              live ? 'bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300' : 'bg-muted text-muted-foreground',
+            )}
+          >
+            <span className={cn('h-1.5 w-1.5 rounded-full', live ? 'animate-pulse bg-green-600' : 'bg-muted-foreground')} />
+            {live ? 'Live' : 'Connecting…'}
+          </span>
+        </span>
+      }
+      description="Every tenant invited to a webinar — who has registered and who hasn't yet."
+      actions={
+        webinars.length > 0 ? (
+          <Select value={trackId} onValueChange={setTrackId}>
+            <SelectTrigger className="h-9 w-full text-sm">
+              <SelectValue placeholder="Choose a webinar" />
+            </SelectTrigger>
+            <SelectContent>
+              {webinars.map((w) => (
+                <SelectItem key={w.id} value={w.id}>
+                  {new Date(w.starts_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · {w.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null
+      }
+    >
+      {!tracked ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">Registrations appear here once a webinar exists.</p>
+      ) : (
+        <Tracker webinar={tracked} invited={audienceOf(tracked)} registrations={regsFor(tracked.id)} filter={filter} onFilter={setFilter} tenants={tenants} />
+      )}
+    </LogRailCard>
+  );
+
   return (
+    <LogRailLayout label="Registrations" rail={rail}>
     <div className="space-y-6">
       {/* ── Webinars ────────────────────────────────────────────────────── */}
       <Card>
@@ -490,50 +534,6 @@ export function WebinarsTab({ canEdit }: { canEdit: boolean }) {
         </CardContent>
       </Card>
 
-      {/* ── Registrations (same view) ───────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
-              <CardTitle className="flex items-center gap-2">
-                Registrations
-                <span
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                    live ? 'bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300' : 'bg-muted text-muted-foreground',
-                  )}
-                >
-                  <span className={cn('h-1.5 w-1.5 rounded-full', live ? 'animate-pulse bg-green-600' : 'bg-muted-foreground')} />
-                  {live ? 'Live' : 'Connecting…'}
-                </span>
-              </CardTitle>
-              <CardDescription>Every tenant invited to a webinar — who has registered and who hasn&apos;t yet.</CardDescription>
-            </div>
-            {webinars.length > 0 && (
-              <Select value={trackId} onValueChange={setTrackId}>
-                <SelectTrigger className="h-9 w-[320px] max-w-full text-sm">
-                  <SelectValue placeholder="Choose a webinar" />
-                </SelectTrigger>
-                <SelectContent>
-                  {webinars.map((w) => (
-                    <SelectItem key={w.id} value={w.id}>
-                      {new Date(w.starts_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · {w.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {!tracked ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Registrations appear here once a webinar exists.</p>
-          ) : (
-            <Tracker webinar={tracked} invited={audienceOf(tracked)} registrations={regsFor(tracked.id)} filter={filter} onFilter={setFilter} tenants={tenants} />
-          )}
-        </CardContent>
-      </Card>
-
       {/* ── Schedule / edit ─────────────────────────────────────────────── */}
       <Dialog open={!!draft} onOpenChange={(o) => !o && setDraft(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
@@ -580,6 +580,7 @@ export function WebinarsTab({ canEdit }: { canEdit: boolean }) {
         </DialogContent>
       </Dialog>
     </div>
+    </LogRailLayout>
   );
 }
 
@@ -779,52 +780,44 @@ function Tracker({
       {shown.length === 0 ? (
         <p className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">Nobody here.</p>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Tenant</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Registered by</TableHead>
-              <TableHead className="whitespace-nowrap">When</TableHead>
-              <TableHead>Confirmation email</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {shown.map(({ tenant, reg }) => (
-              <TableRow key={tenant.id}>
-                <TableCell className="font-medium">{tenant.company_name || tenant.slug}</TableCell>
-                <TableCell>
-                  {reg ? (
-                    <span className="inline-flex items-center gap-1.5 text-green-700 dark:text-green-400">
-                      <CheckCircle2 className="h-4 w-4" />
-                      Registered
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                      <Circle className="h-4 w-4" />
-                      Not registered
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell className="text-muted-foreground">{reg ? reg.app_users?.name || reg.app_users?.email || reg.email || '—' : '—'}</TableCell>
-                <TableCell className="whitespace-nowrap text-muted-foreground">{reg ? formatWhen(reg.registered_at) : '—'}</TableCell>
-                <TableCell>
-                  {!reg ? (
-                    <span className="text-muted-foreground">—</span>
-                  ) : reg.email_status === 'sent' ? (
-                    <span className="text-sm text-green-700 dark:text-green-400">Sent to {reg.email}</span>
-                  ) : reg.email_status === 'failed' ? (
-                    <span className="text-sm text-red-700 dark:text-red-400" title={reg.email_detail ?? undefined}>
-                      Failed{reg.email_detail ? ` — ${reg.email_detail}` : ''}
-                    </span>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">Sending…</span>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <LogList>
+          {shown.map(({ tenant, reg }) => (
+            <LogEntry
+              key={tenant.id}
+              who={tenant.company_name || tenant.slug}
+              status={
+                reg ? (
+                  <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-400">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Registered
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    <Circle className="h-3.5 w-3.5" />
+                    Not registered
+                  </span>
+                )
+              }
+              when={
+                reg ? (
+                  <>
+                    <span>{reg.app_users?.name || reg.app_users?.email || reg.email || '—'}</span>
+                    <span className="whitespace-nowrap">{formatWhen(reg.registered_at)}</span>
+                  </>
+                ) : null
+              }
+              detail={
+                !reg ? null : reg.email_status === 'sent' ? (
+                  <span className="text-green-700 dark:text-green-400">Confirmation sent to {reg.email}</span>
+                ) : reg.email_status === 'failed' ? (
+                  <span className="text-red-700 dark:text-red-400">Confirmation failed{reg.email_detail ? ` — ${reg.email_detail}` : ''}</span>
+                ) : (
+                  'Sending confirmation…'
+                )
+              }
+            />
+          ))}
+        </LogList>
       )}
     </div>
   );

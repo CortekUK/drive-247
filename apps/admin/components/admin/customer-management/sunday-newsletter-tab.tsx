@@ -47,6 +47,7 @@ import { toast } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LogEntry, LogList, LogRailCard, LogRailLayout } from './log-rail';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -503,7 +504,64 @@ export function SundayNewsletterTab({ canEdit }: { canEdit: boolean }) {
 
   const tenantList = v2Tenants.filter((t) => (t.company_name || t.slug).toLowerCase().includes(tenantSearch.trim().toLowerCase()));
 
+  // The read-only record is the right-hand column (log-rail.tsx).
+  const rail = (
+    tracked ? (
+      <LogRailCard
+        title={
+          <span className="flex items-center gap-2">
+            <Mail className="h-4 w-4" />
+            <span className="min-w-0 truncate">Deliveries — {tracked.title}</span>
+          </span>
+        }
+        description={`${prettySunday(tracked.send_date)} · click another issue to switch.`}
+        actions={
+          <span className={cn('text-xs', live ? 'text-green-700 dark:text-green-400' : 'text-muted-foreground')}>
+            {live ? '● Live' : 'Updates on refresh'}
+          </span>
+        }
+      >
+        {trackedDeliveries.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            {tracked.status === 'scheduled'
+              ? `Nothing sent yet — it goes out on ${prettySunday(tracked.send_date)} to ${recipients.length} tenant${recipients.length === 1 ? '' : 's'}.`
+              : 'Nothing was sent for this issue.'}
+          </p>
+        ) : (
+          <LogList>
+            {trackedDeliveries.map((d) => (
+              <LogEntry
+                key={d.id}
+                who={tenantName(d.tenant_id)}
+                status={
+                  <span
+                    className={cn(
+                      'text-xs font-medium',
+                      d.status === 'sent' ? 'text-green-700 dark:text-green-400' : d.status === 'failed' ? 'text-red-700 dark:text-red-400' : 'text-muted-foreground',
+                    )}
+                  >
+                    {d.status === 'sent' ? 'Sent' : d.status === 'failed' ? 'Failed' : 'Skipped'}
+                  </span>
+                }
+                when={
+                  <>
+                    <span className="whitespace-nowrap">
+                      {new Date(d.created_at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    {d.to_email && <span className="min-w-0 truncate">{d.to_email}</span>}
+                  </>
+                }
+                detail={d.detail || null}
+              />
+            ))}
+          </LogList>
+        )}
+      </LogRailCard>
+    ) : null
+  );
+
   return (
+    <LogRailLayout label="Deliveries" rail={rail}>
     <div className="space-y-6">
       {/* ── settings ─────────────────────────────────────────────────────── */}
       <Card>
@@ -756,70 +814,6 @@ export function SundayNewsletterTab({ canEdit }: { canEdit: boolean }) {
         </CardContent>
       </Card>
 
-      {/* ── deliveries ───────────────────────────────────────────────────── */}
-      {tracked && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Mail className="h-4 w-4" />
-                  Deliveries — {tracked.title}
-                </CardTitle>
-                <CardDescription>
-                  {prettySunday(tracked.send_date)} · click another issue above to switch.
-                </CardDescription>
-              </div>
-              <span className={cn('text-xs', live ? 'text-green-700 dark:text-green-400' : 'text-muted-foreground')}>
-                {live ? '● Live' : 'Updates on refresh'}
-              </span>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {trackedDeliveries.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                {tracked.status === 'scheduled'
-                  ? `Nothing sent yet — it goes out on ${prettySunday(tracked.send_date)} to ${recipients.length} tenant${recipients.length === 1 ? '' : 's'}.`
-                  : 'Nothing was sent for this issue.'}
-              </p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Tenant</TableHead>
-                    <TableHead>Sent to</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>When</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {trackedDeliveries.map((d) => (
-                    <TableRow key={d.id}>
-                      <TableCell className="font-medium">{tenantName(d.tenant_id)}</TableCell>
-                      <TableCell className="text-muted-foreground">{d.to_email ?? '—'}</TableCell>
-                      <TableCell>
-                        <span
-                          className={cn(
-                            'text-sm',
-                            d.status === 'sent' ? 'text-green-700 dark:text-green-400' : d.status === 'failed' ? 'text-red-700 dark:text-red-400' : 'text-muted-foreground',
-                          )}
-                        >
-                          {d.status === 'sent' ? 'Sent' : d.status === 'failed' ? 'Failed' : 'Skipped'}
-                          {d.detail ? ` — ${d.detail}` : ''}
-                        </span>
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {new Date(d.created_at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {/* ── editor ───────────────────────────────────────────────────────── */}
       <Dialog open={!!draft} onOpenChange={(o) => !o && !saving && setDraft(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
@@ -1049,6 +1043,7 @@ export function SundayNewsletterTab({ canEdit }: { canEdit: boolean }) {
         </DialogContent>
       </Dialog>
     </div>
+    </LogRailLayout>
   );
 }
 

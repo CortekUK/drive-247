@@ -25,9 +25,10 @@ import { toast } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
+import { LogEntry, LogList, LogRailCard, LogRailLayout } from './log-rail';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -170,7 +171,65 @@ export function PausingAccountsTab({ canEdit }: { canEdit: boolean }) {
   const pausedNow = pauses.filter((p) => stateOf(p, now).label === 'Paused now').length;
   const scheduled = pauses.filter((p) => stateOf(p, now).label === 'Scheduled').length;
 
+  // The read-only record is the right-hand column (log-rail.tsx).
+  const rail = (
+    <LogRailCard
+      title="Pauses"
+      description={`${pausedNow} paused now · ${scheduled} scheduled · ${pauses.length} in total`}
+      actions={
+        <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+      }
+    >
+      {pauses.length === 0 ? (
+        <EmptyState
+          size="section"
+          illustration={<RetentionLeavingArt />}
+          headline="No paused accounts"
+          body="When an operator pauses instead of cancelling, they show up here until they come back."
+        />
+      ) : (
+        <LogList>
+          {pauses.map((p) => {
+            const state = stateOf(p, now);
+            return (
+              <LogEntry
+                key={p.id}
+                who={nameOf(p.tenant_id)}
+                status={<span className={cn('text-xs font-medium', state.cls)}>{state.label}</span>}
+                what={
+                  <>
+                    {fmtDay(p.start_date)} → {fmtDay(p.end_date)}
+                    <span className="ml-1.5 text-muted-foreground">
+                      {p.months} month{p.months === 1 ? '' : 's'}
+                    </span>
+                  </>
+                }
+                when={
+                  <>
+                    <span>Booked {fmtWhen(p.created_at)}</span>
+                    {p.stripe_status === 'failed' ? (
+                      <Badge variant="destructive" title={p.stripe_error ?? undefined}>
+                        {STRIPE_LABEL.failed}
+                      </Badge>
+                    ) : (
+                      <span>Stripe: {STRIPE_LABEL[p.stripe_status]}</span>
+                    )}
+                  </>
+                }
+                detail={p.stripe_error || null}
+              />
+            );
+          })}
+        </LogList>
+      )}
+    </LogRailCard>
+  );
+
   return (
+    <LogRailLayout label="Pauses" rail={rail}>
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Pausing Accounts</h1>
@@ -229,75 +288,7 @@ export function PausingAccountsTab({ canEdit }: { canEdit: boolean }) {
         </CardContent>
       </Card>
 
-      {/* ── every pause ───────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-          <div className="space-y-1.5">
-            <CardTitle>Pauses</CardTitle>
-            <CardDescription>
-              {pausedNow} paused now · {scheduled} scheduled · {pauses.length} in total
-            </CardDescription>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {pauses.length === 0 ? (
-            <EmptyState
-              size="section"
-              illustration={<RetentionLeavingArt />}
-              headline="No paused accounts"
-              body="When an operator pauses instead of cancelling, they show up here until they come back."
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Pause</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Billing (Stripe)</TableHead>
-                  <TableHead>Booked</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pauses.map((p) => {
-                  const state = stateOf(p, now);
-                  return (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-medium">{nameOf(p.tenant_id)}</TableCell>
-                      <TableCell>
-                        {fmtDay(p.start_date)} → {fmtDay(p.end_date)}
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          {p.months} month{p.months === 1 ? '' : 's'}
-                        </span>
-                      </TableCell>
-                      <TableCell className={state.cls}>{state.label}</TableCell>
-                      <TableCell>
-                        {p.stripe_status === 'failed' ? (
-                          <Badge variant="destructive" title={p.stripe_error ?? undefined}>
-                            {STRIPE_LABEL.failed}
-                          </Badge>
-                        ) : (
-                          <span className="text-sm">{STRIPE_LABEL[p.stripe_status]}</span>
-                        )}
-                        {p.stripe_error && (
-                          <p className="mt-1 max-w-xs truncate text-xs text-muted-foreground" title={p.stripe_error}>
-                            {p.stripe_error}
-                          </p>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{fmtWhen(p.created_at)}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
     </div>
+    </LogRailLayout>
   );
 }

@@ -27,6 +27,7 @@ import { toast } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LogEntry, LogList, LogRailCard, LogRailLayout } from './log-rail';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -263,7 +264,64 @@ export function MilestonesTab({ canEdit }: { canEdit: boolean }) {
     );
   }
 
+  // The read-only record is the right-hand column (log-rail.tsx).
+  const rail = (
+    <LogRailCard
+      title="Achievement history"
+      description={`Which operators reached which milestones, and when their email went out. ${sentCount} celebrated so far.`}
+      actions={
+        <Select value={historyFilter} onValueChange={(v) => setHistoryFilter(v as typeof historyFilter)}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="sent">Email sent</SelectItem>
+            <SelectItem value="skipped">Not emailed</SelectItem>
+            <SelectItem value="failed">Failed</SelectItem>
+          </SelectContent>
+        </Select>
+      }
+    >
+      {shownHistory.length === 0 ? (
+        <EmptyState
+          size="section"
+          headline="Nothing celebrated yet"
+          body="Each milestone an operator reaches is recorded here."
+        />
+      ) : (
+        <LogList>
+          {shownHistory.map((h) => (
+            <LogEntry
+              key={h.id}
+              who={h.tenants?.company_name || h.tenants?.slug}
+              status={
+                <Badge variant="secondary" className={STATUS[h.status].className}>
+                  {STATUS[h.status].label}
+                </Badge>
+              }
+              what={
+                <>
+                  {h.milestones?.label}
+                  <span className="ml-1.5 tabular-nums text-muted-foreground">({h.metric_value})</span>
+                </>
+              }
+              when={
+                <>
+                  <span className="whitespace-nowrap">Achieved {formatDateTime(h.achieved_at)}</span>
+                  {h.email_sent_at && <span className="whitespace-nowrap">Emailed {formatDateTime(h.email_sent_at)}</span>}
+                </>
+              }
+              detail={h.detail || h.to_email || null}
+            />
+          ))}
+        </LogList>
+      )}
+    </LogRailCard>
+  );
+
   return (
+    <LogRailLayout label="Achievement history" rail={rail}>
     <div className="space-y-6">
       {/* ── Milestones ──────────────────────────────────────────────────── */}
       <Card>
@@ -468,71 +526,6 @@ export function MilestonesTab({ canEdit }: { canEdit: boolean }) {
         </CardContent>
       </Card>
 
-      {/* ── History ─────────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
-              <CardTitle>Achievement history</CardTitle>
-              <CardDescription>
-                Which operators reached which milestones, and when their email went out. {sentCount} celebrated so far.
-              </CardDescription>
-            </div>
-            <Select value={historyFilter} onValueChange={(v) => setHistoryFilter(v as typeof historyFilter)}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="sent">Email sent</SelectItem>
-                <SelectItem value="skipped">Not emailed</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {shownHistory.length === 0 ? (
-            <EmptyState
-              size="section"
-              headline="Nothing celebrated yet"
-              body="Each milestone an operator reaches is recorded here."
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead>Milestone</TableHead>
-                  <TableHead className="text-right">Count</TableHead>
-                  <TableHead>Achieved</TableHead>
-                  <TableHead>Email sent</TableHead>
-                  <TableHead>Result</TableHead>
-                  <TableHead>Detail</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {shownHistory.map((h) => (
-                  <TableRow key={h.id}>
-                    <TableCell className="font-medium">{h.tenants?.company_name || h.tenants?.slug}</TableCell>
-                    <TableCell>{h.milestones?.label}</TableCell>
-                    <TableCell className="text-right tabular-nums">{h.metric_value}</TableCell>
-                    <TableCell className="whitespace-nowrap">{formatDateTime(h.achieved_at)}</TableCell>
-                    <TableCell className="whitespace-nowrap">{formatDateTime(h.email_sent_at)}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className={STATUS[h.status].className}>
-                        {STATUS[h.status].label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="max-w-[260px] truncate text-muted-foreground">{h.detail || h.to_email || '—'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
       {/* ── Add / edit ──────────────────────────────────────────────────── */}
       <Dialog open={!!draft} onOpenChange={(o) => !o && setDraft(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
@@ -664,5 +657,6 @@ export function MilestonesTab({ canEdit }: { canEdit: boolean }) {
         </DialogContent>
       </Dialog>
     </div>
+    </LogRailLayout>
   );
 }

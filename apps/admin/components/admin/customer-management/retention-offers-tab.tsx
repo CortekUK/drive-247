@@ -30,6 +30,7 @@ import { toast } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LogEntry, LogList, LogRailCard, LogRailLayout } from './log-rail';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -246,7 +247,71 @@ export function RetentionOffersTab({ canEdit }: { canEdit: boolean }) {
     );
   }
 
+  // The read-only record is the right-hand column (log-rail.tsx).
+  const rail = (
+    <LogRailCard
+      title={
+        <span className="flex items-center gap-2">
+          <Gift className="h-5 w-5 text-primary" />
+          Used offers
+        </span>
+      }
+      description="Tenants who accepted their offer. They will not be offered another one, even after it ends."
+    >
+      {redemptions.length === 0 ? (
+        <EmptyState
+          size="section"
+          illustration={<RetentionDiscountArt />}
+          headline="No offers used yet"
+          body="When an operator about to cancel takes an offer to stay, it is recorded here."
+        />
+      ) : (
+        <LogList>
+          {redemptions.map((r) => {
+            const badge = STRIPE_BADGE[r.stripe_status];
+            const ended = r.ends_at ? new Date(r.ends_at).getTime() < Date.now() : false;
+            return (
+              <LogEntry
+                key={r.tenant_id}
+                who={tenantName(r.tenant_id)}
+                status={
+                  <Badge variant="secondary" className={badge.className} title={r.stripe_error ?? undefined}>
+                    {badge.label}
+                  </Badge>
+                }
+                what={
+                  <>
+                    {offerLabel(r.percent, r.months)}
+                    <span className="ml-1.5 text-muted-foreground">({r.source === 'tenant' ? 'tenant offer' : 'default'})</span>
+                  </>
+                }
+                when={
+                  <>
+                    <span>Accepted {formatDate(r.accepted_at)}</span>
+                    <span>
+                      Ends {formatDate(r.ends_at)}
+                      {ended && ' (ended)'}
+                    </span>
+                  </>
+                }
+                action={
+                  canEdit ? (
+                    <Button variant="ghost" size="sm" className="-ml-3 gap-1.5" onClick={() => setConfirmReset(r)}>
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Allow again
+                    </Button>
+                  ) : null
+                }
+              />
+            );
+          })}
+        </LogList>
+      )}
+    </LogRailCard>
+  );
+
   return (
+    <LogRailLayout label="Used offers" rail={rail}>
     <div className="space-y-6">
       {/* ── Default ─────────────────────────────────────────────────────── */}
       <Card>
@@ -426,75 +491,6 @@ export function RetentionOffersTab({ canEdit }: { canEdit: boolean }) {
         </CardContent>
       </Card>
 
-      {/* ── Redemptions ─────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2">
-            <Gift className="h-5 w-5 text-primary" />
-            Used offers
-          </CardTitle>
-          <CardDescription>
-            Tenants who accepted their offer. They will not be offered another one, even after it ends.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {redemptions.length === 0 ? (
-            <EmptyState
-              size="section"
-              illustration={<RetentionDiscountArt />}
-              headline="No offers used yet"
-              body="When an operator about to cancel takes an offer to stay, it is recorded here."
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead>Offer</TableHead>
-                  <TableHead>Accepted</TableHead>
-                  <TableHead>Ends</TableHead>
-                  <TableHead>Stripe</TableHead>
-                  <TableHead className="w-[1%]" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {redemptions.map((r) => {
-                  const badge = STRIPE_BADGE[r.stripe_status];
-                  const ended = r.ends_at ? new Date(r.ends_at).getTime() < Date.now() : false;
-                  return (
-                    <TableRow key={r.tenant_id}>
-                      <TableCell className="font-medium">{tenantName(r.tenant_id)}</TableCell>
-                      <TableCell>
-                        {offerLabel(r.percent, r.months)}
-                        <span className="ml-1.5 text-xs text-muted-foreground">({r.source === 'tenant' ? 'tenant offer' : 'default'})</span>
-                      </TableCell>
-                      <TableCell>{formatDate(r.accepted_at)}</TableCell>
-                      <TableCell>
-                        {formatDate(r.ends_at)}
-                        {ended && <span className="ml-1.5 text-xs text-muted-foreground">(ended)</span>}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className={badge.className} title={r.stripe_error ?? undefined}>
-                          {badge.label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {canEdit && (
-                          <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setConfirmReset(r)}>
-                            <RotateCcw className="h-3.5 w-3.5" />
-                            Allow again
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
       {/* ── Add / edit a tenant offer ───────────────────────────────────── */}
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="sm:max-w-md">
@@ -596,5 +592,6 @@ export function RetentionOffersTab({ canEdit }: { canEdit: boolean }) {
         </DialogContent>
       </Dialog>
     </div>
+    </LogRailLayout>
   );
 }

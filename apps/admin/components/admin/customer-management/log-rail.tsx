@@ -1,9 +1,10 @@
 'use client';
 
 /**
- * The log, in a column on the right (Oct 23 2026): a tab that keeps a log of
- * what it sent shows it beside the settings rather than under them, so the
- * newest sends are in view while the timeline is edited.
+ * The log, in a column on the right (owner, Oct 23 2026): a tab that keeps a
+ * log of what it sent — or any read-only record (used offers, history,
+ * registrations, deliveries) — shows it beside the settings rather than under
+ * them, so the newest entries are in view while the settings are edited.
  *
  * From `xl` the log is a sticky column that scrolls on its own; below that it
  * falls back under the content, full width. A five-column table does not fit
@@ -15,11 +16,13 @@ import type { ReactNode } from 'react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-export function LogRailLayout({ rail, children }: { rail: ReactNode; children: ReactNode }) {
+export function LogRailLayout({ rail, label = 'Log', children }: { rail: ReactNode; label?: string; children: ReactNode }) {
+  // Nothing to show on the right (no issue chosen yet …): the content keeps the full width.
+  if (!rail) return <>{children}</>;
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
       <div className="min-w-0">{children}</div>
-      <aside aria-label="Log" className="min-w-0 xl:sticky xl:top-4">
+      <aside aria-label={label} className="min-w-0 xl:sticky xl:top-4">
         {rail}
       </aside>
     </div>
@@ -60,22 +63,26 @@ export function LogEntry({
   what,
   when,
   detail,
+  action,
 }: {
   who: ReactNode;
-  status: ReactNode;
+  status?: ReactNode;
   what?: ReactNode;
-  when: ReactNode;
+  when?: ReactNode;
   detail?: ReactNode;
+  /** A row's own button (Allow again …), under the rest. */
+  action?: ReactNode;
 }) {
   return (
     <li className="space-y-1 py-3 first:pt-0">
       <div className="flex items-start justify-between gap-3">
         <span className="min-w-0 truncate text-sm font-medium">{who}</span>
-        <span className="shrink-0">{status}</span>
+        {status ? <span className="shrink-0">{status}</span> : null}
       </div>
       {what ? <div className="min-w-0 truncate text-xs">{what}</div> : null}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">{when}</div>
+      {when ? <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">{when}</div> : null}
       {detail ? <div className="break-words text-xs text-muted-foreground">{detail}</div> : null}
+      {action ? <div className="pt-1">{action}</div> : null}
     </li>
   );
 }

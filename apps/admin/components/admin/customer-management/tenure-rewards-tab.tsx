@@ -28,6 +28,7 @@ import { toast } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LogEntry, LogList, LogRailCard, LogRailLayout } from './log-rail';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -320,7 +321,52 @@ export function TenureRewardsTab({ canEdit }: { canEdit: boolean }) {
   const needsAttention = grants.filter((g) => g.status === 'failed' || g.status === 'pending').length;
   const enabledMilestones = milestones.filter((m) => m.enabled);
 
+  // The read-only record is the right-hand column (log-rail.tsx).
+  const rail = (
+    <LogRailCard title="History">
+      {grants.length === 0 ? (
+        <EmptyState
+          size="section"
+          headline="No rewards given yet"
+          body="Each reward an operator earns for staying is recorded here."
+        />
+      ) : (
+        <LogList>
+          {grants.map((g) => (
+            <LogEntry
+              key={g.id}
+              who={tenantName(g.tenant_id)}
+              status={<span className={cn('text-xs font-medium', STATUS_STYLE[g.status].cls)}>{STATUS_STYLE[g.status].label}</span>}
+              what={
+                <>
+                  {g.label}
+                  <span className="text-muted-foreground"> · {perkText(g)}</span>
+                </>
+              }
+              when={<span className="whitespace-nowrap">{formatDate(g.granted_at ?? g.created_at)}</span>}
+              detail={g.detail || null}
+              action={
+                g.status === 'pending' || g.status === 'failed' ? (
+                  <Button size="sm" variant="outline" className="gap-1.5" disabled={!canEdit || busy === g.id} onClick={() => void retry(g)}>
+                    {busy === g.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                    Retry
+                  </Button>
+                ) : g.status === 'manual_todo' ? (
+                  <Button size="sm" className="gap-1.5" disabled={!canEdit || busy === g.id} onClick={() => void markFulfilled(g)}>
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Mark fulfilled
+                  </Button>
+                ) : null
+              }
+            />
+          ))}
+        </LogList>
+      )}
+    </LogRailCard>
+  );
+
   return (
+    <LogRailLayout label="Reward history" rail={rail}>
     <div className="space-y-6">
       {/* ── header + settings ────────────────────────────────────────────── */}
       <Card>
@@ -610,65 +656,6 @@ export function TenureRewardsTab({ canEdit }: { canEdit: boolean }) {
         </CardContent>
       </Card>
 
-      {/* ── history ──────────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">History</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {grants.length === 0 ? (
-            <EmptyState
-              size="section"
-              headline="No rewards given yet"
-              body="Each reward an operator earns for staying is recorded here."
-            />
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Operator</TableHead>
-                    <TableHead>Milestone</TableHead>
-                    <TableHead>Perk</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {grants.map((g) => (
-                    <TableRow key={g.id}>
-                      <TableCell className="font-medium">{tenantName(g.tenant_id)}</TableCell>
-                      <TableCell>{g.label}</TableCell>
-                      <TableCell>{perkText(g)}</TableCell>
-                      <TableCell>
-                        <div className={cn('text-sm font-medium', STATUS_STYLE[g.status].cls)}>{STATUS_STYLE[g.status].label}</div>
-                        {g.detail && <div className="max-w-[320px] text-xs text-muted-foreground">{g.detail}</div>}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(g.granted_at ?? g.created_at)}</TableCell>
-                      <TableCell className="text-right">
-                        {(g.status === 'pending' || g.status === 'failed') && (
-                          <Button size="sm" variant="outline" className="gap-1.5" disabled={!canEdit || busy === g.id} onClick={() => void retry(g)}>
-                            {busy === g.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-                            Retry
-                          </Button>
-                        )}
-                        {g.status === 'manual_todo' && (
-                          <Button size="sm" className="gap-1.5" disabled={!canEdit || busy === g.id} onClick={() => void markFulfilled(g)}>
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            Mark fulfilled
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       {editing && (
         <MilestoneDialog
           milestone={editing === 'new' ? null : editing}
@@ -776,6 +763,7 @@ export function TenureRewardsTab({ canEdit }: { canEdit: boolean }) {
         </DialogContent>
       </Dialog>
     </div>
+    </LogRailLayout>
   );
 }
 

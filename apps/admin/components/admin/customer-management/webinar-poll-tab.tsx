@@ -42,12 +42,12 @@ import { toast } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LogEntry, LogList, LogRailCard, LogRailLayout } from './log-rail';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 
 type Kind = 'single' | 'multi' | 'text';
@@ -277,7 +277,51 @@ export function WebinarPollTab({ canEdit }: { canEdit: boolean }) {
 
   const resultsPoll = polls.find((p) => p.id === resultsPollId) ?? null;
 
+  // The read-only record is the right-hand column (log-rail.tsx).
+  const rail = (
+    <LogRailCard
+      title={
+        <span className="flex items-center gap-2">
+          Results
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+              live ? 'bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300' : 'bg-muted text-muted-foreground',
+            )}
+          >
+            <span className={cn('h-1.5 w-1.5 rounded-full', live ? 'animate-pulse bg-green-600' : 'bg-muted-foreground')} />
+            {live ? 'Live' : 'Connecting…'}
+          </span>
+        </span>
+      }
+      description="Which tenant chose which answer. Updates as they vote."
+      actions={
+        polls.length > 0 ? (
+          <Select value={resultsPollId} onValueChange={setResultsPollId}>
+            <SelectTrigger className="h-9 w-full text-sm">
+              <SelectValue placeholder="Choose a poll" />
+            </SelectTrigger>
+            <SelectContent>
+              {polls.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {STATUS[p.status].label} · {p.question.length > 60 ? `${p.question.slice(0, 60)}…` : p.question}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null
+      }
+    >
+      {!resultsPoll ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">Results appear here once a poll exists.</p>
+      ) : (
+        <PollResults poll={resultsPoll} responses={responses.filter((r) => r.poll_id === resultsPoll.id)} reach={reachFor(resultsPoll)} tenantById={tenantById} />
+      )}
+    </LogRailCard>
+  );
+
   return (
+    <LogRailLayout label="Poll results" rail={rail}>
     <div className="space-y-6">
       {/* ── Polls ───────────────────────────────────────────────────────── */}
       <Card>
@@ -384,50 +428,6 @@ export function WebinarPollTab({ canEdit }: { canEdit: boolean }) {
         </CardContent>
       </Card>
 
-      {/* ── Results ─────────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
-              <CardTitle className="flex items-center gap-2">
-                Results
-                <span
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                    live ? 'bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300' : 'bg-muted text-muted-foreground',
-                  )}
-                >
-                  <span className={cn('h-1.5 w-1.5 rounded-full', live ? 'animate-pulse bg-green-600' : 'bg-muted-foreground')} />
-                  {live ? 'Live' : 'Connecting…'}
-                </span>
-              </CardTitle>
-              <CardDescription>Which tenant chose which answer. Updates as they vote.</CardDescription>
-            </div>
-            {polls.length > 0 && (
-              <Select value={resultsPollId} onValueChange={setResultsPollId}>
-                <SelectTrigger className="h-9 w-[320px] max-w-full text-sm">
-                  <SelectValue placeholder="Choose a poll" />
-                </SelectTrigger>
-                <SelectContent>
-                  {polls.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {STATUS[p.status].label} · {p.question.length > 60 ? `${p.question.slice(0, 60)}…` : p.question}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {!resultsPoll ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Results appear here once a poll exists.</p>
-          ) : (
-            <PollResults poll={resultsPoll} responses={responses.filter((r) => r.poll_id === resultsPoll.id)} reach={reachFor(resultsPoll)} tenantById={tenantById} />
-          )}
-        </CardContent>
-      </Card>
-
       {/* ── Create / edit ───────────────────────────────────────────────── */}
       <Dialog open={!!draft} onOpenChange={(o) => !o && setDraft(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
@@ -474,6 +474,7 @@ export function WebinarPollTab({ canEdit }: { canEdit: boolean }) {
         </DialogContent>
       </Dialog>
     </div>
+    </LogRailLayout>
   );
 }
 
@@ -693,41 +694,36 @@ function PollResults({
           body="Answers appear here as operators reply to the poll."
         />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Tenant</TableHead>
-              <TableHead>Answer</TableHead>
-              <TableHead>Answered by</TableHead>
-              <TableHead className="whitespace-nowrap">When</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {responses.map((r) => {
-              const t = tenantById.get(r.tenant_id);
-              return (
-                <TableRow key={r.id}>
-                  <TableCell className="font-medium">{t?.company_name || t?.slug || 'Unknown tenant'}</TableCell>
-                  <TableCell className="max-w-[360px]">
-                    {poll.kind === 'text' ? (
-                      <span className="whitespace-pre-wrap">{r.text_answer}</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1">
-                        {r.option_ids.map((id) => (
-                          <Badge key={id} variant="secondary">
-                            {labelOf.get(id) ?? 'Removed option'}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{r.app_users?.name || r.app_users?.email || '—'}</TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">{formatWhen(r.created_at)}</TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+        <LogList>
+          {responses.map((r) => {
+            const t = tenantById.get(r.tenant_id);
+            return (
+              <LogEntry
+                key={r.id}
+                who={t?.company_name || t?.slug || 'Unknown tenant'}
+                what={
+                  poll.kind === 'text' ? (
+                    <span className="whitespace-pre-wrap break-words">{r.text_answer}</span>
+                  ) : (
+                    <span className="flex flex-wrap gap-1">
+                      {r.option_ids.map((id) => (
+                        <Badge key={id} variant="secondary">
+                          {labelOf.get(id) ?? 'Removed option'}
+                        </Badge>
+                      ))}
+                    </span>
+                  )
+                }
+                when={
+                  <>
+                    <span>{r.app_users?.name || r.app_users?.email || '—'}</span>
+                    <span className="whitespace-nowrap">{formatWhen(r.created_at)}</span>
+                  </>
+                }
+              />
+            );
+          })}
+        </LogList>
       )}
     </div>
   );
