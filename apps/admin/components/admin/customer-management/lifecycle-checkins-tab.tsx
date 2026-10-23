@@ -272,7 +272,44 @@ export function LifecycleCheckinsTab({ canEdit }: { canEdit: boolean }) {
   }
 
   // The log is the right-hand column (log-rail.tsx).
-  const log = (
+  const rail = (
+    <>
+    <LogRailCard
+      title={
+        <span className="flex items-center gap-2">
+          <ClipboardList className="h-5 w-5 text-primary" />
+          Open team tasks
+        </span>
+      }
+      description="Created by “task for our team” check-ins. Mark them done once handled."
+    >
+      {openTasks.length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">No open tasks.</p>
+      ) : (
+        <LogList>
+          {openTasks.map((r) => (
+            <LogEntry
+              key={r.id}
+              who={r.tenants?.company_name || r.tenants?.slug}
+              what={
+                <>
+                  Day {r.lifecycle_checkins?.day_offset}: {r.lifecycle_checkins?.label}
+                </>
+              }
+              when={<span>Created {formatDate(r.created_at)}</span>}
+              action={
+                canEdit ? (
+                  <Button variant="ghost" size="sm" className="-ml-3 gap-1.5" onClick={() => void markDone(r.todo_id!)}>
+                    <CheckCircle2 className="h-4 w-4" />
+                    Done
+                  </Button>
+                ) : null
+              }
+            />
+          ))}
+        </LogList>
+      )}
+    </LogRailCard>
     <LogRailCard title="Recent activity" description="The last 100 check-ins the system handled.">
       {runs.length === 0 ? (
         <EmptyState
@@ -300,10 +337,11 @@ export function LifecycleCheckinsTab({ canEdit }: { canEdit: boolean }) {
         </LogList>
       )}
     </LogRailCard>
+    </>
   );
 
   return (
-    <LogRailLayout rail={log}>
+    <LogRailLayout rail={rail}>
     <div className="space-y-6">
       {/* ── The plan ────────────────────────────────────────────────────── */}
       <Card>
@@ -444,52 +482,6 @@ export function LifecycleCheckinsTab({ canEdit }: { canEdit: boolean }) {
                 </Table>
               )}
             </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Team tasks ──────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2">
-            <ClipboardList className="h-5 w-5 text-primary" />
-            Open team tasks
-          </CardTitle>
-          <CardDescription>Created by &ldquo;task for our team&rdquo; check-ins. Mark them done once handled.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {openTasks.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">No open tasks.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead>Task</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="w-[1%]" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {openTasks.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="font-medium">{r.tenants?.company_name || r.tenants?.slug}</TableCell>
-                    <TableCell>
-                      Day {r.lifecycle_checkins?.day_offset}: {r.lifecycle_checkins?.label}
-                    </TableCell>
-                    <TableCell>{formatDate(r.created_at)}</TableCell>
-                    <TableCell>
-                      {canEdit && (
-                        <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => void markDone(r.todo_id!)}>
-                          <CheckCircle2 className="h-4 w-4" />
-                          Done
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
           )}
         </CardContent>
       </Card>

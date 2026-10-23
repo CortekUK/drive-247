@@ -22,7 +22,8 @@ export function LogRailLayout({ rail, label = 'Log', children }: { rail: ReactNo
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
       <div className="min-w-0">{children}</div>
-      <aside aria-label={label} className="min-w-0 xl:sticky xl:top-4">
+      {/* More than one card (progress and history …) stack, and the column scrolls as one. */}
+      <aside aria-label={label} className="min-w-0 space-y-6 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-6rem)] xl:overflow-y-auto">
         {rail}
       </aside>
     </div>

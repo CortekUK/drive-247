@@ -35,9 +35,9 @@ import { cn } from '@/lib/utils';
 import { FilterChip, FilterSearch, FilterSection, FilterShell } from '@/components/admin/filter-primitives';
 import { OverviewFlip } from '@/components/admin/overview-flip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LogEntry, LogList, LogRailCard, LogRailLayout } from './log-rail';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { BAND_THRESHOLDS, scoreBuckets, type HealthBand } from '@/lib/customer-health/score';
 import { loadScoredTenants, type ScoredTenant } from '@/lib/customer-health/load';
@@ -113,7 +113,65 @@ export function CustomerHealthTab() {
     { band: 'healthy', title: `Healthy · ${BAND_THRESHOLDS.healthy}+`, icon: CheckCircle2, iconBg: 'bg-success/15', iconText: 'text-success', active: 'border-success/40 bg-success/5' },
   ];
 
+  // The read-only record is the right-hand column (log-rail.tsx).
+  const rail = (
+    error ? null : (
+      <LogRailCard title="Companies" description="Worst first. Click one for the breakdown behind its score.">
+        {loading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-14 w-full" />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <NoMatchState size="section" noun="companies" />
+        ) : (
+          <LogList>
+            {filtered.map((r) => {
+              const h = r.health;
+              return (
+                <LogEntry
+                  key={r.tenant.id}
+                  onOpen={() => setSelected(r)}
+                  who={r.tenant.company_name ?? r.tenant.slug ?? '—'}
+                  status={<BandChip band={h.band} score={h.score} />}
+                  what={
+                    <span className="flex items-center gap-2">
+                      <ScoreBar score={h.score} band={h.band} />
+                      {h.ageDays < 14 && <span className="text-muted-foreground">New · signed up {h.ageDays}d ago</span>}
+                    </span>
+                  }
+                  when={
+                    <>
+                      <span className={cn(h.parts.logins.concern && 'text-destructive')}>
+                        Last login{' '}
+                        {h.daysSinceLogin === null ? 'over 90 days ago' : h.daysSinceLogin === 0 ? 'today' : `${h.daysSinceLogin}d ago`}
+                      </span>
+                      <span className={cn('tabular-nums', h.parts.bookings.concern && 'text-destructive')}>
+                        {h.bookingsLast30Days} booking{h.bookingsLast30Days === 1 ? '' : 's'} (30d)
+                      </span>
+                    </>
+                  }
+                  detail={
+                    <>
+                      <span className={cn(h.parts.payment.concern && 'text-destructive')}>{h.parts.payment.label}</span>
+                      {' · '}
+                      <span className={h.stripeConnected ? 'text-emerald-600' : undefined}>Stripe</span>
+                      {' · '}
+                      <span className={h.bonzahFormSent ? 'text-emerald-600' : undefined}>Bonzah</span>
+                    </>
+                  }
+                />
+              );
+            })}
+          </LogList>
+        )}
+      </LogRailCard>
+    )
+  );
+
   return (
+    <LogRailLayout label="Companies" rail={rail}>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -250,83 +308,6 @@ export function CustomerHealthTab() {
             </CardContent>
           </Card>
 
-          {/* Table — worst first */}
-          <Card className="overflow-hidden">
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[90px]">Score</TableHead>
-                    <TableHead>Company</TableHead>
-                    <TableHead>Health</TableHead>
-                    <TableHead>Last login</TableHead>
-                    <TableHead className="text-right">Bookings (30d)</TableHead>
-                    <TableHead>Payment</TableHead>
-                    <TableHead>Setup</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    Array.from({ length: 8 }).map((_, i) => (
-                      <TableRow key={i}>
-                        {Array.from({ length: 7 }).map((__, j) => (
-                          <TableCell key={j}>
-                            <Skeleton className="h-6 w-full" />
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))
-                  ) : filtered.length === 0 ? (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={7} className="p-0">
-                        <NoMatchState size="section" noun="companies" />
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filtered.map((r) => {
-                      const h = r.health;
-                      return (
-                        <TableRow key={r.tenant.id} className="cursor-pointer" onClick={() => setSelected(r)}>
-                          <TableCell>
-                            <BandChip band={h.band} score={h.score} />
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="font-medium">{r.tenant.company_name ?? r.tenant.slug ?? '—'}</span>
-                              {h.ageDays < 14 && (
-                                <span className="text-xs text-muted-foreground">New · signed up {h.ageDays}d ago</span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <ScoreBar score={h.score} band={h.band} />
-                          </TableCell>
-                          <TableCell className={cn('text-sm whitespace-nowrap', h.parts.logins.concern && 'text-destructive')}>
-                            {h.daysSinceLogin === null
-                              ? 'Over 90 days'
-                              : h.daysSinceLogin === 0
-                                ? 'Today'
-                                : `${h.daysSinceLogin}d ago`}
-                          </TableCell>
-                          <TableCell className={cn('text-right text-sm tabular-nums', h.parts.bookings.concern && 'text-destructive')}>
-                            {h.bookingsLast30Days}
-                          </TableCell>
-                          <TableCell className={cn('text-sm whitespace-nowrap', h.parts.payment.concern && 'text-destructive')}>
-                            {h.parts.payment.label}
-                          </TableCell>
-                          <TableCell className="text-sm whitespace-nowrap">
-                            <span className={h.stripeConnected ? 'text-emerald-600' : 'text-muted-foreground'}>Stripe</span>
-                            {' · '}
-                            <span className={h.bonzahFormSent ? 'text-emerald-600' : 'text-muted-foreground'}>Bonzah</span>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
         </>
       )}
 
@@ -357,5 +338,6 @@ export function CustomerHealthTab() {
         </DialogContent>
       </Dialog>
     </div>
+    </LogRailLayout>
   );
 }

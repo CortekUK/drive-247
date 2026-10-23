@@ -34,7 +34,6 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 
 type Metric = 'bookings' | 'completed_rentals' | 'fleet_size' | 'customers';
@@ -266,6 +265,79 @@ export function MilestonesTab({ canEdit }: { canEdit: boolean }) {
 
   // The read-only record is the right-hand column (log-rail.tsx).
   const rail = (
+    <>
+    <LogRailCard
+      title="Tenant progress"
+      description="Every active v2 operator's current numbers and the next switched-on milestone they are heading for."
+      actions={
+        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void loadOverview()} disabled={overviewLoading}>
+          {overviewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+          Recount
+        </Button>
+      }
+    >
+      {!overview ? (
+        <Skeleton className="h-32 w-full" />
+      ) : (
+        <>
+          {overview.due > 0 && (
+            <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-500/30 dark:bg-amber-500/10">
+              <p className="font-medium">
+                {overview.due} celebration{overview.due === 1 ? '' : 's'} due — the next automatic run (within 15 minutes) will
+                handle {overview.due === 1 ? 'it' : 'them'}:
+              </p>
+              <ul className="mt-1 list-disc pl-5 text-muted-foreground">
+                {overview.dueRows.slice(0, 10).map((r, i) => (
+                  <li key={i}>
+                    {r.tenant} — {r.milestone} ({r.value}){r.to ? ` → ${r.to}` : ' — no email address'}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {overview.tenants.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No active v2 tenants.</p>
+          ) : (
+            <LogList>
+              {overview.tenants.map((t) => (
+                <LogEntry
+                  key={t.id}
+                  who={t.name}
+                  when={
+                    <span className="tabular-nums">
+                      {t.counts.bookings} bookings · {t.counts.completed_rentals} completed · {t.counts.fleet_size} cars ·{' '}
+                      {t.counts.customers} customers
+                    </span>
+                  }
+                  detail={
+                    t.next.length === 0 ? null : (
+                      <span className="block space-y-1.5 pt-1">
+                        {t.next.map((n) => (
+                          <span key={n.metric} className="block">
+                            <span className="flex justify-between gap-2">
+                              <span className="text-foreground">{n.label}</span>
+                              <span className="tabular-nums">
+                                {n.current}/{n.threshold}
+                              </span>
+                            </span>
+                            <span className="mt-0.5 block h-1.5 overflow-hidden rounded-full bg-muted">
+                              <span
+                                className="block h-full rounded-full bg-primary"
+                                style={{ width: `${Math.min(100, (n.current / n.threshold) * 100)}%` }}
+                              />
+                            </span>
+                          </span>
+                        ))}
+                      </span>
+                    )
+                  }
+                />
+              ))}
+            </LogList>
+          )}
+        </>
+      )}
+    </LogRailCard>
     <LogRailCard
       title="Achievement history"
       description={`Which operators reached which milestones, and when their email went out. ${sentCount} celebrated so far.`}
@@ -318,6 +390,7 @@ export function MilestonesTab({ canEdit }: { canEdit: boolean }) {
         </LogList>
       )}
     </LogRailCard>
+    </>
   );
 
   return (
@@ -430,98 +503,6 @@ export function MilestonesTab({ canEdit }: { canEdit: boolean }) {
                 </ol>
               </div>
             ))
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Tenant progress ─────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
-              <CardTitle>Tenant progress</CardTitle>
-              <CardDescription>
-                Every active v2 operator&apos;s current numbers and the next switched-on milestone they are heading for.
-              </CardDescription>
-            </div>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void loadOverview()} disabled={overviewLoading}>
-              {overviewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
-              Recount
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {!overview ? (
-            <Skeleton className="h-32 w-full" />
-          ) : (
-            <>
-              {overview.due > 0 && (
-                <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-500/30 dark:bg-amber-500/10">
-                  <p className="font-medium">
-                    {overview.due} celebration{overview.due === 1 ? '' : 's'} due — the next automatic run (within 15 minutes) will
-                    handle {overview.due === 1 ? 'it' : 'them'}:
-                  </p>
-                  <ul className="mt-1 list-disc pl-5 text-muted-foreground">
-                    {overview.dueRows.slice(0, 10).map((r, i) => (
-                      <li key={i}>
-                        {r.tenant} — {r.milestone} ({r.value}){r.to ? ` → ${r.to}` : ' — no email address'}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {overview.tenants.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">No active v2 tenants.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Tenant</TableHead>
-                      <TableHead className="text-right">Bookings</TableHead>
-                      <TableHead className="text-right">Completed</TableHead>
-                      <TableHead className="text-right">Fleet</TableHead>
-                      <TableHead className="text-right">Customers</TableHead>
-                      <TableHead>Next milestone</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {overview.tenants.map((t) => (
-                      <TableRow key={t.id}>
-                        <TableCell className="font-medium">{t.name}</TableCell>
-                        <TableCell className="text-right tabular-nums">{t.counts.bookings}</TableCell>
-                        <TableCell className="text-right tabular-nums">{t.counts.completed_rentals}</TableCell>
-                        <TableCell className="text-right tabular-nums">{t.counts.fleet_size}</TableCell>
-                        <TableCell className="text-right tabular-nums">{t.counts.customers}</TableCell>
-                        <TableCell>
-                          {t.next.length === 0 ? (
-                            <span className="text-muted-foreground">—</span>
-                          ) : (
-                            <div className="space-y-1.5">
-                              {t.next.map((n) => (
-                                <div key={n.metric} className="min-w-[180px]">
-                                  <div className="flex justify-between gap-2 text-xs">
-                                    <span>{n.label}</span>
-                                    <span className="tabular-nums text-muted-foreground">
-                                      {n.current}/{n.threshold}
-                                    </span>
-                                  </div>
-                                  <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-muted">
-                                    <div
-                                      className="h-full rounded-full bg-primary"
-                                      style={{ width: `${Math.min(100, (n.current / n.threshold) * 100)}%` }}
-                                    />
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </>
           )}
         </CardContent>
       </Card>

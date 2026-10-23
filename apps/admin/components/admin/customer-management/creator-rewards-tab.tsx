@@ -46,13 +46,13 @@ import { toast } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LogEntry, LogList, LogRailCard, LogRailLayout } from './log-rail';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 
 type Status = 'pending' | 'approved' | 'rejected';
@@ -334,7 +334,104 @@ export function CreatorRewardsTab({ canEdit }: { canEdit: boolean }) {
     );
   }
 
+  // The read-only record is the right-hand column (log-rail.tsx).
+  const rail = (
+    <LogRailCard
+      title="Submissions"
+      actions={
+        <div className="flex w-full flex-col gap-2">
+          <FilterSearch scopeLabel="Creator rewards" value={search} onChange={setSearch} placeholder="Search operator or link" />
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as Status | 'all')}>
+            <SelectTrigger className="h-9 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pending">Pending ({stats.pending})</SelectItem>
+              <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+              <SelectItem value="all">All</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      }
+    >
+      {shown.length === 0 ? (
+        rows.length === 0 ? (
+          <EmptyState
+            size="section"
+            illustration={<MilestonesEmptyArt />}
+            headline="No submissions yet"
+            body="Operators who post about Drive247 send their link from the portal. Each one waits here for review."
+          />
+        ) : (
+          <NoMatchState size="section" noun="submissions" />
+        )
+      ) : (
+        <LogList>
+          {shown.map((s) => (
+            <LogEntry
+              key={s.id}
+              who={
+                <span className="inline-flex items-center gap-1.5">
+                  {nameOf(s.tenant_id)}
+                  {rewardedTenants.has(s.tenant_id) && (
+                    <Badge variant="secondary" className="gap-1 text-[10px]" title="This operator has had their one reward">
+                      <Gift className="h-3 w-3" /> Rewarded
+                    </Badge>
+                  )}
+                </span>
+              }
+              status={<StatusBadge s={s} />}
+              what={
+                <span className="flex min-w-0 items-center gap-2">
+                  <Badge variant="secondary" className="shrink-0">
+                    {platformLabel(s.platform)}
+                  </Badge>
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    className="inline-flex min-w-0 items-center gap-1 text-primary hover:underline"
+                    title={s.url}
+                  >
+                    <span className="truncate">{s.url.replace(/^https:\/\/(www\.)?/, '')}</span>
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                  </a>
+                </span>
+              }
+              when={
+                <>
+                  <span className="whitespace-nowrap">Submitted {formatDate(s.created_at)}</span>
+                  <RewardCell s={s} />
+                </>
+              }
+              detail={s.note ? <span className="line-clamp-2">“{s.note}”</span> : null}
+              action={
+                <span className="flex gap-1">
+                  <Button size="sm" variant={s.status === 'pending' ? 'default' : 'outline'} onClick={() => setReviewing(s)}>
+                    {s.status === 'pending' ? 'Review' : 'View'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive hover:text-destructive"
+                    aria-label="Delete submission"
+                    disabled={!canEdit}
+                    onClick={() => setDeleting(s)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </span>
+              }
+            />
+          ))}
+        </LogList>
+      )}
+    </LogRailCard>
+  );
+
   return (
+    <LogRailLayout label="Submissions" rail={rail}>
     <div className="space-y-6">
       {/* ── header ───────────────────────────────────────────────────────── */}
       <Card>
@@ -380,119 +477,6 @@ export function CreatorRewardsTab({ canEdit }: { canEdit: boolean }) {
           </div>
           {!canEdit && (
             <p className="text-sm text-muted-foreground">Read-only: reviewing needs a super admin account.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── submissions ──────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Submissions</CardTitle>
-          <div className="flex flex-wrap items-center gap-2 pt-2">
-            <FilterSearch scopeLabel="Creator rewards" value={search} onChange={setSearch} placeholder="Search operator or link" />
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as Status | 'all')}>
-              <SelectTrigger className="h-9 w-[160px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pending">Pending ({stats.pending})</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-                <SelectItem value="all">All</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {shown.length === 0 ? (
-            rows.length === 0 ? (
-              <EmptyState
-                size="section"
-                illustration={<MilestonesEmptyArt />}
-                headline="No submissions yet"
-                body="Operators who post about Drive247 send their link from the portal. Each one waits here for review."
-              />
-            ) : (
-              <NoMatchState size="section" noun="submissions" />
-            )
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Operator</TableHead>
-                    <TableHead className="min-w-[260px]">Link</TableHead>
-                    <TableHead>Submitted</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Reward</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {shown.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5 font-medium">
-                          {nameOf(s.tenant_id)}
-                          {rewardedTenants.has(s.tenant_id) && (
-                            <Badge variant="secondary" className="gap-1 text-[10px]" title="This operator has had their one reward">
-                              <Gift className="h-3 w-3" /> Rewarded
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground">{tenants.get(s.tenant_id)?.slug}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="shrink-0">
-                            {platformLabel(s.platform)}
-                          </Badge>
-                          <a
-                            href={s.url}
-                            target="_blank"
-                            rel="noopener noreferrer nofollow"
-                            className="inline-flex max-w-[320px] items-center gap-1 truncate text-sm text-primary hover:underline"
-                            title={s.url}
-                          >
-                            <span className="truncate">{s.url.replace(/^https:\/\/(www\.)?/, '')}</span>
-                            <ExternalLink className="h-3 w-3 shrink-0" />
-                          </a>
-                        </div>
-                        {s.note && <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">“{s.note}”</p>}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(s.created_at)}</TableCell>
-                      <TableCell>
-                        <StatusBadge s={s} />
-                      </TableCell>
-                      <TableCell>
-                        <RewardCell s={s} />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            size="sm"
-                            variant={s.status === 'pending' ? 'default' : 'outline'}
-                            onClick={() => setReviewing(s)}
-                          >
-                            {s.status === 'pending' ? 'Review' : 'View'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-destructive hover:text-destructive"
-                            aria-label="Delete submission"
-                            disabled={!canEdit}
-                            onClick={() => setDeleting(s)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
           )}
         </CardContent>
       </Card>
@@ -552,6 +536,7 @@ export function CreatorRewardsTab({ canEdit }: { canEdit: boolean }) {
         />
       )}
     </div>
+    </LogRailLayout>
   );
 }
 

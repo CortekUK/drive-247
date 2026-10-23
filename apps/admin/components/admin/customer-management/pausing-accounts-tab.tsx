@@ -173,6 +173,17 @@ export function PausingAccountsTab({ canEdit }: { canEdit: boolean }) {
 
   // The read-only record is the right-hand column (log-rail.tsx).
   const rail = (
+    <>
+    <LogRailCard title="The rules tenants see">
+      <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
+        <li>Whole months only: minimum 1, maximum 2 (30 Oct → 30 Nov or 30 Dec). Anything else: &ldquo;Can only pause for minimum 1 month and max 2 months.&rdquo;</li>
+        <li>The account switches back on by itself when the pause ends, so 2 months is never outstayed.</li>
+        <li>No pause may start in the last 10 days before a bill: &ldquo;You can not pause right now, as your subscription fee has X days left.&rdquo;</li>
+        <li>The billing date never moves. Bills inside the pause are voided in Stripe (pause_collection), and the next one is on the usual day.</li>
+        <li>While paused: no charges, nothing deleted, no new rentals, vehicles or customers, and the booking site shows &ldquo;Booking on hold for N days&rdquo;.</li>
+        <li>Not during a free trial, with an unpaid bill, or when the subscription is already set to end. One pause at a time; the tenant can cancel or end it early.</li>
+      </ul>
+    </LogRailCard>
     <LogRailCard
       title="Pauses"
       description={`${pausedNow} paused now · ${scheduled} scheduled · ${pauses.length} in total`}
@@ -226,6 +237,7 @@ export function PausingAccountsTab({ canEdit }: { canEdit: boolean }) {
         </LogList>
       )}
     </LogRailCard>
+    </>
   );
 
   return (
@@ -268,23 +280,6 @@ export function PausingAccountsTab({ canEdit }: { canEdit: boolean }) {
               />
             </span>
           </label>
-        </CardContent>
-      </Card>
-
-      {/* ── the rules ─────────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle>The rules tenants see</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
-            <li>Whole months only: minimum 1, maximum 2 (30 Oct → 30 Nov or 30 Dec). Anything else: &ldquo;Can only pause for minimum 1 month and max 2 months.&rdquo;</li>
-            <li>The account switches back on by itself when the pause ends, so 2 months is never outstayed.</li>
-            <li>No pause may start in the last 10 days before a bill: &ldquo;You can not pause right now, as your subscription fee has X days left.&rdquo;</li>
-            <li>The billing date never moves. Bills inside the pause are voided in Stripe (pause_collection), and the next one is on the usual day.</li>
-            <li>While paused: no charges, nothing deleted, no new rentals, vehicles or customers, and the booking site shows &ldquo;Booking on hold for N days&rdquo;.</li>
-            <li>Not during a free trial, with an unpaid bill, or when the subscription is already set to end. One pause at a time; the tenant can cancel or end it early.</li>
-          </ul>
         </CardContent>
       </Card>
 

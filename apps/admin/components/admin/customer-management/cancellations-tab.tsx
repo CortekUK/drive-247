@@ -26,11 +26,11 @@ import { toast } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LogEntry, LogList, LogRailCard, LogRailLayout } from './log-rail';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import {
   headline,
@@ -224,7 +224,96 @@ export function CancellationsTab({ canEdit }: { canEdit: boolean }) {
     (r) => (stateFilter === 'all' || r.state === stateFilter) && (!reasonFilter || r.reason === reasonFilter),
   );
 
+  // The read-only record is the right-hand column (log-rail.tsx).
+  const rail = (
+    <LogRailCard
+      title="Who"
+      actions={
+        reasonFilter || stateFilter !== 'all' ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-3"
+            onClick={() => {
+              setReasonFilter(null);
+              setStateFilter('all');
+            }}
+          >
+            Clear filters
+            {reasonFilter && <Badge variant="secondary" className="ml-2">{REASON_LABEL[reasonFilter]}</Badge>}
+          </Button>
+        ) : null
+      }
+    >
+      {loading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
+        </div>
+      ) : tableRows.length === 0 ? (
+        <NoMatchState size="section" noun="companies" />
+      ) : (
+        <LogList>
+          {tableRows.map((r) => (
+            <LogEntry
+              key={r.tenant.id}
+              who={
+                <Link href={`/admin/rentals/${r.tenant.id}`} className="inline-flex items-center gap-1 hover:underline">
+                  {r.tenant.company_name ?? r.tenant.slug ?? '—'}
+                  <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                </Link>
+              }
+              status={
+                <Badge variant="outline" className="font-mono text-[11px] uppercase">
+                  {r.portal}
+                </Badge>
+              }
+              what={
+                <span className="inline-flex items-center gap-1.5 font-medium">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: REASON_FILL[r.reason] }} />
+                  {REASON_LABEL[r.reason]}
+                  <span className="font-normal text-muted-foreground">· {SOURCE_LABEL[r.source]}</span>
+                </span>
+              }
+              when={
+                <>
+                  {r.state === 'leaving' ? (
+                    <span className="text-amber-600">Leaving · {fmtDay(r.leftAt)}</span>
+                  ) : r.state === 'stayed' ? (
+                    <span className="text-emerald-600">Stayed · asked {fmtDay(r.leftAt)}</span>
+                  ) : (
+                    <span>Left {fmtDay(r.leftAt)}</span>
+                  )}
+                  {r.tenant.status === 'suspended' && <span>Suspended</span>}
+                  <span>
+                    {r.plan ?? 'No plan'}
+                    {r.monthlyCents !== null && ` · ${money(r.monthlyCents, r.currency)}/month`}
+                  </span>
+                  <span>
+                    {r.monthsAsCustomer === null ? '' : r.monthsAsCustomer < 1 ? 'Under a month · ' : `${r.monthsAsCustomer} mo · `}
+                    paid {money(r.paidCents, r.currency)}
+                  </span>
+                </>
+              }
+              detail={r.detail ? <span className="italic text-foreground/70">“{r.detail}”</span> : null}
+              action={
+                canEdit ? (
+                  <Button variant="ghost" size="sm" className="-ml-3 gap-1" onClick={() => setEditing(r)}>
+                    <PencilLine className="h-3.5 w-3.5" />
+                    Set reason
+                  </Button>
+                ) : null
+              }
+            />
+          ))}
+        </LogList>
+      )}
+    </LogRailCard>
+  );
+
   return (
+    <LogRailLayout label="Who" rail={rail}>
     <div className="space-y-6">
       {/* The answer first. */}
       <Card>
@@ -394,119 +483,6 @@ export function CancellationsTab({ canEdit }: { canEdit: boolean }) {
         </CardContent>
       </Card>
 
-      {/* Who. */}
-      <Card className="overflow-hidden">
-        <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle className="text-base">Who</CardTitle>
-            {(reasonFilter || stateFilter !== 'all') && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setReasonFilter(null);
-                  setStateFilter('all');
-                }}
-              >
-                Clear filters
-                {reasonFilter && <Badge variant="secondary" className="ml-2">{REASON_LABEL[reasonFilter]}</Badge>}
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Company</TableHead>
-                <TableHead>Portal</TableHead>
-                <TableHead>Plan</TableHead>
-                <TableHead>Customer for</TableHead>
-                <TableHead>Left / asked</TableHead>
-                <TableHead>Reason</TableHead>
-                <TableHead className="w-[110px]" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                Array.from({ length: 6 }).map((_, i) => (
-                  <TableRow key={i}>
-                    {Array.from({ length: 7 }).map((__, j) => (
-                      <TableCell key={j}>
-                        <Skeleton className="h-6 w-full" />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : tableRows.length === 0 ? (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={7} className="p-0">
-                    <NoMatchState size="section" noun="companies" />
-                  </TableCell>
-                </TableRow>
-              ) : (
-                tableRows.map((r) => (
-                  <TableRow key={r.tenant.id}>
-                    <TableCell>
-                      <Link
-                        href={`/admin/rentals/${r.tenant.id}`}
-                        className="inline-flex items-center gap-1 font-medium hover:underline"
-                      >
-                        {r.tenant.company_name ?? r.tenant.slug ?? '—'}
-                        <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                      </Link>
-                      {r.tenant.status === 'suspended' && (
-                        <span className="block text-xs text-muted-foreground">Suspended</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="font-mono text-[11px] uppercase">
-                        {r.portal}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm">
-                      {r.plan ?? '—'}
-                      {r.monthlyCents !== null && (
-                        <span className="block text-xs text-muted-foreground">{money(r.monthlyCents, r.currency)}/month</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm">
-                      {r.monthsAsCustomer === null ? '—' : r.monthsAsCustomer < 1 ? 'Under a month' : `${r.monthsAsCustomer} mo`}
-                      <span className="block text-xs text-muted-foreground">paid {money(r.paidCents, r.currency)}</span>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm">
-                      {r.state === 'leaving' ? (
-                        <span className="text-amber-600">Leaving · {fmtDay(r.leftAt)}</span>
-                      ) : r.state === 'stayed' ? (
-                        <span className="text-emerald-600">Stayed · asked {fmtDay(r.leftAt)}</span>
-                      ) : (
-                        fmtDay(r.leftAt)
-                      )}
-                    </TableCell>
-                    <TableCell className="max-w-[320px]">
-                      <span className="inline-flex items-center gap-1.5 text-sm font-medium">
-                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: REASON_FILL[r.reason] }} />
-                        {REASON_LABEL[r.reason]}
-                      </span>
-                      <span className="block text-xs text-muted-foreground">{SOURCE_LABEL[r.source]}</span>
-                      {r.detail && <span className="mt-0.5 block text-xs italic text-foreground/70">“{r.detail}”</span>}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {canEdit && (
-                        <Button variant="ghost" size="sm" className="gap-1" onClick={() => setEditing(r)}>
-                          <PencilLine className="h-3.5 w-3.5" />
-                          Set reason
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
       <ReasonDialog
         row={editing}
         onClose={() => setEditing(null)}
@@ -516,6 +492,7 @@ export function CancellationsTab({ canEdit }: { canEdit: boolean }) {
         }}
       />
     </div>
+    </LogRailLayout>
   );
 }
 

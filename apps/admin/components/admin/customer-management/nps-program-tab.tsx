@@ -28,12 +28,12 @@ import { toast } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LogEntry, LogList, LogRailCard, LogRailLayout } from './log-rail';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 type Audience = 'all' | 'selected';
 
@@ -314,7 +314,133 @@ export function NpsProgramTab({ canEdit }: { canEdit: boolean }) {
     (t.company_name || t.slug).toLowerCase().includes(tenantSearch.trim().toLowerCase()),
   );
 
+  // The read-only record is the right-hand column (log-rail.tsx).
+  const rail = (
+    <>
+    <LogRailCard
+      title={
+        <span className="flex items-center gap-2">
+          <Users className="h-4 w-4" />
+          By tenant
+        </span>
+      }
+      description="Click a tenant to see only their answers."
+    >
+      {perTenant.length === 0 ? (
+        <EmptyState
+          size="section"
+          headline="No responses in this range"
+          body="Each operator who answers gets a row here, with their score."
+        />
+      ) : (
+        <LogList>
+          {perTenant.map((t) => (
+            <LogEntry
+              key={t.id}
+              onOpen={() => setTenantFilter(t.id)}
+              who={t.name}
+              status={
+                <span className="text-sm font-semibold tabular-nums">
+                  NPS {t.nps === null ? '—' : `${t.nps > 0 ? '+' : ''}${t.nps}`}
+                </span>
+              }
+              what={
+                <span className="tabular-nums">
+                  {t.answered} response{t.answered === 1 ? '' : 's'} · average {t.avg === null ? '—' : t.avg.toFixed(1)}
+                </span>
+              }
+              when={
+                <>
+                  <span className="tabular-nums">
+                    {t.promoters} promoters · {t.passives} passives · {t.detractors} detractors · {t.dismissed} “not now”
+                  </span>
+                  <span>Last {formatDateTime(t.last)}</span>
+                </>
+              }
+            />
+          ))}
+        </LogList>
+      )}
+    </LogRailCard>
+    <LogRailCard
+      title={
+        <span className="flex items-center gap-2">
+          <MessageSquareText className="h-4 w-4" />
+          Every response
+        </span>
+      }
+      description={
+        <>
+          {tenantFilter === 'all' ? 'All tenants' : tenantName(tenantFilter)}
+          {tenantFilter !== 'all' && (
+            <button type="button" className="ml-2 text-primary underline-offset-4 hover:underline" onClick={() => setTenantFilter('all')}>
+              Show all tenants
+            </button>
+          )}
+        </>
+      }
+      actions={
+        <Select value={answerFilter} onValueChange={(v) => setAnswerFilter(v as 'answered' | 'dismissed' | 'all')}>
+          <SelectTrigger className="h-9 w-[150px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="answered">Scores</SelectItem>
+            <SelectItem value="dismissed">“Not now”</SelectItem>
+            <SelectItem value="all">Everything</SelectItem>
+          </SelectContent>
+        </Select>
+      }
+    >
+      {listed.length === 0 ? (
+        <EmptyState
+          size="section"
+          headline="Nothing here yet"
+          body="Survey sends and their answers are listed here as they happen."
+        />
+      ) : (
+        <LogList>
+          {listed.map((r) => (
+            <LogEntry
+              key={r.id}
+              who={tenantName(r.tenant_id)}
+              status={
+                r.status === 'answered' && r.score !== null ? (
+                  <span className={cn('text-sm font-semibold tabular-nums', GROUP_TEXT[groupOf(r.score)])}>
+                    {r.score} <span className="text-xs font-normal">{GROUP_LABEL[groupOf(r.score)].slice(0, -1)}</span>
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Not now</span>
+                )
+              }
+              what={r.comment ? <span className="whitespace-pre-wrap break-words">{r.comment}</span> : null}
+              when={
+                <>
+                  <span className="whitespace-nowrap">{formatDateTime(r.created_at)}</span>
+                  <span>
+                    {r.app_users?.name || r.app_users?.email || 'Former user'}
+                    {r.app_users?.role ? ` (${r.app_users.role.replace('_', ' ')})` : ''}
+                  </span>
+                  <span>
+                    Asked on day {r.schedule_day}
+                    {r.tenant_age_days !== null && r.tenant_age_days !== r.schedule_day && ` (day ${r.tenant_age_days})`}
+                  </span>
+                  {r.portal && <span className="uppercase">{r.portal}</span>}
+                </>
+              }
+            />
+          ))}
+        </LogList>
+      )}
+      {scoped.filter((r) => answerFilter === 'all' || r.status === answerFilter).length > 500 && (
+        <p className="pt-3 text-center text-xs text-muted-foreground">Showing the latest 500. Narrow the filters to see more.</p>
+      )}
+    </LogRailCard>
+    </>
+  );
+
   return (
+    <LogRailLayout label="Responses" rail={rail}>
     <div className="space-y-6">
       {/* ── settings ─────────────────────────────────────────────────────── */}
       <Card>
@@ -614,146 +740,8 @@ export function NpsProgramTab({ canEdit }: { canEdit: boolean }) {
         </Card>
       </div>
 
-      {/* ── per tenant ───────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Users className="h-4 w-4" />
-            By tenant
-          </CardTitle>
-          <CardDescription>Click a tenant to see only their answers.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {perTenant.length === 0 ? (
-            <EmptyState
-              size="section"
-              headline="No responses in this range"
-              body="Each operator who answers gets a row here, with their score."
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead className="text-right">NPS</TableHead>
-                  <TableHead className="text-right">Average</TableHead>
-                  <TableHead className="text-right">Responses</TableHead>
-                  <TableHead className="text-right">Promoters</TableHead>
-                  <TableHead className="text-right">Passives</TableHead>
-                  <TableHead className="text-right">Detractors</TableHead>
-                  <TableHead className="text-right">“Not now”</TableHead>
-                  <TableHead>Last answer</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {perTenant.map((t) => (
-                  <TableRow key={t.id} className="cursor-pointer" onClick={() => setTenantFilter(t.id)}>
-                    <TableCell className="font-medium">{t.name}</TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">
-                      {t.nps === null ? '—' : `${t.nps > 0 ? '+' : ''}${t.nps}`}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{t.avg === null ? '—' : t.avg.toFixed(1)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{t.answered}</TableCell>
-                    <TableCell className="text-right tabular-nums">{t.promoters}</TableCell>
-                    <TableCell className="text-right tabular-nums">{t.passives}</TableCell>
-                    <TableCell className="text-right tabular-nums">{t.detractors}</TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">{t.dismissed}</TableCell>
-                    <TableCell className="text-muted-foreground">{formatDateTime(t.last)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── every answer ─────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <MessageSquareText className="h-4 w-4" />
-                Every response
-              </CardTitle>
-              <CardDescription>
-                {tenantFilter === 'all' ? 'All tenants' : tenantName(tenantFilter)}
-                {tenantFilter !== 'all' && (
-                  <button type="button" className="ml-2 text-primary underline-offset-4 hover:underline" onClick={() => setTenantFilter('all')}>
-                    Show all tenants
-                  </button>
-                )}
-              </CardDescription>
-            </div>
-            <Select value={answerFilter} onValueChange={(v) => setAnswerFilter(v as 'answered' | 'dismissed' | 'all')}>
-              <SelectTrigger className="h-9 w-[150px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="answered">Scores</SelectItem>
-                <SelectItem value="dismissed">“Not now”</SelectItem>
-                <SelectItem value="all">Everything</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {listed.length === 0 ? (
-            <EmptyState
-              size="section"
-              headline="Nothing here yet"
-              body="Survey sends and their answers are listed here as they happen."
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>When</TableHead>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead>Person</TableHead>
-                  <TableHead>Asked on</TableHead>
-                  <TableHead>Score</TableHead>
-                  <TableHead>Comment</TableHead>
-                  <TableHead>Portal</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {listed.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">{formatDateTime(r.created_at)}</TableCell>
-                    <TableCell className="max-w-[180px] truncate">{tenantName(r.tenant_id)}</TableCell>
-                    <TableCell className="max-w-[200px]">
-                      <div className="truncate">{r.app_users?.name || r.app_users?.email || 'Former user'}</div>
-                      <div className="truncate text-xs text-muted-foreground">{r.app_users?.role?.replace('_', ' ') ?? ''}</div>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      Day {r.schedule_day}
-                      {r.tenant_age_days !== null && r.tenant_age_days !== r.schedule_day && (
-                        <span className="text-xs text-muted-foreground"> (day {r.tenant_age_days})</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {r.status === 'answered' && r.score !== null ? (
-                        <span className={cn('font-semibold tabular-nums', GROUP_TEXT[groupOf(r.score)])}>
-                          {r.score} <span className="text-xs font-normal">{GROUP_LABEL[groupOf(r.score)].slice(0, -1)}</span>
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Not now</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="max-w-[320px] whitespace-pre-wrap text-sm">{r.comment || <span className="text-muted-foreground">—</span>}</TableCell>
-                    <TableCell className="text-xs uppercase text-muted-foreground">{r.portal ?? '—'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-          {scoped.filter((r) => answerFilter === 'all' || r.status === answerFilter).length > 500 && (
-            <p className="pt-3 text-center text-xs text-muted-foreground">Showing the latest 500. Narrow the filters to see more.</p>
-          )}
-        </CardContent>
-      </Card>
     </div>
+    </LogRailLayout>
   );
 }
 

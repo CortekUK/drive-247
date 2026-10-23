@@ -323,6 +323,79 @@ export function TenureRewardsTab({ canEdit }: { canEdit: boolean }) {
 
   // The read-only record is the right-hand column (log-rail.tsx).
   const rail = (
+    <>
+    <LogRailCard
+      title="V2 operators"
+      description={`${tenants.length} operators · tenure counted from ${settings.tenure_start === 'account_created' ? 'account creation' : 'their first subscription'}.`}
+    >
+      <LogList>
+        {tenants.map((t) => {
+          const mine = grantsByTenant.get(t.tenant_id) ?? [];
+          const next = t.started_at
+            ? enabledMilestones.find((m) => t.tenure_months != null && m.months > t.tenure_months)
+            : undefined;
+          const nextDate = next && t.started_at ? addMonths(t.started_at, next.months) : null;
+          const daysToNext = nextDate ? Math.ceil((nextDate.getTime() - Date.now()) / 86_400_000) : null;
+          return (
+            <LogEntry
+              key={t.tenant_id}
+              who={
+                <>
+                  {t.company_name || t.slug}
+                  {t.tenant_type === 'test' && <span className="ml-1.5 text-xs font-normal text-muted-foreground">test</span>}
+                </>
+              }
+              status={
+                <span className="text-sm font-medium tabular-nums">
+                  {t.started_at ? formatTenure(t.tenure_months, t.tenure_days) : <span className="text-muted-foreground">Not started</span>}
+                </span>
+              }
+              what={
+                next && nextDate ? (
+                  <>
+                    Next: {next.label}
+                    <span className="text-muted-foreground">
+                      {' '}
+                      · {formatDate(nextDate.toISOString())} · in {daysToNext} day{daysToNext === 1 ? '' : 's'}
+                    </span>
+                  </>
+                ) : null
+              }
+              when={
+                <>
+                  <span>Since {formatDate(t.started_at)}</span>
+                  <span className={cn('capitalize', t.subscription_status && 'text-green-700 dark:text-green-400')}>
+                    {t.subscription_status?.replace('_', ' ') ?? 'No subscription'}
+                  </span>
+                  {mine.map((g) => (
+                    <Badge
+                      key={g.id}
+                      variant={g.status === 'skipped' ? 'outline' : 'secondary'}
+                      title={`${g.label}: ${STATUS_STYLE[g.status].label}`}
+                      className={cn(g.status === 'skipped' && 'text-muted-foreground line-through')}
+                    >
+                      {g.months} mo
+                    </Badge>
+                  ))}
+                </>
+              }
+              action={
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  disabled={!canEdit || milestones.length === 0}
+                  onClick={() => setGranting(t)}
+                >
+                  <Gift className="h-3.5 w-3.5" />
+                  Grant
+                </Button>
+              }
+            />
+          );
+        })}
+      </LogList>
+    </LogRailCard>
     <LogRailCard title="History">
       {grants.length === 0 ? (
         <EmptyState
@@ -363,6 +436,7 @@ export function TenureRewardsTab({ canEdit }: { canEdit: boolean }) {
         </LogList>
       )}
     </LogRailCard>
+    </>
   );
 
   return (
@@ -550,109 +624,6 @@ export function TenureRewardsTab({ canEdit }: { canEdit: boolean }) {
               </Table>
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* ── operators ────────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">V2 operators</CardTitle>
-          <CardDescription>
-            {tenants.length} operators · tenure counted from{' '}
-            {settings.tenure_start === 'account_created' ? 'account creation' : 'their first subscription'}.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Operator</TableHead>
-                  <TableHead>With us since</TableHead>
-                  <TableHead className="text-right">Tenure</TableHead>
-                  <TableHead>Subscription</TableHead>
-                  <TableHead>Next milestone</TableHead>
-                  <TableHead>Rewards</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tenants.map((t) => {
-                  const mine = grantsByTenant.get(t.tenant_id) ?? [];
-                  const next = t.started_at
-                    ? enabledMilestones.find((m) => t.tenure_months != null && m.months > t.tenure_months)
-                    : undefined;
-                  const nextDate = next && t.started_at ? addMonths(t.started_at, next.months) : null;
-                  const daysToNext = nextDate ? Math.ceil((nextDate.getTime() - Date.now()) / 86_400_000) : null;
-                  return (
-                    <TableRow key={t.tenant_id}>
-                      <TableCell>
-                        <div className="font-medium">{t.company_name || t.slug}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {t.slug}
-                          {t.tenant_type === 'test' && ' · test'}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{formatDate(t.started_at)}</TableCell>
-                      <TableCell className="text-right font-medium tabular-nums">
-                        {t.started_at ? formatTenure(t.tenure_months, t.tenure_days) : <span className="text-muted-foreground">Not started</span>}
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          'capitalize',
-                          t.subscription_status ? 'text-green-700 dark:text-green-400' : 'text-muted-foreground',
-                        )}
-                      >
-                        {t.subscription_status?.replace('_', ' ') ?? 'None'}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {next && nextDate ? (
-                          <>
-                            <div>{next.label}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {formatDate(nextDate.toISOString())} · in {daysToNext} day{daysToNext === 1 ? '' : 's'}
-                            </div>
-                          </>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {mine.length === 0 ? (
-                            <span className="text-muted-foreground">—</span>
-                          ) : (
-                            mine.map((g) => (
-                              <Badge
-                                key={g.id}
-                                variant={g.status === 'skipped' ? 'outline' : 'secondary'}
-                                title={`${g.label}: ${STATUS_STYLE[g.status].label}`}
-                                className={cn(g.status === 'skipped' && 'text-muted-foreground line-through')}
-                              >
-                                {g.months} mo
-                              </Badge>
-                            ))
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="gap-1.5"
-                          disabled={!canEdit || milestones.length === 0}
-                          onClick={() => setGranting(t)}
-                        >
-                          <Gift className="h-3.5 w-3.5" />
-                          Grant
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
         </CardContent>
       </Card>
 

@@ -242,7 +242,7 @@ export function MarketingEmailsTab({ canEdit }: { canEdit: boolean }) {
   }
 
   // The log is the right-hand column (log-rail.tsx).
-  const log = (
+  const rail = (
     <LogRailCard title="Recent activity" description="The last 100 lessons the system handled.">
       {runs.length === 0 ? (
         <EmptyState
@@ -272,7 +272,7 @@ export function MarketingEmailsTab({ canEdit }: { canEdit: boolean }) {
   );
 
   return (
-    <LogRailLayout rail={log}>
+    <LogRailLayout rail={rail}>
     <div className="space-y-6">
       {/* ── The course ──────────────────────────────────────────────────── */}
       <Card>

@@ -322,6 +322,20 @@ export function AbandonedRecoveryTab({ canEdit }: { canEdit: boolean }) {
 
   // The read-only record is the right-hand column (log-rail.tsx).
   const rail = (
+    <>
+    <LogRailCard title="Where renters drop off" description="The furthest step reached by bookings that were abandoned and not completed.">
+      <div className="space-y-2">
+        {stats.lostAt.map((l) => (
+          <div key={l.id} className="grid grid-cols-[80px_1fr_32px] items-center gap-3 text-sm">
+            <span className="text-muted-foreground">{l.label}</span>
+            <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary" style={{ width: `${(l.count / stats.maxLost) * 100}%` }} />
+            </div>
+            <span className="text-right tabular-nums">{l.count}</span>
+          </div>
+        ))}
+      </div>
+    </LogRailCard>
     <LogRailCard
       title="Every booking attempt"
       description="Click one for the recovery email and the renter's conversation."
@@ -418,6 +432,7 @@ export function AbandonedRecoveryTab({ canEdit }: { canEdit: boolean }) {
         </>
       )}
     </LogRailCard>
+    </>
   );
 
   return (
@@ -608,24 +623,6 @@ export function AbandonedRecoveryTab({ canEdit }: { canEdit: boolean }) {
         />
         <Stat icon={TrendingUp} label="Recovered value (est.)" value={money(stats.recoveredValue)} sub={`${stats.completed} completed overall`} />
       </div>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle>Where renters drop off</CardTitle>
-          <CardDescription>The furthest step reached by bookings that were abandoned and not completed.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {stats.lostAt.map((l) => (
-            <div key={l.id} className="grid grid-cols-[90px_1fr_40px] items-center gap-3 text-sm">
-              <span className="text-muted-foreground">{l.label}</span>
-              <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-                <div className="h-full rounded-full bg-primary" style={{ width: `${(l.count / stats.maxLost) * 100}%` }} />
-              </div>
-              <span className="text-right tabular-nums">{l.count}</span>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
 
       <FaqGuardrailCard tenants={tenants} />
 

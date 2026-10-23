@@ -25,6 +25,7 @@ import { toast } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LogRailCard, LogRailLayout } from './log-rail';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -195,67 +196,66 @@ export function AdvisoryBoardTab({ canEdit }: { canEdit: boolean }) {
         ? { text: `${count - BOARD_MAX} over the maximum of ${BOARD_MAX}`, cls: 'text-red-700 dark:text-red-400' }
         : { text: `Within the ${BOARD_MIN}–${BOARD_MAX} target`, cls: 'text-green-700 dark:text-green-400' };
 
-  return (
-    <div className="space-y-6">
-      {/* ── the board ────────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
-              <CardTitle className="flex items-center gap-2">
-                <Award className="h-5 w-5 text-primary" />
-                Advisory Board
-              </CardTitle>
-              <CardDescription>
-                The {BOARD_MIN}–{BOARD_MAX} top operators — v1 and v2 — who help shape the product. Tag them from the list
-                below; nothing is sent to an operator when they are added or removed.
-              </CardDescription>
-            </div>
-            <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => void load()} disabled={loading}>
-              <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
-              Refresh
-            </Button>
+  // The read-only record is the right-hand column (log-rail.tsx).
+  const rail = (
+    <LogRailCard
+      title={
+        <span className="flex items-center gap-2">
+          <Award className="h-5 w-5 text-primary" />
+          Advisory Board
+        </span>
+      }
+      description={`The ${BOARD_MIN}–${BOARD_MAX} top operators — v1 and v2 — who help shape the product. Tag them from the list; nothing is sent to an operator when they are added or removed.`}
+      actions={
+        <Button variant="ghost" size="sm" className="-ml-3 gap-1.5" onClick={() => void load()} disabled={loading}>
+          <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+          Refresh
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span className="text-3xl font-semibold tabular-nums">{count}</span>
+          <span className="text-sm text-muted-foreground">
+            member{count === 1 ? '' : 's'} · target {BOARD_MIN}–{BOARD_MAX}
+          </span>
+          <span className={cn('text-sm font-medium', seatState.cls)}>{seatState.text}</span>
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className={cn(
+              'h-full rounded-full transition-all',
+              count > BOARD_MAX ? 'bg-red-600 dark:bg-red-500' : count >= BOARD_MIN ? 'bg-green-600 dark:bg-green-500' : 'bg-amber-500',
+            )}
+            style={{ width: `${Math.min(100, (count / BOARD_MAX) * 100)}%` }}
+          />
+        </div>
+        {boardTenants.length === 0 ? (
+          <EmptyState
+            size="section"
+            illustration={<UsersEmptyArt />}
+            headline="No one on the board yet"
+            body="Use “Put in Advisory Board” on an operator to invite them in."
+          />
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {boardTenants.map((t) => (
+              <Badge key={t.id} variant="secondary" className="gap-1.5 py-1 text-sm font-medium">
+                {nameOf(t)}
+                <span className="text-xs font-normal text-muted-foreground">
+                  {isV2(t) ? 'V2' : 'V1'} · {formatTenure(t.created_at, now)}
+                </span>
+              </Badge>
+            ))}
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="text-3xl font-semibold tabular-nums">{count}</span>
-            <span className="text-sm text-muted-foreground">
-              member{count === 1 ? '' : 's'} · target {BOARD_MIN}–{BOARD_MAX}
-            </span>
-            <span className={cn('text-sm font-medium', seatState.cls)}>{seatState.text}</span>
-          </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className={cn(
-                'h-full rounded-full transition-all',
-                count > BOARD_MAX ? 'bg-red-600 dark:bg-red-500' : count >= BOARD_MIN ? 'bg-green-600 dark:bg-green-500' : 'bg-amber-500',
-              )}
-              style={{ width: `${Math.min(100, (count / BOARD_MAX) * 100)}%` }}
-            />
-          </div>
-          {boardTenants.length === 0 ? (
-            <EmptyState
-              size="section"
-              illustration={<UsersEmptyArt />}
-              headline="No one on the board yet"
-              body="Use “Put in Advisory Board” on an operator below to invite them in."
-            />
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {boardTenants.map((t) => (
-                <Badge key={t.id} variant="secondary" className="gap-1.5 py-1 text-sm font-medium">
-                  {nameOf(t)}
-                  <span className="text-xs font-normal text-muted-foreground">
-                    {isV2(t) ? 'V2' : 'V1'} · {formatTenure(t.created_at, now)}
-                  </span>
-                </Badge>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        )}
+      </div>
+    </LogRailCard>
+  );
 
+  return (
+    <LogRailLayout label="Advisory Board" rail={rail}>
+    <div className="space-y-6">
       {/* ── every operator ───────────────────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
@@ -379,5 +379,6 @@ export function AdvisoryBoardTab({ canEdit }: { canEdit: boolean }) {
         </CardContent>
       </Card>
     </div>
+    </LogRailLayout>
   );
 }
