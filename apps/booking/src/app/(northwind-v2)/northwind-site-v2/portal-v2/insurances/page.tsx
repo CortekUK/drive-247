@@ -179,7 +179,7 @@ export default function PortalInsurancesPage() {
           <button
             type="button"
             onClick={() => setUploadOpen(true)}
-            className={cn(V2_BUTTON_PRIMARY, HEADER_PRIMARY_V2, 'flex-1 sm:flex-none')}
+            className={cn(V2_BUTTON_PRIMARY, HEADER_PRIMARY_V2)}
           >
             <Plus aria-hidden />
             Upload insurance

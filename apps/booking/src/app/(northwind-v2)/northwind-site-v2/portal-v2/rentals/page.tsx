@@ -123,7 +123,7 @@ export default function PortalRentalsPage() {
               >
                 {view === 'calendar' ? <List aria-hidden className="size-3.5" /> : <CalendarDays aria-hidden className="size-3.5" />}
               </button>
-              <QuickBookTrigger className={cn(V2_BUTTON_PRIMARY, HEADER_PRIMARY_V2, 'flex-1 sm:hidden')}>
+              <QuickBookTrigger className={cn(V2_BUTTON_PRIMARY, HEADER_PRIMARY_V2, 'sm:hidden')}>
                 <Plus aria-hidden />
                 Book a car
               </QuickBookTrigger>

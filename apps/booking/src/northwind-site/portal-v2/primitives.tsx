@@ -49,15 +49,15 @@ export function PageHeader({
         and one-line description. The heading names its font and tracking because
         the site's base styles give every h1 DM Sans at -0.02em, which set it
         wider than the operator's Manrope at the same 30px. */}
-    <div className={cn('flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between', className)}>
+    {/* Phone (owner, Oct 23 2026): the actions sit on the title's row, at
+        their own width, and the description gives way to them. */}
+    <div className={cn('flex flex-row items-start justify-between gap-3', action && 'max-sm:items-center', className)}>
       <div className="min-w-0">
         {eyebrow ? <p className="mb-1 text-xs font-medium text-pv-muted-fg">{eyebrow}</p> : null}
         <h1 className="font-heading text-2xl font-bold tracking-normal text-pv-fg sm:text-3xl">{title}</h1>
-        {description ? <p className="text-sm text-pv-muted-fg sm:text-base">{description}</p> : null}
+        {description ? <p className={cn('text-sm text-pv-muted-fg sm:text-base', action && 'max-sm:hidden')}>{description}</p> : null}
       </div>
-      {/* Phone: the cluster takes the row and the labelled button stretches
-          (admin rentals-list-v2: flex-1 sm:flex-none on the primary). */}
-      {action ? <div className={cn('flex shrink-0 items-center gap-2 max-sm:w-full', actionClassName)}>{action}</div> : null}
+      {action ? <div className={cn('flex shrink-0 items-center gap-2', actionClassName)}>{action}</div> : null}
     </div>
     {alerts ? <PortalAlertBar /> : null}
     </div>

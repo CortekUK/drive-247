@@ -8,8 +8,8 @@
  *
  * The document takes the whole left of the window, drawn page by page; the
  * column on the right carries the title, the Details / Activity switch, and
- * at its foot Download and New tab. The close control is the dialog's own, in
- * the top right corner.
+ * at its foot Download and New tab (on a phone, icons beside the close × in
+ * the top right corner). The close control is the dialog's own.
  *
  * Details are the same rows on both sides, except the first two, which name
  * the other party: the customer and their email for the operator, the
@@ -163,6 +163,35 @@ export function AgreementViewDialog({
       {/* The document takes the whole left of the window; everything about it
           (details, Download, the activity) sits in the column on the right. */}
       <DialogContent className="grid h-[92dvh] grid-rows-[minmax(0,1fr)_minmax(0,45%)] gap-0 overflow-hidden p-0 sm:max-w-[min(96vw,1400px)] md:grid-cols-[minmax(0,1fr)_340px] md:grid-rows-1">
+        {/* Phone (owner, Oct 23 2026): Download and New tab are icons in the
+            top corner, beside the close ×, instead of buttons at the foot. */}
+        {row && (
+          <div className="absolute top-4 right-14 z-10 flex gap-2 md:hidden">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Download"
+              title="Download"
+              onClick={() => void download()}
+              disabled={!pdfDoc || saving || downloading}
+              className="bg-[hsl(var(--v2-secondary,var(--secondary)))]"
+            >
+              {saving || downloading ? <Loader2 className="animate-spin" /> : <Download />}
+            </Button>
+            {pdfUrl && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Open in a new tab"
+                title="Open in a new tab"
+                onClick={() => window.open(pdfUrl, "_blank")}
+                className="bg-[hsl(var(--v2-secondary,var(--secondary)))]"
+              >
+                <ExternalLink />
+              </Button>
+            )}
+          </div>
+        )}
         <div className={`min-h-0 overflow-hidden ${AGREEMENT_PAGE_BACKDROP}`}>
           {state.status === "loading" || state.status === "idle" ? (
             <AgreementPageSkeleton />
@@ -255,8 +284,14 @@ export function AgreementViewDialog({
             </div>
             {/* The actions sit at the foot of the column, below everything they act on. */}
             {row && (
-              <div className="flex shrink-0 flex-col gap-2 border-t border-v2-border px-5 py-4">
-                <Button size="default" onClick={() => void download()} disabled={!pdfDoc || saving || downloading} className="w-full">
+              <div
+                className={cn(
+                  "flex shrink-0 flex-col gap-2 border-t border-v2-border px-5 py-4",
+                  // On a phone the corner icons carry Download and New tab; keep the foot only for what is left.
+                  !canResendRow && !saveError && !(state.status === "ready" && state.doc.kind === "html") && "max-md:hidden",
+                )}
+              >
+                <Button size="default" onClick={() => void download()} disabled={!pdfDoc || saving || downloading} className="w-full max-md:hidden">
                   {saving || downloading ? <Loader2 className="animate-spin" /> : <Download />}
                   {row.status === "signed" ? "Download signed PDF" : "Download PDF"}
                 </Button>
@@ -268,7 +303,7 @@ export function AgreementViewDialog({
                     </Button>
                   )}
                   {pdfUrl && (
-                    <Button variant="outline" size="default" onClick={() => window.open(pdfUrl, "_blank")} className="flex-1">
+                    <Button variant="outline" size="default" onClick={() => window.open(pdfUrl, "_blank")} className="flex-1 max-md:hidden">
                       <ExternalLink />
                       New tab
                     </Button>

@@ -266,7 +266,7 @@ export default function PortalPaymentsPage() {
  * Export CSV on the header line (admin's HEADER_ACTIONS_V2 alignment), in the
  * rail's Book a car colour — the owner asked for that colour (Oct 22 2026).
  */
-const HEADER_EXPORT = cn(V2_BUTTON_PRIMARY, HEADER_PRIMARY_V2, 'flex-1 sm:flex-none');
+const HEADER_EXPORT = cn(V2_BUTTON_PRIMARY, HEADER_PRIMARY_V2);
 
 function EmptyLine({ children }: { children: React.ReactNode }) {
   return <p className="rounded-2xl border border-pv-border bg-pv-card px-5 py-8 text-center text-sm text-pv-muted-fg">{children}</p>;
