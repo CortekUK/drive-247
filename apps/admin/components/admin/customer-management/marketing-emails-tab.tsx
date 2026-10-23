@@ -25,6 +25,7 @@ import { toast } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LogEntry, LogList, LogRailCard, LogRailLayout } from './log-rail';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -240,7 +241,38 @@ export function MarketingEmailsTab({ canEdit }: { canEdit: boolean }) {
     );
   }
 
+  // The log is the right-hand column (log-rail.tsx).
+  const log = (
+    <LogRailCard title="Recent activity" description="The last 100 lessons the system handled.">
+      {runs.length === 0 ? (
+        <EmptyState
+          size="section"
+          headline="Nothing sent yet"
+          body="Each lesson that goes out to an operator is recorded here."
+        />
+      ) : (
+        <LogList>
+          {runs.map((r) => (
+            <LogEntry
+              key={r.id}
+              who={r.tenants?.company_name || r.tenants?.slug}
+              status={
+                <Badge variant="secondary" className={STATUS[r.status].className}>
+                  {STATUS[r.status].label}
+                </Badge>
+              }
+              what={r.marketing_emails?.label}
+              when={<span className="whitespace-nowrap">{formatDate(r.created_at)}</span>}
+              detail={r.detail || r.to_email || null}
+            />
+          ))}
+        </LogList>
+      )}
+    </LogRailCard>
+  );
+
   return (
+    <LogRailLayout rail={log}>
     <div className="space-y-6">
       {/* ── The course ──────────────────────────────────────────────────── */}
       <Card>
@@ -399,50 +431,6 @@ export function MarketingEmailsTab({ canEdit }: { canEdit: boolean }) {
         </CardContent>
       </Card>
 
-      {/* ── Log ─────────────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle>Recent activity</CardTitle>
-          <CardDescription>The last 100 lessons the system handled.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {runs.length === 0 ? (
-            <EmptyState
-              size="section"
-              headline="Nothing sent yet"
-              body="Each lesson that goes out to an operator is recorded here."
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>When</TableHead>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead>Lesson</TableHead>
-                  <TableHead>Result</TableHead>
-                  <TableHead>Detail</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {runs.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="whitespace-nowrap">{formatDate(r.created_at)}</TableCell>
-                    <TableCell className="font-medium">{r.tenants?.company_name || r.tenants?.slug}</TableCell>
-                    <TableCell>{r.marketing_emails?.label}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className={STATUS[r.status].className}>
-                        {STATUS[r.status].label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="max-w-[280px] truncate text-muted-foreground">{r.detail || r.to_email || '—'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
       {/* ── Add / edit ──────────────────────────────────────────────────── */}
       <Dialog open={!!draft} onOpenChange={(o) => !o && setDraft(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
@@ -562,5 +550,6 @@ export function MarketingEmailsTab({ canEdit }: { canEdit: boolean }) {
         </DialogContent>
       </Dialog>
     </div>
+    </LogRailLayout>
   );
 }

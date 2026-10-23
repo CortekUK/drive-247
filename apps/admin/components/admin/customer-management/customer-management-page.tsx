@@ -59,6 +59,8 @@ import { TenureRewardsTab } from './tenure-rewards-tab';
 import { CustomDomainTab } from './custom-domain-tab';
 import { ScopeCard } from './scope-card';
 import { CustomerHealthTab } from './customer-health-tab';
+import { LogRailLayout } from './log-rail';
+import { SendLog } from './logs-table';
 
 type Section = AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory' | 'pausing' | 'testimonials' | 'rewards' | 'tenure' | 'domain' | 'health';
 
@@ -68,7 +70,22 @@ const SECTION_IDS = new Set<string>([
   ...AUTOMATIONS.map((a) => a.id),
 ]);
 
+/**
+ * Descriptions a size down on every tab (owner, Oct 23 2026): the card
+ * descriptions and the line under each tab's own heading, 13px instead of 14.
+ * Set once here rather than in each of the twenty tabs.
+ */
+const SMALLER_DESCRIPTIONS = '[&_[data-slot=card-description]]:text-[13px] [&_h1+p]:text-[13px]';
+
 export function CustomerManagementPage() {
+  return (
+    <div className={SMALLER_DESCRIPTIONS}>
+      <CustomerManagementSections />
+    </div>
+  );
+}
+
+function CustomerManagementSections() {
   const { user } = useAuthStore();
   const canEdit = !!user?.is_super_admin;
 
@@ -263,16 +280,21 @@ export function CustomerManagementPage() {
         </p>
       )}
 
-      <ScopeCard settings={settings} canEdit={canEdit} onChange={setSettings} />
+      {/* The log is the right-hand column (log-rail.tsx), beside the audience and the timeline. */}
+      <LogRailLayout rail={<SendLog automation={tab} />}>
+        <div className="space-y-6">
+          <ScopeCard settings={settings} canEdit={canEdit} onChange={setSettings} />
 
-      <AutomationTab
-        automation={tab}
-        steps={steps}
-        settings={settings}
-        canEdit={canEdit}
-        onSettingsChange={setSettings}
-        onStepsChange={refreshSteps}
-      />
+          <AutomationTab
+            automation={tab}
+            steps={steps}
+            settings={settings}
+            canEdit={canEdit}
+            onSettingsChange={setSettings}
+            onStepsChange={refreshSteps}
+          />
+        </div>
+      </LogRailLayout>
     </div>
   );
 }
@@ -281,7 +303,7 @@ function Header() {
   return (
     <div className="space-y-1">
       <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Customer Management Service</h1>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-[13px] text-muted-foreground">
         The scheduled emails Drive247 sends its operators: onboarding, renewal warnings and
         payment confirmations.
       </p>

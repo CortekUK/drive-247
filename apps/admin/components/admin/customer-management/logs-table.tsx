@@ -9,24 +9,16 @@
  * reason whenever it decides not to send, and this is where the reason is read.
  */
 
-import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
+import { EmptyState } from '@/components/admin/empty-state';
 import { EmailsEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { LogEntry, LogList, LogRailCard } from './log-rail';
 
 import { loadSends, NotInstalledError } from '@/lib/customer-management/api';
 import type { AutomationId, CustomerManagementSendRow } from '@/lib/customer-management/types';
@@ -68,105 +60,67 @@ export function SendLog({ automation }: { automation: AutomationId }) {
   }, [refresh]);
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-1">
-            <CardTitle>Log</CardTitle>
-            <CardDescription>
-              Every send and every deliberate skip, newest first.
-            </CardDescription>
+    <LogRailCard
+      title="Log"
+      description="Every send and every deliberate skip, newest first."
+      actions={
+        <>
+          <div className="flex items-center gap-2">
+            <Switch id={`tests-${automation}`} checked={includeTests} onCheckedChange={setIncludeTests} />
+            <Label htmlFor={`tests-${automation}`} className="text-xs text-muted-foreground">
+              Include rehearsals
+            </Label>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Label htmlFor={`tests-${automation}`} className="text-xs text-muted-foreground">
-                Include rehearsals
-              </Label>
-              <Switch
-                id={`tests-${automation}`}
-                checked={includeTests}
-                onCheckedChange={setIncludeTests}
-              />
-            </div>
-            <Button variant="ghost" size="sm" onClick={refresh} disabled={loading}>
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent>
-        {missing ? (
-          <p className="text-sm text-muted-foreground">
-            The log table does not exist yet.
-          </p>
-        ) : rows.length === 0 && !loading ? (
-          <EmptyState
-            size="section"
-            illustration={<EmailsEmptyArt />}
-            headline="Nothing sent yet"
-            body="Use “Preview what would send” above to see what the next run would do, without sending it."
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>When</TableHead>
-                  <TableHead>Operator</TableHead>
-                  <TableHead>Step</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Sent to</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {new Date(row.created_at).toLocaleString()}
-                      {row.test_mode && (
-                        <Badge variant="outline" className="ml-2">
-                          Rehearsal
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {row.tenant_name || row.tenant_slug || '—'}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{row.step_key}</TableCell>
-                    <TableCell>
-                      <StatusCell row={row} />
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {row.to_email || '—'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          <Button variant="ghost" size="sm" onClick={refresh} disabled={loading} aria-label="Refresh the log">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          </Button>
+        </>
+      }
+    >
+      {missing ? (
+        <p className="text-sm text-muted-foreground">The log table does not exist yet.</p>
+      ) : rows.length === 0 && !loading ? (
+        <EmptyState
+          size="section"
+          illustration={<EmailsEmptyArt />}
+          headline="Nothing sent yet"
+          body="Use “Preview what would send” to see what the next run would do, without sending it."
+        />
+      ) : (
+        <LogList>
+          {rows.map((row) => (
+            <LogEntry
+              key={row.id}
+              who={row.tenant_name || row.tenant_slug || '—'}
+              status={<StatusBadge row={row} />}
+              what={<span className="font-mono">{row.step_key}</span>}
+              when={
+                <>
+                  <span className="whitespace-nowrap">{new Date(row.created_at).toLocaleString()}</span>
+                  {row.test_mode && <Badge variant="outline">Rehearsal</Badge>}
+                  {row.to_email && <span className="min-w-0 truncate">{row.to_email}</span>}
+                </>
+              }
+              detail={skipExplanation(row)}
+            />
+          ))}
+        </LogList>
+      )}
+    </LogRailCard>
   );
 }
 
-function StatusCell({ row }: { row: CustomerManagementSendRow }) {
+function StatusBadge({ row }: { row: CustomerManagementSendRow }) {
   if (row.status === 'sent') return <Badge variant="secondary">Sent</Badge>;
-
-  const explanation = row.detail ? SKIP_REASONS[row.detail] || row.detail : null;
   return (
-    <div className="space-y-1">
-      <Badge variant={row.status === 'failed' ? 'destructive' : 'outline'}>
-        {row.status === 'failed' ? 'Failed' : 'Skipped'}
-      </Badge>
-      {explanation && (
-        <p className="max-w-xs text-xs text-muted-foreground">{explanation}</p>
-      )}
-    </div>
+    <Badge variant={row.status === 'failed' ? 'destructive' : 'outline'}>
+      {row.status === 'failed' ? 'Failed' : 'Skipped'}
+    </Badge>
   );
+}
+
+/** Why a row was not sent, in plain English. */
+function skipExplanation(row: CustomerManagementSendRow): string | null {
+  if (row.status === 'sent' || !row.detail) return null;
+  return SKIP_REASONS[row.detail] || row.detail;
 }

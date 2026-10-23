@@ -1,7 +1,8 @@
 'use client';
 
 /**
- * One automation: its switch, its timeline, its templates, and its log.
+ * One automation: its switch, its timeline and its templates. Its log is the
+ * right-hand column (logs-table.tsx, placed by customer-management-page.tsx).
  *
  * The same component serves all three sub-tabs. They differ only in what the
  * offset means — days AFTER signup, days BEFORE renewal, or nothing at all for
@@ -35,7 +36,6 @@ import type {
 } from '@/lib/customer-management/types';
 import { isEventStep } from '@/lib/customer-management/types';
 
-import { SendLog } from './logs-table';
 
 const ENABLED_FIELD: Record<AutomationId, keyof CustomerManagementSettings> = {
   signup: 'signup_enabled',
@@ -183,8 +183,6 @@ export function AutomationTab({
           ))
         )}
       </div>
-
-      <SendLog automation={automation} />
     </div>
   );
 }
