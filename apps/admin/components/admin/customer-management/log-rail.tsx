@@ -64,6 +64,7 @@ export function LogEntry({
   when,
   detail,
   action,
+  onOpen,
 }: {
   who: ReactNode;
   status?: ReactNode;
@@ -72,9 +73,11 @@ export function LogEntry({
   detail?: ReactNode;
   /** A row's own button (Allow again …), under the rest. */
   action?: ReactNode;
+  /** The whole entry opens something (a booking attempt's detail). */
+  onOpen?: () => void;
 }) {
-  return (
-    <li className="space-y-1 py-3 first:pt-0">
+  const body = (
+    <>
       <div className="flex items-start justify-between gap-3">
         <span className="min-w-0 truncate text-sm font-medium">{who}</span>
         {status ? <span className="shrink-0">{status}</span> : null}
@@ -83,6 +86,20 @@ export function LogEntry({
       {when ? <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">{when}</div> : null}
       {detail ? <div className="break-words text-xs text-muted-foreground">{detail}</div> : null}
       {action ? <div className="pt-1">{action}</div> : null}
-    </li>
+    </>
   );
+  if (onOpen) {
+    return (
+      <li className="py-1 first:pt-0">
+        <button
+          type="button"
+          onClick={onOpen}
+          className="-mx-2 block w-[calc(100%+1rem)] space-y-1 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {body}
+        </button>
+      </li>
+    );
+  }
+  return <li className="space-y-1 py-3 first:pt-0">{body}</li>;
 }

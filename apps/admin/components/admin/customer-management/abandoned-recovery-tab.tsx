@@ -41,6 +41,7 @@ import { toast } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LogEntry, LogList, LogRailCard, LogRailLayout } from './log-rail';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -48,7 +49,6 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 
 type Status = 'in_progress' | 'abandoned' | 'emailed' | 'converted' | 'expired';
@@ -320,7 +320,108 @@ export function AbandonedRecoveryTab({ canEdit }: { canEdit: boolean }) {
       ? 'All tenants (V1 and V2)'
       : `${draft?.tenant_ids.length ?? 0} selected tenant${draft?.tenant_ids.length === 1 ? '' : 's'}`;
 
+  // The read-only record is the right-hand column (log-rail.tsx).
+  const rail = (
+    <LogRailCard
+      title="Every booking attempt"
+      description="Click one for the recovery email and the renter's conversation."
+      actions={
+        <div className="flex w-full flex-col gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input className="w-full pl-8" placeholder="Renter or car" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any outcome</SelectItem>
+              <SelectItem value="in_progress">Browsing</SelectItem>
+              <SelectItem value="abandoned">Abandoned</SelectItem>
+              <SelectItem value="emailed">Emailed</SelectItem>
+              <SelectItem value="recovered">Recovered</SelectItem>
+              <SelectItem value="converted">Booked (any)</SelectItem>
+              <SelectItem value="expired">Lost</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      }
+    >
+      {filtered.length === 0 ? (
+        sessions.length === 0 ? (
+          <EmptyState
+            size="section"
+            illustration={<PendingBookingsEmptyArt />}
+            headline="No abandoned bookings in this period"
+            body="When a renter starts a booking on an operator's site and leaves before paying, it shows up here."
+          />
+        ) : (
+          <NoMatchState size="section" noun="booking attempts" />
+        )
+      ) : (
+        <>
+          <LogList>
+            {filtered.slice(0, 500).map((s) => (
+              <LogEntry
+                key={s.id}
+                onOpen={() => setDetail(s)}
+                who={
+                  <>
+                    {s.tenants?.company_name || s.tenants?.slug}
+                    <span className="ml-1.5 text-[11px] font-normal uppercase text-muted-foreground">{s.site}</span>
+                  </>
+                }
+                status={
+                  <Badge variant="secondary" className={STATUS[s.status].className}>
+                    {s.status === 'converted' && s.converted_after_email ? 'Recovered' : STATUS[s.status].label}
+                  </Badge>
+                }
+                what={
+                  <>
+                    {s.customer_name || <span className="text-muted-foreground">Unknown renter</span>}
+                    <span className="text-muted-foreground"> · {s.customer_email || 'no email yet'}</span>
+                  </>
+                }
+                when={
+                  <>
+                    <span className="whitespace-nowrap">{formatDateTime(s.started_at)}</span>
+                    <span>
+                      {s.vehicle_name || 'No car yet'}
+                      {formatTrip(s) ? ` · ${formatTrip(s)}` : ''}
+                    </span>
+                    {s.status !== 'converted' && <span>Left at {STAGE_LABEL[s.stage] ?? s.stage}</span>}
+                  </>
+                }
+                detail={
+                  s.email_status === 'sent' ? (
+                    <>
+                      <span className="text-foreground">{s.email_subject}</span>
+                      <br />
+                      {`${s.email_count || 1} email${(s.email_count || 1) === 1 ? '' : 's'} sent · ${formatDateTime(s.email_sent_at)}`}
+                      {s.reply_count > 0 && ` · ${s.reply_count} repl${s.reply_count === 1 ? 'y' : 'ies'}`}
+                      {s.next_email_at ? ` · next ${formatDateTime(s.next_email_at)}` : s.follow_up_stopped ? ` · ${s.follow_up_stopped}` : ''}
+                    </>
+                  ) : s.email_status ? (
+                    <span className={cn(s.email_status === 'failed' && 'text-red-600')}>
+                      {s.email_status === 'failed' ? 'Email failed: ' : 'Email not sent: '}
+                      {s.email_detail}
+                    </span>
+                  ) : null
+                }
+              />
+            ))}
+          </LogList>
+          {filtered.length > 500 && (
+            <p className="pt-3 text-center text-xs text-muted-foreground">Showing the latest 500 of {filtered.length}. Narrow the filters to see more.</p>
+          )}
+        </>
+      )}
+    </LogRailCard>
+  );
+
   return (
+    <LogRailLayout label="Booking attempts" rail={rail}>
     <div className="space-y-6">
       {/* ── Settings ────────────────────────────────────────────────────── */}
       <Card>
@@ -526,120 +627,6 @@ export function AbandonedRecoveryTab({ canEdit }: { canEdit: boolean }) {
         </CardContent>
       </Card>
 
-      {/* ── Log ─────────────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
-              <CardTitle>Every booking attempt</CardTitle>
-              <CardDescription>Click a row for the recovery email and the renter&apos;s conversation.</CardDescription>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input className="w-[220px] pl-8" placeholder="Renter or car" value={search} onChange={(e) => setSearch(e.target.value)} />
-              </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Any outcome</SelectItem>
-                  <SelectItem value="in_progress">Browsing</SelectItem>
-                  <SelectItem value="abandoned">Abandoned</SelectItem>
-                  <SelectItem value="emailed">Emailed</SelectItem>
-                  <SelectItem value="recovered">Recovered</SelectItem>
-                  <SelectItem value="converted">Booked (any)</SelectItem>
-                  <SelectItem value="expired">Lost</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {filtered.length === 0 ? (
-            sessions.length === 0 ? (
-              <EmptyState
-                size="section"
-                illustration={<PendingBookingsEmptyArt />}
-                headline="No abandoned bookings in this period"
-                body="When a renter starts a booking on an operator's site and leaves before paying, it shows up here."
-              />
-            ) : (
-              <NoMatchState size="section" noun="booking attempts" />
-            )
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Started</TableHead>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead>Renter</TableHead>
-                  <TableHead>Car &amp; dates</TableHead>
-                  <TableHead>Left at</TableHead>
-                  <TableHead>Recovery email</TableHead>
-                  <TableHead>Outcome</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.slice(0, 500).map((s) => (
-                  <TableRow key={s.id} className="cursor-pointer" onClick={() => setDetail(s)}>
-                    <TableCell className="whitespace-nowrap">{formatDateTime(s.started_at)}</TableCell>
-                    <TableCell>
-                      <div className="font-medium">{s.tenants?.company_name || s.tenants?.slug}</div>
-                      <div className="text-xs uppercase text-muted-foreground">{s.site}</div>
-                    </TableCell>
-                    <TableCell className="max-w-[200px]">
-                      <div className="truncate">{s.customer_name || <span className="text-muted-foreground">Unknown</span>}</div>
-                      <div className="truncate text-xs text-muted-foreground">{s.customer_email || 'no email yet'}</div>
-                    </TableCell>
-                    <TableCell className="max-w-[200px]">
-                      <div className="truncate">{s.vehicle_name || '—'}</div>
-                      <div className="text-xs text-muted-foreground">{formatTrip(s) ?? ''}</div>
-                    </TableCell>
-                    <TableCell>{s.status === 'converted' ? '—' : STAGE_LABEL[s.stage] ?? s.stage}</TableCell>
-                    <TableCell className="max-w-[220px]">
-                      {s.email_status === 'sent' ? (
-                        <div>
-                          <div className="truncate">{s.email_subject}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {formatDateTime(s.email_sent_at)}
-                            {s.reply_count > 0 && ` · ${s.reply_count} repl${s.reply_count === 1 ? 'y' : 'ies'}`}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {`${s.email_count || 1} email${(s.email_count || 1) === 1 ? '' : 's'} sent`}
-                            {s.next_email_at
-                              ? ` · next ${formatDateTime(s.next_email_at)}`
-                              : s.follow_up_stopped
-                              ? ` · ${s.follow_up_stopped}`
-                              : ''}
-                          </div>
-                        </div>
-                      ) : s.email_status ? (
-                        <span className={cn('text-xs', s.email_status === 'failed' ? 'text-red-600' : 'text-muted-foreground')}>
-                          {s.email_status === 'failed' ? 'Failed: ' : 'Not sent: '}
-                          {s.email_detail}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className={STATUS[s.status].className}>
-                        {s.status === 'converted' && s.converted_after_email ? 'Recovered' : STATUS[s.status].label}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-          {filtered.length > 500 && (
-            <p className="pt-3 text-center text-xs text-muted-foreground">Showing the latest 500 of {filtered.length}. Narrow the filters to see more.</p>
-          )}
-        </CardContent>
-      </Card>
-
       <FaqGuardrailCard tenants={tenants} />
 
       <ScopeDialog
@@ -652,6 +639,7 @@ export function AbandonedRecoveryTab({ canEdit }: { canEdit: boolean }) {
 
       <SessionDialog session={detail} onClose={() => setDetail(null)} defaultTestTo={user?.email ?? ''} />
     </div>
+    </LogRailLayout>
   );
 }
 
