@@ -98,6 +98,7 @@ export default function PortalRentalsPage() {
       <PageHeader
         title="Rentals"
         description="Manage your rentals, from upcoming to completed."
+        shortDescription="Manage your rentals."
         // On the subtitle line, as the operator header's actions sit.
         actionClassName={HEADER_ACTIONS_V2}
         action={

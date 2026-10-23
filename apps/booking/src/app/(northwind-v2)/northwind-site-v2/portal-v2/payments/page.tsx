@@ -151,6 +151,7 @@ export default function PortalPaymentsPage() {
       <PageHeader
         title="Finances"
         description="What you owe, what you have paid, and every invoice for your bookings."
+        shortDescription="What you owe and paid."
         actionClassName={HEADER_ACTIONS_V2}
         action={
           <button

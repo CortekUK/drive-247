@@ -27,6 +27,7 @@ import { PortalAlertBar } from '@nw/portal-v2/alert-bar';
 export function PageHeader({
   title,
   description,
+  shortDescription,
   action,
   actionClassName,
   eyebrow,
@@ -35,6 +36,8 @@ export function PageHeader({
 }: {
   title: React.ReactNode;
   description?: React.ReactNode;
+  /** The phone's version of `description` when there is an action beside the title: a few words. */
+  shortDescription?: React.ReactNode;
   action?: React.ReactNode;
   /** On the action cluster, e.g. HEADER_ACTIONS_V2 to centre it on the subtitle line. */
   actionClassName?: string;
@@ -50,12 +53,23 @@ export function PageHeader({
         the site's base styles give every h1 DM Sans at -0.02em, which set it
         wider than the operator's Manrope at the same 30px. */}
     {/* Phone (owner, Oct 23 2026): the actions sit on the title's row, at
-        their own width, and the description gives way to them. */}
+        their own width, and the description shortens to make room. */}
     <div className={cn('flex flex-row items-start justify-between gap-3', action && 'max-sm:items-center', className)}>
       <div className="min-w-0">
         {eyebrow ? <p className="mb-1 text-xs font-medium text-pv-muted-fg">{eyebrow}</p> : null}
         <h1 className="font-heading text-2xl font-bold tracking-normal text-pv-fg sm:text-3xl">{title}</h1>
-        {description ? <p className={cn('text-sm text-pv-muted-fg sm:text-base', action && 'max-sm:hidden')}>{description}</p> : null}
+        {description ? (
+          <p className="text-sm text-pv-muted-fg sm:text-base">
+            {action && shortDescription ? (
+              <>
+                <span className="sm:hidden">{shortDescription}</span>
+                <span className="max-sm:hidden">{description}</span>
+              </>
+            ) : (
+              <span className={cn(action && 'max-sm:line-clamp-1')}>{description}</span>
+            )}
+          </p>
+        ) : null}
       </div>
       {action ? <div className={cn('flex shrink-0 items-center gap-2', actionClassName)}>{action}</div> : null}
     </div>

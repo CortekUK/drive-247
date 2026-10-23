@@ -174,6 +174,7 @@ export default function PortalInsurancesPage() {
       <PageHeader
         title="Insurances"
         description="Every insurance you have uploaded, and the cover bought with your rentals, in one place."
+        shortDescription="All your insurance."
         actionClassName={HEADER_ACTIONS_V2}
         action={
           <button
