@@ -24,11 +24,9 @@ import { cn } from '@nw/lib/utils';
 import type { CustomerRental } from '@nw/hooks/use-customer-rentals';
 import { V2_BUTTON_GHOST_SM } from '@portal-v2-shared/button-styles';
 import { useProgressiveRows, useViewportFillCap } from '@portal-v2-shared/list-table';
-import { V2_LIST_CLASSES, V2_LIST_TONES } from '@portal-v2-shared/list-styles';
-import { formatBookingDates } from '@nw/portal-v2/rentals/format';
-import { PhoneList, PhoneRow } from '@nw/portal-v2/phone-list';
+import { V2_LIST_CLASSES } from '@portal-v2-shared/list-styles';
 import { getRentalStatus } from '@portal-v2-shared/rental-status';
-import { RENTAL_STATUS_TONE, RentalsTable, RentalsTableSkeleton, type RentalsTableRow } from '@portal-v2-shared/rentals-table';
+import { RentalsTable, RentalsTableSkeleton, type RentalsTableRow } from '@portal-v2-shared/rentals-table';
 
 /** The operator's status word for this rental: Active, Upcoming, Pending, Completed, Cancelled, Rejected. */
 export function customerRentalStatus(rental: CustomerRental): string {
@@ -66,24 +64,6 @@ export function CustomerRentalsTable({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Phone: the car and its dates, the status on the right. */}
-      <PhoneList>
-        {rows.visible.map((rental) => {
-          const status = customerRentalStatus(rental);
-          return (
-            <PhoneRow
-              key={rental.id}
-              onOpen={() => router.push(`/portal/rentals/${rental.id}`)}
-              title={rental.vehicle?.displayName ?? 'Vehicle'}
-              detail={`${rental.reference} · ${formatBookingDates(rental.startDate, rental.endDate)}`}
-              valueDetail={
-                <span className={cn('text-[13px] font-medium', V2_LIST_TONES[RENTAL_STATUS_TONE[status] ?? 'muted'])}>{status}</span>
-              }
-            />
-          );
-        })}
-      </PhoneList>
-      <div className="max-md:hidden">
       <RentalsTable
         partyLabel="Vehicle"
         rows={rows.visible.map(toRow)}
@@ -93,7 +73,6 @@ export function CustomerRentalsTable({
         hasMore={rows.hasMore}
         maxHeight={maxHeight}
       />
-      </div>
       {footer ? (
       <div className={V2_LIST_CLASSES.footer}>
         <span>

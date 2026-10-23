@@ -36,17 +36,10 @@ import { cn } from '@nw/lib/utils';
 import { AgreementsTable } from '@portal-v2-shared/agreements/table';
 import { AgreementViewDialog } from '@portal-v2-shared/agreements/view-dialog';
 import { loadAgreementDocument, type AgreementDocumentSource } from '@portal-v2-shared/agreements/document';
-import {
-  AGREEMENT_LINK_LABEL,
-  AGREEMENT_STATUS_LABEL,
-  AGREEMENT_STATUS_TONE,
-  agreementReference,
-  formatAgreementSentAt,
-  type AgreementListRow,
-} from '@portal-v2-shared/agreements/list';
+import type { AgreementListRow } from '@portal-v2-shared/agreements/list';
 import { V2_BUTTON_GHOST_SM } from '@portal-v2-shared/button-styles';
 import { useProgressiveRows } from '@portal-v2-shared/list-table';
-import { V2_LIST_CLASSES, V2_LIST_TONES } from '@portal-v2-shared/list-styles';
+import { V2_LIST_CLASSES } from '@portal-v2-shared/list-styles';
 import { usePageSearch } from '@portal-v2-shared/page-search-slot';
 
 import {
@@ -146,16 +139,11 @@ export default function PortalAgreementsPage() {
             </Panel>
           ) : (
             <section className="flex flex-col gap-3" aria-label="Your agreements">
-              {/* Phone: a list, not a table squeezed sideways — every row says
-                  the same company, so a row is its reference, status and date. */}
-              <AgreementsPhoneList rows={progressive.visible} onOpen={setViewRow} />
-              <div className="max-md:hidden">
-                <AgreementsTable
+              <AgreementsTable
                   rows={progressive}
                   party={{ label: 'Company', name: () => companyName, email: () => companyEmail, emailLabel: 'Company email' }}
                   onOpen={setViewRow}
                 />
-              </div>
               <div className={V2_LIST_CLASSES.footer}>
                 <span>
                   {progressive.hasMore
@@ -192,29 +180,3 @@ export default function PortalAgreementsPage() {
   );
 }
 
-function AgreementsPhoneList<T extends AgreementListRow>({ rows, onOpen }: { rows: readonly T[]; onOpen: (row: T) => void }) {
-  const now = new Date();
-  return (
-    <ul className="divide-y divide-pv-border overflow-hidden rounded-2xl border border-pv-border bg-pv-card md:hidden">
-      {rows.map((row) => (
-        <li key={row.id}>
-          <button
-            type="button"
-            onClick={() => onOpen(row)}
-            className="flex w-full cursor-pointer items-center gap-3 px-4 py-3.5 text-left transition-colors duration-150 active:bg-pv-hover motion-reduce:transition-none"
-          >
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[15px] font-semibold text-pv-fg">{agreementReference(row) ?? 'Agreement'}</span>
-              <span className="mt-0.5 block truncate text-[13px] text-pv-muted-fg">
-                {AGREEMENT_LINK_LABEL[row.kind]} · Sent {formatAgreementSentAt(row.sentAt, now)}
-              </span>
-            </span>
-            <span className={cn('shrink-0 text-[13px] font-medium', V2_LIST_TONES[AGREEMENT_STATUS_TONE[row.status]])}>
-              {AGREEMENT_STATUS_LABEL[row.status]}
-            </span>
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}

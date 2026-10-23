@@ -61,7 +61,6 @@ import { LoadError, PageHeader } from '@nw/portal-v2/primitives';
 import { V2_BUTTON_OUTLINE_SM, V2_BUTTON_PRIMARY } from '@portal-v2-shared/button-styles';
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2 } from '@portal-v2-shared/header';
 import { PhoneCarousel } from '@nw/portal-v2/phone-carousel';
-import { PhoneList, PhoneRow } from '@nw/portal-v2/phone-list';
 import { MOTION_FLOATING } from '@portal-v2-shared/menu';
 import { RentalsOverviewFlip } from '@portal-v2-shared/overview-flip';
 import { usePageSearch } from '@portal-v2-shared/page-search-slot';
@@ -670,40 +669,6 @@ function InvoiceTable({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Phone: one line per invoice — number and due date, what is left to
-          pay, and Pay. The table, with its sum column, from md up. */}
-      <PhoneList>
-        {rows.visible.map((invoice) => {
-          const f = figuresOf(invoice);
-          const overdue = f.due?.tone === 'danger';
-          return (
-            <PhoneRow
-              key={invoice.id}
-              muted={f.cancelled}
-              onOpen={() => onOpen(invoice)}
-              title={invoice.number}
-              detail={
-                <>
-                  {invoice.rental?.reference ?? f.entity}
-                  {f.dueDate ? (
-                    <>
-                      {' · '}
-                      <span className={cn(!f.cancelled && overdue && V2_LIST_TONES.danger)}>
-                        Due {format(parseDateOnly(f.dueDate.slice(0, 10)), 'MMM d')}
-                      </span>
-                    </>
-                  ) : null}
-                </>
-              }
-              value={money(f.owes)}
-              valueClassName={!f.cancelled && f.owes > EPS ? (overdue ? V2_LIST_TONES.danger : undefined) : V2_LIST_TONES.success}
-              valueDetail={f.cancelled ? 'Cancelled' : `of ${money(f.total)}`}
-              trailing={!f.cancelled && f.owes > EPS ? <PayButton rentalId={invoice.rentalId} compact className="h-8 px-3 text-xs" /> : null}
-            />
-          );
-        })}
-      </PhoneList>
-      <div className="max-md:hidden">
       <ListTable rows={rows} minWidth="min-w-[960px]">
         <ListTableHeader>
           <ListHead className="w-[20%]">Invoice #</ListHead>
@@ -813,7 +778,6 @@ function InvoiceTable({
           })}
         </ListBody>
       </ListTable>
-      </div>
       <ListFooter shown={rows.visible.length} total={rows.total} hasMore={rows.hasMore} onMore={rows.showMore} noun="invoice" />
     </div>
   );
@@ -824,21 +788,6 @@ function PaymentTable({ payments }: { payments: readonly CustomerPayment[] }) {
   const rows = useProgressiveRows(payments, 'payments');
   return (
     <div className="flex flex-col gap-3">
-      <PhoneList>
-        {rows.visible.map((payment) => {
-          const chip = PAYMENT_CHIP[payment.state];
-          return (
-            <PhoneRow
-              key={payment.id}
-              title={payment.typeLabel}
-              detail={[formatDate(payment.date), payment.rental?.reference].filter(Boolean).join(' · ')}
-              value={formatCurrency(payment.amount)}
-              valueDetail={<span className={V2_LIST_TONES[TONE[chip.tone]]}>{chip.label}</span>}
-            />
-          );
-        })}
-      </PhoneList>
-      <div className="max-md:hidden">
       <ListTable rows={rows} minWidth="min-w-[760px]">
         <ListTableHeader>
           <ListHead className="w-[26%]">Payment</ListHead>
@@ -880,7 +829,6 @@ function PaymentTable({ payments }: { payments: readonly CustomerPayment[] }) {
           })}
         </ListBody>
       </ListTable>
-      </div>
       <ListFooter shown={rows.visible.length} total={rows.total} hasMore={rows.hasMore} onMore={rows.showMore} noun="payment" />
     </div>
   );
