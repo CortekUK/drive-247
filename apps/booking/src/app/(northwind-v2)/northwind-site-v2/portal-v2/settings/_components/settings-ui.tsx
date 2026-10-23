@@ -27,7 +27,6 @@ import { Button } from '@nw/components/ui/button';
 import { Skeleton } from '@nw/components/ui/skeleton';
 import { Switch } from '@nw/components/ui/switch';
 import { cn } from '@nw/lib/utils';
-import { PortalAlertBar } from '@nw/portal-v2/alert-bar';
 
 import { PV_BUTTON_OUTLINE_SM, PV_BUTTON_SM } from './pv-kit';
 
@@ -65,8 +64,6 @@ export function SettingsPageHeader({
         </div>
         {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
       </div>
-      {/* The alert bar, under every page header (alert-bar.tsx). */}
-      <PortalAlertBar />
     </div>
   );
 }
