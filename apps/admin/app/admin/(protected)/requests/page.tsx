@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 import {
   Table,
   TableBody,
@@ -228,10 +229,10 @@ export default function RequestsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div>
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Mode Requests</h1>
-            <p className="text-sm text-muted-foreground">
+            <p className={cn('text-sm text-muted-foreground', PAGE_DESCRIPTION)}>
               Manage tenant requests to switch integration modes ·{' '}
               <span className="tabular-nums">{requests.length}</span> total
               {pendingCount > 0 && (

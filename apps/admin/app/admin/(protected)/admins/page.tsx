@@ -8,7 +8,8 @@ import { toast } from '@/components/ui/sonner';
 import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
 import { Copy, Eye, EyeOff, Pencil, Plus, Power, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { HEADER_ACTIONS, HEADER_PRIMARY } from '@/components/admin/header-buttons';
+import { HEADER_ACTIONS, HEADER_PRIMARY, PAGE_HEADER, PAGE_HEADER_TEXT, PAGE_TITLE, PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
+import { cn } from '@/lib/utils';
 
 type TeamRole = 'super_admin' | 'manager' | 'sales' | 'support';
 
@@ -217,10 +218,10 @@ export default function ManageAdminsPage() {
 
   return (
     <div>
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-between sm:items-start sm:gap-4 mb-6 sm:mb-8">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Manage Admins</h1>
-          <p className="text-sm text-muted-foreground">
+      <div className={cn('flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-between sm:items-start sm:gap-4 mb-6 sm:mb-8', PAGE_HEADER)}>
+        <div className={PAGE_HEADER_TEXT}>
+          <h1 className={cn('text-2xl sm:text-3xl font-bold tracking-tight text-foreground', PAGE_TITLE)}>Manage Admins</h1>
+          <p className={cn('text-sm text-muted-foreground', PAGE_DESCRIPTION)}>
             Your team on the Drive247 dashboard · <span className="text-red-600">Super admins only</span>
           </p>
         </div>

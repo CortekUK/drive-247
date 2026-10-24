@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils';
 import { LogEntry, LogList, LogRailCard, LogRailLayout } from './log-rail';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
+import { PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -245,7 +246,7 @@ export function PausingAccountsTab({ canEdit }: { canEdit: boolean }) {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Pausing Accounts</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className={cn('text-sm text-muted-foreground', PAGE_DESCRIPTION)}>
           Let V2 tenants pause their subscription for 1 or 2 months from Billing → Pause.
         </p>
       </div>

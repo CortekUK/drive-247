@@ -1,6 +1,6 @@
 'use client';
 
-import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton } from '@/components/admin/header-buttons';
+import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton, PAGE_HEADER, PAGE_HEADER_TEXT, PAGE_TITLE, PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -909,18 +909,18 @@ export default function RentalCompaniesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header — stacks on a phone, the add button taking the full width. */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Rental Companies</h1>
-            <p className="text-sm text-muted-foreground">
+      {/* Header — on a phone, the add button sits at the end of the description line. */}
+      <div className={cn('flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between', PAGE_HEADER)}>
+        <div className={cn('flex items-center gap-3', PAGE_HEADER_TEXT)}>
+          <div className={PAGE_HEADER_TEXT}>
+            <h1 className={cn('text-2xl sm:text-3xl font-bold tracking-tight', PAGE_TITLE)}>Rental Companies</h1>
+            <p className={cn('text-sm text-muted-foreground', PAGE_DESCRIPTION)}>
               Manage all rental companies · {tenants.length} total
             </p>
           </div>
         </div>
-        <div className={cn(HEADER_ACTIONS, 'max-sm:w-full')}>
-          <Button className={cn(HEADER_PRIMARY, 'max-sm:h-10 max-sm:flex-1')} onClick={() => setShowChooser(true)}>
+        <div className={HEADER_ACTIONS}>
+          <Button className={HEADER_PRIMARY} onClick={() => setShowChooser(true)}>
             <Plus className="h-4 w-4" />
             Add New Company
           </Button>

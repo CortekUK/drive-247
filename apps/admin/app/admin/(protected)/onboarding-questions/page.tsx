@@ -34,7 +34,7 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
-import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton } from '@/components/admin/header-buttons';
+import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton, PAGE_HEADER, PAGE_HEADER_TEXT, PAGE_TITLE, PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 import {
   KIND_LABEL,
   OnboardingQuestionCard,
@@ -239,10 +239,10 @@ export default function OnboardingQuestionsAdmin() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Onboarding Questions</h1>
-          <p className="text-sm text-muted-foreground">Asked once, the first time a new operator opens the portal.</p>
+      <div className={cn('flex flex-wrap items-center justify-between gap-4', PAGE_HEADER)}>
+        <div className={cn('min-w-0', PAGE_HEADER_TEXT)}>
+          <h1 className={cn('text-2xl sm:text-3xl font-bold tracking-tight', PAGE_TITLE)}>Onboarding Questions</h1>
+          <p className={cn('text-sm text-muted-foreground', PAGE_DESCRIPTION)}>Asked once, the first time a new operator opens the portal.</p>
         </div>
         <div className={HEADER_ACTIONS}>
           <HeaderIconButton

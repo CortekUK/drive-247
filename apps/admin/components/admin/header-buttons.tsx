@@ -26,7 +26,32 @@ import { cn } from '@/lib/utils';
  * above and below and their centre lands on the subtitle's. Below `sm` the
  * header stacks and the cluster keeps its natural height.
  */
-export const HEADER_ACTIONS = 'flex shrink-0 items-center gap-2 sm:self-end sm:h-5';
+export const HEADER_ACTIONS = 'flex shrink-0 items-center gap-2 sm:self-end sm:h-5 max-sm:justify-self-end';
+
+/**
+ * A page header on a phone (below `sm`): the title on its own line, then ONE
+ * line of description — cut short with an ellipsis, never removed — with the
+ * header's buttons at the right end of that line, instead of a full-width
+ * button stacked underneath (asked for Oct 24 2026). Every class is
+ * `max-sm:`, so the desktop header is untouched.
+ *
+ *   <div className={cn('flex …', PAGE_HEADER)}>       the header row
+ *     <div className={PAGE_HEADER_TEXT}>                each wrapper around the h1 and p
+ *       <h1 className={cn('…', PAGE_TITLE)}>…</h1>
+ *       <p className={cn('…', PAGE_DESCRIPTION)}>…</p>
+ *     </div>
+ *     <div className={HEADER_ACTIONS}>…</div>
+ *   </div>
+ *
+ * The wrappers dissolve (`display: contents`) so the title, the description
+ * and the actions are the grid's own items: the title spans both columns, the
+ * description takes what the buttons leave of the second row.
+ */
+export const PAGE_HEADER =
+  'max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:items-center max-sm:gap-x-3 max-sm:gap-y-1';
+export const PAGE_HEADER_TEXT = 'max-sm:contents';
+export const PAGE_TITLE = 'max-sm:col-span-2';
+export const PAGE_DESCRIPTION = 'max-sm:mt-0 max-sm:min-w-0 max-sm:truncate';
 
 /**
  * The header's one labelled button, Northwind's HEADER_PRIMARY_V2: a 32px brand

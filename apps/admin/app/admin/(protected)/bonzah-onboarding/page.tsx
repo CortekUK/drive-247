@@ -4,6 +4,8 @@ import { ShieldCheck } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import BonzahSubmissions from '@/components/admin/BonzahSubmissions';
 import BonzahContentEditor from '@/components/admin/BonzahContentEditor';
+import { PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
+import { cn } from '@/lib/utils';
 
 // Bonzah insurance onboarding for super admins.
 //
@@ -17,9 +19,9 @@ export default function BonzahOnboardingPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Bonzah Onboarding</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className={cn('text-sm text-muted-foreground', PAGE_DESCRIPTION)}>
             Tenant insurance applications, and the training &amp; quiz content they see
           </p>
         </div>

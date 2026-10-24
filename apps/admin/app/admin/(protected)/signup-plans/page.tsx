@@ -36,9 +36,10 @@ import {
   type PlanDraft,
   type SignupPlan,
 } from '@/components/admin/signup-plan-card';
-import { HEADER_ACTIONS, HEADER_PRIMARY } from '@/components/admin/header-buttons';
+import { HEADER_ACTIONS, HEADER_PRIMARY, PAGE_HEADER, PAGE_HEADER_TEXT, PAGE_TITLE, PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 import { SignupPlanEditableCard } from '@/components/admin/signup-plan-editable-card';
 import { SignupEnterpriseCard } from '@/components/admin/signup-enterprise-card';
+import { cn } from '@/lib/utils';
 
 /* -------------------------------------------------------------------------- */
 /*  Types local to the page                                                    */
@@ -581,10 +582,10 @@ export default function SignupPlansPage() {
     */
     <div className="relative space-y-6">
       {/* ------------------------------- Header ------------------------------ */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Signup Plans</h1>
+      <div className={cn('flex flex-wrap items-start justify-between gap-4', PAGE_HEADER)}>
+        <div className={cn('flex items-start gap-3', PAGE_HEADER_TEXT)}>
+          <div className={cn('min-w-0', PAGE_HEADER_TEXT)}>
+            <h1 className={cn('text-2xl sm:text-3xl font-bold tracking-tight', PAGE_TITLE)}>Signup Plans</h1>
             {/*
               This used to read "Changes go live immediately", which is not true and
               cost real debugging time: the public page is ISR-cached, so an admin
@@ -592,7 +593,7 @@ export default function SignupPlansPage() {
               concluded the toggle was broken when the database had in fact updated
               correctly. Say what actually happens instead.
             */}
-            <p className="mt-0.5 max-w-2xl text-sm text-muted-foreground">
+            <p className={cn('mt-0.5 max-w-2xl text-sm text-muted-foreground', PAGE_DESCRIPTION)}>
               Plans on the drive-247.com pricing page
             </p>
           </div>

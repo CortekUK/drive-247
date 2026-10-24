@@ -61,6 +61,8 @@ import { ScopeCard } from './scope-card';
 import { CustomerHealthTab } from './customer-health-tab';
 import { LogRailLayout } from './log-rail';
 import { SendLog } from './logs-table';
+import { PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
+import { cn } from '@/lib/utils';
 
 type Section = AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory' | 'pausing' | 'testimonials' | 'rewards' | 'tenure' | 'domain' | 'health';
 
@@ -311,7 +313,7 @@ function Header() {
   return (
     <div className="space-y-1">
       <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Customer Management Service</h1>
-      <p className="text-[13px] text-muted-foreground">
+      <p className={cn('text-[13px] text-muted-foreground', PAGE_DESCRIPTION)}>
         The scheduled emails Drive247 sends its operators: onboarding, renewal warnings and
         payment confirmations.
       </p>

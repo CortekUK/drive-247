@@ -1,5 +1,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
+import { PAGE_HEADER, PAGE_HEADER_TEXT, PAGE_TITLE, PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
+import { cn } from '@/lib/utils';
 
 interface TableSkeletonProps {
   rows?: number;
@@ -18,12 +20,12 @@ export function TableSkeleton({
 }: TableSkeletonProps) {
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-        <div>
+      <div className={cn('flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center', PAGE_HEADER)}>
+        <div className={PAGE_HEADER_TEXT}>
           {title ? (
             <>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{title}</h1>
-              {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
+              <h1 className={cn('text-2xl sm:text-3xl font-bold tracking-tight', PAGE_TITLE)}>{title}</h1>
+              {subtitle && <p className={cn('text-sm text-muted-foreground mt-1', PAGE_DESCRIPTION)}>{subtitle}</p>}
             </>
           ) : (
             <>
@@ -32,7 +34,7 @@ export function TableSkeleton({
             </>
           )}
         </div>
-        {showButton && <Skeleton className="h-10 w-full sm:w-40" />}
+        {showButton && <Skeleton className="h-8 w-28 rounded-full sm:h-10 sm:w-40 max-sm:justify-self-end" />}
       </div>
 
       <Card>

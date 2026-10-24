@@ -14,7 +14,7 @@ import { toast } from '@/components/ui/sonner';
 import { confirmDialog } from '@/components/ui/confirm';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
-import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton } from '@/components/admin/header-buttons';
+import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton, PAGE_HEADER, PAGE_HEADER_TEXT, PAGE_TITLE, PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 import { usePageSearch } from '@/components/admin/page-search-slot';
 import { SegmentedControl } from '@/components/announcements/segmented-control';
 import { EmptyState } from '@/components/admin/empty-state';
@@ -207,23 +207,26 @@ export default function ContactRequestsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Contact Requests</h1>
-          <p className="text-sm text-muted-foreground">Leads from the website, Meta Ads and Google Ads, and ones you add by hand.</p>
+      <div className={cn('flex flex-wrap items-center justify-between gap-4', PAGE_HEADER)}>
+        <div className={cn('min-w-0', PAGE_HEADER_TEXT)}>
+          <h1 className={cn('text-2xl font-bold tracking-tight sm:text-3xl', PAGE_TITLE)}>Contact Requests</h1>
+          <p className={cn('text-sm text-muted-foreground', PAGE_DESCRIPTION)}>Leads from the website, Meta Ads and Google Ads, and ones you add by hand.</p>
         </div>
-        <div className={cn(HEADER_ACTIONS, 'max-sm:w-full max-sm:flex-wrap')}>
+        <div className={HEADER_ACTIONS}>
           <button
             type="button"
             onClick={() => setSourcesOpen(true)}
-            className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-background pl-3.5 pr-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            aria-label="Connect lead sources"
+            className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-background pl-3.5 pr-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted max-sm:h-8 max-sm:gap-1 max-sm:pl-2.5 max-sm:pr-1.5"
           >
             <span className="flex -space-x-1" aria-hidden>
               <span className="size-2.5 rounded-full bg-primary ring-2 ring-background" />
               {connections.some((c) => c.provider === 'meta') && <span className="size-2.5 rounded-full bg-[#0866FF] ring-2 ring-background" />}
               {connections.some((c) => c.provider === 'google') && <span className="size-2.5 rounded-full bg-[#34A853] ring-2 ring-background" />}
             </span>
-            Connect
+            {/* A phone keeps the source dots and the chevron; the word would
+                leave the description line no room. */}
+            <span className="max-sm:hidden">Connect</span>
             <ChevronRight className="size-4 text-muted-foreground" />
           </button>
           <HeaderIconButton label="Import CSV" onClick={() => setImporting(true)}>
@@ -232,7 +235,7 @@ export default function ContactRequestsPage() {
           <HeaderIconButton label="Export CSV" onClick={exportCsv}>
             <Download className="h-4 w-4" />
           </HeaderIconButton>
-          <Button className={cn(HEADER_PRIMARY, 'max-sm:flex-1')} onClick={() => setEditing('new')}>
+          <Button className={HEADER_PRIMARY} onClick={() => setEditing('new')}>
             <Plus className="h-4 w-4" />
             New request
           </Button>

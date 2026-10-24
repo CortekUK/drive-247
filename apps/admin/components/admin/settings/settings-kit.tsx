@@ -16,6 +16,7 @@ import { createContext, useContext, type ReactNode } from 'react';
 import { Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 
 /** The page title: always heavier than any section title under it. */
 export const SETTINGS_PAGE_TITLE = 'text-2xl font-bold tracking-tight text-foreground';
@@ -28,7 +29,7 @@ export function SettingsPageHeader({ title, description }: { title: string; desc
   return (
     <header className="space-y-1.5">
       <h1 className={SETTINGS_PAGE_TITLE}>{title}</h1>
-      {description && <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>}
+      {description && <p className={cn('max-w-2xl text-sm text-muted-foreground', PAGE_DESCRIPTION)}>{description}</p>}
     </header>
   );
 }

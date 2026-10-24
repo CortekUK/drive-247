@@ -42,6 +42,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
+import { cn } from '@/lib/utils';
 
 export default function AdminPreviewPage() {
   /* The real sidebar, beside the real surfaces.
@@ -81,7 +83,7 @@ export default function AdminPreviewPage() {
       <div className="p-4 pt-1 sm:p-6 sm:pt-2 max-md:pb-[calc(env(safe-area-inset-bottom,0px)+5rem)]">
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Design preview</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className={cn('mt-1 text-sm text-muted-foreground', PAGE_DESCRIPTION)}>
           The Super Admin surfaces in the v2 language. Fixed numbers, no live data.
         </p>
       </header>

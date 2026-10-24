@@ -14,7 +14,7 @@
  *    can be staged before it goes out.
  */
 
-import { HEADER_PRIMARY } from '@/components/admin/header-buttons';
+import { HEADER_PRIMARY, PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
@@ -53,6 +53,7 @@ import {
   BookOpen, ChevronDown, ChevronUp, Eye, EyeOff, Pencil, Plus, Trash2, Users,
 } from 'lucide-react';
 import { confirmDialog } from '@/components/ui/confirm';
+import { cn } from '@/lib/utils';
 
 /* ------------------------------------------------------------------ types */
 
@@ -314,9 +315,9 @@ export default function WelcomePackAdminPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Welcome Pack</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className={cn('text-sm text-muted-foreground', PAGE_DESCRIPTION)}>
             The onboarding document every operator sees. Global — one pack for all tenants.
           </p>
         </div>

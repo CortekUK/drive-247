@@ -32,7 +32,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { confirmDialog } from '@/components/ui/confirm';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { HEADER_ACTIONS, HEADER_PRIMARY } from '@/components/admin/header-buttons';
+import { HEADER_ACTIONS, HEADER_PRIMARY, PAGE_HEADER, PAGE_HEADER_TEXT, PAGE_TITLE, PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 import { EmptyState } from '@/components/admin/empty-state';
 import { FeedbackEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { CATEGORY_META, type Category } from '@/components/admin/feedback-category';
@@ -257,10 +257,10 @@ export default function FeedbacksPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Feedback</h1>
-          <p className="text-sm text-muted-foreground">What operators tell us, from the portal and from campaigns.</p>
+      <div className={cn('flex flex-wrap items-center justify-between gap-4', PAGE_HEADER)}>
+        <div className={cn('min-w-0', PAGE_HEADER_TEXT)}>
+          <h1 className={cn('text-2xl sm:text-3xl font-bold tracking-tight', PAGE_TITLE)}>Feedback</h1>
+          <p className={cn('text-sm text-muted-foreground', PAGE_DESCRIPTION)}>What operators tell us, from the portal and from campaigns.</p>
         </div>
         <div className={HEADER_ACTIONS}>
           <Button className={HEADER_PRIMARY} onClick={() => setCreating(true)} disabled={loading}>

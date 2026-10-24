@@ -1,6 +1,6 @@
 'use client';
 
-import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton } from '@/components/admin/header-buttons';
+import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton, PAGE_HEADER, PAGE_HEADER_TEXT, PAGE_TITLE, PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
 import { AnnouncementsEmptyArt, FeatureCardArt, SystemNoticeArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -36,6 +36,7 @@ import { AnnouncementList, ListSkeleton } from './announcement-list';
 import { ConfirmDialog } from './confirm-dialog';
 import { DeleteAnnouncementDialog } from './delete-announcement-dialog';
 import { QUIET_BUTTON } from './form-field';
+import { cn } from '@/lib/utils';
 
 type PageState =
   | { status: 'loading' }
@@ -457,11 +458,11 @@ export function AnnouncementsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Announcements</h1>
-            <p className="text-sm text-muted-foreground">
+      <div className={cn('flex flex-wrap items-center justify-between gap-4', PAGE_HEADER)}>
+        <div className={cn('flex min-w-0 items-center gap-3', PAGE_HEADER_TEXT)}>
+          <div className={cn('min-w-0', PAGE_HEADER_TEXT)}>
+            <h1 className={cn('text-2xl sm:text-3xl font-bold tracking-tight', PAGE_TITLE)}>Announcements</h1>
+            <p className={cn('text-sm text-muted-foreground', PAGE_DESCRIPTION)}>
               Feature cards on the dashboard and system messages for tenants&apos; portals.
             </p>
           </div>

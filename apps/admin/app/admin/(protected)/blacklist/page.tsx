@@ -6,6 +6,8 @@ import { Fragment, useEffect, useState } from 'react';
 import { supabase, supabaseUrl } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
 import { FilterSearch } from '@/components/admin/filter-primitives';
+import { PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
+import { cn } from '@/lib/utils';
 
 interface BlockedCustomer {
   id: string;
@@ -242,7 +244,7 @@ export default function BlacklistPage() {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Blocked Customers</h1>
-        <p className="mt-2 text-muted-foreground">
+        <p className={cn('mt-2 text-muted-foreground', PAGE_DESCRIPTION)}>
           All blocked customers across every tenant
         </p>
       </div>

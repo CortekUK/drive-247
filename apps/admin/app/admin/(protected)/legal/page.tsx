@@ -29,6 +29,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Eye, EyeOff, Loader2, Save, Scale } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase';
+import { PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
+import { cn } from '@/lib/utils';
 import {
   DEFAULT_PRIVACY_BODY_MD,
   DEFAULT_PRIVACY_EFFECTIVE_DATE,
@@ -223,9 +225,9 @@ export default function LegalPagesAdmin() {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <header className="flex items-center gap-3">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Legal Pages</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className={cn('text-sm text-muted-foreground', PAGE_DESCRIPTION)}>
             The Terms and Privacy Policy served at drive-247.com. Not tenant rental terms.
           </p>
         </div>

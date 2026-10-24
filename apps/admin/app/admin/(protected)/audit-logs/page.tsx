@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { HEADER_ACTIONS, HeaderIconButton } from '@/components/admin/header-buttons';
+import { HEADER_ACTIONS, HeaderIconButton, PAGE_HEADER, PAGE_HEADER_TEXT, PAGE_TITLE, PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -700,11 +700,11 @@ export default function AuditLogsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Audit Logs</h1>
-            <p className="text-sm text-muted-foreground">
+      <div className={cn('flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between', PAGE_HEADER)}>
+        <div className={cn('flex items-center gap-3', PAGE_HEADER_TEXT)}>
+          <div className={PAGE_HEADER_TEXT}>
+            <h1 className={cn('text-2xl sm:text-3xl font-bold tracking-tight', PAGE_TITLE)}>Audit Logs</h1>
+            <p className={cn('text-sm text-muted-foreground', PAGE_DESCRIPTION)}>
               Global activity log across all tenants · <span className="tabular-nums">{totalCount.toLocaleString()}</span> entries
             </p>
           </div>

@@ -42,6 +42,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { BAND_THRESHOLDS, scoreBuckets, type HealthBand } from '@/lib/customer-health/score';
 import { loadScoredTenants, type ScoredTenant } from '@/lib/customer-health/load';
 import { BAND, BandChip, HealthBreakdown } from '@/components/admin/customer-management/health-parts';
+import { PAGE_HEADER, PAGE_HEADER_TEXT, PAGE_TITLE, PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 
 type Scored = ScoredTenant;
 
@@ -174,11 +175,11 @@ export function CustomerHealthTab() {
     <LogRailLayout label="Companies" rail={rail}>
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Customer Health Score</h1>
-            <p className="text-sm text-muted-foreground">
+      <div className={cn('flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between', PAGE_HEADER)}>
+        <div className={cn('flex items-center gap-3', PAGE_HEADER_TEXT)}>
+          <div className={PAGE_HEADER_TEXT}>
+            <h1 className={cn('text-2xl sm:text-3xl font-bold tracking-tight', PAGE_TITLE)}>Customer Health Score</h1>
+            <p className={cn('text-sm text-muted-foreground', PAGE_DESCRIPTION)}>
               A 0–100 score that tells us who might leave ·{' '}
               <span className="tabular-nums">{rows.length}</span> companies · average{' '}
               <span className="tabular-nums">{average}</span>
@@ -189,7 +190,7 @@ export function CustomerHealthTab() {
         <Button
           variant="ghost"
           size="sm"
-          className="gap-1.5 max-sm:-ml-3 max-sm:self-start"
+          className="gap-1.5 max-sm:-mr-2 max-sm:justify-self-end"
           onClick={() => {
             setRefreshing(true);
             void load();

@@ -10,6 +10,8 @@ import { ReferralLinksTab } from '@/components/admin/promo-codes/referral-links-
 import { ClaimsTab } from '@/components/admin/promo-codes/claims-tab';
 import { LeaderboardTab } from '@/components/admin/promo-codes/leaderboard-tab';
 import { SettingsTab } from '@/components/admin/promo-codes/settings-tab';
+import { PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
+import { cn } from '@/lib/utils';
 
 /**
  * Drive247 promo codes + the operator referral programme.
@@ -48,7 +50,7 @@ export default function PromoCodesPage() {
       <div className="flex items-start gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Promo Codes</h1>
-          <p className="mt-0.5 max-w-3xl text-sm text-muted-foreground">
+          <p className={cn('mt-0.5 max-w-3xl text-sm text-muted-foreground', PAGE_DESCRIPTION)}>
             Drive247 campaign codes, and the operator referral programme. Every operator gets a code and a link;
             a new operator who uses it gets a discount, and the operator who referred them earns a growing discount on their own bill.
             {!canEdit && ' You can look up codes and copy links; changes are made by a super admin.'}

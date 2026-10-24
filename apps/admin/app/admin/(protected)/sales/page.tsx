@@ -1,6 +1,6 @@
 'use client';
 
-import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton } from '@/components/admin/header-buttons';
+import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton, PAGE_HEADER, PAGE_HEADER_TEXT, PAGE_TITLE, PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
 import { LeadsEmptyArt } from '@/components/admin/illustrations/scenes/leads';
 import { useEffect, useState } from 'react';
@@ -124,16 +124,16 @@ export default function SalesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header — stacks on a phone, the create button taking the full width. */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Sales</h1>
-            <p className="text-sm text-muted-foreground">Onboard new rental companies</p>
+      {/* Header — on a phone, the create button sits at the end of the description line. */}
+      <div className={cn('flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between', PAGE_HEADER)}>
+        <div className={cn('flex items-center gap-3', PAGE_HEADER_TEXT)}>
+          <div className={PAGE_HEADER_TEXT}>
+            <h1 className={cn('text-2xl sm:text-3xl font-bold tracking-tight', PAGE_TITLE)}>Sales</h1>
+            <p className={cn('text-sm text-muted-foreground', PAGE_DESCRIPTION)}>Onboard new rental companies</p>
           </div>
         </div>
-        <div className={cn(HEADER_ACTIONS, 'max-sm:w-full')}>
-          <Button className={cn(HEADER_PRIMARY, 'max-sm:h-10 max-sm:flex-1')} onClick={() => setShowCreate(true)}>
+        <div className={HEADER_ACTIONS}>
+          <Button className={HEADER_PRIMARY} onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4" />
             Create Onboarding
           </Button>

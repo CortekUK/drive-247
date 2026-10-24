@@ -48,6 +48,8 @@ import {
 
 import { supabase } from '@/lib/supabase';
 import { confirmDialog } from '@/components/ui/confirm';
+import { PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
+import { cn } from '@/lib/utils';
 
 interface ChecklistItem {
   /** `null` until the row has been saved. */
@@ -525,7 +527,7 @@ export default function SetupChecklistAdmin() {
       <header className="flex items-center gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Setup Checklist</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className={cn('text-sm text-muted-foreground', PAGE_DESCRIPTION)}>
             The features every operator has to sit down with once — each with the video or the
             written guide that explains it.
           </p>

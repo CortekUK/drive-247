@@ -44,6 +44,7 @@ import {
   premiumPriceProblem,
 } from '@/lib/integration-pricing';
 import { confirmDialog } from '@/components/ui/confirm';
+import { PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 
 /* ── the board's cards, as northwind lists them ─────────────────────────── */
 
@@ -377,7 +378,7 @@ export default function IntegrationsAdminPage() {
     <div className="mx-auto w-full max-w-[1200px] space-y-6 pb-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Integrations</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className={cn('text-sm text-muted-foreground', PAGE_DESCRIPTION)}>
           The operator&rsquo;s Integrations board. Open a card to set its price and how it shows. Northwind only for now.
         </p>
       </div>

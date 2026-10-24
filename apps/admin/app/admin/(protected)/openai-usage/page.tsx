@@ -1,6 +1,6 @@
 'use client';
 
-import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton } from '@/components/admin/header-buttons';
+import { HEADER_ACTIONS, HEADER_PRIMARY, HeaderIconButton, PAGE_HEADER, PAGE_HEADER_TEXT, PAGE_TITLE, PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
 import { UsageEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -30,6 +30,7 @@ import {
 } from 'recharts';
 import { Sparkles, RotateCcw, AlertTriangle, DollarSign, Activity, Hash, TrendingUp, CalendarDays } from 'lucide-react';
 import { format, subDays, startOfDay } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -206,11 +207,11 @@ export default function OpenAIUsagePage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">OpenAI Usage</h1>
-            <p className="text-sm text-muted-foreground">
+      <div className={cn('flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between', PAGE_HEADER)}>
+        <div className={cn('flex items-center gap-3', PAGE_HEADER_TEXT)}>
+          <div className={PAGE_HEADER_TEXT}>
+            <h1 className={cn('text-2xl sm:text-3xl font-bold tracking-tight', PAGE_TITLE)}>OpenAI Usage</h1>
+            <p className={cn('text-sm text-muted-foreground', PAGE_DESCRIPTION)}>
               Per-call AI cost tracking across all tenants and edge functions
             </p>
           </div>
