@@ -15,6 +15,16 @@ import { cn } from '@nw/lib/utils';
 /** The page column: 1200px, 16px gutters on phones, 24px from md. */
 export const SITE_CONTAINER = 'mx-auto w-full max-w-[1200px] px-4 md:px-6';
 
+/**
+ * Edge to edge, with the navbar's side padding (the landing page's: 20px on a
+ * phone, growing with the window to 100px). For the bar, the footer and the
+ * closing call to action, which line up with it.
+ */
+export const SITE_EDGE = 'px-[clamp(20px,5.2vw,100px)]';
+
+/** The home page's column: the navbar's edges, so every section lines up with the bar and the hero. */
+export const SITE_WIDE = `mx-auto w-full max-w-[1920px] ${SITE_EDGE}`;
+
 /** A flat card: 1px border, 16px radius, white. Add padding at the call site. */
 export const CARD = 'rounded-2xl border border-pv-border bg-pv-card';
 

@@ -1,56 +1,53 @@
-import type { ReadinessVehicle } from "@nw/site-v2/sections/readiness-card";
 import { loadFleetSeed } from "@nw/components/fleet/fleet-seed";
-import { DEFAULT_HOME_HERO } from "@nw/lib/cms/defaults";
 import { pageMetadata } from "@nw/lib/cms/metadata";
-import { getTenantSlug, isEditMode, loadSection } from "@nw/lib/cms/server";
+import { getTenantSlug } from "@nw/lib/cms/server";
 import { SiteV2Hero } from "@nw/site-v2/home";
-import { CtaBanner } from "@nw/site-v2/sections/cta-banner";
-import { FaqSection } from "@nw/site-v2/sections/faq-section";
 import { FleetSection } from "@nw/site-v2/sections/fleet-section";
-import { HowItWorksSection } from "@nw/site-v2/sections/how-it-works-section";
-import { SafetyVerificationSection } from "@nw/site-v2/sections/safety-verification-section";
-import { StatsStrip } from "@nw/site-v2/sections/stats-strip";
+import { HomeCta } from "@nw/site-v2/sections/home-cta";
+import { HomeFaq } from "@nw/site-v2/sections/home-faq";
+import { HomeSteps } from "@nw/site-v2/sections/home-steps";
+import { ScrollReveal } from "@nw/site-v2/sections/scroll-reveal";
 import { TestimonialsSection } from "@nw/site-v2/sections/testimonials-section";
-import { WhyChooseUsSection } from "@nw/site-v2/sections/why-choose-us-section";
+import { WhyRentSection } from "@nw/site-v2/sections/why-rent-section";
 
 /**
- * Northwind booking site v2 — home. The same sections, in the same order, as
- * the current home page, each in its v2 form.
- *
- * The hero reads exactly what the current `HeroSection` reads: the CMS
- * `home_hero` section, the edit-mode flag, and the fleet seed — the last only
- * so the readiness card names (and links to) a real car, the cheapest one
- * (`loadFleetSeed` orders by daily rate). All three run in parallel and the
- * seed never throws, so an empty fleet just keeps the card's shipped copy.
+ * Northwind booking site v2 — home. Read top to bottom it answers a first-time
+ * renter's questions in order: can I book here (hero search), which car (the
+ * fleet), how does it work, why this company, what do I need to bring — then
+ * what others say, the leftover questions, and one last way in.
  */
 
 export function generateMetadata() {
   return pageMetadata("home", "");
 }
 
+/** The car the hero's phone shows: the operator's dearest. */
+async function heroCars() {
+  const seed = await loadFleetSeed(await getTenantSlug());
+  const cars = [...(seed?.vehicles ?? [])]
+    .sort((a, b) => (b.dailyRent ?? 0) - (a.dailyRent ?? 0))
+    .slice(0, 1)
+    .map((vehicle) => ({
+      id: vehicle.id,
+      name: vehicle.name,
+      label: [vehicle.categoryLabel, vehicle.year].filter(Boolean).join(' · ') || null,
+      dailyRent: vehicle.dailyRent,
+    }));
+  return { cars, currencyCode: seed?.currencyCode ?? null };
+}
+
 export default async function NorthwindV2Home() {
-  const tenantSlug = await getTenantSlug();
-  const [hero, seed, editing] = await Promise.all([
-    loadSection("home", "home_hero", DEFAULT_HOME_HERO),
-    loadFleetSeed(tenantSlug),
-    isEditMode(),
-  ]);
-
-  const featured = seed?.vehicles[0];
-  const vehicle: ReadinessVehicle | null =
-    featured === undefined ? null : { id: featured.id, name: featured.name, categoryLabel: featured.categoryLabel };
-
+  const hero = await heroCars();
   return (
     <>
-      <SiteV2Hero hero={hero} vehicle={vehicle} editing={editing} />
+      <ScrollReveal />
+      <SiteV2Hero cars={hero.cars} currencyCode={hero.currencyCode} />
       <FleetSection />
-      <WhyChooseUsSection />
-      <StatsStrip />
-      <HowItWorksSection />
+      <WhyRentSection />
+      <HomeSteps />
       <TestimonialsSection />
-      <SafetyVerificationSection />
-      <FaqSection />
-      <CtaBanner />
+      <HomeFaq />
+      <HomeCta />
     </>
   );
 }

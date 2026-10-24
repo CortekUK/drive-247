@@ -1,34 +1,15 @@
-import { DEFAULT_BOOKING_HEADER } from "@nw/lib/cms/defaults";
-import { loadSection } from "@nw/lib/cms/server";
-import { Editable, cmsSection } from "@nw/lib/cms/editable";
-import { SITE_CONTAINER, SectionHeading } from "@nw/site-v2/kit";
-import { FleetStrip } from "@nw/site-v2/sections/fleet-strip";
-import { MarqueeStrip } from "@nw/site-v2/sections/marquee-strip";
+import { loadFleetSeed } from "@nw/components/fleet/fleet-seed";
+import { getTenantSlug } from "@nw/lib/cms/server";
+import { HomeFleet } from "@nw/site-v2/sections/home-fleet";
 
 /**
- * v2 of `components/sections/fleet-section.tsx` — the home fleet band. Same
- * key (`home / booking_header`), read on the server so the operator's heading
- * is in the first byte; the strip's own words travel down as props.
+ * The home page's cars — "Ready to drive". Loaded on the server so the
+ * operator's cars are in the first HTML; the live query takes over in the
+ * browser (see `home-fleet.tsx`, which also owns the heading, because its
+ * arrow buttons drive the row). The seed never throws: an unreachable fleet
+ * renders the empty state, not an error page.
  */
 export async function FleetSection() {
-  const header = await loadSection("home", "booking_header", DEFAULT_BOOKING_HEADER);
-
-  return (
-    <section {...cmsSection("home.booking_header", "Fleet")}>
-      <div className={`${SITE_CONTAINER} pt-12 md:pt-16`}>
-        <SectionHeading
-          title={<Editable path="home.booking_header.title">{header.title}</Editable>}
-          description={<Editable path="home.booking_header.subtitle">{header.subtitle}</Editable>}
-        />
-        <FleetStrip
-          allMakesLabel={header.all_makes_label}
-          viewAllText={header.view_all_text}
-          emptyText={header.empty_text}
-          errorText={header.error_text}
-        />
-      </div>
-
-      <MarqueeStrip />
-    </section>
-  );
+  const seed = await loadFleetSeed(await getTenantSlug());
+  return <HomeFleet seed={seed} />;
 }

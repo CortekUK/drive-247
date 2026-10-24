@@ -19,23 +19,21 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { CalendarDays, ChevronDown, LayoutGrid, LogOut, Menu, X } from 'lucide-react-nw';
 
 import { BrandMark } from '@nw/components/layout/brand-mark';
-import { Button } from '@nw/components/ui/button';
 import { MOTION_ANCHORED } from '@nw/components/ui/motion';
-import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from '@nw/components/ui/sheet';
 import { useTenant } from '@nw/contexts/TenantContext';
 import { useCustomer } from '@nw/hooks/use-customer';
+import { SITE_EDGE } from '@nw/site-v2/kit';
 import { QuickBookProvider, QuickBookTrigger } from '@nw/site-v2/quick-book/quick-book-dialog';
 import type { PageSections } from '@nw/lib/cms/types';
 import { NAV_LINKS } from '@nw/lib/constants';
 import { cn } from '@nw/lib/utils';
 import { brandHslVars } from '@nw/portal-v2/brand';
-
-import { SITE_CONTAINER } from './kit';
 
 export function SiteV2Shell({
   fontClass,
@@ -84,13 +82,7 @@ export function SiteV2Shell({
         className={cn('pv2 flex min-h-dvh flex-col overflow-x-clip', fontClass)}
         style={(brandVars ?? undefined) as React.CSSProperties | undefined}
       >
-        <SiteHeader
-          links={links}
-          tenantName={tenantName}
-          siteSettings={siteSettings}
-          fontClass={fontClass}
-          brandVars={brandVars}
-        />
+        <SiteHeader links={links} tenantName={tenantName} siteSettings={siteSettings} />
         <main className="pv2-enter flex-1">{children}</main>
         {footer}
       </div>
@@ -100,9 +92,24 @@ export function SiteV2Shell({
 
 /* ───────────────────────────────── header ──────────────────────────────── */
 
-const NAV_ITEM =
-  'inline-flex h-9 items-center whitespace-nowrap rounded-full px-3 text-[13px] font-medium transition-colors duration-200 ease-out ' +
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none';
+/**
+ * The bar runs edge to edge with the same side padding as the Drive247 landing
+ * page's nav (`apps/web/src/components/landing-v4`): 20px on a phone, growing
+ * with the window to 100px.
+ */
+const EDGE = SITE_EDGE;
+
+/** The landing's nav pills: 40px (36px on phones), 14px semibold, fully round. */
+const PILL =
+  'inline-flex h-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 text-[14px] font-semibold ' +
+  'transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none';
+const PILL_PRIMARY = `${PILL} bg-pv-primary text-pv-primary-fg hover:bg-pv-primary/90`;
+const PILL_OUTLINE = `${PILL} border border-pv-border bg-pv-card text-pv-fg hover:border-pv-tint hover:bg-pv-tint`;
+
+/** The square-ish menu button, as on the landing. */
+const BURGER =
+  'grid size-[42px] shrink-0 place-items-center rounded-xl border border-pv-border bg-pv-card text-pv-fg transition-colors duration-200 ' +
+  'hover:bg-pv-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none';
 
 const MENU_ITEM =
   'flex cursor-pointer select-none items-center rounded-lg px-2.5 py-2 text-[13px] text-pv-fg outline-none ' +
@@ -131,6 +138,8 @@ function Brand({ tenantName, siteSettings }: { tenantName: string | null; siteSe
       className={cn(
         'min-w-0 shrink rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30',
         '[&_img]:max-h-8 [&_img]:max-w-[140px] [&_span]:truncate [&_span]:text-[15px] [&_span]:text-pv-fg',
+        // On a phone a logo is the brand on its own; the name next to it would only truncate.
+        'max-sm:[&_img~span]:hidden',
       )}
     />
   );
@@ -175,13 +184,13 @@ function AccountControl() {
 
   // Hold the slot while the session resolves, so "Sign in" does not flash for
   // a customer who is in fact signed in.
-  if (status === 'loading') return <span aria-hidden="true" className="h-9 w-24" />;
+  if (status === 'loading') return <span aria-hidden="true" className="h-10 w-24" />;
 
   if (status === 'anonymous') {
     return (
-      <Button asChild variant="brand-ghost" className="h-9 px-3 text-[13px]">
-        <Link href="/login">Sign in</Link>
-      </Button>
+      <Link href="/login" className={PILL_OUTLINE}>
+        Sign in
+      </Link>
     );
   }
 
@@ -192,7 +201,7 @@ function AccountControl() {
       <DropdownMenu.Trigger asChild>
         <button
           type="button"
-          className="inline-flex h-9 max-w-[180px] items-center gap-2 rounded-full border border-pv-border bg-pv-card pl-1 pr-2.5 text-[13px] font-medium text-pv-fg transition-colors duration-200 hover:bg-pv-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none"
+          className="inline-flex h-10 max-w-[180px] items-center gap-2 rounded-full border border-pv-border bg-pv-card pl-1.5 pr-3 text-[13px] font-medium text-pv-fg transition-colors duration-200 hover:bg-pv-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none"
         >
           <Avatar initials={initials} />
           <span className="truncate">{firstName}</span>
@@ -247,27 +256,42 @@ function SiteHeader({
   links,
   tenantName,
   siteSettings,
-  fontClass,
-  brandVars,
 }: {
   links: ReadonlyArray<{ href: string; label: string }>;
   tenantName: string | null;
   siteSettings?: PageSections | null;
-  fontClass: string;
-  brandVars: Record<string, string> | null;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  // A link tapped in the phone menu closes it; so does any other navigation.
+  // A link tapped in the menu closes it; so does any other navigation.
   useEffect(() => setOpen(false), [pathname]);
 
+  /* At the top the bar is the hero's own surface; the hairline under it comes
+     in once the page scrolls under the bar. */
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 4);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   return (
-    <header className="sticky top-0 z-30 border-b border-pv-border/70 bg-pv-bg/75 backdrop-blur-md">
-      <div className={cn(SITE_CONTAINER, 'flex h-16 items-center gap-3')}>
+    <header className="sticky top-0 z-30">
+      <div
+        className={cn(
+          EDGE,
+          'flex h-[60px] items-center gap-3 border-b transition-colors duration-200 sm:h-[68px] min-[1060px]:gap-7 motion-reduce:transition-none',
+          scrolled
+            ? 'border-pv-border bg-[color-mix(in_srgb,var(--nw-hero-bg)_90%,transparent)] backdrop-blur-md backdrop-saturate-150'
+            : 'border-transparent bg-[var(--nw-hero-bg)]',
+        )}
+      >
         <Brand tenantName={tenantName} siteSettings={siteSettings} />
 
-        <nav aria-label="Primary" className="ml-3 hidden min-w-0 flex-1 items-center gap-0.5 lg:flex">
+        {/* The section links, centred in the bar; they move into the menu below 1060px. */}
+        <nav aria-label="Primary" className="mx-auto hidden items-center gap-0.5 min-[1060px]:flex">
           {links.map((link) => {
             const active = isActive(pathname, link.href);
             return (
@@ -276,8 +300,9 @@ function SiteHeader({
                 href={link.href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  NAV_ITEM,
-                  active ? 'bg-pv-tint text-pv-primary' : 'text-pv-muted-fg hover:bg-pv-hover hover:text-pv-fg',
+                  'whitespace-nowrap rounded-full px-3 py-2 text-[14px] font-medium transition-colors duration-200 ease-out',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none',
+                  active ? 'bg-pv-card text-pv-fg' : 'text-pv-muted-fg hover:bg-pv-card hover:text-pv-fg',
                 )}
               >
                 {link.label}
@@ -286,11 +311,13 @@ function SiteHeader({
           })}
         </nav>
 
-        <div className="ml-auto hidden shrink-0 items-center gap-2 lg:flex">
-          <AccountControl />
-          <Button asChild variant="brand" className="h-9 px-4 text-[13px]">
-            <QuickBookTrigger>Book a car</QuickBookTrigger>
-          </Button>
+        <div className="ml-auto flex items-center gap-2 max-[380px]:hidden min-[1060px]:ml-0">
+          <span className="hidden sm:contents">
+            <AccountControl />
+          </span>
+          <QuickBookTrigger className={cn(PILL_PRIMARY, 'max-sm:h-9 max-sm:px-3.5 max-sm:text-[13.5px]')}>
+            Book a car
+          </QuickBookTrigger>
         </div>
 
         <button
@@ -298,140 +325,132 @@ function SiteHeader({
           onClick={() => setOpen(true)}
           aria-expanded={open}
           aria-label="Open menu"
-          className="ml-auto grid size-11 shrink-0 place-items-center rounded-full text-pv-fg transition-colors duration-200 hover:bg-pv-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none lg:hidden"
+          className={cn(BURGER, 'max-[380px]:ml-auto min-[1060px]:hidden')}
         >
           <Menu className="size-5" />
         </button>
       </div>
 
-      <PhoneNav
+      <MenuSheet
         open={open}
-        onOpenChange={setOpen}
+        onClose={() => setOpen(false)}
         links={links}
         pathname={pathname}
         tenantName={tenantName}
         siteSettings={siteSettings}
-        fontClass={fontClass}
-        brandVars={brandVars}
       />
     </header>
   );
 }
 
-/* ─────────────────────────────── phone drawer ──────────────────────────── */
+/* ──────────────────────────────── menu sheet ───────────────────────────── */
 
-/** The phone menu — the one side sheet the site allows. 44px rows throughout. */
-function PhoneNav({
+const noSubscribe = () => () => {};
+
+/**
+ * The menu below 1060px, as on the landing page: a full-screen sheet with the
+ * logo and a close button on top, the links centred one per row with a
+ * hairline between them, and the two actions at the foot. It is portalled to
+ * <body> (which carries the site's tokens and font while the shell is
+ * mounted): the bar's backdrop-filter would otherwise trap a fixed sheet
+ * inside the bar. While closed it stays painted but invisible, so it can fade
+ * out rather than vanish.
+ */
+function MenuSheet({
   open,
-  onOpenChange,
+  onClose,
   links,
   pathname,
   tenantName,
   siteSettings,
-  fontClass,
-  brandVars,
 }: {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onClose: () => void;
   links: ReadonlyArray<{ href: string; label: string }>;
   pathname: string | null;
   tenantName: string | null;
   siteSettings?: PageSections | null;
-  fontClass: string;
-  brandVars: Record<string, string> | null;
 }) {
-  const { status, displayName, email, initials } = useCustomer();
-  const { signingOut, signOut } = useSignOut();
+  const host = useSyncExternalStore(noSubscribe, () => document.body, () => null);
+  const { status } = useCustomer();
+  const tab = open ? 0 : -1;
 
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        showCloseButton={false}
-        // Focus lands on the drawer, not its first link (which would open looking hovered).
-        onOpenAutoFocus={(event) => event.preventDefault()}
-        className={cn('pv2-tokens w-[min(20rem,88vw)] max-w-none gap-0 border-l border-pv-border bg-pv-bg p-0 sm:max-w-none lg:hidden', fontClass)}
-        style={(brandVars ?? undefined) as React.CSSProperties | undefined}
-      >
-        <SheetTitle className="sr-only">Menu</SheetTitle>
-        <SheetDescription className="sr-only">Site navigation, your account, and the booking link.</SheetDescription>
+  // The page stays still behind the sheet; Escape closes it.
+  useEffect(() => {
+    if (!open) return;
+    const { overflow } = document.body.style;
+    document.body.style.overflow = 'hidden';
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = overflow;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open, onClose]);
 
-        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-pv-border px-4">
-          <Brand tenantName={tenantName} siteSettings={siteSettings} />
-          <SheetClose
-            aria-label="Close menu"
-            className="ml-auto grid size-11 shrink-0 place-items-center rounded-full text-pv-fg transition-colors duration-200 hover:bg-pv-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none"
-          >
-            <X className="size-5" />
-          </SheetClose>
-        </div>
+  if (!host) return null;
 
-        <nav aria-label="Primary" className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-          <ul className="flex flex-col gap-0.5">
-            {links.map((link) => {
-              const active = isActive(pathname, link.href);
-              return (
-                <li key={link.href}>
-                  <SheetClose asChild>
-                    <Link
-                      href={link.href}
-                      aria-current={active ? 'page' : undefined}
-                      className={cn(
-                        'flex h-11 items-center rounded-full px-4 text-sm font-medium transition-colors duration-200 motion-reduce:transition-none',
-                        active ? 'bg-pv-tint text-pv-primary' : 'text-pv-fg hover:bg-pv-hover',
-                      )}
-                    >
-                      {link.label}
-                    </Link>
-                  </SheetClose>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Menu"
+      aria-hidden={!open}
+      className={cn(
+        'fixed inset-0 z-[60] flex flex-col bg-pv-bg text-pv-fg motion-reduce:transition-none min-[1060px]:hidden',
+        open
+          ? 'visible translate-y-0 opacity-100 [transition:opacity_200ms_ease-out,transform_200ms_ease-out]'
+          : 'invisible -translate-y-3 opacity-0 [transition:opacity_200ms_ease-in,transform_200ms_ease-in,visibility_0s_linear_200ms]',
+      )}
+    >
+      <div className={cn(EDGE, 'flex h-[60px] shrink-0 items-center justify-between gap-3 border-b border-pv-border sm:h-[68px]')}>
+        <Brand tenantName={tenantName} siteSettings={siteSettings} />
+        <button type="button" onClick={onClose} aria-label="Close menu" tabIndex={tab} className={BURGER}>
+          <X className="size-5" />
+        </button>
+      </div>
 
-        {/* Booking first, account second — one primary action, as in v1. */}
-        <div className="shrink-0 space-y-2 border-t border-pv-border p-4">
-          <SheetClose asChild>
-            <Button asChild variant="brand" className="h-11 w-full">
-              <QuickBookTrigger>Book a car</QuickBookTrigger>
-            </Button>
-          </SheetClose>
+      <nav aria-label="Primary" className={cn(EDGE, 'flex min-h-0 flex-1 flex-col overflow-y-auto py-4')}>
+        {links.map((link, index) => {
+          const active = isActive(pathname, link.href);
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
+              onClick={onClose}
+              tabIndex={tab}
+              aria-current={active ? 'page' : undefined}
+              style={{ animationDelay: `${50 + index * 40}ms` }}
+              className={cn(
+                'block border-b border-pv-border py-[22px] text-center text-[20px] font-semibold tracking-[-0.01em] transition-colors duration-200',
+                'hover:text-pv-primary focus-visible:text-pv-primary focus-visible:outline-none motion-reduce:transition-none',
+                active ? 'text-pv-primary' : 'text-pv-fg',
+                open && 'pv2-enter',
+              )}
+            >
+              {link.label}
+            </Link>
+          );
+        })}
+      </nav>
 
-          {status === 'authenticated' ? (
-            <>
-              <SheetClose asChild>
-                <Link
-                  href="/portal"
-                  className="flex h-12 items-center gap-2.5 rounded-xl px-2 transition-colors duration-200 hover:bg-pv-hover motion-reduce:transition-none"
-                >
-                  <Avatar initials={initials} size="lg" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-semibold text-pv-fg">{displayName ?? 'Your account'}</span>
-                    {email ? <span className="block truncate text-[11px] text-pv-muted-fg">{email}</span> : null}
-                  </span>
-                  <LayoutGrid className="size-4 shrink-0 text-pv-muted-fg" />
-                </Link>
-              </SheetClose>
-              <button
-                type="button"
-                disabled={signingOut}
-                onClick={() => void signOut()}
-                className="flex h-11 w-full items-center gap-2.5 rounded-full px-4 text-sm font-medium text-pv-danger transition-colors duration-200 hover:bg-pv-danger/10 disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
-              >
-                <LogOut className="size-4" />
-                {signingOut ? 'Signing out…' : 'Sign out'}
-              </button>
-            </>
-          ) : status === 'anonymous' ? (
-            <SheetClose asChild>
-              <Button asChild variant="brand-outline" className="h-11 w-full">
-                <Link href="/login">Sign in</Link>
-              </Button>
-            </SheetClose>
-          ) : null}
-        </div>
-      </SheetContent>
-    </Sheet>
+      <div className={cn(EDGE, 'grid shrink-0 grid-cols-2 gap-2.5 pb-[calc(20px+env(safe-area-inset-bottom,0px))] pt-4')}>
+        {status === 'authenticated' ? (
+          <Link href="/portal" onClick={onClose} tabIndex={tab} className={cn(PILL_OUTLINE, 'h-12 text-[15px]')}>
+            Your account
+          </Link>
+        ) : (
+          <Link href="/login" onClick={onClose} tabIndex={tab} className={cn(PILL_OUTLINE, 'h-12 text-[15px]')}>
+            Sign in
+          </Link>
+        )}
+        <QuickBookTrigger onClick={onClose} tabIndex={tab} className={cn(PILL_PRIMARY, 'h-12 text-[15px]')}>
+          Book a car
+        </QuickBookTrigger>
+      </div>
+    </div>,
+    host,
   );
 }
