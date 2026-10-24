@@ -314,8 +314,7 @@ function Header() {
     <div className="space-y-1">
       <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Customer Management Service</h1>
       <p className={cn('text-[13px] text-muted-foreground', PAGE_DESCRIPTION)}>
-        The scheduled emails Drive247 sends its operators: onboarding, renewal warnings and
-        payment confirmations.
+        Scheduled emails to operators.
       </p>
     </div>
   );
