@@ -24,6 +24,23 @@ interface BookingNotificationRequest {
   monthlyAmount: number;
   totalAmount: number;
   tenantId?: string;
+  /** Read from the rental, never trusted from the caller. */
+  periodType?: string | null;
+}
+
+/**
+ * What `monthlyAmount` is the rate FOR. Despite its name the field carries
+ * `rentals.monthly_amount`, which is the per-period rate of whatever period
+ * the rental runs on, so a one-day booking's $75 was labelled "Monthly
+ * Rental Amount" (an operator asked why, Oct 25 2026).
+ */
+function rateLabel(periodType: string | null | undefined): string {
+  switch ((periodType || '').toLowerCase()) {
+    case 'daily': return 'Daily';
+    case 'weekly': return 'Weekly';
+    case 'monthly': return 'Monthly';
+    default: return '';
+  }
 }
 
 // sendEmail is now imported from resend-service.ts
@@ -71,7 +88,7 @@ function generateCustomerEmailContent(data: BookingNotificationRequest, branding
                             <table role="presentation" style="width: 100%; border-collapse: collapse; background: linear-gradient(135deg, ${branding.accentColor} 0%, #d4b896 100%); border-radius: 8px; margin-bottom: 25px;">
                                 <tr>
                                     <td style="padding: 20px; text-align: center;">
-                                        <p style="margin: 0 0 5px; color: rgba(255,255,255,0.9); font-size: 14px;">Monthly Rental Amount</p>
+                                        <p style="margin: 0 0 5px; color: rgba(255,255,255,0.9); font-size: 14px;">${[rateLabel(data.periodType), 'Rental Amount'].filter(Boolean).join(' ')}</p>
                                         <p style="margin: 0; color: white; font-size: 32px; font-weight: bold;">$${data.monthlyAmount.toLocaleString()}</p>
                                     </td>
                                 </tr>
@@ -131,7 +148,7 @@ function generateAdminEmailContent(data: BookingNotificationRequest, branding: T
                             <table role="presentation" style="width: 100%; border-collapse: collapse; background: linear-gradient(135deg, ${branding.accentColor} 0%, #d4b589 100%); border-radius: 8px; margin-bottom: 25px;">
                                 <tr>
                                     <td style="padding: 20px; text-align: center;">
-                                        <p style="margin: 0 0 5px; color: rgba(255,255,255,0.9); font-size: 14px;">Monthly Amount</p>
+                                        <p style="margin: 0 0 5px; color: rgba(255,255,255,0.9); font-size: 14px;">${[rateLabel(data.periodType), 'Rental Amount'].filter(Boolean).join(' ')}</p>
                                         <p style="margin: 0; color: white; font-size: 28px; font-weight: bold;">$${data.monthlyAmount.toLocaleString()}</p>
                                     </td>
                                 </tr>
@@ -157,15 +174,17 @@ serve(async (req) => {
     const data: BookingNotificationRequest = await req.json();
     console.log('Sending booking notifications for rental:', data.rentalId);
 
-    // Get tenant_id from rental if not provided
+    // The rental's tenant (if not provided) and the period its rate is for.
     let tenantId = data.tenantId;
-    if (!tenantId && data.rentalId) {
+    data.periodType = null;
+    if (data.rentalId) {
       const { data: rental } = await supabase
         .from('rentals')
-        .select('tenant_id')
+        .select('tenant_id, rental_period_type')
         .eq('id', data.rentalId)
         .single();
-      tenantId = rental?.tenant_id;
+      if (!tenantId) tenantId = rental?.tenant_id;
+      data.periodType = rental?.rental_period_type ?? null;
     }
 
     // Get tenant branding
