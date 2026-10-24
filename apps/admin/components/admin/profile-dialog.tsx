@@ -397,7 +397,8 @@ export function ProfileDialog({
                   className={
                     "absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-white " +
                     "[transition:opacity_200ms_ease-in] group-hover:[transition:opacity_200ms_ease-out] motion-reduce:transition-none " +
-                    (uploading ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100")
+                    // A phone has no hover, so the camera stays on show there.
+                    (uploading ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 max-md:opacity-100")
                   }
                 >
                   {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
@@ -442,7 +443,8 @@ export function ProfileDialog({
               <Label htmlFor="profile-email">
                 Email
               </Label>
-              <div className="flex gap-2">
+              {/* Stacked on a phone, so the address is not squeezed behind the button. */}
+              <div className="flex gap-2 max-sm:flex-col">
                 <Input
                   id="profile-email"
                   type="email"
@@ -461,7 +463,7 @@ export function ProfileDialog({
               {emailSentTo ? (
                 <div className="space-y-3 rounded-xl border border-border p-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="code-new-email">Code sent to {emailSentTo}</Label>
+                    <Label htmlFor="code-new-email" className="[overflow-wrap:anywhere]">Code sent to {emailSentTo}</Label>
                     <CodeInput
                       id="code-new-email"
                       value={newEmailCode}

@@ -457,7 +457,7 @@ export function LifecycleCheckinsTab({ canEdit }: { canEdit: boolean }) {
                 {preview.due === 0 ? 'Nothing is due right now.' : `${preview.due} check-in${preview.due === 1 ? '' : 's'} due now — nothing has been sent.`}
               </p>
               {preview.rows.length > 0 && (
-                <Table className="mt-3">
+                <Table className="mt-3 max-md:min-w-[560px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Tenant</TableHead>

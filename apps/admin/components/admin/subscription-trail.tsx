@@ -158,7 +158,9 @@ export function SubscriptionTrail({
         {trail.length === 0 ? (
           <p className="pt-3 text-sm text-muted-foreground">No subscription payments yet.</p>
         ) : (
-          <table className="w-full table-fixed text-sm">
+          // A phone scrolls the trail sideways instead of crushing the
+          // invoice column to nothing between the fixed-width ones.
+          <table className="w-full table-fixed text-sm max-md:min-w-[660px]">
             <colgroup>
               <col className="w-32" />
               <col />

@@ -14,6 +14,11 @@ const TabsList = React.forwardRef<
     ref={ref}
     className={cn(
       "inline-flex items-center gap-1 border-b border-border",
+      // A phone: one row that scrolls sideways, as Northwind's chip rows do,
+      // rather than tabs running off the screen. Scrolling clips anything
+      // past the padding box, so the hairline moves inside it (an inset
+      // shadow) and the triggers stop borrowing the border's pixel.
+      "max-md:max-w-full max-md:overflow-x-auto max-md:border-b-0 max-md:shadow-[inset_0_-1px_0_hsl(var(--border))] max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden",
       className
     )}
     {...props}
@@ -28,7 +33,7 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "inline-flex items-center justify-center whitespace-nowrap px-4 py-2.5 text-sm font-medium text-muted-foreground transition-all hover:text-foreground border-b-2 border-transparent -mb-px data-[state=active]:text-foreground data-[state=active]:border-primary",
+      "inline-flex items-center justify-center whitespace-nowrap px-4 py-2.5 text-sm font-medium text-muted-foreground transition-all hover:text-foreground border-b-2 border-transparent -mb-px max-md:mb-0 max-md:shrink-0 data-[state=active]:text-foreground data-[state=active]:border-primary",
       className
     )}
     {...props}

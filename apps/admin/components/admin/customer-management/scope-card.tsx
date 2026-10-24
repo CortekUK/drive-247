@@ -75,7 +75,7 @@ export function ScopeCard({
 
       <CardContent className="space-y-6">
         {/* ---- scope ---- */}
-        <div className="flex items-start justify-between gap-6 rounded-lg border p-4">
+        <div className="flex items-start justify-between gap-4 rounded-lg border p-4 sm:gap-6">
           <div className="space-y-1">
             <Label htmlFor="cms-scope" className="text-sm font-medium">
               Send to every operator

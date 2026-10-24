@@ -715,7 +715,7 @@ function ReviewDialog({
 
               {decision === 'approve' ? (
                 <div className="space-y-3">
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">
                       <Label>Reward</Label>
                       <Select value={rewardType} onValueChange={(v) => setRewardType(v as RewardType)}>
@@ -995,7 +995,7 @@ function RulesDialog({
             />
           </label>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {field('monthly_submission_limit', 'Submissions per operator / month', '1–100, counted per calendar month')}
             {field('max_pending_per_tenant', 'Pending at once per operator', '1–100 waiting for review')}
             {field('monthly_reward_limit_per_tenant', 'Rewards per operator / month', '0–100 approvals')}
@@ -1027,7 +1027,7 @@ function RulesDialog({
             {draft.allowed_platforms.length === 0 && <p className="text-xs text-destructive">Pick at least one.</p>}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Default reward</Label>
               <Select

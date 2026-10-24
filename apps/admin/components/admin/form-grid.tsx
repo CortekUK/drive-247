@@ -49,7 +49,10 @@ export const TWINKLE_CSS =
 
 /** The dialog shell's classes: narrow, no padding, the wash behind it. */
 // flex, not the base grid: a grid track grows to a long URL's width.
-export const FORM_DIALOG = 'flex max-w-[720px] flex-col gap-0 overflow-hidden p-0';
+// `max-sm:p-0` cancels the dialog primitive's phone padding (the screens below
+// carry their own), and on a phone the primitive's own `max-sm:overflow-y-auto`
+// still wins over `overflow-hidden`, so a screen taller than the phone scrolls.
+export const FORM_DIALOG = 'flex max-w-[720px] flex-col gap-0 overflow-hidden p-0 max-sm:p-0';
 
 export function Cell({
   label,
@@ -188,6 +191,10 @@ export function ChipToggle({
 /**
  * One screen: the picture, what is being asked, then the fields. Every screen
  * is the same height, so nothing jumps between steps and nothing scrolls.
+ *
+ * Below `sm` the fields go one to a row (a `col-span-2` cell is pulled back to
+ * one column, or it would open a phantom second track), the picture shrinks,
+ * and the screen grows to fit instead of clipping — the dialog scrolls there.
  */
 export function StepScreen({
   stepKey,
@@ -205,14 +212,14 @@ export function StepScreen({
   return (
     <div
       key={stepKey}
-      className="flex h-[520px] flex-col items-center overflow-hidden px-10 pt-8 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none"
+      className="flex h-[520px] flex-col items-center overflow-hidden px-10 pt-8 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none max-sm:h-auto max-sm:px-5 max-sm:pt-6"
     >
-      <Art className="max-w-[280px]" />
-      <h3 className="mt-4 text-center text-xl font-medium leading-snug text-foreground [text-wrap:balance]">{title}</h3>
+      <Art className="max-w-[200px] sm:max-w-[280px]" />
+      <h3 className="mt-4 text-center text-lg font-medium leading-snug text-foreground [text-wrap:balance] sm:text-xl">{title}</h3>
       <p className="mx-auto mt-1.5 min-h-[2lh] max-w-[26rem] text-center text-sm leading-relaxed text-muted-foreground [text-wrap:balance]">
         {line}
       </p>
-      <div className="mt-5 grid w-full grid-cols-2 gap-x-5 gap-y-1">{children}</div>
+      <div className="mt-5 grid w-full grid-cols-1 gap-x-5 gap-y-1 max-sm:[&>*]:col-span-1 sm:grid-cols-2">{children}</div>
     </div>
   );
 }
@@ -230,13 +237,13 @@ export function DoneScreen({
   children?: ReactNode;
 }) {
   return (
-    <div className="flex h-[520px] flex-col items-center overflow-y-auto px-10 pt-8 text-center">
+    <div className="flex h-[520px] flex-col items-center overflow-y-auto px-10 pt-8 text-center max-sm:h-auto max-sm:px-5 max-sm:pt-6">
       <style>{TWINKLE_CSS}</style>
-      <div className="w-full max-w-[260px] duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none">
+      <div className="w-full max-w-[200px] sm:max-w-[260px] duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none">
         <Art />
       </div>
       <div className="w-full duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 [animation-delay:120ms] [animation-fill-mode:both] motion-reduce:animate-none">
-        <h3 className="mt-4 text-2xl font-medium text-foreground [text-wrap:balance]">{title}</h3>
+        <h3 className="mt-4 text-xl font-medium text-foreground [text-wrap:balance] max-sm:[overflow-wrap:anywhere] sm:text-2xl">{title}</h3>
         <p className="mx-auto mt-2 max-w-[28rem] text-sm leading-relaxed text-muted-foreground [text-wrap:balance]">
           {line}
         </p>
@@ -266,11 +273,11 @@ export function StepFooter({
 }) {
   const last = step === steps.length - 1;
   return (
-    <div className="flex items-center justify-between gap-4 px-8 py-4">
+    <div className="flex items-center justify-between gap-2 px-4 py-4 sm:gap-4 sm:px-8">
       <Button
         type="button"
         variant="outline"
-        className="h-10 rounded-full px-5"
+        className="h-10 rounded-full px-4 sm:px-5"
         onClick={() => (step === 0 ? onCancel() : onBack())}
         disabled={loading}
       >
@@ -300,7 +307,7 @@ export function StepFooter({
         ))}
       </ol>
 
-      <Button type="submit" className="h-10 rounded-full px-5" variant={last ? 'default' : 'outline'} disabled={loading}>
+      <Button type="submit" className="h-10 rounded-full px-4 sm:px-5" variant={last ? 'default' : 'outline'} disabled={loading}>
         {loading ? (
           <>
             <Loader2 className="size-4 animate-spin" /> {busyLabel}
@@ -330,7 +337,7 @@ const ROW_ICON =
 export function CopyRow({ label, value, onCopy, href }: { label: string; value: string; onCopy: () => void; href?: string }) {
   return (
     <div className="flex items-center gap-3 border-b border-border/60 py-2.5 last:border-b-0">
-      <span className="w-24 shrink-0 text-[13px] text-muted-foreground">{label}</span>
+      <span className="w-20 shrink-0 text-[13px] text-muted-foreground sm:w-24">{label}</span>
       <code className="min-w-0 flex-1 select-all truncate font-mono text-[13px] text-foreground">{value}</code>
       {/* Icons only: open in a new tab, then copy. */}
       <div className="-my-1 flex shrink-0 items-center gap-0.5">

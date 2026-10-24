@@ -235,7 +235,9 @@ export default function BonzahSubmissions() {
         flipped={filtersOpen}
         onFlipBack={() => setFiltersOpen(false)}
         front={
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          /* Three compact tiles across on a phone (icon dropped), not three
+             screen-wide cards stacked above the list. */
+          <div className="grid grid-cols-3 gap-2 sm:gap-4">
         {(
           [
             { key: 'pending', icon: Clock, label: 'Pending', count: counts.pending, accent: 'warning' },
@@ -251,13 +253,13 @@ export default function BonzahSubmissions() {
             )}
             onClick={() => setFilter(filter === key ? 'all' : key)}
           >
-            <CardContent className="pt-6">
+            <CardContent className="pt-6 max-sm:p-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">{label}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">{label}</p>
                   <p className="text-2xl font-bold tabular-nums">{count}</p>
                 </div>
-                <div className={cn('flex items-center justify-center h-10 w-10 rounded-lg', `bg-${accent}/15`)}>
+                <div className={cn('flex items-center justify-center h-10 w-10 rounded-lg max-sm:hidden', `bg-${accent}/15`)}>
                   <Icon className={cn('h-5 w-5', `text-${accent}`)} />
                 </div>
               </div>
@@ -309,7 +311,7 @@ export default function BonzahSubmissions() {
               <NoMatchState noun="submissions" onClear={() => setFilter('all')} />
             )
           ) : (
-            <Table>
+            <Table className="max-md:min-w-[760px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
               <TableHeader>
                 <TableRow>
                   <TableHead>Business</TableHead>
@@ -929,7 +931,9 @@ function SubmissionDetailDialog({
 
   return (
     <Dialog open={!!submission} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      {/* grid-cols-1 on a phone: the content grid's implicit auto track grew to
+          the tab strip's width and pushed the badge and Approve off the card. */}
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto max-md:grid-cols-1">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-lg bg-primary/15 flex items-center justify-center">

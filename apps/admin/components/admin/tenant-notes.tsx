@@ -102,7 +102,7 @@ export function NotesPanel({ tenantId, className }: { tenantId: string; classNam
             <DialogDescription>For the Drive247 team only. The company never sees these.</DialogDescription>
           </DialogHeader>
           <div className="-mx-2 min-h-0 flex-1 overflow-y-auto px-2 pb-2 pt-2">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-3">
               <NewSticky tenantId={tenantId} authorId={me?.id ?? null} onAdded={loadNotes} compact />
               {(notes ?? []).map((n, i) => (
                 <BoardSticky key={n.id} note={n} tilt={TILTS[i % TILTS.length]} mine={n.author_id === me?.id} onChanged={loadNotes} />
@@ -228,7 +228,7 @@ function ScratchSticky({
               ? `${authorOf(current)} · ${day(current.updated_at)}${status === 'saved' ? ' · saved' : ''}`
               : ''}
         </span>
-        <div className="flex shrink-0 items-center opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+        <div className="flex shrink-0 items-center opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100">
           {count > 1 && (
             <IconAction label={`All ${count} notes`} onClick={onShowAll}>
               <Layers />
@@ -385,7 +385,7 @@ function BoardSticky({ note, tilt, mine, onChanged }: { note: Note; tilt: string
               {edited && ' · edited'}
             </p>
             {mine && (
-              <div className="-mb-1 -mr-1 flex shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+              <div className="-mb-1 -mr-1 flex shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100">
                 <IconAction label={note.is_pinned ? 'Unpin' : 'Pin to top'} disabled={busy} onClick={() => void update({ is_pinned: !note.is_pinned })}>
                   {note.is_pinned ? <PinOff /> : <Pin />}
                 </IconAction>
@@ -412,7 +412,7 @@ function IconAction({ label, onClick, disabled, children }: { label: string; onC
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex size-6 items-center justify-center rounded-full opacity-60 outline-none transition hover:bg-black/5 hover:opacity-100 disabled:opacity-30 dark:hover:bg-white/10 [&_svg]:size-3.5"
+      className="inline-flex size-6 max-md:size-8 items-center justify-center rounded-full opacity-60 outline-none transition hover:bg-black/5 hover:opacity-100 disabled:opacity-30 dark:hover:bg-white/10 [&_svg]:size-3.5"
     >
       {children}
     </button>

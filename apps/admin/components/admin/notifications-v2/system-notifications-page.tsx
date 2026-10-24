@@ -48,7 +48,6 @@ import { usePlatformEmailSender } from '@/hooks/use-platform-email-sender';
 import { usePlatformNotificationSettings } from '@/hooks/use-platform-notification-settings';
 import {
   getSystemNotificationItem,
-  type SystemNotificationDirection,
   type SystemNotificationItem,
 } from '@/lib/notifications-v2/catalog';
 import { PLATFORM_EMAIL_BRAND, senderAddress, settingKey, type ChannelEdit } from '@/lib/notifications-v2/settings-model';
@@ -72,7 +71,6 @@ import { SendTestBox, type SendTestDraft } from './send-test-box';
 import { SystemEmailSender } from './system-email-sender';
 import { SystemPushSetup } from './system-push-setup';
 import {
-  SYSTEM_DIRECTION_GROUPS,
   SYSTEM_NOTIFICATIONS_COPY as COPY,
   categoryGroups,
   channelSpec,
@@ -145,6 +143,20 @@ export function SystemNotificationsPage({ className }: SystemNotificationsPagePr
   const selectedItem =
     selected && selected !== SYSTEM_NOTIFICATIONS_SETUP ? (getSystemNotificationItem(selected) ?? null) : null;
   const showSetup = selected === SYSTEM_NOTIFICATIONS_SETUP;
+
+  // Phones only (below md): which of list and detail fills the screen.
+  const [phonePane, setPhonePane] = useState<'list' | 'detail'>('list');
+  const message = useSystemNotificationsSelection((st) => st.message);
+  const setMessage = useSystemNotificationsSelection((st) => st.setMessage);
+  const openSetup = useSystemNotificationsSelection((st) => st.openSetup);
+  const phoneMessages = useMemo<PreviewSwitchOption<'app' | 'email'>[]>(() => {
+    if (!selectedItem || selectedItem.managedElsewhere) return [];
+    const out: PreviewSwitchOption<'app' | 'email'>[] = [];
+    if (selectedItem.channels.push || selectedItem.channels.in_app) out.push({ value: 'app', label: 'App' });
+    if (selectedItem.channels.email) out.push({ value: 'email', label: 'Email' });
+    return out;
+  }, [selectedItem]);
+  const phoneMessage = phoneMessages.some((m) => m.value === message) ? message : (phoneMessages[0]?.value ?? 'app');
 
   // First visit opens the first notification; cleared on the way out so the
   // next visit starts fresh.
@@ -354,30 +366,64 @@ export function SystemNotificationsPage({ className }: SystemNotificationsPagePr
     >
       <div className="flex min-h-0 flex-1">
         {/* Left: every notification, and Setups. */}
-        <div className="hidden w-[272px] shrink-0 flex-col md:flex">
+        {/* Phones: list → detail. The list fills the screen until a
+            notification (or Setups) is tapped, then the detail takes over
+            with a Back to the list. At md and up both are always shown. */}
+        <div
+          className={cn('w-full shrink-0 flex-col md:flex md:w-[272px]', phonePane === 'list' ? 'flex' : 'hidden')}
+          onClickCapture={(e) => {
+            const target = e.target as HTMLElement;
+            if (target.closest('[data-rail-item], [data-rail-message], [aria-haspopup="menu"], [role="menuitem"]')) {
+              setPhonePane('detail');
+            }
+          }}
+        >
           <SystemNotificationsList className="min-h-0 flex-1" />
         </div>
 
-        <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        <main
+          className={cn(
+            'relative min-h-0 min-w-0 flex-1 flex-col md:flex',
+            phonePane === 'detail' ? 'flex' : 'hidden',
+          )}
+        >
           {notices}
-          {/* Phones: the list is hidden, so Back and the choice live here. */}
-          <div className="flex items-center gap-2 border-b px-4 py-2 md:hidden">
-            <Link
-              href={EXIT_HREF}
-              aria-label="Back to the dashboard"
-              className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+          {/* Phones: Back to the list, the open notification's name, and its
+              App message | Email (or the two setups) — the choices the list
+              nests under the open row on wider screens. */}
+          <div className="flex items-center gap-2 border-b px-3 py-2 md:hidden" data-phone-detail-bar="">
+            <button
+              type="button"
+              onClick={() => setPhonePane('list')}
+              aria-label="Back to the list"
+              className="flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
             >
               <ArrowLeft className="size-4" aria-hidden="true" />
-            </Link>
-            <div className="min-w-0 flex-1">
-              <MobilePicker selected={selected} onSelect={select} />
-            </div>
+            </button>
+            <p className="min-w-0 flex-1 truncate text-[15px] font-semibold text-foreground">{title}</p>
+            {showSetup ? (
+              <PreviewSwitch
+                label="Setup"
+                value={setupSection}
+                options={SETUP_OPTIONS}
+                onChange={openSetup}
+                className="shrink-0 p-[3px] [&>button]:h-7 [&>button]:px-2.5"
+              />
+            ) : phoneMessages.length > 1 ? (
+              <PreviewSwitch
+                label="Message"
+                value={phoneMessage}
+                options={phoneMessages}
+                onChange={setMessage}
+                className="shrink-0 p-[3px] [&>button]:h-7 [&>button]:px-2.5"
+              />
+            ) : null}
           </div>
 
           {showSetup ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
               {/* pt-3: level with the search box at the top of the list. */}
-              <div className="w-full flex-1 px-8 pb-6 pt-3">
+              <div className="w-full flex-1 px-8 pb-6 pt-3 max-md:px-4">
                 <div className={cn(setupSection !== 'email' && 'hidden')}>
                   <SystemEmailSender
                     saved={emailSetup.saved}
@@ -401,19 +447,20 @@ export function SystemNotificationsPage({ className }: SystemNotificationsPagePr
               </div>
               {/* Bottom of the setup: Back on the left, Reset | Save changes on
                   the right, both floating at the foot of the view. */}
-              <div className="pointer-events-none sticky bottom-4 z-30 flex items-end justify-between gap-3 px-8 pb-1 pt-2">
+              <div className="pointer-events-none sticky bottom-4 z-30 flex items-end justify-between gap-3 px-8 pb-1 pt-2 max-md:px-4">
+                {/* Phones leave through the list's own Back instead. */}
                 <button
                   type="button"
                   onClick={leave}
-                  className="pointer-events-auto inline-flex h-11 items-center gap-1.5 rounded-full border bg-card px-4 text-[13px] font-medium text-foreground shadow-lg transition-colors duration-200 ease-out hover:bg-muted motion-reduce:transition-none"
+                  className="pointer-events-auto inline-flex h-11 max-md:hidden items-center gap-1.5 rounded-full border bg-card px-4 text-[13px] font-medium text-foreground shadow-lg transition-colors duration-200 ease-out hover:bg-muted motion-reduce:transition-none"
                 >
                   <ArrowLeft className="size-4" aria-hidden="true" />
                   Back to dashboard
                 </button>
                 {canEdit && setupSection === 'email' && (
-                  <div className="pointer-events-auto flex items-center gap-3">
+                  <div className="pointer-events-auto flex min-w-0 items-center gap-3 max-md:ml-auto">
                     {senderError && (
-                      <span role="alert" className="max-w-[320px] truncate rounded-full bg-card px-3 py-1 text-xs text-destructive shadow-sm" title={senderError}>
+                      <span role="alert" className="max-w-[320px] truncate rounded-full bg-card max-md:max-w-[150px] px-3 py-1 text-xs text-destructive shadow-sm" title={senderError}>
                         Not saved. {senderError}
                       </span>
                     )}
@@ -626,9 +673,13 @@ function NotificationWorkspace({
       : undefined;
 
   return (
-    <div className="flex h-full min-h-0 flex-col lg:flex-row" data-notification-item={item.key}>
+    <div className="flex h-full min-h-0 flex-col max-md:h-auto lg:flex-row" data-notification-item={item.key}>
       {/* MAIN: the preview, then its switch, theme, Send test and Save. */}
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col" data-notification-main="" aria-label={`${item.name}: preview`}>
+      {/* Phones: the preview gets the screen under the bar (the column scrolls
+          on to Trax below), rather than what is left beside a 70vh chat. */}
+      <section
+        className="flex min-h-0 min-w-0 flex-1 flex-col max-md:h-[calc(100dvh-57px)] max-md:flex-none"
+        data-notification-main="" aria-label={`${item.name}: preview`}>
         <h2 className="sr-only">{message === 'app' ? 'App message' : 'Email'}</h2>
 
         {active ? (
@@ -862,6 +913,12 @@ const ON_OFF_OPTIONS: readonly PreviewSwitchOption<'on' | 'off'>[] = [
   { value: 'off', label: 'Off' },
 ];
 
+/** Phones: the two setups, which the Setups card's hover menu offers on wider screens. */
+const SETUP_OPTIONS: readonly PreviewSwitchOption<'email' | 'push'>[] = [
+  { value: 'email', label: 'Sender' },
+  { value: 'push', label: 'Push' },
+];
+
 const THEME_OPTIONS: readonly PreviewSwitchOption<'light' | 'dark'>[] = [
   { value: 'light', label: 'Light', icon: Sun },
   { value: 'dark', label: 'Dark', icon: Moon },
@@ -938,7 +995,7 @@ function EmailPair({
   const box = useRef<HTMLDivElement>(null);
   const desk = useRef<HTMLDivElement>(null);
   const phone = useRef<HTMLDivElement>(null);
-  const [m, setM] = useState({ W: 0, H: 0, hd: 0, hp: 0 });
+  const [m, setM] = useState({ W: 0, H: 0, hd: 0, hp: 0, phoneOnly: false });
 
   useEffect(() => {
     const b = box.current;
@@ -947,8 +1004,22 @@ function EmailPair({
     if (!b || !d || !p || typeof ResizeObserver === 'undefined') return;
     const read = (): void =>
       setM((prev) => {
-        const next = { W: b.clientWidth, H: b.clientHeight, hd: d.offsetHeight, hp: p.offsetHeight };
-        return prev.W === next.W && prev.H === next.H && prev.hd === next.hd && prev.hp === next.hp ? prev : next;
+        // On a phone screen (below md) two Gmails side by side would each be
+        // unreadably small, so only the phone one shows, at the box's width.
+        const next = {
+          W: b.clientWidth,
+          H: b.clientHeight,
+          hd: d.offsetHeight,
+          hp: p.offsetHeight,
+          phoneOnly: window.innerWidth < 768,
+        };
+        return prev.W === next.W &&
+          prev.H === next.H &&
+          prev.hd === next.hd &&
+          prev.hp === next.hp &&
+          prev.phoneOnly === next.phoneOnly
+          ? prev
+          : next;
       });
     const observer = new ResizeObserver(read);
     for (const el of [b, d, p]) observer.observe(el);
@@ -959,7 +1030,7 @@ function EmailPair({
   const PW = GMAIL_PREVIEW_VIEWS.phone.mockupWidth;
   const DW = GMAIL_PREVIEW_VIEWS.desktop.mockupWidth;
   const ready = m.W > 0 && m.H > 0 && m.hd > 0 && m.hp > 0;
-  const sp = ready ? Math.min(m.H / m.hp, (m.W * 0.4) / PW) : 0;
+  const sp = ready ? Math.min(m.H / m.hp, (m.W * (m.phoneOnly ? 1 : 0.4)) / PW) : 0;
   const wp = PW * sp;
   const wd = Math.max(0, m.W - PAIR_GAP - wp);
   const MIN_WIDEN = 0.65;
@@ -981,14 +1052,14 @@ function EmailPair({
       <div
         ref={desk}
         className="absolute left-0 top-0 origin-top-left"
-        style={{ width: DW * widen, transform: `scale(${sd})`, visibility: ready ? 'visible' : 'hidden' }}
+        style={{ width: DW * widen, transform: `scale(${sd})`, visibility: ready && !m.phoneOnly ? 'visible' : 'hidden' }}
       >
         <GmailViewContext.Provider value={desktopView}>{render()}</GmailViewContext.Provider>
       </div>
       <div
         ref={phone}
-        className="absolute right-0 top-0 origin-top-right"
-        style={{ width: PW, transform: `scale(${sp})`, visibility: ready ? 'visible' : 'hidden' }}
+        className={cn('absolute top-0', m.phoneOnly ? 'left-1/2 origin-top' : 'right-0 origin-top-right')}
+        style={{ width: PW, transform: m.phoneOnly ? `translateX(-50%) scale(${sp})` : `scale(${sp})`, visibility: ready ? 'visible' : 'hidden' }}
       >
         <GmailViewContext.Provider value={phoneView}>{render()}</GmailViewContext.Provider>
       </div>
@@ -1019,50 +1090,6 @@ function ManagedElsewhereView({ item }: { item: SystemNotificationItem }) {
         </Button>
       </div>
     </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Phones: the list's choice as a select                                       */
-/* -------------------------------------------------------------------------- */
-
-function MobilePicker({
-  selected,
-  onSelect,
-}: {
-  selected: string | null;
-  onSelect: (key: string, side?: SystemNotificationDirection) => void;
-}) {
-  const openSetup = useSystemNotificationsSelection((st) => st.openSetup);
-  return (
-    <label className="block md:hidden">
-      <span className="sr-only">Choose a notification</span>
-      <select
-        value={selected ?? ''}
-        onChange={(e) => {
-          if (e.target.value === SYSTEM_NOTIFICATIONS_SETUP) {
-            openSetup('email');
-            return;
-          }
-          const item = getSystemNotificationItem(e.target.value);
-          onSelect(e.target.value, item?.direction);
-        }}
-        className="h-10 w-full rounded-lg border bg-background px-3 text-sm"
-      >
-        <option value={SYSTEM_NOTIFICATIONS_SETUP}>Setups</option>
-        {SYSTEM_DIRECTION_GROUPS.map((group) =>
-          categoryGroups(group.direction).map(({ category, items }) => (
-            <optgroup key={`${group.direction}-${category.id}`} label={`${group.title} · ${category.label}`}>
-              {items.map((item) => (
-                <option key={item.key} value={item.key}>
-                  {item.name}
-                </option>
-              ))}
-            </optgroup>
-          )),
-        )}
-      </select>
-    </label>
   );
 }
 

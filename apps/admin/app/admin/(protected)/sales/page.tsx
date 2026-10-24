@@ -5,6 +5,7 @@ import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
 import { LeadsEmptyArt } from '@/components/admin/illustrations/scenes/leads';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui/sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -123,16 +124,16 @@ export default function SalesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      {/* Header — stacks on a phone, the create button taking the full width. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Sales</h1>
             <p className="text-sm text-muted-foreground">Onboard new rental companies</p>
           </div>
         </div>
-        <div className={HEADER_ACTIONS}>
-          <Button className={HEADER_PRIMARY} onClick={() => setShowCreate(true)}>
+        <div className={cn(HEADER_ACTIONS, 'max-sm:w-full')}>
+          <Button className={cn(HEADER_PRIMARY, 'max-sm:h-10 max-sm:flex-1')} onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4" />
             Create Onboarding
           </Button>
@@ -141,7 +142,7 @@ export default function SalesPage() {
 
       {/* Recent submissions */}
       <Card>
-        <CardContent className="pt-6 overflow-x-auto">
+        <CardContent className="pt-6 overflow-x-auto max-sm:px-3 max-sm:pt-3">
           {loading ? (
             <div className="space-y-3">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -166,7 +167,7 @@ export default function SalesPage() {
               action={{ label: 'Create onboarding', onClick: () => setShowCreate(true) }}
             />
           ) : (
-            <Table>
+            <Table className="max-md:min-w-[600px]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="min-w-[180px]">Business</TableHead>

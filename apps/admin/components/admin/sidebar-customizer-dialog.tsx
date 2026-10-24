@@ -105,7 +105,7 @@ function SortableRow({
           type="button"
           onClick={onRemove}
           aria-label={`Remove ${label} from your sidebar`}
-          className={`${ROW_ACTION} text-muted-foreground opacity-0 hover:bg-destructive/10 hover:text-destructive group-hover/row:opacity-100`}
+          className={`${ROW_ACTION} text-muted-foreground opacity-0 hover:bg-destructive/10 hover:text-destructive group-hover/row:opacity-100 max-md:opacity-100`}
         >
           <Minus className="size-3.5" aria-hidden />
           Remove
@@ -148,7 +148,7 @@ function ColumnHeading({ title, count, hint }: { title: string; count?: number; 
 
 /* No scrolling (Ghulam, Oct 17 2026): every column is its natural height and
    the rows are compact enough that the whole dialog fits one screen. */
-const SCROLL_COLUMN = 'px-6 py-4';
+const SCROLL_COLUMN = 'px-5 py-4 sm:px-6';
 
 export function SidebarCustomizerDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const nav = useAdminNav();
@@ -219,7 +219,7 @@ export function SidebarCustomizerDialog({ open, onOpenChange }: { open: boolean;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-0 p-0 sm:max-w-6xl">
-        <DialogHeader className="border-b border-border px-7 py-4">
+        <DialogHeader className="border-b border-border px-5 py-4 text-left sm:px-7">
           <DialogTitle>Customise sidebar</DialogTitle>
           <DialogDescription>Put the pages you use in the order you use them.</DialogDescription>
         </DialogHeader>
@@ -229,7 +229,9 @@ export function SidebarCustomizerDialog({ open, onOpenChange }: { open: boolean;
             Your saved sidebar could not be loaded, so customising is unavailable right now.
           </div>
         ) : (
-          <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-[310px_1fr_280px] sm:divide-x sm:divide-y-0">
+          /* Three columns from md; below it they stack (at sm the two fixed
+             columns left the middle one a sliver). */
+          <div className="grid grid-cols-1 divide-y divide-border md:grid-cols-[310px_1fr_280px] md:divide-x md:divide-y-0">
             {/* Pages off the sidebar */}
             <div className={SCROLL_COLUMN}>
               <ColumnHeading title="Add to your sidebar" count={draft.hidden.length} hint="Pages you removed, and pages that live elsewhere." />
@@ -274,7 +276,7 @@ export function SidebarCustomizerDialog({ open, onOpenChange }: { open: boolean;
             </div>
 
             {/* Preview — drawn from the same draft, so it cannot disagree with the list. */}
-            <div className="bg-muted/20 px-6 py-4" data-testid="sidebar-preview">
+            <div className="bg-muted/20 px-5 py-4 sm:px-6" data-testid="sidebar-preview">
               <ColumnHeading title="Preview" hint="How your sidebar will look." />
               <div className="rounded-2xl bg-background p-2 ring-1 ring-foreground/5">
                 {/* The org row, as the rail starts. */}
@@ -303,7 +305,7 @@ export function SidebarCustomizerDialog({ open, onOpenChange }: { open: boolean;
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-2 border-t border-border px-7 py-3">
+        <div className="flex items-center justify-between gap-2 border-t border-border px-5 py-3 sm:px-7">
           <Button
             variant="ghost"
             size="sm"

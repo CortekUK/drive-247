@@ -349,7 +349,7 @@ Access URLs:
                 <CopyRow label="Booking site" value={credentials.bookingUrl} href={credentials.bookingUrl} onCopy={() => copyToClipboard(credentials.bookingUrl, 'Booking URL')} />
               </div>
             </DoneScreen>
-            <div className="flex items-center justify-between gap-4 px-8 py-4">
+            <div className="flex items-center justify-between gap-2 px-4 py-4 sm:gap-4 sm:px-8">
               <Button type="button" variant="outline" className="h-10 rounded-full px-5" onClick={close}>
                 Done
               </Button>

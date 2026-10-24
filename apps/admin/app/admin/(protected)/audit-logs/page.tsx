@@ -700,7 +700,7 @@ export default function AuditLogsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Audit Logs</h1>
@@ -834,7 +834,9 @@ export default function AuditLogsPage() {
             )
           ) : (
             <>
-              <Table>
+              {/* Phones scroll the table sideways rather than squashing six
+                  columns into stacks of wrapped words. */}
+              <Table className="max-md:min-w-[720px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[160px]">Date & Time</TableHead>

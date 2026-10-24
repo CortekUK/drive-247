@@ -35,6 +35,8 @@ import { AdminNavProvider } from '@/components/admin/admin-nav';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { SidebarProvider } from '@/components/admin/SidebarContext';
 import { SidebarSectionsProvider, useRegisterSidebarSections } from '@/components/admin/sidebar-sections';
+import { PageSearchProvider } from '@/components/admin/page-search-slot';
+import { MobileNavProvider, MobileTabBar, PhoneSectionChips } from '@/components/admin/mobile-nav';
 import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
@@ -56,8 +58,10 @@ export default function AdminPreviewPage() {
     <QueryClientProvider client={queryClient}>
     <TooltipProvider>
     <AdminNavProvider>
-    <SidebarProvider>
+    <PageSearchProvider>
     <SidebarSectionsProvider>
+    <MobileNavProvider>
+    <SidebarProvider>
     {/* The SHELL, not an approximation of it.
 
         This used to be a `p-4 sm:p-8` div with its own heading, which meant
@@ -65,13 +69,16 @@ export default function AdminPreviewPage() {
         renders inside — and the dead space at the top of every page lived in
         exactly that gap. It is now the protected layout's own arrangement:
         `Header`, then a scroll port with the same padding, so what this page
-        shows is what a signed-in page gets. */}
-    <div className="flex h-screen overflow-hidden bg-app-gradient">
+        shows is what a signed-in page gets — on a phone too: the bottom tab
+        bar, the section chips and the padding that clears the bar, as in
+        (protected)/layout.tsx. */}
+    <div className="flex h-svh overflow-hidden bg-background bg-app-gradient">
       <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-      <TopBar />
-      <main data-scrollport className="flex-1 overflow-y-auto">
-      <div className="p-4 sm:p-6">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden pt-[env(safe-area-inset-top,0px)]">
+      <TopBar showNavTrigger={false} />
+      <PhoneSectionChips />
+      <main data-scrollport className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+      <div className="p-4 pt-1 sm:p-6 sm:pt-2 max-md:pb-[calc(env(safe-area-inset-bottom,0px)+5rem)]">
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Design preview</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -81,7 +88,7 @@ export default function AdminPreviewPage() {
 
       <section aria-label="Metric cards">
         <h2 className="mb-3 text-sm font-medium text-muted-foreground">Metric cards</h2>
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-6 lg:grid-cols-3">
           <MetricCard title="Total Rental Companies" value={57} subtitle="41 active" icon={Building2} />
           <MetricCard title="Total Vehicles" value={1284} subtitle="Across all rental companies" icon={Car} accent="info" />
           <MetricCard title="Total Rentals" value={9317} subtitle="All-time bookings" icon={ClipboardList} />
@@ -145,7 +152,7 @@ export default function AdminPreviewPage() {
       <section aria-label="List table" className="mt-8">
         <h2 className="mb-3 text-sm font-medium text-muted-foreground">List table</h2>
         <Card className="overflow-hidden">
-          <Table>
+          <Table className="max-md:min-w-[560px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
             <TableHeader>
               <TableRow>
                 <TableHead>Company</TableHead>
@@ -179,9 +186,12 @@ export default function AdminPreviewPage() {
       </div>
       </main>
       </div>
+      <MobileTabBar />
     </div>
-    </SidebarSectionsProvider>
     </SidebarProvider>
+    </MobileNavProvider>
+    </SidebarSectionsProvider>
+    </PageSearchProvider>
     </AdminNavProvider>
     </TooltipProvider>
     </QueryClientProvider>
@@ -261,7 +271,7 @@ function FilterDemo() {
         flipped={open}
         onFlipBack={() => setOpen(false)}
         front={
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
             <MetricCard title="Active Rentals" value={312} subtitle="Right now" icon={ClipboardList} />
             <MetricCard title="Due Back Today" value={28} subtitle="Across all tenants" icon={Car} accent="warning" />
             <MetricCard title="Overdue" value={4} subtitle="Needs chasing" icon={HeartPulse} accent="success" />

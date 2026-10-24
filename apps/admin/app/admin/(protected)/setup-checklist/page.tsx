@@ -578,7 +578,7 @@ export default function SetupChecklistAdmin() {
                       type="button"
                       onClick={() => move(i, -1)}
                       disabled={i === 0}
-                      className="rounded-md p-1.5 text-muted-foreground hover:bg-muted disabled:opacity-30"
+                      className="rounded-md p-1.5 text-muted-foreground hover:bg-muted disabled:opacity-30 max-md:p-2.5"
                       aria-label="Move up"
                     >
                       <ArrowUp className="size-4" />
@@ -587,7 +587,7 @@ export default function SetupChecklistAdmin() {
                       type="button"
                       onClick={() => move(i, 1)}
                       disabled={i === rows.length - 1}
-                      className="rounded-md p-1.5 text-muted-foreground hover:bg-muted disabled:opacity-30"
+                      className="rounded-md p-1.5 text-muted-foreground hover:bg-muted disabled:opacity-30 max-md:p-2.5"
                       aria-label="Move down"
                     >
                       <ArrowDown className="size-4" />
@@ -595,7 +595,7 @@ export default function SetupChecklistAdmin() {
                     <button
                       type="button"
                       onClick={() => void remove(i)}
-                      className="rounded-md p-1.5 text-destructive hover:bg-destructive/10"
+                      className="rounded-md p-1.5 text-destructive hover:bg-destructive/10 max-md:p-2.5"
                       aria-label="Delete item"
                     >
                       <Trash2 className="size-4" />

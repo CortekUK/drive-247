@@ -94,7 +94,7 @@ export function CustomerManagementCard() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 max-md:text-xl">
             <FlaskConical className="size-4" />
             Customer Management rehearsal
           </CardTitle>
@@ -122,7 +122,7 @@ export function CustomerManagementCard() {
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-1">
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 max-md:text-xl">
               <FlaskConical className="size-4" />
               Customer Management rehearsal
             </CardTitle>

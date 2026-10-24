@@ -388,7 +388,7 @@ export function CancellationsTab({ canEdit }: { canEdit: boolean }) {
       </Card>
 
       {/* Stat cards, in the list-page idiom. */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard
           label="Left"
           value={loading ? null : String(leftRows.length)}
@@ -523,17 +523,17 @@ function StatCard({
   }[tone];
   return (
     <Card className={cn(onClick && 'cursor-pointer transition-all', active && toneCls.active)} onClick={onClick}>
-      <CardContent className="pt-6">
-        <div className="flex items-center justify-between gap-3">
+      <CardContent className="pt-6 max-md:p-4">
+        <div className="flex items-center justify-between gap-2 sm:gap-3">
           <div className="min-w-0">
-            <p className="text-sm text-muted-foreground">{label}</p>
+            <p className="text-sm text-muted-foreground max-md:text-xs">{label}</p>
             {value === null ? (
               <Skeleton className="mt-1 h-8 w-16" />
             ) : (
               <p className={cn('font-bold tabular-nums', small ? 'truncate text-base' : 'text-2xl')}>{value}</p>
             )}
           </div>
-          <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', toneCls.bg)}>
+          <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg max-md:h-8 max-md:w-8', toneCls.bg)}>
             <Icon className={cn('h-5 w-5', toneCls.text)} />
           </div>
         </div>

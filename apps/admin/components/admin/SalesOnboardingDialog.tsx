@@ -734,7 +734,7 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                   />
                 ) : (
                   <div className="flex items-center gap-3 border-b border-border/60 py-2.5">
-                    <span className="w-24 shrink-0 text-[13px] text-muted-foreground">Payment link</span>
+                    <span className="w-20 shrink-0 text-[13px] text-muted-foreground sm:w-24">Payment link</span>
                     <span className={cn('min-w-0 flex-1 text-[13px]', result.subscriptionLinkError ? 'text-destructive' : 'text-muted-foreground')}>
                       {result.subscriptionLinkError
                         ? `${result.subscriptionLinkError}. Generate one from the company's Subscription tab.`
@@ -765,7 +765,7 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                 </p>
               )}
             </DoneScreen>
-            <div className="flex items-center justify-between gap-4 px-8 py-4">
+            <div className="flex items-center justify-between gap-2 px-4 py-4 sm:gap-4 sm:px-8">
               <Button type="button" variant="outline" className="h-10 rounded-full px-5" onClick={close}>
                 Done
               </Button>
@@ -857,7 +857,8 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                   {text('fleetSize', '12', { clear: 'fleetSize', type: 'number' })}
                 </Cell>
                 <Cell label="Vehicle types" className="col-span-2" error={formErrors.vehicleTypeOther} hint="Pick all that apply">
-                  <div className="flex h-11 items-center gap-2">
+                  {/* One 44px row on a desktop; on a phone the chips wrap. */}
+                  <div className="flex h-11 items-center gap-2 max-sm:h-auto max-sm:min-h-11 max-sm:flex-wrap">
                     {[...VEHICLE_TYPE_OPTIONS, 'Other'].map((opt) => {
                       const selected = formData.vehicleTypes.includes(opt);
                       return (
@@ -888,7 +889,7 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                         placeholder="e.g. Vans"
                         aria-invalid={!!formErrors.vehicleTypeOther || undefined}
                         onChange={(e) => set('vehicleTypeOther', e.target.value, 'vehicleTypeOther')}
-                        className={cn(CONTROL, 'h-9 min-w-0 flex-1')}
+                        className={cn(CONTROL, 'h-9 min-w-0 flex-1 max-sm:min-w-[8rem]')}
                         autoFocus
                       />
                     )}

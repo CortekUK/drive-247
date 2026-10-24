@@ -41,7 +41,7 @@ export function LeaderboardTab({ onOpen }: { onOpen: (t: TenantLite) => void }) 
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-0">
-        <Table>
+        <Table className="max-md:min-w-[600px] max-md:[&_td]:whitespace-nowrap max-md:[&_th]:whitespace-nowrap">
           <TableHeader>
             <TableRow>
               <TableHead>Operator</TableHead>

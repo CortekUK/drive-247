@@ -333,7 +333,7 @@ export function AnnouncementEditorDialog({
         }}
       >
         <DialogContent
-          className="flex max-h-[92vh] w-[96vw] max-w-[1200px] flex-col gap-0 overflow-hidden p-0"
+          className="flex max-h-[92vh] w-[96vw] max-w-[1200px] flex-col gap-0 overflow-hidden p-0 max-sm:overflow-hidden max-sm:p-0"
           onCloseAutoFocus={onCloseAutoFocus}
         >
           <DialogHeader className="border-b border-border px-5 pb-4 pr-14 pt-5 text-left sm:px-6 sm:pr-14">

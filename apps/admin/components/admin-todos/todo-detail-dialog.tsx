@@ -175,7 +175,7 @@ export function TodoDetailDialog({ todo, open, onOpenChange, onUpdate, onDelete 
             <p className="text-[10px] text-muted-foreground">{description.length} / 5000</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Priority</Label>
               <Select value={priority} onValueChange={(v) => setPriority(v as TodoPriority)}>
@@ -204,7 +204,7 @@ export function TodoDetailDialog({ todo, open, onOpenChange, onUpdate, onDelete 
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="detail-due">Due date</Label>
               <Input

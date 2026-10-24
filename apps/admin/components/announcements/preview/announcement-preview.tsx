@@ -52,7 +52,11 @@ export function AnnouncementPreview({
   focus: PreviewFocus | null;
 }) {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [device, setDevice] = useState<PreviewDevice>('desktop');
+  // A phone opens on the Phone frame: the desktop frame scaled into a phone's
+  // width is too small to read.
+  const [device, setDevice] = useState<PreviewDevice>(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches ? 'phone' : 'desktop',
+  );
   const [view, setView] = useState<FeaturePreviewView>('card');
   const [slide, setSlide] = useState(0);
 

@@ -142,7 +142,7 @@ export function TodoCreateDialog({ open, defaultStatus, onOpenChange, onSubmit }
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label className="text-xs">Priority</Label>
                 <Select value={priority} onValueChange={(v) => setPriority(v as TodoPriority)}>
@@ -167,7 +167,7 @@ export function TodoCreateDialog({ open, defaultStatus, onOpenChange, onSubmit }
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label htmlFor="todo-due" className="text-xs">Due date</Label>
                 <Input
@@ -194,7 +194,7 @@ export function TodoCreateDialog({ open, defaultStatus, onOpenChange, onSubmit }
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="max-sm:gap-2">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
               Cancel
             </Button>

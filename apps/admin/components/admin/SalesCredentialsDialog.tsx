@@ -61,12 +61,12 @@ export default function SalesCredentialsDialog({ open, onOpenChange, target }: S
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-w-[660px] flex-col gap-0 overflow-hidden p-0" style={FORM_DIALOG_WASH} showCloseButton={false}>
-        <div className="flex flex-col items-center px-10 pt-8 text-center">
-          <div aria-hidden="true" className="w-full max-w-[240px]">
+      <DialogContent className="flex max-w-[660px] flex-col gap-0 overflow-hidden p-0 max-sm:p-0" style={FORM_DIALOG_WASH} showCloseButton={false}>
+        <div className="flex flex-col items-center px-5 pt-6 text-center sm:px-10 sm:pt-8">
+          <div aria-hidden="true" className="w-full max-w-[180px] sm:max-w-[240px]">
             <AddVehicleKeysArt />
           </div>
-          <DialogTitle className="mt-4 text-xl font-medium tracking-normal text-foreground [text-wrap:balance]">
+          <DialogTitle className="mt-4 text-lg font-medium tracking-normal text-foreground [text-wrap:balance] max-sm:[overflow-wrap:anywhere] sm:text-xl">
             {target?.companyName || 'Client'}&apos;s login
           </DialogTitle>
           {/* must_change_password = true, so this is only ever the FIRST-login password. */}
@@ -83,7 +83,7 @@ export default function SalesCredentialsDialog({ open, onOpenChange, target }: S
           )}
         </div>
         {/* No Done: Escape or a click outside closes it. */}
-        <div className="flex items-center justify-end px-10 pb-6 pt-4">
+        <div className="flex items-center justify-end px-5 pb-5 pt-4 sm:px-10 sm:pb-6">
           {details && (
             <Button
               type="button"

@@ -159,7 +159,7 @@ export function AvatarCropDialog({
           </div>
         </div>
 
-        <DialogFooter className="px-5 pb-5 pt-0">
+        <DialogFooter className="gap-2 px-5 pb-5 pt-0 sm:gap-0">
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isUploading} className="flex-1 sm:flex-none">
             Cancel
           </Button>

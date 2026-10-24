@@ -320,7 +320,7 @@ export function TestimonialsTab({ canEdit }: { canEdit: boolean }) {
             />
           ) : (
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="max-md:min-w-[720px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[70px]">Order</TableHead>
@@ -416,7 +416,7 @@ export function TestimonialsTab({ canEdit }: { canEdit: boolean }) {
             <DialogDescription>Shown publicly on drive-247.com once published.</DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="t-name">Operator name *</Label>
               <Input

@@ -14,6 +14,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AdminSupportRail } from '@/components/support/AdminSupportRail';
 import { SupportRailProvider } from '../../../../../shared/trax-support/support-rail';
+import { MobileNavProvider, MobileTabBar, PhoneSectionChips } from '@/components/admin/mobile-nav';
 
 function LoadingScreen() {
   return (
@@ -124,16 +125,27 @@ export default function ProtectedLayout({
           across the top; this is what carries them there. */}
       <SidebarSectionsProvider>
       <SupportRailProvider>
+      {/* The phone's bottom tab bar and its More screen (mobile-nav.tsx). */}
+      <MobileNavProvider>
       {/* Northwind's frame: the brand wash on the provider, bounded to one
           viewport, so the rail and the page are one surface and `<main>` is
           the only thing that scrolls. */}
       <SidebarProvider className="h-svh overflow-hidden bg-background bg-app-gradient">
         {/* On Support a phone keeps the navigation sheet behind the top bar's menu. */}
         {isSupport ? <><AdminSupportRail /><Sidebar desktop={false} /></> : <Sidebar />}
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden pt-[env(safe-area-inset-top,0px)]">
           {/* Support is its own workspace: no top bar on a desktop (the rail has
               Back to dashboard). A phone keeps it for the navigation menu. */}
-          {isSupport || isCompanyPage ? <div className="md:hidden"><TopBar /></div> : <TopBar />}
+          {/* On a phone the tab bar is the navigation, so the top bar's menu
+              button goes — except on Support, a bounded workspace whose
+              composer owns the bottom edge and which keeps the sheet. */}
+          {isSupport || isCompanyPage ? (
+            <div className="md:hidden"><TopBar showNavTrigger={isSupport} /></div>
+          ) : (
+            <TopBar showNavTrigger={false} />
+          )}
+          {/* A page's own sections, which a desktop shows in the rail. */}
+          {!isSupport && <PhoneSectionChips />}
           {/* `data-scrollport` is what the house scrollbar rule in globals.css
               hooks onto. The top bar already gives the page its breathing room
               on a desktop, so the page starts close under it, as in Northwind. */}
@@ -141,12 +153,17 @@ export default function ProtectedLayout({
             data-scrollport
             className={isSupport ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'min-h-0 flex-1 overflow-y-auto overflow-x-hidden'}
           >
-            <div className={isSupport ? 'flex min-h-0 flex-1 flex-col p-3 pt-0 sm:p-4 sm:pt-0 md:pt-4' : isCompanyPage ? 'p-4 pt-1 sm:p-6 sm:pt-2 md:pt-6' : 'p-4 pt-1 sm:p-6 sm:pt-2'}>
+            {/* Below `md` the last row clears the tab bar: 60px plus the home
+                indicator, with room to spare. */}
+            <div className={isSupport ? 'flex min-h-0 flex-1 flex-col p-3 pt-0 sm:p-4 sm:pt-0 md:pt-4' : `${isCompanyPage ? 'p-4 pt-1 sm:p-6 sm:pt-2 md:pt-6' : 'p-4 pt-1 sm:p-6 sm:pt-2'} max-md:pb-[calc(env(safe-area-inset-bottom,0px)+5rem)]`}>
               {children}
             </div>
           </main>
         </div>
+        {/* Not on Support: its composer owns the bottom edge. */}
+        {!isSupport && <MobileTabBar />}
       </SidebarProvider>
+      </MobileNavProvider>
       </SupportRailProvider>
       </SidebarSectionsProvider>
       </PageSearchProvider>

@@ -402,7 +402,7 @@ export function MarketingEmailsTab({ canEdit }: { canEdit: boolean }) {
                   : `${preview.due} lesson${preview.due === 1 ? '' : 's'} due now — the hourly run will send ${preview.due === 1 ? 'it' : 'them'}.`}
               </p>
               {preview.rows.length > 0 && (
-                <Table className="mt-3">
+                <Table className="mt-3 max-md:min-w-[560px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Tenant</TableHead>

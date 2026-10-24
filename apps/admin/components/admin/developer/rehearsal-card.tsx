@@ -326,7 +326,7 @@ export function RehearsalCard({
               login until you sign up again with Link to Northwind on.
             </li>
           </ul>
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={resetting}>
               Cancel
             </Button>

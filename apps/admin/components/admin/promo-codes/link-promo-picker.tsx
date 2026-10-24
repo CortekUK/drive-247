@@ -62,7 +62,7 @@ export function LinkPromoPicker({ tenantId }: { tenantId: string }) {
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <Select value={selected} onValueChange={apply} disabled={saving}>
-          <SelectTrigger className="h-8 w-72 text-xs"><SelectValue placeholder="No code" /></SelectTrigger>
+          <SelectTrigger className="h-8 w-72 max-w-full text-xs"><SelectValue placeholder="No code" /></SelectTrigger>
           <SelectContent>
             <SelectItem value={NONE}>No code</SelectItem>
             {codes.map(c => (

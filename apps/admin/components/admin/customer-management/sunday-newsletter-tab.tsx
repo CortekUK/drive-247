@@ -607,7 +607,7 @@ export function SundayNewsletterTab({ canEdit }: { canEdit: boolean }) {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
                 <div className="space-y-0.5">
                   <Label className="text-sm font-medium">Send every Sunday</Label>
@@ -667,9 +667,9 @@ export function SundayNewsletterTab({ canEdit }: { canEdit: boolean }) {
                       value={tenantSearch}
                       onChange={(e) => setTenantSearch(e.target.value)}
                       placeholder={settingsDraft.audience === 'all' ? 'Search tenants to exclude' : 'Search tenants to send to'}
-                      className="h-8 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                      className="h-8 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                     />
-                    <span className="whitespace-nowrap pr-1 text-xs text-muted-foreground">
+                    <span className="whitespace-nowrap pr-1 text-xs text-muted-foreground max-md:whitespace-normal max-md:text-right">
                       {picked.length} {settingsDraft.audience === 'all' ? 'excluded' : 'selected'}
                     </span>
                   </div>
@@ -745,7 +745,7 @@ export function SundayNewsletterTab({ canEdit }: { canEdit: boolean }) {
               body="Each Sunday issue you write is listed here, with when it went out and to how many operators."
             />
           ) : (
-            <Table>
+            <Table className="max-md:min-w-[720px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Sunday</TableHead>
@@ -827,7 +827,7 @@ export function SundayNewsletterTab({ canEdit }: { canEdit: boolean }) {
           </DialogHeader>
           {draft && (
             <div className="space-y-5">
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="nl-title">Name (only you see this)</Label>
                   <Input id="nl-title" value={draft.title} maxLength={120} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />

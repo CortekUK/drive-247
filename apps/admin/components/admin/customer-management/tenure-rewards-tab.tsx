@@ -469,7 +469,7 @@ export function TenureRewardsTab({ canEdit }: { canEdit: boolean }) {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
               <div>
                 <div className="text-sm font-medium">Programme on</div>
@@ -488,7 +488,7 @@ export function TenureRewardsTab({ canEdit }: { canEdit: boolean }) {
                 onCheckedChange={(v) => void saveSettings({ require_active_subscription: v })}
               />
             </label>
-            <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+            <div className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-sm font-medium">Count tenure from</div>
                 <div className="text-xs text-muted-foreground">Changes every operator’s tenure below.</div>
@@ -498,7 +498,7 @@ export function TenureRewardsTab({ canEdit }: { canEdit: boolean }) {
                 disabled={!canEdit}
                 onValueChange={(v) => void saveSettings({ tenure_start: v as Settings['tenure_start'] })}
               >
-                <SelectTrigger className="h-9 w-[190px]">
+                <SelectTrigger className="h-9 w-full sm:w-[190px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -564,7 +564,7 @@ export function TenureRewardsTab({ canEdit }: { canEdit: boolean }) {
             />
           ) : (
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="max-md:min-w-[720px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Tenure</TableHead>
@@ -815,7 +815,7 @@ function MilestoneDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-[140px_1fr]">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[140px_1fr]">
             <div className="space-y-1.5">
               <Label htmlFor="tm-months">After (months)</Label>
               <Input id="tm-months" type="number" min={1} value={months} onChange={(e) => setMonths(e.target.value)} />

@@ -48,15 +48,15 @@ export function MetricCard({
   accent?: MetricAccent;
 }) {
   return (
-    <div className="rounded-4xl bg-card p-6 shadow-sm ring-1 ring-foreground/5">
+    <div className="min-w-0 rounded-4xl bg-card p-4 shadow-sm ring-1 ring-foreground/5 sm:p-6">
       <div className="mb-3 flex items-start justify-between gap-3">
         <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
-        <span className={cn('flex size-10 shrink-0 items-center justify-center rounded-2xl', ACCENT[accent])}>
-          <Icon className="size-5" aria-hidden="true" />
+        <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-2xl sm:size-10', ACCENT[accent])}>
+          <Icon className="size-4 sm:size-5" aria-hidden="true" />
         </span>
       </div>
       {/* The number is the point, so it is ink rather than a seventh colour. */}
-      <div className="text-3xl font-semibold tracking-tight text-foreground">{value}</div>
+      <div className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">{value}</div>
       <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
     </div>
   );

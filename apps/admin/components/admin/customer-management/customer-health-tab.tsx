@@ -174,7 +174,7 @@ export function CustomerHealthTab() {
     <LogRailLayout label="Companies" rail={rail}>
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Customer Health Score</h1>
@@ -189,7 +189,7 @@ export function CustomerHealthTab() {
         <Button
           variant="ghost"
           size="sm"
-          className="gap-1.5"
+          className="gap-1.5 max-sm:-ml-3 max-sm:self-start"
           onClick={() => {
             setRefreshing(true);
             void load();
@@ -223,24 +223,25 @@ export function CustomerHealthTab() {
             flipped={filtersOpen}
             onFlipBack={() => setFiltersOpen(false)}
             front={
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-3 gap-2 sm:gap-4">
                 {statCards.map(({ band, title, icon: Icon, iconBg, iconText, active }) => (
                   <Card
                     key={band}
                     className={cn('cursor-pointer transition-all', bandFilter === band && active)}
                     onClick={() => setBandFilter(bandFilter === band ? 'all' : band)}
                   >
-                    <CardContent className="pt-6">
-                      <div className="flex items-center justify-between">
+                    <CardContent className="pt-6 max-md:p-3.5">
+                      <div className="flex items-center justify-between gap-2">
                         <div>
-                          <p className="text-sm text-muted-foreground">{title}</p>
+                          <p className="text-sm text-muted-foreground max-md:text-xs">{title}</p>
                           {loading ? (
                             <Skeleton className="mt-1 h-8 w-10" />
                           ) : (
                             <p className="text-2xl font-bold tabular-nums">{counts[band]}</p>
                           )}
                         </div>
-                        <div className={cn('flex items-center justify-center h-10 w-10 rounded-lg', iconBg)}>
+                        {/* Three across on a phone: the band name and count carry it, the icon goes. */}
+                        <div className={cn('flex items-center justify-center h-10 w-10 shrink-0 rounded-lg max-md:hidden', iconBg)}>
                           <Icon className={cn('h-5 w-5', iconText)} />
                         </div>
                       </div>

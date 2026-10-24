@@ -63,7 +63,7 @@ export function ClaimsTab({ canEdit }: { canEdit: boolean }) {
                 <span className="font-medium">{c.referrerName ?? 'An operator'}</span> says{' '}
                 <span className="font-medium">{c.claimed_business_name}</span> joined because of them.
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
                 {new Date(c.created_at).toLocaleDateString()}
                 {c.claimed_contact ? ` · contact: ${c.claimed_contact}` : ''}
               </p>

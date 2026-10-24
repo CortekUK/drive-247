@@ -185,7 +185,7 @@ export function ForceLogoutDialog({
 
         {/* At a glance: how many, who, on what, from where, and who is on right now. */}
         {sessions && total > 0 && (
-          <div className="mb-4 grid grid-cols-5 gap-2">
+          <div className="mb-4 grid grid-cols-5 gap-2 max-sm:grid-cols-3">
             {[
               { label: 'Sessions', value: total },
               { label: 'People', value: new Set(sessions.map((s) => s.user_id)).size },
@@ -244,7 +244,8 @@ export function ForceLogoutDialog({
                           <li key={s.session_id} className="border-b border-border/60 last:border-b-0">
                             <label
                               className={cn(
-                                'grid cursor-pointer grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1.2fr)_auto] items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/50',
+                                // On a phone the device and IP drop under the name.
+                                'grid cursor-pointer grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1.2fr)_auto] items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/50 max-sm:grid-cols-[auto_minmax(0,1fr)_auto] max-sm:gap-y-1.5',
                                 !out && 'opacity-55',
                               )}
                               title={s.user_agent ?? undefined}
@@ -261,14 +262,14 @@ export function ForceLogoutDialog({
                                 </span>
                                 <span className="block truncate text-xs text-muted-foreground">{s.email}</span>
                               </span>
-                              <span className="min-w-0">
+                              <span className="min-w-0 max-sm:col-span-2 max-sm:col-start-2 max-sm:row-start-2">
                                 <span className="flex items-center gap-1.5 text-[13px] text-foreground">
                                   <Icon className="size-3.5 shrink-0 text-muted-foreground" />
                                   <span className="truncate">{device.label}</span>
                                 </span>
                                 <span className="block truncate font-mono text-[11px] text-muted-foreground">{s.ip ?? 'No IP'}</span>
                               </span>
-                              <span className="text-right">
+                              <span className="text-right max-sm:col-start-3 max-sm:row-start-1">
                                 <span className="flex items-center justify-end gap-1.5 text-[13px] tabular-nums text-foreground">
                                   {isActive(s) && <span className="size-1.5 rounded-full bg-emerald-500" aria-label="Active now" />}
                                   {isActive(s) ? 'Active now' : ago(s.last_active)}
@@ -287,13 +288,15 @@ export function ForceLogoutDialog({
           )}
         </div>
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-gradient-to-t from-card from-55% via-card/90 to-transparent px-7 pb-6 pt-12 [&>*]:pointer-events-auto">
-          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => void load()} disabled={busy}>
+        {/* On a phone: Refresh as an icon, no Cancel (the corner X closes),
+            and the sign-out button takes the rest of the row. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-gradient-to-t from-card from-55% via-card/90 to-transparent px-7 pb-6 pt-12 max-sm:px-5 max-sm:pb-5 [&>*]:pointer-events-auto">
+          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground max-sm:size-10 max-sm:shrink-0 max-sm:px-0" onClick={() => void load()} disabled={busy} aria-label="Refresh">
             <RefreshCw className="size-3.5" />
-            Refresh
+            <span className="max-sm:sr-only">Refresh</span>
           </Button>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
+          <div className="flex items-center gap-2 max-sm:min-w-0 max-sm:flex-1 max-sm:[&>button:last-child]:flex-1">
+            <Button variant="outline" className="max-sm:hidden" onClick={() => onOpenChange(false)} disabled={busy}>
               Cancel
             </Button>
             <Button

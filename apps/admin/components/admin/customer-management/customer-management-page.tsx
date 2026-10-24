@@ -77,9 +77,17 @@ const SECTION_IDS = new Set<string>([
  */
 const SMALLER_DESCRIPTIONS = '[&_[data-slot=card-description]]:text-[13px] [&_h1+p]:text-[13px]';
 
+/**
+ * Phones: CardTitle's default 24px wraps "Who receives these emails" onto two
+ * lines in a 300px card, so titles still at that default step down to 20px.
+ * Titles a tab already sized (`text-lg` …) no longer carry `text-2xl` after
+ * tailwind-merge, so they are left alone.
+ */
+const PHONE_CARD_TITLES = 'max-md:[&_h3.text-2xl]:text-xl';
+
 export function CustomerManagementPage() {
   return (
-    <div className={SMALLER_DESCRIPTIONS}>
+    <div className={`${SMALLER_DESCRIPTIONS} ${PHONE_CARD_TITLES}`}>
       <CustomerManagementSections />
     </div>
   );

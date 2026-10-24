@@ -466,7 +466,7 @@ export function NpsProgramTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         {draft && (
           <CardContent className="space-y-5">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
                 <div className="space-y-0.5">
                   <Label className="text-sm font-medium">Show the NPS survey</Label>
@@ -571,9 +571,9 @@ export function NpsProgramTab({ canEdit }: { canEdit: boolean }) {
                       value={tenantSearch}
                       onChange={(e) => setTenantSearch(e.target.value)}
                       placeholder={draft.audience === 'all' ? 'Search tenants to exclude' : 'Search tenants to ask'}
-                      className="h-8 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                      className="h-8 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                     />
-                    <span className="whitespace-nowrap pr-1 text-xs text-muted-foreground">
+                    <span className="whitespace-nowrap pr-1 text-xs text-muted-foreground max-md:whitespace-normal max-md:text-right">
                       {picked.length} {draft.audience === 'all' ? 'excluded' : 'selected'} · {reach} will be asked
                     </span>
                   </div>
@@ -644,7 +644,7 @@ export function NpsProgramTab({ canEdit }: { canEdit: boolean }) {
       </div>
 
       {/* ── headline numbers ─────────────────────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat
           label="NPS score"
           value={summary.nps === null ? '—' : `${summary.nps > 0 ? '+' : ''}${summary.nps}`}
@@ -660,7 +660,7 @@ export function NpsProgramTab({ canEdit }: { canEdit: boolean }) {
       </div>
 
       {/* ── split and distribution ───────────────────────────────────────── */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Promoters, passives and detractors</CardTitle>
@@ -726,7 +726,7 @@ export function NpsProgramTab({ canEdit }: { canEdit: boolean }) {
               <div className="flex h-36 items-end gap-0.5" role="img" aria-label="Number of responses for each score from 0 to 10">
                 {distribution.map((n, score) => (
                   <div key={score} className="group flex h-full flex-1 flex-col items-center justify-end gap-1" title={`Score ${score}: ${n} ${n === 1 ? 'response' : 'responses'}`}>
-                    <span className="text-[10px] tabular-nums text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">{n}</span>
+                    <span className="text-[10px] tabular-nums text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 max-md:opacity-100">{n}</span>
                     <div
                       className="w-full rounded-t-[4px] bg-primary/80 transition-colors group-hover:bg-primary"
                       style={{ height: `${n === 0 ? 0 : Math.max(4, (n / maxCount) * 100)}%` }}

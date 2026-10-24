@@ -50,6 +50,8 @@ export function TopBar({ showNavTrigger = true }: { showNavTrigger?: boolean }) 
   }, []);
   const [chatOpen, setChatOpen] = useState(false);
   const open = useCallback(() => setSearchOpen(true), []);
+  /** A phone: the page's own search, opened from the magnifier, takes the row. */
+  const [phoneFieldOpen, setPhoneFieldOpen] = useState(false);
 
   // ⌘K / Ctrl+K from anywhere.
   useEffect(() => {
@@ -76,7 +78,12 @@ export function TopBar({ showNavTrigger = true }: { showNavTrigger?: boolean }) 
           never both (Northwind's rule: two search fields on one screen, one
           global and one local with nothing saying which, is the confusion). */}
       {slot ? (
-        <PageField slot={slot} onSearchEverywhere={searchEverywhere} />
+        <PageField
+          slot={slot}
+          onSearchEverywhere={searchEverywhere}
+          phoneOpen={phoneFieldOpen}
+          onPhoneClose={() => setPhoneFieldOpen(false)}
+        />
       ) : (
         <button type="button" onClick={open} aria-label="Search" className={`hidden sm:flex ${FIELD}`}>
           <Search className="size-4 shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" aria-hidden />
@@ -89,16 +96,19 @@ export function TopBar({ showNavTrigger = true }: { showNavTrigger?: boolean }) 
         </button>
       )}
 
+      {/* A phone's magnifier: on a list page it opens that page's own search
+          in the bar, as Northwind's does; elsewhere, ⌘K search. It gives way
+          while the page field is showing. */}
       <button
         type="button"
-        onClick={open}
-        aria-label="Search"
-        className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/[0.07] text-primary sm:hidden"
+        onClick={slot ? () => setPhoneFieldOpen(true) : open}
+        aria-label={slot ? 'Search this page' : 'Search'}
+        className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/[0.07] text-primary sm:hidden [header:has([data-phone-field])_&]:hidden"
       >
         <Search className="size-4" aria-hidden />
       </button>
 
-      <div className="ml-auto flex items-center gap-0.5">
+      <div className="ml-auto flex items-center gap-0.5 max-sm:[header:has([data-phone-field])_&]:hidden">
         {supportItem && (
           <>
             <span aria-hidden className="mx-1 hidden h-5 w-px bg-border sm:block" />
@@ -174,9 +184,13 @@ export function TopBar({ showNavTrigger = true }: { showNavTrigger?: boolean }) 
 function PageField({
   slot,
   onSearchEverywhere,
+  phoneOpen,
+  onPhoneClose,
 }: {
   slot: PageSearchRegistration;
   onSearchEverywhere: (q: string) => void;
+  phoneOpen: boolean;
+  onPhoneClose: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [term, setTerm] = useState(slot.value);
@@ -211,13 +225,20 @@ function PageField({
 
   const trimmed = term.trim();
   const filters = slot.filters;
+  // Below `sm` the field shows only once opened, or while it holds a term.
+  const onPhone = phoneOpen || term !== '';
+
+  useEffect(() => {
+    if (phoneOpen) inputRef.current?.focus();
+  }, [phoneOpen]);
 
   return (
-    <div className="relative hidden w-full max-w-[440px] sm:block">
+    <>
+    <div data-phone-field={onPhone ? '' : undefined} className={`relative w-full min-w-0 max-w-[440px] ${onPhone ? 'block' : 'hidden sm:block'}`}>
       <div className={`${FIELD} max-w-none cursor-text`} onClick={() => inputRef.current?.focus()}>
         <Search className="size-4 shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" aria-hidden />
         {slot.scopeLabel && (
-          <span className="flex shrink-0 items-center gap-1 rounded-md border border-primary/30 bg-background/70 py-0.5 pl-1.5 pr-0.5 text-[11px] font-medium text-foreground dark:bg-[hsl(var(--v2-hover,var(--muted)))]">
+          <span className="flex shrink-0 items-center gap-1 rounded-md border border-primary/30 max-sm:hidden bg-background/70 py-0.5 pl-1.5 pr-0.5 text-[11px] font-medium text-foreground dark:bg-[hsl(var(--v2-hover,var(--muted)))]">
             <span className="text-muted-foreground">in</span>
             {slot.scopeLabel}
             <button
@@ -283,7 +304,7 @@ function PageField({
               onSearchEverywhere('');
             }}
             aria-label="Search everything"
-            className="shrink-0 cursor-pointer rounded-md bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary hover:bg-primary/25 dark:text-[hsl(var(--v2-link,var(--primary)))]"
+            className="shrink-0 cursor-pointer max-sm:hidden rounded-md bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary hover:bg-primary/25 dark:text-[hsl(var(--v2-link,var(--primary)))]"
           >
             ⌘K
           </button>
@@ -307,5 +328,19 @@ function PageField({
         </button>
       )}
     </div>
+    {onPhone && (
+      <button
+        type="button"
+        onClick={() => {
+          setTerm('');
+          onPhoneClose();
+        }}
+        aria-label="Clear and close search"
+        className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground sm:hidden"
+      >
+        <X className="size-4" aria-hidden />
+      </button>
+    )}
+    </>
   );
 }

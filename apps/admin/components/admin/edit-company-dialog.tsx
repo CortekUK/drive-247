@@ -259,11 +259,12 @@ export function EditCompanyDialog({
           </section>
         </div>
 
-        <div className="mt-5 flex justify-end gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+        {/* Stacks on a phone, Save on top and full width. */}
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="outline" className="max-sm:w-full" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
-          <Button onClick={save} disabled={saving || passwordTooShort}>
+          <Button className="max-sm:w-full" onClick={save} disabled={saving || passwordTooShort}>
             {saving && <Loader2 className="animate-spin" />}
             Save
           </Button>

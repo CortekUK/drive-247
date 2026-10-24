@@ -69,7 +69,7 @@ export function SettingsTab({ canEdit }: { canEdit: boolean }) {
   if (!settings || !terms) return <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Programme</CardTitle>

@@ -42,10 +42,15 @@ const DialogContent = React.forwardRef<
 >(({ className, overlayClassName, showCloseButton = true, children, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay className={overlayClassName} />
+    {/* On a phone, Northwind's (ui-v2/dialog.tsx): a 1rem margin on each side
+        rather than edge to edge, and never taller than the screen — a long
+        form scrolls inside the card instead of running off the bottom with
+        its buttons. `w-[calc(100%-2rem)]` rather than a max-width, so a
+        dialog that asks for `max-w-2xl` still keeps the margin. */}
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-[100] grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-4xl bg-popover p-6 text-popover-foreground shadow-xl ring-1 ring-foreground/10", MOTION_DIALOG,
+        "fixed left-[50%] top-[50%] z-[100] grid w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-4xl bg-popover p-6 text-popover-foreground shadow-xl ring-1 ring-foreground/10 max-sm:max-h-[calc(100svh-2rem)] max-sm:overflow-y-auto", MOTION_DIALOG,
         className,
       )}
       {...props}
@@ -66,7 +71,7 @@ const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 DialogHeader.displayName = "DialogHeader";
 
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)} {...props} />
+  <div className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-0 sm:space-x-2", className)} {...props} />
 );
 DialogFooter.displayName = "DialogFooter";
 

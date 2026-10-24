@@ -432,7 +432,7 @@ export function RetentionOffersTab({ canEdit }: { canEdit: boolean }) {
           {offers.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">No tenant-specific offers — everyone gets the default.</p>
           ) : (
-            <Table>
+            <Table className="max-md:min-w-[600px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Tenant</TableHead>

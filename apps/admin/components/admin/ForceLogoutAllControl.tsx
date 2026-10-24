@@ -102,7 +102,7 @@ export function ForceLogoutAllControl({ className }: { className?: string }) {
             />
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="max-sm:gap-2">
             <Button
               variant="outline"
               onClick={() => {

@@ -462,7 +462,7 @@ export function AbandonedRecoveryTab({ canEdit }: { canEdit: boolean }) {
         </CardHeader>
         {draft && (
           <CardContent className="space-y-5">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
                 <div className="space-y-0.5">
                   <Label className="text-sm font-medium">Send recovery emails</Label>
@@ -481,7 +481,7 @@ export function AbandonedRecoveryTab({ canEdit }: { canEdit: boolean }) {
                   onCheckedChange={(v) => setDraft({ ...draft, auto_reply_enabled: v })}
                 />
               </div>
-              <div className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 rounded-lg border p-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="ar-delay" className="text-sm font-medium">
                   Email after they&apos;ve been gone for
@@ -939,7 +939,7 @@ function FaqGuardrailCard({ tenants }: { tenants: TenantOption[] }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="grid gap-3 md:grid-cols-[240px_1fr_auto] md:items-end">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[240px_1fr_auto] md:items-end">
           <div className="space-y-1.5">
             <Label>Tenant</Label>
             <Select value={tenantId} onValueChange={setTenantId}>

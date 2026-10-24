@@ -334,7 +334,7 @@ export default function WelcomePackAdminPage() {
           </div>
           <Card className="overflow-hidden">
             <CardContent className="p-0">
-              <Table>
+              <Table className="max-md:min-w-[640px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Title</TableHead>
@@ -405,7 +405,7 @@ export default function WelcomePackAdminPage() {
           </div>
           <Card className="overflow-hidden">
             <CardContent className="p-0">
-              <Table>
+              <Table className="max-md:min-w-[640px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Question</TableHead>
@@ -464,7 +464,7 @@ export default function WelcomePackAdminPage() {
           </div>
           <Card className="overflow-hidden">
             <CardContent className="p-0">
-              <Table>
+              <Table className="max-md:min-w-[640px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Title</TableHead>
@@ -582,7 +582,7 @@ export default function WelcomePackAdminPage() {
         <TabsContent value="readership" className="mt-4">
           <Card className="overflow-hidden">
             <CardContent className="p-0">
-              <Table>
+              <Table className="max-md:min-w-[640px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
                 <TableHeader>
                   <TableRow>
                     <TableHead>User</TableHead>
@@ -639,7 +639,7 @@ export default function WelcomePackAdminPage() {
             <DialogTitle>{editingSection?.id ? 'Edit page' : 'New page'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label>Chapter</Label>
                 <Select
@@ -692,7 +692,7 @@ export default function WelcomePackAdminPage() {
                 onChange={(e) => setEditingSection({ ...editingSection, body_md: e.target.value })}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label>Only show if tenant flag is true</Label>
                 <Input
@@ -726,7 +726,7 @@ export default function WelcomePackAdminPage() {
               <Label>Published</Label>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setEditingSection(null)}>Cancel</Button>
             <Button onClick={saveSection}>Save</Button>
           </DialogFooter>
@@ -770,7 +770,7 @@ export default function WelcomePackAdminPage() {
                 onChange={(e) => setEditingFaq({ ...editingFaq, answer_md: e.target.value })}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label>Only show if tenant flag is true</Label>
                 <Input
@@ -795,7 +795,7 @@ export default function WelcomePackAdminPage() {
               <Label>Published</Label>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setEditingFaq(null)}>Cancel</Button>
             <Button onClick={saveFaq}>Save</Button>
           </DialogFooter>
@@ -823,7 +823,7 @@ export default function WelcomePackAdminPage() {
                 onChange={(e) => setEditingGroup({ ...editingGroup, description: e.target.value })}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label>Icon</Label>
                 <Select
@@ -857,7 +857,7 @@ export default function WelcomePackAdminPage() {
               <Label>Published</Label>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setEditingGroup(null)}>Cancel</Button>
             <Button onClick={saveGroup}>Save</Button>
           </DialogFooter>

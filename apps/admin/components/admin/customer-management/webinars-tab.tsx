@@ -605,7 +605,7 @@ function WebinarEditor({ draft, onChange, tenants }: { draft: Draft; onChange: (
   }
 
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 space-y-5">
       <div className="space-y-1.5">
         <Label htmlFor="wb-title">Title</Label>
         <Input id="wb-title" value={draft.title} onChange={(e) => onChange({ ...draft, title: e.target.value })} placeholder="e.g. Getting more direct bookings" />
@@ -621,7 +621,7 @@ function WebinarEditor({ draft, onChange, tenants }: { draft: Draft; onChange: (
         />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-[1fr_120px_1fr]">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_120px_1fr]">
         <div className="space-y-1.5">
           <Label htmlFor="wb-date">Date</Label>
           <Input id="wb-date" type="date" value={draft.date} onChange={(e) => onChange({ ...draft, date: e.target.value })} />
@@ -647,7 +647,7 @@ function WebinarEditor({ draft, onChange, tenants }: { draft: Draft; onChange: (
           </Select>
         </div>
       </div>
-      <div className="grid gap-3 sm:grid-cols-[120px_1fr]">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[120px_1fr]">
         <div className="space-y-1.5">
           <Label htmlFor="wb-len">Length (min)</Label>
           <Input id="wb-len" type="number" min={5} max={600} value={draft.duration} onChange={(e) => onChange({ ...draft, duration: e.target.value })} />
@@ -689,9 +689,9 @@ function WebinarEditor({ draft, onChange, tenants }: { draft: Draft; onChange: (
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={draft.audience === 'all' ? 'Search tenants to exclude' : 'Search tenants to invite'}
-              className="h-8 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              className="h-8 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
-            <span className="whitespace-nowrap pr-1 text-xs text-muted-foreground">
+            <span className="whitespace-nowrap pr-1 text-xs text-muted-foreground max-md:whitespace-normal max-md:text-right">
               {draft.picked.length} {draft.audience === 'all' ? 'excluded' : 'invited'}
             </span>
           </div>

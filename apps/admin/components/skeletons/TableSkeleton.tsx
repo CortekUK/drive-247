@@ -18,7 +18,7 @@ export function TableSkeleton({
 }: TableSkeletonProps) {
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
         <div>
           {title ? (
             <>
@@ -28,11 +28,11 @@ export function TableSkeleton({
           ) : (
             <>
               <Skeleton className="h-8 w-48 mb-2" />
-              <Skeleton className="h-4 w-72" />
+              <Skeleton className="h-4 w-full max-w-72" />
             </>
           )}
         </div>
-        {showButton && <Skeleton className="h-10 w-40" />}
+        {showButton && <Skeleton className="h-10 w-full sm:w-40" />}
       </div>
 
       <Card>

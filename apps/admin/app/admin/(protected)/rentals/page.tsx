@@ -842,14 +842,14 @@ export default function RentalCompaniesPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <Skeleton className="h-8 w-48" />
-            <Skeleton className="h-4 w-80 mt-2" />
+            <Skeleton className="h-4 w-full max-w-80 mt-2" />
           </div>
-          <Skeleton className="h-10 w-44" />
+          <Skeleton className="h-10 w-full sm:w-44" />
         </div>
-        <Skeleton className="h-10 w-60" />
+        <Skeleton className="h-10 w-60 max-w-full" />
         <Card>
           <CardContent className="p-0">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -909,8 +909,8 @@ export default function RentalCompaniesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Header — stacks on a phone, the add button taking the full width. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-3">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Rental Companies</h1>
@@ -919,8 +919,8 @@ export default function RentalCompaniesPage() {
             </p>
           </div>
         </div>
-        <div className={HEADER_ACTIONS}>
-          <Button className={HEADER_PRIMARY} onClick={() => setShowChooser(true)}>
+        <div className={cn(HEADER_ACTIONS, 'max-sm:w-full')}>
+          <Button className={cn(HEADER_PRIMARY, 'max-sm:h-10 max-sm:flex-1')} onClick={() => setShowChooser(true)}>
             <Plus className="h-4 w-4" />
             Add New Company
           </Button>
@@ -1057,7 +1057,7 @@ export default function RentalCompaniesPage() {
                       ? `${Math.floor(ageMs / 1000)}s ago`
                       : `${Math.floor(ageMs / 60_000)}m ago`;
               return (
-                <div className="flex items-center gap-2 mb-3 text-xs">
+                <div className="flex flex-wrap items-center gap-2 mb-3 text-xs">
                   <span
                     className={cn(
                       'inline-flex h-2 w-2 rounded-full',
@@ -1085,7 +1085,8 @@ export default function RentalCompaniesPage() {
                 </div>
               );
             })()}
-            <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+            {/* A 3-up grid of tiles on a phone; the money figures span the row. */}
+            <div className="grid grid-cols-3 gap-x-3 gap-y-3 sm:flex sm:flex-wrap sm:items-center sm:gap-x-8">
               {(
                 [
                   ['active', 'Subscribed'],
@@ -1120,8 +1121,8 @@ export default function RentalCompaniesPage() {
                 );
               })}
               {Object.keys(subscriptionSummary.atRiskByCurrency).length > 0 && (
-                <div className="flex flex-col ml-auto text-right">
-                  <span className="text-xl font-semibold tabular-nums text-amber-600">
+                <div className="col-span-3 flex flex-col text-left sm:ml-auto sm:text-right">
+                  <span className="text-xl font-semibold tabular-nums text-amber-600 [overflow-wrap:anywhere]">
                     {formatByCurrency(subscriptionSummary.atRiskByCurrency)}
                   </span>
                   <span className="text-xs text-muted-foreground">At risk (owed)</span>
@@ -1129,11 +1130,11 @@ export default function RentalCompaniesPage() {
               )}
               <div
                 className={cn(
-                  'flex flex-col text-right',
-                  Object.keys(subscriptionSummary.atRiskByCurrency).length > 0 ? '' : 'ml-auto'
+                  'col-span-3 flex flex-col text-left sm:text-right',
+                  Object.keys(subscriptionSummary.atRiskByCurrency).length > 0 ? '' : 'sm:ml-auto'
                 )}
               >
-                <span className="text-xl font-semibold tabular-nums text-emerald-600">
+                <span className="text-xl font-semibold tabular-nums text-emerald-600 [overflow-wrap:anywhere]">
                   {formatByCurrency(subscriptionSummary.mrrByCurrency)}
                 </span>
                 <span className="text-xs text-muted-foreground">
@@ -1180,8 +1181,10 @@ export default function RentalCompaniesPage() {
       )}
 
       {/* Table */}
+      {/* On a phone the table scrolls sideways inside its card rather than
+          squeezing every company name into a three-line stack. */}
       <Card className="overflow-hidden">
-        <Table>
+        <Table className="max-md:min-w-[720px]">
           <TableHeader>
             <TableRow>
               <TableHead className="w-10"></TableHead>
@@ -1229,7 +1232,7 @@ export default function RentalCompaniesPage() {
                     />
                   </button>
                 </TableCell>
-                <TableCell className="font-semibold text-foreground">{tenant.company_name}</TableCell>
+                <TableCell className="font-semibold text-foreground max-md:whitespace-nowrap">{tenant.company_name}</TableCell>
                 <TableCell className="whitespace-nowrap font-medium text-foreground">
                   {tenant.admin_name || '—'}
                 </TableCell>
@@ -1509,7 +1512,7 @@ export default function RentalCompaniesPage() {
                   );
                 })()}
                 {!isSubscriptionView && (
-                  <TableCell className="font-medium tabular-nums text-foreground">
+                  <TableCell className="font-medium tabular-nums text-foreground max-md:whitespace-nowrap">
                     {new Date(tenant.created_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </TableCell>
                 )}

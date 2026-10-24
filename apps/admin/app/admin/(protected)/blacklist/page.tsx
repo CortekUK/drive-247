@@ -268,17 +268,19 @@ export default function BlacklistPage() {
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="rounded-4xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
-          <p className="text-sm text-muted-foreground">Total Blocked</p>
+      {/* Three small tiles across on a phone too, rather than three
+          screen-wide cards stacked above the table. */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
+        <div className="rounded-3xl sm:rounded-4xl bg-card p-3 sm:p-5 shadow-sm ring-1 ring-foreground/10">
+          <p className="text-xs sm:text-sm text-muted-foreground">Total Blocked</p>
           <p className="text-2xl font-bold text-red-600 mt-1">{totalBlocked}</p>
         </div>
-        <div className="rounded-4xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
-          <p className="text-sm text-muted-foreground">Globally Blacklisted</p>
+        <div className="rounded-3xl sm:rounded-4xl bg-card p-3 sm:p-5 shadow-sm ring-1 ring-foreground/10">
+          <p className="text-xs sm:text-sm text-muted-foreground">Globally Blacklisted</p>
           <p className="text-2xl font-bold text-orange-600 mt-1">{globallyBlacklisted}</p>
         </div>
-        <div className="rounded-4xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
-          <p className="text-sm text-muted-foreground">Tenants Affected</p>
+        <div className="rounded-3xl sm:rounded-4xl bg-card p-3 sm:p-5 shadow-sm ring-1 ring-foreground/10">
+          <p className="text-xs sm:text-sm text-muted-foreground">Tenants Affected</p>
           <p className="text-2xl font-bold text-foreground mt-1">{uniqueTenants}</p>
         </div>
       </div>
@@ -288,7 +290,7 @@ export default function BlacklistPage() {
           phone and the card was CLIPPING the columns past the fold with no way
           to reach them. Any non-visible overflow still rounds the corners. */}
       <div className="overflow-x-auto rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10">
-        <table className="min-w-full divide-y divide-dark-border">
+        <table className="min-w-full divide-y divide-dark-border max-md:[&_td:not([colspan])]:whitespace-nowrap">
           <thead className="bg-card/95">
             <tr>
               <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-8" />

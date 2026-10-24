@@ -212,7 +212,7 @@ export default function ContactRequestsPage() {
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Contact Requests</h1>
           <p className="text-sm text-muted-foreground">Leads from the website, Meta Ads and Google Ads, and ones you add by hand.</p>
         </div>
-        <div className={HEADER_ACTIONS}>
+        <div className={cn(HEADER_ACTIONS, 'max-sm:w-full max-sm:flex-wrap')}>
           <button
             type="button"
             onClick={() => setSourcesOpen(true)}
@@ -232,7 +232,7 @@ export default function ContactRequestsPage() {
           <HeaderIconButton label="Export CSV" onClick={exportCsv}>
             <Download className="h-4 w-4" />
           </HeaderIconButton>
-          <Button className={HEADER_PRIMARY} onClick={() => setEditing('new')}>
+          <Button className={cn(HEADER_PRIMARY, 'max-sm:flex-1')} onClick={() => setEditing('new')}>
             <Plus className="h-4 w-4" />
             New request
           </Button>
@@ -241,8 +241,12 @@ export default function ContactRequestsPage() {
 
       {loading ? <div className="h-[262px] animate-pulse rounded-3xl border border-border bg-muted/40" /> : <ContactChart dates={dates} />}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 max-md:flex-col max-md:flex-nowrap max-md:items-stretch">
+        {/* Phones: the status chips stay one row and scroll sideways, edge to
+            edge, instead of wrapping into a two-line pill. */}
+        <div className="max-md:-mx-4 max-md:overflow-x-auto max-md:px-4 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden">
         <SegmentedControl
+          className="max-md:max-w-none max-md:flex-nowrap max-md:[&>button]:shrink-0 max-md:[&>button]:whitespace-nowrap"
           size="sm"
           ariaLabel="Status"
           options={[
@@ -252,6 +256,7 @@ export default function ContactRequestsPage() {
           value={status}
           onChange={setStatus}
         />
+        </div>
         <div className="flex items-center gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger

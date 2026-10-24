@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Manrope } from 'next/font/google';
 import NextTopLoader from 'nextjs-toploader';
 import './globals.css';
@@ -41,6 +41,18 @@ export const metadata: Metadata = {
     // be opaque — a transparent PNG is flattened onto black.
     apple: '/icons/apple-touch-icon.png',
   }
+};
+
+/**
+ * `viewport-fit=cover`, as Northwind's: it is what makes
+ * `env(safe-area-inset-*)` report anything but 0, so the phone tab bar clears
+ * the home indicator and, installed to the Home Screen (the status bar is
+ * `black-translucent`), the top bar clears the clock.
+ */
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({

@@ -54,9 +54,9 @@ export function CreateCompanyChooser({
               key={o.mode}
               type="button"
               onClick={() => onChoose(o.mode)}
-              className="group flex cursor-pointer flex-col items-center rounded-2xl border border-border bg-card px-5 pb-5 pt-4 text-center outline-none transition-colors hover:border-primary/40 hover:bg-[hsl(var(--v2-row-hover,var(--muted)))] focus-visible:ring-3 focus-visible:ring-ring/30 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
+              className="group flex cursor-pointer flex-col items-center rounded-2xl border border-border bg-card px-4 pb-4 pt-3 text-center sm:px-5 sm:pb-5 sm:pt-4 outline-none transition-colors hover:border-primary/40 hover:bg-[hsl(var(--v2-row-hover,var(--muted)))] focus-visible:ring-3 focus-visible:ring-ring/30 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
             >
-              <div aria-hidden="true" className="w-full max-w-[220px]">
+              <div aria-hidden="true" className="w-full max-w-[160px] sm:max-w-[220px]">
                 {o.art}
               </div>
               <span className="mt-3 text-base font-semibold tracking-tight text-foreground group-hover:text-primary dark:group-hover:text-[hsl(var(--v2-link,var(--primary)))]">

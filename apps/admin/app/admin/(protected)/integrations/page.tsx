@@ -392,7 +392,7 @@ export default function IntegrationsAdminPage() {
       )}
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-8 max-md:gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="h-56 animate-pulse rounded-4xl border border-border bg-card/40" />
           ))}
@@ -400,7 +400,7 @@ export default function IntegrationsAdminPage() {
       ) : shown.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">No integration matches &ldquo;{query.trim()}&rdquo;.</p>
       ) : (
-        <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-8 max-md:gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {shown.map((r) => {
             const card = CARDS[r.key];
             if (!card) return null;
@@ -458,7 +458,7 @@ export default function IntegrationsAdminPage() {
         <DialogContent
           showCloseButton={false}
           style={{ backgroundImage: DIALOG_WASH }}
-          className="no-scrollbar max-h-[94vh] overflow-y-auto overflow-x-hidden p-7 sm:max-w-4xl [&>*]:min-w-0"
+          className="no-scrollbar max-h-[94vh] overflow-y-auto overflow-x-hidden p-5 sm:p-7 sm:max-w-4xl [&>*]:min-w-0"
         >
           {open && (
             <IntegrationControls
@@ -629,10 +629,10 @@ function IntegrationControls({
         {previewOnly && (
           <p className="mr-auto text-xs text-muted-foreground">Preview only for billing: its price shows, but it can&rsquo;t be bought until it launches.</p>
         )}
-        <Button variant="outline" className="h-10 rounded-2xl px-5" onClick={onClose} disabled={saving}>
+        <Button variant="outline" className="h-10 rounded-2xl px-5 max-sm:flex-1" onClick={onClose} disabled={saving}>
           {dirty ? 'Discard' : 'Close'}
         </Button>
-        <Button className="h-10 rounded-2xl px-6" onClick={() => void save()} disabled={!dirty || saving || locked || Boolean(problem)}>
+        <Button className="h-10 rounded-2xl px-6 max-sm:flex-1" onClick={() => void save()} disabled={!dirty || saving || locked || Boolean(problem)}>
           {saving && <Loader2 className="size-4 animate-spin" />}
           {saving ? 'Saving…' : 'Save changes'}
         </Button>

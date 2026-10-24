@@ -106,7 +106,8 @@ export function ContactDetailDialog({
             {details.map(([label, value]) => (
               <div key={label} className="min-w-0">
                 <dt className="text-xs text-muted-foreground">{label}</dt>
-                <dd className="mt-0.5 truncate text-sm text-foreground">
+                {/* One column on a phone, so a long email wraps there rather than being cut off. */}
+                <dd className="mt-0.5 truncate text-sm text-foreground max-sm:whitespace-normal max-sm:[overflow-wrap:anywhere]">
                   {label === 'Email' && value ? (
                     <a href={`mailto:${value}`} className="text-primary hover:underline">
                       {value}

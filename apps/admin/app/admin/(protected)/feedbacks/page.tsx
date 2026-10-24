@@ -278,7 +278,9 @@ export default function FeedbacksPage() {
           ))}
         </div>
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        /* grid-cols-1, not the implicit track: an auto track grows to the longest
+           campaign name and pushed the cards off a phone's edge. */
+        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {/* First: everything, across every campaign and the portal form. */}
           <li>
             <button
@@ -360,7 +362,7 @@ export default function FeedbacksPage() {
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <DialogTitle className="sr-only">{openCampaign?.name ?? 'Campaign'}</DialogTitle>
-          <div className="min-h-0 overflow-y-auto p-6 [scrollbar-width:thin]">
+          <div className="min-h-0 overflow-y-auto p-4 sm:p-6 [scrollbar-width:thin]">
             {openCampaign && (
               <CampaignView
                 campaign={openCampaign}
@@ -376,11 +378,11 @@ export default function FeedbacksPage() {
       {/* Everything, across every campaign and the portal form. */}
       <Dialog open={openAll} onOpenChange={setOpenAll}>
         <DialogContent className="flex max-h-[88vh] w-[96vw] max-w-[900px] flex-col gap-0 overflow-hidden rounded-3xl p-0">
-          <DialogHeader className="border-b border-border px-6 pb-4 pt-6 text-left">
+          <DialogHeader className="border-b border-border px-4 pb-4 pt-5 text-left sm:px-6 sm:pt-6">
             <DialogTitle>All feedback</DialogTitle>
             <DialogDescription>Every reply, from the portal and from every campaign, newest first.</DialogDescription>
           </DialogHeader>
-          <div className="min-h-0 overflow-y-auto p-6 [scrollbar-width:thin]">
+          <div className="min-h-0 overflow-y-auto p-4 sm:p-6 [scrollbar-width:thin]">
             {items.length === 0 ? (
               <EmptyState illustration={<FeedbackEmptyArt />} headline="No feedback yet" body="Replies from the portal's feedback form show up here." />
             ) : (
@@ -615,7 +617,7 @@ function CampaignView({
                   type="button"
                   disabled={busyTenant === r.id}
                   onClick={() => void setTenantExcluded(r.id, r.state !== 'excluded')}
-                  className="mt-0.5 shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground opacity-0 transition-opacity hover:bg-secondary hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-50"
+                  className="mt-0.5 shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground opacity-0 transition-opacity hover:bg-secondary hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-50 max-md:opacity-100"
                 >
                   {r.state === 'excluded' ? 'Ask them' : 'Leave out'}
                 </button>
@@ -677,7 +679,7 @@ function FeedbackDetail({
           <>
             <DialogHeader className="text-left">
               <DialogTitle>{tenantLabel(item.tenants)}</DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="[overflow-wrap:anywhere]">
                 {[item.submitter_name, item.submitter_role, item.submitter_email].filter(Boolean).join(' · ') || 'Unknown person'}
               </DialogDescription>
             </DialogHeader>
@@ -686,7 +688,7 @@ function FeedbackDetail({
             {item.rating !== null && <Stars value={item.rating} />}
               <span>{fmtDateTime(item.created_at)}</span>
               {campaign && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">{campaign.name}</span>}
-              {item.page_path && <span className="font-mono">{item.page_path}</span>}
+              {item.page_path && <span className="break-all font-mono">{item.page_path}</span>}
             </div>
             <p className="whitespace-pre-wrap rounded-2xl bg-muted/50 p-4 text-sm leading-relaxed text-foreground">{item.message}</p>
             {item.screenshot_path &&

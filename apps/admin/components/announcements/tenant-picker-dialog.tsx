@@ -138,7 +138,7 @@ export function TenantPickerDialog({
       }}
     >
       <DialogContent
-        className="flex max-h-[92vh] w-[96vw] max-w-[880px] flex-col gap-0 overflow-hidden p-0"
+        className="flex max-h-[92vh] w-[96vw] max-w-[880px] flex-col gap-0 overflow-hidden p-0 max-sm:overflow-hidden max-sm:p-0"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           const el = returnFocusRef?.current;
@@ -166,7 +166,9 @@ export function TenantPickerDialog({
                 aria-label="Search tenants"
               />
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            {/* Phones: the filters are one row that scrolls sideways, so the
+                list keeps most of the dialog's height. */}
+            <div className="flex flex-wrap items-center gap-2 max-sm:-mx-5 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:px-5 max-sm:[scrollbar-width:none] max-sm:[&::-webkit-scrollbar]:hidden max-sm:[&>*]:shrink-0">
               <button
                 type="button"
                 aria-pressed={filters.favoritesOnly}
@@ -210,7 +212,7 @@ export function TenantPickerDialog({
                   </button>
                 ))}
               </div>
-              <div className="flex min-w-[220px] flex-1 items-center gap-2 sm:flex-none">
+              <div className="flex min-w-[220px] flex-1 items-center gap-2 max-sm:flex-none sm:flex-none">
                 <Select
                   value={filters.subscription}
                   onValueChange={(v) => patch({ subscription: v as SubscriptionFilter })}

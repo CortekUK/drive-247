@@ -1495,7 +1495,7 @@ export default function TenantDetailsPage() {
     return (
       <div className="p-6 lg:p-8 space-y-6">
         <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-4 w-96" />
+        <Skeleton className="h-4 w-96 max-w-full" />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Skeleton className="h-64" />
           <Skeleton className="h-64" />
@@ -1690,15 +1690,16 @@ export default function TenantDetailsPage() {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         {/* Left: the company, its billing, its integrations, its consent log,
             each a compact full-width strip. */}
-        <div className="flex min-h-0 flex-col gap-4 lg:-m-1.5 lg:overflow-y-auto lg:p-1.5">
+        <div className="flex min-h-0 min-w-0 flex-col gap-4 lg:-m-1.5 lg:overflow-y-auto lg:p-1.5">
           {/* The company's facts, in one row. Its name is the page title, so
               only what the title doesn't say. Edit is in the header. */}
           <Card className="shrink-0">
-            <CardContent className="px-7 py-6">
-              <div className="flex items-center gap-6">
+            <CardContent className="px-7 py-6 max-md:px-5 max-md:py-5">
+              {/* On a phone the who and the what stack. */}
+              <div className="flex items-center gap-6 max-md:flex-col max-md:items-start max-md:gap-4">
                 {/* Who: the admin, and the address to reach them, in full. */}
                 <div className="flex min-w-0 flex-1 items-center gap-3">
                   <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold uppercase text-primary">
@@ -1714,7 +1715,7 @@ export default function TenantDetailsPage() {
                   </div>
                 </div>
                 {/* What: its slug and when it joined. */}
-                <dl className="flex shrink-0 gap-8">
+                <dl className="flex shrink-0 gap-8 max-md:w-full max-md:shrink">
                   {[
                     { label: 'Slug', value: tenant.slug },
                     {
@@ -1722,9 +1723,9 @@ export default function TenantDetailsPage() {
                       value: new Date(tenant.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
                     },
                   ].map((item) => (
-                    <div key={item.label} className="space-y-0.5">
+                    <div key={item.label} className="min-w-0 space-y-0.5">
                       <dt className="text-[13px] text-muted-foreground">{item.label}</dt>
-                      <dd className="text-base font-medium text-foreground">{item.value}</dd>
+                      <dd className="text-base font-medium text-foreground max-md:break-all">{item.value}</dd>
                     </div>
                   ))}
                 </dl>
@@ -1742,7 +1743,10 @@ export default function TenantDetailsPage() {
                 </Button>
               )}
             </div>
-            <div className="grid grid-cols-5 gap-3">{integrationTiles.slice(0, INTEGRATIONS_IN_ROW)}</div>
+            {/* On a phone the row scrolls sideways, each tile a fixed width. */}
+            <div className="grid grid-cols-5 gap-3 max-md:-mx-4 max-md:flex max-md:snap-x max-md:scroll-px-4 max-md:overflow-x-auto max-md:px-4 max-md:pb-1 max-md:pt-0.5 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden max-md:[&>*]:w-28 max-md:[&>*]:shrink-0 max-md:[&>*]:snap-start">
+              {integrationTiles.slice(0, INTEGRATIONS_IN_ROW)}
+            </div>
           </section>
 
           <Dialog open={showIntegrations} onOpenChange={setShowIntegrations}>
@@ -2082,18 +2086,18 @@ export default function TenantDetailsPage() {
                 </div>
               )}
               {(subLinkUrl || subLink) && <Separator className="mb-3" />}
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-6">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-6 max-md:grid-cols-1 max-md:gap-3">
                 {/* Status, plan and billing are one fact, so one pill: the plan
                     and its price, green when active, amber while trialing or
                     unpaid, grey with no subscription. A state other than active
                     is spelled out in it. */}
-                <div className="space-y-1.5">
+                <div className="min-w-0 space-y-1.5">
                   {/* The pill is the way into Manage Plans. */}
                   <button
                     type="button"
                     onClick={() => setShowSubscriptionDetail(true)}
                     title="Manage plans"
-                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background pl-3 pr-2 outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30 [&>*]:cursor-pointer"
+                    className="inline-flex h-8 max-w-full items-center gap-1 rounded-lg border border-border bg-background pl-3 pr-2 outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30 [&>*]:cursor-pointer"
                   >
                     {subscription ? (
                       <Badge
@@ -2232,7 +2236,7 @@ export default function TenantDetailsPage() {
                     <span>Expires <span className="text-foreground font-medium">{String(subscription.card_exp_month).padStart(2, '0')}/{subscription.card_exp_year}</span></span>
                   )}
                   {subscription.stripe_customer_id && (
-                    <span>Customer <span className="text-foreground font-mono text-[11px]">{subscription.stripe_customer_id}</span></span>
+                    <span className="min-w-0 break-all">Customer <span className="text-foreground font-mono text-[11px]">{subscription.stripe_customer_id}</span></span>
                   )}
                 </div>
               )}
@@ -2424,7 +2428,7 @@ export default function TenantDetailsPage() {
       <Dialog open={showDiscountModal} onOpenChange={(o) => { if (!o) setShowDiscountModal(false); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>One-time discount — next invoice only</DialogTitle>
+            <DialogTitle className="max-sm:px-6">One-time discount — next invoice only</DialogTitle>
             <DialogDescription>
               Applies to {tenant?.company_name}&rsquo;s very next invoice, then billing reverts to normal automatically. The plan is not changed.
             </DialogDescription>
@@ -2481,7 +2485,7 @@ export default function TenantDetailsPage() {
                     <p className="text-[11px] text-muted-foreground mt-1">Then reverts to {formatCurrency(normalCents, cur)}/{subscription.interval}.</p>
                   </div>
                 )}
-                <div className="flex justify-end gap-2 pt-1">
+                <div className="flex justify-end gap-2 pt-1 max-sm:flex-col-reverse max-sm:[&>button]:w-full">
                   <Button variant="outline" onClick={() => setShowDiscountModal(false)} disabled={discountBusy}>Cancel</Button>
                   <Button onClick={handleApplyDiscount} disabled={!valid || discountBusy}>
                     {discountBusy ? 'Applying…' : 'Apply discount'}
@@ -2572,7 +2576,7 @@ export default function TenantDetailsPage() {
                     )}
                   </div>
                 )}
-                <div className="flex justify-end gap-2 pt-1">
+                <div className="flex justify-end gap-2 pt-1 max-sm:flex-col-reverse max-sm:[&>button]:w-full">
                   <Button variant="outline" onClick={() => setShowRepriceModal(false)} disabled={repriceBusy}>Cancel</Button>
                   <Button onClick={handleReprice} disabled={!valid || repriceBusy}>
                     {repriceBusy ? 'Applying…' : 'Change price'}
@@ -2591,10 +2595,10 @@ export default function TenantDetailsPage() {
             <DialogDescription>Manage plans, view status, and invoices for {tenant.company_name}</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 pt-2">
+          <div className="min-w-0 space-y-6 pt-2">
             {/* Plans */}
             <div>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between gap-3 mb-3">
                 <h3 className="text-sm font-semibold">Subscription Plans</h3>
                 <Button size="sm" onClick={openAddPlan}>
                   <Plus className="w-3.5 h-3.5 mr-1" />
@@ -2616,7 +2620,8 @@ export default function TenantDetailsPage() {
                 />
               ) : (
                 <div className="overflow-hidden rounded-2xl border border-border/40">
-                  <Table>
+                  {/* Scrolls sideways on a phone rather than squashing. */}
+                  <Table className="max-md:min-w-[640px] max-md:[&_td:not(:first-child)]:whitespace-nowrap">
                     <TableHeader>
                       <TableRow>
                         <TableHead>Name</TableHead>
@@ -2671,7 +2676,7 @@ export default function TenantDetailsPage() {
               {subscriptionLoading ? (
                 <Skeleton className="h-24 w-full" />
               ) : subscription ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 [&>*]:min-w-0">
                   {[
                     { label: 'Status', value: <Badge variant={subscription.status === 'active' ? 'success' : subscription.status === 'past_due' ? 'destructive' : 'secondary'} className="capitalize">{subscription.status}</Badge> },
                     { label: 'Plan', value: <span className="capitalize">{subscription.plan_name}</span> },
@@ -2730,7 +2735,7 @@ export default function TenantDetailsPage() {
                 <div>
                   <h3 className="text-sm font-semibold mb-3">Invoices</h3>
                   <div className="overflow-hidden rounded-2xl border border-border/40">
-                    <Table>
+                    <Table className="max-md:min-w-[600px] max-md:[&_td]:whitespace-nowrap">
                       <TableHeader>
                         <TableRow>
                           <TableHead>Invoice</TableHead>
@@ -2789,7 +2794,7 @@ export default function TenantDetailsPage() {
             <DialogTitle>Credits Management</DialogTitle>
             <DialogDescription>View balances, adjust credits, and transaction history for {tenant.company_name}</DialogDescription>
           </DialogHeader>
-          <div className="pt-2">
+          <div className="min-w-0 pt-2">
             <TenantCreditsTab tenantId={params.id as string} />
           </div>
         </DialogContent>
@@ -2925,7 +2930,7 @@ export default function TenantDetailsPage() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="max-sm:gap-2">
             <Button variant="outline" onClick={() => setShowPlanModal(false)}>Cancel</Button>
             <Button onClick={handleSavePlan} disabled={planSaving}>
               {planSaving ? 'Saving...' : editingPlan ? 'Update Plan' : 'Create Plan'}
@@ -2948,7 +2953,7 @@ export default function TenantDetailsPage() {
           <div className="rounded-2xl bg-warning/10 px-4 py-3 text-sm text-warning ring-1 ring-warning/25">
             Make sure everything is properly configured before switching.
           </div>
-          <DialogFooter>
+          <DialogFooter className="max-sm:gap-2">
             <Button variant="outline" onClick={() => { setShowModeConfirm(false); setPendingModeChange(null); }}>Cancel</Button>
             <Button onClick={confirmModeChange}>Yes, Switch to Live</Button>
           </DialogFooter>
@@ -2986,7 +2991,7 @@ export default function TenantDetailsPage() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <code className="flex-1 rounded-xl bg-muted px-3 py-2 font-mono text-base tracking-wide">
+                <code className="min-w-0 flex-1 break-all rounded-xl bg-muted px-3 py-2 font-mono text-base tracking-wide">
                   {pwResult.password}
                 </code>
                 <Button
@@ -3041,7 +3046,7 @@ export default function TenantDetailsPage() {
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="max-sm:gap-2">
             <Button variant="outline" onClick={() => { setShowPasswordReset(false); setPwResult(null); }}>
               {pwResult ? 'Done' : 'Cancel'}
             </Button>

@@ -206,7 +206,7 @@ export default function OpenAIUsagePage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">OpenAI Usage</h1>
@@ -370,7 +370,7 @@ export default function OpenAIUsagePage() {
               {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
             </div>
           ) : (
-            <Table>
+            <Table className="max-md:min-w-[560px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
               <TableHeader>
                 <TableRow>
                   <TableHead>Function</TableHead>
@@ -504,7 +504,9 @@ export default function OpenAIUsagePage() {
           ) : recentCalls.length === 0 ? (
             <div className="text-center text-sm text-muted-foreground py-12">No calls in this range</div>
           ) : (
-            <Table>
+            /* Phones scroll the table sideways; wrapped model names and
+               function badges were unreadable. */
+            <Table className="max-md:min-w-[720px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[160px]">Time</TableHead>

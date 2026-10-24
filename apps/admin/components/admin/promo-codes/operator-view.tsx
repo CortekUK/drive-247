@@ -122,7 +122,9 @@ function OperatorSetup({ setup, canEdit, onChanged }: { setup: Setup; canEdit: b
     : 'No reward yet';
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    /* grid-cols-1, not the implicit auto track: an auto column grows to the
+       full referral link and pushes every card past a phone's edge. */
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       {/* ── their code ─────────────────────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
@@ -190,7 +192,7 @@ function OperatorSetup({ setup, canEdit, onChanged }: { setup: Setup; canEdit: b
           <CardDescription>A referral counts while that operator stays subscribed.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 gap-3 text-center sm:grid-cols-3">
+          <div className="grid grid-cols-3 gap-2 text-center sm:gap-3">
             <Stat label="Subscribed referrals" value={String(state?.active_referrals ?? 0)} />
             <Stat label="Referred in total" value={String(state?.total_referrals ?? setup.referralsMade.filter(r => r.status === 'active').length)} />
             <Stat label="Saved so far" value={money(setup.savedCents)} />
@@ -300,7 +302,7 @@ function OperatorSetup({ setup, canEdit, onChanged }: { setup: Setup; canEdit: b
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-border p-2.5">
+    <div className="min-w-0 rounded-lg border border-border p-2.5">
       <p className="text-lg font-semibold">{value}</p>
       <p className="text-xs text-muted-foreground">{label}</p>
     </div>

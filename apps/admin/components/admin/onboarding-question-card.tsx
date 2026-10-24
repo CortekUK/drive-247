@@ -137,7 +137,7 @@ export function OnboardingQuestionCard({
     <section className="flex min-w-0 flex-col gap-3" aria-label={`Question: ${question.prompt || question.question_key}`}>
       <div
         className={cn(
-          'relative isolate flex min-h-[calc(100dvh-14rem)] flex-col overflow-hidden rounded-3xl border border-border bg-card px-6 pb-6 pt-6 transition-opacity sm:px-12 sm:pb-8 sm:pt-8',
+          'relative isolate flex min-h-[calc(100dvh-14rem)] flex-col max-md:min-h-0 overflow-hidden rounded-3xl border border-border bg-card px-6 pb-6 pt-6 transition-opacity sm:px-12 sm:pb-8 sm:pt-8',
           !question.is_published && 'opacity-60',
           dragging && 'shadow-lg ring-1 ring-primary/30',
         )}
@@ -190,8 +190,10 @@ export function OnboardingQuestionCard({
           )}
         </div>
 
-        {/* The wizard's footer: progress hairlines, and Skip on optional questions. */}
-        <div className="mt-6 flex items-center justify-between gap-4">
+        {/* The wizard's footer: progress hairlines, and Skip on optional questions.
+            On phones the corner cluster below has no room beside them, so it drops
+            into the flow on its own line instead of sitting over the hairlines. */}
+        <div className="mt-6 flex items-center justify-between gap-4 max-md:flex-col max-md:items-start max-md:gap-3">
           <div aria-hidden className="flex items-center gap-1.5">
             {Array.from({ length: Math.max(liveCount, 1) }, (_, i) => (
               <span
@@ -206,7 +208,7 @@ export function OnboardingQuestionCard({
           </div>
           <div>
             {/* Its place and tags, live in the wizard, then the settings: pinned to the card's corner. */}
-            <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
+            <div className="absolute bottom-3 right-3 flex items-center gap-1.5 max-md:static max-md:flex-wrap">
               <span className="rounded-full bg-card/80 px-2.5 py-1 text-[11px] font-semibold text-foreground ring-1 ring-inset ring-border backdrop-blur">
                 {step ? `Question ${step} of ${liveCount}` : 'Off'}
               </span>
@@ -385,7 +387,7 @@ function AnswerRow({
         type="button"
         aria-label={`Drag answer ${index + 1} to reorder`}
         title="Drag to reorder"
-        className="flex h-8 w-5 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/50 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/opt:opacity-100 active:cursor-grabbing"
+        className="flex h-8 w-5 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/50 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/opt:opacity-100 active:cursor-grabbing max-md:opacity-100"
         {...attributes}
         {...listeners}
       >
@@ -531,7 +533,7 @@ function QuestionSettingsDialog({
           </div>
         </SettingRow>
 
-        <div className="flex items-center justify-between gap-2 border-t border-border pt-4">
+        <div className="flex items-center justify-between gap-2 border-t border-border pt-4 max-sm:flex-wrap">
           <Button variant="ghost" size="sm" className="rounded-full text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={busy} onClick={onDelete}>
             <Trash2 className="size-4" /> Delete question
           </Button>
@@ -562,7 +564,8 @@ function QuestionSettingsDialog({
 
 function SettingRow({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4">
+    // Wraps on phones: the Answer type switcher is wider than the dialog leaves beside its label.
+    <div className="flex items-center justify-between gap-4 max-sm:flex-wrap max-sm:gap-y-2">
       <div className="min-w-0">
         <p className="text-sm font-medium text-foreground">{label}</p>
         {hint && <p className="text-xs text-muted-foreground">{hint}</p>}

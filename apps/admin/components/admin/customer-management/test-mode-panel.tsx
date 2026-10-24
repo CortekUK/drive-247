@@ -78,7 +78,7 @@ export function TestModePanel({
 
   return (
     <div className="space-y-4 rounded-lg border p-4">
-      <div className="flex items-start justify-between gap-6">
+      <div className="flex items-start justify-between gap-4 sm:gap-6">
         <div className="space-y-1">
           <Label
             htmlFor={`${idPrefix}-test`}

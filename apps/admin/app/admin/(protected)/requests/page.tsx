@@ -227,7 +227,7 @@ export default function RequestsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Mode Requests</h1>
@@ -261,7 +261,9 @@ export default function RequestsPage() {
         flipped={filtersOpen}
         onFlipBack={() => setFiltersOpen(false)}
         front={
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          // Three across even on a phone — compact tiles, icon dropped — rather
+          // than three tall cards stacked above the list.
+          <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <Card
           className={cn(
             'cursor-pointer transition-all',
@@ -269,13 +271,13 @@ export default function RequestsPage() {
           )}
           onClick={() => setFilter(filter === 'pending' ? 'all' : 'pending')}
         >
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 max-sm:p-3">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Pending</p>
-                <p className="text-2xl font-bold tabular-nums">{pendingCount}</p>
+              <div className="min-w-0">
+                <p className="truncate text-xs sm:text-sm text-muted-foreground">Pending</p>
+                <p className="text-xl sm:text-2xl font-bold tabular-nums">{pendingCount}</p>
               </div>
-              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-warning/15">
+              <div className="max-sm:hidden flex items-center justify-center h-10 w-10 rounded-lg bg-warning/15">
                 <Clock className="h-5 w-5 text-warning" />
               </div>
             </div>
@@ -289,13 +291,13 @@ export default function RequestsPage() {
           )}
           onClick={() => setFilter(filter === 'approved' ? 'all' : 'approved')}
         >
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 max-sm:p-3">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Approved</p>
-                <p className="text-2xl font-bold tabular-nums">{approvedCount}</p>
+              <div className="min-w-0">
+                <p className="truncate text-xs sm:text-sm text-muted-foreground">Approved</p>
+                <p className="text-xl sm:text-2xl font-bold tabular-nums">{approvedCount}</p>
               </div>
-              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-success/15">
+              <div className="max-sm:hidden flex items-center justify-center h-10 w-10 rounded-lg bg-success/15">
                 <CheckCircle2 className="h-5 w-5 text-success" />
               </div>
             </div>
@@ -309,13 +311,13 @@ export default function RequestsPage() {
           )}
           onClick={() => setFilter(filter === 'rejected' ? 'all' : 'rejected')}
         >
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 max-sm:p-3">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Rejected</p>
-                <p className="text-2xl font-bold tabular-nums">{rejectedCount}</p>
+              <div className="min-w-0">
+                <p className="truncate text-xs sm:text-sm text-muted-foreground">Rejected</p>
+                <p className="text-xl sm:text-2xl font-bold tabular-nums">{rejectedCount}</p>
               </div>
-              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-destructive/15">
+              <div className="max-sm:hidden flex items-center justify-center h-10 w-10 rounded-lg bg-destructive/15">
                 <XCircle className="h-5 w-5 text-destructive" />
               </div>
             </div>
@@ -382,7 +384,7 @@ export default function RequestsPage() {
               />
             )
           ) : (
-            <Table>
+            <Table className="max-md:min-w-[760px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Tenant</TableHead>
@@ -403,7 +405,7 @@ export default function RequestsPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <div>
-                            <span className="font-medium">{request.tenant_name}</span>
+                            <span className="font-medium max-md:whitespace-nowrap">{request.tenant_name}</span>
                             {request.note && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -455,7 +457,7 @@ export default function RequestsPage() {
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground tabular-nums">
+                      <TableCell className="text-sm text-muted-foreground tabular-nums max-md:whitespace-nowrap">
                         {new Date(request.created_at).toLocaleDateString('en-US', {
                           day: '2-digit',
                           month: 'short',

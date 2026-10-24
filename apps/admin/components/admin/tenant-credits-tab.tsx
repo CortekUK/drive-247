@@ -109,22 +109,22 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Balance Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded-4xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
+    <div className="min-w-0 space-y-6">
+      {/* Balance Overview. Two up on a phone too, smaller. */}
+      <div className="grid grid-cols-2 gap-3 md:gap-4">
+        <div className="rounded-4xl bg-card p-4 shadow-sm ring-1 ring-foreground/10 sm:p-5">
           <p className="text-sm text-green-600 font-medium mb-1">Live Balance</p>
-          <p className="text-3xl font-bold text-foreground">{wallet?.balance?.toFixed(0) ?? '0'}</p>
-          <div className="mt-3 flex gap-4 text-xs text-dark-text-secondary">
+          <p className="text-2xl font-bold text-foreground sm:text-3xl">{wallet?.balance?.toFixed(0) ?? '0'}</p>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-dark-text-secondary">
             <span>Purchased: {wallet?.lifetime_purchased?.toFixed(0) ?? '0'}</span>
             <span>Used: {wallet?.lifetime_used?.toFixed(0) ?? '0'}</span>
           </div>
         </div>
 
-        <div className="rounded-4xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
+        <div className="rounded-4xl bg-card p-4 shadow-sm ring-1 ring-foreground/10 sm:p-5">
           <p className="text-sm text-yellow-600 font-medium mb-1">Test Balance</p>
-          <p className="text-3xl font-bold text-foreground">{wallet?.test_balance?.toFixed(0) ?? '0'}</p>
-          <div className="mt-3 flex gap-4 text-xs text-dark-text-secondary">
+          <p className="text-2xl font-bold text-foreground sm:text-3xl">{wallet?.test_balance?.toFixed(0) ?? '0'}</p>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-dark-text-secondary">
             <span>Purchased: {wallet?.test_lifetime_purchased?.toFixed(0) ?? '0'}</span>
             <span>Used: {wallet?.test_lifetime_used?.toFixed(0) ?? '0'}</span>
           </div>
@@ -132,7 +132,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
       </div>
 
       {/* Adjust Credits */}
-      <div className="rounded-4xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
+      <div className="rounded-4xl bg-card p-4 shadow-sm ring-1 ring-foreground/10 sm:p-5">
         <h3 className="text-lg font-semibold text-foreground mb-4">Adjust Credits</h3>
         <div className="space-y-4 max-w-md">
           <div>
@@ -188,7 +188,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
           <button
             onClick={handleAdjust}
             disabled={adjusting}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 text-sm font-medium disabled:opacity-50"
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 text-sm font-medium disabled:opacity-50 max-sm:w-full"
           >
             {adjusting ? 'Applying...' : 'Apply Adjustment'}
           </button>
@@ -203,7 +203,8 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full">
+          {/* Scrolls sideways on a phone; rows stay one line. */}
+          <table className="w-full max-md:min-w-[640px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
             <thead>
               <tr className="border-b border-dark-border">
                 <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Date</th>

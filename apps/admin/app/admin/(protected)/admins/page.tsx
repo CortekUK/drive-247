@@ -217,7 +217,7 @@ export default function ManageAdminsPage() {
 
   return (
     <div>
-      <div className="flex flex-wrap justify-between items-start gap-4 mb-8">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-between sm:items-start sm:gap-4 mb-6 sm:mb-8">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Manage Admins</h1>
           <p className="text-sm text-muted-foreground">
@@ -312,9 +312,9 @@ export default function ManageAdminsPage() {
 
       {/* Add Team Member Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none">
-          <div className="w-full max-w-md rounded-4xl bg-card p-8 shadow-sm ring-1 ring-foreground/10 animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
-            <h2 className="text-2xl font-bold text-foreground mb-4">{editing ? 'Edit Team Member' : 'Add Team Member'}</h2>
+        <div className="fixed inset-0 bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none">
+          <div className="w-full max-w-md max-h-full overflow-y-auto rounded-4xl bg-card p-5 sm:p-8 shadow-sm ring-1 ring-foreground/10 animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
+            <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-4">{editing ? 'Edit Team Member' : 'Add Team Member'}</h2>
 
             <form onSubmit={handleCreateAdmin} className="space-y-4">
               <div>
@@ -393,11 +393,11 @@ export default function ManageAdminsPage() {
 
       {/* Delete confirmation */}
       {deleting && (
-        <div className="fixed inset-0 bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none">
-          <div className="w-full max-w-md rounded-4xl bg-card p-8 shadow-sm ring-1 ring-foreground/10 animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
-            <h2 className="text-2xl font-bold text-foreground mb-2">Delete {deleting.name}?</h2>
+        <div className="fixed inset-0 bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none">
+          <div className="w-full max-w-md max-h-full overflow-y-auto rounded-4xl bg-card p-5 sm:p-8 shadow-sm ring-1 ring-foreground/10 animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
+            <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-2 [overflow-wrap:anywhere]">Delete {deleting.name}?</h2>
             <p className="text-sm text-muted-foreground">
-              {deleting.email} loses access straight away and is removed from the team. This cannot be undone. To keep the account for later, deactivate it instead.
+              <span className="[overflow-wrap:anywhere]">{deleting.email}</span> loses access straight away and is removed from the team. This cannot be undone. To keep the account for later, deactivate it instead.
             </p>
             <div className="flex space-x-3 mt-6">
               <button type="button" onClick={() => setDeleting(null)} disabled={busyId === deleting.id}
@@ -426,7 +426,7 @@ function RowAction({ label, onClick, disabled, tone, children }: {
     : 'hover:text-primary hover:bg-primary/10';
   return (
     <button type="button" onClick={onClick} disabled={disabled} aria-label={label} title={label}
-      className={`rounded-md p-1.5 text-muted-foreground transition-colors duration-200 ease-out motion-reduce:transition-none disabled:opacity-40 ${color}`}>
+      className={`rounded-md p-1.5 max-md:p-2.5 text-muted-foreground transition-colors duration-200 ease-out motion-reduce:transition-none disabled:opacity-40 ${color}`}>
       {children}
     </button>
   );

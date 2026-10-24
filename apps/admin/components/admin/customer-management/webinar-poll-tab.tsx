@@ -497,7 +497,7 @@ function PollEditor({ draft, onChange, tenants }: { draft: Draft; onChange: (d: 
     onChange({ ...draft, excluded: draft.excluded.includes(id) ? draft.excluded.filter((x) => x !== id) : [...draft.excluded, id] });
 
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 space-y-5">
       <div className="space-y-1.5">
         <Label htmlFor="wp-question">Question</Label>
         <Textarea
@@ -593,7 +593,7 @@ function PollEditor({ draft, onChange, tenants }: { draft: Draft; onChange: (d: 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search tenants to exclude"
-              className="h-8 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              className="h-8 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
             <label className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
               <input type="checkbox" checked={showV1} onChange={(e) => setShowV1(e.target.checked)} />

@@ -265,7 +265,7 @@ export function SignupEnterpriseCard() {
                 aria-label={`Remove bullet ${index + 1}`}
                 disabled={saving}
                 onClick={() => set({ bullets: draft.bullets.filter((_, i) => i !== index) })}
-                className="pointer-events-none absolute right-0 top-0 flex size-7 items-center justify-center rounded-full bg-card text-muted-foreground opacity-0 shadow-sm ring-1 ring-border transition-opacity duration-200 hover:text-destructive focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/bullet:pointer-events-auto group-hover/bullet:opacity-100 motion-reduce:transition-none"
+                className="pointer-events-none absolute right-0 top-0 flex size-7 items-center justify-center rounded-full bg-card text-muted-foreground opacity-0 shadow-sm ring-1 ring-border transition-opacity duration-200 hover:text-destructive focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/bullet:pointer-events-auto group-hover/bullet:opacity-100 max-md:group-focus-within/bullet:pointer-events-auto max-md:group-focus-within/bullet:opacity-100 motion-reduce:transition-none"
               >
                 <Trash2 className="size-3.5" />
               </button>
@@ -327,5 +327,6 @@ export function SignupEnterpriseCard() {
 }
 
 function Chip({ children }: { children: ReactNode }) {
-  return <span className="rounded-full bg-secondary px-2 py-0.5">{children}</span>;
+  // A long https:// button link must wrap inside the chip, not widen the card.
+  return <span className="max-w-full rounded-full bg-secondary px-2 py-0.5 [overflow-wrap:anywhere]">{children}</span>;
 }

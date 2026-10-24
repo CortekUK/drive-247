@@ -135,7 +135,8 @@ export function TierEditor({ rows, onChange, disabled }: { rows: TierDraft[]; on
     <div className="space-y-3">
       <div className="space-y-2">
         {rows.map((r, i) => (
-          <div key={i} className="flex flex-wrap items-center gap-2">
+          // On phones a tier wraps onto two lines, so each gets a box to show where it ends.
+          <div key={i} className="flex flex-wrap items-center gap-2 max-md:rounded-2xl max-md:border max-md:border-border max-md:p-2.5">
             <span className="text-sm text-muted-foreground">From</span>
             <Input type="number" min={1} step="1" className="w-20" value={r.min} disabled={disabled}
               onChange={e => update(i, { min: e.target.value })} aria-label="Subscribed referrals" />
