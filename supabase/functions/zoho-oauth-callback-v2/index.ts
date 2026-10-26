@@ -13,7 +13,7 @@ import { serviceClient } from "../_shared/accounting-v2/caller.ts";
 import { finalizeOrg, OrgTakenError, OtherProviderError, otherProviderLive, saveGrant, takenOrgIds } from "../_shared/accounting-v2/connect.ts";
 import { requestToken } from "../_shared/accounting-v2/tokens.ts";
 
-const LOCATION_TO_REGION: Record<string, string> = { us: "com", eu: "eu", in: "in", au: "com.au", jp: "jp", sa: "sa", ca: "ca" };
+const LOCATION_TO_REGION: Record<string, string> = { us: "com", eu: "eu", uk: "uk", in: "in", au: "com.au", jp: "jp", sa: "sa", ca: "ca" };
 
 const plain = (msg: string, status = 400) =>
   new Response(`<!doctype html><meta charset="utf-8"><title>Zoho Books</title><p style="font-family:sans-serif">${msg}</p>`, {

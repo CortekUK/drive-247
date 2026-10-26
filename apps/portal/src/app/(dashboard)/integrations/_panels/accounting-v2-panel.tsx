@@ -54,10 +54,11 @@ import { ConnectionTest, DisconnectScreen, Hero, QuietNav, ScreenNav, ScreenPage
 const fmtDate = (iso: string | null | undefined) => (iso ? format(new Date(iso), "d MMM yyyy") : "—");
 const fmtAgo = (iso: string | null | undefined) => (iso ? formatDistanceToNow(new Date(iso), { addSuffix: true }) : "—");
 
-/** The six Zoho data centres (+ Canada). Zoho tells us the real one on return; this only builds the first URL. */
+/** The Zoho data centres to start sign-in in (Canada only arrives on return). Zoho tells us the real one on return; this only builds the first URL. */
 const ZOHO_REGIONS = [
   { region: "com", label: "Global (.com)", where: "United States and everywhere unlisted", flag: null },
-  { region: "eu", label: "Europe (.eu)", where: "UK and EU", flag: "eu" },
+  { region: "eu", label: "Europe (.eu)", where: "European Union", flag: "eu" },
+  { region: "uk", label: "United Kingdom (.uk)", where: "United Kingdom", flag: "gb" },
   { region: "in", label: "India (.in)", where: "India", flag: "in" },
   { region: "com.au", label: "Australia (.com.au)", where: "Australia", flag: "au" },
   { region: "jp", label: "Japan (.jp)", where: "Japan", flag: "jp" },

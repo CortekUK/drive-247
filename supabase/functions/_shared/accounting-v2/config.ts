@@ -56,7 +56,7 @@ export const ZOHO = {
 };
 
 /** Data centres the portal offers (accounts.zoho.<suffix>). Zoho tells us the real one on return. */
-export const ZOHO_REGIONS = ["com", "eu", "in", "com.au", "jp", "sa", "ca"] as const;
+export const ZOHO_REGIONS = ["com", "eu", "uk", "in", "com.au", "jp", "sa", "ca"] as const;
 
 export function zohoAccountsServer(region: string): string {
   return region === "ca" ? "https://accounts.zohocloud.ca" : `https://accounts.zoho.${region}`;
