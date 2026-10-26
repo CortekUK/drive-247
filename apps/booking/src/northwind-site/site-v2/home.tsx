@@ -34,7 +34,7 @@ import { Calendar } from '@nw/components/ui/calendar';
 import { Popover, PopoverAnchor, PopoverContent } from '@nw/components/ui/popover';
 import { sanitizeTripAddress, TRIP_INTENT_MAX_LENGTH, withTripIntent } from '@nw/lib/booking/trip-intent';
 import { cn } from '@nw/lib/utils';
-import { SITE_EDGE } from '@nw/site-v2/kit';
+import { PAGE_TOP_SURFACE, SITE_EDGE } from '@nw/site-v2/kit';
 import { HeroCollage, type HeroCar } from '@nw/site-v2/sections/hero-collage';
 
 /**
@@ -84,7 +84,7 @@ export function SiteV2Hero({ cars = [], currencyCode = null }: { cars?: HeroCar[
   return (
     // The same surface as the navbar, edge to edge, so the bar and the hero read
     // as one; it fades into the page's wash at the foot.
-    <div className="bg-[linear-gradient(to_bottom,var(--nw-hero-bg)_82%,transparent)]">
+    <div className={PAGE_TOP_SURFACE}>
       <section
         className={cn(
           SITE_EDGE,
@@ -280,7 +280,13 @@ function TripDates({ value, onChange }: { value: DateRange | undefined; onChange
       setOpen(true);
     };
     window.addEventListener(OPEN_TRIP_DATES_EVENT, open);
-    return () => window.removeEventListener(OPEN_TRIP_DATES_EVENT, open);
+    // Arriving from another page's "Choose your dates" (`/#trip-dates`, see
+    // sections/start-booking.tsx): open the calendar once the page is here.
+    const timer = window.location.hash === '#trip-dates' ? window.setTimeout(open, 350) : 0;
+    return () => {
+      window.removeEventListener(OPEN_TRIP_DATES_EVENT, open);
+      window.clearTimeout(timer);
+    };
   }, []);
 
   const pick = (day: Date) => {

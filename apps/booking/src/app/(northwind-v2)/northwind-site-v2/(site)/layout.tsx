@@ -30,6 +30,7 @@ export default async function SiteV2Layout({ children }: { children: React.React
     <SiteV2Shell
       fontClass={manrope.variable}
       tenantName={tenantName}
+      tenantLogoUrl={tenant?.logo_url?.trim() || null}
       siteSettings={siteSettings}
       blogEnabled={blogEnabled}
       footer={<SiteV2Footer tenantName={tenantName} />}

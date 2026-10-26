@@ -37,6 +37,12 @@ type BrandMarkProps = {
   /** The tenant's name, resolved on the server for the same reason. */
   nameSeed?: string | null;
   /**
+   * `tenants.logo_url`, resolved on the server. Without it the first paint has
+   * no fallback logo and shows the NAME, which then swaps to the image once
+   * the client has loaded the tenant — a visible flash.
+   */
+  logoSeed?: string | null;
+  /**
    * Show the tenant's name BESIDE the logo, rather than only in place of it.
    *
    * Off by default because the other two callers put this in a fixed square —
@@ -52,6 +58,7 @@ export function BrandMark({
   className,
   seed,
   nameSeed,
+  logoSeed,
   withName = false,
 }: BrandMarkProps) {
   const { appName: clientName, logoUrl: tenantLogoUrl } = useTenantBranding();
@@ -70,7 +77,7 @@ export function BrandMark({
    */
   const { content: logo } = useCmsSection("site-settings", "logo", DEFAULT_SITE_LOGO, seed);
 
-  const logoUrl = logo.logo_url.trim() || tenantLogoUrl || null;
+  const logoUrl = logo.logo_url.trim() || tenantLogoUrl || logoSeed || null;
   /* Alt text the operator typed wins; then their name. Never ours, and never
      the file name. */
   const label = logo.logo_alt.trim() || (appName ? `${appName} home` : "Home");

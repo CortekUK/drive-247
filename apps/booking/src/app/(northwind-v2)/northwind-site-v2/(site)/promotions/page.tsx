@@ -1,9 +1,15 @@
 import { pageMetadata } from '@nw/lib/cms/metadata';
-import { AboutHeroSection } from '@nw/site-v2/sections/about-hero-section';
-import { CtaBanner } from '@nw/site-v2/sections/cta-banner';
+import { PatternHero } from '@nw/site-v2/sections/pattern-hero';
+import { HomeCta } from '@nw/site-v2/sections/home-cta';
 import { PromotionsListSection } from '@nw/site-v2/sections/promotions-list-section';
+import { ScrollReveal } from '@nw/site-v2/sections/scroll-reveal';
 
-/** Northwind booking site v2 — /promotions. */
+/**
+ * Northwind booking site v2 — /promotions: the offers running now, how to use
+ * one, and the small print. The headline is plain on purpose — a renter is
+ * here to see what is cheaper, not to be sold to. The offers rise over the
+ * opening's curved edge.
+ */
 
 export function generateMetadata() {
   return pageMetadata('promotions', 'Promotions');
@@ -12,21 +18,15 @@ export function generateMetadata() {
 export default function PromotionsPage() {
   return (
     <>
-      <AboutHeroSection
-        imageSrc="/booking_landingpage/promotions-hero.jpg"
-        imageAlt="SUV driving on an open road toward distant snow-capped mountains"
-        imageObjectPosition="50% 65%"
-        heading="Drive More. Spend Less."
-        body={
-          <>
-            Discover today’s top-tier offers on premium SUVs and fuel-efficient commuters.
-            <br className="hidden sm:inline" />
-            No hidden fees, just pure value delivered 24/7.
-          </>
-        }
+      <ScrollReveal />
+      <PatternHero
+        title="Offers and deals"
+        description="Our current discounts on cars, with the dates each one runs until."
       />
-      <PromotionsListSection />
-      <CtaBanner />
+      <div className="relative -mt-16 sm:-mt-24 lg:-mt-36">
+        <PromotionsListSection />
+      </div>
+      <HomeCta />
     </>
   );
 }

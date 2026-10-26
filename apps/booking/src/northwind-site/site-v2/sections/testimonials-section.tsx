@@ -1,7 +1,8 @@
 import { DEFAULT_TESTIMONIALS_HEADER } from '@nw/lib/cms/defaults';
 import { Editable, cmsSection } from '@nw/lib/cms/editable';
 import { isEditMode, loadSection, loadTestimonials } from '@nw/lib/cms/server';
-import { Section, SectionHeading } from '@nw/site-v2/kit';
+import { cn } from '@nw/lib/utils';
+import { SITE_WIDE, SiteHeading } from '@nw/site-v2/kit';
 
 import { TestimonialQuotes } from '@nw/site-v2/sections/testimonial-quotes';
 
@@ -30,16 +31,14 @@ export async function TestimonialsSection() {
   const title = header.title.trim() || FALLBACK_TITLE;
 
   return (
-    <Section>
-      <div {...cmsSection('home.testimonials_header', 'Reviews')}>
-        <SectionHeading
-          title={<Editable path="home.testimonials_header.title">{title}</Editable>}
-          description="In their own words, from people who have rented with us."
-        />
-        <div className="mt-5">
-          <TestimonialQuotes seed={seed} />
-        </div>
+    <section {...cmsSection('home.testimonials_header', 'Reviews')} className={cn(SITE_WIDE, 'pt-20 md:pt-28')}>
+      <SiteHeading
+        title={<Editable path="home.testimonials_header.title">{title}</Editable>}
+        description="In their own words, from people who have rented with us."
+      />
+      <div data-reveal className="mt-10">
+        <TestimonialQuotes seed={seed} />
       </div>
-    </Section>
+    </section>
   );
 }

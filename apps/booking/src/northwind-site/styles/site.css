@@ -580,10 +580,15 @@
 @keyframes nw-drift { from { transform: translateX(-30px); } to { transform: translateX(30px); } }
 .nw-wheel { transform-box: fill-box; transform-origin: center; animation: nw-spin 40s linear infinite; }
 .nw-blink { animation: nw-blink 2.4s ease-in-out infinite; }
+/* A home window's light: off most of the cycle, then on for a stretch. Each
+   window sets its own duration and offset (site-footer.tsx), so they never sync. */
+@keyframes nw-lamp { 0%, 34% { opacity: 0; } 37%, 78% { opacity: 1; } 81%, 100% { opacity: 0; } }
+.nw-lamp { opacity: 0; animation: nw-lamp 15s steps(1, end) infinite; }
 .nw-cloud > path { animation: nw-drift 26s ease-in-out infinite alternate; }
 .nw-sky-parked { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .nw-pin, .nw-pin-shadow, .nw-wheel, .nw-blink, .nw-cloud > path { animation: none; }
+  .nw-lamp { animation: none; opacity: 1; }
   .nw-sky-driving { display: none; }
   .nw-sky-parked { display: inline; }
 }
@@ -627,6 +632,9 @@
 .nw-reveal [data-reveal-group].is-in > * {
   animation: nw-rise .7s cubic-bezier(.2, .7, .2, 1) calc(var(--i, 0) * 90ms) backwards;
 }
+/* `.nw-quick`: a section whose reveal should be over almost as soon as it is seen (the home FAQ). */
+.nw-reveal .nw-quick [data-reveal].is-in { animation-duration: .4s; }
+.nw-reveal .nw-quick [data-reveal-group].is-in > * { animation-duration: .4s; animation-delay: calc(var(--i, 0) * 35ms); }
 [data-reveal-group] > :nth-child(2) { --i: 1; }
 [data-reveal-group] > :nth-child(3) { --i: 2; }
 [data-reveal-group] > :nth-child(4) { --i: 3; }

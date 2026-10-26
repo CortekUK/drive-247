@@ -12,8 +12,14 @@ import { cn } from '@nw/lib/utils';
 import { OPEN_TRIP_DATES_EVENT } from '@nw/site-v2/home';
 
 export function startBooking() {
+  const target = document.getElementById('trip-dates');
+  // On a page without the search (About, Reviews…): to the home page's, which opens its calendar on arrival.
+  if (!target) {
+    window.location.assign('/#trip-dates');
+    return;
+  }
   const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  document.getElementById('trip-dates')?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' });
+  target.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' });
   window.setTimeout(() => window.dispatchEvent(new Event(OPEN_TRIP_DATES_EVENT)), smooth ? 450 : 0);
 }
 

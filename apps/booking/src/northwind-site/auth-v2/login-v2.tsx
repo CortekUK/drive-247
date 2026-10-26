@@ -168,7 +168,7 @@ export function LoginV2() {
               type="button"
               onClick={() => setShowPassword((v) => !v)}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
-              className="absolute inset-y-0 right-1.5 my-auto inline-flex size-9 cursor-pointer items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-pv-tint hover:text-pv-fg focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-pv-primary/25"
+              className="absolute inset-y-0 right-1 my-auto inline-flex size-11 cursor-pointer items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-pv-tint hover:text-pv-fg focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-pv-primary/25"
             >
               {showPassword ? <EyeOff aria-hidden className="size-4" /> : <Eye aria-hidden className="size-4" />}
             </button>
@@ -183,7 +183,7 @@ export function LoginV2() {
         <div className="flex justify-end">
           <Link
             href="/forgot-password"
-            className="text-sm font-medium underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-pv-primary/25"
+            className="-my-2 inline-block py-3 text-sm font-medium underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-pv-primary/25"
             style={{ color: ink }}
           >
             Forgot password?

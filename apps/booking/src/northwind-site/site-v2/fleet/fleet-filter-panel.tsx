@@ -61,7 +61,7 @@ export function FleetFilterPanel({
                 onClick={onCollapse}
                 aria-label="Hide filters"
                 title="Hide filters"
-                className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-pv-muted-fg transition-colors duration-200 ease-out hover:bg-pv-muted hover:text-pv-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none"
+                className="inline-flex size-10 shrink-0 items-center justify-center rounded-full text-pv-muted-fg transition-colors duration-200 ease-out hover:bg-pv-muted hover:text-pv-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none"
               >
                 <PanelLeftClose aria-hidden className="size-4" />
               </button>

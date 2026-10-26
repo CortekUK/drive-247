@@ -1,37 +1,29 @@
-import { DEFAULT_REVIEWS_HERO } from '@nw/lib/cms/defaults';
 import { pageMetadata } from '@nw/lib/cms/metadata';
-import { loadSection } from '@nw/lib/cms/server';
-import { AboutHeroSection } from '@nw/site-v2/sections/about-hero-section';
-import { CtaBanner } from '@nw/site-v2/sections/cta-banner';
+import { HomeCta } from '@nw/site-v2/sections/home-cta';
+import { ReviewsHero } from '@nw/site-v2/sections/reviews-hero';
 import { RealStoriesSection } from '@nw/site-v2/sections/real-stories-section';
-import { TestimonialsSection } from '@nw/site-v2/sections/testimonials-section';
-import { WhyChooseUsSection } from '@nw/site-v2/sections/why-choose-us-section';
+import { ScrollReveal } from '@nw/site-v2/sections/scroll-reveal';
 
 /**
- * Northwind booking site v2 — /reviews. The hero words are the operator's own
- * `reviews / hero`, read exactly as the current page reads them.
+ * Northwind booking site v2 — /reviews: what renters say, and nothing else.
+ * The operator's headline and line (`reviews / hero`) over a crowd of renters,
+ * the wall of real reviews (or an honest "none yet"), the ask to past
+ * renters, and the home page's closing scene.
  */
 
 export function generateMetadata() {
   return pageMetadata('reviews', 'Reviews');
 }
 
-export default async function ReviewsPage() {
-  const hero = await loadSection('reviews', 'hero', DEFAULT_REVIEWS_HERO);
-
+export default async function ReviewsPage({ searchParams }: { searchParams: Promise<{ sample?: string }> }) {
+  // On a dev server an empty wall shows sample reviews; `?sample=0` turns them off (see RealStoriesSection).
+  const { sample } = await searchParams;
   return (
     <>
-      <AboutHeroSection
-        imageSrc="/booking_landingpage/reviews-hero.jpg"
-        imageAlt="Customer enjoying a drive at golden hour"
-        imageObjectPosition="center"
-        heading={hero.title.trim() || DEFAULT_REVIEWS_HERO.title}
-        body={hero.subtitle.trim() || undefined}
-      />
-      <RealStoriesSection />
-      <WhyChooseUsSection />
-      <TestimonialsSection />
-      <CtaBanner />
+      <ScrollReveal />
+      <ReviewsHero />
+      <RealStoriesSection sample={sample !== '0'} />
+      <HomeCta />
     </>
   );
 }

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 
 import { loadBlogEnabled, loadBlogPost } from "@nw/lib/cms/server";
 import { BlogArticleV2 } from "@nw/site-v2/blog/blog-v2";
-import { CtaBanner } from "@nw/site-v2/sections/cta-banner";
+import { HomeCta } from "@nw/site-v2/sections/home-cta";
 
 type Params = { params: Promise<{ slug: string }> };
 
@@ -28,7 +28,7 @@ export default async function BlogPostV2Page({ params }: Params) {
   return (
     <>
       <BlogArticleV2 post={post} />
-      <CtaBanner />
+      <HomeCta />
     </>
   );
 }

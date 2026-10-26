@@ -241,6 +241,8 @@ const LAMPS = [492, 780, 846, 1112];
 
 const FOOT = 'var(--nw-foot)';
 const LIGHT = 'var(--nw-foot-accent)';
+/** A lit home window: warm yellow against the night-blue blocks. */
+const WARM = '#fcd34d';
 
 function building([x, w, h, roof]: Block) {
   const ground = Math.min(hillY(x), hillY(x + w));
@@ -249,6 +251,7 @@ function building([x, w, h, roof]: Block) {
   /* Windows: a grid down the block, a few left dark so it looks lived in.
      A house gets one window and a lit door instead. */
   const lit: React.ReactNode[] = [];
+  const spots: [number, number][] = [];
   if (roof === 'gable') {
     lit.push(<rect key="w" x={x + 4} y={top + 6} width="6" height="6" />);
     lit.push(<rect key="d" x={x + w - 11} y={ground - 12} width="6" height="12" />);
@@ -259,10 +262,23 @@ function building([x, w, h, roof]: Block) {
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         if ((r * 7 + c * 3 + x) % 5 === 0) continue;
+        spots.push([left + c * 11, top + 10 + r * 13]);
         lit.push(<rect key={`${r}-${c}`} x={left + c * 11} y={top + 10 + r * 13} width="6" height="6" />);
       }
     }
   }
+  /* One or two windows per tower where someone is home: a warm light that
+     switches on and off on its own slow, uneven timer (`nw-lamp`), so the
+     city never blinks in step. Picked from the block's position, so the same
+     windows light on every render. */
+  const homes =
+    spots.length < 4
+      ? []
+      : [...new Set([(x * 13) % spots.length, ...(x % 3 === 0 ? [] : [(x * 29 + 7) % spots.length])])].map((i, n) => ({
+          at: spots[i],
+          duration: 11 + ((x + n * 17) % 13),
+          delay: -((x * 7 + n * 31) % 23),
+        }));
   return (
     <g key={x}>
       <rect x={x} y={top} width={w} height={H - top} fill={FOOT} />
@@ -284,6 +300,18 @@ function building([x, w, h, roof]: Block) {
       <g fill={LIGHT} opacity=".5">
         {lit}
       </g>
+      {homes.map(({ at: [wx, wy], duration, delay }) => (
+        <rect
+          key={`home-${wx}-${wy}`}
+          className="nw-lamp"
+          x={wx}
+          y={wy}
+          width="6"
+          height="6"
+          fill={WARM}
+          style={{ animationDuration: `${duration}s`, animationDelay: `${delay}s` }}
+        />
+      ))}
     </g>
   );
 }

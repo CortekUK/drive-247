@@ -49,6 +49,8 @@ export interface CmsTenant {
   meta_title: string | null;
   meta_description: string | null;
   og_image_url: string | null;
+  /** `tenants.logo_url`, so the header has the logo in the first HTML. */
+  logo_url: string | null;
 }
 
 /** The slug the middleware resolved for this request. */
@@ -69,7 +71,7 @@ export const resolveTenant = cache(async (): Promise<CmsTenant | null> => {
   try {
     const { data, error } = await supabase
       .from("tenants")
-      .select("id, currency_code, company_name, app_name, meta_title, meta_description, og_image_url")
+      .select("id, currency_code, company_name, app_name, meta_title, meta_description, og_image_url, logo_url")
       .eq("slug", slug)
       .in("status", ["active", "suspended"])
       .maybeSingle()

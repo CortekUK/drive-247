@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import { loadBlogEnabled, loadBlogPosts } from "@nw/lib/cms/server";
 import { BlogIndexV2 } from "@nw/site-v2/blog/blog-v2";
-import { CtaBanner } from "@nw/site-v2/sections/cta-banner";
+import { HomeCta } from "@nw/site-v2/sections/home-cta";
 
 export const metadata = { title: "Blog" };
 
@@ -18,7 +18,7 @@ export default async function BlogIndexV2Page() {
   return (
     <>
       <BlogIndexV2 posts={posts} />
-      <CtaBanner />
+      <HomeCta />
     </>
   );
 }

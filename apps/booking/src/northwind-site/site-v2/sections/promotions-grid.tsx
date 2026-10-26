@@ -2,9 +2,8 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { CalendarClock, Tag } from 'lucide-react-nw';
+import { CalendarClock } from 'lucide-react-nw';
 
-import { Button } from '@nw/components/ui/button';
 import { Skeleton } from '@nw/components/ui/skeleton';
 import { useCmsSection } from '@nw/hooks/use-cms';
 import { usePromotions } from '@nw/hooks/use-promotions';
@@ -14,9 +13,10 @@ import { isRemoteImage } from '@nw/lib/cms/format';
 import type { PromotionsResult } from '@nw/lib/cms/queries';
 import type { PageSections, PromoItem } from '@nw/lib/cms/types';
 import { cn } from '@nw/lib/utils';
-import { CARD, EmptyState } from '@nw/site-v2/kit';
+import { PromoArt } from '@nw/site-v2/illustrations/page-scenes';
+import { CARD, PILL_DARK, SiteHeading } from '@nw/site-v2/kit';
 
-const GRID = 'mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3';
+const GRID = 'mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5';
 
 /**
  * Northwind booking site v2 — the promotion cards. Same data and the same two
@@ -24,8 +24,10 @@ const GRID = 'mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3';
  * which documents why there are no designed fallback offers): running offers
  * are shown, otherwise the operator's own `promotions / empty_state` copy.
  *
- * A flat card per offer: the photo, the offer name as a chip, the discount,
- * the description, and the end date as a muted line.
+ * A flat card per offer, in the home page's card: the photo, the offer name
+ * as a chip, the discount large, the description, and the end date. With
+ * none running, the operator's own "no offers" words (`title_default`) and
+ * the way on to the cars; `title_active` heads the cards when there are some.
  */
 export function PromotionsGrid({
   seed,
@@ -56,36 +58,42 @@ export function PromotionsGrid({
   }
 
   if (items.length === 0) {
+    // None running: the operator's own words for it, and the way on to the cars.
     return (
-      <EmptyState
-        className="mt-6"
-        icon={<Tag aria-hidden className="size-5" strokeWidth={1.75} />}
-        title={<Editable path="promotions.empty_state.title_active">{emptyState.title_active}</Editable>}
-        description={<Editable path="promotions.empty_state.description">{emptyState.description}</Editable>}
-        action={
-          <Button asChild variant="brand" className="mt-2 h-11 px-6">
-            <Link href="/fleet">
-              <Editable path="promotions.empty_state.button_text">{emptyState.button_text}</Editable>
-            </Link>
-          </Button>
-        }
-      />
+      <div data-reveal className={cn(CARD, 'mx-auto flex max-w-3xl flex-col items-center px-6 pb-12 pt-8 text-center md:pb-16 md:pt-10')}>
+        <PromoArt className="mb-4 w-[220px] md:w-[260px]" />
+        <p className="text-[22px] font-extrabold tracking-[-0.03em] text-pv-fg md:text-[26px]">
+          <Editable path="promotions.empty_state.title_default">{emptyState.title_default}</Editable>
+        </p>
+        <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-pv-muted-fg md:text-[16px]">
+          <Editable path="promotions.empty_state.description">{emptyState.description}</Editable>
+        </p>
+        <Link href="/fleet" className={cn(PILL_DARK, 'mt-7')}>
+          <Editable path="promotions.empty_state.button_text">{emptyState.button_text}</Editable>
+        </Link>
+      </div>
     );
   }
 
   return (
-    <ul className={GRID}>
-      {items.map((promo) => (
-        <PromoCard key={promo.id} promo={promo} />
-      ))}
-    </ul>
+    <>
+      <SiteHeading
+        align="left"
+        title={<Editable path="promotions.empty_state.title_active">{emptyState.title_active}</Editable>}
+      />
+      <ul className={GRID}>
+        {items.map((promo) => (
+          <PromoCard key={promo.id} promo={promo} />
+        ))}
+      </ul>
+    </>
   );
 }
 
 function PromoCard({ promo }: { promo: PromoItem }) {
   return (
     <li className={cn(CARD, 'pv2-enter flex flex-col overflow-hidden')}>
-      <div className="relative aspect-[16/10] w-full bg-pv-muted">
+      <div className="relative aspect-[4/3] w-full bg-pv-tint/60">
         <Image
           src={promo.image}
           alt={promo.imageAlt}
@@ -96,20 +104,20 @@ function PromoCard({ promo }: { promo: PromoItem }) {
           className="object-cover"
         />
       </div>
-      <div className="flex flex-1 flex-col gap-2 p-5">
-        <span className="inline-flex max-w-full self-start truncate rounded-full border border-dashed border-pv-primary/40 bg-pv-tint px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-pv-primary">
+      <div className="flex flex-1 flex-col gap-2.5 p-5">
+        <span className="inline-flex max-w-full self-start truncate rounded-full bg-pv-tint px-3 py-1 text-[12.5px] font-semibold text-pv-primary dark:text-pv-fg">
           {promo.badge}
         </span>
         <div className="flex flex-wrap items-baseline gap-x-2">
-          <p className="text-[28px] font-bold leading-none tracking-[-0.03em] text-pv-fg">{promo.discount}</p>
-          <p className="text-[13px] font-medium text-pv-muted-fg">{promo.label}</p>
+          <p className="text-[32px] font-extrabold leading-none tracking-[-0.04em] text-pv-fg">{promo.discount}</p>
+          <p className="text-[14px] font-medium text-pv-muted-fg">{promo.label}</p>
         </div>
         {promo.caption.trim() !== '' ? (
-          <p className="text-[13px] leading-relaxed text-pv-muted-fg">{promo.caption}</p>
+          <p className="text-[14.5px] leading-relaxed text-pv-muted-fg">{promo.caption}</p>
         ) : null}
         {promo.validUntil !== '' ? (
-          <p className="mt-auto flex items-center gap-1.5 pt-2 text-xs text-pv-muted-fg">
-            <CalendarClock aria-hidden className="size-3.5" strokeWidth={1.75} />
+          <p className="mt-auto flex items-center gap-1.5 pt-2 text-[13px] text-pv-muted-fg">
+            <CalendarClock aria-hidden className="size-4" strokeWidth={1.75} />
             {promo.validUntil}
           </p>
         ) : null}

@@ -1,14 +1,19 @@
 import { pageMetadata } from '@nw/lib/cms/metadata';
-import { AboutHeroSection } from '@nw/site-v2/sections/about-hero-section';
-import { CtaBanner } from '@nw/site-v2/sections/cta-banner';
-import { FaqSection } from '@nw/site-v2/sections/faq-section';
-import { MarqueeStrip } from '@nw/site-v2/sections/marquee-strip';
-import { StatsStrip } from '@nw/site-v2/sections/stats-strip';
+import { AboutBackdrop } from '@nw/site-v2/sections/about-backdrop';
+import { AboutIntro } from '@nw/site-v2/sections/about-intro';
+import { AboutStory } from '@nw/site-v2/sections/about-story';
+import { AboutToday } from '@nw/site-v2/sections/about-today';
+import { HomeCta } from '@nw/site-v2/sections/home-cta';
+import { ScrollReveal } from '@nw/site-v2/sections/scroll-reveal';
 import { TestimonialsSection } from '@nw/site-v2/sections/testimonials-section';
-import { UncompromisingStandardsSection } from '@nw/site-v2/sections/uncompromising-standards-section';
-import { WhyChooseUsSection } from '@nw/site-v2/sections/why-choose-us-section';
 
-/** Northwind booking site v2 — /about. The current page's sections, in the v2 language. */
+/**
+ * Northwind booking site v2 — /about: who the operator is, and nothing that
+ * is not about them. Their headline, their story on a tinted band with
+ * curved edges, where they are today in real numbers and real cars,
+ * what customers say (only once there are reviews), and the closing scene.
+ * Every word is the operator's, editable in place, or read from their fleet.
+ */
 
 export function generateMetadata() {
   return pageMetadata('about', 'About');
@@ -17,14 +22,14 @@ export function generateMetadata() {
 export default function AboutPage() {
   return (
     <>
-      <AboutHeroSection />
-      <UncompromisingStandardsSection />
-      <MarqueeStrip />
-      <WhyChooseUsSection />
-      <StatsStrip />
+      <ScrollReveal />
+      <AboutIntro />
+      <AboutBackdrop>
+        <AboutStory />
+      </AboutBackdrop>
+      <AboutToday />
       <TestimonialsSection />
-      <FaqSection page="about" />
-      <CtaBanner page="about" />
+      <HomeCta page="about" />
     </>
   );
 }

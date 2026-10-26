@@ -3,13 +3,17 @@ import { Check } from "lucide-react-nw";
 import { formatMoney } from "@nw/components/fleet/format";
 import { resolveIcon } from "@nw/lib/cms/icons";
 import { loadSection, resolveTenant } from "@nw/lib/cms/server";
-import { CARD, ICON_TILE, Section, SectionHeading } from "@nw/site-v2/kit";
+import { Editable, cmsSection } from "@nw/lib/cms/editable";
+import { CARD, SITE_WIDE, SiteHeading } from "@nw/site-v2/kit";
 import { cn } from "@nw/lib/utils";
 
 /**
  * v2 of `components/sections/fleet-inclusions-section.tsx`: "What's included"
  * and "Paid extras", from `fleet / inclusions` and `fleet / extras` — the same
  * reads and the same rule that the whole section is absent until written.
+ * Set in the home page's style: the always-included list as the big card, the
+ * longer-rental extras as the tinted one beside it, then the extras you can
+ * add, each with its price. Every word is editable in place.
  *
  * One deliberate difference: extras are priced with the shared `formatMoney`
  * in the tenant's own currency. v1 formats in a hardcoded USD.
@@ -40,7 +44,9 @@ const EMPTY_EXTRAS = {
   footer_text: "",
 };
 
-const named = (items: InclusionItem[]) => (items ?? []).filter((item) => (item.title ?? "").trim() !== "");
+/** The written rows, each with its STORED index: the editor writes back by position. */
+const named = (items: InclusionItem[]) =>
+  (items ?? []).map((item, index) => ({ ...item, index })).filter((item) => (item.title ?? "").trim() !== "");
 
 /** A price the operator typed, or null when they left it blank ("free" and "not priced yet" differ). */
 function priceOf(value: ExtraItem["price"], currencyCode: string | null | undefined): string | null {
@@ -59,7 +65,9 @@ export async function FleetInclusionsSection() {
 
   const standard = named(inclusions.standard_items);
   const premium = named(inclusions.premium_items);
-  const paid = (extras.items ?? []).filter((item) => (item.name ?? "").trim() !== "");
+  const paid = (extras.items ?? [])
+    .map((item, index) => ({ ...item, index }))
+    .filter((item) => (item.name ?? "").trim() !== "");
 
   if (standard.length === 0 && premium.length === 0 && paid.length === 0) {
     return null;
@@ -67,33 +75,46 @@ export async function FleetInclusionsSection() {
 
   const heading = inclusions.section_title.trim() || "Every rental includes";
   const columns = [
-    { title: inclusions.standard_title, items: standard },
-    { title: inclusions.premium_title, items: premium },
+    { key: "standard", title: inclusions.standard_title, items: standard },
+    { key: "premium", title: inclusions.premium_title, items: premium },
   ].filter((column) => column.items.length > 0);
 
   return (
-    <Section>
+    <section {...cmsSection("fleet.inclusions", "What's included")} className={cn(SITE_WIDE, "pt-20 md:pt-28")}>
       {columns.length > 0 && (
         <>
-          <SectionHeading
-            title={heading}
-            description={inclusions.section_subtitle.trim() || "What comes with every car, before any extras."}
+          <SiteHeading
+            title={<Editable path="fleet.inclusions.section_title">{heading}</Editable>}
+            description={inclusions.section_subtitle.trim() || "What comes with every car, at no extra cost."}
           />
-          <div className={cn("mt-5 grid grid-cols-1 gap-4", columns.length > 1 && "lg:grid-cols-2")}>
-            {columns.map((column) => (
-              <div key={column.title || column.items[0]?.title} className={cn(CARD, "px-5 py-5")}>
+          <div data-reveal-group className={cn("mt-10 grid grid-cols-1 gap-4 lg:gap-5", columns.length > 1 && "lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]")}>
+            {columns.map((column, columnIndex) => (
+              <div
+                key={column.key}
+                className={cn(CARD, "p-6 sm:p-8", columnIndex === 1 && "bg-pv-tint/60 border-transparent")}
+              >
                 {(column.title ?? "").trim() !== "" && (
-                  <p className="text-[15px] font-semibold text-pv-fg">{column.title}</p>
+                  <p className="text-[19px] font-bold tracking-[-0.02em] text-pv-fg md:text-[21px]">
+                    <Editable path={`fleet.inclusions.${column.key}_title`}>{column.title}</Editable>
+                  </p>
                 )}
-                <ul className={cn("space-y-3", (column.title ?? "").trim() !== "" && "mt-4")}>
+                <ul
+                  className={cn(
+                    "grid gap-x-8 gap-y-4",
+                    columnIndex === 0 && column.items.length > 3 && "sm:grid-cols-2",
+                    (column.title ?? "").trim() !== "" && "mt-6",
+                  )}
+                >
                   {column.items.map((item, index) => {
                     const Icon = resolveIcon(item.icon, Check);
                     return (
                       <li key={`${index}-${item.title}`} className="flex items-center gap-3">
-                        <span className={ICON_TILE}>
-                          <Icon aria-hidden className="size-4" strokeWidth={1.75} />
+                        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-pv-card text-pv-primary ring-1 ring-pv-border">
+                          <Icon aria-hidden className="size-[18px]" strokeWidth={1.9} />
                         </span>
-                        <span className="text-[14px] leading-relaxed text-pv-fg">{item.title}</span>
+                        <span className="text-[15px] font-medium leading-snug text-pv-fg">
+                          <Editable path={`fleet.inclusions.${column.key}_items.${item.index}.title`}>{item.title}</Editable>
+                        </span>
                       </li>
                     );
                   })}
@@ -105,29 +126,43 @@ export async function FleetInclusionsSection() {
       )}
 
       {paid.length > 0 && (
-        <div className={columns.length > 0 ? "mt-10" : undefined}>
-          <SectionHeading title="Optional extras" description="Add any of these when you book." />
-          <ul className={cn(CARD, "mt-5 divide-y divide-pv-border overflow-hidden")}>
+        <div className={columns.length > 0 ? "mt-16 md:mt-20" : undefined}>
+          <SiteHeading
+            align="left"
+            title="Add to your rental"
+            description="Choose any of these when you book. They are added to your total before you pay."
+          />
+          <ul data-reveal-group className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
             {paid.map((item, index) => {
               const price = priceOf(item.price, tenant?.currency_code);
               return (
-                <li key={`${index}-${item.name}`} className="flex items-start justify-between gap-6 px-5 py-4">
+                <li key={`${index}-${item.name}`} className={cn(CARD, "flex items-start justify-between gap-6 p-5")}>
                   <div className="min-w-0">
-                    <p className="text-[14px] font-medium text-pv-fg">{item.name}</p>
+                    <p className="text-[16px] font-bold tracking-[-0.01em] text-pv-fg">
+                      <Editable path={`fleet.extras.items.${item.index}.name`}>{item.name}</Editable>
+                    </p>
                     {(item.description ?? "").trim() !== "" && (
-                      <p className="mt-0.5 text-[13px] leading-relaxed text-pv-muted-fg">{item.description}</p>
+                      <p className="mt-1 text-[14px] leading-relaxed text-pv-muted-fg">
+                        <Editable path={`fleet.extras.items.${item.index}.description`}>{item.description}</Editable>
+                      </p>
                     )}
                   </div>
-                  {price && <p className="shrink-0 text-[14px] font-semibold tabular-nums text-pv-fg">{price}</p>}
+                  {price && (
+                    <p className="shrink-0 rounded-full bg-pv-tint px-3 py-1 text-[14px] font-bold tabular-nums text-pv-fg">
+                      + {price}
+                    </p>
+                  )}
                 </li>
               );
             })}
           </ul>
           {extras.footer_text.trim() !== "" && (
-            <p className="mt-3 text-xs leading-relaxed text-pv-muted-fg">{extras.footer_text}</p>
+            <p className="mt-4 text-[13px] leading-relaxed text-pv-muted-fg">
+              <Editable path="fleet.extras.footer_text">{extras.footer_text}</Editable>
+            </p>
           )}
         </div>
       )}
-    </Section>
+    </section>
   );
 }

@@ -158,7 +158,7 @@ export function AuthPasswordFieldV2({
           aria-label="Show password"
           aria-pressed={revealed}
           aria-controls={id}
-          className="absolute inset-y-0 right-1.5 my-auto inline-flex size-9 cursor-pointer items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-pv-tint hover:text-pv-fg focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-pv-primary/25 disabled:opacity-50"
+          className="absolute inset-y-0 right-1 my-auto inline-flex size-11 cursor-pointer items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-pv-tint hover:text-pv-fg focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-pv-primary/25 disabled:opacity-50"
         >
           {revealed ? <EyeOff aria-hidden className="size-4" /> : <Eye aria-hidden className="size-4" />}
         </button>

@@ -49,11 +49,11 @@ export function VehicleListRow({ vehicle, currencyCode, distanceUnit, period, tr
       : `${formatMileage(mileage, distanceUnit)}${RATE_PERIOD_MILEAGE_SUFFIX[period]} included`;
 
   return (
-    <article className="group relative flex flex-col gap-4 px-4 py-4 transition-colors duration-200 ease-out hover:bg-pv-row-hover motion-reduce:transition-none md:flex-row md:items-center md:gap-5">
+    <article className="group relative flex flex-wrap items-start gap-x-4 gap-y-3 px-4 py-4 transition-colors duration-200 ease-out hover:bg-pv-row-hover motion-reduce:transition-none md:flex-nowrap md:items-center md:gap-5">
       <VehiclePhoto
         url={vehicle.photoUrl}
         alt=""
-        className="shrink-0 rounded-xl bg-pv-muted md:aspect-auto md:h-[96px] md:w-[150px]"
+        className="w-[112px] shrink-0 rounded-xl bg-pv-muted md:aspect-auto md:h-[96px] md:w-[150px]"
       />
 
       <div className="min-w-0 flex-1">
@@ -97,7 +97,7 @@ export function VehicleListRow({ vehicle, currencyCode, distanceUnit, period, tr
         </ul>
       </div>
 
-      <div className="flex shrink-0 items-end justify-between gap-4 border-t border-pv-border pt-3 md:w-[200px] md:flex-col md:items-stretch md:border-l md:border-t-0 md:pl-5 md:pt-0">
+      <div className="flex w-full shrink-0 items-end justify-between gap-4 border-t border-pv-border pt-3 md:w-[200px] md:flex-col md:items-stretch md:border-l md:border-t-0 md:pl-5 md:pt-0">
         <div className="min-w-0">
           {active.offered && active.amount != null ? (
             <p className="leading-tight">

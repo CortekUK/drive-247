@@ -15,7 +15,7 @@ import { avatar, ground, makeEmptyArt, pal, tick, txt, type Pal } from '@portal-
 import { cn } from '@nw/lib/utils';
 
 /** A canvas: its size, where the floor starts, and how far apart the floor's columns run. */
-type Canvas = { w: number; h: number; horizon: number; colStep: number };
+export type Canvas = { w: number; h: number; horizon: number; colStep: number };
 
 /* Wide: the strip runs nearly edge to edge on a desktop. Compact: the same three
    beats packed for a phone or a tablet, where a wide strip would be too thin. */
@@ -38,7 +38,7 @@ function grid(c: Canvas): string {
 }
 
 /** The floor, its fade at the top and sides, and one glow under the car. */
-function stage(c: Canvas, p: Pal, id: string, dark: boolean, glow: { cx: number; cy: number; rx: number; ry: number }) {
+export function stage(c: Canvas, p: Pal, id: string, dark: boolean, glow: { cx: number; cy: number; rx: number; ry: number }) {
   const gridInk = dark ? '#3f3f46' : '#dcdbe6';
   return `
 <defs>
@@ -69,7 +69,7 @@ function stage(c: Canvas, p: Pal, id: string, dark: boolean, glow: { cx: number;
  * ticked "Booked". The only real words in the picture, and the ones a renter
  * needs to recognise: this is the booking, these are the days.
  */
-function phone(x: number, y: number, p: Pal, id: string): string {
+export function phone(x: number, y: number, p: Pal, id: string): string {
   const S = `stroke="${p.ink}" stroke-width="2.2" stroke-linejoin="round"`;
   const chip = (cx: number, label: string) =>
     `<rect x="${cx}" y="128" width="50" height="30" rx="9" fill="${p.card}" stroke="${p.lite}" stroke-width="1.6"/>` +
@@ -112,7 +112,7 @@ function step(cx: number, y: number, n: number, label: string, p: Pal, size = 15
  * rule), facing the car, the key fob held out in the accent so the eye lands
  * on it. A bag in the other hand says "ready to go".
  */
-function keeper(x: number, y: number, p: Pal, dark: boolean): string {
+export function keeper(x: number, y: number, p: Pal, dark: boolean): string {
   const skin = '#b77e5f';
   const hair = '#1f2040';
   const coat = dark ? '#8c8376' : '#ebe1d2';
@@ -302,16 +302,16 @@ export const PerDayArt = makeEmptyArt(perDayArt, '24 20 232 136');
 /* ───────────────────────────── why rent from us ────────────────────────── */
 
 /** The shared card outline every "why" picture draws with. */
-const inkStroke = (p: Pal, w = 2.2) => `stroke="${p.ink}" stroke-width="${w}" stroke-linejoin="round"`;
+export const inkStroke = (p: Pal, w = 2.2) => `stroke="${p.ink}" stroke-width="${w}" stroke-linejoin="round"`;
 /* The motion classes below (`nw-flow`, `nw-pop`, `nw-draw`, `nw-bob`, …) are
    in styles/site.css. The one-off ones play when the picture is revealed or
    shown (`nw-live`); the ambient ones loop gently. Reduced motion: none play. */
-const accDash = (d: string, p: Pal) =>
+export const accDash = (d: string, p: Pal) =>
   `<path class="nw-flow" d="${d}" fill="none" stroke="${p.acc}" stroke-width="2.2" stroke-dasharray="3 5" stroke-linecap="round"/>`;
-const badgeTick = (x: number, y: number, p: Pal, delay = 0.35) =>
+export const badgeTick = (x: number, y: number, p: Pal, delay = 0.35) =>
   `<g class="nw-pop" style="--d:${delay}s"><circle cx="${x}" cy="${y}" r="12" fill="${p.acc}" stroke="${p.card}" stroke-width="3"/>${tick(x - 5.5, y + 0.5, p.onAcc)}</g>`;
 /** A path that draws itself, like a pen (`pathLength` 1 so one dash covers it). */
-const drawn = (attrs: string) => `<path class="nw-draw" pathLength="1" ${attrs}/>`;
+export const drawn = (attrs: string) => `<path class="nw-draw" pathLength="1" ${attrs}/>`;
 
 /** Book in a few taps, day or night: the booking phone, a moon, and "24/7". */
 function anytimeArt(dark: boolean): string {

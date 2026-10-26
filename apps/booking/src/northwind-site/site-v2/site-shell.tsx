@@ -32,12 +32,15 @@ import { SITE_EDGE } from '@nw/site-v2/kit';
 import { QuickBookProvider, QuickBookTrigger } from '@nw/site-v2/quick-book/quick-book-dialog';
 import type { PageSections } from '@nw/lib/cms/types';
 import { NAV_LINKS } from '@nw/lib/constants';
+
+const NAV_ORDER = ['/', '/fleet', '/promotions', '/reviews', '/about', '/contact'] as const;
 import { cn } from '@nw/lib/utils';
 import { brandHslVars } from '@nw/portal-v2/brand';
 
 export function SiteV2Shell({
   fontClass,
   tenantName,
+  tenantLogoUrl = null,
   siteSettings,
   blogEnabled = false,
   footer,
@@ -46,6 +49,8 @@ export function SiteV2Shell({
   fontClass: string;
   /** The server's tenant name, so the header is right in the first HTML. */
   tenantName: string | null;
+  /** The server's `tenants.logo_url` — the logo's fallback, in the first HTML. */
+  tenantLogoUrl?: string | null;
   /** The server's `site-settings` sections — the logo, in the first HTML. */
   siteSettings?: PageSections | null;
   /** "Show blog on website". /blog 404s when off, so no link to it then. */
@@ -72,9 +77,15 @@ export function SiteV2Shell({
   }, [fontClass, brandVars?.['--brand-h'], brandVars?.['--brand-s'], brandVars?.['--brand-l']]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Blog sits before Contact, as in v1, so "Contact" stays the last item. */
+  // The order a renter looks for things in: the cars and what they cost, any
+  // deal on them, what other customers say, who we are, then how to reach us.
+  // (v1 keeps NAV_LINKS' own order; only this shell reorders.)
+  const ordered = NAV_ORDER.map((href) => NAV_LINKS.find((link) => link.href === href)).filter(
+    (link): link is (typeof NAV_LINKS)[number] => !!link,
+  );
   const links: ReadonlyArray<{ href: string; label: string }> = blogEnabled
-    ? [...NAV_LINKS.slice(0, -1), { href: '/blog', label: 'Blog' }, NAV_LINKS[NAV_LINKS.length - 1]]
-    : NAV_LINKS;
+    ? [...ordered.slice(0, -1), { href: '/blog', label: 'Blog' }, ordered[ordered.length - 1]]
+    : ordered;
 
   return (
     <QuickBookProvider>
@@ -82,7 +93,7 @@ export function SiteV2Shell({
         className={cn('pv2 flex min-h-dvh flex-col overflow-x-clip', fontClass)}
         style={(brandVars ?? undefined) as React.CSSProperties | undefined}
       >
-        <SiteHeader links={links} tenantName={tenantName} siteSettings={siteSettings} />
+        <SiteHeader links={links} tenantName={tenantName} tenantLogoUrl={tenantLogoUrl} siteSettings={siteSettings} />
         <main className="pv2-enter flex-1">{children}</main>
         {footer}
       </div>
@@ -129,17 +140,23 @@ function isActive(pathname: string | null, href: string): boolean {
  * down to the v2 header. Reused rather than re-typed so the logo rules stay in
  * one place.
  */
-function Brand({ tenantName, siteSettings }: { tenantName: string | null; siteSettings?: PageSections | null }) {
+function Brand({
+  tenantName,
+  tenantLogoUrl,
+  siteSettings,
+}: {
+  tenantName: string | null;
+  tenantLogoUrl: string | null;
+  siteSettings?: PageSections | null;
+}) {
   return (
     <BrandMark
       seed={siteSettings}
       nameSeed={tenantName}
-      withName
+      logoSeed={tenantLogoUrl}
       className={cn(
-        'min-w-0 shrink rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30',
+        'inline-flex min-h-11 min-w-0 shrink items-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30',
         '[&_img]:max-h-8 [&_img]:max-w-[140px] [&_span]:truncate [&_span]:text-[15px] [&_span]:text-pv-fg',
-        // On a phone a logo is the brand on its own; the name next to it would only truncate.
-        'max-sm:[&_img~span]:hidden',
       )}
     />
   );
@@ -255,10 +272,12 @@ function AccountControl() {
 function SiteHeader({
   links,
   tenantName,
+  tenantLogoUrl,
   siteSettings,
 }: {
   links: ReadonlyArray<{ href: string; label: string }>;
   tenantName: string | null;
+  tenantLogoUrl: string | null;
   siteSettings?: PageSections | null;
 }) {
   const pathname = usePathname();
@@ -288,7 +307,7 @@ function SiteHeader({
             : 'border-transparent bg-[var(--nw-hero-bg)]',
         )}
       >
-        <Brand tenantName={tenantName} siteSettings={siteSettings} />
+        <Brand tenantName={tenantName} tenantLogoUrl={tenantLogoUrl} siteSettings={siteSettings} />
 
         {/* The section links, centred in the bar; they move into the menu below 1060px. */}
         <nav aria-label="Primary" className="mx-auto hidden items-center gap-0.5 min-[1060px]:flex">
@@ -302,7 +321,11 @@ function SiteHeader({
                 className={cn(
                   'whitespace-nowrap rounded-full px-3 py-2 text-[14px] font-medium transition-colors duration-200 ease-out',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none',
-                  active ? 'bg-pv-card text-pv-fg' : 'text-pv-muted-fg hover:bg-pv-card hover:text-pv-fg',
+                  // The page you are on wears the brand colour; a hover is only a
+                  // neutral wash, so the two never look alike.
+                  active
+                    ? 'bg-pv-primary/[0.13] font-semibold text-pv-primary dark:bg-pv-primary/30 dark:text-pv-fg'
+                    : 'text-pv-muted-fg hover:bg-pv-fg/[0.06] hover:text-pv-fg dark:hover:bg-white/[0.08]',
                 )}
               >
                 {link.label}
@@ -337,6 +360,7 @@ function SiteHeader({
         links={links}
         pathname={pathname}
         tenantName={tenantName}
+        tenantLogoUrl={tenantLogoUrl}
         siteSettings={siteSettings}
       />
     </header>
@@ -362,6 +386,7 @@ function MenuSheet({
   links,
   pathname,
   tenantName,
+  tenantLogoUrl,
   siteSettings,
 }: {
   open: boolean;
@@ -369,6 +394,7 @@ function MenuSheet({
   links: ReadonlyArray<{ href: string; label: string }>;
   pathname: string | null;
   tenantName: string | null;
+  tenantLogoUrl: string | null;
   siteSettings?: PageSections | null;
 }) {
   const host = useSyncExternalStore(noSubscribe, () => document.body, () => null);
@@ -406,7 +432,7 @@ function MenuSheet({
       )}
     >
       <div className={cn(EDGE, 'flex h-[60px] shrink-0 items-center justify-between gap-3 border-b border-pv-border sm:h-[68px]')}>
-        <Brand tenantName={tenantName} siteSettings={siteSettings} />
+        <Brand tenantName={tenantName} tenantLogoUrl={tenantLogoUrl} siteSettings={siteSettings} />
         <button type="button" onClick={onClose} aria-label="Close menu" tabIndex={tab} className={BURGER}>
           <X className="size-5" />
         </button>

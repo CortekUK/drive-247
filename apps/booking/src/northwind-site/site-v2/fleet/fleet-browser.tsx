@@ -1,8 +1,8 @@
 'use client';
 
-import { AlertTriangle, CarFront, SearchX, SlidersHorizontal } from 'lucide-react-nw';
+import { AlertTriangle, CarFront, ChevronDown, SearchX, SlidersHorizontal } from 'lucide-react-nw';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Button } from '@nw/components/ui/button';
 import { Dialog, DialogDescription, DialogHeader, DialogTitle } from '@nw/components/ui/dialog';
@@ -18,6 +18,8 @@ import { FleetGridSkeleton, FleetListSkeleton } from './fleet-skeletons';
 import { FleetToolbar } from './fleet-toolbar';
 import { TripIntentBanner } from './trip-intent-banner';
 import { useFleetBrowser } from './use-fleet-browser';
+
+const PAGE_SIZE = 12;
 import { VehicleListRow } from './vehicle-list-row';
 
 interface FleetBrowserProps {
@@ -30,12 +32,20 @@ interface FleetBrowserProps {
 
 /**
  * v2 of `components/fleet/fleet-browser.tsx`: the operator portal v2 list
- * page shape — a calm bordered filter rail on the left (sticky, foldable), a
+ * page shape — a calm bordered filter rail on the left (full height, foldable), a
  * toolbar, then cards or divided rows. On phones the rail becomes a v2 DIALOG
  * with the "Show N" confirm pinned at its foot. All state is `useFleetBrowser`.
  */
 export function FleetBrowser({ seed = null }: FleetBrowserProps) {
   const fleet = useFleetBrowser(seed);
+
+  // A page of cars at a time, so a big fleet does not turn the page into an
+  // endless scroll before the footer. 12 fills three or four columns evenly.
+  // A new search, filter or sort starts again from the first page.
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  useEffect(() => setLimit(PAGE_SIZE), [fleet.filters, fleet.sort]);
+  const shown = fleet.results.slice(0, limit);
+  const remaining = fleet.results.length - shown.length;
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Desktop-only; seeded open on server and client so folding is never a hydration mismatch.
   const [railOpen, setRailOpen] = useState(true);
@@ -52,9 +62,10 @@ export function FleetBrowser({ seed = null }: FleetBrowserProps) {
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:gap-6">
       {railOpen ? (
-        // The aside stretches to the row's height so the sticky card has travel.
+        // The rail is as tall as its filters and scrolls with the page — no
+        // second scrollbar inside it.
         <aside className="hidden shrink-0 lg:block lg:w-[260px]">
-          <div className={cn(CARD, 'sticky top-24 max-h-[calc(100dvh-7rem)] overflow-y-auto overscroll-contain p-4')}>
+          <div className={cn(CARD, 'p-4')}>
             <FleetFilterPanel {...panelProps} onCollapse={() => setRailOpen(false)} />
           </div>
         </aside>
@@ -160,7 +171,7 @@ export function FleetBrowser({ seed = null }: FleetBrowserProps) {
           />
         ) : fleet.view === 'list' ? (
           <div className={cn(CARD, 'divide-y divide-pv-border overflow-hidden')}>
-            {fleet.results.map((vehicle) => (
+            {shown.map((vehicle) => (
               <VehicleListRow
                 key={vehicle.id}
                 vehicle={vehicle}
@@ -172,9 +183,10 @@ export function FleetBrowser({ seed = null }: FleetBrowserProps) {
             ))}
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {fleet.results.map((vehicle) => (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 min-[1680px]:grid-cols-4 lg:gap-5">
+            {shown.map((vehicle) => (
               <VehicleCard
+                compact
                 key={vehicle.id}
                 vehicle={vehicle}
                 currencyCode={fleet.currencyCode}
@@ -185,6 +197,29 @@ export function FleetBrowser({ seed = null }: FleetBrowserProps) {
             ))}
           </div>
         )}
+
+        {!fleet.showSkeleton && !fleet.showError && remaining > 0 ? (
+          <div className="flex flex-col items-center gap-3 pt-6">
+            <p className="text-[14px] text-pv-muted-fg" aria-live="polite">
+              Showing <span className="font-semibold text-pv-fg">{shown.length}</span> of{' '}
+              <span className="font-semibold text-pv-fg">{fleet.results.length}</span> cars
+            </p>
+            <div aria-hidden className="h-1 w-48 overflow-hidden rounded-full bg-pv-tint">
+              <div
+                className="h-full rounded-full bg-pv-primary"
+                style={{ width: `${(shown.length / fleet.results.length) * 100}%` }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setLimit((current) => current + PAGE_SIZE)}
+              className="mt-1 inline-flex h-11 cursor-pointer items-center gap-2 rounded-full border border-pv-border bg-pv-card px-6 text-[15px] font-semibold text-pv-fg transition-colors duration-200 ease-out hover:border-pv-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pv-primary/30 motion-reduce:transition-none"
+            >
+              Show {Math.min(PAGE_SIZE, remaining)} more {Math.min(PAGE_SIZE, remaining) === 1 ? 'car' : 'cars'}
+              <ChevronDown aria-hidden className="size-4" strokeWidth={2.25} />
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

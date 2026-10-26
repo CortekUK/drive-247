@@ -27,7 +27,7 @@ import {
   type ContactValues,
 } from '@nw/components/forms/contact-form-logic';
 import { cn } from '@nw/lib/utils';
-import { CARD, CardHeading, FIELD, FIELD_LABEL } from '@nw/site-v2/kit';
+import { CARD, FIELD, FIELD_LABEL } from '@nw/site-v2/kit';
 
 export function ContactForm() {
   const [submitted, setSubmitted] = useState(false);
@@ -77,8 +77,11 @@ export function ContactForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate className={cn(CARD, 'flex flex-col gap-5 p-5 sm:p-6')}>
-      <CardHeading title="Send us a message" description="Tell us what you need and we will get back to you." />
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className={cn(CARD, 'flex h-full flex-col gap-5 p-5 sm:p-8')}>
+      <div>
+        <h2 className="text-[28px] font-extrabold leading-tight tracking-[-0.04em] text-pv-fg md:text-[36px]">Send us a message</h2>
+        <p className="mt-1.5 text-[14.5px] text-pv-muted-fg">Tell us what you need and we will get back to you.</p>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field id="cf-fullName" label="Full name" error={errors.fullName?.message}>
@@ -138,12 +141,14 @@ export function ContactForm() {
         </Field>
       </div>
 
-      <Field id="cf-details" label="Additional details">
+      {/* The message box takes whatever height is left, so beside a taller
+          column (hours and map on /contact) the card ends level with it. */}
+      <Field id="cf-details" label="Additional details" grow>
         <textarea
           id="cf-details"
           rows={4}
           placeholder="Type your message here"
-          className={cn(FIELD, 'h-auto min-h-[112px] resize-y py-2.5 leading-relaxed')}
+          className={cn(FIELD, 'h-auto min-h-[112px] flex-1 resize-y py-2.5 leading-relaxed')}
           {...register('details')}
         />
       </Field>
@@ -165,15 +170,18 @@ function Field({
   id,
   label,
   error,
+  grow = false,
   children,
 }: {
   id: string;
   label: string;
   error?: string;
+  /** Fill the form's spare height (the message box). */
+  grow?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1.5">
+    <div className={cn('flex min-w-0 flex-col gap-1.5', grow && 'flex-1')}>
       <label htmlFor={id} className={FIELD_LABEL}>
         {label}
       </label>

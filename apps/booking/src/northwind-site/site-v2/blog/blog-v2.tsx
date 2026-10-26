@@ -13,7 +13,7 @@ import { ArrowLeft, ArrowRight, Newspaper } from 'lucide-react-nw';
 import type { BlogPostFull, BlogPostSummary } from '@nw/lib/cms/queries';
 import { cn } from '@nw/lib/utils';
 
-import { CARD_INTERACTIVE, EmptyState, PageIntro, SITE_CONTAINER } from '../kit';
+import { CARD_INTERACTIVE, EmptyState, PageHeader, SITE_CONTAINER, SITE_WIDE } from '../kit';
 import { htmlToBlocks, type PostBlock } from './html-blocks';
 
 /** "2026-09-09" -> "9 September 2026", as v1's blog pages print it. */
@@ -40,12 +40,9 @@ function metaLine(post: BlogPostSummary): string {
 export function BlogIndexV2({ posts }: { posts: BlogPostSummary[] }) {
   return (
     <div className="pv2-enter">
-      <PageIntro
-        title="News & guides"
-        description="Updates from us, and plain advice on renting and driving."
-      />
+      <PageHeader title="News and guides" description="Updates from us, and plain advice on renting and driving." />
 
-      <section className={cn(SITE_CONTAINER, 'pt-8 md:pt-10')}>
+      <section className={cn(SITE_WIDE, 'pt-2')}>
         {posts.length === 0 ? (
           <EmptyState
             icon={<Newspaper aria-hidden className="size-5" />}
@@ -53,7 +50,7 @@ export function BlogIndexV2({ posts }: { posts: BlogPostSummary[] }) {
             description="We have not posted anything here yet. Check back soon."
           />
         ) : (
-          <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
             {posts.map((post) => (
               <li key={post.id} className="flex">
                 <PostCard post={post} />

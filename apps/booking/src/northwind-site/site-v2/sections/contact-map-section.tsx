@@ -1,90 +1,83 @@
-import { CornerUpRight, MapPin } from 'lucide-react-nw';
+import { MapPin } from 'lucide-react-nw';
 
 import { DEFAULT_SITE_CONTACT, DEFAULT_SITE_LOGO, EMPTY_CONTACT_INFO } from '@nw/lib/cms/defaults';
-import { Editable, cmsSection } from '@nw/lib/cms/editable';
+import { cmsSection } from '@nw/lib/cms/editable';
 import { loadSection } from '@nw/lib/cms/server';
 import { cn } from '@nw/lib/utils';
-import { CARD, ICON_TILE, Section } from '@nw/site-v2/kit';
+import { CARD, SITE_WIDE } from '@nw/site-v2/kit';
+import { OpeningHoursCard, loadOpeningHours } from '@nw/site-v2/sections/contact-hours';
 
 /**
- * Northwind booking site v2 — the map. Same rules as the current section
- * (`components/sections/contact-map-section.tsx`, which documents why): no
- * findable address means no section at all, the contact page's own office
- * field wins over Site Settings, and the links go to the operator's
- * `google_maps_url` when they set one.
+ * Northwind booking site v2 — the lower half of /contact: on the left, when
+ * a renter can come by (`contact-hours.tsx`) and where (the map); on the
+ * right, the message form (passed in as `children`).
  *
- * The floating address card is now a calm row under the map, so nothing has
- * to be masked over the embed.
+ * The map follows the current section's rules
+ * (`components/sections/contact-map-section.tsx`, which documents why): no
+ * findable address means no map, the contact page's own office field wins
+ * over Site Settings. With neither hours nor a map, the form stands alone.
  */
 function joinAddress(parts: readonly string[]): string {
   return parts.map((part) => part.trim()).filter((part) => part !== '').join(', ');
 }
 
-export async function ContactMapSection() {
-  const [site, logo, info] = await Promise.all([
+export async function ContactMapSection({ children }: { children?: React.ReactNode }) {
+  const [site, logo, info, hours] = await Promise.all([
     loadSection('site-settings', 'contact', DEFAULT_SITE_CONTACT),
     loadSection('site-settings', 'logo', DEFAULT_SITE_LOGO),
     loadSection('contact', 'contact_info', EMPTY_CONTACT_INFO),
+    loadOpeningHours(),
   ]);
 
   const hasSiteAddress = site.address_line1.trim() !== '' || site.city.trim() !== '';
   const siteAddress = hasSiteAddress
     ? joinAddress([site.address_line1, site.address_line2, site.city, site.state, site.zip, site.country])
     : '';
-
   const address = info.office.address.trim() || siteAddress;
-  if (address === '') return null;
 
-  const embedSrc = `https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=14&output=embed&iwloc=near`;
-  const mapLink =
-    site.google_maps_url.trim() || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+  const form = (
+    <div id="contact-form" className="h-full min-w-0 scroll-mt-24">
+      {children}
+    </div>
+  );
+
+  if (address === '' && !hours) {
+    return (
+      <section className={cn(SITE_WIDE, 'pb-16 pt-16 md:pb-28 md:pt-24')}>
+        <div className="mx-auto max-w-3xl">{form}</div>
+      </section>
+    );
+  }
+
   const name = logo.logo_alt.trim() || 'Our';
 
   return (
-    <div {...cmsSection('site-settings.contact', 'Map')}>
-      <Section className="pt-4 md:pt-6">
-        <div className={cn(CARD, 'overflow-hidden')}>
-          <iframe
-            src={embedSrc}
-            title={`${name} location`}
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-            className="block h-[320px] w-full border-0 md:h-[440px]"
-          />
-          <div className="flex flex-col gap-4 border-t border-pv-border p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-            <div className="flex min-w-0 items-start gap-3">
-              <span className={ICON_TILE}>
-                <MapPin aria-hidden className="size-4" strokeWidth={1.75} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-[15px] font-semibold text-pv-fg">
-                  {logo.logo_alt.trim() !== '' ? (
-                    <Editable path="site-settings.logo.logo_alt">{name}</Editable>
-                  ) : (
-                    'Find us'
-                  )}
-                </p>
-                <p className="mt-0.5 break-words text-[13px] leading-relaxed text-pv-muted-fg">
-                  {info.office.address.trim() !== '' ? (
-                    <Editable path="contact.contact_info.office.address">{address}</Editable>
-                  ) : (
-                    address
-                  )}
-                </p>
-              </div>
+    <section className={cn(SITE_WIDE, 'grid gap-6 pb-16 pt-16 md:pb-28 md:pt-24 lg:grid-cols-2 lg:gap-10')}>
+      <div data-reveal className="flex min-w-0 flex-col gap-6">
+        {hours ? <OpeningHoursCard hours={hours} /> : null}
+        {address !== '' ? (
+          <div {...cmsSection('site-settings.contact', 'Map')} className="flex flex-1 flex-col">
+            <h2 className="flex items-center gap-2 text-[20px] font-extrabold tracking-[-0.03em] text-pv-fg md:text-[22px]">
+              <MapPin aria-hidden className="size-5 text-pv-primary" strokeWidth={2.25} />
+              Where we are
+            </h2>
+            <p className="mt-1.5 text-[14.5px] text-pv-muted-fg">{address}</p>
+            <div className={cn(CARD, 'mt-4 flex min-h-[280px] flex-1 overflow-hidden md:min-h-[320px]')}>
+              <iframe
+                src={`https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=14&output=embed&iwloc=near`}
+                title={`Map: ${name === 'Our' ? 'where we are' : name}`}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                className="block min-h-full w-full flex-1 border-0"
+              />
             </div>
-            <a
-              href={mapLink}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-pv-border bg-pv-card px-5 text-sm font-medium text-pv-fg transition-colors duration-200 ease-out hover:border-pv-primary/40 hover:text-pv-primary motion-reduce:transition-none"
-            >
-              <CornerUpRight aria-hidden className="size-4" strokeWidth={1.75} />
-              Get directions
-            </a>
           </div>
-        </div>
-      </Section>
-    </div>
+        ) : null}
+      </div>
+      {/* Stretched to the left column's height, so both end on one line. */}
+      <div data-reveal style={{ '--d': '100ms' } as React.CSSProperties}>
+        {form}
+      </div>
+    </section>
   );
 }

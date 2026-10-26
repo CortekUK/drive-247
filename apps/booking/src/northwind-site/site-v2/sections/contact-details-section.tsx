@@ -1,4 +1,4 @@
-import { Mail, MapPin, MessageCircle, Phone } from 'lucide-react-nw';
+import { ArrowRight, Mail, MapPin, MessageCircle, Phone } from 'lucide-react-nw';
 import type { LucideIcon } from 'lucide-react-nw';
 
 import { DEFAULT_CONTACT_INFO, DEFAULT_SITE_CONTACT, DEFAULT_TRUST_BADGES } from '@nw/lib/cms/defaults';
@@ -6,13 +6,14 @@ import { Editable, cmsSection } from '@nw/lib/cms/editable';
 import { resolveIcon } from '@nw/lib/cms/icons';
 import { loadSection } from '@nw/lib/cms/server';
 import { cn } from '@nw/lib/utils';
-import { ContactForm } from '@nw/site-v2/forms/contact-form';
-import { CARD, CardHeading, ICON_TILE, SITE_CONTAINER } from '@nw/site-v2/kit';
+import { SITE_WIDE } from '@nw/site-v2/kit';
 
 type DetailRow = {
   id: string;
   Icon: LucideIcon;
   label: string;
+  /** What tapping the card does, e.g. "Call us". */
+  action: string;
   value: string;
   note: string;
   href?: string;
@@ -22,7 +23,12 @@ type DetailRow = {
 };
 
 /**
- * Northwind booking site v2 — the contact details card beside the form.
+ * Northwind booking site v2 — the ways to reach the operator, as big tinted
+ * cards a renter can tap, each with its icon sitting on the card's top edge,
+ * starting just under the hero's wave so the whole curve shows. Every card ends in the
+ * same row — what tapping does, and an arrow — so they line up: call, message on WhatsApp, email, and where they are. Each
+ * says what tapping it does. The form and the map come after
+ * (`contact-map-section.tsx`).
  *
  * Same sources and precedence as the current section
  * (`components/sections/contact-details-section.tsx`, which documents why):
@@ -56,6 +62,7 @@ export async function ContactDetailsSection() {
       id: 'email',
       Icon: Mail,
       label: 'Email',
+      action: 'Send an email',
       value: email,
       note: info.email.response_time.trim(),
       href: `mailto:${email}`,
@@ -69,6 +76,7 @@ export async function ContactDetailsSection() {
       id: 'phone',
       Icon: Phone,
       label: 'Phone',
+      action: 'Call us',
       value: phone,
       note: info.phone.availability.trim(),
       href: `tel:${dialable.replace(/[^+\d]/g, '')}`,
@@ -82,6 +90,7 @@ export async function ContactDetailsSection() {
       id: 'whatsapp',
       Icon: MessageCircle,
       label: 'WhatsApp',
+      action: 'Message us',
       value: whatsapp,
       note: info.whatsapp.description.trim(),
       href: `https://wa.me/${whatsapp.replace(/[^\d]/g, '')}`,
@@ -94,9 +103,11 @@ export async function ContactDetailsSection() {
     rows.push({
       id: 'location',
       Icon: MapPin,
-      label: 'Location',
+      label: 'Visit us',
+      action: 'Get directions',
       value: office,
       note: '',
+      href: site.google_maps_url.trim() || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(office)}`,
       path: 'contact.contact_info.office.address',
       notePath: '',
     });
@@ -107,69 +118,138 @@ export async function ContactDetailsSection() {
     .filter(({ badge }) => badge.label.trim() !== '');
 
   return (
-    <section
-      {...cmsSection('contact.contact_info', 'Contact details')}
-      className={cn(SITE_CONTAINER, 'grid grid-cols-1 gap-4 pt-8 md:pt-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-start lg:gap-6')}
-    >
-      <div className={cn(CARD, 'flex flex-col gap-5 p-5 sm:p-6')}>
-        <CardHeading title="Contact details" description="Reach us whichever way suits you." />
-
-        {rows.length > 0 ? (
-          <ul className="flex flex-col divide-y divide-pv-border">
-            {rows.map(({ id, Icon, label, value, note, href, path, notePath }) => (
-              <li key={id} className="flex items-start gap-3 py-3.5 first:pt-0 last:pb-0">
-                <span className={ICON_TILE}>
-                  <Icon aria-hidden className="size-4" strokeWidth={1.75} />
-                </span>
-                <div className="flex min-w-0 flex-col gap-0.5">
-                  <p className="text-xs font-medium text-pv-muted-fg">{label}</p>
-                  {href ? (
-                    <a
-                      href={href}
-                      className="break-words text-sm font-medium text-pv-fg transition-colors duration-200 hover:text-pv-primary motion-reduce:transition-none"
-                    >
-                      <Editable path={path}>{value}</Editable>
-                    </a>
-                  ) : (
-                    <p className="break-words text-sm font-medium text-pv-fg">
-                      <Editable path={path}>{value}</Editable>
-                    </p>
+    <section {...cmsSection('contact.contact_info', 'Contact details')} aria-label="Ways to reach us" className={cn(SITE_WIDE, 'pt-7 md:pt-9')}>
+      {rows.length > 0 ? (
+        <ul
+          data-reveal-group
+          className={cn(
+            'grid gap-x-4 gap-y-10 sm:grid-cols-2 lg:gap-x-5',
+            rows.length >= 4 ? 'xl:grid-cols-4' : rows.length === 3 ? 'lg:grid-cols-3' : '',
+          )}
+        >
+          {rows.map(({ id, Icon, label, action, value, note, href, path, notePath }) => {
+            // Calling is the quickest way to an answer, so the phone card is
+            // the one in the brand colour; the rest are white.
+            const lead = id === 'phone';
+            const body = (
+              <>
+                <span
+                  className={cn(
+                    'absolute -top-5 left-5 grid size-11 place-items-center rounded-xl',
+                    lead
+                      ? 'bg-pv-card text-pv-primary'
+                      : 'bg-pv-primary text-pv-primary-fg',
                   )}
-                  {note !== '' ? (
-                    <p className="text-xs text-pv-muted-fg">
-                      <Editable path={notePath}>{note}</Editable>
-                    </p>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-[13px] text-pv-muted-fg">Use the form and we will reply as soon as we can.</p>
-        )}
-
-        {badges.length > 0 ? (
-          <ul className="flex flex-wrap gap-2 border-t border-pv-border pt-5">
-            {badges.map(({ badge, index }) => {
-              const Icon = resolveIcon(badge.icon);
-              return (
-                <li
-                  key={`${badge.label}-${index}`}
-                  title={badge.tooltip || undefined}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-pv-muted px-3 py-1.5 text-xs font-medium text-pv-fg"
                 >
-                  <Icon aria-hidden className="size-3.5 shrink-0 text-pv-primary" strokeWidth={1.75} />
-                  <Editable path={`contact.trust_badges.badges.${index}.label`}>{badge.label}</Editable>
-                </li>
-              );
-            })}
-          </ul>
-        ) : null}
-      </div>
+                  <Icon aria-hidden className="size-5" strokeWidth={2} />
+                </span>
 
-      <div id="contact-form" className="scroll-mt-24">
-        <ContactForm />
-      </div>
+                <span
+                  className={cn(
+                    'mt-3 block text-[12px] font-semibold uppercase tracking-[0.08em]',
+                    lead ? 'text-pv-primary-fg/75' : 'text-pv-muted-fg',
+                  )}
+                >
+                  {label}
+                </span>
+                <span
+                  className={cn(
+                    'mt-1.5 block text-[17px] font-extrabold leading-snug tracking-[-0.025em] [overflow-wrap:anywhere]',
+                    !lead && 'text-pv-fg',
+                  )}
+                >
+                  {/* An address may break after its "@", never in the middle of a word. */}
+                  <Editable path={path}>
+                    {id === 'email' && value.includes('@') ? (
+                      <>
+                        {value.slice(0, value.indexOf('@'))}
+                        <wbr />
+                        {value.slice(value.indexOf('@'))}
+                      </>
+                    ) : (
+                      value
+                    )}
+                  </Editable>
+                </span>
+                {note !== '' ? (
+                  <span
+                    className={cn(
+                      'mt-1 block text-[13.5px] leading-relaxed',
+                      lead ? 'text-pv-primary-fg/75' : 'text-pv-muted-fg',
+                    )}
+                  >
+                    <Editable path={notePath}>{note}</Editable>
+                  </span>
+                ) : null}
+
+                {/* At least 20px, and whatever else the card's height leaves. */}
+                <span aria-hidden className="block min-h-4 flex-1" />
+                {href ? (
+                  <span
+                    className={cn(
+                      'flex items-center justify-between gap-3 border-t pt-3 text-[14px] font-semibold',
+                      lead ? 'border-pv-primary-fg/20' : 'border-pv-border text-pv-fg',
+                    )}
+                  >
+                    {action}
+                    <span
+                      className={cn(
+                        'grid size-8 shrink-0 place-items-center rounded-full transition-transform duration-200 ease-out group-hover:translate-x-0.5 motion-reduce:transition-none',
+                        lead ? 'bg-pv-card text-pv-primary' : 'bg-pv-tint text-pv-primary dark:text-pv-fg',
+                      )}
+                    >
+                      <ArrowRight aria-hidden className="size-4" strokeWidth={2.25} />
+                    </span>
+                  </span>
+                ) : null}
+              </>
+            );
+            const box = cn(
+              'relative flex w-full flex-col rounded-2xl px-5 pb-4 pt-8 sm:min-h-[184px]',
+              lead
+                ? 'bg-[linear-gradient(155deg,hsl(var(--primary)),hsl(var(--primary)/0.8))] text-pv-primary-fg'
+                : 'border border-pv-border bg-pv-card',
+            );
+            return (
+              <li key={id} className="flex">
+                {href ? (
+                  <a
+                    href={href}
+                    {...(id === 'location' ? { target: '_blank', rel: 'noreferrer' } : {})}
+                    className={cn(
+                      box,
+                      'group transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-pv-primary/30 motion-reduce:transition-none',
+                      !lead && 'hover:border-pv-primary/40',
+                    )}
+                  >
+                    {body}
+                  </a>
+                ) : (
+                  <div className={box}>{body}</div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+
+      {badges.length > 0 ? (
+        <ul className="mt-6 flex flex-wrap justify-center gap-2">
+          {badges.map(({ badge, index }) => {
+            const Icon = resolveIcon(badge.icon);
+            return (
+              <li
+                key={`${badge.label}-${index}`}
+                title={badge.tooltip || undefined}
+                className="inline-flex items-center gap-1.5 rounded-full bg-pv-tint px-3.5 py-2 text-[13px] font-medium text-pv-fg"
+              >
+                <Icon aria-hidden className="size-4 shrink-0 text-pv-primary" strokeWidth={1.75} />
+                <Editable path={`contact.trust_badges.badges.${index}.label`}>{badge.label}</Editable>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
     </section>
   );
 }

@@ -44,7 +44,7 @@ function Ribbons() {
         key={d}
         className="nw-draw"
         pathLength={1}
-        style={{ '--d': `${delay + i * 0.25}s`, animationDuration: '1.8s' } as React.CSSProperties}
+        style={{ '--d': `${delay + i * 0.08}s`, animationDuration: '0.7s' } as React.CSSProperties}
         d={d}
         stroke="currentColor"
         strokeWidth="3.5"
@@ -60,14 +60,14 @@ function Ribbons() {
         fill="none"
         className="absolute right-0 top-0 h-auto w-[min(440px,calc((100%-820px)/2))] [mask-image:linear-gradient(to_bottom,transparent,#000_22%)]"
       >
-        {lines(RIGHT, 0.1)}
+        {lines(RIGHT, 0)}
       </svg>
       <svg
         viewBox="0 640 460 860"
         fill="none"
         className="absolute bottom-0 left-0 h-auto w-[min(460px,calc((100%-820px)/2))] [mask-image:linear-gradient(to_top,transparent,#000_22%)]"
       >
-        {lines(LEFT, 0.5)}
+        {lines(LEFT, 0.15)}
       </svg>
     </div>
   );
@@ -77,7 +77,7 @@ export async function HomeFaq() {
   const seed = await loadFaqs();
 
   return (
-    <section id="faq" aria-labelledby="faq-title" className={cn(SITE_WIDE, 'relative isolate pt-20 md:pt-28')}>
+    <section id="faq" aria-labelledby="faq-title" className={cn(SITE_WIDE, 'nw-quick relative isolate pt-20 md:pt-28')}>
       <Ribbons />
       <div {...cmsSection('home.faq_header', 'FAQ')} className="mx-auto max-w-[760px]">
         <div data-reveal className="text-center">
