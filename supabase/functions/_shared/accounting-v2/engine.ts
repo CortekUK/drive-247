@@ -155,6 +155,8 @@ export class Engine {
   private settings!: ResolvedSettings;
   private currency = "USD";
   private syncedRentals = new Set<string>();
+  /** Bills whose main invoice this run created: the money already on them follows (`queueEarlierMoney`). */
+  private newBills = new Map<string, boolean>();
 
   constructor(private db: SupabaseClient, private conn: Connection, private adapter: Adapter) {}
 
@@ -286,6 +288,7 @@ export class Engine {
 
   async process(item: SyncItem): Promise<Outcome> {
     const outcome = await this.route(item);
+    await this.queueEarlierMoney(item);
     if (outcome.outcome !== "drop") return outcome;
     // "Nothing to send" never erases history: an item that was sent before
     // stays in the Sync table as sent.
@@ -316,6 +319,105 @@ export class Engine {
     // Recorded after connecting counts, whatever date it carries (a back-dated
     // manual payment is still new money in the books).
     return !from || new Date(item.scope_at ?? item.occurred_at).getTime() >= new Date(from).getTime() - 1000;
+  }
+
+  /** Is any of these bills (rentals, or charges billed on their own) already upstream? */
+  private async billUpstream(billIds: string[]): Promise<boolean> {
+    if (!billIds.length) return false;
+    const { data } = await this.db.from("accounting_entity_map").select("id")
+      .eq("tenant_id", this.conn.tenant_id).eq("provider", this.conn.provider)
+      .in("entity_type", ["invoice", "credit_note"]).in("drive_id", billIds).limit(1);
+    return !!data?.length;
+  }
+
+  /** The bills a payment pays: the rentals of the charges it is applied to, loose charges, else its rental. */
+  private async billsOfPayment(paymentId: string, p: Record<string, any> | null): Promise<string[]> {
+    if (!p) return [];
+    const { data: apps } = await this.db.from("payment_applications").select("charge_entry_id")
+      .eq("payment_id", paymentId).eq("tenant_id", this.conn.tenant_id);
+    const chargeIds = (apps ?? []).map((a) => a.charge_entry_id as string);
+    const { data: charges } = chargeIds.length
+      ? await this.db.from("ledger_entries").select("id, rental_id").in("id", chargeIds).eq("tenant_id", this.conn.tenant_id)
+      : { data: [] as any[] };
+    const bills = new Set<string>((charges ?? []).map((c) => (c.rental_id ?? c.id) as string));
+    if (p.rental_id) bills.add(p.rental_id);
+    return [...bills];
+  }
+
+  /**
+   * Money on a bill that is in these books belongs in them too, however early
+   * it was recorded. Otherwise an invoice from before the start point, pulled
+   * in by a later payment, lands at its full total with only that payment on
+   * it and shows as owing money the customer has already paid.
+   */
+  private async paysUpstreamBill(paymentId: string, p: Record<string, any> | null): Promise<boolean> {
+    return this.billUpstream(await this.billsOfPayment(paymentId, p));
+  }
+
+  /**
+   * After a run creates a bill's main invoice, queue the money already recorded
+   * against it that is not upstream yet: its payments, their refunds, and the
+   * rental's ledger-only refunds. The scope check lets them through because the
+   * bill is now upstream (`paysUpstreamBill`). Never throws: the item that got
+   * here has been sent, and failing it now would re-run work already done.
+   */
+  private async queueEarlierMoney(current: SyncItem) {
+    const bills = [...this.newBills];
+    this.newBills.clear();
+    for (const [billId, standalone] of bills) {
+      try {
+        const tenantId = this.conn.tenant_id;
+        const { data: charges } = standalone
+          ? { data: [{ id: billId }] }
+          : await this.db.from("ledger_entries").select("id").eq("rental_id", billId).eq("tenant_id", tenantId).eq("type", "Charge");
+        const chargeIds = (charges ?? []).map((c) => c.id as string);
+        const { data: apps } = chargeIds.length
+          ? await this.db.from("payment_applications").select("payment_id").in("charge_entry_id", chargeIds).eq("tenant_id", tenantId)
+          : { data: [] as any[] };
+        const ids = new Set<string>((apps ?? []).map((a) => a.payment_id as string));
+        if (!standalone) {
+          const { data: own } = await this.db.from("payments").select("id").eq("rental_id", billId).eq("tenant_id", tenantId);
+          for (const r of own ?? []) ids.add(r.id as string);
+        }
+        const { data: pays } = ids.size
+          ? await this.db.from("payments").select("id, status, amount, refund_amount, refund_status").in("id", [...ids]).eq("tenant_id", tenantId)
+          : { data: [] as any[] };
+
+        const want: { type: SyncItem["source_type"]; id: string }[] = [];
+        for (const p of pays ?? []) {
+          if (!LANDED.has(p.status)) continue;
+          want.push({ type: "payment", id: p.id });
+          if (refundAmountOf(p) > EPS) want.push({ type: "refund", id: p.id });
+        }
+        if (!standalone) want.push({ type: "rental_refund", id: billId });
+        if (!want.length) continue;
+
+        const [{ data: mapped }, { data: queued }] = await Promise.all([
+          this.db.from("accounting_entity_map").select("entity_type, drive_id, part")
+            .eq("tenant_id", tenantId).eq("provider", this.conn.provider).in("entity_type", ["payment", "refund"])
+            .in("drive_id", want.map((w) => w.id)),
+          this.db.from("accounting_sync_items").select("source_type, source_id")
+            .eq("tenant_id", tenantId).eq("provider", this.conn.provider).eq("operation", "sync")
+            .in("status", ["waiting", "failed"]).in("source_id", want.map((w) => w.id)),
+        ]);
+        const has = (type: string, id: string) =>
+          (mapped ?? []).some((m) => m.drive_id === id && (type === "payment" ? m.entity_type === "payment"
+            : m.entity_type === "refund" && (type === "rental_refund" ? String(m.part).startsWith("ledger") : !String(m.part).startsWith("ledger"))));
+        const waiting = (type: string, id: string) => (queued ?? []).some((q) => q.source_type === type && q.source_id === id);
+
+        for (const w of want) {
+          if (w.type === current.source_type && w.id === current.source_id) continue;
+          if (has(w.type, w.id) || waiting(w.type, w.id)) continue;
+          const { error } = await this.db.rpc("accounting_v2_enqueue", {
+            p_tenant: tenantId, p_source_type: w.type, p_source_id: w.id,
+            p_operation: "sync", p_row: null, p_provider: this.conn.provider,
+          });
+          if (error) console.error(`accounting-v2: could not queue earlier ${w.type} ${w.id}:`, error.message);
+        }
+      } catch (e) {
+        console.error(`accounting-v2: could not queue earlier money for ${billId}:`, e instanceof Error ? e.message : String(e));
+      }
+    }
   }
 
   /* ── invoice: a rental's charges ── */
@@ -433,6 +535,7 @@ export class Engine {
           meta: { applied, customer_id: billCustomer, reference: billReference },
           afterCreate: (d) => this.writeChargeMaps(rentalId, applied.map((a) => ({ ...a, invoice: a.invoice ?? d.id })), d.id, billCustomer, billReference),
         });
+      if (part === "0") this.newBills.set(rentalId, standalone);
     } else {
       const part = `adj-${creditMaps.length + 1}`;
       const docNumber = `${number}-CN${creditMaps.length + 1}`;
@@ -475,7 +578,7 @@ export class Engine {
     const p = item?.operation === "delete" ? null : await this.paymentRow(paymentId);
     await this.resolvePending("payment", paymentId);
     const existing = await this.maps("payment", paymentId);
-    if (!this.inScope(item, existing.length > 0)) return { outcome: "drop" };
+    if (!this.inScope(item, existing.length > 0) && !(await this.paysUpstreamBill(paymentId, p))) return { outcome: "drop" };
     const landed = !!p && LANDED.has(p.status);
     const attempt = item?.attempts ?? 0;
 
@@ -609,7 +712,7 @@ export class Engine {
     const p = item?.operation === "delete" ? null : await this.paymentRow(paymentId);
     await this.resolvePending("refund", paymentId);
     const existing = await this.maps("refund", paymentId);
-    if (!this.inScope(item, existing.length > 0)) return { outcome: "drop" };
+    if (!this.inScope(item, existing.length > 0) && !(await this.paysUpstreamBill(paymentId, p))) return { outcome: "drop" };
     const total = refundAmountOf(p);
     const attempt = item?.attempts ?? 0;
 
@@ -707,7 +810,7 @@ export class Engine {
     const tenantId = this.conn.tenant_id;
     await this.resolvePending("refund", rentalId);
     const existing = (await this.maps("refund", rentalId)).filter((m) => m.part.startsWith("ledger"));
-    if (!this.inScope(item, existing.length > 0)) return { outcome: "drop" };
+    if (!this.inScope(item, existing.length > 0) && !(await this.billUpstream([rentalId]))) return { outcome: "drop" };
 
     const [{ data: rows }, { data: rental }, { data: inv }, { data: described, error: dErr }] = await Promise.all([
       this.db.from("ledger_entries").select("category, amount, created_at").eq("rental_id", rentalId)
