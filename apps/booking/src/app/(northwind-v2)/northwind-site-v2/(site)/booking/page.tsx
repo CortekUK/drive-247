@@ -1,7 +1,26 @@
+import type { Metadata } from "next";
+import { Suspense } from "react";
+
+import { BookingFlowPage, BookingFlowSkeleton } from "@nw/site-v2/book/booking-flow-page";
+
 /**
- * /booking — v2. The flow is vehicle-first, so there is nothing to book here
- * without a car: this forwards to the fleet with the query intact. It is the
- * current site's route, re-used rather than copied, so the forwarding rule
- * lives in one place.
+ * /booking — v2. The booking flow on a page of its own: the trip's dates and
+ * times, then a car free for them, with the overview beside it; checkout is
+ * the chosen car's page (/booking/<vehicleId>). It used to forward to /fleet
+ * (v1's vehicle-first flow); "Book a car" now lands here.
+ *
+ * Suspense because the flow keeps its step in the query (`useSearchParams`).
  */
-export { default } from "../../../../(northwind)/northwind-site/(booking)/booking/page";
+
+export const metadata: Metadata = {
+  title: "Book a car",
+  description: "Choose your dates and times, pick a car that is free for them, and see the price as you go.",
+};
+
+export default function BookingFlowRouteV2() {
+  return (
+    <Suspense fallback={<BookingFlowSkeleton />}>
+      <BookingFlowPage />
+    </Suspense>
+  );
+}
