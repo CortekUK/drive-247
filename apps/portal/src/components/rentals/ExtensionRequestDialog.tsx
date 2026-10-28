@@ -31,6 +31,7 @@ import { calculateTotalMileageAllowance, getMileageTier, isUnlimitedMileage } fr
 import { type CoverageOptions } from '@/hooks/use-bonzah-premium';
 import BonzahInsuranceSelector from '@/components/rentals/bonzah-insurance-selector';
 import { clampToBonzahStart } from '@/lib/bonzah-dates';
+import { useBonzahCoverEnd } from '@/hooks/use-bonzah-cover-end';
 import BonzahAvailabilityNotice from '@/components/rentals/bonzah-availability-notice';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -145,8 +146,11 @@ export function ExtensionRequestDialog({
   // insurable remains. Ranges are end-exclusive.
   const rawInsuranceWindowStart = snapshotEndDate.split('T')[0];
   const extensionStartForInsurance = clampToBonzahStart(rawInsuranceWindowStart);
+  // Bonzah: an extension may only continue Bonzah cover that has not lapsed —
+  // insurance can never be added after a rental has started.
+  const bonzahCover = useBonzahCoverEnd(rental.id, tenant?.timezone, open);
   const requestBonzahInsurable =
-    !!snapshotRequestedDate && snapshotRequestedDate.split('T')[0] > extensionStartForInsurance;
+    !!snapshotRequestedDate && snapshotRequestedDate.split('T')[0] > extensionStartForInsurance && !bonzahCover.lapsed;
   const insurancePremium =
     extensionInsuranceType === 'bonzah' && requestBonzahInsurable && bonzahSellable ? bonzahPremiumAmount : 0;
 
@@ -515,8 +519,9 @@ export function ExtensionRequestDialog({
       // swallowed failure here previously billed premiums with no policy.
       let insuranceWarning: string | null = null;
       if (extensionInsuranceType === 'bonzah' && hasBonzahCoverage && !requestBonzahInsurable) {
-        insuranceWarning =
-          'Bonzah cannot cover this extension — cover cannot be backdated, and this extension ends today or earlier. No insurance was purchased or charged.';
+        insuranceWarning = bonzahCover.lapsedReason
+          ? `${bonzahCover.lapsedReason} No insurance was purchased or charged.`
+          : 'Bonzah cannot cover this extension — cover cannot be backdated, and this extension ends today or earlier. No insurance was purchased or charged.';
       }
       if (extensionInsuranceType === 'bonzah' && hasBonzahCoverage && requestBonzahInsurable && (!originalPolicy || !rental.previous_end_date)) {
         insuranceWarning =
@@ -1004,7 +1009,15 @@ export function ExtensionRequestDialog({
                     can't start today, LA time) — show the branded explainer with
                     the clock math and ways forward instead of quoting a premium
                     the purchase step would refuse. */}
-                {extensionInsuranceType === 'bonzah' && !requestBonzahInsurable && (
+                {extensionInsuranceType === 'bonzah' && bonzahCover.lapsedReason && (
+                  <div className="ml-2 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 p-3 text-xs text-foreground space-y-2">
+                    <p>{bonzahCover.lapsedReason}</p>
+                    <button type="button" className="underline text-muted-foreground hover:text-foreground" onClick={() => setExtensionInsuranceType('own')}>
+                      Use the customer's own policy instead
+                    </button>
+                  </div>
+                )}
+                {extensionInsuranceType === 'bonzah' && !requestBonzahInsurable && !bonzahCover.lapsed && (
                   <div className="ml-2">
                     <BonzahAvailabilityNotice
                       windowStart={rawInsuranceWindowStart}

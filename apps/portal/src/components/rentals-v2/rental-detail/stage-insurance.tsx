@@ -63,7 +63,7 @@ import { isBonzahSellable, bonzahBlockedReason } from "@/lib/bonzah";
 // tomorrow, Pacific. Every UI that gates a purchase has to mirror the clamp in
 // `bonzah-create-quote`, or it offers a premium the purchase step then refuses.
 // GoNiko was charged $26.95 for a policy that never existed exactly that way.
-import { bonzahCanInsureThrough, getBonzahToday } from "@/lib/bonzah-dates";
+import { bonzahCanInsureThrough, getBonzahToday, bonzahRentalHasStarted } from "@/lib/bonzah-dates";
 import { getActiveCoverageLabels } from "@/lib/coverage-labels";
 import {
   useRentalInsurancePolicies,
@@ -287,7 +287,9 @@ export function StageInsurance({ detail, onStage, refetch }: StageProps) {
    */
   const sellable = isBonzahConnected && isBonzahSellable(tenant);
   const hasInsurableDays = bonzahCanInsureThrough(rental.end_date);
-  const canBuy = sellable && isEligible && hasInsurableDays && !!vehicle && !!detail.customer;
+  // Bonzah: cover can be added up to and on the day a rental starts, never after.
+  const rentalStarted = bonzahRentalHasStarted(rental.start_date, tenant?.timezone);
+  const canBuy = sellable && isEligible && hasInsurableDays && !rentalStarted && !!vehicle && !!detail.customer;
 
   const blockedReason = !isBonzahConnected
     ? "Bonzah is not connected for this account. Connect it in Settings → Integrations."
@@ -295,7 +297,9 @@ export function StageInsurance({ detail, onStage, refetch }: StageProps) {
       ? (bonzahBlockedReason(tenant) ?? null)
       : !isEligible
         ? (ineligibleReason ?? "Bonzah does not write cover for this make and model.")
-        : !hasInsurableDays
+        : rentalStarted
+          ? "Bonzah insurance can be added before a rental starts or on the day it starts, but never after — this rental has already started. Upload the customer's own policy instead."
+          : !hasInsurableDays
           ? `Bonzah cannot backdate cover, and this rental ends on or before ${fmtDate(getBonzahToday())} — there are no days left to cover. Upload the customer's own policy instead.`
           : !vehicle
             ? "No car is on this rental, and a policy is written against one."

@@ -63,7 +63,7 @@ import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 import { calculateRentalPriceBreakdown, parseDateString as parseDateStringSafe } from "@/lib/calculate-rental-price";
 import { parseDateOnly } from "@/lib/date-utils";
 import { calcExtrasTotal } from "@/lib/calculate-extras-total";
-import { clampToBonzahStart } from "@/lib/bonzah-dates";
+import { clampToBonzahStart, bonzahRentalHasStarted } from "@/lib/bonzah-dates";
 import {
   vehiclePublicColumns,
   displayRegistration,
@@ -3497,14 +3497,15 @@ const MultiStepBookingWidget = ({
   useEffect(() => {
     const d = formData.pickupDate;
     const e = formData.dropoffDate;
-    const insurable = !!(d && e && e > clampToBonzahStart(d));
+    // Bonzah: cover can be added up to and on the day a rental starts, never after.
+    const insurable = !!(d && e && e > clampToBonzahStart(d)) && !bonzahRentalHasStarted(d, tenant?.timezone);
     const hasSelection =
       bonzahPremium > 0 || bonzahCoverage.cdw || bonzahCoverage.rcli || bonzahCoverage.sli || bonzahCoverage.pai;
     if (!insurable && hasSelection) {
       handleBonzahSkipInsurance();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.pickupDate, formData.dropoffDate, bonzahPremium, bonzahCoverage]);
+  }, [formData.pickupDate, formData.dropoffDate, bonzahPremium, bonzahCoverage, tenant?.timezone]);
 
   // Step 4: Customer Details
   const handleStep4Continue = async () => {
@@ -5396,6 +5397,17 @@ const MultiStepBookingWidget = ({
                 const e = formData.dropoffDate;
                 const effectiveStart = d ? clampToBonzahStart(d) : null;
                 const windowInsurable = !!(effectiveStart && e && e > effectiveStart);
+                if (bonzahRentalHasStarted(d, tenant?.timezone)) {
+                  return (
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs">
+                      <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                      <span>
+                        Bonzah insurance can be added before a rental starts or on the day it starts, but
+                        never after. Your pick-up date has passed, so please arrange coverage with the rental team.
+                      </span>
+                    </div>
+                  );
+                }
                 if (!windowInsurable) {
                   return (
                     <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs">

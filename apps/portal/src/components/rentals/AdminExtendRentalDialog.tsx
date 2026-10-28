@@ -34,6 +34,7 @@ import { useRentalSettings } from '@/hooks/use-rental-settings';
 import { type CoverageOptions } from '@/hooks/use-bonzah-premium';
 import { getActiveCoverageLabels } from '@/lib/coverage-labels';
 import { clampToBonzahStart } from '@/lib/bonzah-dates';
+import { useBonzahCoverEnd } from '@/hooks/use-bonzah-cover-end';
 import BonzahAvailabilityNotice from '@/components/rentals/bonzah-availability-notice';
 import { Checkbox } from '@/components/ui/checkbox';
 import BonzahInsuranceSelector from '@/components/rentals/bonzah-insurance-selector';
@@ -278,14 +279,17 @@ export function AdminExtendRentalDialog({
   const extensionStartForInsurance = clampToBonzahStart(rawInsuranceWindowStart);
   // Does the extension window contain any night Bonzah can insure? Ranges are
   // end-exclusive (matching the backend), so a same-day +1 extension has none.
-  const extensionBonzahInsurable = !!newEndDate && newEndDate.split('T')[0] > extensionStartForInsurance;
+  // Bonzah: an extension may only continue Bonzah cover that has not lapsed —
+  // insurance can never be added after a rental has started.
+  const bonzahCover = useBonzahCoverEnd(rental.id, tenant?.timezone, open);
+  const extensionBonzahInsurable = !!newEndDate && newEndDate.split('T')[0] > extensionStartForInsurance && !bonzahCover.lapsed;
   const insurancePremium = extensionInsuranceType === 'bonzah' && extensionBonzahInsurable && bonzahSellable ? bonzahPremiumAmount : 0;
 
   // Resolve the pickup state + renter details for the Bonzah extension quote.
   // Prefer the original policy (it carries the exact snapshot used at booking),
-  // but fall back to the customer record so extensions can still attach Bonzah
-  // when the base rental had NO Bonzah policy (e.g. the customer brought their
-  // own insurance originally, or the booking-time policy was never linked).
+  // but fall back to the customer record when the original policy row carries
+  // no renter snapshot. (A rental with no live Bonzah cover cannot buy Bonzah
+  // for an extension at all — see bonzahCover above.)
   const bonzahPickupState =
     (originalPolicy?.pickup_state as string) || (fullCustomer as any)?.address_state || 'FL';
 
@@ -752,8 +756,9 @@ export function AdminExtendRentalDialog({
       let insuranceWarning: string | null = null;
       const renterForQuote = (originalPolicy?.renter_details as any) || buildRenterFromCustomer();
       if (extensionInsuranceType === 'bonzah' && hasBonzahCoverage && !extensionBonzahInsurable) {
-        insuranceWarning =
-          'Bonzah cannot cover this extension — cover cannot be backdated, and this extension ends today or earlier. No insurance was purchased or charged.';
+        insuranceWarning = bonzahCover.lapsedReason
+          ? `${bonzahCover.lapsedReason} No insurance was purchased or charged.`
+          : 'Bonzah cannot cover this extension — cover cannot be backdated, and this extension ends today or earlier. No insurance was purchased or charged.';
       }
       if (extensionInsuranceType === 'bonzah' && hasBonzahCoverage && extensionBonzahInsurable && !renterForQuote) {
         insuranceWarning =
@@ -1313,7 +1318,15 @@ export function AdminExtendRentalDialog({
                         can't start today, LA time) — show the branded explainer
                         with the clock math and ways forward instead of quoting a
                         premium the purchase step would refuse. */}
-                    {extensionInsuranceType === 'bonzah' && !extensionBonzahInsurable && (
+                    {extensionInsuranceType === 'bonzah' && bonzahCover.lapsedReason && (
+                      <div className="ml-2 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 p-3 text-xs text-foreground space-y-2">
+                        <p>{bonzahCover.lapsedReason}</p>
+                        <button type="button" className="underline text-muted-foreground hover:text-foreground" onClick={() => setExtensionInsuranceType('own')}>
+                          Use the customer's own policy instead
+                        </button>
+                      </div>
+                    )}
+                    {extensionInsuranceType === 'bonzah' && !extensionBonzahInsurable && !bonzahCover.lapsed && (
                       <div className="ml-2">
                         <BonzahAvailabilityNotice
                           windowStart={rawInsuranceWindowStart}

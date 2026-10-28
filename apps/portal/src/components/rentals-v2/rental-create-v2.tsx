@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { addMonths, addDays, addWeeks, isAfter, isBefore, subYears, startOfDay, format, differenceInDays, parseISO } from "date-fns";
-import { clampToBonzahStart } from "@/lib/bonzah-dates";
+import { clampToBonzahStart, bonzahRentalHasStarted } from "@/lib/bonzah-dates";
 import BonzahAvailabilityNotice from "@/components/rentals/bonzah-availability-notice";
 import { resolveVehicleStatus } from "@/components/vehicles/vehicle-status-badge";
 import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
@@ -655,6 +655,15 @@ export const RentalCreateV2 = () => {
   const selectedVehicleId = form.watch("vehicle_id");
   const watchedStartDate = form.watch("start_date");
   const watchedEndDate = form.watch("end_date");
+  // Bonzah: cover can be added up to and on the day a rental starts, never after.
+  // A backdated rental gets no Bonzah selection, and any earlier pick is cleared
+  // so its premium is not charged to the customer.
+  const bonzahRentalStarted = !!watchedStartDate && bonzahRentalHasStarted(format(watchedStartDate, 'yyyy-MM-dd'), tenant?.timezone);
+  useEffect(() => {
+    if (!bonzahRentalStarted) return;
+    setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
+    setBonzahPremium(0);
+  }, [bonzahRentalStarted]);
   const watchedRentalPeriodType = form.watch("rental_period_type");
   const watchedMonthlyAmount = form.watch("monthly_amount");
   const watchedPickupLocation = form.watch("pickup_location");
@@ -2040,7 +2049,7 @@ export const RentalCreateV2 = () => {
       const hasBonzahCoverage = bonzahCoverage.cdw || bonzahCoverage.rcli || bonzahCoverage.sli || bonzahCoverage.pai;
       // `!skipInsurance` re-checked here: the selector is hidden when Bonzah can't
       // sell, so stale coverage state must never reach the quote/charge path.
-      if (!skipInsurance && hasBonzahCoverage && bonzahPremium > 0 && tenant?.id) {
+      if (!skipInsurance && hasBonzahCoverage && bonzahPremium > 0 && tenant?.id && !bonzahRentalStarted) {
         try {
           // Get customer details for the quote
           const customer = customerDetails;
@@ -5880,6 +5889,7 @@ export const RentalCreateV2 = () => {
                             {(() => {
                               const startStr = watchedStartDate ? format(watchedStartDate, 'yyyy-MM-dd') : null;
                               const endStr = watchedEndDate ? format(watchedEndDate, 'yyyy-MM-dd') : null;
+                              if (bonzahRentalStarted) return null;
                               const effectiveStart = startStr ? clampToBonzahStart(startStr) : null;
                               const warnings: string[] = [];
                               if (startStr && effectiveStart && startStr < effectiveStart) {
@@ -5910,6 +5920,13 @@ export const RentalCreateV2 = () => {
                               // Zero-night window after the LA clamp (e.g. a rental
                               // ending tomorrow booked today) — explain instead of
                               // rendering a selector whose quote must fail.
+                              if (bonzahRentalStarted) {
+                                return (
+                                  <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
+                                    Bonzah insurance can be added before a rental starts or on the day it starts, but never after. This rental's start date has passed, so upload the customer's own policy instead.
+                                  </p>
+                                );
+                              }
                               const clampedStart = watchedStartDate ? clampToBonzahStart(format(watchedStartDate, 'yyyy-MM-dd')) : null;
                               const endStr = watchedEndDate ? format(watchedEndDate, 'yyyy-MM-dd') : null;
                               if (clampedStart && endStr && endStr <= clampedStart) {

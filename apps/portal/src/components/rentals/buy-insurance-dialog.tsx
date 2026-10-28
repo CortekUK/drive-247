@@ -12,7 +12,8 @@ import { formatCurrency } from '@/lib/format-utils';
 import { getActiveCoverageLabels } from '@/lib/coverage-labels';
 import BonzahInsuranceSelector from '@/components/rentals/bonzah-insurance-selector';
 import { useBonzahBalance } from '@/hooks/use-bonzah-balance';
-import { clampToBonzahStart, getPacificToday } from '@/lib/bonzah-dates';
+import { clampToBonzahStart, getPacificToday, bonzahRentalHasStarted } from '@/lib/bonzah-dates';
+import { useBonzahCoverEnd } from '@/hooks/use-bonzah-cover-end';
 import BonzahAvailabilityNotice from '@/components/rentals/bonzah-availability-notice';
 import { Button } from '@/components/ui/button';
 import {
@@ -118,9 +119,8 @@ export function BuyInsuranceDialog({
   }, [open, rental.customers?.id]);
 
   // Compute trip dates once — used by both the selector and the purchase handler.
-  // Starts in the past clamp to Pacific-TOMORROW (not local today): Bonzah can't
-  // start a policy today, and bonzah-create-quote clamps the same way — so the
-  // preview prices exactly the window the purchase will actually cover.
+  // Starts in the past clamp to Bonzah-today (Eastern), as bonzah-create-quote
+  // does — so the preview prices exactly the window the purchase will cover.
   // PAYG rentals have a null end_date (open-ended); fall back to start+30d so this
   // dialog can still render without crashing even if it ever opens for a PAYG row.
   // (PAYG should not surface this dialog at all — guarded at the call site too.)
@@ -144,6 +144,18 @@ export function BuyInsuranceDialog({
   // purchase step will always refuse.
   const hasInsurableWindow = tripDates.start < tripDates.end;
 
+  // Bonzah's rule: "Insurance can never be added after the rental starts, but
+  // it can be added the same day as the rental starts." A first policy is
+  // refused once the start date has passed; an extension only continues Bonzah
+  // cover that has not lapsed. bonzah-create-quote enforces the same.
+  const { coverEnd, lapsedReason } = useBonzahCoverEnd(rental.id, tenant?.timezone, open && isExtension);
+  const bonzahBlockedReason: string | null = isExtension
+    ? lapsedReason
+    : bonzahRentalHasStarted(rental.start_date, tenant?.timezone)
+      ? "Bonzah insurance can be added before a rental starts or on the day it starts, but never after. This rental has already started."
+      : null;
+  const canBuyBonzah = hasInsurableWindow && !bonzahBlockedReason && !(isExtension && coverEnd === undefined);
+
   const hasCoverage = coverage.cdw || coverage.rcli || coverage.sli || coverage.pai;
 
   const handleCoverageChange = (newCoverage: CoverageOptions, newPremium: number) => {
@@ -165,7 +177,7 @@ export function BuyInsuranceDialog({
 
   const handlePurchase = async (forceDuplicate = false) => {
     if (!tenant?.id || !rental.customers?.id) return;
-    if (!hasInsurableWindow) return; // zero-night window — nothing Bonzah can sell
+    if (!canBuyBonzah) return; // zero-night window or Bonzah's never-after-start rule
 
     setPurchasing(true);
     try {
@@ -510,7 +522,17 @@ export function BuyInsuranceDialog({
                   </span>
                 </div>
 
-                {hasInsurableWindow ? (
+                {bonzahBlockedReason ? (
+                  <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 p-4 space-y-3">
+                    <p className="text-sm text-foreground">{bonzahBlockedReason}</p>
+                    <p className="text-xs text-muted-foreground">To keep a policy on file for this rental, upload the customer's own insurance instead.</p>
+                    {onUploadOwnPolicy && (
+                      <Button variant="outline" size="sm" onClick={onUploadOwnPolicy}>
+                        Upload own policy
+                      </Button>
+                    )}
+                  </div>
+                ) : hasInsurableWindow ? (
                   <BonzahInsuranceSelector
                     tripStartDate={tripDates.start}
                     tripEndDate={tripDates.end}
@@ -535,7 +557,7 @@ export function BuyInsuranceDialog({
                     Cancel
                   </Button>
                   <Button
-                    disabled={!hasInsurableWindow || !hasCoverage || premium <= 0}
+                    disabled={!canBuyBonzah || !hasCoverage || premium <= 0}
                     onClick={() => setStep(2)}
                   >
                     Continue

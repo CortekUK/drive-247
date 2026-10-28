@@ -31,10 +31,10 @@ export function getBonzahApiUrl(mode: 'test' | 'live'): string {
 // and confirm-payment re-quotes once if Bonzah still calls the start stale.
 const SAME_DAY_START_BUFFER_MIN = 15;
 
-function easternParts(at: Date): { date: string; time: string } {
+function zonedParts(at: Date, timeZone = 'America/New_York'): { date: string; time: string } {
   const p = Object.fromEntries(
     new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
+      timeZone,
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', hour12: false,
     }).formatToParts(at).map((x) => [x.type, x.value])
@@ -60,10 +60,19 @@ function easternParts(at: Date): { date: string; time: string } {
  * so every chunk is a whole number of days.
  */
 export function resolveBonzahTripStart(requestedStart: string): { date: string; time: string } {
-  const soon = easternParts(new Date(Date.now() + SAME_DAY_START_BUFFER_MIN * 60_000));
+  const soon = zonedParts(new Date(Date.now() + SAME_DAY_START_BUFFER_MIN * 60_000));
   const requested = String(requestedStart).slice(0, 10);
   if (requested > soon.date) return { date: requested, time: '15:00:00' };
   return soon;
+}
+
+/** Today's date (YYYY-MM-DD) in `timeZone` — the tenant's — or Eastern if unknown/invalid. */
+export function todayInZone(timeZone: string | null | undefined): string {
+  try {
+    return zonedParts(new Date(), timeZone || 'America/New_York').date;
+  } catch {
+    return zonedParts(new Date()).date;
+  }
 }
 
 /** Bonzah's rejection when trip_start_date is not in the (Eastern) future. */

@@ -8,6 +8,7 @@ import {
   formatDateForBonzah,
   normalizeZipForBonzah,
   resolveBonzahTripStart,
+  todayInZone,
   type CoverageTypes,
   type RenterDetails,
   type TenantBonzahCredentials,
@@ -320,6 +321,45 @@ serve(async (req) => {
       if (phoneDigits.length === 10) return `1${phoneDigits}`
       return phoneDigits || '10000000000'
     })()
+
+    // Bonzah's rule (Brandon Rockow, 2026-10-28): "Insurance can never be added
+    // after the rental starts, but it can be added the same day as the rental
+    // starts." Same day means the rental's own calendar day, so it is judged on
+    // the tenant's clock. An extension continues existing cover, and Bonzah's
+    // terms require it be bought before that cover lapses — otherwise it would
+    // be cover added to a rental that has already started.
+    const [{ data: startRental }, { data: startTenant }] = await Promise.all([
+      supabase.from('rentals').select('start_date').eq('id', body.rental_id).maybeSingle(),
+      supabase.from('tenants').select('timezone').eq('id', body.tenant_id).maybeSingle(),
+    ])
+    const tenantToday = todayInZone(startTenant?.timezone)
+    if (body.policy_type === 'extension') {
+      const { data: cover } = await supabase
+        .from('bonzah_insurance_policies')
+        .select('trip_end_date')
+        .eq('rental_id', body.rental_id)
+        .in('status', ['active', 'payment_confirmed'])
+        .order('trip_end_date', { ascending: false })
+        .limit(1)
+      const coverEnd = cover?.[0]?.trip_end_date ? String(cover[0].trip_end_date).slice(0, 10) : null
+      if (!coverEnd || coverEnd < tenantToday) {
+        return errorResponse(
+          coverEnd
+            ? `Bonzah cover on this rental ended on ${coverEnd}. Bonzah only sells an extension before the current policy runs out, and insurance can never be added after a rental has started. Upload the customer's own policy instead.`
+            : `This rental has no Bonzah policy to extend, and Bonzah insurance can never be added after a rental has started. Upload the customer's own policy instead.`,
+          400
+        )
+      }
+    } else {
+      // The rental's own start date, not the caller's — callers clamp it to today.
+      const rentalStart = String(startRental?.start_date ?? body.trip_dates.start).slice(0, 10)
+      if (rentalStart < tenantToday) {
+        return errorResponse(
+          `Bonzah insurance can be added before a rental starts or on the day it starts, but never after. This rental started on ${rentalStart}. Upload the customer's own policy instead.`,
+          400
+        )
+      }
+    }
 
     // Same-day cover is allowed: a start today or earlier begins shortly after
     // now on Bonzah's (Eastern) clock. See resolveBonzahTripStart.

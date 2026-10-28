@@ -40,6 +40,30 @@ export function getBonzahToday(): string {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
+/** Today's date (YYYY-MM-DD) in `timeZone` (the tenant's), or Eastern if unknown/invalid. */
+export function getTodayInZone(timeZone?: string | null): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: timeZone || 'America/New_York' }).format(new Date());
+  } catch {
+    return getBonzahToday();
+  }
+}
+
+/**
+ * Bonzah's rule (Brandon Rockow, 2026-10-28): "Insurance can never be added
+ * after the rental starts, but it can be added the same day as the rental
+ * starts." Same day is the rental's own calendar day, judged on the tenant's
+ * clock. Mirrors the guard in bonzah-create-quote. Applies to a rental's first
+ * policy; an extension may only continue cover that has not yet lapsed.
+ */
+export function bonzahRentalHasStarted(
+  rentalStart: string | null | undefined,
+  timeZone?: string | null
+): boolean {
+  if (!rentalStart) return false;
+  return String(rentalStart).slice(0, 10) < getTodayInZone(timeZone);
+}
+
 /**
  * Tomorrow's date (YYYY-MM-DD) in America/Los_Angeles. Calendar arithmetic on
  * the Pacific date parts, not now+24h: adding fixed milliseconds drifts on the
