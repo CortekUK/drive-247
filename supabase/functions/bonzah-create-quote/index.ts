@@ -7,8 +7,10 @@ import {
   isBonzahAuthError,
   formatDateForBonzah,
   normalizeZipForBonzah,
-  resolveBonzahTripStart,
+  resolveBonzahWindow,
   todayInZone,
+  zonedInstant,
+  MIN_MINUTES_BEFORE_PICKUP,
   type CoverageTypes,
   type RenterDetails,
   type TenantBonzahCredentials,
@@ -163,7 +165,7 @@ async function createSingleQuote(
   pdfIds: Record<string, string>
 }> {
   // Same time for both start and end ensures exact day intervals. tripTime
-  // comes from resolveBonzahTripStart (now + buffer for a same-day start).
+  // comes from resolveBonzahWindow (the rental's pickup time, in Eastern).
   const quoteRequest: Record<string, unknown> = {
     ...commonFields,
     trip_start_date: `${formatDateForBonzah(chunk.start)} ${tripTime}`,
@@ -329,10 +331,12 @@ serve(async (req) => {
     // terms require it be bought before that cover lapses — otherwise it would
     // be cover added to a rental that has already started.
     const [{ data: startRental }, { data: startTenant }] = await Promise.all([
-      supabase.from('rentals').select('start_date').eq('id', body.rental_id).maybeSingle(),
+      supabase.from('rentals').select('start_date, pickup_time').eq('id', body.rental_id).maybeSingle(),
       supabase.from('tenants').select('timezone').eq('id', body.tenant_id).maybeSingle(),
     ])
-    const tenantToday = todayInZone(startTenant?.timezone)
+    const tenantZone = startTenant?.timezone || 'America/New_York'
+    const tenantToday = todayInZone(tenantZone)
+    const pickupTime: string | null = startRental?.pickup_time ?? null
     if (body.policy_type === 'extension') {
       const { data: cover } = await supabase
         .from('bonzah_insurance_policies')
@@ -359,17 +363,34 @@ serve(async (req) => {
           400
         )
       }
+      // The policy must be in force before pickup. A same-day start lands a few
+      // minutes after purchase, so require MIN_MINUTES_BEFORE_PICKUP of notice.
+      if (pickupTime) {
+        let pickupAt: Date | null = null
+        try { pickupAt = zonedInstant(rentalStart, pickupTime, tenantZone) } catch { pickupAt = null }
+        if (pickupAt && pickupAt.getTime() < Date.now() + MIN_MINUTES_BEFORE_PICKUP * 60_000) {
+          return errorResponse(
+            `Bonzah cover has to be bought at least ${MIN_MINUTES_BEFORE_PICKUP} minutes before pickup, so the policy is in place before the rental starts. This rental's pickup is ${rentalStart} at ${pickupTime.slice(0, 5)}. Move the pickup time later, or upload the customer's own policy instead.`,
+            400
+          )
+        }
+      }
     }
 
-    // Same-day cover is allowed: a start today or earlier begins shortly after
-    // now on Bonzah's (Eastern) clock. See resolveBonzahTripStart.
-    const resolvedStart = resolveBonzahTripStart(body.trip_dates.start)
-    const tripStart = resolvedStart.date
-    const tripTime = resolvedStart.time
-    console.log(`[Bonzah Quote] input start: ${body.trip_dates.start}, sending: ${tripStart} ${tripTime}`)
+    // Cover starts at the rental's pickup time (converted to Bonzah's Eastern
+    // clock) and ends at the same time on the end date. See resolveBonzahWindow.
+    const policyWindow = resolveBonzahWindow({
+      start: body.trip_dates.start,
+      end: body.trip_dates.end,
+      pickupTime,
+      timeZone: tenantZone,
+    })
+    const tripStart = policyWindow.startDate
+    const tripTime = policyWindow.time
+    console.log(`[Bonzah Quote] input ${body.trip_dates.start}→${body.trip_dates.end} pickup ${pickupTime ?? '-'} (${tenantZone}), sending: ${tripStart} ${tripTime} → ${policyWindow.endDate}`)
 
     // Ensure end date is not before start date (in case start was bumped)
-    const tripEnd = body.trip_dates.end <= tripStart ? tripStart : body.trip_dates.end
+    const tripEnd = policyWindow.endDate <= tripStart ? tripStart : policyWindow.endDate
 
     // Split into 30-day chunks (Bonzah max policy duration)
     const chunks = splitDateRange(tripStart, tripEnd)

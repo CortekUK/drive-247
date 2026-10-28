@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
-import { bonzahFetchWithCredentials, getTenantBonzahCredentials, getBonzahTokenForCredentials, getBonzahApiUrl, formatDateForBonzah, normalizeZipForBonzah, resolveBonzahTripStart, isBonzahStartDateError, type TenantBonzahCredentials } from '../_shared/bonzah-client.ts'
+import { bonzahFetchWithCredentials, getTenantBonzahCredentials, getBonzahTokenForCredentials, getBonzahApiUrl, formatDateForBonzah, normalizeZipForBonzah, resolveBonzahWindow, isBonzahStartDateError, type TenantBonzahCredentials } from '../_shared/bonzah-client.ts'
 import { corsHeaders, handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { sendResendEmail, getTenantBranding, wrapWithBrandedTemplate } from '../_shared/resend-service.ts'
 
@@ -72,6 +72,7 @@ interface SinglePolicyResult {
  * Uses the renter_details, coverage_types, and trip dates stored in the policy record.
  */
 async function recoverPaymentId(
+  supabase: any,
   policyRecord: any,
   credentials: TenantBonzahCredentials
 ): Promise<{ paymentId: string; quoteId: string } | null> {
@@ -104,12 +105,21 @@ async function recoverPaymentId(
 
   console.log('[Bonzah Payment] Recovery using state:', residenceStateFull, 'zip:', zip, 'street:', street)
 
-  // Same-day cover is allowed; a start today or earlier begins shortly after
-  // now on Bonzah's (Eastern) clock. See resolveBonzahTripStart.
-  const resolvedStart = resolveBonzahTripStart(policyRecord.trip_start_date)
-  const recoveryStart = resolvedStart.date
-  const recoveryEnd = policyRecord.trip_end_date <= recoveryStart ? recoveryStart : policyRecord.trip_end_date
-  const tripTime = resolvedStart.time
+  // Same window rule as bonzah-create-quote: cover starts at the rental's
+  // pickup time (Eastern), or shortly after now when that is too close.
+  const [{ data: rentalRow }, { data: tenantRow }] = await Promise.all([
+    supabase.from('rentals').select('pickup_time').eq('id', policyRecord.rental_id).maybeSingle(),
+    supabase.from('tenants').select('timezone').eq('id', policyRecord.tenant_id).maybeSingle(),
+  ])
+  const policyWindow = resolveBonzahWindow({
+    start: policyRecord.trip_start_date,
+    end: policyRecord.trip_end_date,
+    pickupTime: rentalRow?.pickup_time ?? null,
+    timeZone: tenantRow?.timezone ?? null,
+  })
+  const recoveryStart = policyWindow.startDate
+  const recoveryEnd = policyWindow.endDate <= recoveryStart ? recoveryStart : policyWindow.endDate
+  const tripTime = policyWindow.time
 
   const quoteRequest: Record<string, unknown> = {
     product_id: PRODUCT_ID,
@@ -196,7 +206,7 @@ async function processSinglePayment(
   let paymentId = policyRecord.payment_id
   if (!paymentId) {
     console.warn(`[Bonzah Payment] No payment_id for ${recordId} - attempting recovery...`)
-    const recovered = await recoverPaymentId(policyRecord, credentials)
+    const recovered = await recoverPaymentId(supabase, policyRecord, credentials)
     if (!recovered) {
       await supabase
         .from('bonzah_insurance_policies')
@@ -240,7 +250,7 @@ async function processSinglePayment(
   // fresh start (same dates, so same premium) and pay that instead, once.
   if (paymentResponse.status !== 0 && isBonzahStartDateError(paymentResponse.txt)) {
     console.warn(`[Bonzah Payment] Start time went stale for ${recordId}, re-quoting: ${paymentResponse.txt}`)
-    const requoted = await recoverPaymentId(policyRecord, credentials)
+    const requoted = await recoverPaymentId(supabase, policyRecord, credentials)
     if (requoted) {
       paymentId = requoted.paymentId
       await supabase

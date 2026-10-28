@@ -70,7 +70,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { formatCurrency as formatCurrencyUtil, getCurrencySymbol } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { getActiveCoverageLabels } from "@/lib/coverage-labels";
-import { bonzahCanInsureThrough, bonzahRentalHasStarted } from "@/lib/bonzah-dates";
+import { bonzahCanInsureThrough, bonzahRentalHasStarted, bonzahOriginalBlockedReason } from "@/lib/bonzah-dates";
 import { extractFunctionError } from "@/lib/edge-error";
 import { formatVerificationProvider } from "@/lib/verification-provider";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
@@ -2288,11 +2288,14 @@ const RentalDetail = () => {
     if (!endStr) return true; // no date yet → don't block
     return bonzahCanInsureThrough(endStr);
   })();
-  // Bonzah: cover can be added up to and on the day a rental starts, never after.
+  // Bonzah: never after the start day, and at least 30 minutes before pickup so
+  // the policy is in force before the car leaves.
   const bonzahRentalStarted = bonzahRentalHasStarted((rental as any)?.start_date, tenant?.timezone);
-  const bonzahCanAddOriginal = bonzahHasInsurableDays && !bonzahRentalStarted;
-  const bonzahOriginalBlockedText = bonzahRentalStarted
-    ? "Bonzah insurance can be added before a rental starts or on the day it starts, but never after — this rental has already started. Use Upload to attach the customer's own policy."
+  // (Not "bonzahBlockedReason": that name is the imported sellability helper.)
+  const bonzahOriginalBlock = bonzahOriginalBlockedReason((rental as any)?.start_date, (rental as any)?.pickup_time, tenant?.timezone);
+  const bonzahCanAddOriginal = bonzahHasInsurableDays && !bonzahOriginalBlock;
+  const bonzahOriginalBlockedText = bonzahOriginalBlock
+    ? `${bonzahOriginalBlock} Use Upload to attach the customer's own policy.`
     : "Bonzah must be added before the trip's last day — this rental's final day is today, so there are no upcoming days left to cover.";
 
   // Inline upload helper — used by both scopes. Stamps extension_id when provided.
@@ -6245,7 +6248,7 @@ const RentalDetail = () => {
                     }}
                   >
                     <ShieldCheck className="h-4 w-4 mr-1.5" />
-                    {isBonzahEligibilityLoading ? 'Checking...' : !isBonzahEligible ? 'Not Eligible' : bonzahRentalStarted ? 'Rental Started' : !bonzahHasInsurableDays ? 'No Days Left' : 'Get Insurance'}
+                    {isBonzahEligibilityLoading ? 'Checking...' : !isBonzahEligible ? 'Not Eligible' : bonzahRentalStarted ? 'Rental Started' : bonzahOriginalBlock ? 'Pickup Too Soon' : !bonzahHasInsurableDays ? 'No Days Left' : 'Get Insurance'}
                   </Button>
                 ) : (
                   <Button

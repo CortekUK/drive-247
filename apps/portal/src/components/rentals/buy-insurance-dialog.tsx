@@ -12,7 +12,7 @@ import { formatCurrency } from '@/lib/format-utils';
 import { getActiveCoverageLabels } from '@/lib/coverage-labels';
 import BonzahInsuranceSelector from '@/components/rentals/bonzah-insurance-selector';
 import { useBonzahBalance } from '@/hooks/use-bonzah-balance';
-import { clampToBonzahStart, getPacificToday, bonzahRentalHasStarted } from '@/lib/bonzah-dates';
+import { clampToBonzahStart, getPacificToday, bonzahOriginalBlockedReason } from '@/lib/bonzah-dates';
 import { useBonzahCoverEnd } from '@/hooks/use-bonzah-cover-end';
 import BonzahAvailabilityNotice from '@/components/rentals/bonzah-availability-notice';
 import { Button } from '@/components/ui/button';
@@ -42,6 +42,8 @@ interface BuyInsuranceDialogProps {
     id: string;
     start_date: string;
     end_date: string | null;
+    /** HH:MM[:SS] in the tenant's timezone; enables the 30-minute-before-pickup check. */
+    pickup_time?: string | null;
     customer_id?: string;
     customers: { id: string; name: string; email?: string; phone?: string | null };
     vehicles: { id: string; reg: string; make: string; model: string };
@@ -151,9 +153,7 @@ export function BuyInsuranceDialog({
   const { coverEnd, lapsedReason } = useBonzahCoverEnd(rental.id, tenant?.timezone, open && isExtension);
   const bonzahBlockedReason: string | null = isExtension
     ? lapsedReason
-    : bonzahRentalHasStarted(rental.start_date, tenant?.timezone)
-      ? "Bonzah insurance can be added before a rental starts or on the day it starts, but never after. This rental has already started."
-      : null;
+    : bonzahOriginalBlockedReason(rental.start_date, rental.pickup_time, tenant?.timezone);
   const canBuyBonzah = hasInsurableWindow && !bonzahBlockedReason && !(isExtension && coverEnd === undefined);
 
   const hasCoverage = coverage.cdw || coverage.rcli || coverage.sli || coverage.pai;

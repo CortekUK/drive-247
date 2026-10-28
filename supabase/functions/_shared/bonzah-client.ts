@@ -66,6 +66,62 @@ export function resolveBonzahTripStart(requestedStart: string): { date: string; 
   return soon;
 }
 
+/**
+ * Minutes a first policy must be bought before pickup. Cover has to be in
+ * force before the rental starts or it is void, and a same-day start lands
+ * SAME_DAY_START_BUFFER_MIN after purchase — so a booking made a minute
+ * before pickup would begin uninsured (Moore Luxe, 2026-10-28).
+ */
+export const MIN_MINUTES_BEFORE_PICKUP = 30;
+
+/** The instant of wall-clock `date` (YYYY-MM-DD) + `time` (HH:MM[:SS]) in `timeZone`. */
+export function zonedInstant(date: string, time: string, timeZone: string): Date {
+  const [y, m, d] = String(date).slice(0, 10).split('-').map(Number);
+  const [hh, mm] = String(time).split(':').map(Number);
+  const wall = Date.UTC(y, m - 1, d, hh, mm);
+  const offsetAt = (t: number) => {
+    const p = zonedParts(new Date(t), timeZone);
+    const [py, pm, pd] = p.date.split('-').map(Number);
+    const [ph, pmin] = p.time.split(':').map(Number);
+    return Date.UTC(py, pm - 1, pd, ph, pmin) - t;
+  };
+  // Two passes so a DST change between the guess and the answer settles.
+  const first = wall - offsetAt(wall);
+  return new Date(wall - offsetAt(first));
+}
+
+/**
+ * The policy window to send Bonzah, as Eastern wall-clock values.
+ *
+ * With the rental's pickup time, cover starts exactly at pickup and ends at the
+ * same local time on `end` — whole days, in force before the car leaves. (A
+ * fixed 15:00 Eastern start left a 9am pickup uninsured until 3pm.) Without a
+ * pickup time, or when it is already too close to move the start there, it
+ * falls back to resolveBonzahTripStart.
+ */
+export function resolveBonzahWindow(opts: {
+  start: string;
+  end: string;
+  pickupTime?: string | null;
+  timeZone?: string | null;
+}): { startDate: string; time: string; endDate: string } {
+  if (opts.pickupTime) {
+    try {
+      const tz = opts.timeZone || 'America/New_York';
+      const startAt = zonedInstant(opts.start, opts.pickupTime, tz);
+      if (startAt.getTime() >= Date.now() + SAME_DAY_START_BUFFER_MIN * 60_000) {
+        const s = zonedParts(startAt);
+        const e = zonedParts(zonedInstant(opts.end, opts.pickupTime, tz));
+        return { startDate: s.date, time: s.time, endDate: e.date };
+      }
+    } catch {
+      // bad pickup time or zone — fall through to the date-only rule
+    }
+  }
+  const r = resolveBonzahTripStart(opts.start);
+  return { startDate: r.date, time: r.time, endDate: String(opts.end).slice(0, 10) };
+}
+
 /** Today's date (YYYY-MM-DD) in `timeZone` — the tenant's — or Eastern if unknown/invalid. */
 export function todayInZone(timeZone: string | null | undefined): string {
   try {
