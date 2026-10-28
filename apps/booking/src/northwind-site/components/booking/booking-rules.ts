@@ -115,7 +115,9 @@ export function deriveBookingRules(tenant: Tenant | null): BookingRules {
         ? tenant.monthly_tier_days
         : DEFAULT_MONTHLY_TIER_DAYS,
     operatorTimezone: tenant?.timezone ?? FALLBACK_TIMEZONE,
-    timeSlots: buildTimeSlots({ enforceWorkingHours, open, close }),
+    // Quarter hours (:00 / :15 / :30 / :45) — the booking flow and the vehicle
+    // page both offer every slot in here, so they must share the one step.
+    timeSlots: buildTimeSlots({ enforceWorkingHours, open, close, stepMinutes: 15 }),
     workingHours: enforceWorkingHours && open && close ? { open, close } : null,
     bufferMinutes: tenant?.buffer_time_minutes ?? 0,
     installmentsEnabled: tenant?.installments_enabled === true,

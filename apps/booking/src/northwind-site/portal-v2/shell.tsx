@@ -56,7 +56,7 @@ import { useCustomerRentals } from '@nw/hooks/use-customer-rentals';
 import { useTenantBranding } from '@nw/hooks/use-tenant-branding';
 import { supabase } from '@nw/integrations/supabase/client';
 import { cn } from '@nw/lib/utils';
-import { QuickBookProvider, QuickBookTrigger } from '@nw/site-v2/quick-book/quick-book-dialog';
+import { QuickBookTrigger } from '@nw/site-v2/quick-book/quick-book-dialog';
 import { V2_BUTTON_PRIMARY } from '@portal-v2-shared/button-styles';
 import { PageSearchProvider, usePageSearchSlot } from '@portal-v2-shared/page-search-slot';
 import { SearchField } from '@portal-v2-shared/search-field';
@@ -295,7 +295,6 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
     <PortalThemeContext.Provider value={{ theme, setTheme }}>
     <Tooltip.Provider delayDuration={300}>
       <CustomerTraxProvider>
-      <QuickBookProvider>
       {/* The one payment path, for every Pay button in the portal. */}
       <PayProvider>
         <div
@@ -369,7 +368,6 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
           <CustomerTraxPanel />
         </div>
       </PayProvider>
-      </QuickBookProvider>
       </CustomerTraxProvider>
     </Tooltip.Provider>
     </PortalThemeContext.Provider>

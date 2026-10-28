@@ -314,7 +314,7 @@ function PaidBookingNotice({ handoff }: { handoff: PaidBookingHandoff }) {
 /* ───────────────────────────────── states ───────────────────────────── */
 
 /** The loading state, laid out like the page it precedes so nothing jumps. */
-function BookingPageSkeleton() {
+export function BookingPageSkeleton() {
   const bar = "bg-pv-muted";
   return (
     <div className={cn(SITE_CONTAINER, "pb-32 pt-6 md:pt-8 lg:pb-16")}>

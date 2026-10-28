@@ -29,7 +29,7 @@ import { MOTION_ANCHORED } from '@nw/components/ui/motion';
 import { useTenant } from '@nw/contexts/TenantContext';
 import { useCustomer } from '@nw/hooks/use-customer';
 import { SITE_EDGE } from '@nw/site-v2/kit';
-import { QuickBookProvider, QuickBookTrigger } from '@nw/site-v2/quick-book/quick-book-dialog';
+import { QuickBookTrigger } from '@nw/site-v2/quick-book/quick-book-dialog';
 import type { PageSections } from '@nw/lib/cms/types';
 import { NAV_LINKS } from '@nw/lib/constants';
 
@@ -87,17 +87,17 @@ export function SiteV2Shell({
     ? [...ordered.slice(0, -1), { href: '/blog', label: 'Blog' }, ordered[ordered.length - 1]]
     : ordered;
 
+  // "Book a car" opens /booking, a page of its own: no QuickBookProvider here,
+  // so QuickBookTrigger renders its plain link.
   return (
-    <QuickBookProvider>
-      <div
-        className={cn('pv2 flex min-h-dvh flex-col overflow-x-clip', fontClass)}
-        style={(brandVars ?? undefined) as React.CSSProperties | undefined}
-      >
-        <SiteHeader links={links} tenantName={tenantName} tenantLogoUrl={tenantLogoUrl} siteSettings={siteSettings} />
-        <main className="pv2-enter flex-1">{children}</main>
-        {footer}
-      </div>
-    </QuickBookProvider>
+    <div
+      className={cn('pv2 flex min-h-dvh flex-col overflow-x-clip', fontClass)}
+      style={(brandVars ?? undefined) as React.CSSProperties | undefined}
+    >
+      <SiteHeader links={links} tenantName={tenantName} tenantLogoUrl={tenantLogoUrl} siteSettings={siteSettings} />
+      <main className="pv2-enter flex-1">{children}</main>
+      {footer}
+    </div>
   );
 }
 
