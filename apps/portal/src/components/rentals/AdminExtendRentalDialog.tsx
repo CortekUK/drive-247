@@ -265,9 +265,10 @@ export function AdminExtendRentalDialog({
 
   const hasBonzahCoverage = extensionInsuranceType === 'bonzah' && bonzahSellable && (extensionCoverage.cdw || extensionCoverage.rcli || extensionCoverage.sli || extensionCoverage.pai);
   // Insurance is quoted for the window Bonzah will actually SELL: policies can
-  // only start tomorrow (Pacific) or later — bonzah-create-quote clamps the trip
-  // start and rejects the request when nothing insurable remains. So the quote
-  // start is the later of the rental's existing end date and Pacific-tomorrow.
+  // start no earlier than today (Bonzah's Eastern clock) — bonzah-create-quote
+  // moves an earlier start up to now and rejects the request when nothing
+  // insurable remains. So the quote start is the later of the rental's existing
+  // end date and Bonzah-today.
   // (We previously quoted from the raw end date so insurance days matched
   // rental-charge days, but that billed customers for nights Bonzah can never
   // insure — paid premiums with no policy behind them; reported by GoNiko.)
@@ -752,7 +753,7 @@ export function AdminExtendRentalDialog({
       const renterForQuote = (originalPolicy?.renter_details as any) || buildRenterFromCustomer();
       if (extensionInsuranceType === 'bonzah' && hasBonzahCoverage && !extensionBonzahInsurable) {
         insuranceWarning =
-          'Bonzah cannot cover this extension — policies start tomorrow (Pacific) at the earliest, and this extension ends before then. No insurance was purchased or charged.';
+          'Bonzah cannot cover this extension — cover cannot be backdated, and this extension ends today or earlier. No insurance was purchased or charged.';
       }
       if (extensionInsuranceType === 'bonzah' && hasBonzahCoverage && extensionBonzahInsurable && !renterForQuote) {
         insuranceWarning =

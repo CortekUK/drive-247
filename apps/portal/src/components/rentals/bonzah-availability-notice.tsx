@@ -3,15 +3,15 @@
 // Friendly explainer shown when Bonzah cannot insure (part of) a requested
 // window. Replaces the old raw red error: Bonzah's earliest-start rule is a
 // vendor policy, not a system fault, so we show the math — the viewer's clock,
-// the business clock, and Bonzah's Los Angeles clock — plus the concrete ways
-// forward. Bonzah decides "today" strictly in America/Los_Angeles, which is
-// why a staffer in Manila or Chicago can be a full calendar day ahead of the
-// clock that actually matters.
+// the business clock, and Bonzah's clock — plus the concrete ways forward.
+// Bonzah sells same-day cover but cannot backdate: a policy starts no earlier
+// than now on US Eastern time, which is why a staffer in Manila can be a full
+// calendar day ahead of the clock that actually matters.
 
 import { Upload, CalendarClock, ShieldCheck, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTenant } from '@/contexts/TenantContext';
-import { getPacificTomorrow, clampToBonzahStart } from '@/lib/bonzah-dates';
+import { getBonzahToday, clampToBonzahStart } from '@/lib/bonzah-dates';
 
 interface BonzahAvailabilityNoticeProps {
   /** Requested coverage window start (YYYY-MM-DD) — e.g. the extension's first day. */
@@ -69,7 +69,7 @@ export function BonzahAvailabilityNotice({
   const now = new Date();
   const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const tenantZone = (tenant as any)?.timezone as string | undefined;
-  const earliestStart = getPacificTomorrow();
+  const earliestStart = getBonzahToday();
   const insurableStart = clampToBonzahStart(windowStart);
   const hasInsurableNights = !!windowEnd && windowEnd > insurableStart;
 
@@ -83,10 +83,10 @@ export function BonzahAvailabilityNotice({
       </div>
 
       <p className="text-xs text-muted-foreground leading-relaxed">
-        Bonzah never starts a policy on the day it's purchased — coverage can begin the{' '}
-        <strong className="text-foreground">next day at the earliest</strong>, and Bonzah counts
-        days on <strong className="text-foreground">Los Angeles time</strong>, regardless of your
-        or the business's timezone.
+        Bonzah can start cover the same day it's purchased, but never before the moment of
+        purchase — <strong className="text-foreground">days already past cannot be covered</strong>, and
+        Bonzah counts days on <strong className="text-foreground">US Eastern time</strong>, regardless of
+        your or the business's timezone.
       </p>
 
       {/* The three clocks — same instant, three calendars */}
@@ -102,8 +102,8 @@ export function BonzahAvailabilityNotice({
           </div>
         )}
         <div className="flex items-center justify-between px-3 py-1.5">
-          <span className="text-muted-foreground">Bonzah time (Los Angeles)</span>
-          <span className="font-medium tabular-nums text-foreground">{formatClock(now, 'America/Los_Angeles')}</span>
+          <span className="text-muted-foreground">Bonzah time (US Eastern)</span>
+          <span className="font-medium tabular-nums text-foreground">{formatClock(now, 'America/New_York')}</span>
         </div>
       </div>
 

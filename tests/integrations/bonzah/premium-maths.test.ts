@@ -532,8 +532,8 @@ describe("bonzah/premium-maths — 30-day chunking is premium-neutral", () => {
 
   it("returns no chunks at all for a window that collapsed to a single day", () => {
     // This is what the "must be added before the trip's last day" 400 in
-    // bonzah-create-quote is guarding: after the Pacific-tomorrow clamp, a
-    // rental ending today or tomorrow has no insurable window left. Zero chunks
+    // bonzah-create-quote is guarding: after a past start is moved up to now, a
+    // rental ending today or earlier has no insurable window left. Zero chunks
     // means zero policies, and without the guard the function would answer 200
     // with a null policy id — a success for something that never happened.
     expect(

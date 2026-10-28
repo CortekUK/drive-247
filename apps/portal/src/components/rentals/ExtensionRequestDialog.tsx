@@ -140,9 +140,9 @@ export function ExtensionRequestDialog({
   const isStaleRequest = requestedEndDate != null && requestedEndDate <= currentEndDate;
 
   // Insurance is quoted for the window Bonzah will actually SELL: policies can
-  // only start tomorrow (Pacific) or later — bonzah-create-quote clamps the
-  // trip start and rejects the request when nothing insurable remains. Ranges
-  // are end-exclusive, so a same-day +1 extension has no insurable nights.
+  // start no earlier than today (Bonzah's Eastern clock) — bonzah-create-quote
+  // moves an earlier start up to now and rejects the request when nothing
+  // insurable remains. Ranges are end-exclusive.
   const rawInsuranceWindowStart = snapshotEndDate.split('T')[0];
   const extensionStartForInsurance = clampToBonzahStart(rawInsuranceWindowStart);
   const requestBonzahInsurable =
@@ -516,7 +516,7 @@ export function ExtensionRequestDialog({
       let insuranceWarning: string | null = null;
       if (extensionInsuranceType === 'bonzah' && hasBonzahCoverage && !requestBonzahInsurable) {
         insuranceWarning =
-          'Bonzah cannot cover this extension — policies start tomorrow (Pacific) at the earliest, and this extension ends before then. No insurance was purchased or charged.';
+          'Bonzah cannot cover this extension — cover cannot be backdated, and this extension ends today or earlier. No insurance was purchased or charged.';
       }
       if (extensionInsuranceType === 'bonzah' && hasBonzahCoverage && requestBonzahInsurable && (!originalPolicy || !rental.previous_end_date)) {
         insuranceWarning =

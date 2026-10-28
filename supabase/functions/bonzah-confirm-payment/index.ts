@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
-import { bonzahFetchWithCredentials, getTenantBonzahCredentials, getBonzahTokenForCredentials, getBonzahApiUrl, formatDateForBonzah, normalizeZipForBonzah, type TenantBonzahCredentials } from '../_shared/bonzah-client.ts'
+import { bonzahFetchWithCredentials, getTenantBonzahCredentials, getBonzahTokenForCredentials, getBonzahApiUrl, formatDateForBonzah, normalizeZipForBonzah, resolveBonzahTripStart, isBonzahStartDateError, type TenantBonzahCredentials } from '../_shared/bonzah-client.ts'
 import { corsHeaders, handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { sendResendEmail, getTenantBranding, wrapWithBrandedTemplate } from '../_shared/resend-service.ts'
 
@@ -24,40 +24,6 @@ const STATE_NAMES: Record<string, string> = {
 
 function getStateName(stateCode: string): string {
   return STATE_NAMES[stateCode.toUpperCase()] || stateCode
-}
-
-/**
- * Get current date and hour in Pacific timezone using formatToParts (locale-independent).
- */
-function getPacificNow(): { date: string; hour: number } {
-  const now = new Date()
-  const dateParts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(now)
-  const y = dateParts.find(p => p.type === 'year')!.value
-  const m = dateParts.find(p => p.type === 'month')!.value
-  const d = dateParts.find(p => p.type === 'day')!.value
-
-  const timeParts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles',
-    hour: 'numeric', hour12: false,
-  }).formatToParts(now)
-  const hour = parseInt(timeParts.find(p => p.type === 'hour')!.value, 10)
-
-  return { date: `${y}-${m}-${d}`, hour }
-}
-
-function getPacificTomorrow(): string {
-  const tomorrow = new Date(Date.now() + 86400000)
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(tomorrow)
-  const y = parts.find(p => p.type === 'year')!.value
-  const m = parts.find(p => p.type === 'month')!.value
-  const d = parts.find(p => p.type === 'day')!.value
-  return `${y}-${m}-${d}`
 }
 
 interface ConfirmPaymentRequest {
@@ -138,13 +104,12 @@ async function recoverPaymentId(
 
   console.log('[Bonzah Payment] Recovery using state:', residenceStateFull, 'zip:', zip, 'street:', street)
 
-  // Bonzah rejects same-day trip starts — minimum is tomorrow in Pacific timezone
-  const pacific = getPacificNow()
-  const pacificTomorrow = getPacificTomorrow()
-
-  const recoveryStart = policyRecord.trip_start_date <= pacific.date ? pacificTomorrow : policyRecord.trip_start_date
+  // Same-day cover is allowed; a start today or earlier begins shortly after
+  // now on Bonzah's (Eastern) clock. See resolveBonzahTripStart.
+  const resolvedStart = resolveBonzahTripStart(policyRecord.trip_start_date)
+  const recoveryStart = resolvedStart.date
   const recoveryEnd = policyRecord.trip_end_date <= recoveryStart ? recoveryStart : policyRecord.trip_end_date
-  const tripTime = '15:00:00'
+  const tripTime = resolvedStart.time
 
   const quoteRequest: Record<string, unknown> = {
     product_id: PRODUCT_ID,
@@ -259,14 +224,32 @@ async function processSinglePayment(
   const amount = String(policyRecord.premium_amount)
   console.log(`[Bonzah Payment] Processing payment for ${recordId}: payment_id=${paymentId}, amount=$${amount}`)
 
-  const paymentResponse = await bonzahFetchWithCredentials<BonzahPaymentResponse>(
+  const pay = (id: string) => bonzahFetchWithCredentials<BonzahPaymentResponse>(
     '/Bonzah/payment',
     {
-      payment_id: paymentId,
+      payment_id: id,
       amount: amount,
     },
     credentials
   )
+
+  let paymentResponse = await pay(paymentId)
+
+  // A same-day quote starts only minutes after it is made. If payment lands
+  // after that start, Bonzah calls the start date invalid — re-quote with a
+  // fresh start (same dates, so same premium) and pay that instead, once.
+  if (paymentResponse.status !== 0 && isBonzahStartDateError(paymentResponse.txt)) {
+    console.warn(`[Bonzah Payment] Start time went stale for ${recordId}, re-quoting: ${paymentResponse.txt}`)
+    const requoted = await recoverPaymentId(policyRecord, credentials)
+    if (requoted) {
+      paymentId = requoted.paymentId
+      await supabase
+        .from('bonzah_insurance_policies')
+        .update({ payment_id: paymentId, quote_id: requoted.quoteId })
+        .eq('id', recordId)
+      paymentResponse = await pay(paymentId)
+    }
+  }
 
   console.log(`[Bonzah Payment] Payment response for ${recordId}: status=${paymentResponse.status}`)
 

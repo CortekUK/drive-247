@@ -63,7 +63,7 @@ import { isBonzahSellable, bonzahBlockedReason } from "@/lib/bonzah";
 // tomorrow, Pacific. Every UI that gates a purchase has to mirror the clamp in
 // `bonzah-create-quote`, or it offers a premium the purchase step then refuses.
 // GoNiko was charged $26.95 for a policy that never existed exactly that way.
-import { bonzahCanInsureThrough, getPacificTomorrow } from "@/lib/bonzah-dates";
+import { bonzahCanInsureThrough, getBonzahToday } from "@/lib/bonzah-dates";
 import { getActiveCoverageLabels } from "@/lib/coverage-labels";
 import {
   useRentalInsurancePolicies,
@@ -296,7 +296,7 @@ export function StageInsurance({ detail, onStage, refetch }: StageProps) {
       : !isEligible
         ? (ineligibleReason ?? "Bonzah does not write cover for this make and model.")
         : !hasInsurableDays
-          ? `Bonzah cannot start a policy before ${fmtDate(getPacificTomorrow())}, and this rental ends on or before then — there are no days left to cover. Upload the customer's own policy instead.`
+          ? `Bonzah cannot backdate cover, and this rental ends on or before ${fmtDate(getBonzahToday())} — there are no days left to cover. Upload the customer's own policy instead.`
           : !vehicle
             ? "No car is on this rental, and a policy is written against one."
             : !detail.customer

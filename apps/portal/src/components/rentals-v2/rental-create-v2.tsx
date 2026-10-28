@@ -5883,7 +5883,7 @@ export const RentalCreateV2 = () => {
                               const effectiveStart = startStr ? clampToBonzahStart(startStr) : null;
                               const warnings: string[] = [];
                               if (startStr && effectiveStart && startStr < effectiveStart) {
-                                warnings.push(`Bonzah policies start tomorrow (Los Angeles time) at the earliest — coverage will begin ${new Date(effectiveStart + 'T00:00:00').toLocaleDateString('en-US')}, not ${new Date(startStr + 'T00:00:00').toLocaleDateString('en-US')}.`);
+                                warnings.push(`Bonzah cannot backdate cover — coverage will begin ${new Date(effectiveStart + 'T00:00:00').toLocaleDateString('en-US')}, not ${new Date(startStr + 'T00:00:00').toLocaleDateString('en-US')}.`);
                               }
                               if (effectiveStart && endStr) {
                                 const s = new Date(effectiveStart + 'T00:00:00');

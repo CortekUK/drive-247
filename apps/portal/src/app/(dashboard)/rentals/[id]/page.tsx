@@ -70,7 +70,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { formatCurrency as formatCurrencyUtil, getCurrencySymbol } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { getActiveCoverageLabels } from "@/lib/coverage-labels";
-import { getPacificTomorrow } from "@/lib/bonzah-dates";
+import { bonzahCanInsureThrough } from "@/lib/bonzah-dates";
 import { extractFunctionError } from "@/lib/edge-error";
 import { formatVerificationProvider } from "@/lib/verification-provider";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
@@ -2280,16 +2280,13 @@ const RentalDetail = () => {
   );
   const originalHasCoverage = originalBonzahActive || originalInsuranceDocs.length > 0;
 
-  // Does this rental still have any days Bonzah can insure?
-  // Bonzah refuses to insure today — a policy must start TOMORROW (Pacific) or later
-  // (mirrors the clamp in the bonzah-create-quote edge function). So a rental whose
-  // end date is today or earlier has zero insurable days left and Buy Bonzah would
-  // always error. We compute "tomorrow" in America/Los_Angeles to match the backend.
+  // Does this rental still have any days Bonzah can insure? A policy can start
+  // today (Bonzah's Eastern clock) at the earliest, so a rental whose end date is
+  // today or earlier has zero insurable days left and Buy Bonzah would always error.
   const bonzahHasInsurableDays = (() => {
     const endStr = (rental as any)?.end_date as string | undefined;
     if (!endStr) return true; // no date yet → don't block
-    // Insurable only if the trip ends strictly after tomorrow.
-    return String(endStr).slice(0, 10) > getPacificTomorrow();
+    return bonzahCanInsureThrough(endStr);
   })();
 
   // Inline upload helper — used by both scopes. Stamps extension_id when provided.

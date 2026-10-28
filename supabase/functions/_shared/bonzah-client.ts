@@ -26,6 +26,51 @@ export function getBonzahApiUrl(mode: 'test' | 'live'): string {
     : 'https://bonzah.sb.insillion.com/api/v1';
 }
 
+// Minutes of headroom between "now" and a same-day trip_start_date. Quote to
+// payment is near-instant in production (p98 3 min over 31 policies, Oct 2026),
+// and confirm-payment re-quotes once if Bonzah still calls the start stale.
+const SAME_DAY_START_BUFFER_MIN = 15;
+
+function easternParts(at: Date): { date: string; time: string } {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(at).map((x) => [x.type, x.value])
+  );
+  const hour = p.hour === '24' ? '00' : p.hour;
+  return { date: `${p.year}-${p.month}-${p.day}`, time: `${hour}:${p.minute}:00` };
+}
+
+/**
+ * The trip start to send Bonzah for a coverage window that should begin on
+ * `requestedStart` (YYYY-MM-DD).
+ *
+ * Bonzah DOES sell same-day cover. It validates trip_start_date against the
+ * current US Eastern wall clock, ignoring policy_booking_time_zone — probed on
+ * live 2026-10-28 at 07:57 PT: today 10:57 rejected ("Invalid Policy Start
+ * date"), today 10:59 accepted, with either time zone value. Earlier code sent
+ * a same-day start of Pacific-now + 2h, always in Eastern's past, concluded
+ * "same-day is blocked", and clamped every start to tomorrow — leaving the
+ * first day of every same-day rental uninsured.
+ *
+ * So: a start today (Eastern) or earlier begins shortly after now; a future
+ * start keeps the 15:00 convention. Callers use the same time for trip_end_date
+ * so every chunk is a whole number of days.
+ */
+export function resolveBonzahTripStart(requestedStart: string): { date: string; time: string } {
+  const soon = easternParts(new Date(Date.now() + SAME_DAY_START_BUFFER_MIN * 60_000));
+  const requested = String(requestedStart).slice(0, 10);
+  if (requested > soon.date) return { date: requested, time: '15:00:00' };
+  return soon;
+}
+
+/** Bonzah's rejection when trip_start_date is not in the (Eastern) future. */
+export function isBonzahStartDateError(message: string | null | undefined): boolean {
+  return /invalid policy start date/i.test(message || '');
+}
+
 /**
  * Tenant Bonzah credentials
  */

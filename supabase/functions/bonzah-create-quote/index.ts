@@ -7,6 +7,7 @@ import {
   isBonzahAuthError,
   formatDateForBonzah,
   normalizeZipForBonzah,
+  resolveBonzahTripStart,
   type CoverageTypes,
   type RenterDetails,
   type TenantBonzahCredentials,
@@ -70,42 +71,6 @@ function extractStateFromAddress(addr: string | null | undefined): string | null
   const trailing = s.match(/,\s*([A-Za-z]{2})\s*(?:,\s*(?:USA|United States))?\s*$/i)
   if (trailing && STATE_NAMES[trailing[1].toUpperCase()]) return trailing[1].toUpperCase()
   return null
-}
-
-/**
- * Get current date and hour in Pacific timezone using formatToParts (locale-independent).
- * Returns { date: 'YYYY-MM-DD', hour: number }
- */
-function getPacificNow(): { date: string; hour: number } {
-  const now = new Date()
-  const dateParts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(now)
-  const y = dateParts.find(p => p.type === 'year')!.value
-  const m = dateParts.find(p => p.type === 'month')!.value
-  const d = dateParts.find(p => p.type === 'day')!.value
-
-  const timeParts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles',
-    hour: 'numeric', hour12: false,
-  }).formatToParts(now)
-  const hour = parseInt(timeParts.find(p => p.type === 'hour')!.value, 10)
-
-  return { date: `${y}-${m}-${d}`, hour }
-}
-
-/** Get tomorrow's date in Pacific timezone as YYYY-MM-DD */
-function getPacificTomorrow(): string {
-  const tomorrow = new Date(Date.now() + 86400000)
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(tomorrow)
-  const y = parts.find(p => p.type === 'year')!.value
-  const m = parts.find(p => p.type === 'month')!.value
-  const d = parts.find(p => p.type === 'day')!.value
-  return `${y}-${m}-${d}`
 }
 
 interface CreateQuoteRequest {
@@ -189,17 +154,15 @@ async function createSingleQuote(
   body: CreateQuoteRequest,
   credentials: TenantBonzahCredentials,
   commonFields: Record<string, unknown>,
+  tripTime: string,
 ): Promise<{
   quoteId: string
   paymentId: string
   premium: number
   pdfIds: Record<string, string>
 }> {
-  // Bonzah validates the full datetime against America/Los_Angeles timezone.
-  // Same time for both start and end ensures exact day intervals.
-  // Start is always tomorrow+ (clamped upstream), so 15:00 is always safe.
-  const tripTime = '15:00:00'
-
+  // Same time for both start and end ensures exact day intervals. tripTime
+  // comes from resolveBonzahTripStart (now + buffer for a same-day start).
   const quoteRequest: Record<string, unknown> = {
     ...commonFields,
     trip_start_date: `${formatDateForBonzah(chunk.start)} ${tripTime}`,
@@ -358,14 +321,13 @@ serve(async (req) => {
       return phoneDigits || '10000000000'
     })()
 
-    // Bonzah rejects same-day trip starts — minimum start date is TOMORROW in Pacific timezone.
-    // Successful policies always have trip_start >= tomorrow; today's date gets rejected with
-    // "Invalid Policy Start date" even with a future time component.
-    const pacificNow = getPacificNow()
-    const pacificTomorrow = getPacificTomorrow()
-    console.log(`[Bonzah Quote] Pacific now: ${pacificNow.date}, tomorrow: ${pacificTomorrow}, input start: ${body.trip_dates.start}`)
+    // Same-day cover is allowed: a start today or earlier begins shortly after
+    // now on Bonzah's (Eastern) clock. See resolveBonzahTripStart.
+    const resolvedStart = resolveBonzahTripStart(body.trip_dates.start)
+    const tripStart = resolvedStart.date
+    const tripTime = resolvedStart.time
+    console.log(`[Bonzah Quote] input start: ${body.trip_dates.start}, sending: ${tripStart} ${tripTime}`)
 
-    const tripStart = body.trip_dates.start <= pacificNow.date ? pacificTomorrow : body.trip_dates.start
     // Ensure end date is not before start date (in case start was bumped)
     const tripEnd = body.trip_dates.end <= tripStart ? tripStart : body.trip_dates.end
 
@@ -373,9 +335,9 @@ serve(async (req) => {
     const chunks = splitDateRange(tripStart, tripEnd)
     console.log(`[Bonzah Quote] Date range ${tripStart} → ${tripEnd}: ${chunks.length} chunk(s)`)
 
-    // Guard: Bonzah won't insure today, so the start is clamped to tomorrow. If
-    // the rental has already ended (or ends today/tomorrow), that clamp collapses
-    // the window to a single day → zero chunks → no quote is ever created. Without
+    // Guard: a start in the past is moved up to now. If the rental has already
+    // ended (or ends today), that collapses the window to zero days → zero
+    // chunks → no quote is ever created. Without
     // this guard the function would fall through and return HTTP 200 with a null
     // policy_record_id, which the UI reads as "Quote created. Complete it from the
     // rental page" — a misleading success for something that never happened.
@@ -466,7 +428,7 @@ serve(async (req) => {
 
       let quoteResult
       try {
-        quoteResult = await createSingleQuote(chunk, body, credentials, commonFields)
+        quoteResult = await createSingleQuote(chunk, body, credentials, commonFields, tripTime)
       } catch (apiError) {
         console.error(`[Bonzah Quote] API call failed for chunk ${i + 1}/${chunks.length}:`, apiError)
         // If the first chunk fails, abort everything
@@ -481,7 +443,7 @@ serve(async (req) => {
             return errorResponse(errMsg, 502)
           }
           // Include sent dates in error for debugging
-          return errorResponse(`${errMsg} [sent: ${formatDateForBonzah(chunk.start)} 15:00:00, pacific_now: ${pacificNow.date}]`, 500)
+          return errorResponse(`${errMsg} [sent: ${formatDateForBonzah(chunk.start)} ${tripTime}]`, 500)
         }
         // If a subsequent chunk fails, we still have earlier quotes — log and break
         console.error(`[Bonzah Quote] Chunk ${i + 1} failed, ${i} policies created successfully`)

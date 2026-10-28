@@ -149,8 +149,8 @@ export function resolveCoverageGap(
 
   return {
     kind: "ending",
-    // Bonzah cannot start a policy before tomorrow (Pacific), so once cover ends
-    // today or tomorrow this is the last moment to buy contiguous cover.
+    // Extensions must be bought before the current cover lapses, so once cover
+    // ends today or tomorrow this is the last moment to buy contiguous cover.
     severity: coverEndsOn <= tomorrow ? "critical" : "warning",
     coverEndsOn,
     rentalEndsOn,
@@ -172,6 +172,6 @@ export function describeCoverageGap(gap: CoverageGap): string {
   return (
     `Insurance cover ends on ${gap.coverEndsOn}, but this rental runs to ${gap.rentalEndsOn} — ` +
     `${days} would be uninsured. Buy the extension's cover before ${gap.coverEndsOn}: ` +
-    `Bonzah cannot start a policy before tomorrow, and cover cannot be reinstated once it lapses.`
+    `Bonzah cannot backdate a policy, and cover cannot be reinstated once it lapses.`
   );
 }
