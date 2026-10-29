@@ -2107,6 +2107,10 @@ const CreateRental = () => {
       const hasBonzahCoverage = bonzahCoverage.cdw || bonzahCoverage.rcli || bonzahCoverage.sli || bonzahCoverage.pai;
       // `!skipInsurance` re-checked here: the selector is hidden when Bonzah can't
       // sell, so stale coverage state must never reach the quote/charge path.
+      // Set once Bonzah has a policy record for this rental (quote created). A
+      // record awaiting payment (e.g. low Bonzah balance) still counts: it can be
+      // activated later from the rental page, so its premium stays billed.
+      let bonzahQuoteCreated = false;
       if (!skipInsurance && hasBonzahCoverage && submitBonzahPremium > 0 && tenant?.id && !bonzahRentalStarted) {
         try {
           // Get customer details for the quote
@@ -2181,6 +2185,7 @@ const CreateRental = () => {
               // Step 2: Confirm payment to activate the policy
               const policyRecordId = quoteResult?.policy_record_id;
               if (policyRecordId) {
+                bonzahQuoteCreated = true;
                 const { data: confirmResult, error: confirmError } = await supabase.functions.invoke('bonzah-confirm-payment', {
                   body: {
                     policy_record_id: policyRecordId,
@@ -2237,6 +2242,26 @@ const CreateRental = () => {
           console.error('[Bonzah] Error creating quote:', bonzahError);
           // Non-fatal — rental is already created
         }
+      }
+
+      // No Bonzah policy record means nothing was bought, so nothing may be
+      // billed. Previously the rental kept insurance_status 'bonzah' and the
+      // premium still reached the invoice and ledger, so staff recorded payments
+      // for cover that did not exist (Moore Luxe R-359a67, 2026-10-29).
+      const bonzahNotBought = submitBonzahPremium > 0 && !bonzahQuoteCreated;
+      if (bonzahNotBought) {
+        const { error: insuranceResetError } = await supabase
+          .from('rentals')
+          .update({ insurance_status: 'pending', insurance_premium: null })
+          .eq('id', rental.id);
+        if (insuranceResetError) {
+          console.error('[Bonzah] Failed to clear insurance on rental:', insuranceResetError);
+        }
+        toast({
+          title: 'Bonzah insurance not added',
+          description: "No Bonzah policy was issued, so the insurance premium has not been charged. Buy cover from the rental page before pickup, or upload the customer's own policy.",
+          variant: 'destructive',
+        });
       }
 
       setCreationProgress(4); // Step 4: Configuring pricing & charges
@@ -2337,7 +2362,7 @@ const CreateRental = () => {
       const securityDeposit = isTakingDeposit
         ? (depositOverride !== null ? depositOverride : calculateSecurityDeposit(data.vehicle_id))
         : 0;
-      const insurancePremium = submitBonzahPremium > 0 ? submitBonzahPremium : 0;
+      const insurancePremium = submitBonzahPremium > 0 && !bonzahNotBought ? submitBonzahPremium : 0;
       // Per-day extras bill unit price × rental days; per-trip bill flat. PAYG (no
       // end date) has no fixed length, so per-day extras fall back to a single day.
       const extrasDays = data.end_date ? Math.max(1, differenceInDays(data.end_date, data.start_date)) : 1;
@@ -3702,6 +3727,11 @@ const CreateRental = () => {
                                                 vehicle.id,
                                                 format(start, 'yyyy-MM-dd'),
                                                 format(end, 'yyyy-MM-dd'),
+                                                undefined,
+                                                {
+                                                  pickupTime: form.getValues("pickup_time"),
+                                                  returnTime: form.getValues("return_time"),
+                                                },
                                               );
                                               if (result.hasConflicts) {
                                                 setVehicleChangeConflict(result);
