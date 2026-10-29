@@ -53,6 +53,9 @@ export const V2_BUILT_SEGMENTS: readonly string[] = [];
  * page at the normal address. '' is the home page; `portal` is the customer
  * portal (its folder is `portal-v2`, see V2_SEGMENT_FOLDERS). Only `admin`, a
  * v1 placeholder, still opens from v1.
+ *
+ * `template-2` is the booking site's second design ("Glass", Oct 29 2026) on a
+ * temporary preview link while it is built — see src/northwind-site/template-2.
  */
 export const V2_ONLY_SEGMENTS: readonly string[] = [
   '',
@@ -69,6 +72,7 @@ export const V2_ONLY_SEGMENTS: readonly string[] = [
   'register',
   'reviews',
   'signup',
+  'template-2',
   'terms',
 ];
 
