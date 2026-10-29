@@ -8137,16 +8137,25 @@ const RentalDetail = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Rental</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this rental?
-              <span className="block mt-2 text-red-600 font-medium">
-                This action cannot be undone. All associated data will be permanently removed.
-              </span>
+              {bonzahPolicy ? (
+                // delete_rental_cascade refuses this anyway; say so before the click.
+                <span className="block text-red-600 font-medium">
+                  This rental has a Bonzah insurance policy{bonzahPolicy.policy_no ? ` (${bonzahPolicy.policy_no})` : ""}, so it can't be deleted. Cancel or close the rental instead, so the policy stays on record.
+                </span>
+              ) : (
+                <>
+                  Are you sure you want to delete this rental?
+                  <span className="block mt-2 text-red-600 font-medium">
+                    This action cannot be undone. All associated data will be permanently removed.
+                  </span>
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={isDeleting}
+              disabled={isDeleting || !!bonzahPolicy}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={async (e) => {
                 e.preventDefault();
