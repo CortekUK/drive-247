@@ -555,15 +555,10 @@ export default function BonzahPanel({ tenant, onClose }: IntegrationPanelProps) 
       });
       setAlertOpen(false);
     } catch (err: unknown) {
-      // `reminder_config` carries a UNIQUE index on `config_key` ALONE, with no
-      // tenant in it, and one tenant already holds the `bonzah_low_balance`
-      // row — so the second operator on the platform to set a threshold gets a
-      // 23505 rather than a saved setting. Reported to the lead; naming it
-      // here beats "Failed to save", which would send someone hunting through
-      // their own input for a fault that is not there.
-      const message = (err as { code?: string; message?: string })?.code === "23505"
-        ? "Low-balance alerts can't be saved for this account yet — the platform stores one alert setting globally rather than one per operator. Your balance is still shown here, and we have flagged this."
-        : (err as { message?: string })?.message || "Could not save the alert.";
+      // `reminder_config` is unique per (tenant_id, config_key) since migration
+      // 20261029230000; before that the key was unique platform-wide and every
+      // operator after the first got a 23505 here.
+      const message = (err as { message?: string })?.message || "Could not save the alert.";
       toast({ title: "Alert not saved", description: message, variant: "destructive" });
     }
   };
