@@ -1271,6 +1271,13 @@
   .g2-step-num { font-size: min(380px, 44svh); }
 }
 
+/* No scrollbars on Template 2's inner scrollers (the car list, the questions,
+   the chat thread, the bill): the dark bar breaks the glass. They still
+   scroll by wheel, touch and keyboard, and each is cut mid-row so it reads
+   as more. The page's own scrollbar is on <html>, outside .g2, and stays. */
+.g2 * { scrollbar-width: none; }
+.g2 *::-webkit-scrollbar { display: none; }
+
 /* ── The car page (template-2/car-page.tsx) ──────────────────────────────
    site-v2's booking form, bill and checkout, re-tokened as glass. They draw
    with the portal-v2 colour tokens (bg-pv-card, border-pv-border, bg-pv-bg

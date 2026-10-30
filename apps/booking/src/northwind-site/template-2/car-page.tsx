@@ -124,7 +124,7 @@ export function Template2CarPage({ vehicleId }: { vehicleId: string }) {
           {/* Sticky, capped to the screen: the bill scrolls inside, the total and button never leave. */}
           <aside className="hidden lg:sticky lg:top-[96px] lg:flex lg:max-h-[calc(100svh-108px)] lg:flex-col lg:self-start">
             <div className="g2-glass flex min-h-0 flex-1 flex-col rounded-[36px] p-3">
-              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto [scrollbar-width:thin]">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
                 <Trip
                   pickupDate={form.pickupDate}
                   pickupTime={form.pickupTime}

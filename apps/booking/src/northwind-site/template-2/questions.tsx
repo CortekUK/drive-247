@@ -104,7 +104,7 @@ export function Template2Questions({ seed }: { seed: FaqItem[] | null }) {
           <div className="grid gap-3 lg:flex-1 lg:grid-cols-[400px_minmax(0,1fr)] lg:gap-4">
             {/* The questions. */}
             <div className="g2-well g2-tray relative rounded-[30px] p-2 max-lg:order-last lg:min-h-[420px]">
-              <ul aria-label="Questions" className="flex flex-col gap-1 lg:absolute lg:inset-2 lg:overflow-y-auto lg:[scrollbar-width:thin]">
+              <ul aria-label="Questions" className="flex flex-col gap-1 lg:absolute lg:inset-2 lg:overflow-y-auto">
                 {questions.map((item) => {
                   const now = item.id === latest;
                   return (
@@ -148,7 +148,7 @@ export function Template2Questions({ seed }: { seed: FaqItem[] | null }) {
                 </div>
               </div>
 
-              <div ref={scroller} role="log" aria-live="polite" className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-5 [scrollbar-width:thin] sm:px-6">
+              <div ref={scroller} role="log" aria-live="polite" className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-5 sm:px-6">
                 <p className="mx-auto mb-auto rounded-full bg-white/50 px-3 py-1 text-[12px] font-medium text-[var(--g2-ink-soft)]">
                   Questions people ask before they book
                 </p>

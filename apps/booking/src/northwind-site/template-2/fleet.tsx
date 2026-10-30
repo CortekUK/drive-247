@@ -348,7 +348,7 @@ function CarList({
         ref={scroller}
         role="group"
         aria-label="Cars"
-        className="flex snap-x snap-mandatory gap-1.5 overflow-x-auto [scrollbar-width:none] lg:absolute lg:inset-2 lg:block lg:snap-none lg:overflow-y-auto lg:overflow-x-hidden lg:[scrollbar-width:thin]"
+        className="flex snap-x snap-mandatory gap-1.5 overflow-x-auto [scrollbar-width:none] lg:absolute lg:inset-2 lg:block lg:snap-none lg:overflow-y-auto lg:overflow-x-hidden"
       >
         {groups.map(([kind, cars], index) => (
           <div key={kind} className={cn('contents lg:flex lg:flex-col lg:gap-1', index > 0 && 'lg:mt-3')}>
