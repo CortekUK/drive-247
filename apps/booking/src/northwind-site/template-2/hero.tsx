@@ -11,8 +11,9 @@
  *   the search along the foot — where, when, go — in one bar, with the
  *   return-place switch over it and what booking here gets you under it
  *
- * Behind it is a photograph, softly blurred (`.g2-studio`); the file is
- * public/template-2/backdrop.webp.
+ * Behind it is the site's photograph, fixed to the screen (the shell's
+ * `.g2-scene`); the file is public/template-2/backdrop.webp. The hero tints
+ * it with the car's colour through `useSceneColour`.
  *
  * On a phone the bar's cells stack inside the same pane.
  *
@@ -32,6 +33,7 @@ import { Popover, PopoverAnchor, PopoverContent } from '@nw/components/ui/popove
 import { sanitizeTripAddress, TRIP_INTENT_MAX_LENGTH, withTripIntent } from '@nw/lib/booking/trip-intent';
 import { cn } from '@nw/lib/utils';
 import { rgbCss, SILVER, useCarColours } from '@nw/template-2/car-colour';
+import { useSceneColour } from '@nw/template-2/shell';
 import { Showroom, type Direction, type ShowroomCar } from '@nw/template-2/showroom';
 
 export type Template2HeroProps = {
@@ -88,11 +90,14 @@ export function Template2Hero({ cars, fromDaily, currencyCode }: Template2HeroPr
     [index],
   );
 
-  const vibe = { '--g2-car': rgbCss(colours[index] ?? SILVER) } as React.CSSProperties;
+  const car = rgbCss(colours[index] ?? SILVER);
+  const setScene = useSceneColour();
+  useEffect(() => setScene(car), [car, setScene]);
+  useEffect(() => () => setScene(null), [setScene]);
+  const vibe = { '--g2-car': car } as React.CSSProperties;
 
   return (
-    <section aria-labelledby="g2-hero-title" style={vibe} className="g2-studio relative isolate min-h-svh overflow-hidden">
-      <span aria-hidden className="g2-vibe" />
+    <section aria-labelledby="g2-hero-title" style={vibe} className="g2-studio relative min-h-svh">
       <div className="relative mx-auto w-full max-w-[1320px] px-3 pb-6 pt-[84px] sm:px-5 sm:pt-[100px] lg:pb-8">
         <div
           style={delay(60)}
@@ -200,9 +205,10 @@ function TripConsole() {
 }
 
 function Segmented({ value, onChange }: { value: ReturnMode; onChange: (value: ReturnMode) => void }) {
-  const options: { value: ReturnMode; label: string }[] = [
-    { value: 'same', label: 'Return to same place' },
-    { value: 'different', label: 'Different return' },
+  // The short labels are for the narrowest phones, where the long ones are cut.
+  const options: { value: ReturnMode; label: string; short: string }[] = [
+    { value: 'same', label: 'Return to same place', short: 'Same place' },
+    { value: 'different', label: 'Different return', short: 'Somewhere else' },
   ];
   return (
     <div role="radiogroup" aria-label="Where you return the car" className="g2-well relative grid w-full max-w-[340px] grid-cols-2 rounded-full p-1">
@@ -227,7 +233,8 @@ function Segmented({ value, onChange }: { value: ReturnMode; onChange: (value: R
             FOCUS,
           )}
         >
-          {option.label}
+          <span className="min-[380px]:hidden">{option.short}</span>
+          <span className="max-[379px]:hidden">{option.label}</span>
         </button>
       ))}
     </div>

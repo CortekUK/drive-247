@@ -1005,36 +1005,41 @@
 .g2-cta:hover { background-color: var(--pv-primary-hover); transform: translateY(-1px); }
 .g2-cta:active { transform: translateY(0) scale(0.985); }
 
-/* The hero's backdrop: a photograph, chosen by hand. To change it, replace
+/* The backdrop: a photograph, chosen by hand. To change it, replace
    public/template-2/backdrop.webp (or point --g2-backdrop at another file).
-   It is drawn on ::before so it can be blurred a little without blurring the
-   tiles: the source is small (734px), and a light blur both hides that at
-   full width and suits glass, which frosts what it sits on anyway. */
-.g2-studio {
+   ONE layer for the whole site, fixed to the screen (template-2/shell.tsx):
+   the photograph stays still and the panes scroll over it, as glass slides
+   over a room. The photo is drawn on ::before so it can be blurred a little:
+   the source is small (734px), and a light blur both hides that at full
+   width and suits glass, which frosts what it sits on anyway. The car's
+   colour (.g2-vibe) lies between the photo and the wash. */
+.g2-scene {
   --g2-backdrop: url("/template-2/backdrop.webp");
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
   background: #dfe6ef;
+  transition: --g2-car 900ms cubic-bezier(.4, 0, .2, 1);
 }
-.g2-studio::before {
+.g2-scene::before {
   content: "";
   position: absolute;
   inset: -24px;
-  z-index: -1;
-  pointer-events: none;
   background: var(--g2-backdrop) center 60% / cover no-repeat;
   filter: blur(6px) saturate(110%);
 }
 /* A soft white wash at the top, so the nav and the headline stay crisp. */
-.g2-studio::after {
+.g2-scene::after {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: -1;
-  pointer-events: none;
   background: linear-gradient(180deg, rgb(255 255 255 / 0.3), rgb(255 255 255 / 0) 40%, rgb(255 255 255 / 0) 80%, rgb(255 255 255 / 0.15));
 }
 
-/* The scene takes on the colour of the car on stage (template-2/car-colour.ts
-   sets --g2-car on the hero). Registered as a colour so it eases from one
+/* The scene takes on the colour of the car on stage (car-colour.ts reads it;
+   the hero sets --g2-car on itself and, through the shell, on the scene). Registered as a colour so it eases from one
    car's paint to the next instead of jumping. */
 @property --g2-car {
   syntax: "<color>";
@@ -1057,7 +1062,6 @@
 .g2-vibe {
   position: absolute;
   inset: 0;
-  z-index: -1;
   pointer-events: none;
   background: var(--g2-car);
   mix-blend-mode: color;
@@ -1086,9 +1090,9 @@
 /* The name is sized to the stage: as big as it gets, but never wider than
    the stage, however long it is (--chars, set inline). */
 .g2-stage { container-type: inline-size; }
-.g2-car-name { font-size: min(176px, calc(140cqw / var(--chars, 8))); }
+.g2-car-name { font-size: min(176px, calc(118cqw / var(--chars, 8))); }
 @media (min-width: 1024px) and (max-height: 820px) {
-  .g2-car-name { font-size: min(132px, calc(140cqw / var(--chars, 8))); }
+  .g2-car-name { font-size: min(132px, calc(118cqw / var(--chars, 8))); }
 }
 /* The car's name behind it: deep paint at the top, gone by its foot, so the
    car stands on it the way the references have it. */
@@ -1213,14 +1217,113 @@
 @keyframes g2-rise { from { opacity: 0; transform: translateY(16px) scale(0.985); filter: blur(6px); } }
 .g2-rise { animation: g2-rise .8s cubic-bezier(.2, .7, .2, 1) var(--d, 0ms) backwards; }
 
+/* ── The home page's cars (template-2/fleet.tsx) ─────────────────────── */
+/* The picker's stage and list are wells to look at, not fields: they do not
+   light up when something inside them is focused (each control rings itself). */
+.g2-well.g2-tray:focus-within,
+.g2-well.g2-tray:hover {
+  background: rgb(255 255 255 / 0.48);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.85), inset 0 0 0 1px rgb(255 255 255 / 0.25);
+}
+
+/* A price rolling to another car's rate: each digit a column of 0–9, one em a step. */
+.g2-roll { display: inline-flex; align-items: flex-start; white-space: nowrap; line-height: 1; vertical-align: -0.08em; }
+.g2-roll > span { display: inline-block; height: 1em; line-height: 1; }
+.g2-roll-digit { overflow: hidden; }
+.g2-roll-digit > span {
+  display: flex;
+  flex-direction: column;
+  transition: transform 650ms cubic-bezier(.2, 1.1, .3, 1);
+}
+.g2-roll-digit > span > span { height: 1em; line-height: 1; }
+
+/* ── How renting works (template-2/how-it-works.tsx) ──────────────────────
+   The part of the rail behind you, in the brand colour. */
+.g2-rail-fill {
+  background: linear-gradient(90deg, color-mix(in oklab, var(--g2-accent) 45%, #fff), var(--g2-accent));
+  transition: width 650ms cubic-bezier(.3, 1.15, .4, 1);
+}
+/* The bead: a drop of glass on the chosen step, sliding to the next. */
+.g2-bead {
+  color: #fff;
+  background:
+    radial-gradient(120% 90% at 30% 18%, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0) 52%),
+    var(--g2-accent);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.7),
+    inset 0 -3px 6px color-mix(in oklab, var(--g2-accent) 55%, #050314 45%),
+    0 10px 22px -8px color-mix(in oklab, var(--g2-accent) 75%, #050314),
+    0 0 0 5px rgb(255 255 255 / 0.55);
+  transition: left 650ms cubic-bezier(.3, 1.15, .4, 1), opacity 200ms ease-out;
+}
+/* The chosen step's number, set huge and fading into the pane. */
+.g2-step-num {
+  font-size: clamp(200px, 30vw, 380px);
+  background: linear-gradient(180deg,
+    color-mix(in oklab, var(--g2-accent) 32%, transparent) 0%,
+    color-mix(in oklab, var(--g2-accent) 10%, transparent) 70%,
+    transparent 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+@media (min-width: 1024px) {
+  .g2-step-num { font-size: min(380px, 44svh); }
+}
+
+/* ── The car page (template-2/car-page.tsx) ──────────────────────────────
+   site-v2's booking form, bill and checkout, re-tokened as glass. They draw
+   with the portal-v2 colour tokens (bg-pv-card, border-pv-border, bg-pv-bg
+   for fields…), so inside .g2-skin those tokens become translucent white and
+   Template 2's ink: the same components, no second copy of the booking logic. */
+.g2-skin {
+  --pv-fg: var(--g2-ink);
+  --pv-muted-fg: var(--g2-ink-soft);
+  --pv-muted-on-tint: var(--g2-ink-soft);
+  --pv-card: rgb(255 255 255 / 0.5);
+  --pv-bg: rgb(255 255 255 / 0.78);
+  --pv-muted: rgb(255 255 255 / 0.55);
+  --pv-border: rgb(255 255 255 / 0.75);
+  --pv-tint: color-mix(in oklab, var(--g2-accent) 10%, rgb(255 255 255 / 0.7));
+  --pv-hover: color-mix(in oklab, var(--g2-accent) 10%, rgb(255 255 255 / 0.75));
+  --pv-row-hover: rgb(255 255 255 / 0.6);
+  --pv-link: var(--g2-accent-ink);
+}
+/* Its cards: the glass's own corner and top highlight, not the portal's 16px box. */
+.g2-skin .rounded-2xl.bg-pv-card {
+  border-radius: 24px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95);
+}
+/* The phone's pinned total: frosted like the navbar. */
+.g2-skin .fixed.bg-pv-card\/95 {
+  background: rgb(255 255 255 / 0.72);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
+}
+
+/* ── Questions (template-2/questions.tsx) ────────────────────────────────
+   A message lands: up from the foot of the thread, like iMessage. */
+@keyframes g2-msg-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } }
+.g2-msg-in { animation: g2-msg-in 360ms cubic-bezier(.2, .9, .3, 1.15) both; transform-origin: bottom; }
+/* The operator typing. */
+@keyframes g2-dot { 0%, 60%, 100% { opacity: 0.3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+.g2-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--g2-ink-soft);
+  animation: g2-dot 900ms ease-in-out infinite;
+}
+
 /* Without backdrop-filter the panes would be see-through: make them solid enough to read. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .g2-glass { background: color-mix(in oklab, var(--g2-accent) 10%, rgb(18 28 52 / 0.94)); }
   .g2-glass-thin { background: color-mix(in oklab, var(--g2-accent) 10%, rgb(24 36 64 / 0.95)); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .g2-rise, .g2-car-in, .g2-swap, .g2-swap-fade { animation: none !important; }
-  .g2-studio { transition: none; }
+  .g2-rise, .g2-car-in, .g2-swap, .g2-swap-fade, .g2-msg-in, .g2-dot { animation: none !important; }
+  .g2-studio, .g2-scene { transition: none; }
   .g2-car-body, .g2-car-shadow { transform: none !important; transition: none !important; }
   .g2-cta, .g2-well { transition: none; }
+  .g2-roll-digit > span, .g2-rail-fill, .g2-bead { transition: none; }
 }

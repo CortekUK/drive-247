@@ -13,11 +13,16 @@
  *
  * The nav floats over the hero's photograph at the top and keeps floating as
  * the page scrolls; it never becomes a bar.
+ *
+ * The photograph is ONE layer for the whole site, fixed to the screen
+ * (`.g2-scene`): it stays still and every pane scrolls over it. It takes on
+ * the colour of the car on the hero's stage, which the hero hands up through
+ * `useSceneColour`.
  */
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { ArrowUpRight, Menu, X } from 'lucide-react-nw';
 
 import { BrandMark } from '@nw/components/layout/brand-mark';
@@ -27,9 +32,14 @@ import type { PageSections } from '@nw/lib/cms/types';
 import { NAV_LINKS } from '@nw/lib/constants';
 import { cn } from '@nw/lib/utils';
 import { brandHslVars } from '@nw/portal-v2/brand';
+import { T2_HOME, t2Href } from '@nw/template-2/links';
 
-/** Where Template 2's home lives while it is previewed beside the first design. */
-export const T2_HOME = '/template-2';
+const SceneColour = createContext<(colour: string | null) => void>(() => {});
+
+/** Tint the fixed backdrop with a car's colour ("rgb(…)"); null for the plain photo. */
+export const useSceneColour = () => useContext(SceneColour);
+
+export { T2_HOME } from '@nw/template-2/links';
 
 /** The same order site-v2 uses: the cars, deals, what people say, who we are, how to reach us. */
 const NAV_ORDER = ['/fleet', '/promotions', '/reviews', '/about', '/contact'] as const;
@@ -41,15 +51,19 @@ export function Template2Shell({
   tenantName,
   tenantLogoUrl = null,
   siteSettings,
+  footer = null,
   children,
 }: {
   fontClass: string;
   tenantName: string | null;
   tenantLogoUrl?: string | null;
   siteSettings?: PageSections | null;
+  /** The footer (template-2/footer.tsx), a server component, so it comes in from the layout. */
+  footer?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const { tenant } = useTenant();
+  const [sceneColour, setSceneColour] = useState<string | null>(null);
   const brandVars = brandHslVars(tenant?.primary_color);
 
   // Popovers portal to <body>, outside the template: give <body> the same
@@ -66,17 +80,23 @@ export function Template2Shell({
     };
   }, [fontClass, brandVars?.['--brand-h'], brandVars?.['--brand-s'], brandVars?.['--brand-l']]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const links = NAV_ORDER.map((href) => NAV_LINKS.find((link) => link.href === href)).filter(
-    (link): link is (typeof NAV_LINKS)[number] => !!link,
-  );
+  const links = NAV_ORDER.map((href) => NAV_LINKS.find((link) => link.href === href))
+    .filter((link): link is (typeof NAV_LINKS)[number] => !!link)
+    .map((link) => ({ ...link, href: t2Href(link.href) }));
 
   return (
     <div
-      className={cn('pv2-tokens g2 flex min-h-dvh flex-col overflow-x-clip bg-[#ececf0]', fontClass)}
+      className={cn('pv2-tokens g2 relative isolate flex min-h-dvh flex-col overflow-x-clip bg-[#ececf0]', fontClass)}
       style={(brandVars ?? undefined) as React.CSSProperties | undefined}
     >
+      <div aria-hidden className="g2-scene" style={sceneColour ? ({ '--g2-car': sceneColour } as React.CSSProperties) : undefined}>
+        <span className="g2-vibe" />
+      </div>
       <GlassNav links={links} tenantName={tenantName} tenantLogoUrl={tenantLogoUrl} siteSettings={siteSettings} />
-      <main className="flex-1">{children}</main>
+      <SceneColour.Provider value={setSceneColour}>
+        <main className="flex-1">{children}</main>
+      </SceneColour.Provider>
+      {footer}
     </div>
   );
 }
@@ -130,13 +150,18 @@ function GlassNav({
           {/* The links sit in their own inset track, like an iOS segmented control. */}
           {/* Centred on the bar itself, not in the space left between the logo and the buttons. */}
           <div className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 lg:block">
-          <nav aria-label="Primary" className="g2-well flex items-center gap-0.5 rounded-full p-1">
+          <nav aria-label="Primary" className="g2-well g2-tray flex items-center gap-0.5 rounded-full p-1">
             {links.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
+                aria-current={pathname === link.href ? 'page' : undefined}
                 className={cn(
-                  'rounded-full px-4 py-2 text-[14px] font-medium tracking-[-0.01em] text-[var(--g2-ink-soft)] transition-colors duration-200 hover:bg-white/70 hover:text-[var(--g2-ink)]',
+                  'whitespace-nowrap rounded-full px-4 py-2 text-[14px] font-medium tracking-[-0.01em] transition-colors duration-200',
+                  // The page you are on: white, in the operator's colour. Hover: a wash of it.
+                  pathname === link.href
+                    ? 'bg-white font-semibold text-[var(--g2-accent-ink)] shadow-[0_6px_14px_-10px_color-mix(in_oklab,var(--g2-accent)_70%,transparent),inset_0_1px_0_#fff,inset_0_0_0_1px_color-mix(in_oklab,var(--g2-accent)_18%,transparent)]'
+                    : 'text-[var(--g2-ink-soft)] hover:bg-[color-mix(in_oklab,var(--g2-accent)_10%,rgb(255_255_255/0.7))] hover:text-[var(--g2-accent-ink)]',
                   FOCUS,
                 )}
               >
@@ -175,7 +200,14 @@ function GlassNav({
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={cn('rounded-2xl px-4 py-3.5 text-[16px] font-medium text-[var(--g2-ink)] hover:bg-white/60', FOCUS)}
+                  aria-current={pathname === link.href ? 'page' : undefined}
+                  className={cn(
+                    'rounded-2xl px-4 py-3.5 text-[16px] font-medium transition-colors duration-200',
+                    pathname === link.href
+                      ? 'bg-white font-semibold text-[var(--g2-accent-ink)] shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--g2-accent)_18%,transparent)]'
+                      : 'text-[var(--g2-ink)] hover:bg-[color-mix(in_oklab,var(--g2-accent)_10%,rgb(255_255_255/0.7))] hover:text-[var(--g2-accent-ink)]',
+                    FOCUS,
+                  )}
                 >
                   {link.label}
                 </Link>

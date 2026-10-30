@@ -22,9 +22,10 @@ import { Editable } from '@nw/lib/cms/editable';
 import type { FaqItem } from '@nw/lib/cms/types';
 import { cn } from '@nw/lib/utils';
 
-type Question = { id: string; question: string; answer: string; own: boolean; topic?: RegExp };
+export type Question = { id: string; question: string; answer: string; own: boolean; topic?: RegExp };
 
-const HOW_IT_WORKS: (Omit<Question, 'own'> & { topic: RegExp })[] = [
+/** Also Template 2's (template-2/questions.tsx): one list of the site's own answers. */
+export const HOW_IT_WORKS: (Omit<Question, 'own'> & { topic: RegExp })[] = [
   {
     id: 'site-need',
     topic: /what (do|will) i need|bring with|documents?|licen[cs]e/i,
@@ -68,7 +69,7 @@ const HOW_IT_WORKS: (Omit<Question, 'own'> & { topic: RegExp })[] = [
 ];
 
 /** "1. How old…" → "How old…": the row numbers itself. */
-const unnumbered = (text: string) => text.replace(/^\s*\d+[.)]\s*/, '');
+export const unnumbered = (text: string) => text.replace(/^\s*\d+[.)]\s*/, '');
 
 export function HomeFaqList({ seed }: { seed: FaqItem[] | null }) {
   const { faqs, isLoading } = useFaqs(seed);

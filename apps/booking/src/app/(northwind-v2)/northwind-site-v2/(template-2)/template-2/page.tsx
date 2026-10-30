@@ -1,13 +1,19 @@
 import { loadFleetSeed } from "@nw/components/fleet/fleet-seed";
 import { DEFAULT_HOME_HERO } from "@nw/lib/cms/defaults";
-import { getTenantSlug, loadSection } from "@nw/lib/cms/server";
+import { getTenantSlug, loadFaqs, loadSection } from "@nw/lib/cms/server";
 import type { HomeHeroContent } from "@nw/lib/cms/types";
+import { loadSiteNumbers } from "@nw/site-v2/sections/site-numbers";
+import { Template2Closing } from "@nw/template-2/closing";
+import { Template2Fleet } from "@nw/template-2/fleet";
 import { Template2Hero } from "@nw/template-2/hero";
+import { Template2HowItWorks } from "@nw/template-2/how-it-works";
+import { Template2Questions } from "@nw/template-2/questions";
 import type { ShowroomCar } from "@nw/template-2/showroom";
 
 /**
- * Template 2 ("Glass") — home. Built a section at a time; the hero first,
- * since it settles the template's design language for every section after it.
+ * Template 2 ("Glass") — home. Built a section at a time: the hero, which
+ * settles the template's design language, then the cars, how renting works
+ * and the questions people ask, then the close.
  */
 
 export const metadata = { title: "Template 2" };
@@ -60,18 +66,26 @@ function operatorCars(hero: HomeHeroContent): ShowroomCar[] {
 }
 
 export default async function Template2Home() {
-  const [seed, hero] = await Promise.all([
+  const [seed, hero, numbers, faqs] = await Promise.all([
     loadFleetSeed(await getTenantSlug()),
     loadSection("home", "home_hero", DEFAULT_HOME_HERO),
+    loadSiteNumbers(),
+    loadFaqs(),
   ]);
   const vehicles = seed?.vehicles ?? [];
   const dailyRents = vehicles.map((vehicle) => vehicle.dailyRent).filter((rent): rent is number => !!rent && rent > 0);
 
   return (
-    <Template2Hero
-      cars={operatorCars(hero)}
-      fromDaily={dailyRents.length ? Math.min(...dailyRents) : null}
-      currencyCode={seed?.currencyCode ?? null}
-    />
+    <>
+      <Template2Hero
+        cars={operatorCars(hero)}
+        fromDaily={dailyRents.length ? Math.min(...dailyRents) : null}
+        currencyCode={seed?.currencyCode ?? null}
+      />
+      <Template2Fleet seed={seed} />
+      <Template2HowItWorks numbers={numbers} />
+      <Template2Questions seed={faqs} />
+      <Template2Closing seed={seed} />
+    </>
   );
 }

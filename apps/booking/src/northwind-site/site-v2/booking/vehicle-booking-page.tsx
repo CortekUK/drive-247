@@ -249,7 +249,7 @@ function TripCard({
  * not say the booking is confirmed. Payment has been taken, the insurance
  * document is outstanding, and an operator still has to approve.
  */
-function PaidBookingNotice({ handoff }: { handoff: PaidBookingHandoff }) {
+export function PaidBookingNotice({ handoff }: { handoff: PaidBookingHandoff }) {
   const settled = handoff.kind === "succeeded";
   const href = settled && handoff.documentsToken !== null ? bookingDocumentsHref(handoff.documentsToken) : null;
 

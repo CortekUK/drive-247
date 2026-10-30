@@ -1,6 +1,7 @@
 import { Inter_Tight } from "next/font/google";
 
 import { loadPageSections, resolveTenant } from "@nw/lib/cms/server";
+import { Template2Footer } from "@nw/template-2/footer";
 import { Template2Shell } from "@nw/template-2/shell";
 
 /**
@@ -18,12 +19,14 @@ export const metadata = { robots: { index: false, follow: false } };
 
 export default async function Template2Layout({ children }: { children: React.ReactNode }) {
   const [siteSettings, tenant] = await Promise.all([loadPageSections("site-settings"), resolveTenant()]);
+  const tenantName = tenant?.app_name || tenant?.company_name || null;
   return (
     <Template2Shell
       fontClass={interTight.variable}
-      tenantName={tenant?.app_name || tenant?.company_name || null}
+      tenantName={tenantName}
       tenantLogoUrl={tenant?.logo_url?.trim() || null}
       siteSettings={siteSettings}
+      footer={<Template2Footer tenantName={tenantName} tenantLogoUrl={tenant?.logo_url?.trim() || null} siteSettings={siteSettings} />}
     >
       {children}
     </Template2Shell>
