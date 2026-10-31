@@ -23,9 +23,11 @@ import {
   Loader2,
   Plus,
   RotateCcw,
+  Trash2,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   buildPatch,
   draftFromPlan,
@@ -123,6 +125,8 @@ function parsePlan(raw: unknown): SignupPlan | null {
   };
 }
 
+const EMPTY_NEW_PLAN = { name: '', minVehicles: '', maxVehicles: '', tagline: '', price: '' };
+
 function sortPlans(plans: SignupPlan[]): SignupPlan[] {
   return [...plans].sort(
     (a, b) => a.sort_order - b.sort_order || a.plan_key.localeCompare(b.plan_key),
@@ -215,10 +219,14 @@ export default function SignupPlansPage() {
 
   const [pricePlanId, setPricePlanId] = useState<string | null>(null);
   const cancelPriceRef = useRef<HTMLButtonElement>(null);
+  const cancelDeleteRef = useRef<HTMLButtonElement>(null);
 
   /** The New plan dialog. */
   const [createOpen, setCreateOpen] = useState(false);
-  const [newPlan, setNewPlan] = useState({ name: '', price: '', maxVehicles: '' });
+  const [newPlan, setNewPlan] = useState(EMPTY_NEW_PLAN);
+
+  /** The plan waiting on the Delete confirmation. */
+  const [deletePlanId, setDeletePlanId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -254,6 +262,11 @@ export default function SignupPlansPage() {
   const visibleCount = useMemo(
     () => plans.filter((plan) => plan.is_visible).length,
     [plans],
+  );
+
+  const deletePlan = useMemo(
+    () => plans.find((plan) => plan.id === deletePlanId) ?? null,
+    [plans, deletePlanId],
   );
 
   const pricePlan = useMemo(
@@ -533,10 +546,23 @@ export default function SignupPlansPage() {
   };
 
   const newPrice = parsePriceToCents(newPlan.price);
+  const newMin = Number(newPlan.minVehicles);
   const newMax = Number(newPlan.maxVehicles);
   const newName = newPlan.name.trim();
+  const newTagline = newPlan.tagline.trim();
+  const newMaxOk = newPlan.maxVehicles !== '' && Number.isInteger(newMax) && newMax >= 1 && newMax <= 10000;
+  const newMinOk = newPlan.minVehicles !== '' && Number.isInteger(newMin) && newMin >= 1;
+  const newRangeError =
+    newMinOk && newMaxOk && newMin > newMax ? 'The first number of vehicles must not be above the last.' : null;
+  const newBand = newMin === newMax ? `${newMax} vehicle${newMax === 1 ? '' : 's'}` : `${newMin}–${newMax} vehicles`;
   const newValid =
-    newName.length >= 2 && newName.length <= 40 && newPrice.ok && Number.isInteger(newMax) && newMax >= 1 && newMax <= 10000;
+    newName.length >= 2 &&
+    newName.length <= 40 &&
+    newTagline.length <= 160 &&
+    newPrice.ok &&
+    newMinOk &&
+    newMaxOk &&
+    !newRangeError;
 
   /** A new card: Stripe price first, then the row. It arrives switched off. */
   const handleCreate = async () => {
@@ -544,7 +570,14 @@ export default function SignupPlansPage() {
     setPending('new:create');
     setStatus(`Creating ${newName}…`);
     const { data, failure } = await callPlansFn(
-      { action: 'create', name: newName, amount_cents: newPrice.cents, max_vehicles: newMax },
+      {
+        action: 'create',
+        name: newName,
+        amount_cents: newPrice.cents,
+        min_vehicles: newMin,
+        max_vehicles: newMax,
+        tagline: newTagline,
+      },
       `Could not create "${newName}".`,
     );
     setPending(null);
@@ -559,9 +592,54 @@ export default function SignupPlansPage() {
       setDrafts((current) => ({ ...current, [created.id]: draftFromPlan(created) }));
     }
     setCreateOpen(false);
-    setNewPlan({ name: '', price: '', maxVehicles: '' });
+    setNewPlan(EMPTY_NEW_PLAN);
     setStatus(`${newName} created. It is off until you switch it on.`);
     toast.success(`"${newName}" created — it stays off the pricing page until you switch it on.`);
+  };
+
+  /**
+   * Gone for good. Anyone already subscribed keeps being billed by Stripe; the
+   * server refuses the last visible plan and a plan with a signup in flight.
+   */
+  const handleConfirmDelete = async () => {
+    if (!deletePlan || busy) return;
+    const plan = deletePlan;
+
+    setPending(`${plan.id}:delete`);
+    setStatus(`Deleting ${plan.name}…`);
+
+    const { data, failure } = await callPlansFn(
+      { action: 'delete', id: plan.id, updated_at: plan.updated_at },
+      `Could not delete "${plan.name}".`,
+    );
+
+    if (failure) {
+      setDeletePlanId(null);
+      if (failure.code === 'STALE_WRITE' || failure.code === 'LAST_VISIBLE') {
+        handleFailure(plan, failure);
+      } else {
+        setStatus(`Could not delete ${plan.name}. ${failure.message}`);
+        toast.error(failure.message);
+      }
+      setPending(null);
+      return;
+    }
+
+    const next = parsePlanList(isRecord(data) ? data.plans : null);
+    setPlans((current) => (next.length > 0 ? next : current.filter((p) => p.id !== plan.id)));
+    // Every other card keeps whatever is half-typed on it.
+    setDrafts((current) => {
+      const rest = { ...current };
+      delete rest[plan.id];
+      return rest;
+    });
+
+    setStatus(`${plan.name} deleted.`);
+    toast.success(`"${plan.name}" deleted — it is off the pricing page.`, {
+      description: 'Anyone already subscribed to it keeps their plan and price.',
+    });
+    setPending(null);
+    setDeletePlanId(null);
   };
 
   /* ------------------------------- render -------------------------------- */
@@ -724,6 +802,7 @@ export default function SignupPlansPage() {
                   onToggleVisibility={(next) => void handleVisibility(plan, next)}
                   onToggleHighlight={(next) => void handleToggleHighlight(plan, next)}
                   onSaveTrial={(days) => void handleSaveTrial(plan, days)}
+                  onRequestDelete={() => setDeletePlanId(plan.id)}
                 />
               );
             })}
@@ -758,32 +837,61 @@ export default function SignupPlansPage() {
                 id="new-plan-name"
                 autoFocus
                 maxLength={40}
-                placeholder="e.g. Enterprise"
+                placeholder="e.g. Starter"
                 value={newPlan.name}
                 onChange={(e) => setNewPlan((p) => ({ ...p, name: e.target.value }))}
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="new-plan-price">Price per month ($)</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="new-plan-min">Vehicles</Label>
+              <div className="flex items-center gap-2">
                 <Input
-                  id="new-plan-price"
-                  inputMode="decimal"
-                  placeholder="399"
-                  value={newPlan.price}
-                  onChange={(e) => setNewPlan((p) => ({ ...p, price: e.target.value }))}
+                  id="new-plan-min"
+                  inputMode="numeric"
+                  placeholder="1"
+                  aria-label="From (vehicles)"
+                  value={newPlan.minVehicles}
+                  onChange={(e) => setNewPlan((p) => ({ ...p, minVehicles: e.target.value.replace(/\D/g, '') }))}
                 />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="new-plan-max">Max vehicles</Label>
+                <span className="shrink-0 text-sm text-muted-foreground">to</span>
                 <Input
                   id="new-plan-max"
                   inputMode="numeric"
-                  placeholder="80"
+                  placeholder="5"
+                  aria-label="To (vehicles), the most a signup can add"
                   value={newPlan.maxVehicles}
                   onChange={(e) => setNewPlan((p) => ({ ...p, maxVehicles: e.target.value.replace(/\D/g, '') }))}
                 />
               </div>
+              {newRangeError ? (
+                <p className="text-xs text-destructive">{newRangeError}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {newMinOk && newMaxOk ? `Shown as “${newBand}”. ` : ''}The last number is enforced at signup.
+                </p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="new-plan-tagline">Description</Label>
+              <Textarea
+                id="new-plan-tagline"
+                rows={2}
+                maxLength={160}
+                placeholder="e.g. For smaller independent operators"
+                value={newPlan.tagline}
+                onChange={(e) => setNewPlan((p) => ({ ...p, tagline: e.target.value }))}
+                className="resize-none"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="new-plan-price">Price per month ($)</Label>
+              <Input
+                id="new-plan-price"
+                inputMode="decimal"
+                placeholder="129"
+                value={newPlan.price}
+                onChange={(e) => setNewPlan((p) => ({ ...p, price: e.target.value }))}
+              />
             </div>
             {newPlan.price && !newPrice.ok && <p className="text-xs text-destructive">{newPrice.error}</p>}
             <DialogFooter>
@@ -796,6 +904,51 @@ export default function SignupPlansPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ------------------------------ Delete -------------------------------- */}
+      <Dialog
+        open={deletePlan !== null}
+        onOpenChange={(open) => {
+          if (!open && pending?.endsWith(':delete') !== true) setDeletePlanId(null);
+        }}
+      >
+        <DialogContent
+          className="max-w-md"
+          onOpenAutoFocus={(event) => {
+            // Cancel, not Delete, takes focus: a stray Enter must not delete.
+            event.preventDefault();
+            cancelDeleteRef.current?.focus();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Delete {deletePlan?.name || deletePlan?.plan_key}?</DialogTitle>
+            <DialogDescription>
+              {deletePlan &&
+                `${formatMoney(deletePlan.amount_cents, deletePlan.currency)}/${deletePlan.interval}${deletePlan.fleet_band ? ` · ${deletePlan.fleet_band}` : ''}`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+            <div className="space-y-1.5">
+              <p className="font-medium">This removes the plan for good.</p>
+              <p className="text-muted-foreground">
+                It leaves the pricing page and new customers can no longer pick it. Anyone already
+                subscribed keeps their plan and keeps being billed the same amount. To take it off
+                the page for now, turn it off instead.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button ref={cancelDeleteRef} variant="outline" disabled={busy} onClick={() => setDeletePlanId(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" disabled={busy} onClick={() => void handleConfirmDelete()}>
+              {pending?.endsWith(':delete') ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              {pending?.endsWith(':delete') ? 'Deleting…' : 'Delete plan'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -58,6 +58,7 @@ export interface SignupPlanEditableCardProps {
   onToggleVisibility: (next: boolean) => void;
   onToggleHighlight: (next: boolean) => void;
   onSaveTrial: (days: number) => void;
+  onRequestDelete: () => void;
 }
 
 export function SignupPlanEditableCard({
@@ -73,6 +74,7 @@ export function SignupPlanEditableCard({
   onToggleVisibility,
   onToggleHighlight,
   onSaveTrial,
+  onRequestDelete,
 }: SignupPlanEditableCardProps) {
   const errors = validateContent(draft);
   const invalid = hasContentErrors(errors);
@@ -150,6 +152,20 @@ export function SignupPlanEditableCard({
           >
             <Settings2 className="size-4" aria-hidden="true" />
           </button>
+          <button
+            type="button"
+            onClick={onRequestDelete}
+            disabled={busy}
+            aria-label={`Delete ${plan.name || plan.plan_key}`}
+            title="Delete plan"
+            className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-out hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none"
+          >
+            {pending === `${plan.id}:delete` ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Trash2 className="size-4" aria-hidden="true" />
+            )}
+          </button>
         </div>
 
         {/* Name */}
@@ -161,7 +177,7 @@ export function SignupPlanEditableCard({
           aria-label="Plan name"
           aria-invalid={Boolean(errors.name)}
           onChange={(e) => onDraftChange({ name: e.target.value })}
-          className={cn(INLINE, 'h-8 pr-[5.5rem] text-lg font-semibold tracking-tight text-foreground')}
+          className={cn(INLINE, 'h-8 pr-[7.5rem] text-lg font-semibold tracking-tight text-foreground')}
         />
         <FieldIssue>{errors.name}</FieldIssue>
 
