@@ -154,7 +154,7 @@ export function PlanCard({ plan, onSelect, offer }: PlanCardProps) {
           "dark:bg-indigo-500 dark:hover:bg-indigo-600"
         )}
       >
-        {trialDays > 0 ? "Start free trial" : "Subscribe"}{" "}
+        {trialDays > 0 ? `Start ${trialDays}-Day Free Trial` : "Subscribe"}{" "}
         <ArrowRight className="h-4 w-4" aria-hidden="true" />
       </Button>
 

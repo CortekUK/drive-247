@@ -224,6 +224,11 @@ verify_jwt = true
 [functions.onboarding-daily-digest]
 verify_jwt = false
 
+# Onboarding call 24h reminder — pg_cron with x-platform-secret, or a
+# super-admin JWT (Brian's "Send reminder"); checked in code.
+[functions.onboarding-call-reminder]
+verify_jwt = false
+
 # GHL is an external provider and cannot present a Supabase JWT. The handler
 # verifies the raw-body X-GHL-Signature with Ed25519 before parsing/persisting.
 [functions.ghl-strategy-call-webhook]

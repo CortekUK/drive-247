@@ -274,7 +274,7 @@ export function SignupPlanEditableCard({
           aria-hidden="true"
           className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-full bg-primary text-[13px] font-medium text-primary-foreground"
         >
-          {plan.trial_days > 0 ? 'Start free trial' : 'Subscribe'} <ArrowRight className="size-3.5" />
+          {plan.trial_days > 0 ? `Start ${plan.trial_days}-Day Free Trial` : 'Subscribe'} <ArrowRight className="size-3.5" />
         </div>
 
         {/* Bullets */}

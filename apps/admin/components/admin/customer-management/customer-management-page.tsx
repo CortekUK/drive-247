@@ -57,6 +57,7 @@ import { TestimonialsTab } from './testimonials-tab';
 import { CreatorRewardsTab } from './creator-rewards-tab';
 import { TenureRewardsTab } from './tenure-rewards-tab';
 import { CustomDomainTab } from './custom-domain-tab';
+import { OnboardingCallsTab } from './onboarding-calls-tab';
 import { ScopeCard } from './scope-card';
 import { CustomerHealthTab } from './customer-health-tab';
 import { LogRailLayout } from './log-rail';
@@ -64,11 +65,11 @@ import { SendLog } from './logs-table';
 import { PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 import { cn } from '@/lib/utils';
 
-type Section = AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory' | 'pausing' | 'testimonials' | 'rewards' | 'tenure' | 'domain' | 'health';
+type Section = AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory' | 'pausing' | 'testimonials' | 'rewards' | 'tenure' | 'domain' | 'health' | 'onboarding-calls';
 
 const SECTION_IDS = new Set<string>([
   'health', 'cancellations', 'retention', 'lifecycle', 'poll', 'marketing', 'webinars', 'milestones',
-  'abandoned', 'nps', 'newsletter', 'advisory', 'pausing', 'testimonials', 'rewards', 'tenure', 'domain',
+  'abandoned', 'nps', 'newsletter', 'advisory', 'pausing', 'testimonials', 'rewards', 'tenure', 'domain', 'onboarding-calls',
   ...AUTOMATIONS.map((a) => a.id),
 ]);
 
@@ -121,6 +122,7 @@ function CustomerManagementSections() {
       { id: 'cancellations', label: 'Cancellations' },
       { id: 'retention', label: 'Tiered retention offers' },
       { id: 'lifecycle', label: 'Lifecycle check-ins' },
+      { id: 'onboarding-calls', label: 'Onboarding calls' },
       { id: 'poll', label: 'Webinar Poll' },
       { id: 'marketing', label: 'Marketing Instructions Emails' },
       { id: 'webinars', label: 'Webinars' },
@@ -219,6 +221,9 @@ function CustomerManagementSections() {
   }
   if (tab === 'domain') {
     return <CustomDomainTab canEdit={canEdit} />;
+  }
+  if (tab === 'onboarding-calls') {
+    return <OnboardingCallsTab canEdit={canEdit} />;
   }
 
   if (loading) {
