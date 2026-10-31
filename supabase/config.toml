@@ -229,6 +229,11 @@ verify_jwt = false
 [functions.onboarding-call-reminder]
 verify_jwt = false
 
+# LeadConnector workflow webhook (Brian's calendar). No Supabase JWT; the
+# ?key= query parameter is checked against private.platform_config in code.
+[functions.onboarding-call-booked]
+verify_jwt = false
+
 # GHL is an external provider and cannot present a Supabase JWT. The handler
 # verifies the raw-body X-GHL-Signature with Ed25519 before parsing/persisting.
 [functions.ghl-strategy-call-webhook]

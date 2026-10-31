@@ -20,7 +20,7 @@
  * this card takes comes out of them — the same trade the banners above make.
  */
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight, CalendarCheck, CalendarDays, Check, ExternalLink, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -31,7 +31,7 @@ import { useAuth } from "@/stores/auth-store";
 import { getBookingBaseUrl } from "@/lib/booking-url";
 import { cn } from "@/lib/utils";
 import {
-  ONBOARDING_CALL_BOOKING_URL,
+  onboardingCallBookingUrl,
   useOnboardingCall,
   type OnboardingCallStep,
 } from "@/hooks/use-onboarding-call";
@@ -40,8 +40,23 @@ import { Eyebrow } from "./home/ui";
 export function OnboardingCallCard() {
   const { tenant } = useTenant();
   const { appUser } = useAuth();
-  const { state, mark } = useOnboardingCall();
   const [calendarOpen, setCalendarOpen] = useState(false);
+  // While the calendar is open, keep checking: LeadConnector reports the
+  // booking to `onboarding-call-booked` a few seconds after a slot is picked.
+  const { state, mark } = useOnboardingCall({ poll: calendarOpen });
+
+  // The booking landed while the calendar was open: close it and say so.
+  const wasBooked = useRef<boolean | null>(null);
+  const bookedNow = !!state?.callBookedAt;
+  useEffect(() => {
+    if (wasBooked.current === false && bookedNow && calendarOpen) {
+      setCalendarOpen(false);
+      toast.success("Your onboarding call is booked", {
+        description: "Three quick steps will make the 30 minutes count — they're on your home screen.",
+      });
+    }
+    if (state) wasBooked.current = bookedNow;
+  }, [bookedNow, calendarOpen, state]);
 
   // The owner's decision, not every staff login's.
   const isOwner = appUser?.role === "head_admin" || appUser?.role === "admin";
@@ -110,6 +125,11 @@ export function OnboardingCallCard() {
             <h2 className="mt-2 text-[18px] font-semibold leading-tight tracking-[-0.015em] text-[var(--pv-ink)]">
               {doneCount === steps.length ? "You're ready for your call" : "Before your call with Brian"}
             </h2>
+            {state.callScheduledFor && (
+              <p className="mt-1 text-[12px] font-medium text-[var(--pv-ink)]">
+                {formatCallTime(state.callScheduledFor, tenant?.timezone)}
+              </p>
+            )}
             <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--pv-ink-2)]">
               {doneCount === steps.length
                 ? "Brian can spend the 30 minutes showing you how everything works together."
@@ -155,6 +175,7 @@ export function OnboardingCallCard() {
       <BookingDialog
         open={calendarOpen}
         onOpenChange={setCalendarOpen}
+        bookingUrl={onboardingCallBookingUrl({ email: appUser?.email, name: appUser?.name })}
         booked={booked}
         saving={mark.isPending}
         onBooked={() =>
@@ -171,6 +192,23 @@ export function OnboardingCallCard() {
       />
     </section>
   );
+}
+
+/** "Wednesday, 4 November at 3:00 PM" in the tenant's timezone, else the browser's. */
+function formatCallTime(iso: string, timeZone: string | null | undefined): string {
+  const options: Intl.DateTimeFormatOptions = {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    hour: "numeric",
+    minute: "2-digit",
+  };
+  try {
+    return new Date(iso).toLocaleString(undefined, timeZone ? { ...options, timeZone } : options);
+  } catch {
+    // An unknown timezone name throws; fall back to the browser's own.
+    return new Date(iso).toLocaleString(undefined, options);
+  }
 }
 
 function ChecklistLink({
@@ -234,19 +272,23 @@ function ChecklistLink({
 }
 
 /**
- * Brian's live calendar, embedded. The widget sends both sides the invitation
- * and reminders itself; it does not tell the portal a slot was taken, so the
- * operator confirms with one click (and Brian can also record it from admin).
+ * Brian's live calendar, embedded and pre-filled with the operator's email.
+ * The widget sends both sides the invitation and reminders itself, and
+ * LeadConnector's workflow tells `onboarding-call-booked`, which marks the card
+ * booked; the card polls while this is open. "I've booked my call" stays as a
+ * fallback for a booking made under a different email.
  */
 function BookingDialog({
   open,
   onOpenChange,
+  bookingUrl,
   booked,
   saving,
   onBooked,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  bookingUrl: string;
   booked: boolean;
   saving: boolean;
   onBooked: () => void;
@@ -257,13 +299,14 @@ function BookingDialog({
         <DialogHeader className="px-6 pb-4 pt-6 text-left">
           <DialogTitle className="text-xl font-semibold tracking-tight">Book your free onboarding call</DialogTitle>
           <DialogDescription>
-            Pick a 30-minute slot with Brian. You&rsquo;ll both get a calendar invitation and reminders.
+            Pick a 30-minute slot with Brian. You&rsquo;ll both get a calendar invitation and reminders, and this
+            page updates as soon as you&rsquo;ve booked.
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-hidden border-y bg-muted/30">
           {open && (
             <iframe
-              src={ONBOARDING_CALL_BOOKING_URL}
+              src={bookingUrl}
               title="Brian's booking calendar"
               className="block h-[min(640px,65vh)] w-full border-0"
               loading="eager"
@@ -272,7 +315,7 @@ function BookingDialog({
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
           <a
-            href={ONBOARDING_CALL_BOOKING_URL}
+            href={bookingUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
@@ -285,7 +328,7 @@ function BookingDialog({
               Close
             </Button>
             {!booked && (
-              <Button className="h-9 gap-1.5 rounded-xl px-5" onClick={onBooked} disabled={saving}>
+              <Button variant="outline" className="h-9 gap-1.5 rounded-xl px-5" onClick={onBooked} disabled={saving}>
                 {saving ? <Loader2 className="size-4 animate-spin" /> : <CalendarCheck className="size-4" />}
                 I&rsquo;ve booked my call
               </Button>

@@ -10,8 +10,11 @@
  *   - who has not booked 24h after signing up — the people to reach out to;
  *   - who has booked, and whether they did the checklist before the call;
  *   - Mark call done, which takes the card off their home screen;
- *   - the 24h reminder email: see who is due and send it (onboarding-call-
- *     reminder), or send one tenant a reminder by hand.
+ *   - the 24h reminder email (onboarding-call-reminder): pg_cron sends it
+ *     hourly; here you can see who is due, send now, or remind one tenant;
+ *   - calendar bookings: LeadConnector reports each booking, cancellation and
+ *     attendance to onboarding-call-booked, which updates the row by itself.
+ *     A booking it could not match to a tenant is listed here to place by hand.
  *
  * V1 tenants never appear: onboarding_call_eligible() only covers V2.
  */
@@ -45,6 +48,7 @@ interface Row {
   trial_end: string | null;
   call_booked_at: string | null;
   call_booked_via: string | null;
+  call_scheduled_for: string | null;
   call_completed_at: string | null;
   site_previewed_at: string | null;
   dismissed_at: string | null;
@@ -68,6 +72,16 @@ const STAGE: Record<Stage, { label: string; cls: string }> = {
   booked: { label: 'Booked', cls: 'text-indigo-700 dark:text-indigo-400' },
   done: { label: 'Call done', cls: 'text-green-700 dark:text-green-400' },
 };
+
+interface CalendarEvent {
+  id: string;
+  received_at: string;
+  email: string | null;
+  name: string | null;
+  status: string | null;
+  starts_at: string | null;
+  outcome: string;
+}
 
 const fmtWhen = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -95,6 +109,7 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
   const [due, setDue] = useState<{ due: { slug: string; email: string }[]; skipped: { slug: string; reason: string }[] } | null>(null);
   const [notesFor, setNotesFor] = useState<Row | null>(null);
   const [notes, setNotes] = useState('');
+  const [unmatched, setUnmatched] = useState<CalendarEvent[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -108,6 +123,15 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
         throw error;
       }
       setRows((data as Row[]) ?? []);
+      // Calendar bookings from the last 30 days that no tenant matched.
+      const { data: events } = await db
+        .from('onboarding_call_events')
+        .select('id, received_at, email, name, status, starts_at, outcome')
+        .is('tenant_id', null)
+        .gte('received_at', new Date(Date.now() - 30 * DAY).toISOString())
+        .order('received_at', { ascending: false })
+        .limit(20);
+      setUnmatched((events as CalendarEvent[]) ?? []);
     } catch (e) {
       toast.error('Could not load onboarding calls', { description: (e as Error).message });
     } finally {
@@ -228,8 +252,8 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
         <CardHeader>
           <CardTitle>24-hour reminder email</CardTitle>
           <CardDescription>
-            One email, once, to a V2 operator on a trial or paid plan who signed up 1–14 days ago and has not booked.
-            Check who is due before sending.
+            Sent automatically every hour: one email, once, to a V2 operator on a trial or paid plan who signed up
+            1–14 days ago and has not booked. You can check who is due and send now instead of waiting.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -306,7 +330,9 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
                         {r.call_completed_at
                           ? fmtWhen(r.call_completed_at)
                           : r.call_booked_at
-                            ? `${fmtWhen(r.call_booked_at)}${r.call_booked_via === 'admin' ? ' · by you' : ''}`
+                            ? r.call_scheduled_for
+                              ? `Call ${fmtWhen(r.call_scheduled_for)}`
+                              : `${fmtWhen(r.call_booked_at)}${r.call_booked_via === 'admin' ? ' · by you' : ' · said they booked'}`
                             : r.reminder_sent_at
                               ? `Reminded ${fmtWhen(r.reminder_sent_at)}`
                               : r.dismissed_at
@@ -388,6 +414,33 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
           )}
         </CardContent>
       </Card>
+
+      {unmatched.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Calendar bookings we could not match</CardTitle>
+            <CardDescription>
+              Booked on your calendar with an email that belongs to no operator. Find them above and use Mark booked.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ul className="divide-y">
+              {unmatched.map((e) => (
+                <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 px-6 py-3 text-sm">
+                  <span>
+                    <span className="font-medium">{e.name || e.email || 'Unknown'}</span>
+                    {e.name && e.email && <span className="text-muted-foreground"> · {e.email}</span>}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {e.status ?? 'booked'}
+                    {e.starts_at && ` · call ${fmtWhen(e.starts_at)}`} · received {fmtWhen(e.received_at)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <Dialog open={notesFor !== null} onOpenChange={(o) => !o && pending === null && setNotesFor(null)}>
         <DialogContent className="max-w-md">
