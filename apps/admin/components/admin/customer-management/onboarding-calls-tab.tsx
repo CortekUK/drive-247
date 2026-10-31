@@ -128,6 +128,9 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
         .from('onboarding_call_events')
         .select('id, received_at, email, name, status, starts_at, outcome')
         .is('tenant_id', null)
+        // Only bookings whose email matched no tenant at all. A V1 customer's
+        // ordinary support booking on the shared calendar is not Brian's to place.
+        .eq('outcome', 'no tenant with that email')
         .gte('received_at', new Date(Date.now() - 30 * DAY).toISOString())
         .order('received_at', { ascending: false })
         .limit(20);
