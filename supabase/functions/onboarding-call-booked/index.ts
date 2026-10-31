@@ -18,6 +18,8 @@
 //                                       booking came from the calendar)
 //   showed                            → call done
 //
+// Only tenants being offered the onboarding call (Portal V2) are touched; a
+// V1 customer booking on the shared Support calendar is logged and ignored.
 // Every request is kept in onboarding_call_events, matched or not, so Brian
 // can place a booking we could not. Always 200 once authenticated —
 // LeadConnector retries anything else, and a retry would not match any better.
@@ -133,15 +135,27 @@ Deno.serve(async (req) => {
     ]);
     if (ids.size === 0) return await record("no tenant with that email", null);
 
-    // One email can own more than one tenant: the newest V2 one is the one
-    // that was offered the call.
+    // Portal V2 only. The calendar is the shared "Drive247 Support" one, so
+    // V1 customers book on it too: only a tenant that is being offered the
+    // onboarding call right now (onboarding_call_eligible — the same rule as
+    // the portal card: V2, first 30 days or trialing, plus the canary) is
+    // touched. Anything else is logged and left alone. One email can own more
+    // than one tenant, so the newest eligible one wins.
     const { data: candidates } = await supabase
       .from("tenants")
       .select("id, created_at, portal_experience")
       .in("id", [...ids])
       .order("created_at", { ascending: false });
-    const tenant = (candidates ?? []).find((t: any) => t.portal_experience === "v2") ?? (candidates ?? [])[0];
-    if (!tenant) return await record("no tenant with that email", null);
+    let tenant: { id: string } | null = null;
+    for (const t of candidates ?? []) {
+      const { data: eligible, error: eErr } = await supabase.rpc("onboarding_call_eligible", { p_tenant_id: t.id });
+      if (eErr) throw eErr;
+      if (eligible === true) {
+        tenant = t;
+        break;
+      }
+    }
+    if (!tenant) return await record("ignored: not a Portal V2 operator in onboarding", null);
 
     const { data: row } = await supabase
       .from("tenant_onboarding_calls")
