@@ -20,7 +20,7 @@ import { useTenant } from "@/contexts/TenantContext";
 
 /** Brian's live booking calendar (LeadConnector). */
 export const ONBOARDING_CALL_BOOKING_URL =
-  "https://api.leadconnectorhq.com/widget/booking/WhGxejLXDJt4pN10JYUg";
+  "https://api.leadconnectorhq.com/widget/bookings/drive247-onboarding-call";
 
 /**
  * The calendar, pre-filled with who is booking. The email is what the webhook

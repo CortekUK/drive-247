@@ -27,7 +27,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendResendEmail } from "../_shared/resend-service.ts";
 
 const LOG = "[onboarding-call-reminder]";
-const BOOKING_URL = "https://api.leadconnectorhq.com/widget/booking/WhGxejLXDJt4pN10JYUg";
+const BOOKING_URL = "https://api.leadconnectorhq.com/widget/bookings/drive247-onboarding-call";
 const DAY = 86_400_000;
 
 const esc = (s: unknown) =>

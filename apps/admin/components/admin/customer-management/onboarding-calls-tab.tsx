@@ -35,7 +35,7 @@ import { cn } from '@/lib/utils';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
-const BOOKING_URL = 'https://api.leadconnectorhq.com/widget/booking/WhGxejLXDJt4pN10JYUg';
+const BOOKING_URL = 'https://api.leadconnectorhq.com/widget/bookings/drive247-onboarding-call';
 const DAY = 86_400_000;
 
 interface Row {
