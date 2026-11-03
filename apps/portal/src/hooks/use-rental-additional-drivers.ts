@@ -16,6 +16,8 @@ export interface RentalAdditionalDriver {
   boldsign_signer_email: string | null;
   signed_at: string | null;
   created_at: string;
+  /** Secondary driver added by the renter: verified and listed only, never on the agreement. */
+  listing_only: boolean;
 }
 
 /**
@@ -50,7 +52,7 @@ export function useRentalAdditionalDrivers(rentalId: string | undefined, enabled
       const { data, error } = await supabaseUntyped
         .from("rental_additional_drivers")
         .select(
-          "id, name, email, phone, license_number, verification_status, signing_status, verification_url, identity_verification_id, boldsign_signer_email, signed_at, created_at",
+          "id, name, email, phone, license_number, verification_status, signing_status, verification_url, identity_verification_id, boldsign_signer_email, signed_at, created_at, listing_only",
         )
         .eq("rental_id", rentalId)
         .eq("tenant_id", tenant.id)

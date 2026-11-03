@@ -13,7 +13,7 @@ interface AdditionalDriversCardProps {
   rentalId: string;
 }
 
-const verificationBadge = (status: RentalAdditionalDriver["verification_status"]) => {
+const verificationBadge = (status: RentalAdditionalDriver["verification_status"], listingOnly: boolean) => {
   switch (status) {
     case "verified":
       return (
@@ -33,7 +33,7 @@ const verificationBadge = (status: RentalAdditionalDriver["verification_status"]
       return (
         <Badge className="bg-red-100 text-red-700 border-red-200 gap-1">
           <UserX className="h-3 w-3" />
-          Rejected
+          {listingOnly ? "Failed" : "Rejected"}
         </Badge>
       );
     default:
@@ -157,7 +157,14 @@ export function AdditionalDriversCard({ rentalId }: AdditionalDriversCardProps) 
           >
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-[#080812]">{driver.name}</p>
+                <p className="text-sm font-medium text-[#080812]">
+                  {driver.name}
+                  {driver.listing_only && (
+                    <Badge variant="outline" className="ml-2 align-middle">
+                      Secondary driver
+                    </Badge>
+                  )}
+                </p>
                 <p className="text-xs text-[#737373] mt-0.5">
                   {[driver.email, driver.phone].filter(Boolean).join(" · ") || "No contact"}
                 </p>
@@ -166,10 +173,15 @@ export function AdditionalDriversCard({ rentalId }: AdditionalDriversCardProps) 
                     Licence: <span className="font-mono">{driver.license_number}</span>
                   </p>
                 )}
+                {driver.listing_only && (
+                  <p className="text-xs text-[#737373] mt-0.5">
+                    Added by the renter. Not on the agreement or insurance, and not authorized to drive under the agreement.
+                  </p>
+                )}
               </div>
               <div className="flex flex-col gap-1.5 items-end">
-                {verificationBadge(driver.verification_status)}
-                {signingBadge(driver.signing_status)}
+                {verificationBadge(driver.verification_status, driver.listing_only)}
+                {!driver.listing_only && signingBadge(driver.signing_status)}
               </div>
             </div>
             <div className="flex flex-wrap gap-2 mt-3">

@@ -68,6 +68,7 @@ import { ExtendRentalDialog } from '@/components/customer-portal/ExtendRentalDia
 import PaymentBreakdown from '@/components/customer-portal/PaymentBreakdown';
 import { PaygSection } from '@/components/customer-portal/payg-section';
 import { AutoExtensionCard } from '@/components/customer-portal/AutoExtensionCard';
+import { SecondaryDriverCard } from '@/components/customer-portal/SecondaryDriverCard';
 import { CustomerInstallmentsView } from '@/components/installments/CustomerInstallmentsView';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
 import { getActiveCoverageLabels } from '@/lib/coverage-labels';
@@ -1099,6 +1100,8 @@ export default function BookingDetailPage() {
           </Card>
         );
       })()}
+
+      <SecondaryDriverCard rentalId={id} />
 
       {/* Tabs: Payments / Agreements / Insurance */}
       <Tabs defaultValue="payments" className="w-full">

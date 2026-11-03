@@ -1527,6 +1527,8 @@ export async function POST(request: NextRequest) {
                 .from('rental_additional_drivers')
                 .select('id, name, email, phone, license_number')
                 .eq('rental_id', body.rentalId)
+                // Secondary drivers are verified and listed only, never on the agreement.
+                .eq('listing_only', false)
                 .order('created_at', { ascending: true });
             additionalDrivers = (addlRows || []) as AdditionalDriverRow[];
             console.log(`Additional drivers: ${additionalDrivers.length}`);

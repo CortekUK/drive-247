@@ -7200,6 +7200,7 @@ export type Database = {
           rejection_labels: string[] | null
           rejection_reason: string | null
           review_result: string | null
+          rental_id: string | null
           review_status: string | null
           selfie_image_url: string | null
           session_id: string | null
@@ -7252,6 +7253,7 @@ export type Database = {
           rejection_labels?: string[] | null
           rejection_reason?: string | null
           review_result?: string | null
+          rental_id?: string | null
           review_status?: string | null
           selfie_image_url?: string | null
           session_id?: string | null
@@ -7304,6 +7306,7 @@ export type Database = {
           rejection_labels?: string[] | null
           rejection_reason?: string | null
           review_result?: string | null
+          rental_id?: string | null
           review_status?: string | null
           selfie_image_url?: string | null
           session_id?: string | null
@@ -12750,6 +12753,7 @@ export type Database = {
           id: string
           identity_verification_id: string | null
           license_number: string | null
+          listing_only: boolean
           name: string
           phone: string | null
           rental_id: string
@@ -12767,6 +12771,7 @@ export type Database = {
           id?: string
           identity_verification_id?: string | null
           license_number?: string | null
+          listing_only?: boolean
           name: string
           phone?: string | null
           rental_id: string
@@ -12784,6 +12789,7 @@ export type Database = {
           id?: string
           identity_verification_id?: string | null
           license_number?: string | null
+          listing_only?: boolean
           name?: string
           phone?: string | null
           rental_id?: string

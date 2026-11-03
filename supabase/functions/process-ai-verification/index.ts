@@ -1,6 +1,7 @@
 // @ts-nocheck - This is a Deno Edge Function, not Node.js TypeScript
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import { driverNameMatchesDocument, isDocumentExpired } from '../_shared/secondary-driver-rules.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -24,6 +25,28 @@ interface ProcessResponse {
   };
   error?: string;
   detail?: string;
+}
+
+/** The driver a session belongs to, or null when it is a customer's session. */
+function additionalDriverId(verification: { customer_id?: string | null; external_user_id?: string | null }): string | null {
+  const externalId = verification.external_user_id || '';
+  if (verification.customer_id || !externalId.startsWith('additional_driver_')) return null;
+  return externalId.replace(/^additional_driver_/, '');
+}
+
+/**
+ * Show a check that could not finish as failed. Otherwise the driver sits on
+ * "pending" forever with nobody able to clear it. Only the driver's current
+ * session counts: a link that was replaced must not change their status.
+ */
+async function failAdditionalDriver(supabase: any, driverId: string | null, verificationId: string | undefined) {
+  if (!driverId || !verificationId) return;
+  const { error } = await supabase
+    .from('rental_additional_drivers')
+    .update({ verification_status: 'rejected' })
+    .eq('id', driverId)
+    .or(`identity_verification_id.eq.${verificationId},identity_verification_id.is.null`);
+  if (error) console.error('[ProcessAI] could not mark additional driver failed:', error);
 }
 
 /**
@@ -90,6 +113,10 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  // Outside the try so the catch below can still fail the driver's check.
+  let driverId: string | null = null;
+  let failedSessionId: string | undefined;
+
   try {
     const { sessionId, documentFrontPath, documentBackPath, selfiePath } = await req.json() as ProcessRequest;
 
@@ -131,6 +158,9 @@ serve(async (req) => {
       );
     }
 
+    driverId = additionalDriverId(verification as any);
+    failedSessionId = recordId;
+
     // Update status to processing
     await supabaseClient
       .from('identity_verifications')
@@ -170,6 +200,7 @@ serve(async (req) => {
           updated_at: new Date().toISOString()
         })
         .eq('id', recordId);
+      await failAdditionalDriver(supabaseClient, driverId, recordId);
 
       return new Response(
         JSON.stringify({
@@ -212,6 +243,7 @@ serve(async (req) => {
           updated_at: new Date().toISOString()
         })
         .eq('id', recordId);
+      await failAdditionalDriver(supabaseClient, driverId, recordId);
 
       return new Response(
         JSON.stringify({
@@ -249,6 +281,38 @@ serve(async (req) => {
       faceMatchResultStr = 'no_match';
     }
 
+    // A driver is not a customer: no one reviews their check by hand, so a
+    // result that needs review is a failed check they can retry with a new link.
+    let driverRow: { name: string; listing_only: boolean; identity_verification_id: string | null } | null = null;
+    let driverFailure: string | null = null;
+    if (driverId) {
+      const { data, error: driverRowError } = await supabaseClient
+        .from('rental_additional_drivers')
+        .select('name, listing_only, identity_verification_id')
+        .eq('id', driverId)
+        .maybeSingle();
+      if (driverRowError) console.error('[ProcessAI] additional driver lookup failed:', driverRowError);
+      driverRow = data;
+
+      if (finalResult === 'review_required') {
+        finalResult = 'rejected';
+        reviewResult = 'RED';
+        driverFailure = 'We could not confirm that your selfie matches your document. Please try again with clearer photos.';
+      } else if (finalResult === 'verified' && driverRow?.listing_only) {
+        // Secondary drivers only: the face check proves the selfie matches the
+        // ID, not that the ID belongs to the person the renter named.
+        if (!driverNameMatchesDocument(driverRow.name, ocrData?.firstName, ocrData?.lastName)) {
+          finalResult = 'rejected';
+          reviewResult = 'RED';
+          driverFailure = 'The name on this document does not match the name given for this driver.';
+        } else if (isDocumentExpired(ocrData?.documentExpiry, new Date().toISOString().slice(0, 10))) {
+          finalResult = 'rejected';
+          reviewResult = 'RED';
+          driverFailure = 'This document has expired.';
+        }
+      }
+    }
+
     // Update verification record with all results
     const updateData: any = {
       status: 'completed',
@@ -277,7 +341,7 @@ serve(async (req) => {
     };
 
     if (finalResult === 'rejected') {
-      updateData.rejection_reason = 'Face does not match document photo';
+      updateData.rejection_reason = driverFailure ?? 'Face does not match document photo';
     }
 
     await supabaseClient
@@ -290,9 +354,10 @@ serve(async (req) => {
     // "additional_driver_<uuid>" and customer_id is NULL. Update the
     // rental_additional_drivers row instead of the customers table so the
     // portal badge flips to Verified/Rejected in realtime.
-    const externalId = (verification as any).external_user_id || '';
-    if (!verification.customer_id && typeof externalId === 'string' && externalId.startsWith('additional_driver_')) {
-      const driverId = externalId.replace(/^additional_driver_/, '');
+    // A link that has since been replaced must not change the driver's status.
+    const isCurrentSession =
+      !driverRow?.identity_verification_id || driverRow.identity_verification_id === recordId;
+    if (driverId && isCurrentSession) {
       let driverStatus: 'pending' | 'verified' | 'rejected' = 'pending';
       if (finalResult === 'verified') driverStatus = 'verified';
       else if (finalResult === 'rejected') driverStatus = 'rejected';
@@ -366,10 +431,9 @@ serve(async (req) => {
               blocked_reason: `Blocked identity: ${blockedCheck.reason}`
             })
             .eq('id', verification.customer_id);
-        } else if (typeof externalId === 'string' && externalId.startsWith('additional_driver_')) {
+        } else if (driverId && isCurrentSession) {
           // Additional drivers don't have a `customers` row to block, but we
           // still need to flip their per-rental verification_status to rejected.
-          const driverId = externalId.replace(/^additional_driver_/, '');
           await supabaseClient
             .from('rental_additional_drivers')
             .update({ verification_status: 'rejected' })
@@ -385,6 +449,7 @@ serve(async (req) => {
     const response: ProcessResponse = {
       ok: true,
       result: finalResult,
+      detail: driverFailure ?? undefined,
       details: {
         ocrData,
         faceMatchScore: faceResult.similarity || 0,
@@ -399,6 +464,11 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Process verification error:', error);
+    await failAdditionalDriver(
+      createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''),
+      driverId,
+      failedSessionId,
+    ).catch((failError) => console.error('[ProcessAI] could not mark additional driver failed:', failError));
     return new Response(
       JSON.stringify({
         ok: false,
