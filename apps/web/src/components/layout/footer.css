@@ -1,0 +1,23 @@
+/*
+ * The footer is dark in both themes. Its wordmark is cut out of the brand's pixel texture
+ * and runs off the bottom, fading at the sides and the foot.
+ */
+/* At least one full screen, so the section above never shows when scrolled to the end. */
+.ft-dark {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 100svh;
+  background: #0b0b0e;
+  color: #fff;
+}
+.ft-word {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: clamp(24px, 3vw, 44px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent), linear-gradient(to right, transparent, #000 9%, #000 91%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to bottom, #000 62%, transparent), linear-gradient(to right, transparent, #000 9%, #000 91%, transparent);
+  mask-composite: intersect;
+}

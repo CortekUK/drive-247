@@ -1,10 +1,8 @@
 import { Hero } from "@/components/sections/hero";
-import { CredibilityStrip } from "@/components/sections/credibility-strip";
-import { ProblemSection } from "@/components/sections/problem-section";
 import { OperationsDashboard } from "@/components/sections/operations-dashboard";
-import { ProductShowcase } from "@/components/sections/product-showcase";
-import { SocialProof } from "@/components/sections/social-proof";
-import { Timeline } from "@/components/sections/timeline";
+import { TraxSection } from "@/components/sections/trax-section";
+import { IntegrationsSection } from "@/components/sections/integrations-section";
+import { TestimonialWall } from "@/components/sections/testimonial-wall";
 import { FAQSection } from "@/components/sections/faq-section";
 import { connection } from "next/server";
 
@@ -20,6 +18,7 @@ import { fetchLandingVersion, parseLandingPreview } from "@/lib/landing-version-
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { LandingV2 } from "@/components/landing-v2/landing-v2";
+import { LandingTheme } from "@/components/shared/landing-theme";
 
 export default async function Home({
   searchParams,
@@ -77,22 +76,20 @@ export default async function Home({
   }
 
   return (
-    <>
-      <Header />
+    <LandingTheme>
+      <Header overHero />
       <main id="main" className="min-h-[calc(100vh-4rem)]">
         {offer && <ReferralBanner offer={offer} />}
         <Hero />
-        <CredibilityStrip />
         <OperationsDashboard />
-        <SocialProof testimonials={testimonials} />
-        <ProblemSection />
-        <ProductShowcase />
-        <Timeline />
+        <TraxSection />
+        <TestimonialWall testimonials={testimonials} />
+        <IntegrationsSection />
         {plans && <PricingSection plans={plans} offer={offer} enterprise={enterprise} />}
         <FAQSection />
         <CTABand />
       </main>
       <Footer />
-    </>
+    </LandingTheme>
   );
 }

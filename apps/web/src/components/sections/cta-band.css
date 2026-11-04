@@ -1,0 +1,88 @@
+/*
+ * The closing band: the car under the brand's purple, the same in both themes. It falls
+ * to the footer's black at the foot, so the two run together with no line between them.
+ */
+.cb-band {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: min(78vh, 680px);
+  background: #0b0b0e;
+  color: #fff;
+}
+.cb-photo {
+  position: absolute;
+  inset: -6%;
+  z-index: -2;
+  background: url("/landing-v3/tesla-bg.webp") center 60% / cover;
+  transform: scale(1.04);
+  transition: transform 1.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cb-band:hover .cb-photo { transform: scale(1.1); }
+.cb-tint {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(180deg, rgb(11 11 14 / 0) 70%, #0b0b0e 100%),
+    linear-gradient(105deg, rgb(18 10 70 / 0.78) 0%, rgb(68 45 215 / 0.55) 45%, rgb(110 92 255 / 0.32) 100%),
+    radial-gradient(60% 80% at 50% 50%, rgb(20 12 80 / 0.35), transparent);
+}
+.cb-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: clamp(80px, 9vw, 120px) 24px;
+  text-align: center;
+}
+.cb-kicker {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.75);
+}
+.cb-kicker::before, .cb-kicker::after { content: ""; width: 40px; height: 1px; background: rgb(255 255 255 / 0.4); }
+.cb-title {
+  margin-top: 24px;
+  font-size: clamp(2.75rem, 6vw, 5.25rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+.cb-title span { color: #cfc9ff; }
+.cb-sub { max-width: 36rem; margin: 20px 0 32px; font-size: clamp(1rem, 1.3vw, 1.125rem); line-height: 1.6; color: rgb(255 255 255 / 0.85); }
+.cb-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.cb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 50px;
+  padding-inline: 24px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  transition: background-color 200ms ease-out;
+}
+.cb-btn svg { width: 17px; height: 17px; transition: transform 200ms ease-out; }
+.cb-btn:hover svg { transform: translate(2px, -2px); }
+.cb-primary { background: #fff; color: #0b0b0e; }
+.cb-primary:hover { background: #ece9ff; }
+.cb-ghost {
+  background: rgb(255 255 255 / 0.12);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.35);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.cb-ghost:hover { background: rgb(255 255 255 / 0.22); }
+@media (prefers-reduced-motion: reduce) {
+  .cb-photo, .cb-btn svg { transition: none; }
+  .cb-band:hover .cb-photo { transform: scale(1.04); }
+}

@@ -39,7 +39,15 @@ interface PortalAccess {
   is_active: boolean | null;
 }
 
-export function HeaderCta() {
+export function HeaderCta({
+  label = "Book a strategy call",
+  href = "/strategy-call",
+  className = BUTTON_CLASS,
+}: {
+  label?: string;
+  href?: string;
+  className?: string;
+}) {
   const [portalUrl, setPortalUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -96,7 +104,7 @@ export function HeaderCta() {
 
   if (portalUrl) {
     return (
-      <Button asChild size="sm" className={BUTTON_CLASS}>
+      <Button asChild size="sm" className={className}>
         {/* A full navigation, not a client route: the portal is another app on
             another subdomain. */}
         <a href={portalUrl}>Dashboard</a>
@@ -105,8 +113,8 @@ export function HeaderCta() {
   }
 
   return (
-    <Button asChild size="sm" className={BUTTON_CLASS}>
-      <a href="/strategy-call">Book a strategy call</a>
+    <Button asChild size="sm" className={className}>
+      <a href={href}>{label}</a>
     </Button>
   );
 }

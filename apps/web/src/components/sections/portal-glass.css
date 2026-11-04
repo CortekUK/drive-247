@@ -1,0 +1,238 @@
+/*
+ * The whole area: the page's own ground (landing-theme.css), with the hero's purple carried
+ * a little way down into it. Flat colour only, nothing behind the individual screens.
+ */
+.pg-area {
+  position: relative;
+  isolation: isolate;
+  padding-block: clamp(96px, 11vw, 168px);
+  background-image: linear-gradient(to bottom, rgb(167 159 245 / 0.45), rgb(167 159 245 / 0) 480px);
+}
+.dark .pg-area {
+  background-image: linear-gradient(to bottom, rgb(42 33 144 / 0.7), rgb(42 33 144 / 0) 480px);
+}
+/* Phones and small windows stack the row, so there is no gap for the thread to run in. */
+.pg-thread { display: none; }
+@media (min-width: 1200px) {
+  .pg-thread { display: block; position: absolute; z-index: -1; top: 0; left: 0; pointer-events: none; }
+}
+.pg-thread-rest { stroke: hsl(var(--v2-primary) / 0.22); stroke-width: 1.5; stroke-dasharray: 2 7; stroke-linecap: round; }
+.pg-thread-live { stroke: hsl(var(--v2-primary)); stroke-width: 1.5; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.pg-thread-stop { fill: hsl(var(--v2-background)); stroke: hsl(var(--v2-primary) / 0.5); stroke-width: 1.5; }
+.pg-thread-tip { fill: hsl(var(--v2-primary)); stroke: hsl(var(--v2-background)); stroke-width: 2; }
+.pg-rows { display: grid; gap: clamp(112px, 15vw, 224px); overflow-x: clip; }
+.pg-row {
+  display: grid;
+  gap: 56px;
+  padding-inline: 1.25rem;
+}
+.pg-copy { max-width: 34rem; margin-inline: auto; }
+.pg-art { display: block; width: 100%; max-width: 380px; color: hsl(var(--v2-foreground)); }
+
+/* A plain browser window: tab strip, address bar, then the screen. */
+.pg-browser {
+  --pg-strip: #e6e4f2;
+  overflow: hidden;
+  border: 1px solid hsl(var(--v2-border));
+  border-radius: 14px;
+  background: hsl(var(--v2-card));
+}
+.dark .pg-browser { --pg-strip: #17171c; }
+.pg-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  height: 38px;
+  padding-inline: 14px;
+  background: var(--pg-strip);
+  color: hsl(var(--v2-muted-foreground));
+}
+.pg-lights { display: flex; gap: 7px; align-self: center; margin-right: 8px; }
+.pg-lights i { width: 11px; height: 11px; border-radius: 50%; background: #ff5f57; }
+.pg-lights i:nth-child(2) { background: #febc2e; }
+.pg-lights i:nth-child(3) { background: #28c840; }
+.pg-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(210px, 45%);
+  height: 31px;
+  padding-inline: 10px;
+  border-radius: 10px 10px 0 0;
+  background: hsl(var(--v2-card));
+  color: hsl(var(--v2-foreground));
+  font-size: 12px;
+  white-space: nowrap;
+}
+.pg-tab img { width: 14px; height: 14px; border-radius: 3px; }
+.pg-tab svg { width: 12px; height: 12px; margin-left: auto; color: hsl(var(--v2-muted-foreground)); }
+.pg-newtab { width: 14px; height: 14px; align-self: center; }
+.pg-address {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding-inline: 14px;
+  border-bottom: 1px solid hsl(var(--v2-border));
+  color: hsl(var(--v2-muted-foreground));
+}
+.pg-address > svg { flex: none; width: 15px; height: 15px; }
+.pg-address > .pg-off { opacity: 0.4; }
+.pg-url {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 28px;
+  margin-left: 2px;
+  padding-inline: 12px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--pg-strip);
+  color: hsl(var(--v2-foreground));
+  font-size: 12px;
+  white-space: nowrap;
+}
+.pg-url svg { flex: none; width: 12px; height: 12px; color: hsl(var(--v2-muted-foreground)); }
+.pg-screen { position: relative; overflow: hidden; }
+.pg-device { position: relative; min-width: 0; }
+.pg-phone {
+  position: absolute;
+  right: -8px;
+  bottom: -28px;
+  width: 27%;
+  padding: 5px;
+  border-radius: 26px;
+  background: #0c0c10;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14), 0 14px 36px rgb(13 8 70 / 0.26);
+}
+.is-flipped .pg-phone { right: auto; left: -8px; }
+.pg-phone-screen { position: relative; overflow: hidden; aspect-ratio: 390 / 844; border-radius: 21px; background: hsl(var(--v2-card)); }
+.pg-phone-screen img { object-fit: cover; object-position: top; }
+.pg-screen img { object-fit: cover; object-position: top; }
+
+@media (min-width: 1200px) {
+  .pg-row {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    align-items: center;
+    gap: clamp(72px, 8vw, 128px);
+    width: min(100%, 1360px);
+    margin-inline: auto;
+    padding-inline: clamp(40px, 6vw, 96px);
+  }
+  .pg-copy { margin-inline: 0; }
+  .pg-phone { right: -36px; bottom: -44px; width: 24%; }
+  .is-flipped .pg-phone { right: auto; left: -36px; }
+  /* The mirrored row: screen on the left. */
+  .pg-row.is-flipped { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); }
+  .is-flipped .pg-copy { order: 2; }
+}
+
+/*
+ * The sections build as you scroll to them, one element at a time: the art, headline and
+ * words rise; the window slides in from its own side, then its tab, address bar and
+ * screen appear in turn; the phone lands last. They reset once a row is back below the
+ * screen, so it builds again next time. Hidden states snap, so only the arrival animates.
+ */
+.pg-row { --pg-ease: cubic-bezier(0.16, 1, 0.3, 1); }
+.pg-row.is-flipped { --pg-from: -120px; }
+.pg-copy > * { opacity: 0; translate: 0 44px; }
+.pg-copy > .pg-art { scale: 0.9; transform-origin: left center; }
+.pg-browser { opacity: 0; translate: var(--pg-from, 120px) 0; scale: 0.96; }
+.pg-tabs, .pg-address, .pg-screen { opacity: 0; }
+.pg-tabs, .pg-address { translate: 0 -10px; }
+.pg-screen { translate: 0 18px; }
+.pg-phone { opacity: 0; translate: 0 90px; rotate: 5deg; }
+.is-flipped .pg-phone { rotate: -5deg; }
+
+.is-in .pg-copy > *,
+.is-in .pg-browser,
+.is-in .pg-tabs,
+.is-in .pg-address,
+.is-in .pg-screen,
+.is-in .pg-phone {
+  opacity: 1;
+  translate: 0 0;
+  scale: 1;
+  rotate: 0deg;
+  transition:
+    opacity 600ms ease-out var(--pg-at, 0ms),
+    translate 1000ms var(--pg-ease) var(--pg-at, 0ms),
+    scale 1000ms var(--pg-ease) var(--pg-at, 0ms),
+    rotate 1000ms var(--pg-ease) var(--pg-at, 0ms);
+}
+.is-in .pg-copy > :nth-child(2) { --pg-at: 120ms; }
+.is-in .pg-copy > :nth-child(3) { --pg-at: 240ms; }
+.is-in .pg-browser { --pg-at: 100ms; }
+.is-in .pg-tabs { --pg-at: 340ms; }
+.is-in .pg-address { --pg-at: 440ms; }
+.is-in .pg-screen { --pg-at: 540ms; }
+.is-in .pg-phone { --pg-at: 720ms; }
+
+/* The pictures: plain ink and the app's indigo. */
+.pg-art-line { fill: none; stroke: hsl(var(--v2-primary)); stroke-width: 1.25; opacity: 0.3; }
+.pg-art-pulse { fill: none; stroke: hsl(var(--v2-primary)); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 0.14 1; stroke-dashoffset: 0.14; opacity: 0; }
+.pg-art-tool { fill: hsl(var(--v2-card)); stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.pg-art-screen { fill: hsl(var(--v2-card)); stroke: currentColor; stroke-width: 1.6; }
+.pg-art-bar { fill: hsl(var(--v2-primary)); stroke: currentColor; stroke-width: 1.6; }
+.pg-art-ink { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; opacity: 0.55; }
+.pg-art-mark { fill: none; stroke: hsl(var(--v2-primary)); stroke-dasharray: 5 4; }
+.pg-art-sign { fill: none; stroke: hsl(var(--v2-primary)); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.pg-art-grow { fill: hsl(var(--v2-primary) / 0.28); transform-box: fill-box; transform-origin: left; transform: scaleX(0); }
+.pg-art-fillbar { fill: hsl(var(--v2-primary)); transform-box: fill-box; transform-origin: left; transform: scaleX(0); }
+.pg-art-solid { fill: hsl(var(--v2-card)); stroke: currentColor; stroke-width: 1.6; }
+.pg-art-kept { fill: hsl(var(--v2-primary)); stroke: currentColor; stroke-width: 1.6; }
+.pg-art-rise, .pg-art-drop { transform-box: fill-box; transform: scaleY(0); }
+.pg-art-rise { transform-origin: bottom; }
+.pg-art-drop { transform-origin: top; }
+.pg-art-tick { opacity: 0; }
+.pg-art-tick circle { fill: hsl(var(--v2-primary)); }
+.pg-art-tick path { stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+.is-playing .pg-art-bob { animation: pg-bob 4s ease-in-out var(--d, 0s) infinite alternate; }
+.is-playing .pg-art-pulse { animation: pg-pulse 8s linear var(--d, 0s) infinite; }
+.is-playing .pg-art-sign { animation: pg-sign 8s ease-out var(--d, 0s) infinite; }
+.is-playing .pg-art-grow, .is-playing .pg-art-fillbar { animation: pg-grow-x 8s ease-out var(--d, 0s) infinite; }
+.is-playing .pg-art-rise, .is-playing .pg-art-drop { animation: pg-grow-y 8s ease-out var(--d, 0s) infinite; }
+.is-playing .pg-art-tick { animation: pg-tick 8s ease-out var(--d, 0s) infinite; }
+
+/* Each piece takes its turn, holds, and clears before the loop comes round again. */
+@keyframes pg-bob { to { translate: 0 -4px; } }
+@keyframes pg-pulse {
+  0% { stroke-dashoffset: 0.14; opacity: 0; }
+  1% { opacity: 1; }
+  11% { opacity: 1; }
+  12%, 100% { stroke-dashoffset: -1; opacity: 0; }
+}
+@keyframes pg-sign {
+  0% { stroke-dashoffset: 1; opacity: 1; }
+  10%, 50% { stroke-dashoffset: 0; opacity: 1; }
+  56%, 100% { stroke-dashoffset: 0; opacity: 0; }
+}
+@keyframes pg-grow-x {
+  0% { transform: scaleX(0); opacity: 1; }
+  7%, 50% { transform: scaleX(1); opacity: 1; }
+  56%, 100% { transform: scaleX(1); opacity: 0; }
+}
+@keyframes pg-grow-y {
+  0% { transform: scaleY(0); opacity: 1; }
+  7%, 50% { transform: scaleY(1); opacity: 1; }
+  56%, 100% { transform: scaleY(1); opacity: 0; }
+}
+@keyframes pg-tick {
+  0% { opacity: 0; scale: 0.8; }
+  3%, 30% { opacity: 1; scale: 1; }
+  36%, 100% { opacity: 0; scale: 1; }
+}
+.pg-art-tick { transform-box: fill-box; transform-origin: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pg-browser, .pg-tabs, .pg-address, .pg-screen, .pg-phone, .pg-copy > * { opacity: 1; translate: none; scale: none; rotate: none; transition: none !important; }
+  .is-playing .pg-art-bob, .is-playing .pg-art-pulse, .is-playing .pg-art-sign, .is-playing .pg-art-grow,
+  .is-playing .pg-art-fillbar, .is-playing .pg-art-rise, .is-playing .pg-art-drop, .is-playing .pg-art-tick { animation: none; }
+  .pg-art-sign { stroke-dashoffset: 0; }
+  .pg-art-grow, .pg-art-fillbar { transform: none; }
+  .pg-art-rise, .pg-art-drop { transform: none; }
+  .pg-art-tick { opacity: 1; }
+}

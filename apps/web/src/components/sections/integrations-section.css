@@ -1,0 +1,98 @@
+/*
+ * Integrations: the words centred at the top, and tall plain cards
+ * running past in a marquee. Flat, like the rest of the page below the hero.
+ */
+.ig-section {
+  --ig-gutter: clamp(16px, 2.5vw, 40px);
+  padding-block: clamp(72px, 12svh, 128px) 0;
+  overflow: hidden;
+}
+.ig-inner {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(28px, 4svh, 44px);
+}
+
+/* The words */
+.ig-copy { padding-inline: var(--ig-gutter); text-align: center; }
+.ig-title {
+  font-size: clamp(2.5rem, 4.4vw, 4rem);
+  line-height: 1.06;
+  color: var(--foreground);
+}
+.ig-sub {
+  max-width: 40rem;
+  margin: clamp(10px, 1.6svh, 16px) auto 0;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+
+/* The cards */
+.ig-marquee {
+  min-width: 0;
+  overflow: hidden;
+}
+.ig-track {
+  display: flex;
+  width: max-content;
+  animation: ig-run 60s linear infinite;
+}
+.ig-set { display: flex; gap: 16px; padding-right: 16px; }
+@keyframes ig-run { to { transform: translateX(-50%); } }
+/* Nothing moves: one set that can be scrolled by hand instead. */
+@media (prefers-reduced-motion: reduce) {
+  .ig-marquee { overflow-x: auto; }
+  .ig-track { animation: none; }
+  .ig-set[aria-hidden] { display: none; }
+}
+.ig-card {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 40px;
+  width: clamp(270px, 22vw, 340px);
+  height: clamp(440px, 68svh, 620px);
+  padding: clamp(20px, 2vw, 28px);
+  border-radius: 28px;
+  /*
+   * Glass, as on the hero's tiles: see-through, a clean even border and a sheen across the top,
+   * over the integration's own colour rising from the bottom-left corner. No drop shadow.
+   */
+  border: 1px solid color-mix(in srgb, var(--foreground) 16%, transparent);
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 0.6), rgb(255 255 255 / 0.08) 34%, transparent 52%),
+    linear-gradient(to top right, color-mix(in srgb, var(--ig-brand) 62%, transparent), transparent 100%),
+    rgb(255 255 255 / 0.22);
+  /* Stops at the inside of the border. Left to run under it, the gradient wraps round
+     and tints each edge differently, and the border stops being one even line. */
+  background-clip: padding-box;
+  color: var(--foreground);
+}
+.dark .ig-card {
+  border-color: rgb(255 255 255 / 0.26);
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.02) 34%, transparent 52%),
+    linear-gradient(to top right, color-mix(in srgb, var(--ig-brand) 62%, transparent), transparent 100%),
+    rgb(255 255 255 / 0.04);
+  background-clip: padding-box;
+}
+/* The logo as it comes, with no circle or frame of ours around it. */
+.ig-logo { flex: none; display: block; color: hsl(var(--v2-primary)); }
+.dark .ig-logo { color: hsl(var(--v2-link)); }
+.ig-logo img { width: clamp(64px, 5.6vw, 84px); height: clamp(64px, 5.6vw, 84px); object-fit: contain; border-radius: 18px; }
+.ig-logo img.is-wide { width: clamp(120px, 11vw, 160px); border-radius: 0; object-position: left; }
+.ig-logo svg { width: clamp(64px, 5.6vw, 84px); height: clamp(64px, 5.6vw, 84px); }
+.ig-text h3 {
+  font-size: clamp(1.5rem, 1.9vw, 1.875rem);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+.ig-text p {
+  margin-top: 10px;
+  color: color-mix(in srgb, var(--foreground) 82%, transparent);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}

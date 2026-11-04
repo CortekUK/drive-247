@@ -37,6 +37,8 @@ const strategyCallCsp = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  // The landing page keeps its theme toggle at the bottom-left of the screen.
+  devIndicators: { position: "bottom-right" },
   typescript: {
     // Root monorepo has @types/react@18, web app uses React 19.
     ignoreBuildErrors: true,

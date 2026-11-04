@@ -1,143 +1,97 @@
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
-import { AuroraBackground } from "@/components/shared/aurora-background";
+import Image from "next/image";
+import "./hero.css";
 
-function DashboardPreview() {
-  return (
-    <div className="relative mx-auto w-full max-w-xl lg:mx-0">
-      <div className="relative max-w-2xl lg:mx-0">
-        <div className="mr-8 overflow-hidden rounded-xl border bg-background shadow-2xl shadow-indigo-900/10 sm:mr-16 lg:mr-20">
-          <Image
-            src="/dashboard-preview-v5.png"
-            alt="Drive247 operations dashboard showing revenue tracking and performance analytics"
-            width={1440}
-            height={828}
-            className="w-full dark:hidden"
-            priority
-          />
-          <Image
-            src="/dashboard-preview-v5-dark.png"
-            alt="Drive247 operations dashboard showing revenue tracking and performance analytics"
-            width={1440}
-            height={828}
-            className="hidden w-full dark:block"
-            priority
-          />
-        </div>
-        <div className="-mt-8 ml-4 mr-4 overflow-hidden rounded-xl border bg-background shadow-xl shadow-indigo-900/10 opacity-90 sm:-mt-12 sm:ml-8 sm:mr-8 lg:-mt-20 lg:ml-10 lg:mr-10">
-          <Image
-            src="/renter-portal-preview-v3.png"
-            alt="Drive247 renter portal showing bookings, payments, ID verification, and messaging"
-            width={1440}
-            height={828}
-            className="w-full dark:hidden"
-          />
-          <Image
-            src="/renter-portal-preview-v3-dark.png"
-            alt="Drive247 renter portal showing bookings, payments, ID verification, and messaging"
-            width={1440}
-            height={828}
-            className="hidden w-full dark:block"
-          />
-        </div>
-        <div className="-mt-8 ml-8 overflow-hidden rounded-xl border bg-background shadow-xl shadow-indigo-900/10 opacity-85 sm:-mt-12 sm:ml-16 lg:-mt-20 lg:ml-20">
-          <Image
-            src="/booking-preview-v4.png"
-            alt="Drive247 branded booking flow showing trip details, vehicle selection, and insurance steps"
-            width={1440}
-            height={828}
-            className="w-full dark:hidden"
-          />
-          <Image
-            src="/booking-preview-v4-dark.png"
-            alt="Drive247 branded booking flow showing trip details, vehicle selection, and insurance steps"
-            width={1440}
-            height={828}
-            className="hidden w-full dark:block"
-          />
-        </div>
-      </div>
-      <div className="absolute -right-4 -top-4 -z-10 h-32 w-32 rounded-full bg-indigo-200/40 blur-2xl" />
-      <div className="absolute -bottom-6 -left-6 -z-10 h-40 w-40 rounded-full bg-indigo-100/50 blur-2xl" />
-    </div>
-  );
-}
+/* `crop` is a close-up of one card: picture width, then its shift as a share of itself. */
+type Screen = { label: string; src: string; crop?: { width: string; shift: string } };
+type Column = { shape: "wide" | "square" | "phone"; screens: Screen[] };
+
+/* A mix of shapes: wide screens, stacked pairs, a phone and close-ups of one card. */
+const COLUMNS: Column[] = [
+  { shape: "wide", screens: [{ label: "Dashboard", src: "/v2/hero/dashboard" }] },
+  {
+    shape: "square",
+    screens: [
+      { label: "Agreements", src: "/v2/hero/agreements" },
+      { label: "Insights", src: "/v2/slide-revenue" },
+    ],
+  },
+  { shape: "phone", screens: [{ label: "Renter portal", src: "/v2/phone-renter" }] },
+  { shape: "wide", screens: [{ label: "Website editor", src: "/v2/hero/editor" }] },
+  { shape: "square", screens: [{ label: "Requests", src: "/v2/hero/dashboard", crop: { width: "370%", shift: "-47.2%, -37.6%" } }] },
+  { shape: "wide", screens: [{ label: "Marketing", src: "/v2/hero/marketing" }] },
+  {
+    shape: "square",
+    screens: [
+      { label: "Fleet", src: "/v2/slide-fleet" },
+      { label: "Booking flow", src: "/v2/hero-booking" },
+    ],
+  },
+  { shape: "wide", screens: [{ label: "Your booking site", src: "/v2/site-main" }] },
+  { shape: "square", screens: [{ label: "Your business today", src: "/v2/hero/dashboard", crop: { width: "370%", shift: "-19.2%, -37.6%" } }] },
+];
 
 export function Hero() {
   return (
-    <AuroraBackground className="pb-4 pt-12 sm:pb-6 sm:pt-16 lg:pt-20">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
-          {/* Left — copy */}
-          <div>
-            <p className="text-[13px] font-semibold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
-              Built for established US rental operators
-            </p>
+    <section className="hg-hero">
+      <div className="hg-grid" aria-hidden />
 
-            <h1 className="mt-6 text-4xl font-extrabold tracking-tighter leading-[1.05] text-foreground sm:text-5xl sm:leading-[1.05] lg:text-[3.5rem] lg:leading-[1.02]">
-              Own your bookings.
-              <br />
-              <span className="bg-gradient-to-r from-indigo-600 to-indigo-400 bg-clip-text text-transparent">
-                Grow beyond marketplaces.
-              </span>
-            </h1>
+      {/* The white-lettered logo in both themes: the top of the hero is always midnight. */}
+      <div className="hg-top">
+        <a href="/" className="hg-logo" aria-label="Drive247 home">
+          <Image src="/logo-dark.png" alt="Drive247" width={855} height={195} priority />
+        </a>
+        <nav className="hg-nav" aria-label="Get started">
+          <Button asChild size="sm" className="hg-ghost">
+            <a href="/strategy-call">Book a demo</a>
+          </Button>
+          <Button asChild size="sm" className="hg-primary">
+            <a href="#pricing">Start free trial</a>
+          </Button>
+        </nav>
+      </div>
 
-            <p className="mt-8 text-[15px] leading-relaxed text-muted-foreground lg:max-w-[24rem]">
-              Launch your own direct booking system, take payments, manage
-              customers and reduce marketplace dependency with Drive247.
-            </p>
+      <div className="hg-copy">
+        <h1 className="hg-title font-medium tracking-tighter text-white">
+          Your whole rental business.
+        </h1>
 
-            <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
-              <Button
-                asChild
-                size="lg"
-                className="bg-indigo-600 text-sm font-normal shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30"
-              >
-                <a href="/strategy-call">
-                  Get your 7-day launch plan
-                  <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                </a>
-              </Button>
-              <Button
-                variant="ghost"
-                size="lg"
-                className="text-sm font-normal"
-                asChild
-              >
-                <a href="#dashboard">See how it works</a>
-              </Button>
+        <p className="hg-sub text-base leading-relaxed text-white/85 sm:text-lg">
+          Your booking site, agreements, payments and marketing, working together. No more spreadsheets, chasing signatures or waiting on a developer.
+        </p>
+      </div>
+
+      {/* Real screens, edge to edge. The set is doubled so the loop has no seam. */}
+      <div className="hg-marquee" role="img" aria-label="Drive247 screens: dashboard, agreements, insights, renter portal, website editor, requests, marketing, fleet, booking flow and booking site">
+        <div className="hg-track">
+          {[0, 1].map((set) => (
+            <div key={set} className="hg-set">
+              {COLUMNS.map((column, i) => (
+                <div key={i} className={`hg-col is-${column.shape}`}>
+                  {column.screens.map((s) => (
+                    <div key={s.label} className="hg-tile">
+                      <p>{s.label}</p>
+                      <div className="hg-shot">
+                        {s.crop ? (
+                          <div className="hg-crop" style={{ width: s.crop.width, transform: `translate(${s.crop.shift})` }}>
+                            <Image src={`${s.src}.png`} alt="" fill sizes="130vw" className="dark:hidden" />
+                            <Image src={`${s.src}-dark.png`} alt="" fill sizes="130vw" className="hidden dark:block" />
+                          </div>
+                        ) : (
+                          <>
+                            <Image src={`${s.src}.png`} alt="" fill sizes="(max-width: 767px) 80vw, 45vw" className="dark:hidden" />
+                            <Image src={`${s.src}-dark.png`} alt="" fill sizes="(max-width: 767px) 80vw, 45vw" className="hidden dark:block" />
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
-
-            <p className="mt-4 text-xs text-muted-foreground">
-              For operators with 5+ vehicles already taking bookings.
-            </p>
-
-            <div className="mt-8 flex flex-wrap items-center gap-2">
-              {["Booking Website", "Admin Dashboard", "Renter Portal"].map(
-                (item) => (
-                  <span
-                    key={item}
-                    className="rounded-full border border-indigo-200/40 bg-indigo-50/30 px-3 py-1 text-xs font-medium text-indigo-600/80 dark:border-indigo-800/25 dark:bg-indigo-950/25 dark:text-indigo-400/80"
-                  >
-                    {item}
-                  </span>
-                )
-              )}
-            </div>
-          </div>
-
-          {/* Right — product mockup */}
-          <div className="hidden lg:block">
-            <DashboardPreview />
-          </div>
-        </div>
-
-        {/* Mobile mockup */}
-        <div className="mt-10 lg:hidden">
-          <DashboardPreview />
+          ))}
         </div>
       </div>
-    </AuroraBackground>
+    </section>
   );
 }

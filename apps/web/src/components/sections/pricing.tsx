@@ -1,7 +1,5 @@
 "use client";
 
-import { Check } from "lucide-react";
-
 import { OnboardingProvider } from "@/components/onboarding/onboarding-provider";
 import { EnterpriseCard } from "@/components/pricing/enterprise-card";
 import { PlanCard } from "@/components/pricing/plan-card";
@@ -9,8 +7,6 @@ import type { EnterpriseCard as EnterpriseCardData } from "@/lib/enterprise-card
 import { useFadeIn } from "@/hooks/use-fade-in";
 import type { PromoOffer } from "@/lib/promo-offer";
 import {
-  PLATFORM_INCLUDED,
-  PRICING_FOOTNOTE,
   SIGNUP_PLANS,
   type SignupPlan,
   type SignupPlanId,
@@ -75,6 +71,11 @@ export function PricingSection({
   // already falls back, but a default parameter only fires for `undefined`.
   const catalogue = plans.length > 0 ? plans : SIGNUP_PLANS;
   const cardCount = catalogue.length + (enterprise ? 1 : 0);
+  // One line above the grid when every plan has the same trial. If a super admin
+  // ever sets them differently, each card goes back to stating its own.
+  const firstTrial = catalogue[0]?.trialDays ?? 0;
+  const sharedTrial = catalogue.every((plan) => (plan.trialDays ?? 0) === firstTrial) ? firstTrial : null;
+  const TONES = ["lilac", "brand", "deep"] as const;
 
   const section = (
     <section
@@ -82,7 +83,7 @@ export function PricingSection({
       aria-labelledby="pricing-heading"
       className="bg-muted/50 py-20 sm:py-24"
     >
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+      <div className="mx-auto max-w-[1360px] px-4 sm:px-6">
         {/* Section heading */}
         <div className="flex items-center justify-center gap-4">
           <div className="h-px w-12 bg-border" />
@@ -103,9 +104,14 @@ export function PricingSection({
         </h2>
 
         <p className="mx-auto mt-3 max-w-xl text-center leading-relaxed text-muted-foreground">
-          Pick the plan that fits your fleet today. Every plan includes the
-          whole platform — you can be taking direct bookings the same day.
+          Pick the plan that fits your fleet today. Every plan includes the whole platform. Your portal and booking site are ready the day you sign up.
         </p>
+
+        {sharedTrial ? (
+          <p className="mt-4 text-center text-sm font-semibold text-indigo-600 dark:text-indigo-400">
+            {sharedTrial}-day free trial on every plan. Card required, cancel anytime.
+          </p>
+        ) : null}
 
         {/* Cards. useFadeIn is applied once, on the wrapper, exactly as the
             other sections do — the observer is one-shot, so it must sit on a
@@ -124,7 +130,12 @@ export function PricingSection({
             forever. One plan centres at card width, two at two-thirds, three
             at full width, so the section stays balanced whatever is published.
           */
-          className={`mx-auto mt-12 grid gap-6 md:items-stretch ${
+          /*
+            From lg the cards share five rows (subgrid, in each card), so names,
+            prices, descriptions, buttons and lists all line up across the row
+            however long any one of them is.
+          */
+          className={`mx-auto mt-12 grid gap-4 md:items-stretch lg:gap-y-0 ${
             cardCount === 1
               ? "max-w-sm md:grid-cols-1"
               : cardCount === 2
@@ -134,37 +145,19 @@ export function PricingSection({
                   : "md:grid-cols-2 lg:grid-cols-4"
           } ${visible ? "fade-in-visible" : "fade-in-hidden"}`}
         >
-          {catalogue.map((plan) => (
-            <PlanCard key={plan.id} plan={plan} onSelect={onSelectPlan} offer={offer} />
+          {catalogue.map((plan, i) => (
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              onSelect={onSelectPlan}
+              offer={offer}
+              tone={TONES[Math.min(i, TONES.length - 1)]}
+              showTrial={sharedTrial === null}
+            />
           ))}
           {enterprise && <EnterpriseCard card={enterprise} />}
         </div>
 
-        {/* Nothing in PLATFORM_INCLUDED is plan-gated, which is exactly why it
-            is listed once here instead of being repeated on all three cards. */}
-        <div className="mt-12 rounded-2xl border bg-card p-6 shadow-sm sm:p-8">
-          <h3 className="text-center text-lg font-semibold tracking-tight">
-            Every plan includes the full platform
-          </h3>
-          <ul className="mt-6 grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-            {PLATFORM_INCLUDED.map((feature) => (
-              <li
-                key={feature}
-                className="flex items-start gap-2.5 text-sm text-muted-foreground"
-              >
-                <Check
-                  className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-400"
-                  aria-hidden="true"
-                />
-                {feature}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          {PRICING_FOOTNOTE}
-        </p>
       </div>
     </section>
   );

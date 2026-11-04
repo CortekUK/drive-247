@@ -1,0 +1,198 @@
+/*
+ * The hero: one full screen, falling from midnight through the brand's indigo into
+ * a lighter purple, white text on top and a strip of real screens running edge to edge.
+ */
+.hg-hero {
+  --hg-end: #a79ff5;
+  --hg-low: #6a5ce8;
+  position: relative;
+  height: 100svh;
+  min-height: 640px;
+  margin-top: -4rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: clamp(80px, 14svh, 136px);
+  background: linear-gradient(
+    to bottom,
+    #07071a 0%,
+    #17136a 24%,
+    hsl(var(--v2-primary)) 58%,
+    var(--hg-low) 82%,
+    var(--hg-end) 100%
+  );
+}
+.dark .hg-hero {
+  --hg-end: hsl(var(--v2-background));
+  --hg-low: #2a2190;
+}
+.hg-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.035) 1px, transparent 1px);
+  background-size: 96px 96px;
+}
+/* The screens: one strip, edge to edge, running off the bottom of the hero. */
+.hg-marquee {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  margin-top: clamp(24px, 5svh, 56px);
+  overflow: hidden;
+  animation: hg-rise-far 420ms ease-out 200ms both;
+}
+.hg-track {
+  display: flex;
+  width: max-content;
+  height: 100%;
+  animation: hg-slide 80s linear infinite;
+}
+.hg-marquee:hover .hg-track { animation-play-state: paused; }
+.hg-set { display: flex; gap: 16px; padding-right: 16px; height: 100%; }
+/* Height comes from the room left under the text, width from the height. */
+.hg-col {
+  height: calc(100% + 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.hg-col.is-wide { aspect-ratio: 1.6; }
+.hg-col.is-square { aspect-ratio: 1.02; }
+.hg-col.is-phone { aspect-ratio: 0.62; }
+.hg-tile {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 8px;
+  border: 1px solid rgb(255 255 255 / 0.32);
+  border-bottom: 0;
+  border-radius: 20px 20px 0 0;
+  background: linear-gradient(160deg, rgb(255 255 255 / 0.28), rgb(255 255 255 / 0.08) 55%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5), 0 12px 40px rgb(13 8 70 / 0.22);
+}
+/* The upper tile of a stacked pair is a whole card; only the lower runs off the page. */
+.hg-tile:not(:last-child) {
+  flex-grow: 1.15;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.32);
+  border-radius: 20px;
+}
+.hg-tile:not(:last-child) .hg-shot { border-radius: 12px; }
+.hg-tile p {
+  flex: none;
+  padding: 7px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+}
+.hg-shot {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 12px 12px 0 0;
+  isolation: isolate;
+  background: linear-gradient(155deg, #f1edff, #cdc4ff);
+}
+/*
+ * Frosted screens: blending turns each capture's white into the frost behind it and
+ * leaves its text fully dark, so the glass costs no legibility. `.hg-crop` carries the
+ * blend itself because its transform would isolate the picture inside it.
+ */
+.hg-shot > img, .hg-crop { mix-blend-mode: multiply; }
+.hg-shot img { object-fit: cover; object-position: top; }
+.hg-shot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(125deg, rgb(255 255 255 / 0.28), rgb(255 255 255 / 0.06) 22%, rgb(255 255 255 / 0) 40%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6);
+}
+.hg-crop { position: absolute; top: 0; left: 0; aspect-ratio: 1.6; }
+/* Stacked and centred on smaller screens. */
+.hg-copy {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: fit-content;
+  padding-inline: 1rem;
+  text-align: center;
+}
+.hg-title { font-size: clamp(2.5rem, min(8.4svh, 10vw), 4.75rem); line-height: 1.06; }
+.hg-sub { max-width: 44rem; margin: clamp(12px, 2.4svh, 24px) auto 0; }
+/* Wide screens: the words sit on the left, under the logo. */
+@media (min-width: 1280px) {
+  .hg-copy { padding-inline: clamp(16px, 2.5vw, 40px); text-align: left; }
+  .hg-title { font-size: clamp(2.5rem, min(9.5svh, 5vw), 6rem); }
+  .hg-sub { max-width: 46rem; margin-inline: 0; }
+}
+.hg-top {
+  position: absolute;
+  z-index: 3;
+  top: clamp(14px, 2.6svh, 24px);
+  inset-inline: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-inline: clamp(16px, 2.5vw, 40px);
+}
+.hg-nav { display: flex; flex: none; gap: 8px; }
+.hg-primary, .hg-primary:hover {
+  background: linear-gradient(180deg, #fff, rgb(255 255 255 / 0.92));
+  color: hsl(var(--brand-h) var(--brand-s) var(--brand-l));
+  box-shadow: inset 0 1px 0 #fff;
+}
+.hg-primary:hover { background: #ece9ff; }
+.hg-ghost {
+  border: 1px solid rgb(255 255 255 / 0.32);
+  background: linear-gradient(160deg, rgb(255 255 255 / 0.26), rgb(255 255 255 / 0.08));
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  backdrop-filter: blur(14px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45);
+  color: #fff;
+}
+.hg-ghost:hover { background: rgb(255 255 255 / 0.24); color: #fff; }
+.hg-logo img { width: auto; height: clamp(26px, 3.6svh, 34px); }
+@keyframes hg-rise-far {
+  from { opacity: 0; transform: translateY(28px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes hg-slide { to { transform: translateX(-50%); } }
+@keyframes hg-rise {
+  from { opacity: 0; translate: 0 12px; }
+  to { opacity: 1; translate: 0 0; }
+}
+.hg-title, .hg-sub { animation: hg-rise 200ms ease-out both; }
+.hg-sub { animation-delay: 80ms; }
+
+@media (max-width: 767px) {
+  .hg-hero { min-height: 700px; padding-top: 84px; }
+  .hg-top { gap: 8px; }
+  .hg-logo { flex: none; }
+  .hg-logo img { height: 24px; }
+  .hg-nav { gap: 6px; }
+  .hg-nav a { height: 32px; padding-inline: 10px; font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hg-title, .hg-sub, .hg-marquee, .hg-track { animation: none; }
+}
+/* Dark captures do the same in reverse: their near-black lifts into a dark frost. */
+.dark .hg-shot { background: linear-gradient(155deg, #3b3285, #1d1850); }
+.dark .hg-shot > img, .dark .hg-crop { mix-blend-mode: screen; }
+.dark .hg-shot::after {
+  background: linear-gradient(125deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.04) 22%, rgb(255 255 255 / 0) 40%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.22);
+}

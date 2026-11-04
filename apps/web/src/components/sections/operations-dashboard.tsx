@@ -1,233 +1,227 @@
 "use client";
 
-import { Monitor } from "lucide-react";
-import Image from "next/image";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { DASHBOARD_SLIDES } from "@/lib/constants";
-import { useFadeIn } from "@/hooks/use-fade-in";
+import { useEffect, useRef, useState } from "react";
+import {
+  AgreementsArt,
+  InsightsArt,
+  MarketingArt,
+  PortalScreen,
+  SixToolsArt,
+  WebsiteArt,
+} from "./portal-glass";
 
-export function OperationsDashboard() {
-  const { ref: videoRowRef, visible: videoRowVisible } = useFadeIn();
-  const { ref: tabsRowRef, visible: tabsRowVisible } = useFadeIn();
+const ROWS = [
+  {
+    art: SixToolsArt,
+    title: "Stop juggling six tools to run one business.",
+    body: "Bookings, vehicle availability, payments and deposits, e-signed agreements, customer messages and staff roles in one portal, under your brand and, if you choose, on your own domain.",
+    src: "/v2/hero/dashboard",
+    phone: "/v2/phone-dashboard",
+    phoneAlt: "The same dashboard on a phone",
+    aspect: "1440 / 900",
+    tab: "Dashboard",
+    url: "northwind.portal.drive-247.com",
+    alt: "The Drive247 operator dashboard",
+  },
+  {
+    art: WebsiteArt,
+    title: "Change your website without waiting on a developer.",
+    body: "Edit your booking site's pages yourself, see the change as you make it, and publish when you're ready.",
+    src: "/v2/hero/editor",
+    phone: "/v2/phone-booking-site",
+    phoneAlt: "The live booking site on a phone",
+    aspect: "1440 / 900",
+    tab: "Website editor",
+    url: "northwind.portal.drive-247.com/cms",
+    alt: "The Drive247 website editor",
+  },
+  {
+    art: AgreementsArt,
+    title: "Stop chasing signatures.",
+    body: "Send agreements for e-signature and follow every one through to its signed copy. Renters sign from their phone.",
+    src: "/v2/hero/agreements",
+    phone: "/v2/phone-agreements",
+    phoneAlt: "The agreements page on a phone",
+    aspect: "1168 / 640",
+    tab: "Agreements",
+    url: "northwind.portal.drive-247.com/agreements",
+    alt: "The Drive247 agreements page",
+  },
+  {
+    art: InsightsArt,
+    title: "Know what every car actually makes.",
+    body: "Insights shows what you took in, gave back, spent and kept, with utilisation and profit for every car, so decisions start from your own numbers.",
+    src: "/v2/slide-revenue",
+    phone: "/v2/phone-insights",
+    phoneAlt: "The Insights page on a phone",
+    aspect: "1917 / 992",
+    tab: "Insights",
+    url: "northwind.portal.drive-247.com/insights",
+    alt: "The Drive247 Insights page",
+  },
+  {
+    art: MarketingArt,
+    title: "See what your website brings in.",
+    body: "Visitors, bookings from the site and the share of visitors who book, with every step from first visit to paid booking in one place.",
+    src: "/v2/hero/marketing",
+    phone: "/v2/phone-website-stats",
+    phoneAlt: "The website analytics page on a phone",
+    aspect: "1168 / 660",
+    tab: "Your website",
+    url: "northwind.portal.drive-247.com",
+    alt: "The Drive247 website analytics page",
+  },
+];
+
+/*
+ * True once the row's top is well into the screen, so the build happens where it can be
+ * seen rather than at the bottom edge. False again once the row is back below the screen,
+ * so scrolling down to it plays again; a row passed upward stays built.
+ */
+function useReveal() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const trigger = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) setVisible(true);
+      },
+      { rootMargin: "0px 0px -30% 0px" },
+    );
+    const reset = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting && entry.boundingClientRect.top > 0) setVisible(false);
+    });
+    trigger.observe(el);
+    reset.observe(el);
+    return () => {
+      trigger.disconnect();
+      reset.disconnect();
+    };
+  }, []);
+
+  return { ref, visible };
+}
+
+function Row({ row, flipped }: { row: (typeof ROWS)[number]; flipped: boolean }) {
+  const { ref, visible } = useReveal();
+  const Art = row.art;
 
   return (
-    <section id="features" className="bg-muted/50 py-20 sm:py-24">
-      <span id="dashboard" />
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        {/* Section heading */}
-        <div className="flex items-center justify-center gap-4">
-          <div className="h-px w-12 bg-border" />
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-            Back-office control
-          </p>
-          <div className="h-px w-12 bg-border" />
-        </div>
-
-        <h2 className="mt-5 text-center text-3xl font-bold tracking-tighter sm:text-4xl lg:text-[44px] lg:leading-tight">
-          Run your entire rental operation from{" "}
-          <span className="text-indigo-600 dark:text-indigo-400">
-            one dashboard
-          </span>
+    <div
+      ref={ref}
+      className={`pg-row${flipped ? " is-flipped" : ""}${visible ? " is-in" : ""}`}
+    >
+      <div className="pg-copy">
+        <Art play={visible} />
+        <h2 className="mt-10 text-3xl font-bold tracking-tighter sm:text-4xl lg:text-[44px] lg:leading-tight">
+          {row.title}
         </h2>
+        <p className="mt-5 text-lg leading-relaxed text-muted-foreground">{row.body}</p>
+      </div>
 
-        <p className="mx-auto mt-3 max-w-xl text-center leading-relaxed text-muted-foreground">
-          Fleet, bookings, payments and analytics — unified in one system.
-          No more switching between spreadsheets, payment platforms, and messaging apps.
-        </p>
+      <PortalScreen src={row.src} alt={row.alt} aspect={row.aspect} tab={row.tab} url={row.url} phone={row.phone} phoneAlt={row.phoneAlt} />
+    </div>
+  );
+}
 
-        {/* Video row */}
-        <div
-          ref={videoRowRef}
-          className={`mt-16 grid items-center gap-6 lg:grid-cols-5 ${videoRowVisible ? "fade-in-visible" : "fade-in-hidden"}`}
-        >
-          {/* Desktop mockup — takes 3 of 5 columns */}
-          <div className="lg:col-span-3">
-            <div className="overflow-hidden rounded-xl border border-border/50 bg-muted/30 shadow-lg">
-              <div className="flex items-center gap-2 border-b bg-muted/60 px-4 py-3">
-                <div className="flex gap-1.5">
-                  <div className="h-3 w-3 rounded-full bg-red-400/80" />
-                  <div className="h-3 w-3 rounded-full bg-yellow-400/80" />
-                  <div className="h-3 w-3 rounded-full bg-green-400/80" />
-                </div>
-                <div className="mx-auto flex h-6 w-40 sm:w-64 items-center justify-center rounded-md bg-background px-3">
-                  <span className="text-[11px] text-muted-foreground">
-                    admin.drive247.com
-                  </span>
-                </div>
-                <div className="w-[52px]" />
-              </div>
-              <video autoPlay loop muted playsInline className="w-full dark:hidden">
-                <source src="/dashboard-video-v2.mp4" type="video/mp4" />
-              </video>
-              <video autoPlay loop muted playsInline className="hidden w-full dark:block">
-                <source src="/dashboard-video-v2-dark.mp4" type="video/mp4" />
-              </video>
-            </div>
-          </div>
+/*
+ * One thread down the whole area, through the gap between words and window in each row,
+ * so it never runs behind anything. It draws itself as you scroll, tip leading. Measured
+ * from the rows because their heights differ; `offsetLeft` and `offsetTop` ignore the
+ * reveal's `translate`, so a row part-way through building does not move the line.
+ */
+function useThread() {
+  const sectionRef = useRef<HTMLElement>(null);
+  const liveRef = useRef<SVGPathElement>(null);
+  const tipRef = useRef<SVGCircleElement>(null);
+  const [thread, setThread] = useState<{ w: number; h: number; d: string; stops: [number, number][] } | null>(null);
 
-          {/* Intro text — takes 2 of 5 columns */}
-          <div className="lg:col-span-2">
-            <h3 className="text-2xl font-bold tracking-tight">
-              Stop juggling six tools to run one business.
-            </h3>
-            <p className="mt-3 text-muted-foreground leading-relaxed">
-              Booking management, vehicle availability, payments and deposits,
-              agreements and reminders, customer communication, and admin
-              controls — all in one dashboard, on your domain, under your brand.
-            </p>
-          </div>
-        </div>
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
 
-        {/* Tab carousel */}
-        <div
-          ref={tabsRowRef}
-          className={tabsRowVisible ? "fade-in-visible" : "fade-in-hidden"}
-        >
-          <Tabs defaultValue="operations" className="mt-6 sm:mt-12">
-            <TabsList
-              variant="line"
-              className="mx-auto grid h-auto w-full grid-cols-2 gap-2 bg-transparent sm:flex sm:flex-wrap sm:justify-center"
-            >
-              {DASHBOARD_SLIDES.map((slide) => (
-                  <TabsTrigger
-                    key={slide.id}
-                    value={slide.id}
-                    className="whitespace-nowrap rounded-full border border-border/60 bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all after:hidden last:col-span-2 last:mx-auto last:w-3/4 data-[state=active]:border-indigo-600/30 data-[state=active]:bg-indigo-600/[0.08] data-[state=active]:text-indigo-600 sm:px-4 sm:py-2 sm:text-sm sm:last:col-span-1 sm:last:w-auto dark:border-neutral-700 dark:data-[state=active]:border-indigo-400/50 dark:data-[state=active]:bg-indigo-400/[0.08] dark:data-[state=active]:text-indigo-400"
-                  >
-                    {slide.trigger}
-                  </TabsTrigger>
-                ))}
-            </TabsList>
+    const measure = () => {
+      const stops = [...section.querySelectorAll<HTMLElement>(".pg-row")].map((row): [number, number] => {
+        const [a, b] = [row.querySelector<HTMLElement>(".pg-copy")!, row.querySelector<HTMLElement>(".pg-device")!];
+        const [first, second] = a.offsetLeft < b.offsetLeft ? [a, b] : [b, a];
+        return [(first.offsetLeft + first.offsetWidth + second.offsetLeft) / 2, row.offsetTop + row.offsetHeight / 2];
+      });
+      if (!stops.length) return;
+      const h = section.offsetHeight;
+      const points: [number, number][] = [[stops[0][0], 0], ...stops, [stops[stops.length - 1][0], h]];
+      const d = points.reduce((path, [x, y], i) => {
+        if (i === 0) return `M${x} ${y}`;
+        const [px, py] = points[i - 1];
+        const mid = (py + y) / 2;
+        return `${path}C${px} ${mid} ${x} ${mid} ${x} ${y}`;
+      }, "");
+      setThread({ w: section.offsetWidth, h, d, stops });
+    };
 
-            {DASHBOARD_SLIDES.map((slide) => (
-              <TabsContent
-                key={slide.id}
-                value={slide.id}
-                className="animate-in fade-in duration-200"
-              >
-                <div className="relative mt-6 overflow-hidden rounded-2xl border bg-card shadow-sm">
-                  {/* Top accent line */}
-                  <div className="absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-indigo-600/20 to-transparent" />
+    measure();
+    const size = new ResizeObserver(measure);
+    size.observe(section);
+    return () => size.disconnect();
+  }, []);
 
-                  <div className="grid items-center gap-6 p-6 sm:p-8 lg:grid-cols-2">
-                    {/* Screenshot or video */}
-                    <div className="overflow-hidden rounded-xl border border-border/50 bg-muted/30">
-                      {"video" in slide && slide.video ? (
-                        "videoDark" in slide && slide.videoDark ? (
-                          <>
-                            <video
-                              autoPlay
-                              loop
-                              muted
-                              playsInline
-                              className="w-full dark:hidden"
-                              onLoadedMetadata={(e) => {
-                                e.currentTarget.playbackRate = 2;
-                              }}
-                            >
-                              <source src={slide.video} type="video/mp4" />
-                            </video>
-                            <video
-                              autoPlay
-                              loop
-                              muted
-                              playsInline
-                              className="hidden w-full dark:block"
-                              onLoadedMetadata={(e) => {
-                                e.currentTarget.playbackRate = 2;
-                              }}
-                            >
-                              <source src={slide.videoDark} type="video/mp4" />
-                            </video>
-                          </>
-                        ) : (
-                          <video
-                            autoPlay
-                            loop
-                            muted
-                            playsInline
-                            className="w-full"
-                            onLoadedMetadata={(e) => {
-                              e.currentTarget.playbackRate = 2;
-                            }}
-                          >
-                            <source src={slide.video} type="video/mp4" />
-                          </video>
-                        )
-                      ) : slide.image.startsWith("/placeholder") ? (
-                        <div className="flex aspect-[4/3] items-center justify-center text-muted-foreground">
-                          <div className="text-center">
-                            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-indigo-600/[0.08] dark:bg-indigo-400/[0.1]">
-                              <Monitor className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-                            </div>
-                            <p className="text-sm font-medium">{slide.title}</p>
-                            <p className="mt-1 text-xs text-muted-foreground/60">
-                              Screenshot coming soon
-                            </p>
-                          </div>
-                        </div>
-                      ) : "imageDark" in slide && slide.imageDark ? (
-                        <>
-                          <Image
-                            src={slide.image}
-                            alt={slide.title}
-                            width={1917}
-                            height={992}
-                            quality={100}
-                            className="w-full dark:hidden"
-                          />
-                          <Image
-                            src={slide.imageDark}
-                            alt={slide.title}
-                            width={1917}
-                            height={992}
-                            quality={100}
-                            className="hidden w-full dark:block"
-                          />
-                        </>
-                      ) : (
-                        <Image
-                          src={slide.image}
-                          alt={slide.title}
-                          width={1917}
-                          height={992}
-                          quality={100}
-                          className="w-full"
-                        />
-                      )}
-                    </div>
+  useEffect(() => {
+    const section = sectionRef.current;
+    const live = liveRef.current;
+    const tip = tipRef.current;
+    if (!section || !live || !tip || !thread) return;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      live.style.strokeDashoffset = "0";
+      tip.style.display = "none";
+      return;
+    }
 
-                    {/* Text & bullets */}
-                    <div>
-                      <h4 className="text-xl font-bold tracking-tight">
-                        {slide.title}
-                      </h4>
-                      <p className="mt-2 text-muted-foreground leading-relaxed">
-                        {slide.description}
-                      </p>
-                      {"body" in slide && slide.body && (
-                        <p className="mt-2 text-muted-foreground leading-relaxed">
-                          {slide.body}
-                        </p>
-                      )}
-                      <ul className="mt-5 space-y-2">
-                        {slide.bullets.map((bullet) => (
-                          <li
-                            key={bullet}
-                            className="flex items-start gap-3 rounded-lg bg-muted/50 px-3 py-2.5"
-                          >
-                            <span className="mt-1 block h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-600 dark:bg-indigo-400" />
-                            <p className="text-sm font-medium">{bullet}</p>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-            ))}
-          </Tabs>
-        </div>
+    let frame = 0;
+    const paint = () => {
+      frame = 0;
+      const box = section.getBoundingClientRect();
+      const done = Math.min(1, Math.max(0, (innerHeight * 0.7 - box.top) / box.height));
+      live.style.strokeDashoffset = String(1 - done);
+      const at = live.getPointAtLength(live.getTotalLength() * done);
+      tip.setAttribute("cx", String(at.x));
+      tip.setAttribute("cy", String(at.y));
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(paint);
+    };
+    paint();
+    addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, [thread]);
+
+  return { sectionRef, liveRef, tipRef, thread };
+}
+
+export function OperationsDashboard() {
+  const { sectionRef, liveRef, tipRef, thread } = useThread();
+
+  return (
+    <section ref={sectionRef} id="features" className="pg-area">
+      <span id="dashboard" />
+      {thread && (
+        <svg className="pg-thread" viewBox={`0 0 ${thread.w} ${thread.h}`} width={thread.w} height={thread.h} fill="none" aria-hidden>
+          <path className="pg-thread-rest" d={thread.d} />
+          <path ref={liveRef} className="pg-thread-live" pathLength={1} d={thread.d} />
+          {thread.stops.map(([x, y]) => (
+            <circle key={y} className="pg-thread-stop" cx={x} cy={y} r="5" />
+          ))}
+          <circle ref={tipRef} className="pg-thread-tip" r="5" />
+        </svg>
+      )}
+      <div className="pg-rows">
+        {ROWS.map((row, i) => (
+          <Row key={row.src} row={row} flipped={i % 2 === 1} />
+        ))}
       </div>
     </section>
   );

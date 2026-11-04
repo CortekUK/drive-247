@@ -1,8 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, Gift, Sparkles } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useOptionalOnboarding } from "@/components/onboarding/onboarding-provider";
 import {
@@ -12,6 +10,7 @@ import {
 } from "@/lib/plans";
 import { discountedPrice, type PromoOffer } from "@/lib/promo-offer";
 import { cn } from "@/lib/utils";
+import "./plan-cards.css";
 
 /** "$79", "$79.20". */
 function formatUsd(n: number): string {
@@ -31,6 +30,10 @@ interface PlanCardProps {
   onSelect?(planId: SignupPlanId): void;
   /** A Drive247 promo / referral code the visitor carries: shown as the discounted price. */
   offer?: PromoOffer | null;
+  /** The card's colour; the grid deepens it plan by plan. */
+  tone?: "lilac" | "brand" | "deep";
+  /** Off when the section states one shared trial above the cards. */
+  showTrial?: boolean;
 }
 
 /**
@@ -45,7 +48,7 @@ interface PlanCardProps {
  * Must be rendered inside <OnboardingProvider> (supplied by PricingSection)
  * UNLESS `onSelect` is given, in which case the provider is never consulted.
  */
-export function PlanCard({ plan, onSelect, offer }: PlanCardProps) {
+export function PlanCard({ plan, onSelect, offer, tone = "lilac", showTrial = true }: PlanCardProps) {
   // `open()` never throws and never rejects — every failure mode (missing Stripe
   // config, missing Supabase env, a dead network) surfaces as a banner inside the
   // dialog itself, per the onboarding spec. The card therefore has no error
@@ -69,107 +72,57 @@ export function PlanCard({ plan, onSelect, offer }: PlanCardProps) {
   };
 
   return (
-    <div
-      className={cn(
-        "relative flex h-full flex-col overflow-hidden rounded-2xl border bg-card p-6 shadow-sm transition-all",
-        "hover:-translate-y-0.5 hover:shadow-md",
-        plan.highlighted
-          ? // The recommended tier is distinguished by colour and the badge only —
-            // never by size or vertical offset. An earlier version lifted this card
-            // with `md:-mt-4 md:pb-10`, which made the three cards visibly different
-            // heights and knocked their prices off a shared baseline.
-            "border-indigo-600/40 shadow-lg shadow-indigo-600/10 ring-1 ring-indigo-600/15 dark:border-indigo-400/30 dark:ring-indigo-400/15"
-          : "border-border"
-      )}
-    >
-      {/* Top accent hairline — a hint of the brand indigo without a full gradient. */}
-      <div
-        aria-hidden="true"
-        className={cn(
-          "absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent to-transparent",
-          plan.highlighted ? "via-indigo-600/40" : "via-indigo-600/20"
-        )}
-      />
+    <div className={cn("pc-card", tone !== "lilac" && `is-${tone}`)}>
+      {plan.highlighted && <span className="pc-tag">Most popular</span>}
 
-      {plan.highlighted && (
-        <Badge className="absolute right-5 top-5 gap-1 bg-indigo-600 text-white dark:bg-indigo-500">
-          <Sparkles className="h-3 w-3" aria-hidden="true" /> Most popular
-        </Badge>
-      )}
-
-      <p className="text-sm font-semibold tracking-tight">{plan.name}</p>
-      <p className="mt-1 text-xs font-medium uppercase tracking-[0.14em] text-indigo-600 dark:text-indigo-400">
-        {plan.fleetBand}
-      </p>
-
-      <div className="mt-5 flex items-baseline gap-1">
-        {offer && (
-          <span className="mr-1 text-lg text-muted-foreground line-through" aria-label={`was ${formatPlanPriceUsd(plan)}`}>
-            {formatPlanPriceUsd(plan)}
-          </span>
-        )}
-        <span className="text-4xl font-bold tracking-tighter">
-          {offer ? formatUsd(discountedPrice(plan.priceUsd, offer)) : formatPlanPriceUsd(plan)}
-        </span>
-        <span className="text-sm text-muted-foreground">/month</span>
+      <div>
+        <p className="pc-name">{plan.name}</p>
+        <p className="pc-band">{plan.fleetBand}</p>
       </div>
-      {offer && (
-        <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-          {offer.discountText} {offer.durationText}
-        </p>
-      )}
-      {trialDays > 0 && (
-        <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400">
-          <Gift className="h-3.5 w-3.5" aria-hidden="true" />
-          {trialDays}-day free trial · card required, cancel anytime
-        </p>
-      )}
-      {/* Reserves two rendered lines (14px text at leading-relaxed ≈ 22.75px/line),
-          so a tier whose tagline happens to fit on one line does not pull its
-          Subscribe button above the other two. 2.5rem was under one line short. */}
-      <p className="mt-2 min-h-[2.875rem] text-sm leading-relaxed text-muted-foreground">
-        {plan.tagline}
-      </p>
+
+      <div>
+        <div className="pc-price">
+          {offer && (
+            <span className="pc-was" aria-label={`was ${formatPlanPriceUsd(plan)}`}>
+              {formatPlanPriceUsd(plan)}
+            </span>
+          )}
+          <span className="pc-amount">
+            {offer ? formatUsd(discountedPrice(plan.priceUsd, offer)) : formatPlanPriceUsd(plan)}
+          </span>
+          <span className="pc-per">/month</span>
+        </div>
+        {offer && (
+          <p className="pc-note">
+            {offer.discountText} {offer.durationText}
+          </p>
+        )}
+        {/* Said once above the grid when every plan has the same trial. */}
+        {showTrial && trialDays > 0 && (
+          <p className="pc-note">{trialDays}-day free trial · card required, cancel anytime</p>
+        )}
+      </div>
+
+      <p className="pc-tagline">{plan.tagline}</p>
 
       <Button
         size="lg"
         onClick={handlePress}
-        // Three buttons all labelled "Subscribe" are ambiguous when a screen
-        // reader lists them out of context, so the accessible name carries the
-        // tier and the price.
+        // Several buttons with one label are ambiguous when a screen reader lists
+        // them out of context, so the accessible name carries the tier and price.
         aria-label={
           trialDays > 0
             ? `Start a ${trialDays}-day free trial of ${plan.name}, then ${formatPlanPriceUsd(plan)} per month`
             : `Subscribe to ${plan.name} — ${formatPlanPriceUsd(plan)} per month`
         }
-        // Every tier gets the same solid indigo CTA. Giving the non-recommended
-        // tiers an `outline` button read as "these are the lesser options" and
-        // suppressed clicks on Starter and Scale, which are real plans we want
-        // people to buy. The recommended tier is signalled by the card's border,
-        // ring and badge — not by being the only one with a live-looking button.
-        variant="default"
-        className={cn(
-          "mt-6 w-full bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-all",
-          "hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30",
-          "dark:bg-indigo-500 dark:hover:bg-indigo-600"
-        )}
+        className="pc-btn"
       >
-        {trialDays > 0 ? `Start ${trialDays}-Day Free Trial` : "Subscribe"}{" "}
-        <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        {trialDays > 0 ? "Start free trial" : "Subscribe"}
       </Button>
 
-      <ul className="mt-6 space-y-2.5 border-t pt-6">
+      <ul className="pc-list">
         {plan.bullets.map((bullet) => (
-          <li
-            key={bullet}
-            className="flex items-start gap-2.5 text-sm text-muted-foreground"
-          >
-            <Check
-              className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-400"
-              aria-hidden="true"
-            />
-            {bullet}
-          </li>
+          <li key={bullet}>{bullet}</li>
         ))}
       </ul>
     </div>
