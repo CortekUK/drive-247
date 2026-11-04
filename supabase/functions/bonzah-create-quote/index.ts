@@ -16,6 +16,7 @@ import {
   type TenantBonzahCredentials,
 } from '../_shared/bonzah-client.ts'
 import { corsHeaders, handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
+import { cleanBonzahText, resolveBonzahRenterName } from '../_shared/bonzah-renter-name.ts'
 
 // Bonzah Auto Rental Insurance product ID
 const PRODUCT_ID = 'M000000000006'
@@ -190,8 +191,23 @@ async function createSingleQuote(
   // Surface the raw message so the caller sees the real reason instead of
   // letting confirm-payment half-fail on an empty payment_id later.
   if (!response.data?.payment_id) {
+    // Bonzah usually gives no reason here, so record the shape of what we sent.
+    // Shape only: this is an insurance applicant's personal data.
+    const isAscii = (v: unknown) => /^[\x20-\x7E]*$/.test(String(v ?? ''))
+    console.error('[Bonzah Quote] No payment_id returned', {
+      quote_id: response.data?.quote_id,
+      txt: response.txt || null,
+      msg: response.data?.msg ?? null,
+      first_name_ok: !!body.renter.first_name && isAscii(body.renter.first_name),
+      last_name_ok: !!body.renter.last_name && isAscii(body.renter.last_name),
+      street_ok: isAscii(commonFields.address_line_1),
+      zip_length: String(commonFields.zip_code ?? '').length,
+      phone_length: String(commonFields.phone_no ?? '').length,
+      has_dob: !!body.renter.dob,
+      has_license: !!body.renter.license?.number,
+    })
     throw new Error(
-      `Bonzah did not finalize the quote for ${chunk.start}-${chunk.end}: ${response.txt || response.data?.msg || 'no payment_id returned'}`
+      `Bonzah did not finalize the quote for ${chunk.start}-${chunk.end}: ${response.txt || response.data?.msg || "no payment_id returned, and Bonzah gave no reason. Check the renter's name, date of birth, address and licence details."}`
     )
   }
 
@@ -267,6 +283,51 @@ serve(async (req) => {
 
     if (!body.renter) {
       return errorResponse('Missing renter details')
+    }
+
+    // Bonzah needs a real first and last name, and callers send placeholders for
+    // one-word customers. See _shared/bonzah-renter-name.ts. The resolved name is
+    // stored in renter_details, so payment recovery and extensions reuse it.
+    let renterName = resolveBonzahRenterName({
+      firstName: body.renter.first_name,
+      lastName: body.renter.last_name,
+    })
+    if (!renterName.ok) {
+      const [{ data: verifications }, { data: customerRow }] = await Promise.all([
+        supabase
+          .from('identity_verifications')
+          .select('first_name, last_name, review_result')
+          .eq('customer_id', body.customer_id)
+          .not('last_name', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(20),
+        supabase
+          .from('customers')
+          .select('name')
+          .eq('id', body.customer_id)
+          .eq('tenant_id', body.tenant_id)
+          .maybeSingle(),
+      ])
+      renterName = resolveBonzahRenterName({
+        firstName: body.renter.first_name,
+        lastName: body.renter.last_name,
+        verifications,
+        customerName: customerRow?.name,
+      })
+    }
+    if (!renterName.ok) {
+      console.warn(`[Bonzah Quote] Refused: no real first and last name for customer ${body.customer_id}`)
+      return jsonResponse({
+        error: `Bonzah needs the renter's legal first and last name, but this customer's profile only shows "${renterName.displayName}". Add the full name to the customer's profile and try again. No policy was created and nothing was charged.`,
+        code: 'renter_name_incomplete',
+      }, 400)
+    }
+    console.log(`[Bonzah Quote] Renter name source: ${renterName.source}`)
+    body.renter = {
+      ...body.renter,
+      first_name: renterName.firstName,
+      last_name: renterName.lastName,
+      address: { ...body.renter.address, street: cleanBonzahText(body.renter.address?.street) },
     }
 
     // Check if any coverage is selected

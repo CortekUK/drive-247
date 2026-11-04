@@ -503,7 +503,13 @@ export default function BookingCheckoutStep({
       if (error) {
         console.error('[Bonzah] Error creating quote:', error);
         setBonzahQuoteFailed(true);
-        toast.error('Insurance could not be set up, so it has been removed from your total. Our team can help arrange coverage after booking.');
+        let code: string | null = null;
+        try {
+          code = (await (error as any).context?.json())?.code ?? null;
+        } catch { /* keep the general message */ }
+        toast.error(code === 'renter_name_incomplete'
+          ? 'Insurance needs your full first and last name, so it has been removed from your total. Please enter your full name, or our team can help arrange coverage after booking.'
+          : 'Insurance could not be set up, so it has been removed from your total. Our team can help arrange coverage after booking.');
         return { policyId: null, failed: true };
       }
 
