@@ -7,11 +7,16 @@ import {
   isBonzahAuthError,
   formatDateForBonzah,
   normalizeZipForBonzah,
+  resolveBonzahWindow,
+  todayInZone,
+  zonedInstant,
+  MIN_MINUTES_BEFORE_PICKUP,
   type CoverageTypes,
   type RenterDetails,
   type TenantBonzahCredentials,
 } from '../_shared/bonzah-client.ts'
 import { corsHeaders, handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
+import { cleanBonzahText, resolveBonzahRenterName } from '../_shared/bonzah-renter-name.ts'
 
 // Bonzah Auto Rental Insurance product ID
 const PRODUCT_ID = 'M000000000006'
@@ -70,42 +75,6 @@ function extractStateFromAddress(addr: string | null | undefined): string | null
   const trailing = s.match(/,\s*([A-Za-z]{2})\s*(?:,\s*(?:USA|United States))?\s*$/i)
   if (trailing && STATE_NAMES[trailing[1].toUpperCase()]) return trailing[1].toUpperCase()
   return null
-}
-
-/**
- * Get current date and hour in Pacific timezone using formatToParts (locale-independent).
- * Returns { date: 'YYYY-MM-DD', hour: number }
- */
-function getPacificNow(): { date: string; hour: number } {
-  const now = new Date()
-  const dateParts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(now)
-  const y = dateParts.find(p => p.type === 'year')!.value
-  const m = dateParts.find(p => p.type === 'month')!.value
-  const d = dateParts.find(p => p.type === 'day')!.value
-
-  const timeParts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles',
-    hour: 'numeric', hour12: false,
-  }).formatToParts(now)
-  const hour = parseInt(timeParts.find(p => p.type === 'hour')!.value, 10)
-
-  return { date: `${y}-${m}-${d}`, hour }
-}
-
-/** Get tomorrow's date in Pacific timezone as YYYY-MM-DD */
-function getPacificTomorrow(): string {
-  const tomorrow = new Date(Date.now() + 86400000)
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(tomorrow)
-  const y = parts.find(p => p.type === 'year')!.value
-  const m = parts.find(p => p.type === 'month')!.value
-  const d = parts.find(p => p.type === 'day')!.value
-  return `${y}-${m}-${d}`
 }
 
 interface CreateQuoteRequest {
@@ -189,17 +158,15 @@ async function createSingleQuote(
   body: CreateQuoteRequest,
   credentials: TenantBonzahCredentials,
   commonFields: Record<string, unknown>,
+  tripTime: string,
 ): Promise<{
   quoteId: string
   paymentId: string
   premium: number
   pdfIds: Record<string, string>
 }> {
-  // Bonzah validates the full datetime against America/Los_Angeles timezone.
-  // Same time for both start and end ensures exact day intervals.
-  // Start is always tomorrow+ (clamped upstream), so 15:00 is always safe.
-  const tripTime = '15:00:00'
-
+  // Same time for both start and end ensures exact day intervals. tripTime
+  // comes from resolveBonzahWindow (the rental's pickup time, in Eastern).
   const quoteRequest: Record<string, unknown> = {
     ...commonFields,
     trip_start_date: `${formatDateForBonzah(chunk.start)} ${tripTime}`,
@@ -224,8 +191,23 @@ async function createSingleQuote(
   // Surface the raw message so the caller sees the real reason instead of
   // letting confirm-payment half-fail on an empty payment_id later.
   if (!response.data?.payment_id) {
+    // Bonzah usually gives no reason here, so record the shape of what we sent.
+    // Shape only: this is an insurance applicant's personal data.
+    const isAscii = (v: unknown) => /^[\x20-\x7E]*$/.test(String(v ?? ''))
+    console.error('[Bonzah Quote] No payment_id returned', {
+      quote_id: response.data?.quote_id,
+      txt: response.txt || null,
+      msg: response.data?.msg ?? null,
+      first_name_ok: !!body.renter.first_name && isAscii(body.renter.first_name),
+      last_name_ok: !!body.renter.last_name && isAscii(body.renter.last_name),
+      street_ok: isAscii(commonFields.address_line_1),
+      zip_length: String(commonFields.zip_code ?? '').length,
+      phone_length: String(commonFields.phone_no ?? '').length,
+      has_dob: !!body.renter.dob,
+      has_license: !!body.renter.license?.number,
+    })
     throw new Error(
-      `Bonzah did not finalize the quote for ${chunk.start}-${chunk.end}: ${response.txt || response.data?.msg || 'no payment_id returned'}`
+      `Bonzah did not finalize the quote for ${chunk.start}-${chunk.end}: ${response.txt || response.data?.msg || "no payment_id returned, and Bonzah gave no reason. Check the renter's name, date of birth, address and licence details."}`
     )
   }
 
@@ -303,6 +285,51 @@ serve(async (req) => {
       return errorResponse('Missing renter details')
     }
 
+    // Bonzah needs a real first and last name, and callers send placeholders for
+    // one-word customers. See _shared/bonzah-renter-name.ts. The resolved name is
+    // stored in renter_details, so payment recovery and extensions reuse it.
+    let renterName = resolveBonzahRenterName({
+      firstName: body.renter.first_name,
+      lastName: body.renter.last_name,
+    })
+    if (!renterName.ok) {
+      const [{ data: verifications }, { data: customerRow }] = await Promise.all([
+        supabase
+          .from('identity_verifications')
+          .select('first_name, last_name, review_result')
+          .eq('customer_id', body.customer_id)
+          .not('last_name', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(20),
+        supabase
+          .from('customers')
+          .select('name')
+          .eq('id', body.customer_id)
+          .eq('tenant_id', body.tenant_id)
+          .maybeSingle(),
+      ])
+      renterName = resolveBonzahRenterName({
+        firstName: body.renter.first_name,
+        lastName: body.renter.last_name,
+        verifications,
+        customerName: customerRow?.name,
+      })
+    }
+    if (!renterName.ok) {
+      console.warn(`[Bonzah Quote] Refused: no real first and last name for customer ${body.customer_id}`)
+      return jsonResponse({
+        error: `Bonzah needs the renter's legal first and last name, but this customer's profile only shows "${renterName.displayName}". Add the full name to the customer's profile and try again. No policy was created and nothing was charged.`,
+        code: 'renter_name_incomplete',
+      }, 400)
+    }
+    console.log(`[Bonzah Quote] Renter name source: ${renterName.source}`)
+    body.renter = {
+      ...body.renter,
+      first_name: renterName.firstName,
+      last_name: renterName.lastName,
+      address: { ...body.renter.address, street: cleanBonzahText(body.renter.address?.street) },
+    }
+
     // Check if any coverage is selected
     const hasCoverage = body.coverage.cdw || body.coverage.rcli ||
                         body.coverage.sli || body.coverage.pai
@@ -358,24 +385,81 @@ serve(async (req) => {
       return phoneDigits || '10000000000'
     })()
 
-    // Bonzah rejects same-day trip starts — minimum start date is TOMORROW in Pacific timezone.
-    // Successful policies always have trip_start >= tomorrow; today's date gets rejected with
-    // "Invalid Policy Start date" even with a future time component.
-    const pacificNow = getPacificNow()
-    const pacificTomorrow = getPacificTomorrow()
-    console.log(`[Bonzah Quote] Pacific now: ${pacificNow.date}, tomorrow: ${pacificTomorrow}, input start: ${body.trip_dates.start}`)
+    // Bonzah's rule (Brandon Rockow, 2026-10-28): "Insurance can never be added
+    // after the rental starts, but it can be added the same day as the rental
+    // starts." Same day means the rental's own calendar day, so it is judged on
+    // the tenant's clock. An extension continues existing cover, and Bonzah's
+    // terms require it be bought before that cover lapses — otherwise it would
+    // be cover added to a rental that has already started.
+    const [{ data: startRental }, { data: startTenant }] = await Promise.all([
+      supabase.from('rentals').select('start_date, pickup_time').eq('id', body.rental_id).maybeSingle(),
+      supabase.from('tenants').select('timezone').eq('id', body.tenant_id).maybeSingle(),
+    ])
+    const tenantZone = startTenant?.timezone || 'America/New_York'
+    const tenantToday = todayInZone(tenantZone)
+    const pickupTime: string | null = startRental?.pickup_time ?? null
+    if (body.policy_type === 'extension') {
+      const { data: cover } = await supabase
+        .from('bonzah_insurance_policies')
+        .select('trip_end_date')
+        .eq('rental_id', body.rental_id)
+        .in('status', ['active', 'payment_confirmed'])
+        .order('trip_end_date', { ascending: false })
+        .limit(1)
+      const coverEnd = cover?.[0]?.trip_end_date ? String(cover[0].trip_end_date).slice(0, 10) : null
+      if (!coverEnd || coverEnd < tenantToday) {
+        return errorResponse(
+          coverEnd
+            ? `Bonzah cover on this rental ended on ${coverEnd}. Bonzah only sells an extension before the current policy runs out, and insurance can never be added after a rental has started. Upload the customer's own policy instead.`
+            : `This rental has no Bonzah policy to extend, and Bonzah insurance can never be added after a rental has started. Upload the customer's own policy instead.`,
+          400
+        )
+      }
+    } else {
+      // The rental's own start date, not the caller's — callers clamp it to today.
+      const rentalStart = String(startRental?.start_date ?? body.trip_dates.start).slice(0, 10)
+      if (rentalStart < tenantToday) {
+        return errorResponse(
+          `Bonzah insurance can be added before a rental starts or on the day it starts, but never after. This rental started on ${rentalStart}. Upload the customer's own policy instead.`,
+          400
+        )
+      }
+      // The policy must be in force before pickup. A same-day start lands a few
+      // minutes after purchase, so require MIN_MINUTES_BEFORE_PICKUP of notice.
+      if (pickupTime) {
+        let pickupAt: Date | null = null
+        try { pickupAt = zonedInstant(rentalStart, pickupTime, tenantZone) } catch { pickupAt = null }
+        if (pickupAt && pickupAt.getTime() < Date.now() + MIN_MINUTES_BEFORE_PICKUP * 60_000) {
+          return errorResponse(
+            `Bonzah cover has to be bought at least ${MIN_MINUTES_BEFORE_PICKUP} minutes before pickup, so the policy is in place before the rental starts. This rental's pickup is ${rentalStart} at ${pickupTime.slice(0, 5)}. Move the pickup time later, or upload the customer's own policy instead.`,
+            400
+          )
+        }
+      }
+    }
 
-    const tripStart = body.trip_dates.start <= pacificNow.date ? pacificTomorrow : body.trip_dates.start
+    // Cover starts at the rental's pickup time (converted to Bonzah's Eastern
+    // clock) and ends at the same time on the end date. See resolveBonzahWindow.
+    const policyWindow = resolveBonzahWindow({
+      start: body.trip_dates.start,
+      end: body.trip_dates.end,
+      pickupTime,
+      timeZone: tenantZone,
+    })
+    const tripStart = policyWindow.startDate
+    const tripTime = policyWindow.time
+    console.log(`[Bonzah Quote] input ${body.trip_dates.start}→${body.trip_dates.end} pickup ${pickupTime ?? '-'} (${tenantZone}), sending: ${tripStart} ${tripTime} → ${policyWindow.endDate}`)
+
     // Ensure end date is not before start date (in case start was bumped)
-    const tripEnd = body.trip_dates.end <= tripStart ? tripStart : body.trip_dates.end
+    const tripEnd = policyWindow.endDate <= tripStart ? tripStart : policyWindow.endDate
 
     // Split into 30-day chunks (Bonzah max policy duration)
     const chunks = splitDateRange(tripStart, tripEnd)
     console.log(`[Bonzah Quote] Date range ${tripStart} → ${tripEnd}: ${chunks.length} chunk(s)`)
 
-    // Guard: Bonzah won't insure today, so the start is clamped to tomorrow. If
-    // the rental has already ended (or ends today/tomorrow), that clamp collapses
-    // the window to a single day → zero chunks → no quote is ever created. Without
+    // Guard: a start in the past is moved up to now. If the rental has already
+    // ended (or ends today), that collapses the window to zero days → zero
+    // chunks → no quote is ever created. Without
     // this guard the function would fall through and return HTTP 200 with a null
     // policy_record_id, which the UI reads as "Quote created. Complete it from the
     // rental page" — a misleading success for something that never happened.
@@ -466,7 +550,7 @@ serve(async (req) => {
 
       let quoteResult
       try {
-        quoteResult = await createSingleQuote(chunk, body, credentials, commonFields)
+        quoteResult = await createSingleQuote(chunk, body, credentials, commonFields, tripTime)
       } catch (apiError) {
         console.error(`[Bonzah Quote] API call failed for chunk ${i + 1}/${chunks.length}:`, apiError)
         // If the first chunk fails, abort everything
@@ -481,7 +565,7 @@ serve(async (req) => {
             return errorResponse(errMsg, 502)
           }
           // Include sent dates in error for debugging
-          return errorResponse(`${errMsg} [sent: ${formatDateForBonzah(chunk.start)} 15:00:00, pacific_now: ${pacificNow.date}]`, 500)
+          return errorResponse(`${errMsg} [sent: ${formatDateForBonzah(chunk.start)} ${tripTime}]`, 500)
         }
         // If a subsequent chunk fails, we still have earlier quotes — log and break
         console.error(`[Bonzah Quote] Chunk ${i + 1} failed, ${i} policies created successfully`)

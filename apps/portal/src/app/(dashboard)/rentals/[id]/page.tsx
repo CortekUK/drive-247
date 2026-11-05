@@ -70,7 +70,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { formatCurrency as formatCurrencyUtil, getCurrencySymbol } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { getActiveCoverageLabels } from "@/lib/coverage-labels";
-import { getPacificTomorrow } from "@/lib/bonzah-dates";
+import { bonzahCanInsureThrough, bonzahRentalHasStarted, bonzahOriginalBlockedReason } from "@/lib/bonzah-dates";
 import { extractFunctionError } from "@/lib/edge-error";
 import { formatVerificationProvider } from "@/lib/verification-provider";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
@@ -2280,17 +2280,23 @@ const RentalDetail = () => {
   );
   const originalHasCoverage = originalBonzahActive || originalInsuranceDocs.length > 0;
 
-  // Does this rental still have any days Bonzah can insure?
-  // Bonzah refuses to insure today — a policy must start TOMORROW (Pacific) or later
-  // (mirrors the clamp in the bonzah-create-quote edge function). So a rental whose
-  // end date is today or earlier has zero insurable days left and Buy Bonzah would
-  // always error. We compute "tomorrow" in America/Los_Angeles to match the backend.
+  // Does this rental still have any days Bonzah can insure? A policy can start
+  // today (Bonzah's Eastern clock) at the earliest, so a rental whose end date is
+  // today or earlier has zero insurable days left and Buy Bonzah would always error.
   const bonzahHasInsurableDays = (() => {
     const endStr = (rental as any)?.end_date as string | undefined;
     if (!endStr) return true; // no date yet → don't block
-    // Insurable only if the trip ends strictly after tomorrow.
-    return String(endStr).slice(0, 10) > getPacificTomorrow();
+    return bonzahCanInsureThrough(endStr);
   })();
+  // Bonzah: never after the start day, and at least 30 minutes before pickup so
+  // the policy is in force before the car leaves.
+  const bonzahRentalStarted = bonzahRentalHasStarted((rental as any)?.start_date, tenant?.timezone);
+  // (Not "bonzahBlockedReason": that name is the imported sellability helper.)
+  const bonzahOriginalBlock = bonzahOriginalBlockedReason((rental as any)?.start_date, (rental as any)?.pickup_time, tenant?.timezone);
+  const bonzahCanAddOriginal = bonzahHasInsurableDays && !bonzahOriginalBlock;
+  const bonzahOriginalBlockedText = bonzahOriginalBlock
+    ? `${bonzahOriginalBlock} Use Upload to attach the customer's own policy.`
+    : "Bonzah must be added before the trip's last day — this rental's final day is today, so there are no upcoming days left to cover.";
 
   // Inline upload helper — used by both scopes. Stamps extension_id when provided.
   const uploadInsuranceDoc = (scope: { extensionId: string | null }) => {
@@ -6200,8 +6206,8 @@ const RentalDetail = () => {
           {/* Bonzah Insurance CTA - Show when no Bonzah policy exists */}
           {canEdit('rentals') && !bonzahPolicy && (
             <div
-              className={`relative overflow-hidden rounded-lg border border-[#CC004A]/20 bg-gradient-to-r from-[#CC004A]/5 via-[#CC004A]/10 to-[#CC004A]/5 dark:from-[#CC004A]/10 dark:via-[#CC004A]/15 dark:to-[#CC004A]/10 p-4 transition-all ${bonzahCanSell && isBonzahEligible && bonzahHasInsurableDays ? 'cursor-pointer hover:border-[#CC004A]/40 group' : 'opacity-60'}`}
-              onClick={() => { if (bonzahCanSell && isBonzahEligible && bonzahHasInsurableDays) { setBuyInsuranceMode('original'); setShowBuyInsurance(true); } }}
+              className={`relative overflow-hidden rounded-lg border border-[#CC004A]/20 bg-gradient-to-r from-[#CC004A]/5 via-[#CC004A]/10 to-[#CC004A]/5 dark:from-[#CC004A]/10 dark:via-[#CC004A]/15 dark:to-[#CC004A]/10 p-4 transition-all ${bonzahCanSell && isBonzahEligible && bonzahCanAddOriginal ? 'cursor-pointer hover:border-[#CC004A]/40 group' : 'opacity-60'}`}
+              onClick={() => { if (bonzahCanSell && isBonzahEligible && bonzahCanAddOriginal) { setBuyInsuranceMode('original'); setShowBuyInsurance(true); } }}
             >
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -6222,8 +6228,8 @@ const RentalDetail = () => {
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {!isBonzahEligible
                         ? `${rental.vehicles?.make} ${rental.vehicles?.model} is not eligible for Bonzah coverage`
-                        : !bonzahHasInsurableDays
-                        ? "Bonzah must be added before the trip's last day — this rental's final day is today, so there are no upcoming days left to cover."
+                        : !bonzahCanAddOriginal
+                        ? bonzahOriginalBlockedText
                         : 'CDW, Liability, Supplemental & Personal Accident coverage powered by Bonzah'}
                     </p>
                   </div>
@@ -6231,10 +6237,10 @@ const RentalDetail = () => {
                 {bonzahCanSell ? (
                   <Button
                     size="sm"
-                    className={(!isBonzahEligible || !bonzahHasInsurableDays) ? "flex-shrink-0 opacity-50" : "bg-[#CC004A] hover:bg-[#A80040] text-white hover:text-white flex-shrink-0 group-hover:shadow-md transition-shadow"}
-                    variant={(!isBonzahEligible || !bonzahHasInsurableDays) ? "outline" : undefined}
-                    disabled={!isBonzahEligible || !bonzahHasInsurableDays || isBonzahEligibilityLoading}
-                    title={!isBonzahEligible ? "This vehicle is not eligible for Bonzah insurance" : !bonzahHasInsurableDays ? "Bonzah must be added before the trip's last day. This rental's final day is today, so there are no upcoming days left to cover — use Upload to attach a policy manually." : undefined}
+                    className={(!isBonzahEligible || !bonzahCanAddOriginal) ? "flex-shrink-0 opacity-50" : "bg-[#CC004A] hover:bg-[#A80040] text-white hover:text-white flex-shrink-0 group-hover:shadow-md transition-shadow"}
+                    variant={(!isBonzahEligible || !bonzahCanAddOriginal) ? "outline" : undefined}
+                    disabled={!isBonzahEligible || !bonzahCanAddOriginal || isBonzahEligibilityLoading}
+                    title={!isBonzahEligible ? "This vehicle is not eligible for Bonzah insurance" : !bonzahCanAddOriginal ? bonzahOriginalBlockedText : undefined}
                     onClick={(e) => {
                       e.stopPropagation();
                       setBuyInsuranceMode('original');
@@ -6242,7 +6248,7 @@ const RentalDetail = () => {
                     }}
                   >
                     <ShieldCheck className="h-4 w-4 mr-1.5" />
-                    {isBonzahEligibilityLoading ? 'Checking...' : !isBonzahEligible ? 'Not Eligible' : !bonzahHasInsurableDays ? 'No Days Left' : 'Get Insurance'}
+                    {isBonzahEligibilityLoading ? 'Checking...' : !isBonzahEligible ? 'Not Eligible' : bonzahRentalStarted ? 'Rental Started' : bonzahOriginalBlock ? 'Pickup Too Soon' : !bonzahHasInsurableDays ? 'No Days Left' : 'Get Insurance'}
                   </Button>
                 ) : (
                   <Button
@@ -6782,8 +6788,8 @@ const RentalDetail = () => {
                       size="sm"
                       variant="outline"
                       className="h-7 text-xs border-[#CC004A]/30 text-[#CC004A] hover:bg-[#CC004A]/10 hover:text-[#CC004A]"
-                      disabled={isBonzahEligibilityLoading || !bonzahHasInsurableDays}
-                      title={!bonzahHasInsurableDays ? "Bonzah must be added before the trip's last day. This rental's final day is today, so there are no upcoming days left to cover — use Upload to attach a policy manually." : undefined}
+                      disabled={isBonzahEligibilityLoading || !bonzahCanAddOriginal}
+                      title={!bonzahCanAddOriginal ? bonzahOriginalBlockedText : undefined}
                       onClick={() => { setBuyInsuranceMode('original'); setBuyInsuranceExtensionId(null); setShowBuyInsurance(true); }}
                     >
                       <img src="/bonzah-logo.svg" alt="" className="h-3 w-3 mr-1 dark:hidden" />
@@ -8131,16 +8137,25 @@ const RentalDetail = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Rental</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this rental?
-              <span className="block mt-2 text-red-600 font-medium">
-                This action cannot be undone. All associated data will be permanently removed.
-              </span>
+              {bonzahPolicy ? (
+                // delete_rental_cascade refuses this anyway; say so before the click.
+                <span className="block text-red-600 font-medium">
+                  This rental has a Bonzah insurance policy{bonzahPolicy.policy_no ? ` (${bonzahPolicy.policy_no})` : ""}, so it can't be deleted. Cancel or close the rental instead, so the policy stays on record.
+                </span>
+              ) : (
+                <>
+                  Are you sure you want to delete this rental?
+                  <span className="block mt-2 text-red-600 font-medium">
+                    This action cannot be undone. All associated data will be permanently removed.
+                  </span>
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={isDeleting}
+              disabled={isDeleting || !!bonzahPolicy}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={async (e) => {
                 e.preventDefault();

@@ -151,7 +151,7 @@ const lineTotal = (s: ExtraSelection, days: number) =>
  * `pending` are primary, not amber: on this screen amber means "out of date" and
  * nothing else, and a driver who has simply not got round to it yet is not that.
  */
-function verifyPill(status: RentalAdditionalDriver["verification_status"]) {
+function verifyPill(status: RentalAdditionalDriver["verification_status"], listingOnly: boolean) {
   switch (status) {
     case "verified":
       return (
@@ -171,7 +171,7 @@ function verifyPill(status: RentalAdditionalDriver["verification_status"]) {
       return (
         <Pill tone="warning">
           <UserX />
-          ID rejected
+          {listingOnly ? "ID failed" : "ID rejected"}
         </Pill>
       );
     default:
@@ -553,14 +553,19 @@ export function StageExtras({ detail }: StageProps) {
                   <div key={d.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{d.name}</p>
+                      {d.listing_only && (
+                        <p className="text-xs text-muted-foreground">
+                          Secondary driver, added by the renter. Not on the agreement or insurance, and not authorized to drive under the agreement.
+                        </p>
+                      )}
                       <p className="truncate text-xs text-muted-foreground">
                         {[d.email, d.phone, d.license_number ? `Licence ${d.license_number}` : null].filter(Boolean).join(" · ") ||
                           "No contact details on file"}
                       </p>
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                      {verifyPill(d.verification_status)}
-                      {signPill(d.signing_status)}
+                      {verifyPill(d.verification_status, d.listing_only)}
+                      {!d.listing_only && signPill(d.signing_status)}
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
                       <Button
@@ -573,7 +578,7 @@ export function StageExtras({ detail }: StageProps) {
                         {resending === d.id ? <Loader2 className="animate-spin" /> : <RefreshCw />}
                         {d.verification_status === "unverified" || d.verification_status === "rejected" ? "Send ID link" : "Resend ID link"}
                       </Button>
-                      {canEdit && (
+                      {canEdit && !d.listing_only && (
                         <Button
                           variant="ghost"
                           size="icon-sm"

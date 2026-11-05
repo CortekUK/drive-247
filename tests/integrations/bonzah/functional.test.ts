@@ -221,8 +221,8 @@ describe("bonzah/functional — bonzah-create-quote", () => {
   });
 
   it("refuses a collapsed window instead of answering 200 with no policy", () => {
-    // Bonzah will not insure today, so the start is clamped to Pacific-tomorrow.
-    // A rental that ends today or tomorrow collapses to zero chunks, and without
+    // Bonzah cannot backdate, so a past start is moved up to now (Eastern).
+    // A rental that ends today or earlier collapses to zero chunks, and without
     // this guard the function returns 200 with a null policy_record_id — which
     // the UI reads as "Quote created. Complete it from the rental page." GoNiko
     // was billed $26.95 for a policy that never existed, exactly that way.

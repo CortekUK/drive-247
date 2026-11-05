@@ -1032,13 +1032,15 @@ Deno.serve(async (req) => {
     // Fetch additional drivers on this rental — they become secondary BoldSign
     // signers AND get merged into the {{additional_drivers_list}} template var.
     // Drivers with no email are skipped for signing (BoldSign requires email)
-    // but still appear in the agreement text for record-keeping.
+    // but still appear in the agreement text for record-keeping. Secondary
+    // drivers (listing_only) are never on the agreement.
     let additionalDrivers: AdditionalDriverRow[] = [];
     if (rentalId) {
       const { data: addlRows } = await supabase
         .from('rental_additional_drivers')
         .select('id, name, email, phone, license_number')
-        .eq('rental_id', rentalId);
+        .eq('rental_id', rentalId)
+        .eq('listing_only', false);
       additionalDrivers = (addlRows || []) as typeof additionalDrivers;
     }
     const additionalDriversList = additionalDrivers

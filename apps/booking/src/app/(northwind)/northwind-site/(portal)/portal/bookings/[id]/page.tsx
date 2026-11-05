@@ -6,8 +6,9 @@
  * ── SCOPE ───────────────────────────────────────────────────────────────────
  * This page shows what the customer bought: the car, the dates and places, what
  * they were charged, what extras they picked, and whether the money landed. It
- * takes no actions — no cancel, no extend, no re-pay, no document signing. That
- * is deliberate. v1's equivalent is ~1,466 lines because it also owns the
+ * takes no actions on money or the contract — no cancel, no extend, no re-pay,
+ * no document signing. The one write is the secondary driver panel, which
+ * touches neither. That is deliberate. v1's equivalent is ~1,466 lines because it also owns the
  * extension checkout, the installment schedule, the BoldSign envelope and the
  * cancellation request; each of those is a WRITE against money or a contract
  * and none can be bolted on safely as a side-effect of a detail view. See the
@@ -56,6 +57,7 @@ import {
 import { VehiclePhoto } from '@nw/components/fleet/vehicle-photo';
 import { Button } from '@nw/components/ui/button';
 import { Skeleton } from '@nw/components/ui/skeleton';
+import { SecondaryDriverPanel } from '@nw/components/portal/secondary-driver-panel';
 import { useCustomer } from '@nw/hooks/use-customer';
 import { useCustomerRental } from '@nw/hooks/use-customer-rental';
 import type { CustomerRentalDetail } from '@nw/hooks/use-customer-rental';
@@ -329,6 +331,8 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
               </DetailList>
             </div>
           </Panel>
+
+          <SecondaryDriverPanel rentalId={rental.id} />
 
           {/* Extras — what was bought, not what it cost. The money is in the
               breakdown; repeating it here would give two places to disagree. */}

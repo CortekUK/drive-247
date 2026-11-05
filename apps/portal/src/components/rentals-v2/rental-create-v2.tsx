@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { addMonths, addDays, addWeeks, isAfter, isBefore, subYears, startOfDay, format, differenceInDays, parseISO } from "date-fns";
-import { clampToBonzahStart } from "@/lib/bonzah-dates";
+import { clampToBonzahStart, bonzahOriginalBlockedReason } from "@/lib/bonzah-dates";
 import BonzahAvailabilityNotice from "@/components/rentals/bonzah-availability-notice";
 import { resolveVehicleStatus } from "@/components/vehicles/vehicle-status-badge";
 import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
@@ -655,6 +655,20 @@ export const RentalCreateV2 = () => {
   const selectedVehicleId = form.watch("vehicle_id");
   const watchedStartDate = form.watch("start_date");
   const watchedEndDate = form.watch("end_date");
+  // Bonzah: never after the start day, and at least 30 minutes before pickup so
+  // the policy is in force before the car leaves. A blocked rental gets no
+  // Bonzah selection, and any earlier pick is cleared so its premium is not
+  // charged to the customer.
+  const watchedPickupTime = form.watch("pickup_time");
+  const bonzahBlockedReason = watchedStartDate
+    ? bonzahOriginalBlockedReason(format(watchedStartDate, 'yyyy-MM-dd'), watchedPickupTime, tenant?.timezone)
+    : null;
+  const bonzahRentalStarted = !!bonzahBlockedReason;
+  useEffect(() => {
+    if (!bonzahRentalStarted) return;
+    setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
+    setBonzahPremium(0);
+  }, [bonzahRentalStarted]);
   const watchedRentalPeriodType = form.watch("rental_period_type");
   const watchedMonthlyAmount = form.watch("monthly_amount");
   const watchedPickupLocation = form.watch("pickup_location");
@@ -1634,6 +1648,20 @@ export const RentalCreateV2 = () => {
     setCreationProgress(1); // Step 1: Validating
     setSubmitError("");
     try {
+      // Re-check Bonzah at submit: the 30-minute window can close while the form
+      // is open. A blocked pick counts as no premium — in the rental, the invoice
+      // and the purchase alike — so the customer is never billed for no policy.
+      const bonzahBlockedAtSubmit = bonzahPremium > 0
+        ? bonzahOriginalBlockedReason(
+            data.start_date instanceof Date ? format(data.start_date, 'yyyy-MM-dd') : String(data.start_date).split('T')[0],
+            data.pickup_time,
+            tenant?.timezone
+          )
+        : null;
+      const submitBonzahPremium = bonzahBlockedAtSubmit ? 0 : bonzahPremium;
+      if (bonzahBlockedAtSubmit) {
+        toast({ title: 'Bonzah insurance not added', description: bonzahBlockedAtSubmit, variant: 'destructive' });
+      }
       // Identity verification. Required by default; the ONLY way past it without
       // a verified customer is an explicit, reasoned waiver that the tenant's
       // head admin has enabled and a trusted role has confirmed. The reason is
@@ -1829,8 +1857,8 @@ export const RentalCreateV2 = () => {
         promo_code: promoDetails?.code || null,
         discount_applied: discountAmount > 0 ? discountAmount : null,
         // PAYG: Bonzah insurance is not offered per the product spec; force "pending" if PAYG.
-        insurance_status: isPayAsYouGo ? "pending" : (bonzahPremium > 0 ? "bonzah" : (data.insurance_status || "pending")),
-        insurance_premium: isPayAsYouGo ? null : (bonzahPremium > 0 ? bonzahPremium : null),
+        insurance_status: isPayAsYouGo ? "pending" : (submitBonzahPremium > 0 ? "bonzah" : (data.insurance_status || "pending")),
+        insurance_premium: isPayAsYouGo ? null : (submitBonzahPremium > 0 ? submitBonzahPremium : null),
         renewed_from_rental_id: renewFromId || null,
         delivery_method: rentalSettings?.lockbox_enabled ? deliveryMethod : null,
         delivery_fee: effectiveDeliveryFee > 0 ? effectiveDeliveryFee : null,
@@ -2040,7 +2068,11 @@ export const RentalCreateV2 = () => {
       const hasBonzahCoverage = bonzahCoverage.cdw || bonzahCoverage.rcli || bonzahCoverage.sli || bonzahCoverage.pai;
       // `!skipInsurance` re-checked here: the selector is hidden when Bonzah can't
       // sell, so stale coverage state must never reach the quote/charge path.
-      if (!skipInsurance && hasBonzahCoverage && bonzahPremium > 0 && tenant?.id) {
+      // Set once Bonzah has a policy record for this rental (quote created). A
+      // record awaiting payment (e.g. low Bonzah balance) still counts: it can be
+      // activated later from the rental page, so its premium stays billed.
+      let bonzahQuoteCreated = false;
+      if (!skipInsurance && hasBonzahCoverage && submitBonzahPremium > 0 && tenant?.id && !bonzahRentalStarted) {
         try {
           // Get customer details for the quote
           const customer = customerDetails;
@@ -2114,6 +2146,7 @@ export const RentalCreateV2 = () => {
               // Step 2: Confirm payment to activate the policy
               const policyRecordId = quoteResult?.policy_record_id;
               if (policyRecordId) {
+                bonzahQuoteCreated = true;
                 const { data: confirmResult, error: confirmError } = await supabase.functions.invoke('bonzah-confirm-payment', {
                   body: {
                     policy_record_id: policyRecordId,
@@ -2149,8 +2182,8 @@ export const RentalCreateV2 = () => {
                   .insert({
                     type: 'Charge',
                     category: 'Insurance',
-                    amount: bonzahPremium,
-                    remaining_amount: bonzahPremium,
+                    amount: submitBonzahPremium,
+                    remaining_amount: submitBonzahPremium,
                     reference: `BONZAH-${policyRecordId}`,
                     rental_id: rental.id,
                     customer_id: data.customer_id,
@@ -2170,6 +2203,26 @@ export const RentalCreateV2 = () => {
           console.error('[Bonzah] Error creating quote:', bonzahError);
           // Non-fatal — rental is already created
         }
+      }
+
+      // No Bonzah policy record means nothing was bought, so nothing may be
+      // billed. Previously the rental kept insurance_status 'bonzah' and the
+      // premium still reached the invoice and ledger, so staff recorded payments
+      // for cover that did not exist (Moore Luxe R-359a67, 2026-10-29).
+      const bonzahNotBought = submitBonzahPremium > 0 && !bonzahQuoteCreated;
+      if (bonzahNotBought) {
+        const { error: insuranceResetError } = await supabase
+          .from('rentals')
+          .update({ insurance_status: 'pending', insurance_premium: null })
+          .eq('id', rental.id);
+        if (insuranceResetError) {
+          console.error('[Bonzah] Failed to clear insurance on rental:', insuranceResetError);
+        }
+        toast({
+          title: 'Bonzah insurance not added',
+          description: "No Bonzah policy was issued, so the insurance premium has not been charged. Buy cover from the rental page before pickup, or upload the customer's own policy.",
+          variant: 'destructive',
+        });
       }
 
       setCreationProgress(4); // Step 4: Configuring pricing & charges
@@ -2270,7 +2323,7 @@ export const RentalCreateV2 = () => {
       const securityDeposit = isTakingDeposit
         ? (depositOverride !== null ? depositOverride : calculateSecurityDeposit(data.vehicle_id))
         : 0;
-      const insurancePremium = bonzahPremium > 0 ? bonzahPremium : 0;
+      const insurancePremium = submitBonzahPremium > 0 && !bonzahNotBought ? submitBonzahPremium : 0;
       // Per-day extras bill unit price × rental days; per-trip bill flat. PAYG (no
       // end date) has no fixed length, so per-day extras fall back to a single day.
       const extrasDays = data.end_date ? Math.max(1, differenceInDays(data.end_date, data.start_date)) : 1;
@@ -3836,6 +3889,11 @@ export const RentalCreateV2 = () => {
                                                 vehicle.id,
                                                 format(start, 'yyyy-MM-dd'),
                                                 format(end, 'yyyy-MM-dd'),
+                                                undefined,
+                                                {
+                                                  pickupTime: form.getValues("pickup_time"),
+                                                  returnTime: form.getValues("return_time"),
+                                                },
                                               );
                                               if (result.hasConflicts) {
                                                 setVehicleChangeConflict(result);
@@ -5880,10 +5938,11 @@ export const RentalCreateV2 = () => {
                             {(() => {
                               const startStr = watchedStartDate ? format(watchedStartDate, 'yyyy-MM-dd') : null;
                               const endStr = watchedEndDate ? format(watchedEndDate, 'yyyy-MM-dd') : null;
+                              if (bonzahRentalStarted) return null;
                               const effectiveStart = startStr ? clampToBonzahStart(startStr) : null;
                               const warnings: string[] = [];
                               if (startStr && effectiveStart && startStr < effectiveStart) {
-                                warnings.push(`Bonzah policies start tomorrow (Los Angeles time) at the earliest — coverage will begin ${new Date(effectiveStart + 'T00:00:00').toLocaleDateString('en-US')}, not ${new Date(startStr + 'T00:00:00').toLocaleDateString('en-US')}.`);
+                                warnings.push(`Bonzah cannot backdate cover — coverage will begin ${new Date(effectiveStart + 'T00:00:00').toLocaleDateString('en-US')}, not ${new Date(startStr + 'T00:00:00').toLocaleDateString('en-US')}.`);
                               }
                               if (effectiveStart && endStr) {
                                 const s = new Date(effectiveStart + 'T00:00:00');
@@ -5910,6 +5969,13 @@ export const RentalCreateV2 = () => {
                               // Zero-night window after the LA clamp (e.g. a rental
                               // ending tomorrow booked today) — explain instead of
                               // rendering a selector whose quote must fail.
+                              if (bonzahRentalStarted) {
+                                return (
+                                  <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
+                                    {bonzahBlockedReason}
+                                  </p>
+                                );
+                              }
                               const clampedStart = watchedStartDate ? clampToBonzahStart(format(watchedStartDate, 'yyyy-MM-dd')) : null;
                               const endStr = watchedEndDate ? format(watchedEndDate, 'yyyy-MM-dd') : null;
                               if (clampedStart && endStr && endStr <= clampedStart) {

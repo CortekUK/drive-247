@@ -392,6 +392,17 @@ Self-service key handover system where customers retrieve keys from a lockbox in
 - **Notification**: `notify-lockbox-code` edge function sends via Resend (email) and Twilio (SMS), falls back to default templates if no custom template exists. If a tenant's `lockbox_notification_methods` leaves no usable channel, it falls back to email rather than sending nothing — this message carries the code that opens the box holding the car keys
 - **Portal UI**: Key handover section on rental detail page supports lockbox delivery; lockbox template editor in settings (only visible when `lockbox_enabled = true`)
 
+## Secondary Drivers
+
+A renter can name one extra driver on a Pending rental from the customer portal. That person verifies their ID and is listed on the rental. Nothing else changes: the agreement and the Bonzah policy stay primary-driver only, and no money moves.
+
+- **Data**: `rental_additional_drivers` with `listing_only = true` (one per rental, enforced by a partial unique index). Any new code that reads this table for an agreement must filter `listing_only = false`.
+- **Edge function**: `customer-secondary-driver` (`list`, `add`, `resend`, `remove`). Ownership is checked through `customer_users`; changes are refused once the rental leaves Pending or the keys are handed over. Renters only ever get name, contact details and status, never the licence number or verification link, because the link would let them complete the check themselves.
+- **Rules**: `_shared/secondary-driver-rules.ts` (pure, tested by `tests/integrations/secondary-driver`). `_shared/additional-driver-invite.ts` opens the verification session and sends the email for staff and renters alike.
+- **Verification**: `process-ai-verification`. For secondary drivers the name on the ID must match the name the renter typed, and the ID must not be expired. A check that errors or needs review shows as failed (`rejected`) for every additional driver, because nobody reviews these by hand.
+- **Limits**: 60 seconds between links per driver, 6 emails per rental per 24 hours, counted through `identity_verifications.rental_id`.
+- **UI**: three customer portals (`components/customer-portal/SecondaryDriverCard.tsx` for legacy, `northwind-site/components/portal/secondary-driver-panel.tsx` for Northwind v1, `portal-v2/rentals/[id]/secondary-driver-card.tsx` for v2) and two operator screens (`additional-drivers-card.tsx`, `stage-extras.tsx`).
+
 ## Setup Hub & Go-Live System
 
 Tenant onboarding progress tracking during trial period:

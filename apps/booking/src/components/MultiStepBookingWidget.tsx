@@ -63,7 +63,7 @@ import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 import { calculateRentalPriceBreakdown, parseDateString as parseDateStringSafe } from "@/lib/calculate-rental-price";
 import { parseDateOnly } from "@/lib/date-utils";
 import { calcExtrasTotal } from "@/lib/calculate-extras-total";
-import { clampToBonzahStart } from "@/lib/bonzah-dates";
+import { clampToBonzahStart, bonzahRentalHasStarted, bonzahOriginalBlockedReason, BONZAH_MIN_MINUTES_BEFORE_PICKUP } from "@/lib/bonzah-dates";
 import {
   vehiclePublicColumns,
   displayRegistration,
@@ -3497,14 +3497,15 @@ const MultiStepBookingWidget = ({
   useEffect(() => {
     const d = formData.pickupDate;
     const e = formData.dropoffDate;
-    const insurable = !!(d && e && e > clampToBonzahStart(d));
+    // Bonzah: never after the start day, and at least 30 minutes before pickup.
+    const insurable = !!(d && e && e > clampToBonzahStart(d)) && !bonzahOriginalBlockedReason(d, formData.pickupTime, tenant?.timezone);
     const hasSelection =
       bonzahPremium > 0 || bonzahCoverage.cdw || bonzahCoverage.rcli || bonzahCoverage.sli || bonzahCoverage.pai;
     if (!insurable && hasSelection) {
       handleBonzahSkipInsurance();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.pickupDate, formData.dropoffDate, bonzahPremium, bonzahCoverage]);
+  }, [formData.pickupDate, formData.pickupTime, formData.dropoffDate, bonzahPremium, bonzahCoverage, tenant?.timezone]);
 
   // Step 4: Customer Details
   const handleStep4Continue = async () => {
@@ -5396,13 +5397,25 @@ const MultiStepBookingWidget = ({
                 const e = formData.dropoffDate;
                 const effectiveStart = d ? clampToBonzahStart(d) : null;
                 const windowInsurable = !!(effectiveStart && e && e > effectiveStart);
+                if (bonzahOriginalBlockedReason(d, formData.pickupTime, tenant?.timezone)) {
+                  return (
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs">
+                      <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                      <span>
+                        {bonzahRentalHasStarted(d, tenant?.timezone)
+                          ? 'Bonzah insurance can be added before a rental starts or on the day it starts, but never after. Your pick-up date has passed, so please arrange coverage with the rental team.'
+                          : `Bonzah insurance has to be bought at least ${BONZAH_MIN_MINUTES_BEFORE_PICKUP} minutes before pick-up, so the policy is in place before your rental starts. Please choose a later pick-up time, or arrange coverage with the rental team.`}
+                      </span>
+                    </div>
+                  );
+                }
                 if (!windowInsurable) {
                   return (
                     <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs">
                       <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
                       <span>
-                        Bonzah insurance isn't available for these dates — policies can only start
-                        tomorrow (Los Angeles time), which is on or after your return date. You can
+                        Bonzah insurance isn't available for these dates — cover can't start before
+                        today (US Eastern time), which is on or after your return date. You can
                         adjust your dates, or continue and arrange coverage with the rental team.
                       </span>
                     </div>
@@ -5410,7 +5423,7 @@ const MultiStepBookingWidget = ({
                 }
                 const warnings: string[] = [];
                 if (d && effectiveStart && d < effectiveStart) {
-                  warnings.push(`Bonzah policies start tomorrow (Los Angeles time) at the earliest — coverage will begin ${new Date(effectiveStart + 'T00:00:00').toLocaleDateString('en-US')}, not ${new Date(d + 'T00:00:00').toLocaleDateString('en-US')}.`);
+                  warnings.push(`Bonzah cannot backdate cover — coverage will begin ${new Date(effectiveStart + 'T00:00:00').toLocaleDateString('en-US')}, not ${new Date(d + 'T00:00:00').toLocaleDateString('en-US')}.`);
                 }
                 if (effectiveStart && e) {
                   const s = new Date(effectiveStart + 'T00:00:00');

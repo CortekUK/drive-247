@@ -29,6 +29,9 @@ const LOG = "[manage-signup-plans]";
 const MIN_AMOUNT_CENTS = 50;
 const MAX_AMOUNT_CENTS = 99_999_999;
 
+/** A signup on a plan within this window may still resume by its plan_key. */
+const SIGNUP_IN_FLIGHT_MS = 48 * 60 * 60 * 1000;
+
 const PLAN_COLUMNS =
   "id, plan_key, name, tagline, fleet_band, max_vehicles, amount_cents, currency, " +
   '"interval", bullets, is_highlighted, is_visible, sort_order, stripe_price_id, ' +
@@ -189,6 +192,17 @@ Deno.serve(async (req) => {
         if (!Number.isInteger(maxVehicles) || maxVehicles < 1 || maxVehicles > 10_000) {
           return fail("VALIDATION_FAILED", "Max vehicles must be a whole number between 1 and 10,000.", 400, { field: "max_vehicles" });
         }
+        // Optional (Nov 1 2026): the dialog now asks for the range and the
+        // one-line description the pricing page shows, e.g. "1–5 vehicles" /
+        // "For smaller independent operators". Older clients omit both.
+        const minVehicles = body.min_vehicles === undefined || body.min_vehicles === null ? null : Number(body.min_vehicles);
+        if (minVehicles !== null && (!Number.isInteger(minVehicles) || minVehicles < 1 || minVehicles > maxVehicles)) {
+          return fail("VALIDATION_FAILED", "Min vehicles must be a whole number from 1 up to max vehicles.", 400, { field: "min_vehicles" });
+        }
+        const tagline = String(body.tagline ?? "").trim();
+        if (tagline.length > 160) {
+          return fail("VALIDATION_FAILED", "Description must be 160 characters or fewer.", 400, { field: "tagline" });
+        }
 
         const { data: existing, error: exErr } = await supabase
           .from("signup_plans")
@@ -224,20 +238,27 @@ Deno.serve(async (req) => {
           { idempotencyKey: `d247-signup-create-${planKey}-${amount}-v1` },
         );
 
-        const band = `Up to ${maxVehicles} vehicles`;
+        const band =
+          minVehicles === null
+            ? `Up to ${maxVehicles} vehicles`
+            : minVehicles === maxVehicles
+              ? `${maxVehicles} vehicle${maxVehicles === 1 ? "" : "s"}`
+              : `${minVehicles}–${maxVehicles} vehicles`;
         const { data, error } = await supabase
           .from("signup_plans")
           .insert({
             plan_key: planKey,
             name,
-            tagline: "",
+            tagline,
             fleet_band: band,
             max_vehicles: maxVehicles,
             amount_cents: amount,
             currency: "usd",
             interval: "month",
             bullets: [
-              `Sized for fleets of up to ${maxVehicles} vehicles`,
+              minVehicles === null
+                ? `Sized for fleets of up to ${maxVehicles} vehicles`
+                : `Sized for fleets of ${band}`,
               "Unlimited bookings and customer records",
               "Unlimited staff logins with role-based access",
               "The full platform — nothing is held back",
@@ -552,6 +573,69 @@ Deno.serve(async (req) => {
         if (setErr) throw new Error(`set highlight failed: ${setErr.message}`);
 
         return jsonResponse({ plans: await listPlans(supabase) });
+      }
+
+      // ---------------------------------------------------------------------
+      // DELETE (Nov 1 2026). Removes the card for good. Safe for anyone
+      // already subscribed: Stripe bills the Price pinned on their
+      // subscription, and archiving a Price never touches live subscriptions.
+      // Two guards, both server-side so a direct call cannot get round them:
+      //   - not the last visible plan (same rule as set-visibility);
+      //   - not while someone may be mid-signup on it — signup resumes after
+      //     payment by plan_key, and an admin-created key has no hardcoded
+      //     fallback, so deleting under them would strand a paid signup.
+      // ---------------------------------------------------------------------
+      case "delete": {
+        const loaded = await loadForWrite(supabase, body.id, body.updated_at);
+        if (loaded.err) return loaded.err;
+        const row: any = loaded.row;
+
+        if (row.is_visible) {
+          const { count, error: cErr } = await supabase
+            .from("signup_plans")
+            .select("id", { count: "exact", head: true })
+            .eq("is_visible", true);
+          if (cErr) throw new Error(`delete count failed: ${cErr.message}`);
+          if ((count ?? 0) <= 1) {
+            return fail(
+              "LAST_VISIBLE",
+              "This is the only plan on the pricing page — turn another plan on before deleting it.",
+              409,
+            );
+          }
+        }
+
+        const since = new Date(Date.now() - SIGNUP_IN_FLIGHT_MS).toISOString();
+        const { count: recent, error: aErr } = await supabase
+          .from("signup_attempts")
+          .select("id", { count: "exact", head: true })
+          .eq("plan_id", row.plan_key)
+          .gte("created_at", since);
+        if (aErr) throw new Error(`delete in-flight check failed: ${aErr.message}`);
+        if ((recent ?? 0) > 0) {
+          return fail(
+            "IN_USE",
+            "Someone started signing up on this plan in the last 48 hours. Turn it off now and delete it once that window has passed.",
+            409,
+          );
+        }
+
+        const { error } = await supabase.from("signup_plans").delete().eq("id", body.id);
+        if (error) throw new Error(`delete failed: ${error.message}`);
+
+        // Best-effort, as in update-price: stops the lookup key resolving for
+        // a new checkout, never affects anyone already billed on it.
+        if (row.stripe_price_id) {
+          try {
+            const stripe = getSignupStripeClient(getSignupStripeMode());
+            await stripe.prices.update(row.stripe_price_id, { active: false });
+          } catch (e) {
+            console.warn(`${LOG} could not archive price ${row.stripe_price_id} (non-fatal):`, e);
+          }
+        }
+
+        console.log(`${LOG} deleted ${row.plan_key} (${row.id}) by ${auth.userId}`);
+        return jsonResponse({ deleted: row.id, plans: await listPlans(supabase) });
       }
 
       // ---------------------------------------------------------------------

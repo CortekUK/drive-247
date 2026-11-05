@@ -138,7 +138,7 @@ export function SignupPlanPreview({
       </p>
 
       <div className="mt-3 flex h-8 w-full items-center justify-center gap-2 rounded-md bg-primary text-xs font-medium text-primary-foreground">
-        {trialDays > 0 ? 'Start free trial' : 'Subscribe'} <ArrowRight className="h-3.5 w-3.5" />
+        {trialDays > 0 ? `Start ${trialDays}-Day Free Trial` : 'Subscribe'} <ArrowRight className="h-3.5 w-3.5" />
       </div>
 
       <ul className="mt-3 space-y-1.5 border-t border-border pt-3">

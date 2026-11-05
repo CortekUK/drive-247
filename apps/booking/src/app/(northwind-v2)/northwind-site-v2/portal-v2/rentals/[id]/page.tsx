@@ -12,8 +12,9 @@
  * ── SCOPE ───────────────────────────────────────────────────────────────────
  * This page shows what the customer bought: the car, the dates and places, what
  * they were charged, what extras they picked, and whether the money landed. It
- * takes no actions — no cancel, no extend, no re-pay, no document signing. That
- * is deliberate. v1's equivalent is ~1,466 lines because it also owns the
+ * takes no actions on money or the contract — no cancel, no extend, no re-pay,
+ * no document signing. The one write is the secondary driver card, which
+ * touches neither. That is deliberate. v1's equivalent is ~1,466 lines because it also owns the
  * extension checkout, the installment schedule, the BoldSign envelope and the
  * cancellation request; each of those is a WRITE against money or a contract
  * and none can be bolted on safely as a side-effect of a detail view.
@@ -49,6 +50,8 @@ import { AlertStripe } from '@nw/portal-v2/alert-bar';
 import { PayButton } from '@nw/portal-v2/pay/pay-provider';
 import { RecordDock, useBelow } from '@nw/portal-v2/record-dock';
 import { InstalmentTrack, PaidBar } from '@nw/portal-v2/instalment-track';
+
+import { SecondaryDriverCard } from './secondary-driver-card';
 
 /** Hover = fade only, 200ms, ease-out on / ease-in off (V2_PLAN §12). */
 const HOVER_FADE = 'transition-colors duration-200 ease-in hover:ease-out motion-reduce:transition-none';
@@ -426,6 +429,8 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
           </Link>
         </div>
       </div>
+
+      <SecondaryDriverCard rentalId={rental.id} />
 
       <div className="max-lg:hidden">
         <PaymentCard rental={rental} />

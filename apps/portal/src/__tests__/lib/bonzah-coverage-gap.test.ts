@@ -74,8 +74,8 @@ describe("resolveCoverageGap — lapsed vs about to lapse", () => {
   });
 
   it("is critical once cover ends today or tomorrow — the last chance to act", () => {
-    // Bonzah cannot start a policy before tomorrow, so cover ending tomorrow
-    // leaves exactly one moment to buy a contiguous extension.
+    // Extensions must be bought before cover lapses, so cover ending today or
+    // tomorrow is the last moment to buy a contiguous extension.
     for (const end of ["2026-06-15", "2026-06-16"]) {
       const gap = resolveCoverageGap([active(end)], { end_date: "2026-06-30", status: "Active" }, CLOCK);
       expect(gap!.kind).toBe("ending");

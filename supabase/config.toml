@@ -224,6 +224,16 @@ verify_jwt = true
 [functions.onboarding-daily-digest]
 verify_jwt = false
 
+# Onboarding call 24h reminder — pg_cron with x-platform-secret, or a
+# super-admin JWT (Brian's "Send reminder"); checked in code.
+[functions.onboarding-call-reminder]
+verify_jwt = false
+
+# LeadConnector workflow webhook (Brian's calendar). No Supabase JWT; the
+# ?key= query parameter is checked against private.platform_config in code.
+[functions.onboarding-call-booked]
+verify_jwt = false
+
 # GHL is an external provider and cannot present a Supabase JWT. The handler
 # verifies the raw-body X-GHL-Signature with Ed25519 before parsing/persisting.
 [functions.ghl-strategy-call-webhook]
