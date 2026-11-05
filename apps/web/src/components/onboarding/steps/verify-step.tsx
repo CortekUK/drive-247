@@ -26,7 +26,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { MailArt } from "@/components/onboarding/signup-art";
 import { ScreenHead, SIGNUP_PRIMARY, SIGNUP_QUIET } from "@/components/onboarding/signup-ui";
 
 /** Mirrors OTP_RESEND_COOLDOWN_MS in supabase/functions/_shared/signup-otp.ts. */
@@ -71,9 +70,15 @@ export function VerifyStep({
     return () => window.clearTimeout(id);
   }, [cooldown]);
 
+  // A ref, not the `submitting` state: a paste can reach `submit` twice before
+  // React re-renders, and the second copy of an already-spent code comes back
+  // "not valid" over the top of the first one's success.
+  const inFlightRef = React.useRef(false);
+
   const submit = React.useCallback(
     async (value: string) => {
-      if (submitting || value.length !== 6) return;
+      if (inFlightRef.current || value.length !== 6) return;
+      inFlightRef.current = true;
       setSubmitting(true);
       try {
         const ok = await onVerify(value);
@@ -84,10 +89,11 @@ export function VerifyStep({
           inputRef.current?.focus();
         }
       } finally {
+        inFlightRef.current = false;
         setSubmitting(false);
       }
     },
-    [onVerify, submitting],
+    [onVerify],
   );
 
   const onChange = (raw: string) => {
@@ -97,6 +103,16 @@ export function VerifyStep({
     // Submit on the sixth digit. Typing a code and then hunting for a button is
     // the one interaction everybody expects to be automatic.
     if (digits.length === 6) void submit(digits);
+  };
+
+  // A code copied out of an email rarely arrives clean: Gmail brings a space or
+  // a line break with it, and the email may space the digits out. Read the
+  // clipboard ourselves and keep only the digits, replacing whatever was typed.
+  const onPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const digits = e.clipboardData.getData("text").replace(/\D/g, "");
+    if (!digits) return;
+    e.preventDefault();
+    onChange(digits);
   };
 
   const resend = async () => {
@@ -111,7 +127,6 @@ export function VerifyStep({
   return (
     <div className="space-y-6">
       <ScreenHead
-        art={<MailArt />}
         title="Check your inbox"
         lead={
           <>
@@ -148,10 +163,13 @@ export function VerifyStep({
             inputMode="numeric"
             autoComplete="one-time-code"
             pattern="[0-9]*"
-            maxLength={6}
+            /* No `maxLength`: the browser clips a paste to it BEFORE onChange
+               sees it, so " 220465" arrived as " 22046". `onChange` keeps the
+               first six digits itself. */
             value={code}
             disabled={busy || submitting}
             onChange={(e) => onChange(e.target.value)}
+            onPaste={onPaste}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             aria-describedby={error ? "signup-otp-error" : undefined}

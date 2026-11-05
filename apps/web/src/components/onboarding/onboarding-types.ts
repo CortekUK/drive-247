@@ -409,6 +409,9 @@ export interface TenantFormValues {
  */
 export type AccountStepMode = "create" | "tenant";
 
+/** The identity providers a signup can start with. */
+export type OauthProvider = "google" | "apple";
+
 export interface AccountStepProps {
   plan: SignupPlan;
   mode: AccountStepMode;
@@ -436,11 +439,18 @@ export interface AccountStepProps {
    * fails is worse than no button at all.
    */
   googleEnabled: boolean;
+  /**
+   * Whether "Continue with Apple" is offered. Off unless
+   * `NEXT_PUBLIC_SIGNUP_APPLE_ENABLED` is "true", for the same reason as Google:
+   * it needs an Apple provider on the Supabase project and a
+   * `signup-begin-oauth` that accepts `apple`.
+   */
+  appleEnabled: boolean;
   onSubmit(values: AccountFormValues): void;
   /** `tenant` mode's submit: the account already exists and is paid for. */
   onSubmitTenant(values: TenantFormValues): void;
-  /** Leaves the page for Google, carrying these three values across the redirect. */
-  onGoogle(values: TenantFormValues): void;
+  /** Leaves the page for Google or Apple, carrying these three values across the redirect. */
+  onGoogle(values: TenantFormValues, provider: OauthProvider): void;
   /** Live availability for the web address. Debounced by the step. */
   onCheckSlug(slug: string): Promise<SlugCheckResult>;
   onSignIn(values: { email: string; password: string }): void;
@@ -512,8 +522,8 @@ export interface OnboardingContextValue {
   submitAccount(values: AccountFormValues): Promise<void>;
   /** `tenant`-mode submit: store the details and start provisioning straight away. */
   submitTenantDetails(values: TenantFormValues): Promise<void>;
-  /** Stash the tenant details, then hand the browser to Google. Never returns. */
-  startGoogleSignup(values: TenantFormValues): Promise<void>;
+  /** Stash the tenant details, then hand the browser to Google or Apple. Never returns. */
+  startGoogleSignup(values: TenantFormValues, provider?: OauthProvider): Promise<void>;
   signInExisting(values: { email: string; password: string }): Promise<void>;
   useDifferentEmail(): void;
   /** Switch to the sign-in panel for an email the user has already typed. */

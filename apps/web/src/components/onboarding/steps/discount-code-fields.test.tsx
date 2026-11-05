@@ -1,23 +1,20 @@
 // @vitest-environment jsdom
 
 /**
- * Two code fields on the signup checkout, and only one code can win.
+ * One code field on the signup checkout, for a promo OR a referral code.
  *
- * It was one box labelled "Promo code" that silently accepted referral codes as
- * well, because the server decides the kind from the code itself. Somebody
- * holding a referral code from a friend's link had no field with their name on
- * it and no reason to believe it would be taken.
+ * The server decides the kind from the code itself, so one box is enough. It
+ * is always open, and named for both kinds so a referral code from a friend's
+ * link plainly belongs here.
  *
- * WHAT THESE PIN, each being a way two fields go wrong:
- *   - both fields post to the SAME lookup, so a referral code typed in the
- *     promo box is still accepted — the labels are a signpost, not a rule;
- *   - a code carried in by a referral link lands in the Referral field, so it
- *     does not look lost after the banner said it was applied;
- *   - applying REPLACES, because the subscription takes one signup discount —
- *     and the rule is stated before it surprises anyone;
- *   - applying in one field clears the other, so a stale code never sits there
- *     looking applied;
- *   - a rejection is shown against the field it was typed into.
+ * WHAT THESE PIN:
+ *   - the box is there without clicking anything;
+ *   - what is typed goes to the lookup unchanged, whatever its kind;
+ *   - a code carried in by a referral link is put back in the box, so it does
+ *     not look lost after the banner said it was applied;
+ *   - applying REPLACES, because the subscription takes one discount, and the
+ *     replaced code is named;
+ *   - a rejection is shown under the box and leaves the code to be corrected.
  */
 
 import { act } from "react";
@@ -72,17 +69,10 @@ const render = (props: Partial<Parameters<typeof DiscountCodeFields>[0]> = {}) =
 };
 
 const text = () => container.textContent ?? "";
-const open = () => {
-  const link = container.querySelector("button");
-  act(() => link?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-};
-const input = (label: string) =>
-  container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
-const applyButtonFor = (label: string) =>
-  input(label)?.closest("form")?.querySelector<HTMLButtonElement>('button[type="submit"]');
+const input = () => container.querySelector<HTMLInputElement>("#signup-discount-code");
 
-const type = (label: string, value: string) => {
-  const el = input(label)!;
+const type = (value: string) => {
+  const el = input()!;
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
   act(() => {
     setter.call(el, value);
@@ -90,129 +80,80 @@ const type = (label: string, value: string) => {
   });
 };
 
-const apply = async (label: string) => {
+const apply = async () => {
   await act(async () => {
-    applyButtonFor(label)!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    container.querySelector<HTMLButtonElement>('button[type="submit"]')!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
   await act(async () => {
     await Promise.resolve();
   });
 };
 
-describe("it stays a link until asked for", () => {
-  it("offers both kinds by name when nothing is applied", () => {
+describe("one field, always open", () => {
+  it("shows the box without a click, named for both kinds", () => {
     render();
-    expect(text()).toContain("Have a promo or referral code?");
-  });
-
-  it("offers a swap once a code is on the subscription", () => {
-    // Hiding the fields here left "use a different code" with nowhere to go.
-    render({ applied: offer() });
-    expect(text()).toContain("Use a different code");
+    expect(input()).not.toBeNull();
+    expect(text()).toContain("Promo or referral code");
+    expect(container.querySelectorAll("input")).toHaveLength(1);
   });
 });
 
-describe("two labelled fields", () => {
-  beforeEach(() => {
-    render();
-    open();
+describe("what is typed goes to the lookup", () => {
+  it("sends a promo code unchanged", async () => {
+    const onApply = vi.fn(async () => null);
+    render({ onApply });
+    type("SAVE20");
+    await apply();
+    expect(onApply).toHaveBeenCalledWith("SAVE20");
   });
 
-  it("shows one for each kind", () => {
-    expect(input("Promo code")).not.toBeNull();
-    expect(input("Referral code")).not.toBeNull();
-  });
-
-  it("states the one-code rule before anyone trips over it", () => {
-    expect(text()).toMatch(/Only one discount code can be applied per subscription/i);
+  it("sends a referral code unchanged", async () => {
+    const onApply = vi.fn(async () => null);
+    render({ onApply });
+    type("FRIEND-42");
+    await apply();
+    expect(onApply).toHaveBeenCalledWith("FRIEND-42");
   });
 });
 
 describe("a code carried in by a referral link", () => {
-  it("lands in the Referral field", () => {
+  it("is put back in the box", () => {
     document.cookie = "d247_ref=FRIEND-42; path=/";
     render();
-    open();
-    expect(input("Referral code")?.value).toBe("FRIEND-42");
-    expect(input("Promo code")?.value).toBe("");
-  });
-
-  it("does not overwrite something already typed there", () => {
-    document.cookie = "d247_ref=FRIEND-42; path=/";
-    render();
-    open();
-    type("Referral code", "MY-OWN-CODE");
-    expect(input("Referral code")?.value).toBe("MY-OWN-CODE");
-  });
-});
-
-describe("both fields post to the same lookup", () => {
-  it("sends what was typed in the promo field", async () => {
-    const onApply = vi.fn(async () => null);
-    render({ onApply });
-    open();
-    type("Promo code", "SAVE20");
-    await apply("Promo code");
-    expect(onApply).toHaveBeenCalledWith("SAVE20");
-  });
-
-  it("sends what was typed in the referral field, unchanged", async () => {
-    // The server decides the kind. A referral code is not re-labelled here.
-    const onApply = vi.fn(async () => null);
-    render({ onApply });
-    open();
-    type("Referral code", "FRIEND-42");
-    await apply("Referral code");
-    expect(onApply).toHaveBeenCalledWith("FRIEND-42");
+    expect(input()?.value).toBe("FRIEND-42");
   });
 });
 
 describe("only one code survives", () => {
   it("says which code was replaced", async () => {
     render({ applied: offer({ displayCode: "SAVE20" }), onApply: vi.fn(async () => null) });
-    open();
-    type("Referral code", "FRIEND-42");
-    await apply("Referral code");
+    type("FRIEND-42");
+    await apply();
     expect(text()).toContain("SAVE20 was replaced.");
   });
 
-  it("clears the other field, so no stale code sits there looking applied", async () => {
-    render();
-    open();
-    type("Promo code", "SAVE20");
-    type("Referral code", "FRIEND-42");
-    await apply("Referral code");
-    expect(input("Promo code")?.value).toBe("");
-    expect(input("Referral code")?.value).toBe("FRIEND-42");
-  });
-
-  it("says nothing about replacing when re-applying the same code", async () => {
-    render({ applied: offer({ displayCode: "SAVE20" }), onApply: vi.fn(async () => null) });
-    open();
-    type("Promo code", "SAVE20");
-    await apply("Promo code");
-    expect(text()).not.toContain("was replaced");
+  it("shows the applied code in the box, with Remove instead of Apply", async () => {
+    const onApply = vi.fn(async () => null);
+    render({ applied: offer({ displayCode: "SAVE20" }), onApply });
+    expect(input()?.value).toBe("SAVE20");
+    const remove = Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Remove");
+    expect(remove).toBeDefined();
+    await act(async () => {
+      remove!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onApply).toHaveBeenCalledWith(null);
+    expect(input()?.value).toBe("");
   });
 });
 
 describe("a rejected code", () => {
-  it("is reported against the field it was typed into", async () => {
+  it("is reported under the box and leaves the code to be corrected", async () => {
     render({ onApply: vi.fn(async () => "That code has expired.") });
-    open();
-    type("Referral code", "OLD-ONE");
-    await apply("Referral code");
-
-    const message = container.querySelector('[role="alert"]');
-    expect(message?.textContent).toBe("That code has expired.");
-    expect(input("Referral code")?.getAttribute("aria-invalid")).toBe("true");
-    expect(input("Promo code")?.getAttribute("aria-invalid")).toBeNull();
-  });
-
-  it("leaves the typed code in place to be corrected", async () => {
-    render({ onApply: vi.fn(async () => "No such code.") });
-    open();
-    type("Promo code", "TYPOO");
-    await apply("Promo code");
-    expect(input("Promo code")?.value).toBe("TYPOO");
+    type("OLD-ONE");
+    await apply();
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("That code has expired.");
+    expect(input()?.getAttribute("aria-invalid")).toBe("true");
+    expect(input()?.value).toBe("OLD-ONE");
   });
 });

@@ -19,6 +19,7 @@
 // Self-contained (no ../_shared) so it deploys cleanly on its own.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { withPhoenix } from "../_shared/phoenix.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -163,7 +164,7 @@ async function logUsage(row: Record<string, unknown>) {
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withPhoenix("trax-insights-summary", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
@@ -329,4 +330,4 @@ Deno.serve(async (req) => {
     console.error("trax-insights-summary", error);
     return json({ error: (error as Error).message || "Internal error" }, 500);
   }
-});
+}));

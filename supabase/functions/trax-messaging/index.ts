@@ -4,7 +4,8 @@ import { sendResendEmail } from '../_shared/resend-service.ts';
 import { handleMessaging, nudgeStore, ticketSourceReader, ticketUnreadReader, unreadMessageReader, type MessagingDatabase, type MessagingStorage, type SourceClient } from '../trax-support/support/messaging.ts';
 const ATTACHMENT_BUCKET='trax-support-attachments';
 import { createSupportReads, type SupportDatabase } from '../trax-support/support/reads.ts';
-Deno.serve(async(req:Request)=>{
+import { withPhoenix } from '../_shared/phoenix.ts';
+Deno.serve(withPhoenix('trax-messaging', async(req:Request)=>{
   const preflight=handleCors(req);if(preflight)return preflight;
   const url=Deno.env.get('SUPABASE_URL'),secret=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if(!url||!secret)return Response.json({error:'Support is not configured.'},{status:503,headers:corsHeaders});
@@ -25,4 +26,4 @@ Deno.serve(async(req:Request)=>{
     sendEmail:(email)=>sendResendEmail({...email,from:'noreply@drive-247.com',source:'trax-messaging'}),
     ...(Deno.env.get('OPENAI_API_KEY')?{assist:{key:Deno.env.get('OPENAI_API_KEY')!,model:Deno.env.get('TRAX_ASSIST_MODEL')??'gpt-4.1'}}:{})}); // Defaults on: the project is at its secret limit; a secret still overrides.
   for(const[k,v]of Object.entries(corsHeaders))response.headers.set(k,v);return response;
-});
+}));

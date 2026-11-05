@@ -1,0 +1,175 @@
+/*
+ * Launch in minutes: the features thread runs through four cards, filling each in turn.
+ * On the page's own ground, like the rows before it.
+ */
+.ls-section { --ls-a: hsl(var(--v2-primary)); padding-block: clamp(72px, 9vw, 136px); overflow-x: clip; }
+.dark .ls-section { --ls-a: #a79ff5; }
+.ls-inner { width: min(100%, 1120px); margin-inline: auto; padding-inline: 1.25rem; }
+.ls-head { text-align: center; }
+
+/* The four steps */
+.ls-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px 20px;
+  width: min(100%, 1120px);
+  margin: 56px auto 0;
+  padding-inline: 1.25rem;
+}
+.ls-step { position: relative; display: flex; flex-direction: column; min-width: 0; }
+/* The number is a stop on the line: a small node where the line meets the card. */
+.ls-step-no {
+  position: absolute;
+  z-index: 1;
+  top: -18px;
+  left: 20px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 26%, hsl(var(--v2-card)));
+  border-radius: 50%;
+  background: hsl(var(--v2-card));
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--foreground) 55%, hsl(var(--v2-card)));
+  transition: background-color 200ms ease-out, border-color 200ms ease-out, color 200ms ease-out;
+}
+.is-lit > .ls-step-no { border-color: hsl(var(--v2-primary)); background: hsl(var(--v2-primary)); color: #fff; }
+/* Opaque, so the line passes behind and goes into the card. It floods from where the line enters. */
+.ls-card {
+  position: relative;
+  isolation: isolate;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: clamp(16px, 1.6vw, 24px);
+  border: 1px solid color-mix(in srgb, var(--foreground) 26%, transparent);
+  border-radius: 24px;
+  background: hsl(var(--v2-card));
+  transition: border-color 200ms ease-out;
+}
+.ls-card::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: color-mix(in srgb, hsl(var(--v2-primary)) 20%, hsl(var(--v2-card)));
+  clip-path: circle(0% at 0 50%);
+  transition: clip-path 800ms ease-out;
+}
+.is-lit > .ls-card::before { clip-path: circle(150% at 0 50%); }
+.dark .ls-card::before { background: color-mix(in srgb, hsl(var(--v2-primary)) 26%, hsl(var(--v2-card))); }
+.is-lit > .ls-card { border-color: hsl(var(--v2-primary)); }
+.ls-tile { position: relative; }
+.ls-tile svg { display: block; width: 100%; height: auto; overflow: visible; }
+/* Waiting: the whole scene readable in grey, ready for the colour. */
+.ls-art-base {
+  --la-ink: color-mix(in srgb, var(--foreground) 52%, hsl(var(--v2-card)));
+  --la-card: hsl(var(--v2-card));
+  --la-acc: color-mix(in srgb, var(--foreground) 24%, hsl(var(--v2-card)));
+  --la-deep: color-mix(in srgb, var(--foreground) 36%, hsl(var(--v2-card)));
+  --la-warm: color-mix(in srgb, var(--foreground) 18%, hsl(var(--v2-card)));
+  --la-mid: color-mix(in srgb, var(--foreground) 12%, hsl(var(--v2-card)));
+  --la-soft: color-mix(in srgb, var(--foreground) 9%, hsl(var(--v2-card)));
+  --la-on: hsl(var(--v2-card));
+  --la-text: color-mix(in srgb, var(--foreground) 52%, hsl(var(--v2-card)));
+}
+/* The same scene in colour: every tone is the accent, from deep to pale. */
+.ls-art-lit {
+  --la-ink: color-mix(in srgb, var(--foreground) 88%, hsl(var(--v2-card)));
+  --la-card: hsl(var(--v2-card));
+  --la-acc: hsl(var(--v2-primary));
+  --la-deep: #2e2a8f;
+  --la-warm: #a8a2f7;
+  --la-mid: #d4d0fb;
+  --la-soft: color-mix(in srgb, hsl(var(--v2-primary)) 20%, hsl(var(--v2-card)));
+  --la-on: #fff;
+  --la-text: #2e2a8f;
+  position: absolute;
+  inset: 0;
+  clip-path: circle(0% at -8% 50%);
+  transition: clip-path 800ms ease-out;
+}
+.is-lit .ls-art-lit { clip-path: circle(150% at -8% 50%); }
+.dark .ls-art-lit { --la-text: var(--foreground); }
+/* Three small things once a picture has filled: what hangs swings, and the shop's lights come on. */
+.ls-tile text { font-family: inherit; }
+.ls-swing { transform-box: view-box; }
+.is-lit .ls-art-lit .ls-swing { animation: ls-swing 1000ms ease-out 240ms; }
+@keyframes ls-swing {
+  0% { rotate: 0deg; }
+  25% { rotate: 4deg; }
+  55% { rotate: -2.4deg; }
+  80% { rotate: 1deg; }
+  100% { rotate: 0deg; }
+}
+.ls-lights { opacity: 0; }
+.is-lit .ls-art-lit .ls-lights { opacity: 1; transition: opacity 200ms ease-out 520ms; }
+.ls-step-words {
+  display: grid;
+  gap: 4px;
+  margin-top: clamp(16px, 2vw, 24px);
+  font-size: 14px;
+  line-height: 1.45;
+  color: hsl(var(--v2-muted-foreground));
+  opacity: 0.6;
+  translate: 0 6px;
+  transition: opacity 200ms ease-in, translate 200ms ease-in;
+}
+.is-lit .ls-step-words {
+  opacity: 1;
+  translate: 0 0;
+  transition: opacity 200ms ease-out 240ms, translate 200ms ease-out 240ms;
+}
+.ls-step-words b { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; color: hsl(var(--v2-foreground)); }
+
+/* The thread, with room to draw: the section holds still while it crosses the row. */
+.ls-line { display: none; }
+@media (min-width: 1200px) and (min-height: 640px) {
+  .ls-section { padding-block: 0; }
+  .ls-pin {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    height: 100svh;
+    padding-top: clamp(96px, 13svh, 128px);
+  }
+  .ls-line { display: block; position: absolute; z-index: -1; top: 0; left: 0; pointer-events: none; overflow: visible; }
+  .ls-steps {
+    width: min(100% - 2 * clamp(40px, 4vw, 80px), 1560px);
+    margin-block: auto;
+    padding-inline: 0;
+    gap: clamp(32px, 3vw, 48px);
+  }
+  .ls-step-no { top: 50%; left: -18px; translate: 0 -50%; }
+  @media (prefers-reduced-motion: no-preference) {
+    .ls-track { height: 250svh; }
+    .ls-pin { position: sticky; top: 0; }
+  }
+}
+
+/* No line to set the pace here, and a whole row can arrive at once: they fill one after another. */
+@media (max-width: 1199.98px), (max-height: 639.98px) {
+  .ls-step:nth-child(2) { --ls-wait: 250ms; }
+  .ls-step:nth-child(3) { --ls-wait: 500ms; }
+  .ls-step:nth-child(4) { --ls-wait: 750ms; }
+  .is-lit .ls-art-lit, .is-lit > .ls-card::before { transition-delay: var(--ls-wait, 0ms); }
+  .is-lit .ls-step-words { transition-delay: calc(var(--ls-wait, 0ms) + 240ms); }
+}
+
+
+@media (min-width: 1200px) {
+  .ls-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 639.98px) {
+  /* One scene to a row: at half a phone's width the words in the drawings are too small to read. */
+  .ls-steps { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ls-step-no, .ls-card, .ls-card::before, .ls-art-lit, .ls-step-words, .is-lit .ls-art-lit, .is-lit > .ls-card::before, .is-lit .ls-step-words, .is-lit .ls-art-lit .ls-lights { transition: none; }
+  .is-lit .ls-art-lit .ls-swing { animation: none; }
+}

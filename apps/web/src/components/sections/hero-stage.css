@@ -1,0 +1,237 @@
+/*
+ * The hero's stage: the operator's whole business on one desk. Flat like the
+ * portal (1px borders, no shadows, no tilt). Windows are placed with --x/--y/--w,
+ * in percent of the stage, so the phone layout only swaps those numbers.
+ */
+.hs-hero {
+  /* The guide's "Done" colour: only ever on something that is actually complete. */
+  --hs-done: #12a594;
+  /* One full screen. The sticky header (4rem) floats over the top of it. */
+  position: relative;
+  height: 100svh;
+  min-height: 600px;
+  margin-top: -4rem;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Edge to edge: the screens tile the whole hero, running just past every edge. */
+.hs-stage { position: absolute; inset: 0; }
+.hs-desk { position: absolute; inset: 0; }
+/* Phones only: there the text takes the top and the screens gather below it. */
+.hs-veil { display: none; }
+.hs-copy {
+  position: relative;
+  z-index: 20;
+  width: fit-content;
+  max-width: calc(100% - 2rem);
+  margin-bottom: 3svh;
+  text-align: center;
+}
+/* The glow follows the text's own size, so no empty clearing is left around it. */
+.hs-copy::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -52px -84px;
+  pointer-events: none;
+  border-radius: 56px;
+  background: hsl(var(--v2-background));
+  /* A soft rectangle rather than an ellipse: it clears the text's corners too */
+  filter: blur(28px);
+}
+.hs-win {
+  position: absolute;
+  left: calc(var(--x) * 1%);
+  top: calc(var(--y) * 1%);
+  width: calc(var(--w) * 1%);
+  height: calc(var(--h) * 1%);
+  display: flex;
+  flex-direction: column;
+  z-index: var(--z);
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid hsl(var(--v2-border));
+  background: hsl(var(--v2-card));
+  transition: border-color 200ms ease-out;
+}
+.hs-win[data-active="true"] { border-color: hsl(var(--v2-primary)); }
+.hs-bar {
+  display: flex;
+  align-items: center;
+  height: 26px;
+  padding-inline: 10px;
+  border-bottom: 1px solid hsl(var(--v2-border));
+  font-size: 11px;
+  font-weight: 500;
+  color: hsl(var(--v2-muted-foreground));
+  white-space: nowrap;
+}
+.hs-shot { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; container-type: size; }
+/* Covers the tile like object-fit, but overlays stay pinned to the picture. */
+.hs-pic {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: max(100cqw, calc(100cqh * var(--a, 1.6)));
+  translate: -50% 0;
+}
+.hs-pic.at-bottom { top: auto; bottom: 0; }
+/* The phone fills its tile, so the signing sheet stays in view */
+.hs-renter .hs-pic { left: 0; width: 100%; height: 100%; translate: none; aspect-ratio: auto !important; }
+.hs-pic img { object-fit: cover; object-position: top; opacity: 0.4; filter: saturate(0.7); }
+.dark .hs-pic img { opacity: 0.32; }
+/* The booking site inside the editor has no dark version, so it sits lower still */
+.dark .hs-editor .hs-pic img { opacity: 0.14; }
+
+.hs-win.is-phone { border-radius: 24px; border-width: 4px; }
+.hs-win.is-phone .hs-bar { justify-content: center; height: 22px; font-size: 10px; }
+
+/* Placement: desktop. Around the edges, running off the page, clear of the text. */
+.hs-editor     { --x: 0;   --y: -2; --w: 31;   --h: 48; --z: 1; --a: 1.6; }
+.hs-agreements { --x: 0;   --y: 45; --w: 31;   --h: 29; --z: 2; --a: 1.825; }
+.hs-site       { --x: 0;   --y: 73; --w: 31;   --h: 29; --z: 3; --a: 1.932; }
+.hs-booking    { --x: 30;  --y: -2; --w: 41;   --h: 60; --z: 1; --a: 1.739; }
+.hs-dashboard  { --x: 30;  --y: 57; --w: 41;   --h: 45; --z: 2; --a: 1.6; }
+.hs-marketing  { --x: 70;  --y: -2; --w: 30;   --h: 47; --z: 1; --a: 1.77; }
+.hs-insights   { --x: 70;  --y: 44; --w: 17;   --h: 30; --z: 2; --a: 1.932; }
+.hs-fleet      { --x: 70;  --y: 73; --w: 17;   --h: 29; --z: 3; --a: 1.932; }
+.hs-renter     { --x: 86;  --y: 44; --w: 14;   --h: 58; --z: 4; }
+
+/*
+ * Entrance. Plain CSS, so the text never waits on JavaScript and never flashes.
+ * It uses the `translate` property, leaving `transform` free for the GSAP drift.
+ */
+@keyframes hs-rise {
+  from { opacity: 0; translate: 0 12px; }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes hs-rise-far {
+  from { opacity: 0; translate: 0 28px; }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes hs-draw { to { stroke-dashoffset: 0; } }
+.hs-copy > * { animation: hs-rise 200ms ease-out both; }
+.hs-copy > :nth-child(1) { animation-delay: 60ms; }
+.hs-copy > :nth-child(2) { animation-delay: 140ms; }
+.hs-copy > :nth-child(3) { animation-delay: 220ms; }
+.hs-copy > :nth-child(4) { animation-delay: 300ms; }
+.hs-win { animation: hs-rise-far 420ms ease-out both; }
+.hs-dashboard  { animation-delay: 360ms; }
+.hs-editor     { animation-delay: 460ms; }
+.hs-marketing  { animation-delay: 520ms; }
+.hs-agreements { animation-delay: 620ms; }
+.hs-site       { animation-delay: 680ms; }
+.hs-renter     { animation-delay: 780ms; }
+.hs-booking    { animation-delay: 300ms; }
+.hs-insights   { animation-delay: 720ms; }
+.hs-fleet      { animation-delay: 840ms; }
+
+/* The hand-drawn line under the promise, the same stroke as the booking site's */
+.hs-mark { position: relative; display: inline-block; isolation: isolate; }
+.hs-mark svg {
+  position: absolute;
+  left: 0;
+  z-index: -1;
+  bottom: -0.16em;
+  width: 100%;
+  height: 0.22em;
+  overflow: visible;
+  opacity: 0.4;
+  pointer-events: none;
+}
+.hs-mark path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: hs-draw 600ms ease-out 620ms forwards;
+}
+
+/* Things that happen on the screens. Hidden until the timeline shows them. */
+.hs-ov {
+  position: absolute;
+  opacity: 0;
+  visibility: hidden;
+  font-size: 11px;
+  line-height: 1.3;
+  color: hsl(var(--v2-foreground));
+}
+.hs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid hsl(var(--v2-primary));
+  border-radius: 8px;
+  background: hsl(var(--v2-card));
+  white-space: nowrap;
+}
+.hs-row b { font-weight: 600; }
+.hs-tag { color: hsl(var(--v2-link)); font-weight: 500; }
+.hs-good { color: var(--hs-done); font-weight: 600; }
+.hs-row:has(.hs-good) { border-color: var(--hs-done); }
+.hs-outline {
+  border: 1.5px solid hsl(var(--v2-primary));
+  border-radius: 6px;
+  background: transparent;
+}
+.hs-sheet {
+  left: 6%;
+  right: 6%;
+  bottom: 4%;
+  padding: 8px;
+  border: 1px solid hsl(var(--v2-border));
+  border-radius: 10px;
+  background: hsl(var(--v2-card));
+}
+.hs-sheet svg {
+  display: block;
+  width: 100%;
+  height: 30px;
+  margin-top: 4px;
+  border-bottom: 1px solid hsl(var(--v2-border));
+  color: hsl(var(--v2-primary));
+}
+
+
+
+/* Phones: the text takes the top, the screens gather along the bottom */
+@media (max-width: 767px) {
+  .hs-hero { min-height: 780px; }
+  .hs-hero { align-items: flex-start; }
+  .hs-copy { width: auto; margin-bottom: 0; padding-top: clamp(28px, 7svh, 64px); }
+  .hs-copy::before { display: none; }
+  .hs-veil {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 7;
+    pointer-events: none;
+    background: linear-gradient(to bottom, hsl(var(--v2-background)) 0%, hsl(var(--v2-background)) 54%, hsl(var(--v2-background) / 0) 66%);
+  }
+  .hs-editor     { --x: -1; --y: -1; --w: 52; --h: 24; }
+  .hs-marketing  { --x: 50; --y: -1; --w: 51; --h: 24; }
+  .hs-booking    { --x: -1; --y: 22; --w: 52; --h: 24; }
+  .hs-insights   { --x: 50; --y: 22; --w: 51; --h: 24; }
+  .hs-fleet      { display: none; }
+  .hs-agreements { --x: -1; --y: 45; --w: 52; --h: 20; }
+  .hs-site       { --x: -1; --y: 84; --w: 66; --h: 17; }
+  .hs-dashboard  { --x: -1; --y: 62; --w: 66; --h: 23; }
+  .hs-renter     { --x: 64; --y: 45; --w: 37; --h: 56; }
+  .hs-bar { font-size: 10px; height: 20px; padding-inline: 7px; }
+  .hs-win { border-radius: 9px; }
+  .hs-ov { font-size: 9px; }
+  .hs-row { padding: 3px 5px; }
+  .hs-row .hs-tag { display: none; }
+}
+
+/* No motion: show the finished state */
+@media (prefers-reduced-motion: reduce) {
+  .hs-ov { opacity: 1; visibility: visible; }
+  .hs-copy > *, .hs-win { animation: none; }
+  .hs-mark path { animation: none; stroke-dashoffset: 0; }
+  .hs-sheet svg path { stroke-dashoffset: 0 !important; }
+}
+
+.dark .hs-hero { --hs-done: #34d399; }

@@ -1,0 +1,103 @@
+/*
+ * The pricing cards: flat colour and no icons. The colour deepens with the plan, lilac to deep
+ * purple, the top two with a hint of red in their gradient, so the size of the business reads before any word does. Same in both themes.
+ */
+.pc-card {
+  --pc-bg: #ebdff8;
+  --pc-ink: #33114f;
+  --pc-soft: rgb(51 17 79 / 0.76);
+  --pc-line: rgb(51 17 79 / 0.16);
+  --pc-mark: #5a2bc9;
+  --pc-btn: #5a2bc9;
+  --pc-btn-ink: #fff;
+  --pc-btn-hover: #4c22ad;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: clamp(24px, 2.2vw, 32px);
+  border-radius: 24px;
+  background: var(--pc-bg);
+  color: var(--pc-ink);
+  transition: translate 200ms ease-out;
+}
+.pc-card:hover { translate: 0 -4px; }
+.pc-card.is-brand, .pc-card.is-deep, .pc-card.is-night {
+  --pc-ink: #fff;
+  --pc-soft: rgb(255 255 255 / 0.92);
+  --pc-line: rgb(255 255 255 / 0.28);
+  --pc-mark: #e9d4ff;
+  --pc-btn: #fff;
+  --pc-btn-ink: #33114f;
+  --pc-btn-hover: #f1e4fb;
+}
+.pc-card.is-brand { --pc-bg: #6d55e4; }
+.pc-card.is-deep { --pc-bg: linear-gradient(155deg, #6a50dc 0%, #7b4fd2 58%, #9650c0 100%); }
+.pc-card.is-night { --pc-bg: linear-gradient(155deg, #4f3fb8 0%, #5c3ea8 58%, #7b4096 100%); }
+@media (min-width: 768px) {
+  .pc-card { display: grid; grid-template-rows: subgrid; grid-row: span 5; row-gap: 0; }
+}
+/* Two columns: the second row of cards sits clear of the first, and a lone last card centres. */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .pc-grid-wrap > .pc-card:nth-child(n + 3) { height: auto; margin-top: 16px; }
+  .pc-grid-wrap > .pc-card:last-child:nth-child(odd) { grid-column: 1 / -1; justify-self: center; width: calc(50% - 8px); }
+}
+@media (min-width: 1024px) {
+  .pc-grid-wrap > .pc-card:nth-child(n + 5) { height: auto; margin-top: 16px; }
+}
+
+.pc-name { font-size: 1.125rem; font-weight: 600; letter-spacing: -0.01em; }
+.pc-band { margin-top: 2px; font-size: 14px; color: var(--pc-soft); }
+.pc-tag {
+  position: absolute;
+  top: clamp(24px, 2.2vw, 32px);
+  right: clamp(24px, 2.2vw, 32px);
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: var(--pc-btn);
+  color: var(--pc-btn-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+.pc-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin-top: 28px; }
+.pc-amount { font-size: clamp(2.5rem, 3.6vw, 3.25rem); font-weight: 700; line-height: 1.05; letter-spacing: -0.04em; }
+.pc-per { font-size: 14px; color: var(--pc-soft); }
+.pc-was { margin-right: 4px; font-size: 1.125rem; color: var(--pc-soft); text-decoration: line-through; }
+.pc-note { margin-top: 6px; font-size: 13px; font-weight: 500; color: var(--pc-soft); }
+.pc-tagline { min-height: 2.875rem; margin-top: 14px; font-size: 15px; line-height: 1.5; color: var(--pc-soft); }
+.pc-card [data-slot="button"].pc-btn {
+  width: 100%;
+  margin-top: 24px;
+  border: 0;
+  background: var(--pc-btn);
+  color: var(--pc-btn-ink);
+  box-shadow: none;
+  font-weight: 600;
+  transition: background-color 200ms ease-out;
+}
+.pc-card [data-slot="button"].pc-btn:hover { background: var(--pc-btn-hover); }
+.pc-list { margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--pc-line); }
+.pc-list li { position: relative; padding-left: 16px; font-size: 14.5px; line-height: 1.4; color: var(--pc-soft); }
+.pc-list li + li { margin-top: 11px; }
+/* One small square, the same pixel as the footer's wordmark. */
+.pc-list li::before {
+  content: "";
+  position: absolute;
+  top: 0.5em;
+  left: 0;
+  width: 6px;
+  height: 6px;
+  background: var(--pc-mark);
+}
+/* A finger-sized button below the desktop layout. */
+@media (max-width: 1279.98px) {
+  .pc-card [data-slot="button"].pc-btn { height: 44px; }
+}
+/* Touch has no hover: a tapped card must not stay lifted. */
+@media (hover: none) {
+  .pc-card:hover { translate: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pc-card, .pc-card [data-slot="button"].pc-btn { transition: none; }
+  .pc-card:hover { translate: none; }
+}

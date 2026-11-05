@@ -1,9 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { ArrowLeft, Info, Loader2, RotateCcw, TriangleAlert, X } from "lucide-react";
+import { ArrowLeft, Info, Loader2, Lock, RotateCcw, TriangleAlert, X } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -19,7 +18,7 @@ import {
 import { ACCOUNT_PAGE_COUNT, AccountStep, type ResetShellState } from "./steps/account-step";
 import { PaymentStep } from "./steps/payment-step";
 import { VerifyStep } from "./steps/verify-step";
-import { PauseArt } from "./signup-art";
+import { SignupDoodles } from "./signup-doodles";
 import { ScreenHead, SignupWash, SIGNUP_CARD, SIGNUP_ENTER, SIGNUP_PRIMARY, SIGNUP_QUIET } from "./signup-ui";
 
 /**
@@ -112,7 +111,7 @@ export function OnboardingScreen() {
     checkSlug,
     setError,
   } = useOnboarding();
-  const { resolving, planSwitchBlocked, accountMode, googleEnabled } =
+  const { resolving, planSwitchBlocked, accountMode, googleEnabled, appleEnabled } =
     useOnboardingShell();
 
   const contentRef = useRef<HTMLDivElement>(null);
@@ -189,9 +188,8 @@ export function OnboardingScreen() {
 
   const notices = useMemo(() => {
     const out: { key: string; text: string; icon: "resume" | "info" }[] = [];
-    if (state.resumed) {
-      out.push({ key: "resumed", text: "Welcome back. I've picked up where you left off.", icon: "resume" });
-    }
+    // No "Welcome back" note on resume: landing on the right screen with their
+    // answers in place says it already.
     if (planSwitchBlocked && plan) {
       out.push({
         key: "plan-locked",
@@ -199,23 +197,18 @@ export function OnboardingScreen() {
         icon: "info",
       });
     }
-    // `tenant` mode is only ever reached after payment, so the notice is about
-    // reassuring someone who has already been charged that nothing was lost.
-    if (step === "account" && accountMode === "tenant" && !state.payment.paid) {
-      out.push({
-        // Reached when the PaymentIntent came back `processing` — an async
-        // method that Stripe has accepted but not yet settled.
-        key: "processing",
-        text: "Your payment is going through. You can carry on setting up.",
-        icon: "info",
-      });
-    }
+    // There was a "Your payment is going through" notice here for `tenant` mode,
+    // gated on `!paid`. `tenant` mode is also reached BEFORE paying (after the
+    // email code, after Google), so it told unpaid operators their payment was
+    // in flight. State has no way to tell `processing` from `succeeded`, so the
+    // notice is gone rather than guessed at.
     return out;
-  }, [state.resumed, state.payment.paid, planSwitchBlocked, plan, step, accountMode]);
+  }, [planSwitchBlocked, plan]);
 
   if (!plan || !dialogStep) return null;
 
   /** The create-account pages are only in play on the plain create form. */
+  const paymentColumns = dialogStep === "payment" && !closeConfirmOpen;
   const paging = dialogStep === "account" && step !== "verify" && !state.signInPrompt && accountMode !== "tenant";
   const onBusinessPage = paging && accountPage === ACCOUNT_PAGE_COUNT - 1;
 
@@ -231,7 +224,9 @@ export function OnboardingScreen() {
   const primary =
     dialogStep === "account"
       ? accountMode === "tenant"
-        ? { label: "Build my portal", busyLabel: "Setting up…" }
+        ? state.payment.paid
+          ? { label: "Build my portal", busyLabel: "Setting up…" }
+          : { label: "Continue to payment", busyLabel: "Saving…" }
         : onBusinessPage
           ? { label: "Continue to payment", busyLabel: "Creating your account…" }
           : { label: "Continue", busyLabel: "Working…" }
@@ -252,6 +247,8 @@ export function OnboardingScreen() {
     (dialogStep === "account" && Boolean(state.signInPrompt)) ||
     (dialogStep === "account" && state.error?.code === "EMAIL_IS_STAFF") ||
     (dialogStep === "account" && accountReset.open) ||
+    // The first account page draws its own Continue above Google / Apple.
+    (paging && accountPage === 0 && !accountReset.open) ||
     (dialogStep === "payment" && state.error?.code === "CONFIG_MISSING");
 
   /**
@@ -306,25 +303,20 @@ export function OnboardingScreen() {
             "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-200 data-[state=open]:ease-out",
             "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-200 data-[state=closed]:ease-in",
             "motion-reduce:animate-none!",
+            // Tailwind 4 dropped the pointer on buttons; every action here gets it back.
+            "[&_button:not(:disabled)]:cursor-pointer [&_a[href]]:cursor-pointer [&_[role=checkbox]:not(:disabled)]:cursor-pointer",
           )}
         >
           {/* The portal's page wash — the same one under the onboarding questions. */}
           <SignupWash />
+          <SignupDoodles />
 
           {/* ── top bar ───────────────────────────────────────────────────── */}
           <header className="relative flex h-14 shrink-0 items-center justify-between gap-4 px-5 sm:h-16 sm:px-8">
-            <div className="flex min-w-0 items-center">
-              <Image src="/logo-light.png" alt="Drive247" width={855} height={195} className="h-6 w-auto dark:hidden" priority />
-              <Image src="/logo-dark.png" alt="Drive247" width={855} height={195} className="hidden h-6 w-auto dark:block" priority />
-            </div>
+            <div />
 
 
             <div className="flex items-center gap-3">
-              <span className="hidden text-[13px] text-muted-foreground md:inline">
-                <span className="font-medium text-foreground">{plan.name}</span>
-                {" · "}${plan.priceUsd}/month
-                {(plan.trialDays ?? 0) > 0 && ` · ${plan.trialDays}-day free trial`}
-              </span>
               <button
                 type="button"
                 onClick={requestClose}
@@ -365,7 +357,14 @@ export function OnboardingScreen() {
                 </li>
               ))}
             </ol>
-            <div className={cn("relative flex min-h-0 w-full max-w-[480px] flex-col overflow-hidden", SIGNUP_CARD)}>
+            <div
+              className={cn(
+                "relative flex min-h-0 w-full max-w-[480px] flex-col overflow-hidden transition-[max-width] duration-200 ease-out motion-reduce:transition-none",
+                // The payment screen goes two-column on a laptop (see PaymentStep).
+                dialogStep === "payment" && !closeConfirmOpen && "lg:max-w-[920px]",
+                SIGNUP_CARD,
+              )}
+            >
               {/* Sized to fit: the picture shrinks, then steps aside, on short
                   screens (see ScreenHead), so the page itself never scrolls.
                   The overflow here is a last resort for a phone held sideways. */}
@@ -374,7 +373,6 @@ export function OnboardingScreen() {
                 {closeConfirmOpen ? (
                   <div key="leave" className={SIGNUP_ENTER}>
                     <ScreenHead
-                      art={<PauseArt />}
                       title="Leave for now?"
                       lead="Your account is saved. Come back to drive-247.com and I'll pick up right here. Nothing has been charged yet."
                     />
@@ -408,6 +406,7 @@ export function OnboardingScreen() {
                         <AccountStep
                           plan={plan}
                           mode={accountMode}
+                          paid={state.payment.paid}
                           initialValues={{
                             fullName: state.account?.fullName ?? "",
                             email: state.account?.email ?? state.signInPrompt?.email ?? "",
@@ -418,9 +417,10 @@ export function OnboardingScreen() {
                           busy={state.busy}
                           error={state.error}
                           googleEnabled={googleEnabled}
+                          appleEnabled={appleEnabled}
                           onSubmit={(values) => void submitAccount(values)}
                           onSubmitTenant={(values) => void submitTenantDetails(values)}
-                          onGoogle={(values) => void startGoogleSignup(values)}
+                          onGoogle={(values, provider) => void startGoogleSignup(values, provider)}
                           onCheckSlug={checkSlug}
                           onSignIn={(values) => void signInExisting(values)}
                           onUseDifferentEmail={useDifferentEmail}
@@ -469,6 +469,18 @@ export function OnboardingScreen() {
                     </div>
                   )}
 
+                  {/* On the two-column payment screen this is a row of its own:
+                      the Stripe line at the bottom of the left column, and the
+                      notices, errors and Pay button under the card form on the
+                      right. On a phone the Stripe line comes last. */}
+                  <div className={cn(paymentColumns && "flex flex-col lg:grid lg:grid-cols-2 lg:items-end lg:gap-x-10")}>
+                  {paymentColumns && (
+                    <p className="order-last mt-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground lg:order-first lg:mt-0 lg:justify-start lg:leading-none">
+                      <Lock className="h-3 w-3 shrink-0" aria-hidden="true" />
+                      Payments are processed by Stripe. We never see your card details.
+                    </p>
+                  )}
+                  <div>
                   {notices.map((n) => (
                     <Alert key={n.key} variant="info" className={cn("mt-5 rounded-xl text-left", SIGNUP_ENTER)}>
                       {n.icon === "resume" ? <RotateCcw /> : <Info />}
@@ -526,6 +538,8 @@ export function OnboardingScreen() {
                       ) : null}
                     </div>
                   ) : null}
+                  </div>
+                  </div>
                 </div>
               </div>
               </div>

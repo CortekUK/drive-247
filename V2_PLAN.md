@@ -3,8 +3,20 @@
 How Drive247 is being rebuilt. If you are an AI agent picking up this work with
 no other context, read this file first and in order.
 
-Every number in this document was measured against production on 2026-09-03. Where
-a number matters, the query that produced it is in `scripts/v1-check/shared.mjs`.
+Refreshed 2026-11-03 against production and `main` at `2ebd6c33`. Numbers go stale
+fast: re-measure before relying on one (`scripts/v1-check/shared.mjs` holds the
+queries). Where this file and the code disagree, the code wins, so fix this file.
+
+**Where to start:**
+
+| You want | Read |
+|---|---|
+| What Northwind is today, surface by surface | §13 |
+| What happens next, in order | §14 |
+| What is waiting on Ghulam | §15 |
+| The rules (these do not change) | §0 to §12 |
+
+Section numbers are stable on purpose: code comments across the repo cite them.
 
 ---
 
@@ -12,11 +24,12 @@ a number matters, the query that produced it is in `scripts/v1-check/shared.mjs`
 
 Two things will cause real damage faster than anything else you can do here.
 
-**One — there is no staging.** You are working on `main`, in the repo that
-deploys, against the production database that ~32 paying operators are running
-their businesses on right now. There is no branch between you and them. A
-migration you apply is applied to their data. An edge function you redeploy is
-serving their customers within seconds.
+**One — there is no staging deploy.** You are working on `main`, in the repo that
+deploys, against the production database that ~34 subscribed operators are running
+their businesses on right now. A staging Supabase branch exists
+(`ksmreaadhbirzakkxqrq`) for local work, but no deployed site sits between you and
+them. A migration you apply to production is applied to their data. An edge
+function you redeploy is serving their customers within seconds.
 
 **Two — the database will not stop you from reading or writing another
 operator's data.** Row Level Security is **disabled on the core tables**.
@@ -47,7 +60,7 @@ So the model is:
 - Every change is behind a tenant gate.
 - A single canary tenant, **`northwind`**, receives every change first — UI,
   logic, schema, architecture.
-- The other 56 tenants — 32 of them paying — continue to see v1, untouched,
+- Every other tenant (69 rows, 34 subscribed on 2026-11-03) continues to see v1,
   with no code path changed underneath them.
 - v2 grows over v1 one area at a time. When an area is live for every tenant,
   the v1 code for that area is deleted and its gate is removed.
@@ -77,7 +90,7 @@ It carries synthetic data only. Never copy real customer data into it.
 There is no rollout system. There is one tenant.
 
 Every v2 change — a screen, a query, a column, a trigger, an edge function —
-is gated so that **`northwind` sees it and nobody else does**. The other 56
+is gated so that **`northwind` sees it and nobody else does**. The other
 tenants keep running exactly the code they ran yesterday. When a change has
 been live on the canary long enough to have failed and has not, it is widened;
 when it is live for everyone, the v1 code behind it is deleted and the gate
@@ -105,24 +118,36 @@ That is the worst failure this model can produce, and it has already happened
 once. The slug is stable across every environment; use it.
 
 ```ts
-// apps/portal/src/lib/v2.ts   ← create this with the first v2 area
-/** Canary tenants, by slug. Stable across prod, staging and local. */
-const CANARY = ['northwind'] as const;
+// apps/portal/src/lib/v2.ts   (shortened; the file carries the reasoning)
+export const NORTHWIND = 'northwind';
 
-/** One entry per v2 area. Today every list is just the canary. */
-const V2_AREAS: Record<string, readonly string[]> = {
-  vehicles:  CANARY,
-  dashboard: CANARY,
+const V2_AREAS: Record<V2Area, readonly string[]> = {
+  dashboard: [NORTHWIND],
+  rentals:   [NORTHWIND],
+  turo:      [NORTHWIND, 'car-rental-deal-hq'],
+  // appearance theme chrome login customers cms vehicles insights
+  // availability agreements finances: all [NORTHWIND]
 };
 
 export function isV2(
-  area: keyof typeof V2_AREAS,
+  area: V2Area,
   tenantSlug: string | null | undefined,
+  onV2: boolean = false,                // tenants.portal_experience === 'v2'
 ): boolean {
   if (!tenantSlug) return false;        // unknown tenant ⇒ v1, always
-  return V2_AREAS[area].includes(tenantSlug);
+  if (onV2) return true;
+  return V2_AREAS[area]?.includes(tenantSlug) ?? false;
 }
 ```
+
+**There are two ways in, OR'd.** The slug list above, and since 2026-09-17 the row
+column `tenants.portal_experience = 'v2'`, because a self-serve signup cannot be in
+a list compiled at build time. A `v2` row gets **every** area at once, and the lean
+product with it. The row is read once per request (`lib/portal-tenant.ts`), the
+gates are resolved once (`lib/v2-server.ts`, `serverIsV2`), and client components
+read the answers from context (`useV2`, `useIsLean`, `useIsAreaHidden`). Modules
+holding the rule stay pure: a cached answer would be one tenant's gate served to
+the next tenant.
 
 Note `V2_AREAS` is annotated rather than `satisfies`-ed. With `as const` the
 value type narrows to a literal union, and `.includes()` on a `readonly
@@ -140,7 +165,7 @@ Three properties of it are not optional:
 
 **It fails to v1.** If resolving the tenant throws, or comes back empty, the
 answer is v1 and every tenant sees the screen they already had. A gate that
-fails *open* puts all 57 tenants on unfinished code at once.
+fails *open* puts every tenant on unfinished code at once.
 
 **It is resolved once, at the entrance** — on the server, at the route or layout
 level. Never sprinkled through a component, never in a client effect. That is
@@ -226,14 +251,13 @@ carrying bug fixes for both paths.
 
 ```tsx
 // apps/portal/src/app/(dashboard)/vehicles/page.tsx   ← the ONLY edit to v1
-import { isV2 } from '@/lib/v2';
-import { tenantIdFromHeaders } from '@/lib/tenant-server';
+import { serverIsV2 } from '@/lib/v2-server';
 import LegacyVehicles from '@/components/vehicles/legacy-vehicles';
 import VehiclesV2 from '@/components/vehicles-v2/vehicles-v2';
 
 export default async function VehiclesPage() {
-  const tenantId = await tenantIdFromHeaders();   // never throws; null on failure
-  return isV2('vehicles', tenantId) ? <VehiclesV2 /> : <LegacyVehicles />;
+  // Never throws; an unresolved tenant answers v1.
+  return (await serverIsV2('vehicles')) ? <VehiclesV2 /> : <LegacyVehicles />;
 }
 ```
 
@@ -242,27 +266,12 @@ apps/portal/src/components/vehicles/        ← v1. Untouched. Deleted at the en
 apps/portal/src/components/vehicles-v2/     ← v2. Yours.
 ```
 
-Neither `@/lib/v2` nor `@/lib/tenant-server` exists in `apps/portal` yet. Write
-them once, with the first area, and every later route reuses them.
+Working examples to read before you write your own:
 
-There is a working example of this already in the repo, from the booking-v2
-landing page. Read it before you write your own:
-
-- `apps/booking/src/app/page.tsx` — resolves the flag **on the server**, in one
-  place, and falls back to the legacy component if the lookup throws.
-- `apps/booking/src/app/booking-v2/page.tsx` — a standing preview route that
-  renders the new design on *every* tenant regardless of the flag, so it can be
-  reviewed without switching anyone over.
-
-Note what that example does with failure:
-
-```tsx
-} catch {
-  // Never let a flag lookup take the home page down — fall back to the
-  // design every tenant already has.
-  return false;
-}
-```
+- `apps/portal/src/app/(dashboard)/finances/page.tsx`: a v2-only route, server
+  gated with `serverIsV2`. The cleanest current shape.
+- `apps/booking/src/lib/booking-design.ts`: the booking side's gate, plain logic
+  with no Next.js imports so it can be tested directly.
 
 **A gate that throws must resolve to v1.** If resolving the tenant fails, every
 tenant gets the screen they already had. If it fails open to v2, one bad query
@@ -282,6 +291,15 @@ only true if nothing v2 wrote ever went inside a v1 file.
 The alternative — flags sprinkled through components — is how a codebase
 accumulates flags that can never be removed, and how a "temporary" migration
 becomes permanent.
+
+### Where this rule has already slipped
+
+Measured 2026-11-03: **101 non-`-v2` portal files call `useV2(`**, about 110 of the
+calls on the catch-all `chrome` area, and the biggest v1 pages carry inline gates
+(`settings/page.tsx`, `rentals/[id]`, `customers/[id]`). Those gates are no longer
+"three deletions" to retire. Do not add to the count: new work goes in `-v2` files,
+and a shared file gets forked, never given a v2 branch (grep its importers first).
+Paying this down is in §14, Phase 3.
 
 ---
 
@@ -340,7 +358,8 @@ documents this in place.
 
 ### Do not add flag #74
 
-`public.tenants` currently has **269 columns, 73 of them boolean**. Many are
+`public.tenants` had **269 columns, 73 of them boolean** when this was written, and
+has 281 columns today. Many are
 orphaned — flags for features that shipped, were removed, or were never
 finished, still being selected on every tenant load.
 
@@ -349,9 +368,10 @@ would be selected on every tenant load forever, it would need its own `anon`
 grant or it takes every booking site down on the day it lands, and it would
 outlive the feature it was added for exactly the way the orphans above did.
 
-v2 gates live in application code instead (§2), keyed on the tenant id. They
+v2 gates live in application code instead (§2), keyed on the tenant slug. They
 cost no column, no grant, no migration and no query — and deleting one is
-deleting a line.
+deleting a line. `portal_experience` is the one deliberate exception, shipped with
+its grant and a reader that retries without the column on a permission error.
 
 ---
 
@@ -362,18 +382,19 @@ deleting a line.
 RLS is **disabled** on the tables the entire business runs on:
 
 ```
-rentals          RLS OFF   (11 policies defined — all inert)
-customers        RLS OFF   (15 policies defined — all inert)
-payments         RLS OFF   (10 policies defined — all inert)
-vehicles         RLS OFF   (10 policies defined — all inert)
-invoices         RLS OFF   ( 8 policies defined — all inert)
-ledger_entries   RLS OFF   ( 0 policies)
-app_users        RLS OFF   ( 5 policies defined — all inert)
+rentals          RLS OFF
+customers        RLS OFF
+payments         RLS OFF
+invoices         RLS OFF
+ledger_entries   RLS OFF
+fines            RLS OFF
+
+tenants, vehicles, app_users   RLS ON (since this file was first written)
 ```
 
-**74 of 220 public tables have RLS disabled overall.**
+**69 of 338 public tables have RLS disabled overall** (2026-11-03).
 
-Note the second column. Six of those seven tables have policies written on
+Most of those tables have policies written on
 them. **Policies on a table with RLS disabled do not run.** They are visible in
 the Supabase dashboard, they look like protection, and they enforce absolutely
 nothing. Do not read the presence of a policy as evidence that a table is
@@ -427,7 +448,7 @@ breaking at the same time.** `CREATE TRIGGER` alters no column, so it passes a
 "did you change any columns?" review — and then it changes what happens every
 time v1 writes a row.
 
-There are **181 triggers** on public tables today. Two real ones show both
+There are **233 triggers** on public tables today. Two real ones show both
 shapes of the problem:
 
 **`queue_for_rag()`** — attached to `rentals`, `payments`, `customers` and
@@ -490,10 +511,15 @@ with the migration and the reason.
 
 ## 7. Edge functions
 
-There are **324 edge functions** in `supabase/functions/`, **67** of them with
-`verify_jwt = false` in `supabase/config.toml` — publicly callable without a JWT
-(third-party webhooks that verify their own signatures, cron targets, and a few
-genuinely public endpoints).
+There are **389 edge functions** in `supabase/functions/` and **416 deployed**
+(35 deployed have no source in the repo; 8 in the repo are not deployed, some on
+purpose, such as `reset-password-with-otp`). **83** have `verify_jwt = false` in
+`supabase/config.toml`, publicly callable without a JWT (third-party webhooks that
+verify their own signatures, cron targets, and a few genuinely public endpoints).
+
+Deploy one function per command and verify each one behaviourally. See "Deploying
+edge functions" in `CLAUDE.md`: a batch deploy has reported success while serving
+old code.
 
 > **Never change the behaviour of an existing edge function.**
 
@@ -511,7 +537,7 @@ supabase/functions/create-checkout-session-v2/    ← v2. Point northwind at it.
 The caller picks, the same way a route picks a component:
 
 ```ts
-const fn = isV2('checkout', tenant.id)
+const fn = isV2('checkout', tenant.slug)
   ? 'create-checkout-session-v2'
   : 'create-checkout-session';
 await supabase.functions.invoke(fn, { body });
@@ -596,9 +622,18 @@ Re-running the snapshot to silence a failing check is the one way to make this
 whole directory worthless. The baseline is the record of what was agreed; a
 baseline regenerated whenever it complains records nothing.
 
-The current baseline covers 220 tables, 3,297 columns, 1,148 constraints, 893
-indexes, 550 function signatures, 181 triggers, 324 edge functions and 1,930 v1
-source files.
+### Current state: failing, and not yet reviewed
+
+Run on 2026-11-03, **`v1:check` fails**. The baseline was last snapshotted on
+2026-09-07, and two months of accepted work sit on top of it. The findings include
+real behaviour worth a human look, not only noise: `block_insert_while_paused`
+BEFORE INSERT on `rentals`, `customers` and `vehicles`, and the
+`accounting_v2_capture` triggers on `invoices`, `ledger_entries`, `payments` and
+`payment_applications`, plus edge function changes including `_shared`,
+`apply-payment`, `auto-extend-rentals` and `boldsign-webhook`.
+
+So today a failure tells you nothing about *your* change. Do not re-snapshot to
+quiet it. Reviewing it and taking a deliberate new baseline is §14, Phase 2.
 
 ---
 
@@ -608,14 +643,15 @@ source files.
 
 ```
 project ref   hviqoaokxvlancmftwuo
-tables        220 public   (74 without RLS)
-functions     550 public
-triggers      181 public
-edge fns      324  (67 with verify_jwt = false)
-tenants       57 rows      (32 with an active/trialing/past_due subscription)
+tables        338 public   (69 without RLS)
+functions     706 public
+triggers      233 public
+edge fns      389 in repo, 416 deployed  (83 with verify_jwt = false)
+tenants       69 rows      (34 with an active/trialing/past_due subscription)
+                           (measured 2026-11-03)
 ```
 
-RLS helper functions, still used by the 146 tables that do have RLS on:
+RLS helper functions, still used by the tables that do have RLS on:
 `get_user_tenant_id()`, `is_super_admin()`, `is_primary_super_admin()`,
 `is_global_master_admin()`. Super admins have `tenant_id = NULL` in `app_users`,
 which is a live source of bugs in any edge function that reads
@@ -623,18 +659,21 @@ which is a live source of bugs in any edge function that reads
 
 **The apps**
 
-Five, not four. `apps/bonzah` is a real fifth app (the Bonzah partner console).
+Four. `apps/bonzah` was deleted from the repo on 2026-10-04.
 
 | App | Purpose | `.from('…')` call sites |
 |---|---|---|
-| `apps/portal` | operator admin portal | 1,319 |
-| `apps/booking` | customer booking + customer portal | 351 |
-| `apps/admin` | super-admin dashboard | 179 |
-| `apps/web` | marketing site | 7 |
-| `apps/bonzah` | Bonzah partner console | 4 |
-| | **total** | **1,860** |
+| `apps/portal` | operator admin portal | ~1,520 |
+| `apps/booking` | customer booking + customer portal | ~410 |
+| `apps/admin` | super-admin dashboard | ~300 |
+| `apps/web` | marketing site and self-serve signup | 8 |
+| | **total** | **~2,240** |
 
-Those 1,860 direct `.from()` calls **are the Supabase coupling.** They are what
+`shared/` holds code used across apps: `shared/portal-v2/` (the v2 table, card and
+token kit, used by the operator portal and the customer portal) and
+`shared/trax-support/` (the support inbox, used by portal and admin).
+
+Those direct `.from()` calls **are the Supabase coupling.** They are what
 the future owned API layer replaces, and the reason the move off Supabase is a
 later phase rather than this one. Do not add to the pile casually: new v2 data
 access should go through a hook or a service function, not a raw `.from()`
@@ -647,7 +686,6 @@ compile the same way.
 |---|---|---|---|
 | `apps/admin` | **true** | true | **false** — type errors fail the build |
 | `apps/web` | true | true | — |
-| `apps/bonzah` | true | true | — |
 | `apps/booking` | false | **true** | true |
 | `apps/portal` | false | **false** | true |
 
@@ -753,12 +791,17 @@ unschedule a `pg_cron` job. Both outlive the commit. Check
 ## 11. Files worth reading, in this order
 
 ```
-apps/booking/src/app/page.tsx
-    The strangler pattern, done correctly, already in production. Read this
-    first — it is the shape every v2 gate copies.
+apps/portal/src/lib/v2.ts, v2-server.ts, lean-areas.ts
+    The portal's gates, with the reasoning and the history of what went wrong.
 
-apps/booking/src/app/booking-v2/page.tsx
-    The standing-preview route pattern.
+apps/booking/src/lib/booking-design.ts
+    Which design a booking request gets. The Northwind routing, in one file.
+
+PROJECT_CONTEXT.md
+    The full repo map: apps, routes, edge functions, data model, scripts.
+
+QA/QA_GUIDE.md, QA/MASTER_PLAN.md
+    How everything gets tested. Untracked in git as of 2026-11-03.
 
 supabase/migrations/20260820150000_add_booking_v2_flag.sql
     The `tenants` anon-grant trap, documented at the scene.
@@ -787,8 +830,8 @@ does its own thing is a screen that reads as a different product.
 **The reference is the Trax panel** — the one that opens from **Help** in the
 top bar (`apps/portal/src/components/trax/trax-panel.tsx`, the `shown` class
 list on the `<aside>`). Every animation matches it — in **every app**: portal
-(v1 and v2), booking site and customer portal, super admin, the Bonzah console
-and the marketing site. This is the one deliberate exception to "v1 never
+(v1 and v2), booking site and customer portal, super admin and the marketing
+site. This is the one deliberate exception to "v1 never
 moves": the owner chose one motion language for the whole product (Sep 27
 2026), for every tenant. Nothing gets its own duration or its own curve.
 
@@ -830,3 +873,262 @@ The rules that follow from it:
   `visibility_0s_linear_200ms`; otherwise the exit animation never shows.
 - **`motion-reduce:transition-none` on every animated element.** An operator
   who has asked their OS for less motion gets none.
+
+---
+
+## 13. Northwind today
+
+Measured 2026-11-03 on `main` at `2ebd6c33`. Northwind is the product v2 will become,
+so this is the map of that product across all its surfaces.
+
+### The tenant
+
+```
+slug / id        northwind / 6e5c544f-b374-451f-a662-360a634bff15
+type             test, portal_experience = 'v2' (so every portal area is on)
+data             60 rentals, 25 customers, 10 vehicles, 69 payments, 42 invoices,
+                 15 agreements, 0 fines (synthetic only)
+stripe_mode      test
+BoldSign         column says test, but lean forces LIVE: a send spends real credits
+                 and produces a binding document
+setup            setup_completed_at is NULL
+```
+
+Other `portal_experience = 'v2'` rows: only `ghulam` (production type, created
+2026-10-28, subscription cancelled; looks like a signup test). One real tenant
+touches a v2 area: `car-rental-deal-hq`, for Turo Sync only. **No real operator is
+on v2.** The 1 Oct 2026 launch date has passed without a widening, and the Notion
+tracker's Tasks database has 0 rows.
+
+### Operator portal (`apps/portal`, `{slug}.portal.drive-247.com`)
+
+The v2 rail: Dashboard, Customers, Vehicles, Rentals, Insights, Insurances,
+Agreements, Availability, Finances, Support, Integrations, Billing, Rewards, plus a
+Portal / Website switch into the CMS. 25 `components/*-v2/` directories, about
+120,000 lines.
+
+| Area | Route | v2 state | Gate |
+|---|---|---|---|
+| Dashboard | `/` | Built, with setup checklist | `dashboard` |
+| Rentals list | `/rentals` | Built | `rentals` |
+| Rental detail | `/rentals/[id]` | Built: 8 stages, rail | `rentals`, beside 8.2k-line v1 |
+| New rental | `/rentals/new` | Drafts added, but **6.8k-line v1 page** with inline gates | `rentals` |
+| Customers | `/customers`, `[id]` | List restyled in place, detail built | `chrome`, `customers` |
+| Vehicles | `/vehicles`, `[id]` | List restyled in place, detail built | `chrome`, `vehicles` |
+| Finances | `/finances` | Built: tabs over Payments, Invoices, Fines | `finances`, server |
+| Insights | `/insights` | Built, replaces Reports and P&L | `insights`, server |
+| Agreements | `/agreements` | Built, templates and individual sends | `agreements` |
+| Availability | `/blocked-dates` | Built, saves hours and blocked dates (the comment in `v2.ts` calling it read-only is out of date) | `availability` |
+| Insurances | `/insurances` | Restyled in place | `chrome` |
+| Integrations | `/integrations` | Built: per-integration panels | `appearance`, server |
+| Settings | `/settings` | v2 pages inside a 7.5k-line v1 page | mixed |
+| Notifications | `/settings?tab=notifications` | UI built, **see gap below** | mixed |
+| Billing | `/subscription` | Built | `chrome` |
+| Support | `/support` | Built, tickets | `chrome`, server |
+| Messages | `/messages` | Built, **ungated for all tenants** | none |
+| Trax | `/trax` | Built, **route has no gate** | none |
+| Website (CMS) | `/cms` | Built, visual editor | `cms` |
+| Onboarding | layout | First-run wizard, first-rental tour | `useIsLean` |
+
+**Hidden from Northwind (lean), still live for everyone else:** enquiries, leads,
+automations, quotes, tesla, welcome, owners, expenses, accounting, fleet-health,
+cmd, inshur, tenant-health, reports, pl-dashboard, reminders, and the Settings tabs
+for payments, messaging, insurance and e-sign. Parked means hidden, never deleted.
+
+### Booking site (`apps/booking`, `{slug}.drive-247.com`)
+
+Gate: slug in `NEW_DESIGN_TENANTS` (`lib/booking-design.ts`), with the middleware
+rewriting the URL. Code in `src/northwind-site/` via `@nw/*`. Tailwind 4 compiled
+ahead of time: re-run `node scripts/build-northwind-css.mjs` after new class names.
+
+| Surface | State |
+|---|---|
+| Public pages: home, fleet, about, contact, blog, promotions, reviews, privacy, terms | v2, at the normal links |
+| Auth: login, signup, forgot-password, invite register | v2 |
+| Vehicle booking page `/booking/[vehicleId]` | v2 UI and quote work, **payment cannot complete** |
+| Quick book dialog ("Book a car") | **Prototype, charges and writes nothing**, and says so on screen |
+| Contact form | **Fake send**: waits 600ms and reports success |
+| `checkout`, `pay`, `offer`, `verify`, `apply`, `auth`, `booking-*`, `sms-opt-in` | **Still legacy pages**, by design for now |
+
+### Customer portal (`/portal` on the booking site)
+
+v2 at the normal link, folder `portal-v2`. Rentals, bookings, agreements, documents,
+insurances, Finances, messages, notifications, verification, gig driver, settings,
+customer Trax, and the phone layout. Rentals and Agreements share the operator's
+screens through `shared/portal-v2`. Paying from Finances calls the same missing
+payment function below.
+
+### Signup and onboarding (`apps/web`)
+
+`signup-begin` → `signup-verify-otp` → `signup-payment-intent-v2` →
+`signup-provision` (writes `portal_experience = 'v2'`) → first-run wizard →
+first-rental tour → setup checklist. **The signup redesign is uncommitted in the
+working tree**, along with the OTP helper changes and Phoenix tracing on the `trax-*`
+functions (`_shared/phoenix.ts`, migration `20261027120000`). Landing switches:
+`landing_version` is `v1` and `landing_pricing_enabled` is false in production.
+
+### Super admin (`apps/admin`)
+
+One app for all tenants, not gated by tenant. It has the Northwind rail and the phone
+layout. Strict TypeScript: a type error here fails the build.
+
+### Known gaps, verified 2026-11-03
+
+**Blocks a real customer journey on Northwind**
+
+1. **Renters cannot pay.** `create-booking-payment-intent` is not on `main` and not
+   deployed. The source (691 lines) is on `origin/haseeb/staging/booking-side` and
+   `origin/improv/staging/booking-site`. The booking page and customer Finances both
+   call it and get a 404.
+2. **Quick book is simulated.** Its planned real version is a manual-capture card
+   hold, captured after the licence check. Its clock offers :15 and :45 while booking
+   validation uses 30-minute slots.
+3. **The contact form sends nothing.**
+4. **Notification settings do not drive sends.** No edge function reads
+   `tenant_notification_settings`, so switches and wording change previews only.
+5. **Support email never goes out.** 17 `trax_support_email_jobs` sit pending because
+   no cron runs `trax-support-notifications`.
+
+**Blocks widening beyond Northwind**
+
+6. **The booking site does not follow `portal_experience`.** `usesNewDesign` reads the
+   slug list only, so a v2 signup gets the v2 operator portal and the legacy booking
+   site.
+7. **Going lean removes features real tenants use.** The lean list hides enquiries,
+   reminders, owner payouts and more. Moving a real tenant onto `portal_experience =
+   'v2'` takes those away from them.
+8. **Lean is mirrored by hand** in portal, booking and edge. All three say
+   `['northwind']` today and must move together.
+
+**Trust**
+
+9. **Four pricing calculators, three different.** Portal and booking match; `_shared`
+    and `northwind-site/lib/domain` each differ. No golden tables exist yet, and no
+    app has Sentry.
+10. **`v1:check` is failing and unreviewed** (§8).
+
+**Security, live for every tenant today**
+
+11. `exec_sql(text)` is **executable by anon**: arbitrary SQL using the public key.
+12. 9 reporting views (`view_payments_export`, `view_rentals_export`,
+    `view_customer_statements` and others) are selectable by anon.
+13. The `customer-documents` bucket (licences, selfies) is public.
+14. 35 deployed functions have no source in the repo, including `run-migration`,
+    `cleanup-rls` and `fix-rls-v2`.
+
+---
+
+## 14. The plan
+
+**A proposal for Ghulam to edit, not an agreed schedule.** Each phase has an exit test.
+Nothing here is pushed or deployed until Ghulam says so.
+
+### Phase 0: Close the open doors
+
+The one phase that is not canary-gated, because the exposure is on every tenant. Each
+step is a production change and needs Ghulam's explicit go-ahead.
+
+- Revoke `exec_sql` from anon, PUBLIC and authenticated, keeping service_role. Haris's
+  `00a` containment was written for this. Then the wider `00b` sweep.
+- Revoke anon on the 9 reporting views. First confirm no booking-side code reads them.
+- Move `customer-documents` to private with signed uploads. This needs code first, so
+  it is not a one-line flip.
+- Review the 35 source-less deployed functions and undeploy the dead ones.
+
+**Exit:** the `has_function_privilege` and `has_table_privilege` checks return false
+for anon, and the bucket refuses an anonymous read.
+
+### Phase 1: Northwind works, end to end, for real
+
+- Bring `create-booking-payment-intent` onto `main` as new code. Read it against
+  today's booking contract in `hooks/use-payment-intent.ts` first, since it was
+  written on a diverged branch in September. Keep it in Stripe test mode.
+- Decide quick book (§15). Either make it real or remove the trigger, but do not leave
+  a "Prototype" screen in a live flow.
+- Contact form: send for real.
+- Wire `tenant_notification_settings` into real sends, for Northwind only, on new code
+  paths.
+- Schedule `trax-support-notifications`, and drain or clear the 17 stale jobs.
+- Move `verify`, `pay`, `checkout` and `offer` to v2 screens, one at a time. These
+  addresses are sent by email, SMS and Stripe, so existing links must keep working.
+- Rebuild New Rental as a v2 file, replacing the inline gates in the 6.8k-line page.
+- Land the uncommitted signup redesign once Ghulam has reviewed it.
+
+**Exit: one person walks the whole journey on Northwind with nothing simulated.** Sign
+up → first-run → add a car → renter books and pays by test card → agreement signed →
+verification → keys → extension → return → refund, with correct money on every screen
+and the right messages sent.
+
+### Phase 2: Prove it
+
+- Golden tables and Vitest for pricing, then reduce to one implementation per rule
+  (`QA/QA_GUIDE.md` §8, §10).
+- Tenant isolation in three layers: code scan, cross-tenant mismatch queries returning
+  0, and a leak-test tenant.
+- Work through the QA modules and flows in `QA/MASTER_PLAN.md`. Commit `QA/`.
+- Sentry on all four apps.
+- Review every `v1:check` finding, then take a deliberate new baseline, committed with
+  the reasons.
+- Phone pass on the directories with no breakpoint classes: `insurance-v2`, `fleet-v2`,
+  `invoices-v2`, `credits-v2`. They may inherit from shared kit, so check on a real
+  phone before changing anything.
+
+**Exit:** `v1:check` is green and means something again, and the golden tables pass
+against every calculator.
+
+### Phase 3: Make it widenable
+
+- **Booking follows the tenant:** drive the design from the row as well as the slug,
+  so a v2 signup also gets the v2 site. Keep the anon-grant trap (§4) in mind.
+- **Separate "v2 UI" from "lean".** Today a v2 row gets both, so a real tenant cannot
+  get the new UI and keep its enquiries, reminders or payouts. Needs a decision (§15).
+- **Bring those kept features into v2 UI** where real tenants rely on them.
+- Fold `lean-areas.ts` into `v2.ts`, which its own TODO asks for. Replace the hand
+  mirrors with one source, or a test that pins them equal.
+- Remove the dead switch: `V2_BUILT_SEGMENTS` is empty, so
+  `northwind_site_version` and its Developer-tab card no longer change anything.
+- Retire `(northwind)/northwind-site`, the older design tree, once nothing routes to
+  it.
+- Give `/trax` a proper gate. Decide whether ungated `messages-v2` and `timeline-v2`
+  stay that way on purpose, and write the answer here.
+- Split the catch-all `chrome` area where it blocks area-by-area widening.
+
+**Exit:** a new test tenant, created only through signup, gets the full v2 product on
+both sides without a deploy, and a v1 tenant sees no change.
+
+### Phase 4: Widen
+
+```
+northwind → new self-serve signups → 1-2 friendly tenants → everyone
+```
+
+New signups come first because they have no habits or data to break. Before a real
+tenant moves: check which lean-hidden features it uses, take a snapshot of its key
+money totals, and agree a way back (`portal_experience = 'v1'`). Pause at least one
+full billing and rental cycle between steps. When messaging tenants about this, say
+what is now available, never what was broken.
+
+**Exit:** every subscribed tenant is on v2.
+
+### Phase 5: Retire v1, then move off Supabase
+
+- Area by area: delete the v1 files, the route branch and the `V2_AREAS` entry, then
+  re-snapshot. Prove each removal with the independent grep in §10, and check crons
+  and deployed functions separately.
+- Only then the owned API layer and the AWS move. `apps/api` is not on `main` today.
+
+---
+
+## 15. Waiting on Ghulam
+
+| # | Decision | Recommendation |
+|---|---|---|
+| 1 | Go-ahead for Phase 0 on production | Yes, and first. It outranks everything else here |
+| 2 | Quick book: real, or removed? | Make it the real flow using a card hold, and retire the long booking page later |
+| 3 | v2 UI separate from lean? | Yes. It is the only way paying tenants can move without losing features |
+| 4 | Which lean-hidden features return in v2 for real tenants | Decide from per-tenant usage. Enquiries (on for 51 tenants when measured in September) and reminders look like the first two |
+| 5 | PAYG and installments | Park both for new tenants, per the 2026-11-03 usage research (4 and 1 rentals ever). Fix auto-extend gaps first |
+| 6 | Credits versus monthly add-ons | Proposed 2026-09-18, still unapproved. v2 Billing already has no Credits tab |
+| 7 | Subscription first charge: per-plan trial, or $1 then first charge at one month | Confirm which is current. Signup now uses per-plan `trialDays`, and the $1 model note dates from June |
+| 8 | First friendly tenants | Ghulam's call. Prefer one with few lean-hidden features in use |
+| 9 | A new launch date | The Notion tracker is empty, so say if it should be rebuilt from §14 |

@@ -160,30 +160,6 @@ export function getSignupPlan(
 }
 
 /**
- * Rendered once, under the three cards. Every line describes a capability that
- * actually ships today (see CLAUDE.md + lib/constants.ts PLATFORM_FEATURES).
- * Nothing here is plan-gated, which is exactly why it is listed once.
- */
-export const PLATFORM_INCLUDED: readonly string[] = [
-  "Branded booking website on your own domain",
-  "Full fleet management, availability and blackout controls",
-  "Online bookings and payments via Stripe",
-  "Deposits and pre-authorisations",
-  "Customer verification and document checks",
-  "E-signed rental agreements",
-  "Automated invoicing and reminders",
-  "Real-time customer chat",
-  "Reports and P&L dashboard",
-  "Weekend and holiday dynamic pricing",
-  "Lockbox self-service key handover",
-  "Bonzah insurance integration",
-] as const;
-
-/** Footnote under the grid. Every claim here must remain true. */
-export const PRICING_FOOTNOTE =
-  "Prices in USD, billed monthly. Manage your subscription any time from your portal.";
-
-/**
  * The price a customer reads on the card, derived from `amountCents` — the one
  * number the server also charges. `priceUsd` stays in the contract because B2's
  * dialog header and B3's order summary read it, but nothing renders it directly:

@@ -3,15 +3,23 @@
 /**
  * The playground hub — DESIGN SANDBOX.
  *
- * Four doors into four fake screens. Nothing behind any of them touches a
+ * Doors into fake screens. Nothing behind any of them touches a
  * real row: no Supabase, no tenant, no auth. This is where a flow gets tried
  * and argued about before any of it is built for real.
  */
 
 import Link from "next/link";
-import { Car, Key, Users, Globe, ArrowRight, FlaskConical } from "lucide-react";
+import { Car, Key, Users, Globe, ArrowRight, FlaskConical, Repeat } from "lucide-react";
 
 const DOORS = [
+  {
+    href: "/playground/rental-model",
+    icon: Repeat,
+    title: "A simpler rental model",
+    blurb:
+      "Extensions, auto extension, pay as you go and installments, drawn as one list of payments. Diagrams, plus three questions that build any rental.",
+    tag: "Proposal",
+  },
   {
     href: "/playground/rental-create-fake",
     icon: Key,

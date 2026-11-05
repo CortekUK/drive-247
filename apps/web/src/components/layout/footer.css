@@ -1,0 +1,41 @@
+/*
+ * The footer is dark in both themes. Its wordmark is cut out of the brand's pixel texture
+ * and runs off the bottom, fading at the sides and the foot.
+ */
+/* At least one full screen, so the section above never shows when scrolled to the end. */
+.ft-dark {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 100svh;
+  background: #0b0b0e;
+  color: #fff;
+}
+.ft-word {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: clamp(24px, 3vw, 44px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent), linear-gradient(to right, transparent, #000 9%, #000 91%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to bottom, #000 62%, transparent), linear-gradient(to right, transparent, #000 9%, #000 91%, transparent);
+  mask-composite: intersect;
+}
+/* Finger-sized links below the desktop layout, keeping the same text and left edge. */
+@media (max-width: 1279.98px) {
+  .ft-logo { display: inline-flex; align-items: center; min-height: 44px; }
+  .ft-list { margin-top: 6px; }
+  .ft-list > li { margin-block: 0; }
+  .ft-link { display: flex; align-items: center; width: fit-content; min-width: 44px; min-height: 44px; }
+  .ft-legal, .ft-legal > span { display: inline-flex; align-items: center; }
+  .ft-legal a { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
+}
+/* The wordmark is small on a phone: fade it less so every letter stays readable, and
+   lift it clear of the floating theme button in the corner. */
+@media (max-width: 639.98px) {
+  .ft-dark { padding-bottom: 72px; }
+  .ft-word {
+    -webkit-mask-image: linear-gradient(to bottom, #000 80%, rgb(0 0 0 / 0.55)), linear-gradient(to right, transparent, #000 3%, #000 97%, transparent);
+    mask-image: linear-gradient(to bottom, #000 80%, rgb(0 0 0 / 0.55)), linear-gradient(to right, transparent, #000 3%, #000 97%, transparent);
+  }
+}

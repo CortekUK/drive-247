@@ -1,85 +1,40 @@
 "use client";
 
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import { Plus } from "lucide-react";
+import { Accordion as AccordionPrimitive } from "radix-ui";
+import { AccordionContent } from "@/components/ui/accordion";
 import { FAQ_ITEMS } from "@/lib/constants";
 import { useFadeIn } from "@/hooks/use-fade-in";
-
-const INLINE_QUESTIONS = [
-  "Do you generate bookings like Turo?",
-  "Can I keep my current domain?",
-];
+import "./faq-section.css";
 
 export function FAQSection() {
   const { ref, visible } = useFadeIn();
 
-  const inlineItems = FAQ_ITEMS.filter((item) =>
-    INLINE_QUESTIONS.includes(item.question)
-  );
-  const accordionItems = FAQ_ITEMS.filter(
-    (item) => !INLINE_QUESTIONS.includes(item.question)
-  );
-
   return (
-    <section id="faq" className="bg-muted/30 py-20 sm:py-24">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <div className="flex items-center justify-center gap-4">
-          <div className="h-px w-12 bg-border" />
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-            FAQ
-          </p>
-          <div className="h-px w-12 bg-border" />
-        </div>
+    <section id="faq" className="fq-section">
+      <svg className="fq-curve" viewBox="0 0 340 300" fill="none" aria-hidden>
+        <path d="M340 4C240 60 160 150 110 300" stroke="currentColor" strokeWidth="1.25" />
+      </svg>
 
-        <h2 className="mt-5 text-center text-3xl font-bold tracking-tighter sm:text-4xl lg:text-[44px] lg:leading-tight">
-          Frequently asked{" "}
-          <span className="text-indigo-600 dark:text-indigo-400">
-            questions
-          </span>
-        </h2>
-        <p className="mx-auto mt-3 max-w-xl text-center leading-relaxed text-muted-foreground">
-          Clear answers for operators moving beyond marketplaces.
+      <div ref={ref} className={`relative mx-auto max-w-3xl px-4 sm:px-6 ${visible ? "fade-in-visible" : "fade-in-hidden"}`}>
+        <h2 className="text-center text-5xl font-bold tracking-tighter sm:text-6xl">FAQs</h2>
+        <p className="mt-5 text-center text-lg leading-relaxed text-muted-foreground">
+          Everything operators ask before switching to Drive247
         </p>
 
-        {/* Inline 2-column block */}
-        <div className="mx-auto mt-12 grid max-w-3xl gap-4 sm:grid-cols-2">
-          {inlineItems.map((item) => (
-            <div
-              key={item.question}
-              className="rounded-lg border bg-card p-5"
-            >
-              <h3 className="text-[15px] font-bold tracking-tight">
-                {item.question}
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                {item.answer}
-              </p>
-            </div>
-          ))}
-        </div>
-
-        {/* Full accordion */}
-        <div
-          ref={ref}
-          className={`mx-auto mt-8 max-w-3xl ${visible ? "fade-in-visible" : "fade-in-hidden"}`}
-        >
-          <Accordion type="single" collapsible defaultValue="faq-0" className="space-y-0">
-            {accordionItems.map((item, i) => (
-              <AccordionItem key={i} value={`faq-${i}`} className="py-1">
-                <AccordionTrigger className="text-left text-[15px] font-bold tracking-tight py-3">
+        <AccordionPrimitive.Root type="single" collapsible defaultValue="faq-0" className="fq-list">
+          {FAQ_ITEMS.map((item, i) => (
+            <AccordionPrimitive.Item key={item.question} value={`faq-${i}`} className="fq-item">
+              <AccordionPrimitive.Header className="flex">
+                <AccordionPrimitive.Trigger className="fq-trigger">
                   {item.question}
-                </AccordionTrigger>
-                <AccordionContent className="text-sm leading-relaxed text-muted-foreground pb-3">
-                  {item.answer}
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-        </div>
+                  <Plus className="fq-mark" strokeWidth={1.5} aria-hidden />
+                </AccordionPrimitive.Trigger>
+              </AccordionPrimitive.Header>
+              <AccordionContent className="fq-answer">{item.answer}</AccordionContent>
+            </AccordionPrimitive.Item>
+          ))}
+        </AccordionPrimitive.Root>
       </div>
     </section>
   );

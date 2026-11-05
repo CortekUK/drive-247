@@ -17,18 +17,15 @@
  *   them into one "email taken" message is how you tell a paying customer to
  *   go away.
  *
- * There is deliberately no "confirm password" field on THIS form. Confirm fields
- * exist to compensate for masked input; the show/hide toggle removes the masking
- * instead, so the user can simply read what they typed, which deletes the
- * mismatch failure mode rather than adding a second field to catch it. The reset
- * panel next door does carry one, and that is not an inconsistency: a reset is a
- * blind change to a credential the user cannot currently sign in with, so a typo
- * there locks them out of a portal they are already paying for, with no wrong
- * password on file to fall back to.
+ * The password page asks for the password twice. The confirm field is checked
+ * here only (the server never sees it): page 1 will not move on until the two
+ * match, and the checklist under the fields shows "Passwords match" live. The
+ * reset panel next door carries the same pair.
  */
 
 import * as React from "react";
-import { Check, Circle, Loader2 } from "lucide-react";
+import { Roboto } from "next/font/google";
+import { Check, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +34,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import type {
   AccountStepProps,
+  OauthProvider,
   TenantFormValues,
 } from "@/components/onboarding/onboarding-types";
 import { SIGNUP_ERROR_COPY } from "@/components/onboarding/onboarding-types";
@@ -69,12 +67,6 @@ import {
   type PasswordResetView,
 } from "@/components/onboarding/steps/password-reset-panel";
 import {
-  KeyArt,
-  PasswordArt,
-  SiteArt,
-  WelcomeArt,
-} from "@/components/onboarding/signup-art";
-import {
   FieldError,
   ScreenHead,
   SIGNUP_ENTER,
@@ -83,6 +75,9 @@ import {
   SIGNUP_PRIMARY,
   SIGNUP_QUIET,
 } from "@/components/onboarding/signup-ui";
+
+/** Google's sign-in button is set in Roboto (Google's branding guidelines). */
+const roboto = Roboto({ subsets: ["latin"], weight: ["500"], display: "swap" });
 
 /**
  * Server error codes that belong under a specific input rather than in the
@@ -141,6 +136,12 @@ export interface AccountStepShellProps extends AccountStepProps {
    */
   page?: number;
   onPageChange?(page: number): void;
+  /**
+   * Whether the card has run. `tenant` mode is also reached BEFORE paying (the
+   * Google return, a reload on the code screen), and must not say the plan is
+   * active then.
+   */
+  paid?: boolean;
 }
 
 /** The create-account form's pages, and which page owns each field. */
@@ -151,6 +152,13 @@ const PAGE_FIELDS: readonly (readonly AccountField[])[] = [
   ["password"],
   ["companyName", "slug", "acceptedTerms"],
 ];
+/** The honeypot's value, or "" when it only repeats a field the person filled. */
+function honeypotValue(raw: string | undefined, typed: readonly (string | undefined)[]): string {
+  const v = (raw ?? "").trim().toLowerCase();
+  if (!v) return "";
+  return typed.some((t) => (t ?? "").trim().toLowerCase() === v) ? "" : v;
+}
+
 function pageOf(field: AccountField): number {
   const index = PAGE_FIELDS.findIndex((fields) => fields.includes(field));
   return index === -1 ? LAST_ACCOUNT_PAGE : index;
@@ -166,6 +174,7 @@ export function AccountStep({
   busy,
   error,
   googleEnabled,
+  appleEnabled,
   onSubmit,
   onSubmitTenant,
   onGoogle,
@@ -177,6 +186,7 @@ export function AccountStep({
   onClearError,
   page: pageProp,
   onPageChange,
+  paid = true,
 }: AccountStepShellProps) {
   const [ownPage, setOwnPage] = React.useState(0);
   const page = pageProp ?? ownPage;
@@ -185,6 +195,9 @@ export function AccountStep({
   const [email, setEmail] = React.useState(initialValues.email);
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [confirmError, setConfirmError] = React.useState<string | null>(null);
+  const confirmRef = React.useRef<HTMLInputElement>(null);
   const [errors, setErrors] = React.useState<FieldErrors<AccountField>>({});
   const [emailSuggestion, setEmailSuggestion] = React.useState<string | null>(
     null,
@@ -463,6 +476,12 @@ export function AccountStep({
         focusFirst(pageErrors, ACCOUNT_FIELD_ORDER);
         return;
       }
+      // The second copy of the password, checked only here.
+      if (page === 1 && confirmPassword !== password) {
+        setConfirmError(confirmPassword ? "These passwords don't match." : "Type your password again to confirm it.");
+        confirmRef.current?.focus();
+        return;
+      }
       setPage(page + 1);
       return;
     }
@@ -486,7 +505,9 @@ export function AccountStep({
       // Read from the DOM rather than from state: the whole point of the
       // honeypot is that only an automated filler touches it, and a bot that
       // sets `.value` directly never fires React's onChange.
-      companyWebsite: honeypotRef.current?.value ?? "",
+      // A browser autofill that slipped past the attributes copies what the
+      // person typed; a bot writes its own value. Only the latter is a trip.
+      companyWebsite: honeypotValue(honeypotRef.current?.value, [fullName, email, tenantValue.companyName]),
       // 0 only if the mount effect somehow has not run; falling back to "now"
       // is the safe direction (a zero would read as an implausibly old form).
       formStartedAt: formStartedAtRef.current || Date.now(),
@@ -527,11 +548,12 @@ export function AccountStep({
    * either way, so someone who filled the fields in before noticing the button
    * skips the second screen entirely.
    */
-  const handleGoogle = () => {
+  const handleOauth = (provider: OauthProvider) => {
     if (busy) return;
     setErrors({});
-    onGoogle(tenantValues());
+    onGoogle(tenantValues(), provider);
   };
+  const oauthEnabled = googleEnabled || appleEnabled;
 
   const handleSignIn = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -563,7 +585,6 @@ export function AccountStep({
     return (
       <div className={SIGNUP_ENTER}>
         <ScreenHead
-          art={<KeyArt />}
           title="You already have a portal"
           lead="That email already runs a Drive247 portal. Sign in there, or give me a different email and I'll start a new one."
         />
@@ -620,7 +641,7 @@ export function AccountStep({
 
     return (
       <form id="signup-account-form" onSubmit={handleSignIn} noValidate className={SIGNUP_ENTER}>
-        <ScreenHead art={<KeyArt />} title={title} lead={body} />
+        <ScreenHead title={title} lead={body} />
 
         {resetDoneFor === promptEmail && <PasswordResetSuccessNote />}
 
@@ -702,16 +723,20 @@ export function AccountStep({
   }
 
   // -------------------------------------------------------------------------
-  // Branch: `tenant` mode — the account exists and is paid for, and only the
-  // tenant details are missing. See `AccountStepMode`.
+  // Branch: `tenant` mode — the account exists and only the tenant details are
+  // missing. Usually after payment; before it on the Google return or a reload
+  // on the code screen, which is what `paid` tells apart.
   // -------------------------------------------------------------------------
   if (mode === "tenant") {
     return (
       <form id="signup-account-form" onSubmit={handleTenantSubmit} noValidate className={SIGNUP_ENTER}>
         <ScreenHead
-          art={<SiteArt company={tenant.companyName} slug={tenant.slug} />}
-          title="One last thing"
-          lead={`Your ${plan.name} plan is active. Tell me what to call your business and I'll build your portal now.`}
+          title={paid ? "One last thing" : "Name your business"}
+          lead={
+            paid
+              ? `Your ${plan.name} plan is active. Tell me what to call your business and I'll build your portal now.`
+              : "Tell me what to call your business, then we'll set up payment."
+          }
         />
 
         <div className="mt-6 space-y-4">
@@ -756,53 +781,14 @@ export function AccountStep({
 
   return (
     <form id="signup-account-form" onSubmit={handleCreateAccount} noValidate>
-      {/*
-        Honeypot. Positioned off-screen rather than `display: none` — a fair
-        number of crawlers skip inputs that are display:none or hidden, which
-        defeats the entire trap. `tabIndex={-1}` and `aria-hidden` keep it away
-        from keyboard and screen-reader users. Rendered on every page so the
-        value read at submit is the one a bot filled in on page 0.
-      */}
-      <input
-        ref={honeypotRef}
-        type="text"
-        name="companyWebsite"
-        tabIndex={-1}
-        autoComplete="off"
-        aria-hidden="true"
-        className="pointer-events-none absolute left-[-9999px] h-0 w-0 opacity-0"
-      />
-
       {page === 0 && (
         <div key="page-0" className={SIGNUP_ENTER}>
           <ScreenHead
-            art={<WelcomeArt />}
+            art={oauthEnabled ? undefined : null}
             title="Let's get you on the road"
-            lead="I'm Trax. Tell me who you are and I'll have your portal and booking site ready in a few minutes."
           />
 
-          {googleEnabled && (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy}
-                onClick={handleGoogle}
-                className="mt-6 h-11 w-full rounded-xl border-zinc-200 text-[15px] font-medium shadow-none transition-colors duration-200 dark:border-white/10"
-              >
-                <GoogleMark />
-                Continue with Google
-              </Button>
-
-              <div className="mt-5 flex items-center gap-3">
-                <Separator className="flex-1" />
-                <span className="text-xs text-muted-foreground">or with email</span>
-                <Separator className="flex-1" />
-              </div>
-            </>
-          )}
-
-          <div className={cn("space-y-3.5", googleEnabled ? "mt-5" : "mt-6")}>
+          <div className={cn(oauthEnabled ? "mt-6 space-y-3.5" : "mt-9 space-y-5")}>
             <div>
               <Label htmlFor="signup-full-name" className={SIGNUP_LABEL}>
                 Your name
@@ -825,7 +811,7 @@ export function AccountStep({
                   setErrors((prev) => ({ ...prev, fullName: undefined }));
                   markDirty();
                 }}
-                className={cn(SIGNUP_INPUT, "mt-1.5")}
+                className={cn(SIGNUP_INPUT, "mt-1.5", !oauthEnabled && "mt-2 h-12")}
               />
               {nameError && <FieldError id="signup-full-name-error">{nameError}</FieldError>}
             </div>
@@ -863,7 +849,7 @@ export function AccountStep({
                 // Suggest on blur, not on every keystroke: "did you mean gmail.com"
                 // while someone is still typing "gm" is noise.
                 onBlur={() => setEmailSuggestion(suggestEmailCorrection(email))}
-                className={cn(SIGNUP_INPUT, "mt-1.5")}
+                className={cn(SIGNUP_INPUT, "mt-1.5", !oauthEnabled && "mt-2 h-12")}
               />
               {emailError ? (
                 <FieldError id="signup-email-error">{emailError}</FieldError>
@@ -888,12 +874,75 @@ export function AccountStep({
                   ?
                 </p>
               ) : (
-                <p id="signup-email-help" className="mt-1.5 text-[13px] text-muted-foreground">
+                <p id="signup-email-help" className="mt-2 text-[13px] text-muted-foreground">
                   This becomes the owner login for your portal.
                 </p>
               )}
             </div>
           </div>
+
+          {/*
+            Page 0 carries its own Continue so the email path comes first and
+            Google / Apple sit under it; the shell hides its footer button here.
+          */}
+          <Button type="submit" disabled={busy} className={cn(SIGNUP_PRIMARY, "mt-6")}>
+            {busy ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Working…
+              </>
+            ) : (
+              "Continue"
+            )}
+          </Button>
+
+          {oauthEnabled && (
+            <>
+              <div className="mt-4 flex items-center gap-3">
+                <Separator className="flex-1" />
+                <span className="text-xs text-muted-foreground">or</span>
+                <Separator className="flex-1" />
+              </div>
+
+              <div className="mt-4 space-y-2.5">
+                {googleEnabled && (
+                  // Google's sign-in branding: white with a #747775 hairline and
+                  // #1F1F1F Roboto Medium in light, #131314 / #8E918F / #E3E3E3
+                  // in dark, the full-colour "G" at 18px.
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => handleOauth("google")}
+                    className={cn(
+                      roboto.className,
+                      "h-11 w-full gap-2.5 rounded-xl border-[#747775] bg-white text-[15px] font-medium text-[#1F1F1F] shadow-none transition-colors duration-200 ease-out hover:bg-[#f2f2f2] hover:text-[#1F1F1F] motion-reduce:transition-none dark:border-[#8E918F] dark:bg-[#131314] dark:text-[#E3E3E3] dark:hover:bg-[#2a2a2c] dark:hover:text-[#E3E3E3]",
+                    )}
+                  >
+                    <GoogleMark />
+                    Continue with Google
+                  </Button>
+                )}
+                {/*
+                  Apple's guidelines: a black button with the white mark (white on
+                  dark). MOCK until Apple is configured on Supabase: always drawn
+                  beside Google, but it only does something once
+                  NEXT_PUBLIC_SIGNUP_APPLE_ENABLED is "true".
+                */}
+                <Button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    if (appleEnabled) handleOauth("apple");
+                  }}
+                  className="h-11 w-full rounded-xl bg-black text-[15px] font-medium text-white shadow-none transition-colors duration-200 hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                >
+                  <AppleMark />
+                  Continue with Apple
+                </Button>
+              </div>
+            </>
+          )}
 
           {/*
             A deliberate way back in for someone who has already started.
@@ -905,7 +954,7 @@ export function AccountStep({
             the wrong one, and taking it burned a throttle slot to be told something
             they already knew.
           */}
-          <p className="mt-4 text-center text-[13px] text-muted-foreground">
+          <p className="mt-5 text-center text-[13px] text-muted-foreground">
             Already started?{" "}
             <button
               type="button"
@@ -934,8 +983,17 @@ export function AccountStep({
 
       {page === 1 && (
         <div key="page-1" className={SIGNUP_ENTER}>
+          {/* The username for the password manager, which otherwise goes
+              looking for one and picks the wrong field (see the honeypot). */}
+          <input
+            type="email"
+            name="username"
+            autoComplete="username"
+            value={normalizeEmail(email)}
+            readOnly
+            hidden
+          />
           <ScreenHead
-            art={<PasswordArt length={password.length} ready={ruleState.every((r) => r.met)} name={fullName} />}
             title={firstName ? `Nice to meet you, ${firstName}` : "Choose a password"}
             lead={
               <>
@@ -975,49 +1033,92 @@ export function AccountStep({
             </div>
 
             {/*
-              Live requirement checklist + strength meter. The checklist is the
-              gate (it is exactly what signup-begin enforces); the meter is
-              advisory and never blocks. Both are inside one polite live region so
-              a screen reader hears the state change without a separate
-              announcement per keystroke.
+              Strength, right under the field it measures: four segments and a
+              word. Advisory only — it never blocks; the checklist below is the
+              gate (it is exactly what signup-begin enforces).
             */}
-            <div id="signup-password-rules" aria-live="polite" className="mt-3">
-              <div className="flex flex-wrap gap-2">
-                {ruleState.map(({ rule, met }) => (
-                  <span
-                    key={rule.id}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors duration-200 ease-out motion-reduce:transition-none",
-                      met
-                        ? "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-400/30 dark:bg-indigo-400/10 dark:text-indigo-300"
-                        : "border-zinc-200 text-muted-foreground dark:border-white/10",
-                    )}
-                  >
-                    {met ? <Check className="h-3 w-3 shrink-0" /> : <Circle className="h-3 w-3 shrink-0 opacity-50" />}
-                    {rule.label}
-                    <span className="sr-only">{met ? " — met" : " — not met"}</span>
-                  </span>
-                ))}
+            <div className="mt-2 flex h-4 items-center gap-3" aria-hidden>
+              <div className="flex flex-1 gap-1">
+                {[0, 1, 2, 3].map((i) => {
+                  const filled = password.length > 0 && i < Math.max(1, strength.score);
+                  return (
+                    <span key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-white/10">
+                      <span
+                        className={cn(
+                          "block h-full origin-left rounded-full transition-transform duration-200 ease-out motion-reduce:transition-none",
+                          STRENGTH_BAR_CLASS[strength.score],
+                          filled ? "scale-x-100" : "scale-x-0",
+                        )}
+                      />
+                    </span>
+                  );
+                })}
               </div>
-
-              <div className="mt-3 flex h-4 items-center gap-2">
-                <div className="h-1 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-white/10">
-                  <div
-                    className={cn(
-                      "h-full origin-left rounded-full transition-[width,background-color] duration-200 ease-out motion-reduce:transition-none",
-                      STRENGTH_BAR_CLASS[strength.score],
-                    )}
-                    style={{ width: password.length > 0 ? `${strength.percent}%` : "0%" }}
-                  />
-                </div>
-                <span className="w-14 text-right text-xs text-muted-foreground">
-                  {password.length > 0 ? strength.label : ""}
-                </span>
-              </div>
+              <span className="w-16 text-right text-xs font-medium text-muted-foreground">
+                {password.length > 0 ? strength.label : ""}
+              </span>
             </div>
-
             {passwordError && <FieldError>{passwordError}</FieldError>}
           </div>
+
+          <div className="mt-3">
+            <Label htmlFor="signup-password-confirm" className={SIGNUP_LABEL}>
+              Confirm password
+            </Label>
+            <div className="relative mt-1.5">
+              <Input
+                ref={confirmRef}
+                id="signup-password-confirm"
+                name="passwordConfirm"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={confirmPassword}
+                disabled={busy}
+                aria-invalid={Boolean(confirmError)}
+                aria-describedby={confirmError ? "signup-password-confirm-error" : "signup-password-rules"}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  setConfirmError(null);
+                }}
+                className={cn(SIGNUP_INPUT, "pr-12")}
+              />
+              <PasswordToggle shown={showPassword} onToggle={() => setShowPassword((v) => !v)} />
+            </div>
+            {confirmError && <FieldError id="signup-password-confirm-error">{confirmError}</FieldError>}
+          </div>
+
+          {/*
+            The checklist: what the password needs, plus the match. One polite
+            live region, so a screen reader hears a change without an
+            announcement per keystroke.
+          */}
+          <ul
+            id="signup-password-rules"
+            aria-live="polite"
+            className="mt-4 grid gap-2 rounded-xl border border-zinc-100 bg-zinc-50/70 px-3.5 py-3 dark:border-white/10 dark:bg-white/[0.03]"
+          >
+            {[
+              ...ruleState.map(({ rule, met }) => ({ id: rule.id, label: rule.label, met })),
+              { id: "match", label: "Passwords match", met: confirmPassword.length > 0 && confirmPassword === password },
+            ].map(({ id, label, met }) => (
+              <li key={id} className="flex items-center gap-2.5 text-[13px]">
+                <span
+                  className={cn(
+                    "flex size-[18px] shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ease-out motion-reduce:transition-none",
+                    met
+                      ? "border-indigo-600 bg-indigo-600 text-white dark:border-indigo-400 dark:bg-indigo-400 dark:text-[#0e0e14]"
+                      : "border-zinc-300 text-transparent dark:border-white/20",
+                  )}
+                >
+                  <Check className="size-3" strokeWidth={3} />
+                </span>
+                <span className={cn("transition-colors duration-200 ease-out motion-reduce:transition-none", met ? "text-foreground" : "text-muted-foreground")}>
+                  {label}
+                </span>
+                <span className="sr-only">{met ? " — done" : " — not yet"}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -1030,7 +1131,6 @@ export function AccountStep({
             which made a collision a dead end.
           */}
           <ScreenHead
-            art={<SiteArt company={tenant.companyName} slug={tenant.slug} />}
             title="What's your business called?"
             lead="I'll build your booking site under this name. The web address is yours for good."
           />
@@ -1056,6 +1156,37 @@ export function AccountStep({
           </div>
         </div>
       )}
+      {/*
+        Honeypot. LAST in the form on purpose: Chrome's password manager
+        treats the text field just before a password field as the username
+        and fills it. On the password page this was that field, so every
+        saved-login visitor tripped the trap and was silently refused.
+        Positioned off-screen rather than `display: none` — a fair
+        number of crawlers skip inputs that are display:none or hidden, which
+        defeats the entire trap. `tabIndex={-1}` and `aria-hidden` keep it away
+        from keyboard and screen-reader users. Rendered on every page so the
+        value read at submit is the one a bot filled in on page 0.
+      */}
+      {/*
+        The name means nothing ON PURPOSE. It was `companyWebsite`, and Chrome's
+        address autofill files any field with "company" in its name as the
+        business name and fills it alongside name and email, so real people
+        tripped the trap. Password managers are told to skip it too. Only the
+        request body key (`companyWebsite`) is part of the server contract.
+      */}
+      <input
+        ref={honeypotRef}
+        type="text"
+        name="hp_x7"
+        tabIndex={-1}
+        autoComplete="off"
+        data-lpignore="true"
+        data-1p-ignore=""
+        data-bwignore=""
+        data-form-type="other"
+        aria-hidden="true"
+        className="pointer-events-none absolute left-[-9999px] h-0 w-0 opacity-0"
+      />
     </form>
   );
 }
@@ -1073,9 +1204,18 @@ export function AccountStep({
  * form on the site — one that fails silently behind a content blocker and leaves
  * an unlabelled button.
  */
+/** Apple's logo, inline for the same reason as Google's; takes the button's text colour. */
+function AppleMark() {
+  return (
+    <svg viewBox="0 0 17 20" aria-hidden="true" className="h-[18px] w-4 shrink-0 fill-current">
+      <path d="M14.06 10.62c-.02-2.25 1.84-3.33 1.92-3.38-1.05-1.53-2.68-1.74-3.26-1.76-1.39-.14-2.71.82-3.42.82-.7 0-1.79-.8-2.95-.78-1.52.02-2.92.88-3.7 2.24-1.58 2.74-.4 6.79 1.13 9.01.75 1.09 1.65 2.31 2.82 2.26 1.13-.04 1.56-.73 2.93-.73 1.37 0 1.75.73 2.95.71 1.22-.02 1.99-1.1 2.73-2.2.86-1.26 1.22-2.49 1.24-2.55-.03-.01-2.37-.91-2.39-3.64ZM11.8 3.94c.62-.76 1.05-1.81.93-2.86-.9.04-1.99.6-2.64 1.36-.58.67-1.09 1.75-.95 2.78 1 .08 2.03-.51 2.66-1.28Z" />
+    </svg>
+  );
+}
+
 function GoogleMark() {
   return (
-    <svg viewBox="0 0 18 18" aria-hidden="true" className="h-4 w-4 shrink-0">
+    <svg viewBox="0 0 18 18" aria-hidden="true" className="size-[18px] shrink-0">
       <path
         fill="#4285F4"
         d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62Z"

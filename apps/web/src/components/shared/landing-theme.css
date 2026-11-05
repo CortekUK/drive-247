@@ -1,0 +1,183 @@
+/*
+ * The live landing page (v1 branch of app/(marketing)/page.tsx) in the Northwind
+ * portal's visual language. Nothing here reaches past `.lp-v2`.
+ *
+ * Every value comes from the portal's shared token file, imported below, so the
+ * landing page and the portal cannot drift. globals.css holds whole colours where
+ * the portal holds HSL triples, hence `hsl(var(--v2-…))`. Tailwind 4 utilities
+ * read these variables at the element, so re-pointing them here recolours the
+ * sections without touching their markup. This file is unlayered, so its rules
+ * outrank the utilities.
+ */
+@import "../../../../../shared/portal-v2/tokens.css";
+
+.lp-v2 {
+  --background: hsl(var(--v2-background));
+  --foreground: hsl(var(--v2-foreground));
+  --card: hsl(var(--v2-card));
+  --card-foreground: hsl(var(--v2-card-foreground));
+  --popover: hsl(var(--v2-popover));
+  --popover-foreground: hsl(var(--v2-popover-foreground));
+  --primary: hsl(var(--v2-primary));
+  --primary-foreground: hsl(var(--v2-primary-foreground));
+  --secondary: hsl(var(--v2-secondary));
+  --secondary-foreground: hsl(var(--v2-secondary-foreground));
+  --muted: hsl(var(--v2-muted));
+  --muted-foreground: hsl(var(--v2-muted-foreground));
+  --accent: hsl(var(--v2-accent));
+  --accent-foreground: hsl(var(--v2-accent-foreground));
+  --destructive: hsl(var(--v2-destructive));
+  --border: hsl(var(--v2-border));
+  --input: hsl(var(--v2-input));
+  --ring: hsl(var(--v2-ring));
+
+  /* The indigo utilities the sections are written in, onto the portal's brand.
+     600/500 are the fill, 400 is the brand text colour (`dark:text-indigo-400`
+     everywhere), and the pale steps are the portal's tints. */
+  --color-indigo-50: hsl(var(--v2-accent));
+  --color-indigo-100: hsl(var(--v2-accent));
+  --color-indigo-200: hsl(var(--brand-h) var(--brand-s) 91%);
+  --color-indigo-300: hsl(var(--v2-link));
+  --color-indigo-400: hsl(var(--v2-link));
+  --color-indigo-500: hsl(var(--v2-primary));
+  --color-indigo-600: hsl(var(--v2-primary));
+  --color-indigo-700: hsl(var(--v2-primary-hover));
+  --color-indigo-800: hsl(var(--v2-accent));
+  --color-indigo-950: hsl(var(--v2-accent));
+  --color-emerald-400: hsl(var(--v2-success));
+  --color-emerald-700: hsl(var(--v2-success));
+  --color-amber-400: hsl(var(--v2-warning));
+
+  /* The portal's headings: h1 bold, h2 semibold, `tracking-tight`. */
+  --font-weight-extrabold: 700;
+  --font-weight-bold: 600;
+  --tracking-tighter: -0.025em;
+
+  /* Every transition on the page, per the Trax motion standard. */
+  --default-transition-duration: 200ms;
+  --default-transition-timing-function: ease-out;
+  --font-sans: var(--font-manrope), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  font-family: var(--font-sans);
+  color: var(--foreground);
+  /*
+   * One ground for the whole page: a light wash of the accent over the hero's grid, in
+   * indigo. It lives here, not on sections, so there is no edge where one section ends.
+   * Only Trax and the dark sections (hero, final CTA) paint a ground of their own.
+   */
+  background-color: color-mix(in srgb, hsl(var(--v2-primary)) 7%, var(--background));
+  background-image:
+    linear-gradient(hsl(var(--v2-primary) / 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--v2-primary) / 0.055) 1px, transparent 1px);
+  background-size: 96px 96px;
+  /* Holds the wash below above this background and behind the content. */
+  isolation: isolate;
+}
+
+/* The portal's page wash, `.bg-app-gradient::before` in v2-theme.css, verbatim. */
+.lp-v2::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(70rem 50rem at 105% -10%, hsl(var(--v2-wash) / 0.20), transparent 55%),
+    radial-gradient(60rem 48rem at -8% -6%, hsl(var(--v2-chart-3) / 0.16), transparent 52%),
+    radial-gradient(55rem 45rem at 50% 115%, hsl(var(--v2-wash) / 0.12), transparent 55%),
+    linear-gradient(180deg, hsl(var(--v2-wash) / 0.07) 0%, transparent 45%);
+  background-repeat: no-repeat;
+}
+
+.dark .lp-v2 {
+  background-color: color-mix(in srgb, hsl(var(--v2-primary)) 13%, var(--background));
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.03) 1px, transparent 1px);
+}
+
+/* Past the page's edges on overscroll, the same dark as the page itself. */
+.dark body:has(.lp-v2) {
+  background-color: hsl(0 0% 10%);
+}
+
+/* ---------------------------------------------------------------------------
+ * Flat. These components are also used outside this page (the header and footer
+ * by the legal pages, the pricing grid by the signup journey), so their effects
+ * are switched off here rather than edited out of the files.
+ * ------------------------------------------------------------------------- */
+
+/* The drop-shadow half only: rings, and so focus rings, draw through their own
+   variable and keep working. */
+.lp-v2 [class*="shadow"] {
+  --tw-shadow: 0 0 #0000 !important;
+}
+.lp-v2 [class*="hover:-translate-y"]:hover {
+  --tw-translate-y: 0 !important;
+}
+.lp-v2 [class*="via-indigo-600"] {
+  display: none;
+}
+.lp-v2 [class*="ring-indigo"] {
+  --tw-ring-shadow: 0 0 #0000;
+}
+.lp-v2 #pricing {
+  background-color: transparent;
+}
+/* `dark:border-indigo-800/…` tints read as no border at all on the portal's
+   neutral dark, so these take its plain hairline. */
+.dark .lp-v2 [class*="border-indigo-800"] {
+  border-color: var(--border);
+}
+.lp-v2 header {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  transition-duration: 200ms;
+}
+.lp-v2 header.bg-background\/95 {
+  background-color: var(--background);
+}
+
+/* The portal's card radius (`rounded-4xl` in shared/portal-v2/card.tsx). */
+.lp-v2 .rounded-2xl {
+  border-radius: var(--v2-radius-4xl);
+}
+
+/* The portal's button: ui-v2/button.tsx, a pill, medium weight, hover at 80%. */
+.lp-v2 [data-slot="button"] {
+  border-radius: var(--v2-radius-4xl);
+  font-weight: 500;
+}
+.lp-v2 [data-slot="button"][class*="bg-indigo"] {
+  background-color: hsl(var(--v2-primary));
+  color: hsl(var(--v2-primary-foreground));
+}
+.lp-v2 [data-slot="button"][class*="bg-indigo"]:hover {
+  background-color: hsl(var(--v2-primary) / 0.8);
+}
+
+/* ---------------------------------------------------------------------------
+ * Motion: the Trax panel's enter, opacity plus a 12px lift in 200ms ease-out.
+ * ------------------------------------------------------------------------- */
+.lp-v2 .fade-in-hidden {
+  opacity: 0;
+  transform: translateY(12px);
+}
+.lp-v2 .fade-in-visible {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 200ms ease-out, transform 200ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-v2 .fade-in-hidden {
+    opacity: 1;
+    transform: none;
+  }
+  .lp-v2 .fade-in-visible {
+    transition: none;
+  }
+  .lp-v2 .animate-marquee {
+    animation: none;
+  }
+}

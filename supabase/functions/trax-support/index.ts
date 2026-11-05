@@ -15,13 +15,14 @@ import { configuredFinance } from './support/finance-tools.ts';
 import type { FinanceDatabase } from './support/finance-reads.ts';
 import { calendarClock } from './support/calendar-clock.ts';
 import { fromZonedTime, formatInTimeZone } from 'npm:date-fns-tz@3.2.0';
+import { withPhoenix } from '../_shared/phoenix.ts';
 
 // Non-secret TRAX settings default here because the project is at its 100-secret limit.
 // A Supabase secret with the same name still overrides any of them.
 const TRAX_DEFAULTS:Record<string,string>={TRAX_MODEL:'gpt-4.1',TRAX_MODEL_DATA_POLICY:'minimal-operational-v1',TRAX_SUPPORT_STORAGE:'enabled',TRAX_FINANCE_READS:'enabled'};
 const env=(key:string)=>Deno.env.get(key)??TRAX_DEFAULTS[key];
 
-Deno.serve(async (req:Request) => {
+Deno.serve(withPhoenix('trax-support', async (req:Request) => {
   const preflight=handleCors(req);if(preflight)return preflight;
   const started=Date.now();const requestId=crypto.randomUUID();
   const url=Deno.env.get('SUPABASE_URL');const secret=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -34,4 +35,4 @@ Deno.serve(async (req:Request) => {
   for(const[key,value]of Object.entries(corsHeaders))response.headers.set(key,value);
   console.info(JSON.stringify({event:'trax_support',requestId,status:response.status,modelCalls,toolCalls,durationMs:Date.now()-started}));
   return response;
-});
+}));

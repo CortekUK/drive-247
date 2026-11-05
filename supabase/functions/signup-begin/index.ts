@@ -244,8 +244,10 @@ Deno.serve(async (req) => {
     // Throttle. IP first (the cheap, broad control), then email.
     // -----------------------------------------------------------------------
     const rules = [
-      ...(ip ? [{ scope: "signup_begin_ip", key: ip, limit: 5, windowMs: HOUR_MS }] : []),
-      { scope: "signup_begin_email", key: email, limit: 3, windowMs: HOUR_MS },
+      // Raised by 10 each on 2026-10-28 (5 -> 15, 3 -> 13): three tries an hour
+      // locked out a real person who restarted a few times.
+      ...(ip ? [{ scope: "signup_begin_ip", key: ip, limit: 15, windowMs: HOUR_MS }] : []),
+      { scope: "signup_begin_email", key: email, limit: 13, windowMs: HOUR_MS },
     ];
     const allowed = await checkThrottle(supabase, rules);
 

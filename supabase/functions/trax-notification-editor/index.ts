@@ -28,6 +28,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse } from '../_shared/cors.ts';
+import { withPhoenix } from '../_shared/phoenix.ts';
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const MODEL = Deno.env.get('TRAX_NOTIFICATION_MODEL') || 'gpt-4o';
@@ -130,7 +131,7 @@ ${channel === 'email'
 "change" holds the COMPLETE new wording of both fields (repeat the unchanged one as it is).`;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withPhoenix('trax-notification-editor', async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
@@ -252,4 +253,4 @@ Deno.serve(async (req) => {
     .slice(0, 3);
 
   return jsonResponse({ say, change, suggestions });
-});
+}));

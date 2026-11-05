@@ -17,38 +17,22 @@ function Stars({ count }: { count: number }) {
   );
 }
 
-const AVATAR_COLORS = [
-  "bg-indigo-600 text-white",
-  "bg-emerald-600 text-white",
-  "bg-amber-600 text-white",
-];
-
 function TestimonialCard({
   t,
-  index,
   featured = false,
   visible,
   delay,
 }: {
   t: Testimonial;
-  index: number;
   featured?: boolean;
   visible: boolean;
   delay: number;
 }) {
   return (
     <div
-      className={`group relative overflow-hidden rounded-2xl border bg-card shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md ${featured ? "p-8 sm:p-10" : "p-6"}`}
-      style={{
-        opacity: visible ? 1 : 0,
-        transform: visible ? "translateY(0)" : "translateY(16px)",
-        transition:
-          "opacity 600ms ease-out, transform 600ms ease-out, box-shadow 300ms",
-        transitionDelay: visible ? `${delay}ms` : "0ms",
-      }}
+      className={`group relative overflow-hidden rounded-2xl border bg-card ${featured ? "p-8 sm:p-10" : "p-6"} ${visible ? "fade-in-visible" : "fade-in-hidden"}`}
+      style={{ transitionDelay: visible ? `${delay}ms` : "0ms" }}
     >
-      {/* Top accent line */}
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-600/20 to-transparent" />
 
       <Stars count={t.stars} />
 
@@ -57,7 +41,7 @@ function TestimonialCard({
       </blockquote>
 
       <div className="mt-6 flex items-center gap-3 border-t pt-5">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold ${AVATAR_COLORS[index % AVATAR_COLORS.length]}`}>
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600/[0.08] text-sm font-bold text-indigo-600 dark:bg-indigo-400/[0.1] dark:text-indigo-400">
           {t.initials}
         </div>
         <div>
@@ -81,7 +65,7 @@ export function SocialProof({ testimonials }: { testimonials: Testimonial[] }) {
   const [featured, ...rest] = testimonials;
 
   return (
-    <section className="bg-muted/30 py-20 sm:py-24">
+    <section className="py-20 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         {/* Section heading */}
         <div className="flex items-center justify-center gap-4">
@@ -103,7 +87,6 @@ export function SocialProof({ testimonials }: { testimonials: Testimonial[] }) {
           {/* Featured testimonial — full width */}
           <TestimonialCard
             t={featured}
-            index={0}
             featured
             visible={visible}
             delay={0}
@@ -116,7 +99,6 @@ export function SocialProof({ testimonials }: { testimonials: Testimonial[] }) {
               <TestimonialCard
                 key={t.id}
                 t={t}
-                index={i + 1}
                 visible={visible}
                 delay={(i + 1) * 100}
               />

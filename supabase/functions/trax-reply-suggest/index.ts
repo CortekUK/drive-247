@@ -26,6 +26,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { chatCompletion, type ToolDefinition } from "../_shared/openai.ts";
+import { withPhoenix } from "../_shared/phoenix.ts";
 
 type Mode = "in_app" | "sms";
 type Style = "friendly" | "detailed" | "next_step";
@@ -68,7 +69,7 @@ function clean<T extends Record<string, unknown>>(o: T | null | undefined): Reco
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== ""));
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withPhoenix("trax-reply-suggest", async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
   if (req.method !== "POST") return errorResponse("Method not allowed", 405);
@@ -233,4 +234,4 @@ Rules for every reply: plain text, no emojis unless the customer used them, no p
     console.error("trax-reply-suggest", err);
     return errorResponse(err instanceof Error ? err.message : "Unexpected error", 500);
   }
-});
+}));

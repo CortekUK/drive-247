@@ -29,6 +29,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { corsHeaders, handleCors, jsonResponse } from '../_shared/cors.ts';
 import { authenticateAgreementsV2, type DbClient } from '../agreements-v2/auth.ts';
+import { withPhoenix } from '../_shared/phoenix.ts';
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const MODEL = Deno.env.get('TRAX_AGREEMENT_MODEL') || 'gpt-4o';
@@ -118,7 +119,7 @@ function parseBody(raw: unknown): { name: string; blocks: Block[]; messages: Msg
   return { name: text(body.name, 120), blocks: cleanBlocks, messages, variables };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withPhoenix('trax-agreement-editor', async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
@@ -218,4 +219,4 @@ Deno.serve(async (req) => {
       'X-Content-Type-Options': 'nosniff',
     },
   });
-});
+}));

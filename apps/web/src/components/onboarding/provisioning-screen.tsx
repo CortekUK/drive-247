@@ -3,12 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import {
-  ArrowRight,
-  Circle,
-  CircleCheck,
-  ExternalLink,
   Info,
-  Loader2,
   MessageSquare,
   Pencil,
   RotateCcw,
@@ -23,8 +18,10 @@ import { cn } from "@/lib/utils";
 import { useOnboarding } from "./onboarding-provider";
 import { TenantIdentityFields } from "./tenant-identity-fields";
 import { BuildArt } from "./signup-art";
-import { ArtStage, SignupWash, SIGNUP_CARD, SIGNUP_ENTER, SIGNUP_PRIMARY } from "./signup-ui";
+import { LivePreview } from "./live-preview";
+import { SignupWash, SIGNUP_ENTER, SIGNUP_PRIMARY } from "./signup-ui";
 import {
+  type ProvisionMilestone,
   MILESTONE_COPY,
   PROVISION_MILESTONES,
   RECOVERABLE_PROVISION_CODES,
@@ -36,6 +33,55 @@ import {
 /** §5 row 16 — the only honest thing to say when the money moved and the build did not. */
 const PAID_FAILURE_COPY =
   "Your payment went through and your subscription is active — nothing was charged twice. We just couldn't finish building your portal. Try again, or talk to us and we'll finish it for you.";
+
+/**
+ * What Trax says on each step of the build. A little puffed up on purpose: the
+ * build takes seconds, so the screen can afford to enjoy itself. First person,
+ * no emojis, and every line still says what is really happening.
+ */
+const STEP_LINES: Record<ProvisionMilestone, { title: string; line: string }> = {
+  validated: {
+    title: "Reading your details very carefully",
+    line: "Twice, actually. I like to be thorough.",
+  },
+  payment_verified: {
+    title: "Counting your dollar",
+    line: "All one of it. Then counting it again, to be safe.",
+  },
+  brand_ready: {
+    title: "Picking your colours",
+    line: "I've ruled out beige. You deserve better than beige.",
+  },
+  workspace_created: {
+    title: "Building your workspace",
+    line: "Desks, drawers, a very nice chair. Digitally speaking.",
+  },
+  account_linked: {
+    title: "Making you the boss",
+    line: "Every key to every door. Try not to lose them.",
+  },
+  billing_ready: {
+    title: "Sorting out the paperwork",
+    line: "So that you never have to. That's rather the point.",
+  },
+  subscription_linked: {
+    title: "Flicking the big switch",
+    line: "It makes a very satisfying click.",
+  },
+  site_published: {
+    title: "Putting your site on the internet",
+    line: "The whole internet. Even the quiet corners.",
+  },
+};
+
+/**
+ * How long each step stays on screen, at the least. The real build often
+ * finishes in a few seconds, which flicked through eight steps faster than
+ * anyone could read them. The screen now walks the steps at this pace and
+ * only says "You're live." once it has shown them all. A failure is shown at
+ * once: nobody should wait to hear that.
+ */
+const STEP_DWELL_MS = 2800;
 
 const UNPAID_FAILURE_COPY =
   "We couldn't finish building your portal. Try again, or talk to us and we'll finish it for you.";
@@ -85,8 +131,20 @@ export function ProvisioningScreen() {
    */
   const [fixing, setFixing] = useState(false);
 
-  const succeeded = phase === "succeeded" || (state.step === "done" && result !== null);
-  const failed = phase === "failed" && !succeeded;
+  const serverSucceeded = phase === "succeeded" || (state.step === "done" && result !== null);
+  const failed = phase === "failed" && !serverSucceeded;
+
+  // Steps actually shown, walking towards what the server has done at no more
+  // than one per STEP_DWELL_MS. See STEP_DWELL_MS.
+  const serverDone = serverSucceeded ? PROVISION_MILESTONES.length : Math.min(completed.length, PROVISION_MILESTONES.length);
+  const [shownDone, setShownDone] = useState(0);
+  useEffect(() => {
+    if (failed || shownDone >= serverDone) return;
+    const t = window.setTimeout(() => setShownDone((n) => n + 1), STEP_DWELL_MS);
+    return () => window.clearTimeout(t);
+  }, [failed, shownDone, serverDone]);
+
+  const succeeded = serverSucceeded && shownDone >= PROVISION_MILESTONES.length;
   const running = !succeeded && !failed;
 
   // A 1 s heartbeat, only while work is actually in flight. It exists solely so
@@ -111,13 +169,23 @@ export function ProvisioningScreen() {
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const completedSet = new Set(completed);
-  const activeIndex = PROVISION_MILESTONES.findIndex((m) => !completedSet.has(m));
   const total = PROVISION_MILESTONES.length;
-  const doneCount = Math.min(completed.length, total);
+  // What the SCREEN has reached, not the server: the paced count.
+  const doneCount = failed ? serverDone : shownDone;
+  const activeIndex = doneCount >= total ? -1 : doneCount;
   const percent = (doneCount / total) * 100;
 
   const companyName = result?.companyName || business.companyName || "your portal";
+
+  const activeMilestone = activeIndex === -1 ? null : PROVISION_MILESTONES[activeIndex];
+  // Only when the screen has caught up with the server: until then the wait is
+  // the screen's own pacing, not a slow step.
+  const showSlowHint =
+    running &&
+    shownDone === serverDone &&
+    activeMilestone === SLOW_MILESTONE &&
+    activeSince !== null &&
+    now - activeSince > SLOW_MILESTONE_HINT_MS;
 
   const recoverable = failure ? RECOVERABLE_PROVISION_CODES.includes(failure.code) : false;
   const isWatchdog = Boolean(failure?.detail?.watchdog);
@@ -189,7 +257,7 @@ export function ProvisioningScreen() {
             there is not, so a tall failure panel on a small phone stays
             reachable.
           */
-          className="fixed inset-0 z-[300] flex items-start justify-center overflow-y-auto bg-white px-5 py-10 outline-none dark:bg-[#0e0e14]"
+          className="fixed inset-0 z-[300] flex items-start justify-center overflow-y-auto bg-white px-5 py-10 outline-none dark:bg-[#0e0e14] [&_button:not(:disabled)]:cursor-pointer [&_a[href]]:cursor-pointer [&_[role=checkbox]:not(:disabled)]:cursor-pointer"
         >
           {/* The same wash the signup screens wear, so the hand-off is seamless. */}
           <SignupWash />
@@ -205,31 +273,54 @@ export function ProvisioningScreen() {
             </button>
           )}
 
-          <div className={cn("relative my-auto w-full max-w-[480px] px-6 py-8 sm:px-10", SIGNUP_CARD, SIGNUP_ENTER)}>
-            <ArtStage className="-mx-6 -mt-8 sm:-mx-10">
-              <BuildArt
-                progress={succeeded ? 1 : percent / 100}
-                company={companyName === "your portal" ? "" : companyName}
-                slug={business.slug}
-              />
-            </ArtStage>
+          {/*
+            ONE STEP AT A TIME, NO CARD. The build used to be a card with the
+            full eight-row checklist; now the picture is the screen, and under
+            it only the step in hand, swapping as each one lands.
+          */}
+          <div className={cn("relative my-auto flex w-full max-w-[1120px] flex-col items-center text-center", SIGNUP_ENTER)}>
+            {!(succeeded && result) && (
+              <div className="relative h-[220px] w-full max-w-[680px] sm:h-[340px] [@media(max-height:820px)]:h-[260px] [@media(max-height:680px)]:h-[180px]">
+                <BuildArt
+                  progress={percent / 100}
+                  done={doneCount}
+                  company={companyName === "your portal" ? "" : companyName}
+                  slug={business.slug}
+                />
+              </div>
+            )}
 
             {succeeded && result ? (
-              /* ── success ─────────────────────────────────────────────────── */
-              <div className={SIGNUP_ENTER}>
+              /* ── success: two cards, the portal and the booking site ─────── */
+              <div className={cn("w-full", SIGNUP_ENTER)}>
                 {/* asChild so the visible heading IS the accessible name of the
                     dialog — exactly one Title renders in either branch. */}
                 <DialogPrimitive.Title asChild>
-                  <h2 className="mt-6 text-center text-[30px] leading-tight font-semibold tracking-[-0.02em]">
+                  <h2 className="text-center text-[30px] leading-tight font-semibold tracking-[-0.02em] sm:text-[40px]">
                     You&apos;re live.
                   </h2>
                 </DialogPrimitive.Title>
-                <p className="mx-auto mt-2.5 max-w-[380px] text-center text-[15px] leading-relaxed text-muted-foreground">
-                  {companyName} is ready. Your portal and your booking site are both up, and I&apos;ll meet you inside.
-                </p>
+
+                <div className="mt-12 grid gap-12 text-left sm:grid-cols-2 sm:gap-16">
+                  <LiveCard
+                    previewUrl={result.portalUrl}
+                    shot={{ light: "/signup/portal-v2-light.jpg", dark: "/signup/portal-v2-dark.jpg" }}
+                    ctaLabel={`Go to my portal, ${result.portalUrl.replace(/^https?:\/\//, "")}${result.portalSignInUrl === null ? ". Sign in with the email and password you just created." : ""}`}
+                    onOpen={() => window.location.assign(portalHref)}
+                    tilt="left"
+                  />
+                  <LiveCard
+                    previewUrl={result.bookingUrl}
+                    shot={{ light: "/signup/booking-site-v2.jpg", dark: "/signup/booking-site-v2.jpg" }}
+                    ctaLabel={`View my booking site, ${result.bookingUrl.replace(/^https?:\/\//, "")}, opens in a new tab`}
+                    href={result.bookingUrl}
+                    tilt="right"
+                    delayMs={120}
+                  />
+                </div>
 
                 {result.contentSeeded === false && (
-                  <Alert variant="info" className="mt-6">
+                  <Alert variant="info" className="mt-5 text-left">
                     <Info />
                     <AlertDescription className="text-foreground">
                       Your booking site is live, but some pages still show our default copy. You can
@@ -237,139 +328,69 @@ export function ProvisioningScreen() {
                     </AlertDescription>
                   </Alert>
                 )}
-
-                <Button
-                  size="lg"
-                  onClick={() => window.location.assign(portalHref)}
-                  className={cn(SIGNUP_PRIMARY, "mt-8")}
-                >
-                  Go to my portal
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-
-                {/*
-                  The address itself, spelled out. The button is the fast path,
-                  but this is the one thing the operator has to be able to write
-                  down or find again later — nothing renames a tenant slug, and
-                  an unlabelled button leaves them with no idea what their portal
-                  is actually called.
-                */}
-                <p className="mt-3 text-center text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    {result.portalUrl.replace(/^https?:\/\//, "")}
-                  </span>
-                  {result.portalSignInUrl === null
-                    ? " — sign in with the email and password you just created."
-                    : null}
-                </p>
-
-                <a
-                  href={result.bookingUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-4 block text-center text-sm font-semibold text-indigo-600 transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-                >
-                  View my booking site
-                  <ExternalLink className="ml-1 inline h-3.5 w-3.5" />
-                </a>
               </div>
             ) : (
               /* ── running / failed ────────────────────────────────────────── */
-              <>
-                <DialogPrimitive.Title asChild>
-                  <h1 className="mt-6 text-center text-[30px] leading-tight font-semibold tracking-[-0.02em] text-balance">
-                    Building {companyName}
-                  </h1>
-                </DialogPrimitive.Title>
-                {running && (
-                  <p className="mx-auto mt-2.5 max-w-[380px] text-center text-[15px] leading-relaxed text-muted-foreground">
-                    Give me under a minute. Keep this tab open and I&apos;ll take you straight in.
-                  </p>
-                )}
+              <div className="w-full">
+                <p className="mt-10 text-sm font-medium text-muted-foreground">Building {companyName}</p>
 
-                {running && (
+                {running ? (
                   <>
-                    <div className="mt-8 h-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-white/10">
-                      <div
-                        role="progressbar"
-                        aria-label="Setup progress"
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={Math.round(percent)}
-                        className="h-full origin-left rounded-full bg-indigo-600 transition-transform duration-700 ease-out motion-reduce:transition-none dark:bg-indigo-400"
-                        style={{ transform: `scaleX(${percent / 100})` }}
-                      />
-                    </div>
-                    <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-                      <span>
-                        {doneCount} of {total} complete
-                      </span>
-                      <span>{Math.round(percent)}%</span>
-                    </div>
-                  </>
-                )}
+                    {/* Keyed on the step, so each new one rises in. */}
+                    <DialogPrimitive.Title asChild>
+                      <h1
+                        key={activeMilestone ?? "finishing"}
+                        aria-live="polite"
+                        className={cn("mt-2.5 text-[30px] leading-tight font-semibold tracking-[-0.02em] text-balance sm:text-[40px]", SIGNUP_ENTER)}
+                      >
+                        {activeMilestone ? STEP_LINES[activeMilestone].title : "Putting the kettle on"}
+                      </h1>
+                    </DialogPrimitive.Title>
 
-                {/*
-                  aria-live so a screen reader hears each milestone land. Colour is
-                  never the only signal: every row carries its own icon AND its own
-                  wording (present tense while running, past tense when done), which
-                  is what makes this legible with prefers-reduced-motion on.
-                */}
-                <ul className="mt-6 space-y-2.5" aria-live="polite">
-                  {PROVISION_MILESTONES.map((milestone, index) => {
-                    const isDone = completedSet.has(milestone);
-                    const isActive = running && index === activeIndex;
-                    const showSlowHint =
-                      isActive &&
-                      milestone === SLOW_MILESTONE &&
-                      activeSince !== null &&
-                      now - activeSince > SLOW_MILESTONE_HINT_MS;
+                    <p
+                      key={`${activeMilestone ?? "finishing"}-${showSlowHint ? "slow" : "line"}`}
+                      className={cn("mt-3 text-[15px] text-muted-foreground sm:text-base", SIGNUP_ENTER)}
+                    >
+                      {showSlowHint
+                        ? "Still going. Good things take a moment, and so does this one."
+                        : activeMilestone
+                          ? STEP_LINES[activeMilestone].line
+                          : "Nearly there. Keep this tab open and I'll take you straight in."}
+                    </p>
 
-                    return (
-                      <li key={milestone}>
-                        <div
-                          className={cn(
-                            "flex items-start gap-2.5",
-                            isDone && "animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none",
-                          )}
-                        >
-                          {isDone ? (
-                            <CircleCheck className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-400" />
-                          ) : isActive ? (
-                            <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-indigo-600 dark:text-indigo-400" />
-                          ) : (
-                            // /70 is the floor that still clears the 3:1 minimum for
-                            // a non-text glyph in BOTH themes; anything fainter is
-                            // decoration the user cannot see.
-                            <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/70" />
-                          )}
+                    {/* Where they are in the build, as the signup's own dashes. */}
+                    <div
+                      role="progressbar"
+                      aria-label="Setup progress"
+                      aria-valuemin={0}
+                      aria-valuemax={total}
+                      aria-valuenow={doneCount}
+                      className="mt-10 flex items-center justify-center gap-1.5"
+                    >
+                      {PROVISION_MILESTONES.map((m, i) => (
+                        <span key={m} aria-hidden className="relative h-1 w-7 overflow-hidden rounded-full bg-indigo-900/10 sm:w-9 dark:bg-white/15">
                           <span
                             className={cn(
-                              "text-sm",
-                              isDone && "text-foreground",
-                              isActive && "font-medium text-foreground",
-                              // Full-strength token, not a faded one: six of these
-                              // eight rows are pending for most of the run, and a
-                              // composited /60 lands around 2.3:1 in light mode —
-                              // well under AA. State is already carried by the icon
-                              // and by the tense of the copy, so contrast does not
-                              // have to signal anything.
-                              !isDone && !isActive && "text-muted-foreground",
+                              "absolute inset-0 origin-left rounded-full bg-indigo-600 transition-transform duration-200 ease-out motion-reduce:transition-none dark:bg-indigo-400",
+                              i < doneCount ? "scale-x-100" : "scale-x-0",
                             )}
-                          >
-                            {isDone ? MILESTONE_COPY[milestone].done : MILESTONE_COPY[milestone].running}
-                          </span>
-                        </div>
-                        {showSlowHint && (
-                          <p className="mt-1 ml-6.5 text-xs text-muted-foreground">
-                            Still working — this one can take a few seconds.
-                          </p>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
+                          />
+                        </span>
+                      ))}
+                    </div>
+                    <p className="mt-2.5 text-xs text-muted-foreground tabular-nums">
+                      Step {Math.min(doneCount + 1, total)} of {total}
+                    </p>
+                  </>
+                ) : (
+                  <DialogPrimitive.Title asChild>
+                    <h1 className="mt-2 text-[30px] leading-tight font-semibold tracking-[-0.02em] text-balance">
+                      {failed && activeMilestone ? `Stuck on: ${MILESTONE_COPY[activeMilestone].running.toLowerCase()}` : `Building ${companyName}`}
+                    </h1>
+                  </DialogPrimitive.Title>
+                )}
 
+                <div className="mx-auto max-w-[440px] text-left">
                 {failed && failure && (
                   <div className="mt-6 animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
                     <Alert variant="destructive">
@@ -426,11 +447,51 @@ export function ProvisioningScreen() {
                     )}
                   </div>
                 )}
-              </>
+                </div>
+              </div>
             )}
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
+  );
+}
+
+/**
+ * One of the two "You're live." cards: a real, live preview of the page, its
+ * name, and the way in. The whole card is clickable through a stretched link
+ * (the button's ::after covers the card), because a frame cannot sit inside a
+ * <button> or <a>.
+ */
+function LiveCard({
+  previewUrl,
+  ctaLabel,
+  tilt,
+  shot,
+  href,
+  onOpen,
+  delayMs = 0,
+}: {
+  previewUrl: string;
+  ctaLabel: string;
+  tilt?: "left" | "right";
+  shot?: { light: string; dark: string };
+  href?: string;
+  onOpen?: () => void;
+  delayMs?: number;
+}) {
+  // No label, no button: the laptop is the way in. An invisible link or button
+  // covers it, named for screen readers, with the focus ring drawn round it.
+  const cover =
+    "absolute inset-0 z-10 rounded-2xl outline-none focus-visible:ring-[3px] focus-visible:ring-indigo-500/40";
+  return (
+    <div className={cn("group relative", SIGNUP_ENTER)} style={{ animationDelay: `${delayMs}ms` }}>
+      <LivePreview url={previewUrl} tilt={tilt} shot={shot} />
+      {href ? (
+        <a href={href} target="_blank" rel="noopener noreferrer" aria-label={ctaLabel} className={cover} />
+      ) : (
+        <button type="button" onClick={onOpen} aria-label={ctaLabel} className={cover} />
+      )}
+    </div>
   );
 }

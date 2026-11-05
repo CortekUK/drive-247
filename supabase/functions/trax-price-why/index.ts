@@ -13,6 +13,7 @@
  */
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { chatCompletion } from "../_shared/openai.ts";
+import { withPhoenix } from "../_shared/phoenix.ts";
 
 const money = (n: unknown) =>
   typeof n === "number" ? `$${Math.round(n)}` : `$${n}`;
@@ -29,7 +30,7 @@ const MATCH_WORD: Record<string, string> = {
   make: "the same brand",
 };
 
-Deno.serve(async (req) => {
+Deno.serve(withPhoenix("trax-price-why", async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
   if (req.method !== "POST") return errorResponse("Method not allowed", 405);
@@ -95,4 +96,4 @@ Deno.serve(async (req) => {
       500,
     );
   }
-});
+}));

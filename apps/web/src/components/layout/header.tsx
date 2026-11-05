@@ -1,22 +1,136 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { Menu, X } from "lucide-react";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { HeaderCta } from "./header-cta";
 
-export function Header() {
+const PILL_LINKS = [
+  { label: "Features", href: "#features" },
+  { label: "Trax", href: "#trax" },
+  { label: "Pricing", href: "#pricing" },
+  { label: "FAQ", href: "#faq" },
+];
+
+/**
+ * `overHero` is for the landing page, whose hero fills the first screen with its own
+ * logo and buttons: a floating glass pill takes over as soon as those scroll away,
+ * and the theme toggle lives at the bottom-left of the screen instead.
+ */
+export function Header({ overHero = false }: { overHero?: boolean }) {
   const [scrolled, setScrolled] = useState(false);
+  const [pill, setPill] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const pillRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 50);
+    const onScroll = () => {
+      setScrolled(window.scrollY > 50);
+      setPill(window.scrollY > 60);
+      // The pill is about to hide: its menu must not stay open behind the hero.
+      if (window.scrollY <= 60) setMenuOpen(false);
+    };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!pillRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
+
+  if (overHero) {
+    return (
+      <>
+        <header
+          aria-hidden={!pill || undefined}
+          inert={!pill || undefined}
+          className={`sticky top-2 z-50 flex h-16 w-full items-center px-4 transition-all duration-200 ease-out sm:px-6 ${
+            pill ? "" : "pointer-events-none -translate-y-3 opacity-0"
+          }`}
+        >
+          <div ref={pillRef} className="relative mx-auto grid h-[52px] w-full max-w-7xl grid-cols-[1fr_auto] items-center rounded-full border border-white/60 bg-white/70 pl-5 pr-2 max-[359px]:pl-3 max-[359px]:pr-1 shadow-[inset_0_1px_0_rgb(255_255_255/0.7),0_0_0_1px_rgb(20_10_90/0.08),0_12px_40px_rgb(13_8_70/0.18)] backdrop-blur-xl backdrop-saturate-150 lg:grid-cols-[1fr_auto_1fr] dark:border-white/15 dark:bg-black/50 dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.18),0_12px_40px_rgb(0_0_0/0.3)]">
+            <Link href="/" className="justify-self-start max-xl:flex max-xl:h-11 max-xl:items-center">
+              <Image src="/logo-light.png" alt="Drive247" width={855} height={195} className="h-6 w-auto max-[359px]:h-5 dark:hidden" priority />
+              <Image src="/logo-dark.png" alt="Drive247" width={855} height={195} className="hidden h-6 w-auto max-[359px]:h-5 dark:block" priority />
+            </Link>
+
+            <nav aria-label="Main" className="hidden items-center gap-7 lg:flex">
+              {PILL_LINKS.map((link) => (
+                <a key={link.href} href={link.href} className="text-sm text-foreground/70 transition-colors duration-200 ease-out hover:text-foreground max-xl:flex max-xl:h-11 max-xl:items-center">
+                  {link.label}
+                </a>
+              ))}
+            </nav>
+
+            <div className="flex items-center gap-4 justify-self-end max-sm:gap-1 max-lg:gap-2">
+              <a href="/strategy-call" className="hidden items-center text-sm text-foreground/70 transition-colors duration-200 ease-out hover:text-foreground max-xl:h-11 sm:flex">
+                Book a demo
+              </a>
+              <HeaderCta
+                label="Start free trial"
+                href="#pricing"
+                className="rounded-full bg-primary px-5 text-sm font-normal text-primary-foreground hover:bg-primary/90 max-xl:h-11 max-[359px]:px-3 max-[359px]:text-xs"
+              />
+              <button
+                ref={menuButtonRef}
+                type="button"
+                onClick={() => setMenuOpen((open) => !open)}
+                aria-label={menuOpen ? "Close menu" : "Open menu"}
+                aria-expanded={menuOpen}
+                aria-controls="pill-menu"
+                className="flex size-11 shrink-0 items-center justify-center rounded-full text-foreground/70 transition-colors duration-200 ease-out hover:text-foreground lg:hidden"
+              >
+                {menuOpen ? <X className="size-5" aria-hidden /> : <Menu className="size-5" aria-hidden />}
+              </button>
+            </div>
+
+            {/* The links the pill has no room for below the wide layout. */}
+            {menuOpen && (
+              <nav
+                id="pill-menu"
+                aria-label="Menu"
+                className="absolute inset-x-0 top-full mt-2 flex max-h-[calc(100svh-5rem)] flex-col overflow-y-auto rounded-2xl border bg-card p-2 lg:hidden"
+              >
+                {PILL_LINKS.map((link) => (
+                  <a key={link.href} href={link.href} onClick={() => setMenuOpen(false)} className="flex min-h-11 items-center rounded-lg px-3 text-sm text-foreground/80 transition-colors duration-200 ease-out hover:bg-muted hover:text-foreground">
+                    {link.label}
+                  </a>
+                ))}
+                {/* From `sm` up this one is already in the pill. */}
+                <a href="/strategy-call" onClick={() => setMenuOpen(false)} className="flex min-h-11 items-center rounded-lg px-3 text-sm text-foreground/80 transition-colors duration-200 ease-out hover:bg-muted hover:text-foreground sm:hidden">
+                  Book a demo
+                </a>
+              </nav>
+            )}
+          </div>
+        </header>
+        <div className="fixed bottom-4 left-4 z-50 rounded-full border bg-card p-1 max-xl:p-0 max-xl:[&_button]:size-11">
+          <ThemeToggle />
+        </div>
+      </>
+    );
+  }
+
   return (
+    <>
     <header
       className={`sticky top-0 z-50 w-full border-b transition-all duration-300 ease-out ${
         scrolled
@@ -52,5 +166,6 @@ export function Header() {
         </div>
       </div>
     </header>
+    </>
   );
 }

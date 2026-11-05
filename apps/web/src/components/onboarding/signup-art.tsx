@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * The pictures for the full-screen signup — one per screen.
+ * The picture for the build screen after payment. The signup card's own
+ * screens carry no picture: just the headline and the form.
  *
  * Each one is drawn for the card's STAGE: the tinted band across the top of
  * the signup card (see `ScreenHead` in signup-ui.tsx), 400 × 200, anchored to
@@ -23,7 +24,7 @@
  * Light and dark ship together through the `--sa-*` tokens on the <svg>.
  */
 
-import { useId, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 
 import { carSvg, type CarPaint } from "@/components/landing-v2/car-art";
 import { cn } from "@/lib/utils";
@@ -61,32 +62,20 @@ function clip(text: string, max: number): string {
 // ---------------------------------------------------------------------------
 
 const S = { stroke: "var(--sa-ink)", strokeWidth: 2, strokeLinejoin: "round" as const };
-const POP =
-  "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-3 motion-safe:duration-200 motion-safe:ease-out";
 
-function Art({ children }: { children: ReactNode }) {
+function Art({
+  children,
+  viewBox = "0 0 400 200",
+  className = "absolute inset-x-0 bottom-0 mx-auto h-full w-full max-w-[480px]",
+}: {
+  children: ReactNode;
+  viewBox?: string;
+  className?: string;
+}) {
   return (
-    <svg
-      viewBox="0 0 400 200"
-      preserveAspectRatio="xMidYMax meet"
-      aria-hidden
-      className={cn(TOKENS, "absolute inset-x-0 bottom-0 mx-auto h-full w-full max-w-[480px]")}
-    >
+    <svg viewBox={viewBox} preserveAspectRatio="xMidYMax meet" aria-hidden className={cn(TOKENS, className)}>
       {children}
     </svg>
-  );
-}
-
-/** A floating card, popping in a beat after the stage. */
-function Float({ x, y, w, h, delay = 0, children }: { x: number; y: number; w: number; h: number; delay?: number; children?: ReactNode }) {
-  return (
-    <g className={POP} style={{ animationDelay: `${delay}ms`, animationFillMode: "both" }}>
-      <g transform={`translate(${x} ${y})`}>
-        <rect x={2} y={5} width={w} height={h} rx={14} fill="var(--sa-shadow)" />
-        <rect width={w} height={h} rx={14} fill="var(--sa-card)" {...S} />
-        {children}
-      </g>
-    </g>
   );
 }
 
@@ -96,7 +85,7 @@ function Tick({ x, y, color = "var(--sa-on)", w = 2.4 }: { x: number; y: number;
 
 function Badge({ x, y, r = 12 }: { x: number; y: number; r?: number }) {
   return (
-    <g className="motion-safe:animate-in motion-safe:zoom-in-50 motion-safe:fade-in-0 motion-safe:duration-200 motion-safe:ease-out" style={{ transformBox: "fill-box", transformOrigin: "center" }}>
+    <g>
       <circle cx={x} cy={y} r={r} fill="var(--sa-acc)" stroke="var(--sa-card)" strokeWidth={3} />
       <Tick x={x - 5.5} y={y + 0.5} w={2.3} />
     </g>
@@ -106,20 +95,6 @@ function Badge({ x, y, r = 12 }: { x: number; y: number; r?: number }) {
 function Sparkle({ x, y, r, opacity = 1 }: { x: number; y: number; r: number; opacity?: number }) {
   const d = `M${x} ${y - r} Q${x + r * 0.18} ${y - r * 0.18} ${x + r} ${y} Q${x + r * 0.18} ${y + r * 0.18} ${x} ${y + r} Q${x - r * 0.18} ${y + r * 0.18} ${x - r} ${y} Q${x - r * 0.18} ${y - r * 0.18} ${x} ${y - r} Z`;
   return <path d={d} fill="var(--sa-acc)" opacity={opacity} />;
-}
-
-function Avatar({ x, y, r, skin = "#d9a88a", hair = "#1f2040" }: { x: number; y: number; r: number; skin?: string; hair?: string }) {
-  return (
-    <g transform={`translate(${x} ${y})`}>
-      <circle r={r} fill="var(--sa-soft)" />
-      <circle cy={-r * 0.18} r={r * 0.38} fill={skin} />
-      <path d={`M${-r * 0.65} ${r * 0.72} Q0 ${r * 0.05} ${r * 0.65} ${r * 0.72}`} fill="var(--sa-acc)" />
-      <path
-        d={`M${-r * 0.38} ${-r * 0.3} Q${-r * 0.36} ${-r * 0.66} 0 ${-r * 0.66} Q${r * 0.36} ${-r * 0.66} ${r * 0.38} ${-r * 0.3} Q${r * 0.18} ${-r * 0.48} 0 ${-r * 0.48} Q${-r * 0.18} ${-r * 0.48} ${-r * 0.38} ${-r * 0.3}Z`}
-        fill={hair}
-      />
-    </g>
-  );
 }
 
 /** The approved coupe — pearl in light mode, indigo in dark. Box ≈ 330 × 140. */
@@ -147,7 +122,7 @@ function BrandFill({ id }: { id: string }) {
 }
 
 /** The booking site in a browser window, peeking up from the stage floor. */
-function Site({ name, address, progress = 1, carX = 0 }: { name: string; address: string; progress?: number; carX?: number }) {
+function Site({ name, address, progress = 1, carX = 0, driveIn = false, loop = false }: { name: string; address: string; progress?: number; carX?: number; driveIn?: boolean; loop?: boolean }) {
   const id = useArtId();
   const shown = (i: number) => progress >= (i + 1) / 6 || progress >= 1;
   const fade = "transition-opacity duration-200 ease-out motion-reduce:transition-none";
@@ -171,7 +146,10 @@ function Site({ name, address, progress = 1, carX = 0 }: { name: string; address
       <g clipPath={`url(#${id}c)`}>
         <circle cx="250" cy="40" r="60" fill="#fff" opacity=".08" />
         <path d="M150 128 H278" stroke="#fff" strokeOpacity=".25" strokeWidth="1.2" />
-        <g style={{ transform: `translateX(${carX}px)` }} className="transition-transform duration-700 ease-out motion-reduce:transition-none">
+        <g
+          style={{ transform: `translateX(${carX}px)` }}
+          className={loop ? "sa-carloop" : driveIn ? "sa-drive" : "transition-transform duration-700 ease-out motion-reduce:transition-none"}
+        >
           <Car transform="translate(148 76) scale(.38)" />
         </g>
       </g>
@@ -181,6 +159,7 @@ function Site({ name, address, progress = 1, carX = 0 }: { name: string; address
       <rect x="26" y="75" width="78" height="5" rx="2.5" fill="#fff" opacity={shown(2) ? 0.55 : 0} className={fade} />
       <rect x="26" y="85" width="56" height="5" rx="2.5" fill="#fff" opacity={shown(2) ? 0.55 : 0} className={fade} />
       <g opacity={shown(3) ? 1 : 0} className={fade}>
+        {loop && <rect x="26" y="101" width="52" height="18" rx="9" fill="none" stroke="#fff" strokeWidth="1.5" className="sa-ring" />}
         <rect x="26" y="101" width="52" height="18" rx="9" fill="#fff" />
         <text x="52" y="113.2" textAnchor="middle" fontSize="8.5" fontWeight="700" fill="var(--sa-acc)" fontFamily={FONT}>
           Book now
@@ -191,251 +170,379 @@ function Site({ name, address, progress = 1, carX = 0 }: { name: string; address
 }
 
 // ---------------------------------------------------------------------------
-// 1 · Welcome — the car, a booking landing on one side, money on the other.
+// 6 · Building — one scene per stretch of the build, swapping as it lands.
 // ---------------------------------------------------------------------------
 
-export function WelcomeArt() {
-  return (
-    <Art>
-      <Car transform="translate(70 70) scale(.8)" />
-      <Float x={20} y={56} w={118} h={52} delay={80}>
-        <Avatar x={24} y={26} r={14} />
-        <rect x="44" y="17" width="50" height="5.5" rx="2.75" fill="var(--sa-ink)" />
-        <rect x="44" y="29" width="36" height="4.5" rx="2.25" fill="var(--sa-lite)" />
-      </Float>
-      <Badge x={134} y={58} r={11} />
-      <Float x={264} y={46} w={116} h={60} delay={160}>
-        <rect x="12" y="12" width="34" height="4.5" rx="2.25" fill="var(--sa-mut)" />
-        <rect x="12" y="22" width="54" height="7" rx="3.5" fill="var(--sa-ink)" />
-        {[6, 10, 8, 13, 17].map((h, i) => (
-          <rect key={i} x={12 + i * 11} y={52 - h} width={7} height={h} rx={2} fill={i === 4 ? "var(--sa-acc)" : "var(--sa-soft)"} />
-        ))}
-        <path d="M74 50 L84 43 L92 46 L104 34" fill="none" stroke="var(--sa-acc)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-      </Float>
-      <Sparkle x={210} y={58} r={6} />
-      <Sparkle x={248} y={40} r={3.5} opacity={0.6} />
-    </Art>
-  );
+/*
+ * Motion, all inside the SVG so it travels with the art. Scenes enter with the
+ * app's standard (200ms ease-out, opacity + 12px lift) and leave the other way
+ * (ease-in). Inside a scene, things pop in on a stagger and the hero floats.
+ * `transform-box: fill-box` makes every transform act on the shape's own box.
+ */
+const MOTION = `
+@keyframes sa-in { from { opacity: 0; transform: translateY(14px) scale(.985) } to { opacity: 1; transform: none } }
+@keyframes sa-out { from { opacity: 1; transform: none } to { opacity: 0; transform: translateY(-10px) scale(.99) } }
+@keyframes sa-pop { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+@keyframes sa-float { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-3px) } }
+@keyframes sa-grow { from { transform: scaleX(0) } to { transform: scaleX(1) } }
+@keyframes sa-twinkle { 0%, 100% { opacity: .35 } 50% { opacity: 1 } }
+@keyframes sa-draw { from { stroke-dashoffset: 180 } to { stroke-dashoffset: 0 } }
+@keyframes sa-redraw { 0% { stroke-dashoffset: 180; opacity: 1 } 40% { stroke-dashoffset: 0 } 85% { stroke-dashoffset: 0; opacity: 1 } 96% { opacity: 0 } 100% { stroke-dashoffset: 180; opacity: 0 } }
+@keyframes sa-toast { 0%, 12% { opacity: 0; transform: translateY(10px) } 20%, 62% { opacity: 1; transform: none } 72%, 100% { opacity: 0; transform: translateY(-6px) } }
+@keyframes sa-breathe { 0%, 100% { transform: scaleX(.55) } 50% { transform: scaleX(1) } }
+@keyframes sa-carloop { 0% { transform: translateX(-210px) } 24% { transform: translateX(0) } 68% { transform: translateX(0) } 92%, 100% { transform: translateX(230px) } }
+@keyframes sa-ring { 0% { opacity: .7; transform: scale(1) } 70%, 100% { opacity: 0; transform: scale(1.35) } }
+@keyframes sa-drive { from { transform: translateX(-170px) } to { transform: translateX(0) } }
+.sa-in { animation: sa-in 560ms cubic-bezier(.22,1,.36,1) both }
+.sa-out { animation: sa-out 260ms cubic-bezier(.4,0,1,1) both }
+.sa-pop { animation: sa-pop 600ms cubic-bezier(.22,1,.36,1) both; transform-box: fill-box; transform-origin: center }
+.sa-float { animation: sa-float 5.5s ease-in-out infinite; transform-box: fill-box }
+.sa-grow { animation: sa-grow 800ms cubic-bezier(.22,1,.36,1) both; transform-box: fill-box; transform-origin: left }
+.sa-spin { animation: sa-twinkle 3.2s ease-in-out infinite }
+.sa-draw { stroke-dasharray: 180; animation: sa-draw 1.4s cubic-bezier(.22,1,.36,1) both }
+.sa-redraw { stroke-dasharray: 180; animation: sa-redraw 5.5s cubic-bezier(.22,1,.36,1) 600ms infinite both }
+.sa-toast { animation: sa-toast 6.5s cubic-bezier(.22,1,.36,1) 1.2s infinite both; transform-box: fill-box }
+.sa-breathe { animation: sa-breathe 3.6s ease-in-out infinite; transform-box: fill-box; transform-origin: left }
+.sa-carloop { animation: sa-carloop 7s cubic-bezier(.45,0,.25,1) infinite both }
+.sa-ring { animation: sa-ring 2.2s ease-out infinite; transform-box: fill-box; transform-origin: center }
+.sa-drive { animation: sa-drive 1.6s cubic-bezier(.22,1,.36,1) 250ms both }
+@media (prefers-reduced-motion: reduce) {
+  .sa-in, .sa-out, .sa-pop, .sa-float, .sa-grow, .sa-spin, .sa-drive, .sa-draw, .sa-redraw, .sa-toast, .sa-breathe, .sa-carloop, .sa-ring { animation: none }
 }
+`;
 
-// ---------------------------------------------------------------------------
-// 2 · Password — the owner's card, the shield, the dots filling as they type.
-// ---------------------------------------------------------------------------
+const delay = (ms: number) => ({ animationDelay: `${ms}ms` });
 
-export function PasswordArt({ length, ready, name }: { length: number; ready: boolean; name: string }) {
-  const slots = 8;
-  const filled = Math.min(length, slots);
-  const first = clip(name.trim().split(/\s+/)[0] || "You", 11);
-  const id = useArtId();
-  return (
-    <Art>
-      <BrandFill id={`${id}b`} />
-      {/* shield */}
-      <g transform="translate(158 54)">
-        <path d="M44 4 L84 18 L84 58 Q84 104 44 124 Q4 104 4 58 L4 18 Z" fill="var(--sa-shadow)" transform="translate(2 5)" />
-        <path d="M42 0 L82 14 L82 54 Q82 100 42 120 Q2 100 2 54 L2 14 Z" fill={`url(#${id}b)`} {...S} />
-        <path d="M42 14 L70 24 L70 54 Q70 88 42 104 Q14 88 14 54 L14 24 Z" fill="#fff" opacity=".14" />
-        {ready ? (
-          <path d="M28 60 l10 10 l18 -20" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" className={POP} />
-        ) : (
-          <g>
-            <path d="M33 56 v-7 a9 9 0 0 1 18 0 v7" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" />
-            <rect x="28" y="55" width="28" height="22" rx="5" fill="#fff" />
-            <circle cx="42" cy="64" r="3" fill="var(--sa-acc)" />
-            <rect x="40.8" y="65" width="2.4" height="6" rx="1.2" fill="var(--sa-acc)" />
-          </g>
-        )}
-      </g>
-      <Float x={18} y={78} w={128} h={56} delay={80}>
-        <Avatar x={26} y={28} r={15} />
-        <text x="48" y="25" fontSize="12.5" fontWeight="700" fill="var(--sa-ink)" fontFamily={FONT}>
-          {first}
-        </text>
-        <rect x="48" y="33" width="52" height="4.5" rx="2.25" fill="var(--sa-lite)" />
-      </Float>
-      <Float x={258} y={92} w={126} h={34} delay={160}>
-        {Array.from({ length: slots }, (_, i) => (
-          <circle
-            key={i}
-            cx={18 + i * 13}
-            cy={17}
-            r={3.6}
-            fill={i < filled ? "var(--sa-ink)" : "var(--sa-lite)"}
-            className="transition-[fill] duration-100"
-          />
-        ))}
-      </Float>
-      {ready && (
-        <>
-          <Sparkle x={262} y={66} r={6} />
-          <Sparkle x={142} y={58} r={4} opacity={0.6} />
-        </>
-      )}
-    </Art>
-  );
+/** The soft shadow every scene stands on, now that there is no stage floor. */
+function Ground({ rx = 130 }: { rx?: number }) {
+  return <ellipse cx="200" cy="214" rx={rx} ry="6" fill="var(--sa-shadow)" />;
 }
-
-// ---------------------------------------------------------------------------
-// 3 · Business — their booking site, spelled with what they are typing.
-// ---------------------------------------------------------------------------
-
-export function SiteArt({ company, slug }: { company: string; slug: string }) {
-  const name = clip(company.trim() || "Your business", 16);
-  const address = `${clip(slug.trim() || "your-business", 22)}.drive-247.com`;
-  return (
-    <Art>
-      <Site name={name} address={address} />
-      {company.trim() && (
-        <>
-          <Sparkle x={362} y={64} r={6} />
-          <Sparkle x={36} y={92} r={4} opacity={0.6} />
-        </>
-      )}
-    </Art>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// 4 · Code — the letter rising out of the envelope with the six boxes on it.
-// ---------------------------------------------------------------------------
-
-export function MailArt() {
-  const id = useArtId();
-  return (
-    <Art>
-      <BrandFill id={`${id}b`} />
-      <g transform="translate(122 64)">
-        <rect x="3" y="6" width="156" height="110" rx="14" fill="var(--sa-shadow)" />
-        <rect width="156" height="110" rx="14" fill={`url(#${id}b)`} {...S} />
-        <g className={POP} style={{ animationDelay: "80ms", animationFillMode: "both" }}>
-          <rect x="18" y="-26" width="120" height="84" rx="10" fill="var(--sa-card)" {...S} />
-          <rect x="32" y="-12" width="46" height="5.5" rx="2.75" fill="var(--sa-ink)" />
-          {Array.from({ length: 6 }, (_, i) => (
-            <rect key={i} x={32 + i * 16} y={4} width={12} height={16} rx={3.5} fill={i < 4 ? "var(--sa-acc)" : "var(--sa-soft)"} />
-          ))}
-          <rect x="32" y="30" width="64" height="4.5" rx="2.25" fill="var(--sa-lite)" />
-        </g>
-        <path d="M0 40 L78 82 L156 40 L156 96 Q156 110 142 110 L14 110 Q0 110 0 96 Z" fill={`url(#${id}b)`} {...S} />
-        <path d="M0 106 L60 70 M156 106 L96 70" stroke="#fff" strokeOpacity=".35" strokeWidth="1.6" />
-      </g>
-      <Badge x={282} y={58} r={13} />
-      <Sparkle x={104} y={70} r={5} />
-      <Sparkle x={306} y={92} r={3.5} opacity={0.6} />
-    </Art>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// 5 · Payment — the card up front, the receipt beside it.
-// ---------------------------------------------------------------------------
-
-export function CardArt({ price }: { price?: string }) {
-  const id = useArtId();
-  return (
-    <Art>
-      <BrandFill id={`${id}b`} />
-      <g transform="translate(78 66) rotate(-6 100 62)">
-        <rect x="3" y="6" width="196" height="122" rx="16" fill="var(--sa-shadow)" />
-        <rect width="196" height="122" rx="16" fill={`url(#${id}b)`} {...S} />
-        <circle cx="170" cy="18" r="70" fill="#fff" opacity=".08" />
-        <rect x="20" y="30" width="32" height="24" rx="5" fill="#f5e7c6" stroke="#151530" strokeWidth="1.4" />
-        <path d="M20 42 H52 M36 30 V54" stroke="#151530" strokeWidth="1" strokeOpacity=".35" />
-        <path d="M160 34 q7 10 0 20 M168 29 q11 15 0 30" fill="none" stroke="#fff" strokeOpacity=".8" strokeWidth="2" strokeLinecap="round" />
-        {[0, 1, 2, 3].map((g) =>
-          [0, 1, 2, 3].map((d) => (
-            <circle key={`${g}${d}`} cx={22 + g * 40 + d * 7} cy={80} r={2.4} fill="#fff" opacity={g === 3 ? 1 : 0.55} />
-          )),
-        )}
-        <rect x="20" y="96" width="62" height="6" rx="3" fill="#fff" opacity=".55" />
-      </g>
-      <Float x={280} y={60} w={100} h={96} delay={120}>
-        <rect x="14" y="14" width="44" height="5.5" rx="2.75" fill="var(--sa-ink)" />
-        <rect x="14" y="30" width="40" height="4.5" rx="2.25" fill="var(--sa-lite)" />
-        <rect x="14" y="41" width="30" height="4.5" rx="2.25" fill="var(--sa-lite)" />
-        <path d="M14 56 H86" stroke="var(--sa-lite)" strokeWidth="1.5" strokeDasharray="3 3" />
-        <rect x="14" y="70" width="26" height="5" rx="2.5" fill="var(--sa-mut)" />
-        <text x="86" y="76" textAnchor="end" fontSize="13" fontWeight="800" fill="var(--sa-ink)" fontFamily={FONT}>
-          {price ?? ""}
-        </text>
-      </Float>
-      <g>
-        <circle cx="64" cy="76" r="17" fill="var(--sa-card)" {...S} />
-        <path d="M58 75 v-3.6 a6 6 0 0 1 12 0 v3.6" fill="none" stroke="var(--sa-ink)" strokeWidth="2.2" strokeLinecap="round" />
-        <rect x="55.5" y="75" width="17" height="12" rx="3" fill="var(--sa-acc)" stroke="var(--sa-ink)" strokeWidth="1.6" />
-      </g>
-      <Sparkle x={262} y={50} r={5} />
-    </Art>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// 6 · Building — the site fills in, the car drives in and parks.
-// ---------------------------------------------------------------------------
 
 /**
- * `progress` is 0–1. The site's pieces appear in order and the car rolls into
- * its hero as the portal comes together; at 1 a tick and sparkles land. The
- * roll is slower than the 200ms standard on purpose: this is a loader, one of
- * the exceptions in V2_PLAN §12, and it is the only thing that moves.
+ * A small floating card beside the hero, saying what the scene is for. It
+ * pops in late and bobs out of step with the hero, so the picture never sits
+ * still as one block.
  */
-export function BuildArt({ progress, company, slug }: { progress: number; company: string; slug: string }) {
-  const p = Math.max(0, Math.min(1, progress));
-  const name = clip(company.trim() || "Your business", 16);
-  const address = `${clip(slug.trim() || "your-business", 22)}.drive-247.com`;
+function Chip({
+  x,
+  y,
+  w,
+  label,
+  tick = true,
+  wait = 500,
+  bob = "6.2s",
+}: {
+  x: number;
+  y: number;
+  w: number;
+  label: string;
+  tick?: boolean;
+  wait?: number;
+  bob?: string;
+}) {
   return (
-    <Art>
-      <Site name={name} address={address} progress={p} carX={-160 + p * 160} />
-      {p >= 1 && (
-        <>
-          <Badge x={340} y={52} r={14} />
-          <Sparkle x={366} y={84} r={5} />
-          <Sparkle x={36} y={92} r={4} opacity={0.6} />
-        </>
-      )}
-    </Art>
+    <g className="sa-pop" style={delay(wait)}>
+      <g className="sa-float" style={{ animationDuration: bob, animationDelay: `${wait + 300}ms` }}>
+        <rect x={x + 2} y={y + 3} width={w} height="26" rx="9" fill="var(--sa-shadow)" />
+        <rect x={x} y={y} width={w} height="26" rx="9" fill="var(--sa-card)" {...S} strokeWidth={1.6} />
+        {tick ? (
+          <>
+            <circle cx={x + 14} cy={y + 13} r="7" fill="var(--sa-acc)" />
+            <path d={`M${x + 10.5} ${y + 13.2} l2.5 2.5 l4.5 -5`} fill="none" stroke="var(--sa-on)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </>
+        ) : (
+          <circle cx={x + 14} cy={y + 13} r="4" fill="var(--sa-acc)" />
+        )}
+        <text x={x + 27} y={y + 17} fontSize="10" fontWeight="700" fill="var(--sa-ink)" fontFamily={FONT}>
+          {label}
+        </text>
+      </g>
+    </g>
   );
 }
 
-// ---------------------------------------------------------------------------
-// The screens that are not a step: signing back in, leaving for now.
-// ---------------------------------------------------------------------------
+/** Checking the details: a clipboard whose rows tick off one by one. */
+function SceneCheck() {
+  return (
+    <g>
+      <Ground rx={90} />
+      <Chip x={22} y={84} w={104} label="Business name" wait={800} />
+      <Chip x={286} y={128} w={94} label="Web address" wait={1216} bob="7s" />
+      <g className="sa-float">
+        <rect x="133" y="44" width="140" height="160" rx="16" fill="var(--sa-shadow)" />
+        <rect x="130" y="40" width="140" height="160" rx="16" fill="var(--sa-card)" {...S} />
+        <rect x="172" y="30" width="56" height="20" rx="7" fill="var(--sa-acc)" {...S} />
+        {[78, 110, 142].map((y, i) => (
+          <g key={y}>
+            <g className="sa-pop" style={delay(240 + i * 352)}>
+              <circle cx="156" cy={y} r="10" fill="var(--sa-acc)" />
+              <Tick x={150.5} y={y + 0.5} />
+            </g>
+            <rect x="174" y={y - 4} width={[72, 58, 66][i]} height="8" rx="4" fill="var(--sa-lite)" className="sa-grow" style={delay(352 + i * 352)} />
+          </g>
+        ))}
+      </g>
+      <Sparkle x={300} y={70} r={6} />
+      <Sparkle x={100} y={110} r={4} opacity={0.5} />
+    </g>
+  );
+}
 
-/** Returning operator: their card and the key fob. */
-export function KeyArt() {
+/** Confirming the payment: the card, a lock, and a tick landing on it. */
+function SceneCard() {
   const id = useArtId();
   return (
-    <Art>
-      <BrandFill id={`${id}b`} />
-      <g transform="translate(212 48) rotate(12 26 70)">
-        <circle cx="26" cy="10" r="11" fill="none" stroke="var(--sa-ink)" strokeWidth="3" />
-        <rect x="4" y="22" width="44" height="104" rx="20" fill="var(--sa-shadow)" transform="translate(2 5)" />
-        <rect x="4" y="22" width="44" height="104" rx="20" fill={`url(#${id}b)`} {...S} />
-        <circle cx="26" cy="56" r="8" fill="#fff" opacity=".9" />
-        <rect x="16" y="82" width="20" height="5" rx="2.5" fill="#fff" opacity=".6" />
+    <g>
+      <Ground rx={100} />
+      <Chip x={18} y={132} w={92} label="Secured" tick={false} wait={672} />
+      <Chip x={300} y={140} w={82} label="$1 paid" wait={1120} bob="7s" />
+      <BrandFill id={`${id}g`} />
+      <g className="sa-float">
+        <rect x="113" y="66" width="180" height="114" rx="16" fill="var(--sa-shadow)" />
+        <rect x="110" y="62" width="180" height="114" rx="16" fill={`url(#${id}g)`} {...S} />
+        <rect x="130" y="90" width="30" height="22" rx="5" fill="#fff" opacity=".85" />
+        <path d="M130 101 h30 M145 90 v22" stroke="var(--sa-acc)" strokeWidth="1.2" opacity=".6" />
+        <text x="130" y="146" fontSize="14" fontWeight="700" fill="#fff" fontFamily={FONT} letterSpacing="2">
+          •••• 4242
+        </text>
+        <circle cx="262" cy="96" r="10" fill="#fff" opacity=".35" />
+        <circle cx="250" cy="96" r="10" fill="#fff" opacity=".55" />
       </g>
-      <Float x={70} y={74} w={128} h={58} delay={80}>
-        <Avatar x={26} y={29} r={15} />
-        <rect x="48" y="21" width="56" height="6" rx="3" fill="var(--sa-ink)" />
-        <rect x="48" y="33" width="40" height="4.5" rx="2.25" fill="var(--sa-lite)" />
-      </Float>
-      <Sparkle x={286} y={66} r={5} />
+      <g className="sa-pop" style={delay(560)}>
+        <Badge x={292} y={64} r={15} />
+      </g>
+      <Sparkle x={96} y={74} r={5} />
+    </g>
+  );
+}
+
+/** Making the brand: colour swatches fanning out. */
+function ScenePalette() {
+  const swatches = [
+    { r: -16, fill: "var(--sa-acc2)" },
+    { r: 0, fill: "var(--sa-acc)" },
+    { r: 16, fill: "var(--sa-soft)" },
+  ];
+  return (
+    <g>
+      <Ground rx={80} />
+      <Chip x={24} y={120} w={100} label="Your colours" tick={false} wait={992} />
+      {swatches.map((sw, i) => (
+        <g key={i} transform={`rotate(${sw.r} 200 210)`}>
+          <g className="sa-pop" style={delay(i * 256)}>
+            <rect x="166" y="52" width="68" height="132" rx="12" fill="var(--sa-card)" {...S} />
+            <rect x="174" y="60" width="52" height="78" rx="8" fill={sw.fill} />
+            <rect x="174" y="148" width="36" height="6" rx="3" fill="var(--sa-lite)" />
+            <rect x="174" y="160" width="24" height="6" rx="3" fill="var(--sa-lite)" />
+          </g>
+        </g>
+      ))}
+      <g className="sa-pop" style={delay(896)}>
+        <circle cx="300" cy="70" r="20" fill="var(--sa-card)" {...S} />
+        <text x="300" y="76" textAnchor="middle" fontSize="16" fontWeight="800" fill="var(--sa-acc)" fontFamily={FONT}>
+          Aa
+        </text>
+      </g>
+      <Sparkle x={104} y={66} r={6} />
+      <Sparkle x={318} y={128} r={4} opacity={0.6} />
+    </g>
+  );
+}
+
+/** The workspace and the owner: a portal window and a person joining it. */
+function ScenePortal({ chips = true, live = false }: { chips?: boolean; live?: boolean }) {
+  return (
+    <g>
+      <Ground rx={130} />
+      {chips && (
+        <>
+          <Chip x={6} y={150} w={88} label="Workspace" wait={1120} />
+          <Chip x={326} y={112} w={68} label="Owner" wait={1376} bob="7s" />
+        </>
+      )}
+      <g className="sa-float">
+        <rect x="73" y="54" width="240" height="160" rx="16" fill="var(--sa-shadow)" />
+        <rect x="70" y="50" width="240" height="160" rx="16" fill="var(--sa-card)" {...S} />
+        <rect x="80" y="60" width="52" height="140" rx="9" fill="var(--sa-soft)" />
+        {[74, 92, 110].map((y, i) => (
+          <rect key={y} x="90" y={y} width={i === 0 ? 32 : 26} height="7" rx="3.5" fill={i === 0 ? "var(--sa-acc)" : "var(--sa-lite)"} />
+        ))}
+        {[0, 1, 2].map((i) => (
+          <g key={i} className="sa-pop" style={delay(192 + i * 224)}>
+            <rect x={144 + i * 54} y="64" width="46" height="38" rx="8" fill="var(--sa-card)" stroke="var(--sa-lite)" strokeWidth="1.5" />
+            <rect x={151 + i * 54} y="72" width="18" height="5" rx="2.5" fill="var(--sa-lite)" />
+            <rect
+              x={151 + i * 54}
+              y="84"
+              width="26"
+              height="9"
+              rx="3"
+              fill={i === 1 ? "var(--sa-acc)" : "var(--sa-mut)"}
+              opacity={i === 1 ? 1 : 0.5}
+              className={live ? "sa-breathe" : undefined}
+              style={live ? { animationDelay: `${i * 600}ms` } : undefined}
+            />
+          </g>
+        ))}
+        <rect x="144" y="114" width="154" height="60" rx="8" fill="var(--sa-soft)" />
+        <path d="M152 162 L178 146 L200 154 L226 132 L250 140 L290 120" fill="none" stroke="var(--sa-acc)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={live ? "sa-redraw" : "sa-draw"} style={live ? undefined : delay(700)} />
+      </g>
+      <g className="sa-pop" style={delay(832)}>
+        <circle cx="318" cy="66" r="24" fill="var(--sa-acc)" stroke="var(--sa-card)" strokeWidth="4" />
+        <circle cx="318" cy="60" r="7" fill="#fff" />
+        <path d="M305 79 a13 11 0 0 1 26 0" fill="#fff" />
+      </g>
+      <Sparkle x={350} y={104} r={5} />
+      {live && (
+        // A booking landing now and then, so the portal looks open for business.
+        <g className="sa-toast">
+          <rect x="182" y="178" width="132" height="30" rx="10" fill="var(--sa-shadow)" transform="translate(2 3)" />
+          <rect x="182" y="178" width="132" height="30" rx="10" fill="var(--sa-card)" {...S} strokeWidth={1.6} />
+          <circle cx="198" cy="193" r="8" fill="var(--sa-acc)" />
+          <path d="M194 193.2 l3 3 l5 -5.6" fill="none" stroke="var(--sa-on)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <text x="212" y="197" fontSize="10" fontWeight="700" fill="var(--sa-ink)" fontFamily={FONT}>
+            New booking · $240
+          </text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+/** Billing and the subscription: a receipt with the plan marked active. */
+function SceneReceipt() {
+  return (
+    <g>
+      <Ground rx={80} />
+      <Chip x={26} y={140} w={102} label="Card on file" wait={896} />
+      <Chip x={280} y={120} w={114} label="Renews monthly" tick={false} wait={1216} bob="7s" />
+      <g className="sa-float">
+        <path d="M143 44 h120 v150 l-10 -6 l-10 6 l-10 -6 l-10 6 l-10 -6 l-10 6 l-10 -6 l-10 6 l-10 -6 l-10 6 l-10 -6 l-10 6 z" fill="var(--sa-shadow)" transform="translate(3 4)" />
+        <path d="M143 44 h120 v150 l-10 -6 l-10 6 l-10 -6 l-10 6 l-10 -6 l-10 6 l-10 -6 l-10 6 l-10 -6 l-10 6 l-10 -6 l-10 6 z" fill="var(--sa-card)" {...S} />
+        <rect x="160" y="62" width="50" height="7" rx="3.5" fill="var(--sa-lite)" />
+        <text x="160" y="104" fontSize="28" fontWeight="800" fill="var(--sa-ink)" fontFamily={FONT}>
+          $1
+        </text>
+        <text x="196" y="104" fontSize="10" fontWeight="600" fill="var(--sa-mut)" fontFamily={FONT}>
+          /month
+        </text>
+        {[122, 136].map((y, i) => (
+          <rect key={y} x="160" y={y} width={i ? 60 : 86} height="6" rx="3" fill="var(--sa-lite)" className="sa-grow" style={delay(224 + i * 224)} />
+        ))}
+        <g className="sa-pop" style={delay(672)}>
+          <rect x="160" y="152" width="66" height="22" rx="11" fill="var(--sa-acc)" />
+          <Tick x={168} y={163} />
+          <text x="184" y="167" fontSize="10" fontWeight="700" fill="#fff" fontFamily={FONT}>
+            Active
+          </text>
+        </g>
+      </g>
+      <g className="sa-spin">
+        <Sparkle x={300} y={80} r={7} />
+      </g>
+      <Sparkle x={100} y={96} r={4} opacity={0.6} />
+    </g>
+  );
+}
+
+/** Which scene each stretch of the build shows. Index = milestones done. */
+const SCENE_FOR_DONE = ["check", "card", "palette", "portal", "portal", "receipt", "receipt", "site", "done"] as const;
+type SceneId = (typeof SCENE_FOR_DONE)[number];
+
+function Scene({ id, company, slug }: { id: SceneId; company: string; slug: string }) {
+  const name = clip(company.trim() || "Your business", 16);
+  const address = `${clip(slug.trim() || "your-business", 22)}.drive-247.com`;
+  switch (id) {
+    case "check":
+      return <SceneCheck />;
+    case "card":
+      return <SceneCard />;
+    case "palette":
+      return <ScenePalette />;
+    case "portal":
+      return <ScenePortal />;
+    case "receipt":
+      return <SceneReceipt />;
+    case "site":
+      // The booking site going up: the car drives into its hero (a loader,
+      // so slower than 200ms on purpose; V2_PLAN §12).
+      return (
+        <>
+          <Ground rx={150} />
+          <Site name={name} address={address} progress={1} carX={0} driveIn />
+          <Chip x={4} y={150} w={92} label="Publishing" tick={false} wait={800} />
+        </>
+      );
+    case "done":
+      return (
+        <>
+          <Ground rx={150} />
+          <Site name={name} address={address} progress={1} carX={0} />
+          <Chip x={4} y={150} w={58} label="Live" wait={480} />
+          <g className="sa-pop" style={delay(192)}>
+            <Badge x={340} y={52} r={14} />
+          </g>
+          <g className="sa-pop" style={delay(416)}>
+            <Sparkle x={366} y={84} r={5} />
+          </g>
+          <g className="sa-pop" style={delay(576)}>
+            <Sparkle x={36} y={92} r={4} opacity={0.6} />
+          </g>
+        </>
+      );
+  }
+}
+
+/**
+ * `done` is how many of the eight milestones have landed (0–8); `progress` is
+ * kept for callers that only know a fraction. Each stretch of the build has
+ * its own scene, and a change of scene crossfades: the old one lifts away
+ * while the new one rises in, both inside 200ms.
+ */
+export function BuildArt({
+  progress,
+  done,
+  company,
+  slug,
+}: {
+  progress: number;
+  done?: number;
+  company: string;
+  slug: string;
+}) {
+  const p = Math.max(0, Math.min(1, progress));
+  const count = Math.max(0, Math.min(SCENE_FOR_DONE.length - 1, done ?? Math.round(p * 8)));
+  const scene = p >= 1 ? "done" : SCENE_FOR_DONE[count];
+
+  // The same element carries a scene from entering to leaving, so leaving only
+  // swaps its class: nothing inside remounts and replays on the way out.
+  const [scenes, setScenes] = useState<{ id: SceneId; key: number; leaving: boolean }[]>([
+    { id: scene, key: 0, leaving: false },
+  ]);
+  useEffect(() => {
+    let cleared: number | undefined;
+    setScenes((list) => {
+      const current = list.find((x) => !x.leaving);
+      if (current?.id === scene) return list;
+      const nextKey = Math.max(...list.map((x) => x.key)) + 1;
+      return [...list.map((x) => ({ ...x, leaving: true })), { id: scene, key: nextKey, leaving: false }];
+    });
+    cleared = window.setTimeout(() => setScenes((list) => list.filter((x) => !x.leaving)), 280);
+    return () => window.clearTimeout(cleared);
+  }, [scene]);
+
+  return (
+    <Art viewBox="0 0 400 222" className="absolute inset-0 h-full w-full">
+      <style>{MOTION}</style>
+      {scenes.map((x) => (
+        <g key={x.key} className={x.leaving ? "sa-out" : "sa-in"}>
+          <Scene id={x.id} company={company} slug={slug} />
+        </g>
+      ))}
     </Art>
   );
 }
 
-/** Leaving for now: the saved progress, ticked, waiting for them. */
-export function PauseArt() {
-  return (
-    <Art>
-      <Car transform="translate(150 96) scale(.62)" />
-      <Float x={40} y={60} w={150} h={70} delay={80}>
-        <Avatar x={28} y={28} r={15} />
-        <rect x="52" y="20" width="62" height="6" rx="3" fill="var(--sa-ink)" />
-        <rect x="52" y="32" width="40" height="4.5" rx="2.25" fill="var(--sa-lite)" />
-        <rect x="14" y="50" width="122" height="9" rx="4.5" fill="var(--sa-soft)" />
-        <rect x="14" y="50" width="70" height="9" rx="4.5" fill="var(--sa-acc)" />
-      </Float>
-      <Badge x={186} y={62} r={12} />
-    </Art>
-  );
-}
+// ---------------------------------------------------------------------------
+// 7 · You're live — one picture per card: the portal, and the booking site.
+// ---------------------------------------------------------------------------

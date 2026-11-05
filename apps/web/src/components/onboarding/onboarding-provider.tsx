@@ -18,7 +18,7 @@ import {
   type SignupPlan,
   type SignupPlanId,
 } from "@/lib/plans";
-import { promoRejectionText } from "@/lib/promo-offer";
+import { promoRejectionText, type PromoOffer } from "@/lib/promo-offer";
 import {
   clearReferralCodeInDocument,
   normalizeReferralCode,
@@ -67,6 +67,7 @@ import {
   type OnboardingContextValue,
   type OnboardingError,
   type OnboardingState,
+  type OauthProvider,
   type ProvisionMilestone,
   type ProvisioningState,
   type ProvisionResult,
@@ -122,16 +123,28 @@ const STALL_MESSAGE = "This is taking longer than it should.";
  *    signup whose tenant details had to be re-asked. There is nothing to pay,
  *    so payment is not on the way.
  */
+/** DEV ONLY pretend codes for `applyPromoCode`. Never reach production. */
+const DEV_PREVIEW_CODES: Record<string, PromoOffer> = {
+  PREVIEW20: {
+    kind: "campaign", displayCode: "PREVIEW20", discountText: "20% off", durationText: "for 3 months",
+    referrerName: null, duration: "repeating", durationMonths: 3, discountType: "percent", discountValue: 20, currency: "usd",
+  },
+  FRIEND50: {
+    kind: "referral", displayCode: "FRIEND50", discountText: "50% off", durationText: "your first month",
+    referrerName: "Sam", duration: "once", durationMonths: null, discountType: "percent", discountValue: 50, currency: "usd",
+  },
+};
+
 const ALLOWED_TRANSITIONS: Record<SignupStep, readonly SignupStep[]> = {
   plan: ["plan", "account", "payment", "provisioning", "done"],
   account: ["account", "verify", "payment", "provisioning", "plan"],
   /*
-   * `verify -> account` is the ONLY forward move, and it is deliberate: a
-   * confirmed address goes to the business fields, not to the card. Payment is
-   * reachable from there, once there is something to name the tenant after.
-   * `plan` is the way back out for someone who mistyped the address.
+   * `verify -> payment` when the business was named on the page before the
+   * code (the normal path; see `verifyEmailCode`). `verify -> account` when it
+   * was not, e.g. a reload on the code screen lost it, so the business fields
+   * come first. `plan` is the way back out for someone who mistyped the address.
    */
-  verify: ["verify", "account", "plan"],
+  verify: ["verify", "account", "payment", "plan"],
   // `payment -> done` is the second-tab recovery: signup-payment-intent answers
   // ALREADY_PROVISIONED when another tab has already finished the whole signup,
   // and the only coherent destination from there is the success panel.
@@ -258,7 +271,10 @@ function reducer(state: OnboardingState, action: Action): OnboardingState {
 // Contexts
 // ---------------------------------------------------------------------------
 
-const OnboardingContext = createContext<OnboardingContextValue | null>(null);
+/** Exported only for the dev build-screen replay (dev/build-screen-replay.tsx). */
+export const OnboardingContext = createContext<OnboardingContextValue | null>(null);
+/** Exported only for the dev build-screen replay. */
+export const INITIAL_ONBOARDING_STATE = (): OnboardingState => INITIAL_STATE;
 
 /**
  * Shell-only extras. Kept out of `OnboardingContextValue` because that interface
@@ -301,6 +317,8 @@ interface OnboardingShellValue {
    * with a Supabase 400 is worse than no button.
    */
   googleEnabled: boolean;
+  /** Whether "Continue with Apple" is offered — `NEXT_PUBLIC_SIGNUP_APPLE_ENABLED`. */
+  appleEnabled: boolean;
 }
 
 /**
@@ -309,12 +327,16 @@ interface OnboardingShellValue {
  */
 const GOOGLE_ENABLED = process.env.NEXT_PUBLIC_SIGNUP_GOOGLE_ENABLED === "true";
 
+/** The same switch for "Continue with Apple" — `NEXT_PUBLIC_SIGNUP_APPLE_ENABLED`. */
+const APPLE_ENABLED = process.env.NEXT_PUBLIC_SIGNUP_APPLE_ENABLED === "true";
+
 const OnboardingShellContext = createContext<OnboardingShellValue>({
   resolving: false,
   planSwitchBlocked: null,
   plans: SIGNUP_PLANS,
   accountMode: "create",
   googleEnabled: GOOGLE_ENABLED,
+  appleEnabled: APPLE_ENABLED,
 });
 
 export function useOnboarding(): OnboardingContextValue {
@@ -1392,7 +1414,10 @@ export function OnboardingProvider({
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("signup") !== "google") return;
+    // `apple` returns here exactly like `google`: Supabase hands back the same
+    // single-use code whichever provider the operator picked.
+    const marker = params.get("signup");
+    if (marker !== "google" && marker !== "apple") return;
 
     const code = params.get("code");
     const oauthError = params.get("error_description") ?? params.get("error");
@@ -1693,6 +1718,18 @@ export function OnboardingProvider({
         pendingTenantRef.current = null;
         if (pendingTenant) await saveTenantDraft(pendingTenant);
 
+        // They named the business on the page before the code, so asking again
+        // is a repeat, and the `tenant` screen's copy assumes a paid plan. Go
+        // straight to the card. The screen stays as the fallback for a reload
+        // on the code screen, which loses the ref.
+        if (pendingTenant) {
+          dispatch({ type: "business", patch: draftToBusiness(pendingTenant) });
+          setAccountMode("create");
+          dispatch({ type: "goto", step: "payment" });
+          void startPaymentRef.current?.();
+          return true;
+        }
+
         setAccountMode("tenant");
         dispatch({ type: "resumeTo", step: "account" });
         return true;
@@ -1782,7 +1819,7 @@ export function OnboardingProvider({
    * reusing the last one used means creating the portal under the wrong address
    * — which nothing in this flow can undo afterwards.
    */
-  const startGoogleSignup = useCallback(async (values: TenantFormValues) => {
+  const startGoogleSignup = useCallback(async (values: TenantFormValues, provider: OauthProvider = "google") => {
     const s = stateRef.current;
     const planId = s.planId;
     if (!planId) {
@@ -1799,17 +1836,18 @@ export function OnboardingProvider({
     dispatch({ type: "business", patch: draftToBusiness(tenant) });
     try {
       writePendingOauth(planId, tenant);
-      const redirectTo = `${window.location.origin}${window.location.pathname}?signup=google`;
+      const redirectTo = `${window.location.origin}${window.location.pathname}?signup=${provider}`;
       const { error: oauthError } = await getBrowserSupabase().auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo, queryParams: { prompt: "select_account" } },
+        provider,
+        // The account picker is Google's; Apple always asks which Apple ID.
+        options: { redirectTo, ...(provider === "google" ? { queryParams: { prompt: "select_account" } } : {}) },
       });
       if (oauthError) {
         // The commonest cause by far is that no Google provider is configured on
         // the Supabase project, which answers 400. Nothing was created, so the
         // stashed handoff would only confuse a later attempt.
         clearPendingOauth();
-        console.error("[onboarding] Google sign-in could not start", oauthError);
+        console.error(`[onboarding] ${provider} sign-in could not start`, oauthError);
         dispatch({ type: "error", error: err("CONFIG_MISSING") });
         dispatch({ type: "busy", busy: false });
       }
@@ -1906,6 +1944,23 @@ export function OnboardingProvider({
       const code = normalizeReferralCode(raw);
       if (!code) return promoRejectionText("not_found");
       if (s.payment.promo?.displayCode === code) return null;
+
+      /*
+       * DEV ONLY: a pretend code, to see the applied-code screen without a real
+       * campaign. It changes what the screen SAYS and nothing else — the Stripe
+       * intent is untouched, so paying still charges the full price. Compiled
+       * out of production builds. Remove clears it like any other code.
+       */
+      if (process.env.NODE_ENV === "development" && DEV_PREVIEW_CODES[code]) {
+        const plan = getSignupPlan(s.planId, plans);
+        const offer = DEV_PREVIEW_CODES[code];
+        const off = offer.discountType === "percent" ? (offer.discountValue / 100) * (plan?.amountCents ?? 0) : offer.discountValue * 100;
+        dispatch({
+          type: "payment",
+          patch: { promo: offer, amountDueCents: Math.max(0, Math.round((plan?.amountCents ?? 0) - off)), promoNotice: null },
+        });
+        return null;
+      }
       // Checked before anything changes, so a typo never throws away a code
       // that is already applied.
       try {
@@ -1919,7 +1974,7 @@ export function OnboardingProvider({
       await startPaymentInternal(s.planId);
       return null;
     },
-    [startPaymentInternal],
+    [startPaymentInternal, plans],
   );
 
   // See the note on `startPaymentRef`.
@@ -2208,6 +2263,7 @@ export function OnboardingProvider({
       plans,
       accountMode,
       googleEnabled: GOOGLE_ENABLED,
+      appleEnabled: APPLE_ENABLED,
     }),
     [resolving, planSwitchBlocked, plans, accountMode],
   );

@@ -24,21 +24,22 @@ import * as React from "react";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import type { Stripe, StripeElementsOptions } from "@stripe/stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
-import { CreditCard, Gift, Loader2, Lock, ShieldCheck, TriangleAlert } from "lucide-react";
+import { CreditCard, Gift, Loader2, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useTheme } from "next-themes";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import type {
   OnboardingError,
   PaymentStepProps,
 } from "@/components/onboarding/onboarding-types";
 import { SIGNUP_ERROR_COPY } from "@/components/onboarding/onboarding-types";
+import type { SignupPlan } from "@/lib/plans";
 import type { PromoOffer } from "@/lib/promo-offer";
 import { readReferralCodeFromDocument } from "@/lib/referral-cookie";
-import { CardArt } from "@/components/onboarding/signup-art";
 import { ScreenHead, SIGNUP_ENTER } from "@/components/onboarding/signup-ui";
 
 /** "13 Oct 2026" — the day a trial ends and the card is first charged. */
@@ -47,6 +48,69 @@ function formatDay(iso: string | null): string | null {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** The same day `n` months on, or that month's last day when it is shorter. */
+function addMonths(from: Date, n: number): Date {
+  const d = new Date(from.getFullYear(), from.getMonth() + n, 1);
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(from.getDate(), lastDay));
+  return d;
+}
+
+type BillingStop = { when: string; what: string; cents: number; wasCents?: number };
+
+/**
+ * What the card is charged, and when, from today until the price settles.
+ *
+ * Stripe bills a monthly subscription on the same day each month, clamped to
+ * the month's last day (31 Jan -> 28 Feb), which is what `addMonths` does. A
+ * code changes the first invoice (`amountDueCents`, Stripe's own figure) and,
+ * when it repeats, the invoices after it until it runs out.
+ */
+function billingTimeline(
+  plan: SignupPlan,
+  promo: PromoOffer | null | undefined,
+  amountDueCents: number | null | undefined,
+): BillingStop[] {
+  const today = new Date();
+  const day = (n: number) => formatDay(addMonths(today, n).toISOString()) ?? "";
+  const full = plan.amountCents;
+  const discounted = promo && typeof amountDueCents === "number" ? amountDueCents : null;
+
+  if (discounted === null || !promo) {
+    return [
+      { when: "Today", what: "Your first month", cents: full },
+      { when: day(1), what: "Then every month on this date", cents: full },
+    ];
+  }
+
+  const first: BillingStop = {
+    when: "Today",
+    what:
+      promo.kind === "referral" && promo.referrerName
+        ? `First month, with ${promo.referrerName}'s referral`
+        : `First month, with ${promo.displayCode}`,
+    cents: discounted,
+    wasCents: full,
+  };
+  if (promo.duration === "forever") {
+    return [first, { when: day(1), what: "Every month after, discount included", cents: discounted, wasCents: full }];
+  }
+  const months = promo.duration === "repeating" ? Math.max(1, promo.durationMonths ?? 1) : 1;
+  if (months === 1) {
+    return [first, { when: day(1), what: "Back to the full price, every month", cents: full }];
+  }
+  return [
+    first,
+    {
+      when: day(1),
+      what: months === 2 ? "Second month, discount still on" : `Months 2 to ${months}, discount still on`,
+      cents: discounted,
+      wasCents: full,
+    },
+    { when: day(months), what: "Discount ends, full price every month", cents: full },
+  ];
 }
 
 /** "$79", "$79.20" from cents. */
@@ -142,6 +206,8 @@ export function PaymentStep({
 }: PaymentStepProps) {
   const isTrial = intentType === "setup";
   const chargeDate = formatDay(trialEndsAt);
+
+  const timeline = billingTimeline(plan, promo, amountDueCents);
   const { resolvedTheme } = useTheme();
   const [stripeJs, setStripeJs] = React.useState<StripeJsState>("idle");
 
@@ -314,15 +380,13 @@ export function PaymentStep({
     !error;
 
   return (
-    <div className={SIGNUP_ENTER}>
+    // Two columns on a laptop: what they are buying on the left, the card on
+    // the right. Stacked, the Stripe form plus the summary was taller than the
+    // card and scrolled; side by side it fits. Phones keep the single column.
+    <div className={cn(SIGNUP_ENTER, "lg:grid lg:grid-cols-2 lg:items-start lg:gap-10")}>
+      <div className="min-w-0">
       <ScreenHead
-        art={<CardArt price={isTrial ? "$0" : promo && typeof amountDueCents === "number" ? formatCents(amountDueCents) : `$${plan.priceUsd}`} />}
         title={ownerName.trim() ? `Last step, ${ownerName.trim().split(/\s+/)[0]}` : "Last step"}
-        lead={
-          isTrial
-            ? `Add a card for later. Nothing is charged today, and I'll start building ${companyName.trim() || "your portal"} the moment it's saved.`
-            : `Add a card and I'll start building ${companyName.trim() || "your portal"} the moment the payment goes through.`
-        }
       />
 
       {/* Order summary — the last place the price is shown before it is taken. */}
@@ -369,18 +433,12 @@ export function PaymentStep({
         )}
       </div>
 
-      {promo ? (
-        <AppliedPromo
-          promo={promo}
-          busy={busy}
-          onRemove={onApplyPromo ? () => void onApplyPromo(null) : undefined}
-        />
-      ) : (
-        promoNotice && (
-          <p className="mt-2 text-xs leading-relaxed text-amber-700 dark:text-amber-400" role="status">
-            {promoNotice}
-          </p>
-        )
+      {/* No "applied" note: the code stays in its box with Remove beside it,
+          and the timeline below shows what it takes off. */}
+      {!promo && promoNotice && (
+        <p className="mt-2 text-xs leading-relaxed text-amber-700 dark:text-amber-400" role="status">
+          {promoNotice}
+        </p>
       )}
 
       {/* Offered even once a code is on: the fields are how you SWAP one, and
@@ -412,18 +470,51 @@ export function PaymentStep({
           </p>
         </div>
       ) : (
-      <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
-        You&apos;re starting a monthly subscription. Today&apos;s payment covers
-        your first month; it renews on the same date each month and you can
-        manage it from your portal.
-        {promo && promo.duration !== "forever" && (
-          <> Your discount applies {promo.durationText}; after that the plan is ${plan.priceUsd}/month.</>
-        )}
-      </p>
+      // What they pay and when, as a short timeline: today, the next charge,
+      // and where the price settles once a code runs out.
+      <div className="mt-4">
+        <ol>
+          {timeline.map((stop, i) => {
+            const last = i === timeline.length - 1;
+            return (
+              <li key={stop.when + stop.what} className={cn("relative pl-6", !last && "pb-3.5")}>
+                {!last && (
+                  <span aria-hidden className="absolute top-3.5 bottom-0 left-[4.5px] w-px bg-zinc-200 dark:bg-white/10" />
+                )}
+                <span
+                  aria-hidden
+                  className={cn(
+                    "absolute top-[5px] left-0 size-2.5 rounded-full",
+                    i === 0
+                      ? "bg-indigo-600 dark:bg-indigo-400"
+                      : "border-2 border-zinc-300 bg-white dark:border-white/25 dark:bg-transparent",
+                  )}
+                />
+                <div className="flex items-baseline justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-foreground">{stop.when}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{stop.what}</p>
+                  </div>
+                  <p className="shrink-0 text-right text-sm font-semibold tabular-nums">
+                    {stop.wasCents !== undefined && stop.wasCents !== stop.cents && (
+                      <span className="mr-1.5 text-xs font-normal text-muted-foreground line-through">
+                        <span className="sr-only">Was </span>
+                        {formatCents(stop.wasCents)}
+                      </span>
+                    )}
+                    {formatCents(stop.cents)}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
       )}
 
-      <div className="mt-4" />
+      </div>
 
+      <div className="mt-4 min-w-0 lg:mt-1">
       {isConfigError || isUnexplainedGap ? (
         <ConfigurationErrorPanel />
       ) : stripeJs === "failed" ? (
@@ -449,10 +540,7 @@ export function PaymentStep({
         </Elements>
       )}
 
-      <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-        <Lock className="h-3 w-3" />
-        Payments are processed by Stripe. We never see your card details.
-      </p>
+      </div>
     </div>
   );
 }
@@ -948,73 +1036,17 @@ function ConfigurationErrorPanel() {
   );
 }
 
-/** The code on this subscription: what it gives, and a way to take it off. */
-function AppliedPromo({
-  promo,
-  busy,
-  onRemove,
-}: {
-  promo: PromoOffer;
-  busy: boolean;
-  onRemove?: () => void;
-}) {
-  return (
-    <div className="mt-2 flex items-start justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100">
-      <p className="flex min-w-0 items-start gap-1.5 leading-relaxed">
-        <Gift className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        <span>
-          <span className="font-mono font-semibold">{promo.displayCode}</span> applied:{" "}
-          {promo.discountText} {promo.durationText}
-          {promo.kind === "referral" && promo.referrerName ? `, thanks to ${promo.referrerName}` : ""}.
-        </span>
-      </p>
-      {onRemove && (
-        <button
-          type="button"
-          onClick={onRemove}
-          disabled={busy}
-          className="shrink-0 font-medium underline underline-offset-2 disabled:opacity-50"
-        >
-          Remove
-        </button>
-      )}
-    </div>
-  );
-}
-
 /**
- * Two code fields, and only one code can win.
+ * One field for a promo OR a referral code, always open.
  *
- * It was one field labelled "Promo code" that quietly accepted referral codes
- * too, because `promo-code-lookup` decides the kind from the code itself. That
- * works, but it reads as if referral codes are not accepted here: somebody
- * holding one from a friend's link has no field with their name on it.
+ * `promo-code-lookup` decides the kind from the code itself, so the box does
+ * not need to ask. It was two labelled boxes behind a "Have a code?" link;
+ * Ghulam asked for one box, always showing, named for both kinds so somebody
+ * holding a friend's referral code can see it belongs here.
  *
- * So there are two labelled fields, and both post to the same lookup. The kind
- * is still the server's decision — a referral code typed into the promo box is
- * accepted on its merits, not rejected on its label. The labels are a signpost,
- * not a second validation rule.
- *
- * ── ONE CODE PER SUBSCRIPTION ───────────────────────────────────────────────
- *
- * The subscription carries a single signup discount, so applying a code
- * REPLACES whatever was on it rather than adding to it. Two fields make that
- * worth saying out loud, which is what the line under them does — without it,
- * two boxes imply two discounts and the second apply looks like a bug that ate
- * the first.
- *
- * Still a link until asked for: most operators have no code, and an empty pair
- * of boxes reads as a price they are missing out on.
+ * The subscription carries a single discount, so applying a code REPLACES the
+ * one on it, and the line under the box says which one went.
  */
-type CodeKind = "promo" | "referral";
-
-const OTHER: Record<CodeKind, CodeKind> = { promo: "referral", referral: "promo" };
-
-const FIELD_COPY: Record<CodeKind, { label: string; placeholder: string }> = {
-  promo: { label: "Promo code", placeholder: "PROMO CODE" },
-  referral: { label: "Referral code", placeholder: "REFERRAL CODE" },
-};
-
 export function DiscountCodeFields({
   busy,
   applied,
@@ -1025,131 +1057,124 @@ export function DiscountCodeFields({
   applied: PromoOffer | null;
   onApply(code: string | null): Promise<string | null>;
 }) {
-  const [open, setOpen] = React.useState(false);
-  const [values, setValues] = React.useState<Record<CodeKind, string>>({ promo: "", referral: "" });
-  const [pending, setPending] = React.useState<CodeKind | null>(null);
-  const [error, setError] = React.useState<{ field: CodeKind; text: string } | null>(null);
+  const [value, setValue] = React.useState("");
+  const [pending, setPending] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
   const [replaced, setReplaced] = React.useState<string | null>(null);
 
   /*
    * A referral arriving by link is already APPLIED by the provider before this
-   * step renders — the banner on the marketing page says so. Showing the field
-   * empty underneath that would read as "we lost it", so the carried code is
-   * put back in the box it belongs to. Reading the cookie rather than the
-   * applied offer keeps it right when the code was carried but rejected (an
-   * expired referral, say): the visitor still sees what they arrived with.
+   * step renders. Showing the box empty under that reads as "we lost it", so
+   * the carried code is put back in it.
    */
   React.useEffect(() => {
-    if (!open) return;
     const carried = readReferralCodeFromDocument();
-    if (!carried) return;
-    setValues((v) => (v.referral ? v : { ...v, referral: carried }));
-  }, [open]);
+    if (carried) setValue((v) => v || carried);
+  }, []);
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="mt-2 text-xs font-medium text-indigo-600 underline-offset-2 hover:underline dark:text-indigo-400"
-      >
-        {applied ? "Use a different code" : "Have a promo or referral code?"}
-      </button>
-    );
-  }
+  // The applied code lives in the box, so the box is where it is removed.
+  const appliedCode = applied?.displayCode ?? null;
+  React.useEffect(() => {
+    if (appliedCode) setValue(appliedCode);
+  }, [appliedCode]);
+  const showingApplied = !!appliedCode && value.trim().toUpperCase() === appliedCode.toUpperCase();
 
-  const submit = async (field: CodeKind) => {
-    const code = values[field].trim();
+  const remove = async () => {
+    if (pending || busy) return;
+    setPending(true);
+    setError(null);
+    setReplaced(null);
+    try {
+      await onApply(null);
+      setValue("");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const submit = async () => {
+    const code = value.trim();
     if (!code || pending || busy) return;
 
     const previous = applied?.displayCode ?? null;
     const isReplacement = !!previous && previous.toUpperCase() !== code.toUpperCase();
 
-    setPending(field);
+    setPending(true);
     setError(null);
     setReplaced(null);
     try {
       const failure = await onApply(code);
       if (failure) {
-        setError({ field, text: failure });
+        setError(failure);
         return;
       }
-      // One code wins, so the other box must not sit there looking applied.
-      setValues((v) => ({ ...v, [OTHER[field]]: "" }));
       if (isReplacement) setReplaced(previous);
     } finally {
-      setPending(null);
+      setPending(false);
     }
   };
 
   return (
-    <div className="mt-2 space-y-2">
-      {(["promo", "referral"] as const).map((field) => (
-        <form
-          key={field}
-          onSubmit={(e) => {
-            e.preventDefault();
-            void submit(field);
+    <form
+      className="mt-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+    >
+      <label htmlFor="signup-discount-code" className="mb-1 block text-xs font-medium text-muted-foreground">
+        Promo or referral code
+      </label>
+      <div className="flex gap-2">
+        <Input
+          id="signup-discount-code"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value.toUpperCase());
+            setError(null);
+            setReplaced(null);
           }}
-        >
-          <label
-            htmlFor={"signup-" + field + "-code"}
-            className="mb-1 block text-xs font-medium text-muted-foreground"
+          placeholder="Enter a code"
+          aria-invalid={!!error || undefined}
+          aria-describedby={error ? "signup-discount-code-error" : undefined}
+          autoComplete="off"
+          spellCheck={false}
+          maxLength={64}
+          className="h-9 font-mono text-sm uppercase placeholder:font-sans placeholder:normal-case"
+        />
+        {showingApplied ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 shrink-0"
+            disabled={pending || busy}
+            onClick={() => void remove()}
           >
-            {FIELD_COPY[field].label}
-          </label>
-          <div className="flex gap-2">
-            <Input
-              id={"signup-" + field + "-code"}
-              value={values[field]}
-              onChange={(e) => {
-                const next = e.target.value.toUpperCase();
-                setValues((v) => ({ ...v, [field]: next }));
-                setError(null);
-                setReplaced(null);
-              }}
-              placeholder={FIELD_COPY[field].placeholder}
-              aria-label={FIELD_COPY[field].label}
-              aria-invalid={error?.field === field || undefined}
-              aria-describedby={error?.field === field ? "signup-" + field + "-error" : undefined}
-              autoComplete="off"
-              spellCheck={false}
-              maxLength={64}
-              className="h-9 font-mono text-sm uppercase"
-            />
-            <Button
-              type="submit"
-              variant="outline"
-              size="sm"
-              className="h-9 shrink-0"
-              disabled={!values[field].trim() || !!pending || busy}
-            >
-              {pending === field ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-              ) : (
-                "Apply"
-              )}
-            </Button>
-          </div>
-          {error?.field === field && (
-            <p id={"signup-" + field + "-error"} className="mt-1.5 text-xs text-destructive" role="alert">
-              {error.text}
-            </p>
-          )}
-        </form>
-      ))}
-
-      {/* Said before they try it, not after it surprises them. */}
-      <p className="text-xs text-muted-foreground">
-        Only one discount code can be applied per subscription. Applying a code
-        replaces the one already on it.
-      </p>
-
-      {replaced && (
-        <p className="text-xs text-amber-700 dark:text-amber-400" role="status">
-          {replaced} was replaced.
+            {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : "Remove"}
+          </Button>
+        ) : (
+          <Button
+            type="submit"
+            variant="outline"
+            size="sm"
+            className="h-9 shrink-0"
+            disabled={!value.trim() || pending || busy}
+          >
+            {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : "Apply"}
+          </Button>
+        )}
+      </div>
+      {error && (
+        <p id="signup-discount-code-error" className="mt-1.5 text-xs text-destructive" role="alert">
+          {error}
         </p>
       )}
-    </div>
+      {replaced && (
+        <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-400" role="status">
+          {replaced} was replaced. Only one code can be on a subscription.
+        </p>
+      )}
+    </form>
   );
 }

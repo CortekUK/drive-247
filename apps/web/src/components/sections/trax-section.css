@@ -1,0 +1,738 @@
+/*
+ * The Trax section: straight on the page's own ground, a wheel in fine dots behind
+ * everything, the Trax screen at its hub, and branches out to the business.
+ * The screen and its branches are the one thing that moves; the field stays still.
+ * The glow, beads and shimmer are the Trax exception to the flat rule: the portal's
+ * own panel wears the same gradient to say a model is working.
+ * Motion is the Trax standard where things appear: 200ms ease-out, opacity plus a
+ * 12px lift. The branches drawing is the exception, as a loader would be.
+ */
+.tm-section {
+  --tm-ink: #120e4a;
+  --tm-ink-soft: rgb(18 14 74 / 0.76);
+  --tm-accent: hsl(var(--v2-primary));
+  --tm-wire: rgb(46 38 190 / 0.42);
+  --tm-node: linear-gradient(160deg, rgb(255 255 255 / 0.72), rgb(255 255 255 / 0.4) 60%);
+  --tm-node-line: color-mix(in srgb, var(--foreground) 16%, transparent);
+  --tm-node-lift: inset 0 1px 0 rgb(255 255 255 / 0.7);
+  --tm-shadow: 0 28px 70px -24px rgb(24 16 120 / 0.55);
+  --tm-bead: #2e2a8f;
+  --tm-iris-a: hsl(var(--v2-chart-3));
+  --tm-iris-b: hsl(var(--v2-primary));
+  /* The illustrations, in the same indigos as the launch section's. */
+  --lv-accent: hsl(var(--v2-primary));
+  --ta-ink: color-mix(in srgb, var(--foreground) 88%, hsl(var(--v2-card)));
+  --ta-card: hsl(var(--v2-card));
+  --ta-acc: hsl(var(--v2-primary));
+  --ta-deep: #2e2a8f;
+  --ta-pale: #a8a2f7;
+  --ta-mid: #d4d0fb;
+  --ta-soft: color-mix(in srgb, hsl(var(--v2-primary)) 20%, hsl(var(--v2-card)));
+  --ta-on: #fff;
+  position: relative;
+  min-height: 680px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding-top: 0;
+  padding-bottom: clamp(48px, 7svh, 72px);
+  /* The wheel runs past the section: it dissolves here, within the padding, rather than being cut in a line. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 48px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 48px), transparent);
+}
+.dark .tm-section {
+  --tm-ink: #fff;
+  --tm-ink-soft: rgb(255 255 255 / 0.82);
+  --tm-accent: #b9b0ff;
+  --tm-wire: rgb(255 255 255 / 0.28);
+  --tm-node: linear-gradient(160deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.05) 60%);
+  --tm-node-line: rgb(255 255 255 / 0.2);
+  --tm-node-lift: inset 0 1px 0 rgb(255 255 255 / 0.25);
+  --tm-shadow: 0 28px 70px -24px rgb(0 0 0 / 0.7);
+  --tm-bead: #fff;
+  --tm-iris-a: hsl(var(--v2-chart-1));
+  --tm-iris-b: hsl(var(--v2-chart-2));
+  --lv-accent: hsl(var(--v2-link));
+}
+/* The page's thread, outside the section's fade so it can leave through the bottom. */
+.tm-root, .tm-pin { position: relative; }
+.tm-way { position: absolute; z-index: 2; top: 0; left: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.tm-tail { display: none; }
+@media (min-width: 1200px) and (min-height: 640px) {
+  /* Where the thread runs on after the screen, before the next section. */
+  .tm-tail { display: block; height: clamp(72px, 12svh, 120px); }
+}
+
+/* The words */
+.tm-copy {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  padding-inline: 1rem;
+  text-align: center;
+  padding-top: clamp(84px, 11svh, 112px);
+  color: var(--foreground);
+}
+.tm-title {
+  font-size: clamp(2.5rem, min(8.4svh, 10vw), 4.75rem);
+  line-height: 1.06;
+}
+.tm-sub {
+  max-width: 40rem;
+  margin: clamp(10px, 1.8svh, 18px) auto 0;
+  color: var(--muted-foreground);
+}
+
+/* The three stages, so it's always clear which one is happening. */
+.tm-stages {
+  --tm-step: hsl(var(--v2-primary));
+  --tm-step-wash: color-mix(in srgb, hsl(var(--v2-primary)) 16%, hsl(var(--v2-card)));
+  display: flex;
+  width: fit-content;
+  max-width: calc(100% - 2rem);
+  margin: 16px auto 0;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  border-radius: 999px;
+  background: hsl(var(--v2-card));
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+.dark .tm-stages { --tm-step: #b9b0ff; --tm-step-wash: color-mix(in srgb, hsl(var(--v2-primary)) 34%, hsl(var(--v2-card))); }
+/* The step you're on is its own progress bar: its pill fills from the left. */
+.tm-stages li {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  padding: 7px 16px 7px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
+  transition: color 200ms ease-out;
+}
+.tm-stages li[data-state="now"] { color: var(--foreground); }
+.tm-stages li[data-state="done"] { color: var(--tm-step); }
+.tm-stages b {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--tm-step-wash);
+  /* Slides in rather than stretching, so its leading edge stays round. */
+  transform: translateX(-100%);
+  transition: transform 3s linear;
+}
+.tm-stages [data-state="now"] b { transform: translateX(0); }
+.tm-stages [data-state="next"] b { transition: none; visibility: hidden; }
+.tm-stages [data-state="done"] b { visibility: hidden; }
+.tm-stages i { flex: none; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; }
+.tm-stages svg { width: 15px; height: 15px; }
+.tm-stages [data-state="now"] i { color: var(--tm-step); }
+.tm-stages [data-state="done"] i { background: var(--tm-step); color: hsl(var(--v2-card)); }
+.tm-stages [data-state="done"] svg { width: 12px; height: 12px; }
+/* A phone: the words alone, so all three stay on one line. */
+@media (max-width: 480px) {
+  .tm-stages { font-size: 0.75rem; }
+  .tm-stages li { padding: 6px 9px; }
+  .tm-stages i { display: none; }
+}
+
+/* Whatever isn't part of this stage steps back: the boxes while you ask, and those not read once answered. */
+.tm-node, .tm-wire { transition: opacity 200ms ease-out, border-color 200ms ease-out, box-shadow 200ms ease-out; }
+.tm-stage[data-phase="typing"] .tm-node { opacity: 0.55; }
+.tm-stage[data-phase="answer"] .tm-node[data-lit="false"] { opacity: 0.45; }
+.tm-stage[data-phase="answer"] .tm-wire { opacity: 0.35; }
+
+/* Boxes, branches, screen, branches, boxes. The gaps are where the branches run. */
+.tm-stage {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: minmax(170px, 216px) minmax(40px, 1fr) minmax(380px, 440px) minmax(40px, 1fr) minmax(170px, 216px);
+  width: 100%;
+  max-width: 1500px;
+  min-height: 520px;
+  margin: clamp(20px, 3.4svh, 40px) auto 0;
+  padding-inline: clamp(16px, 2.5vw, 40px);
+}
+/*
+ * The wheel in fine dots, public/v2/trax-wheel.webp, used as a stencil. It rises from
+ * behind the screen with its hub low down, and turns as Trax works.
+ */
+.tm-wheel {
+  position: absolute;
+  /* From the top of the stage, so it always starts just under the words. */
+  top: -10px;
+  left: 50%;
+  width: 1100px;
+  height: 1100px;
+  translate: -50% 0;
+  pointer-events: none;
+  /* The picture is only the shape of the dots; the colour comes from here. */
+  background: hsl(var(--v2-primary));
+  -webkit-mask: url("/v2/trax-wheel.webp") center / 100% 100% no-repeat;
+  mask: url("/v2/trax-wheel.webp") center / 100% 100% no-repeat;
+  opacity: 0.42;
+  animation: tm-roll 40s linear infinite paused;
+}
+.tm-wheel[data-running="true"] { animation-play-state: running; }
+@keyframes tm-roll { to { rotate: 360deg; } }
+.dark .tm-wheel { background: #fff; opacity: 0.3; }
+/* The boxes sit evenly above and below here, so the middle of the stage is the screen's middle. */
+@media (max-width: 1099px) {
+  .tm-wheel { top: 50%; width: 860px; height: 860px; translate: -50% -50%; }
+}
+.tm-wires {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.tm-wires path { fill: none; stroke-linecap: round; }
+.tm-wire { stroke: var(--tm-wire); stroke-width: 1.5; transition: opacity 200ms ease-out; }
+/* The lines appear once the question has gone in, and the scroll draws each one out. */
+.tm-wires[data-idle="true"] .tm-wire { opacity: 0; }
+.tm-wires[data-scroll="true"] .tm-wire-lit { animation: none; stroke-dashoffset: 1; }
+.tm-iris-a { stop-color: var(--tm-iris-a); }
+.tm-iris-b { stop-color: var(--tm-iris-b); }
+.tm-wire-lit {
+  stroke-width: 2.5;
+  stroke-dasharray: 1 1;
+  animation: tm-draw 560ms ease-out both;
+}
+/* Small round beads of data, running home along the branch. */
+.tm-wire-flow {
+  stroke: var(--tm-bead);
+  stroke-width: 4;
+  stroke-dasharray: 0.001 0.09;
+  animation: tm-flow 900ms linear 460ms infinite both;
+}
+@keyframes tm-flow {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: 0.091; }
+}
+.tm-wire-back {
+  stroke: var(--tm-bead);
+  stroke-width: 3;
+  stroke-dasharray: 0.16 1;
+  animation: tm-back 640ms ease-in both;
+}
+.dark .tm-wire-back { stroke: #e4e0ff; }
+@keyframes tm-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+/* A pulse running from the box back into the screen, gone once it arrives. */
+@keyframes tm-back {
+  0% { stroke-dashoffset: -1; opacity: 1; }
+  90% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+.tm-col {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+}
+.tm-col.is-left { grid-column: 1; }
+.tm-col.is-right { grid-column: 5; }
+.tm-node {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 7px 7px 10px;
+  border: 1px solid var(--tm-node-line);
+  border-radius: 18px;
+  background: var(--tm-node);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
+  box-shadow: var(--tm-node-lift);
+  color: var(--tm-ink);
+  transition: border-color 200ms ease-out, box-shadow 200ms ease-out;
+}
+.tm-art {
+  position: relative;
+  display: block;
+  padding: 4px 0 0;
+}
+.tm-art-svg { display: block; width: 100%; height: clamp(54px, 8.6svh, 80px); overflow: visible; }
+.tm-node-text { min-width: 0; display: flex; flex-direction: column; padding-inline: 5px; }
+.tm-node-text b { font-size: 13.5px; font-weight: 600; line-height: 1.25; }
+.tm-node-text small {
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--tm-ink-soft);
+  transition: color 200ms ease-out;
+}
+/* Lights as its branch arrives, not as it sets off. */
+.tm-node[data-lit="true"],
+.tm-node[data-lit="true"] small { transition-delay: 460ms; }
+.tm-track[data-scroll="true"] .tm-node[data-lit="true"],
+.tm-track[data-scroll="true"] .tm-node[data-lit="true"] small { transition-delay: 0ms; }
+.tm-node[data-lit="true"] {
+  border-color: var(--tm-accent);
+  box-shadow: 0 0 0 1px var(--tm-accent), var(--tm-node-lift);
+}
+.tm-node[data-lit="true"] small { color: var(--tm-ink); font-weight: 600; }
+/* Trax's own sparkle lands on the picture when it has read that part of the business. */
+.tm-spark {
+  position: absolute;
+  color: var(--tm-accent);
+  animation: tm-twinkle 420ms ease-out 460ms both;
+}
+.tm-spark.is-big { top: 6px; right: 8px; width: 18px; height: 18px; }
+.tm-spark.is-small { top: 26px; right: 26px; width: 9px; height: 9px; animation-delay: 560ms; }
+@keyframes tm-twinkle {
+  from { opacity: 0; transform: scale(0.3) rotate(-30deg); }
+  to { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+/* The screen, and the iridescent glow it wears while it thinks. */
+.tm-screen {
+  position: relative;
+  grid-column: 3;
+  align-self: center;
+  width: 100%;
+  height: 100%;
+  max-height: 600px;
+  min-height: 0;
+}
+.tm-screen-halo {
+  position: absolute;
+  inset: -14px;
+  border-radius: 30px;
+  pointer-events: none;
+  filter: blur(26px);
+  background: linear-gradient(135deg, hsl(var(--v2-chart-2)), hsl(var(--v2-primary)), hsl(var(--v2-chart-1)));
+  opacity: 0;
+  transition: opacity 500ms ease-out;
+}
+.tm-screen[data-thinking="true"] .tm-screen-halo {
+  opacity: 0.5;
+  animation: tm-breathe 2.4s ease-in-out infinite;
+}
+@keyframes tm-breathe {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.6; }
+}
+
+/*
+ * From here down is the portal's Trax panel, class for class: trax-panel.tsx,
+ * trax-composer.tsx, trax-greeting.tsx, support/ChatMessage.tsx and
+ * support/TraxSupportThread.tsx. Only the sizes around the composer are tighter.
+ */
+.tm-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid hsl(var(--v2-border) / 0.7);
+  border-radius: 16px;
+  color: hsl(var(--v2-foreground));
+  background-color: hsl(var(--v2-background));
+  background-image:
+    radial-gradient(70% 50% at 105% -10%, hsl(var(--v2-wash) / 0.28), transparent 70%),
+    radial-gradient(60% 48% at -8% -6%, hsl(var(--v2-chart-3) / 0.2), transparent 70%),
+    linear-gradient(180deg, hsl(var(--v2-wash) / 0.1) 0%, transparent 60%);
+  box-shadow: var(--tm-shadow);
+}
+.tm-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 56px;
+  padding: 0 12px;
+}
+.tm-switch {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 999px;
+  background: hsl(var(--v2-primary) / 0.07);
+}
+.tm-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding-inline: 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: hsl(var(--v2-muted-foreground));
+}
+.tm-tab > svg { width: 12px; height: 12px; }
+.tm-tab.is-on {
+  background: hsl(var(--v2-primary) / 0.14);
+  color: hsl(var(--v2-link));
+}
+.tm-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 4px;
+  color: hsl(var(--v2-muted-foreground));
+}
+.tm-actions svg { width: 15px; height: 15px; }
+
+.tm-mark {
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: #fff;
+}
+.tm-mark.is-xs { width: 20px; height: 20px; }
+.tm-mark.is-xs > svg { width: 12px; height: 12px; }
+.tm-mark.is-md { width: 40px; height: 40px; }
+.tm-mark.is-md > svg { width: 20px; height: 20px; }
+.tm-mark > svg { position: relative; filter: drop-shadow(0 1px 2px hsl(var(--v2-chart-5) / 0.55)); }
+.tm-mark-clip { position: absolute; inset: 0; overflow: hidden; border-radius: 999px; }
+.tm-mark-fill {
+  position: absolute;
+  inset: -25%;
+  background: conic-gradient(from 180deg, hsl(var(--v2-chart-2)), hsl(var(--v2-primary)), hsl(var(--v2-chart-4)), hsl(var(--v2-chart-1)), hsl(var(--v2-chart-2)));
+}
+.tm-mark[data-animated="true"] .tm-mark-fill { animation: tm-spin 12s linear infinite; }
+.tm-mark-halo {
+  position: absolute;
+  z-index: -1;
+  inset: -20px;
+  border-radius: 999px;
+  filter: blur(24px);
+  background: radial-gradient(closest-side, hsl(var(--v2-chart-2) / 0.6), hsl(var(--v2-primary) / 0.25) 60%, transparent);
+  animation: tm-breathe 4s ease-in-out infinite;
+}
+.tm-mark.is-xs .tm-mark-halo { inset: -8px; filter: blur(10px); }
+@keyframes tm-spin { to { transform: rotate(360deg); } }
+
+.tm-body { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.tm-greeting {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px 20px;
+  text-align: center;
+}
+.tm-greeting h3 { font-size: 20px; font-weight: 500; line-height: 1.25; letter-spacing: -0.015em; }
+.tm-greeting p {
+  margin-top: -4px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: hsl(var(--v2-muted-foreground));
+}
+.tm-thread {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 14px 4px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
+}
+.tm-msg { display: flex; gap: 12px; padding-block: 6px; }
+.tm-msg.is-user { flex-direction: row-reverse; }
+.tm-msg-col { min-width: 0; flex: 1 1 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.tm-msg.is-user .tm-msg-col { align-items: flex-end; }
+.tm-avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: hsl(var(--v2-primary) / 0.1);
+  color: hsl(var(--v2-link));
+  font-size: 10px;
+  font-weight: 600;
+}
+.dark .tm-avatar { background: hsl(var(--v2-primary) / 0.25); }
+.tm-bubble {
+  width: 100%;
+  padding: 9px 13px;
+  border: 1px solid hsl(var(--v2-border) / 0.4);
+  border-radius: 4px 12px 12px 12px;
+  background: hsl(var(--v2-secondary) / 0.4);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.tm-bubble.is-user {
+  width: auto;
+  max-width: 100%;
+  border: 0;
+  border-radius: 12px 4px 12px 12px;
+  background: hsl(var(--v2-primary));
+  color: hsl(var(--v2-primary-foreground));
+}
+.tm-time, .tm-prov { font-size: 11px; color: hsl(var(--v2-muted-foreground)); }
+.tm-word { animation: tm-word 140ms ease-out both; }
+@keyframes tm-word { from { opacity: 0; } to { opacity: 1; } }
+/* The status line, with the shimmer that says the model is working. */
+.tm-status {
+  padding: 8px 0 8px 40px;
+  font-size: 13px;
+  font-weight: 500;
+  color: transparent;
+  background: linear-gradient(90deg, hsl(var(--v2-muted-foreground)) 35%, hsl(var(--v2-link)) 50%, hsl(var(--v2-muted-foreground)) 65%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: tm-rise 200ms ease-out both, tm-shimmer 1.6s linear infinite;
+}
+@keyframes tm-shimmer {
+  from { background-position: 120% 0; }
+  to { background-position: -120% 0; }
+}
+/* AnswerChart: one measure, one hue, every bar direct-labelled. */
+.tm-chart { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.tm-chart-row {
+  display: grid;
+  grid-template-columns: 94px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: hsl(var(--v2-muted-foreground));
+}
+.tm-chart-row > span:first-child { white-space: nowrap; }
+.tm-chart-row b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.tm-chart-track { display: block; }
+.tm-chart-track i {
+  display: block;
+  height: 14px;
+  border-radius: 0 4px 4px 0;
+  background: hsl(var(--v2-chart-2));
+  transform-origin: left;
+  animation: tm-grow 420ms ease-out both;
+}
+@keyframes tm-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+/* The record check card under an answer. */
+.tm-evidence {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid hsl(var(--v2-border) / 0.6);
+  border-radius: 8px;
+  background: hsl(var(--v2-background) / 0.6);
+  font-size: 12px;
+  animation: tm-rise 200ms ease-out 700ms both;
+}
+.tm-evidence.is-live { width: auto; margin-left: 40px; animation: tm-rise 200ms ease-out 460ms both; }
+.tm-evidence.is-live li { animation-delay: 460ms; }
+.tm-evidence p { font-weight: 500; }
+.tm-evidence ul { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+.tm-evidence li { color: hsl(var(--v2-muted-foreground)); }
+.tm-evidence li b { font-weight: 500; color: hsl(var(--v2-foreground)); }
+.tm-prov { animation: tm-rise 200ms ease-out 600ms both; }
+
+.tm-composer-wrap { flex: none; padding: 4px 14px 14px; }
+.tm-composer { position: relative; }
+.tm-composer-glow {
+  position: absolute;
+  inset: -4px;
+  border-radius: 28px;
+  filter: blur(20px);
+  background: linear-gradient(135deg, hsl(var(--v2-chart-2) / 0.5), hsl(var(--v2-primary) / 0.3), hsl(var(--v2-chart-4) / 0.45));
+  opacity: 0;
+  transition: opacity 500ms ease-out;
+}
+.tm-composer-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 25.5px;
+  background: linear-gradient(135deg, hsl(var(--v2-chart-2)), hsl(var(--v2-primary)), hsl(var(--v2-chart-4)));
+  opacity: 0;
+  transition: opacity 300ms ease-out;
+}
+.tm-composer[data-active="true"] .tm-composer-glow { opacity: 0.7; }
+.tm-composer[data-active="true"] .tm-composer-ring { opacity: 1; }
+.tm-composer-card {
+  position: relative;
+  margin: 1.5px;
+  border-radius: 24px;
+  background: hsl(var(--v2-card));
+  box-shadow: 0 10px 36px -14px hsl(var(--v2-primary) / 0.35);
+}
+.tm-draft {
+  min-height: 40px;
+  padding: 12px 16px 4px;
+  font-size: 14px;
+  line-height: 24px;
+}
+.tm-draft span { color: hsl(var(--v2-muted-foreground)); }
+.tm-caret {
+  display: inline-block;
+  width: 1.5px;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: -0.14em;
+  background: hsl(var(--v2-link));
+}
+.tm-composer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 10px 10px 14px;
+  color: hsl(var(--v2-muted-foreground));
+}
+.tm-composer-row > svg { width: 18px; height: 18px; opacity: 0.5; }
+.tm-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: hsl(var(--v2-muted));
+  color: hsl(var(--v2-muted-foreground));
+}
+.tm-send[data-ready="true"] {
+  background: linear-gradient(135deg, hsl(var(--v2-chart-2)), hsl(var(--v2-primary)));
+  color: hsl(var(--v2-primary-foreground));
+  box-shadow: 0 4px 12px -4px hsl(var(--v2-primary) / 0.6);
+}
+.tm-send svg { width: 16px; height: 16px; }
+.tm-suggest {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 14px 18px;
+}
+.tm-suggest span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid hsl(var(--v2-border) / 0.4);
+  border-radius: 12px;
+  background: hsl(var(--v2-card) / 0.4);
+  font-size: 13px;
+  color: hsl(var(--v2-muted-foreground));
+}
+.tm-suggest svg { width: 14px; height: 14px; color: hsl(var(--v2-primary)); }
+.dark .tm-suggest svg { color: hsl(var(--v2-chart-2)); }
+
+.tm-in { animation: tm-rise 200ms ease-out both; }
+@keyframes tm-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* The entrance, played once when the section first comes on screen. */
+.tm-section[data-seen="false"] .tm-copy,
+.tm-section[data-seen="false"] .tm-stage { opacity: 0; }
+.tm-section[data-seen="true"] .tm-copy { animation: tm-rise 200ms ease-out both; }
+.tm-section[data-seen="true"] .tm-stage { animation: tm-rise-far 420ms ease-out 120ms both; }
+@keyframes tm-rise-far {
+  from { opacity: 0; transform: translateY(28px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Too narrow for branches at the sides: the boxes go above and below the screen. */
+@media (max-width: 1099px) {
+  .tm-stage {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    row-gap: 40px;
+    max-width: 680px;
+    min-height: 0;
+    align-content: center;
+  }
+  .tm-col, .tm-col.is-left, .tm-col.is-right {
+    grid-column: 1;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .tm-col.is-left { grid-row: 1; }
+  .tm-screen { grid-column: 1; grid-row: 2; height: 560px; max-height: none; }
+  .tm-col.is-right { grid-row: 3; }
+  .tm-node { padding: 5px 5px 8px; gap: 5px; text-align: center; }
+  .tm-node-text { padding-inline: 0; }
+  .tm-node-text small { display: none; }
+  .tm-node-text b { font-size: 12px; }
+  .tm-art { padding: 3px 0; }
+  .tm-art-svg { height: clamp(36px, 8vw, 58px); }
+  .tm-spark.is-big { top: 2px; right: 2px; width: 12px; height: 12px; }
+  .tm-spark.is-small { display: none; }
+}
+@media (max-width: 480px) {
+  .tm-node { padding-inline: 3px; }
+  .tm-node-text b { font-size: 11.5px; letter-spacing: -0.01em; }
+  .tm-screen { height: 580px; }
+  .tm-chart-row { grid-template-columns: 92px minmax(0, 1fr) auto; }
+  .tm-msg { gap: 8px; }
+  .tm-status { padding-left: 36px; }
+  .tm-evidence.is-live { margin-left: 36px; }
+}
+/* Too narrow for four across at a readable size: two by two, with a gutter for the far branches. */
+@media (max-width: 379px) {
+  .tm-stage { row-gap: 32px; }
+  .tm-col, .tm-col.is-left, .tm-col.is-right {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 14px;
+  }
+  .tm-node { padding: 5px 5px 8px; }
+  .tm-node-text b { font-size: 13px; letter-spacing: 0; }
+  .tm-art-svg { height: 44px; }
+  .tm-screen { height: 620px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tm-section[data-seen="false"] .tm-copy,
+  .tm-section[data-seen="false"] .tm-stage { opacity: 1; }
+  .tm-section[data-seen="true"] .tm-copy,
+  .tm-section[data-seen="true"] .tm-stage,
+  .tm-in, .tm-wire-lit, .tm-status, .tm-evidence, .tm-prov, .tm-chart-track i,
+  .tm-mark-fill, .tm-mark-halo, .tm-screen-halo { animation: none; }
+  .tm-status { color: hsl(var(--v2-muted-foreground)); background: none; }
+  .tm-node, .tm-node *, .tm-composer *, .tm-screen-halo { transition: none; }
+  .tm-stages li, .tm-stages b, .tm-wire { transition: none; }
+  .tm-wheel { animation: none; }
+}
+
+/* After the rules it overrides. */
+/* The section holds still while the scroll plays it: 300svh of scrolling. */
+@media (min-width: 1200px) and (min-height: 640px) and (prefers-reduced-motion: no-preference) {
+  .tm-track { height: 400svh; }
+  .tm-pin { position: sticky; top: 0; height: 100svh; }
+  /* The screen: a gap, then the words, then a gap, then this section, filling the screen as it holds. */
+  .tm-section { height: 100svh; min-height: 0; padding-top: 152px; padding-bottom: 52px; }
+  .tm-stage { min-height: 0; margin-top: 0; }
+  /* Four boxes share the height, so a short laptop still fits them. */
+  .tm-art-svg { height: clamp(28px, calc((100svh - 228px) / 4 - 66px), 96px); }
+  /* Solid, and over the thread, which runs behind it on the way to the screen. */
+  .tm-stages { position: absolute; z-index: 3; top: 82px; left: 50%; margin: 0; translate: -50% 0; }
+  .tm-stages b { transition: none; }
+  /* Already there when the thread arrives, and measured where it stands. */
+  .tm-section[data-seen="false"] .tm-stage { opacity: 1; }
+  .tm-section[data-seen="true"] .tm-stage { animation: none; }
+}
+/* A short screen can't hold the record check as well: the answer and its chart come first. */
+@media (min-width: 1200px) and (min-height: 640px) and (max-height: 779px) and (prefers-reduced-motion: no-preference) {
+  .tm-msg .tm-evidence { display: none; }
+}
+
+/* After the launch section: a good gap, the words, a gap, then the Trax stage. */
+@media (min-width: 1200px) and (min-height: 640px) {
+  .tm-copy { padding-top: clamp(96px, 16svh, 176px); padding-bottom: clamp(48px, 8svh, 80px); }
+}

@@ -37,6 +37,7 @@ import { DeleteTenantDialog } from '@/components/admin/delete-tenant-dialog';
 import { toast } from '@/components/ui/sonner';
 import { setTenantStatus, setTenantType, type TenantStatus, type TenantType } from '@/lib/tenant-actions';
 import { promptDialog } from '@/components/ui/confirm';
+import { BillingHealthBar } from '@/components/admin/billing-health-bar';
 
 interface Tenant {
   id: string;
@@ -1085,6 +1086,16 @@ export default function RentalCompaniesPage() {
                 </div>
               );
             })()}
+            {/* The whole picture in one bar; the tiles below give the exact
+                per-status counts and filter the table. */}
+            <BillingHealthBar
+              tally={subscriptionSummary.tally}
+              owedLabel={
+                Object.keys(subscriptionSummary.atRiskByCurrency).length > 0
+                  ? formatByCurrency(subscriptionSummary.atRiskByCurrency)
+                  : null
+              }
+            />
             {/* A 3-up grid of tiles on a phone; the money figures span the row. */}
             <div className="grid grid-cols-3 gap-x-3 gap-y-3 sm:flex sm:flex-wrap sm:items-center sm:gap-x-8">
               {(

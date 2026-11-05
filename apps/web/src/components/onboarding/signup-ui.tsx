@@ -60,7 +60,8 @@ export function ArtStage({ children, className }: { children: ReactNode; classNa
 /**
  * Picture, headline, one line. The picture stands in the card's stage at the
  * very top; the headline says the one thing the screen is for, and the line is
- * Trax speaking.
+ * Trax speaking. `art={null}` drops the stage for a little plain white air above
+ * the headline; the screen then spaces its own fields out to fill the card.
  */
 export function ScreenHead({
   art,
@@ -75,7 +76,11 @@ export function ScreenHead({
 }) {
   return (
     <div className="flex flex-col items-center text-center">
-      {art ? <ArtStage className="-mx-6 -mt-7 mb-6 self-stretch sm:-mx-10 sm:-mt-8">{art}</ArtStage> : null}
+      {art === null ? (
+        <div aria-hidden className="h-4 sm:h-6 [@media(max-height:700px)]:hidden" />
+      ) : art ? (
+        <ArtStage className="-mx-6 -mt-7 mb-6 self-stretch sm:-mx-10 sm:-mt-8">{art}</ArtStage>
+      ) : null}
       <h2 id={titleId} className="text-[24px] leading-[1.2] font-semibold tracking-[-0.02em] text-balance sm:text-[26px]">
         {title}
       </h2>

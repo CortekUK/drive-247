@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drive247 v2: road to launch</title>
+<style>
+  :root { --ink:#080812; --body:#404040; --muted:#737373; --line:#e2e8f0; --g:#6366f1; --g-soft:#eef2ff; --h:#0f766e; --h-soft:#ccfbf1; --o:#94a3b8; --o-soft:#f8fafc; --q:#b45309; --q-soft:#fef3c7; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#fff; color:var(--body); font:14px/1.45 "DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  main { max-width:1180px; margin:0 auto; padding:36px 28px 72px; }
+  h1 { margin:0 0 4px; color:var(--ink); font-size:30px; font-weight:500; }
+  .sub { margin:0; color:var(--muted); }
+  .legend { display:flex; flex-wrap:wrap; gap:18px; margin:18px 0 26px; font-size:13px; }
+  .legend i { display:inline-block; width:14px; height:14px; border-radius:4px; vertical-align:-2px; margin-right:6px; }
+  .stage { border:1px solid var(--line); border-radius:14px; padding:16px 18px 18px; }
+  .stage h2 { margin:0 0 12px; color:var(--ink); font-size:16px; font-weight:500; }
+  .stage h2 span { color:var(--muted); font-size:13px; font-weight:400; margin-left:8px; }
+  .flow { display:flex; align-items:stretch; flex-wrap:wrap; gap:6px; }
+  .box { flex:1 1 130px; min-width:130px; border-radius:10px; padding:11px 13px; border:1.5px solid; }
+  .box b { display:block; color:var(--ink); font-weight:500; }
+  .box small { display:block; margin-top:2px; font-size:12px; color:var(--muted); }
+  .box ul { margin:6px 0 0; padding-left:16px; font-size:12.5px; }
+  .g { background:var(--g-soft); border-color:var(--g); }
+  .h { background:var(--h-soft); border-color:var(--h); }
+  .o { background:var(--o-soft); border-color:var(--o); }
+  .q { background:var(--q-soft); border-color:var(--q); }
+  .ar { align-self:center; color:var(--muted); font-size:18px; padding:0 1px; }
+  .down { text-align:center; color:var(--muted); font-size:18px; line-height:1; margin:7px 0; }
+  .meet { background:#080812; color:#fff; border-radius:12px; padding:13px 18px; text-align:center; }
+  .meet b { font-weight:500; font-size:15px; }
+  .meet span { display:block; font-size:13px; color:#cbd5e1; }
+  .also { margin-top:10px; }
+  .also .box { flex:1 1 200px; }
+  h3 { margin:36px 0 10px; color:var(--ink); font-size:20px; font-weight:500; }
+  table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  th { text-align:left; background:#eef2ff; color:var(--ink); font-weight:500; padding:9px 12px; }
+  td { padding:9px 12px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+  td:first-child { color:var(--ink); font-weight:500; white-space:nowrap; }
+  a { color:var(--g); }
+
+  .order { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; align-items:start; }
+  .col { border:1px solid var(--line); border-radius:12px; padding:14px 14px 10px; }
+  .col h4 { margin:0; color:var(--ink); font-size:15px; font-weight:500; }
+  .col .who { font-size:12px; color:var(--muted); margin-bottom:8px; }
+  .col ol { margin:0; padding:0; list-style:none; counter-reset:n; }
+  .col li { counter-increment:n; display:flex; gap:8px; padding:6px 0; border-top:1px solid #f1f5f9; font-size:13px; color:var(--ink); }
+  .col li::before { content:counter(n); color:var(--muted); min-width:16px; }
+  .col li span.t { flex:1; }
+  .tag { align-self:flex-start; font-size:10.5px; border-radius:5px; padding:1px 5px; white-space:nowrap; background:#f1f5f9; color:#475569; }
+  .tag.b { background:#dbeafe; color:#1d4ed8; }
+  .tag.c { background:#fce7f3; color:#be185d; }
+  .tag.s { background:#ede9fe; color:#6d28d9; }
+  .key { display:flex; gap:12px; flex-wrap:wrap; margin:0 0 12px; font-size:12px; color:var(--muted); }
+  .later { font-size:12px; color:var(--muted); margin:8px 0 2px; }
+  @media (max-width:900px){ .order{grid-template-columns:1fr 1fr;} }
+
+  .sys { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+  .card { border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .card b { color:var(--ink); font-weight:500; font-size:15px; }
+  .card p { margin:6px 0 0; font-size:13.5px; }
+  .card .st { float:right; font-size:11.5px; color:var(--muted); }
+  .card .st.ok { color:#15803d; } .card .st.now { color:#b45309; }
+  .card .where { display:block; font-size:12px; color:var(--muted); margin-top:1px; }
+  @media (max-width:800px){ .sys{grid-template-columns:1fr;} }
+  ol.tips { margin:0; padding-left:20px; font-size:14px; } ol.tips li { margin:5px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Road to V2 launch</h1>
+  <p class="sub">Each part is sorted separately, then everything meets for one full run.</p>
+  <div class="legend">
+    <span><i class="g"></i>Ghulam</span>
+    <span><i class="h"></i>Haris</span>
+    <span><i class="q"></i>Hamza (QA)</span>
+    <span><i class="o"></i>Not assigned yet</span>
+  </div>
+
+  <section class="stage">
+    <h2>1. The operator gets onboarded</h2>
+    <div class="flow">
+      <div class="box g"><b>Landing page</b><small>Thursday</small></div><div class="ar">→</div>
+      <div class="box g"><b>Signup and questions</b><small>Thursday</small></div><div class="ar">→</div>
+      <div class="box g"><b>Quick tour</b><small>Thursday</small></div><div class="ar">→</div>
+      <div class="box g"><b>Call with Brian</b><small>Thursday</small></div><div class="ar">→</div>
+      <div class="box g"><b>Connect Stripe</b><small>Thursday</small></div>
+    </div>
+  </section>
+  <div class="down">↓</div>
+
+  <section class="stage">
+    <h2>2. The operator sets up the business</h2>
+    <div class="flow">
+      <div class="box h"><b>Add a vehicle</b><small>Thursday · <a href="#vehicle-systems">detail</a></small></div><div class="ar">→</div>
+      <div class="box h"><b>Add a customer</b><small>Thursday</small><ul><li>ID verification</li></ul></div><div class="ar">→</div>
+      <div class="box h"><b>Agreements</b><small>Friday</small><ul><li>Make and send</li></ul></div><div class="ar">→</div>
+      <div class="box h"><b>Insurance</b><small>Friday</small><ul><li>Standalone tab</li></ul></div>
+    </div>
+    <div class="flow also">
+      <div class="box h"><b>Apps and notifications</b><small>Friday</small><ul><li>Install, push, email</li></ul></div>
+      <div class="box h"><b>Pricing</b><small>Saturday</small><ul><li>Weekend, holiday, extras, promos</li></ul></div>
+      <div class="box h"><b>Business settings</b><small>Saturday</small><ul><li>Fees, rules, locations, team</li></ul></div>
+    </div>
+  </section>
+  <div class="down">↓</div>
+
+  <div class="meet"><b>Meeting point: end of Saturday</b><span>A new operator can get onboarded and set up their business, and all of it works.</span></div>
+  <div class="down">↓</div>
+
+  <section class="stage">
+    <h2>3. The operator runs a rental<span>Next, not scheduled yet</span></h2>
+    <div class="flow">
+      <div class="box o"><b>Create a rental</b><small>Rental admin portal</small></div><div class="ar">→</div>
+      <div class="box o"><b>Customer books and pays</b><small>Booking site</small></div><div class="ar">→</div>
+      <div class="box o"><b>Customer portal</b></div><div class="ar">→</div>
+      <div class="box o"><b>Keys and pickup</b></div><div class="ar">→</div>
+      <div class="box o"><b>Extension, return, refund</b></div>
+    </div>
+  </section>
+  <div class="down">↓</div>
+
+  <section class="stage">
+    <h2>4. Prove it and launch</h2>
+    <div class="flow">
+      <div class="box o"><b>Full calculation round</b><small>Every calculation in the portal, against an approved answer sheet</small></div><div class="ar">→</div>
+      <div class="box o"><b>Full run</b><small>Landing page to refund, including super admin</small></div><div class="ar">→</div>
+      <div class="box q"><b>QA</b><small>Hamza</small></div><div class="ar">→</div>
+      <div class="box o"><b>V2 launch</b></div>
+    </div>
+  </section>
+
+  <h3>The rule: every feature, on every app</h3>
+  <p class="sub" style="margin-bottom:10px">A feature is only done when it works everywhere it reaches. Every checklist covers all of these. "Check" means we confirm whether it reaches that app when we review the feature.</p>
+  <table><thead><tr><th>Feature</th><th>Rental admin portal</th><th>Booking site</th><th>Customer portal</th><th>Super admin</th><th>Marketing site</th></tr></thead><tbody><tr><td>Vehicle</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Not used</td></tr><tr><td>Customer</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Not used</td></tr><tr><td>Agreements</td><td>Yes</td><td>Not used</td><td>Yes</td><td>Yes</td><td>Not used</td></tr><tr><td>Insurance</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Check</td><td>Not used</td></tr><tr><td>Apps and notifications</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Not used</td></tr><tr><td>Pricing and settings</td><td>Yes</td><td>Yes</td><td>Check</td><td>Check</td><td>Not used</td></tr></tbody></table>
+
+  <h3>Haris's order, feature by feature</h3>
+  <p class="sub" style="margin-bottom:10px">Top to bottom. The tag shows which app to check it in.</p>
+  <div class="order">
+    <div class="col"><h4>1. Onboarding</h4><div class="who">Ghulam</div><ol><li><span class="t">Landing page</span><span class="tag ">Website</span></li><li><span class="t">Signup and questions</span><span class="tag ">Website</span></li><li><span class="t">Tenant appears in super admin</span><span class="tag s">Super admin</span></li><li><span class="t">Quick tour</span><span class="tag ">Portal</span></li><li><span class="t">Call with Brian</span><span class="tag ">Portal</span></li><li><span class="t">Connect Stripe</span><span class="tag ">Portal</span></li></ol></div>
+    <div class="col"><h4>2. Vehicle</h4><div class="who">Haris</div><ol><li><span class="t">Add a vehicle</span><span class="tag ">Portal</span></li><li><span class="t">Fleet list</span><span class="tag ">Portal</span></li><li><span class="t">Details and photos</span><span class="tag ">Portal</span></li><li><span class="t">Rates, deposit, hire lengths</span><span class="tag ">Portal</span></li><li><span class="t">Mileage</span><span class="tag ">Portal</span></li><li><span class="t">Extras and surcharges</span><span class="tag ">Portal</span></li><li><span class="t">Availability</span><span class="tag ">Portal</span></li><li><span class="t">Pickup and handover</span><span class="tag ">Portal</span></li><li><span class="t">Compliance and servicing</span><span class="tag ">Portal</span></li><li><span class="t">Keys and documents</span><span class="tag ">Portal</span></li><li><span class="t">Listing</span><span class="tag ">Portal</span></li><li><span class="t">Fleet page</span><span class="tag b">Booking site</span></li><li><span class="t">Car page and price</span><span class="tag b">Booking site</span></li><li><span class="t">Side panel, Money, Retire</span><span class="tag ">Portal</span></li><li><span class="t">Dashboard and new rental picker</span><span class="tag ">Portal</span></li><li><span class="t">The car on a customer's rental</span><span class="tag c">Customer portal</span></li><li><span class="t">Vehicle counts and search</span><span class="tag s">Super admin</span></li></ol></div>
+    <div class="col"><h4>3. Customer</h4><div class="who">Haris</div><ol><li><span class="t">Add a customer</span><span class="tag ">Portal</span></li><li><span class="t">Customer list</span><span class="tag ">Portal</span></li><li><span class="t">Identity, licence, documents</span><span class="tag ">Portal</span></li><li><span class="t">Send ID check by QR and email</span><span class="tag ">Portal</span></li><li><span class="t">Complete ID check on a phone</span><span class="tag b">Booking site</span></li><li><span class="t">Result back on the customer</span><span class="tag ">Portal</span></li><li><span class="t">Registration invite link</span><span class="tag b">Booking site</span></li><li><span class="t">Signup and login</span><span class="tag b">Booking site</span></li><li><span class="t">Details and settings</span><span class="tag c">Customer portal</span></li><li><span class="t">Verification</span><span class="tag c">Customer portal</span></li><li><span class="t">Guest booking</span><span class="tag b">Booking site</span></li><li><span class="t">Signed-in booking</span><span class="tag b">Booking site</span></li><li><span class="t">No duplicate customers</span><span class="tag ">Portal</span></li><li><span class="t">Account, consent, blocked customers</span><span class="tag ">Portal</span></li></ol><p class="later">Rentals, Money, Fines and Reviews on the customer wait for the rental round.</p></div>
+    <div class="col"><h4>4. After that</h4><div class="who">Haris</div><ol><li><span class="t">Make and send an agreement</span><span class="tag ">Portal</span></li><li><span class="t">Customer signs by email</span><span class="tag ">Email</span></li><li><span class="t">Signed agreement visible</span><span class="tag c">Customer portal</span></li><li><span class="t">Install all three apps</span><span class="tag ">All apps</span></li><li><span class="t">Push test</span><span class="tag ">Portal, super admin</span></li><li><span class="t">Email format</span><span class="tag ">Email</span></li><li><span class="t">Insurance tab</span><span class="tag ">Portal</span></li><li><span class="t">Insurance from the customer</span><span class="tag c">Customer portal</span></li><li><span class="t">Pricing rules</span><span class="tag ">Portal</span></li><li><span class="t">Prices on the car page</span><span class="tag b">Booking site</span></li><li><span class="t">Fees, rules, locations</span><span class="tag ">Portal</span></li><li><span class="t">Team users and roles</span><span class="tag ">Portal</span></li></ol></div>
+  </div>
+
+  <h3 id="vehicle-systems">What we check in each vehicle system</h3>
+  <p class="sub" style="margin-bottom:12px">Roles, tenant privacy and phone are checked inside each one.</p>
+  <div class="sys"><div class="card"><span class="st ok">Reviewed</span><b>1. Add a vehicle</b><span class="where">Portal</span><p>Adds a car through all 11 screens and confirms every value saves correctly. Tries wrong entries on each screen, like a bad year, a future date or no photo, to confirm they are refused. Also covers duplicate plates, a lost connection and double-clicking save.</p></div><div class="card"><span class="st ok">Reviewed</span><b>2. Fleet list</b><span class="where">Portal</span><p>Confirms the new car appears with the right details and status, and that clicking it opens its record. Tests search, filters and CSV export. Also checks the empty screen a brand-new operator sees.</p></div><div class="card"><span class="st ok">Reviewed</span><b>3. Details and photos</b><span class="where">Portal, booking site</span><p>Edits what the car is: make, model, year, plate, class and description. Adds, removes and reorders photos, and changes the cover. Confirms changes save without a Save button, bad values are stopped, and the booking site updates.</p></div><div class="card"><span class="st ok">Reviewed</span><b>4. Rates, deposit, hire lengths</b><span class="where">Portal, booking site</span><p>Changes the daily, weekly and monthly prices and the deposit, then confirms the booking site shows them. Switches each hire length on and off, and confirms a car with none on disappears from booking. Also tests a price of 0 and the deposit set for all cars in Settings.</p></div><div class="card"><span class="st ok">Reviewed</span><b>5. Mileage</b><span class="where">Portal, booking site</span><p>Sets the included miles for each hire length and the charge for going over. Offers the paid unlimited mileage upgrade and sets its prices. Confirms the booking site shows the right mileage and upgrade price.</p></div><div class="card"><span class="st ok">Reviewed</span><b>6. Extras and surcharges</b><span class="where">Portal, booking site</span><p>Turns extras on for this car and changes their prices. Sets this car's weekend and holiday pricing: follow the fleet rule, opt out, custom percent or fixed price. Sets a special price for one date, then confirms the booking price reflects all of it.</p></div><div class="card"><span class="st ok">Reviewed</span><b>7. Availability</b><span class="where">Portal, booking site</span><p>Pauses and resumes the car, with a reason. Blocks and unblocks dates, including wrong ones like an end before the start. Confirms the booking site follows, and the car's Bookable status is right.</p></div><div class="card"><span class="st ok">Reviewed</span><b>8. Pickup and handover</b><span class="where">Portal, booking site</span><p>Assigns a pickup location, or none, and confirms the customer sees the right option. Sets up the lockbox with a code and instructions. Confirms the code itself is never shown on the booking site.</p></div><div class="card"><span class="st ok">Reviewed</span><b>9. Compliance and servicing</b><span class="where">Portal, booking site</span><p>Sets inspection, registration and warranty dates, and checks each shows valid, expiring or expired. Confirms an expired inspection takes the car off the booking site. Logs services and confirms the next service reading and the cost under Money.</p></div><div class="card"><span class="st ok">Reviewed</span><b>10. Keys and documents</b><span class="where">Portal</span><p>Records the spare key, logbook, tracker and security notes. Uploads, downloads and removes documents, including odd file types. Confirms none of this ever reaches the customer.</p></div><div class="card"><span class="st ok">Reviewed</span><b>11. Listing</b><span class="where">Portal</span><p>Confirms this section shows exactly what is on the booking site. Hides the car in each possible way, and checks each reason appears and links to where it gets fixed.</p></div><div class="card"><span class="st ok">Reviewed</span><b>12. Booking site fleet page</b><span class="where">Booking site</span><p>Acting as a customer, confirms the car appears with the right photo, price and mileage. Tests search and filters. Confirms paused, retired and unavailable cars behave correctly.</p></div><div class="card"><span class="st ok">Reviewed</span><b>13. Booking site car page and price</b><span class="where">Booking site</span><p>Opens the car's page and confirms the photos, description and details are right. Tries rental lengths at the daily, weekly and monthly boundaries, and confirms the price matches what was set. Confirms blocked dates can't be picked, and direct links to hidden cars behave.</p></div><div class="card"><span class="st ok">Reviewed</span><b>14. Side panel, Money, Retire</b><span class="where">Portal</span><p>Confirms Needs attention lists real problems and links to their fix, and that Activity records changes. Confirms purchase and finance details and costs under Money. Retires a car, confirms it leaves the booking site, then undoes it. Rental earnings wait for the rental round.</p></div><div class="card"><span class="st ok">Reviewed</span><b>15. Dashboard and new rental picker</b><span class="where">Portal</span><p>Confirms the home screen and setup checklist update when a car is added. Confirms the new rental screen offers the car, warns if it is paused, and leaves out retired cars. No rental is actually created here.</p></div><div class="card"><span class="st ok">Reviewed</span><b>16. The car on a customer's rental</b><span class="where">Customer portal</span><p>Using an existing test rental, confirms the customer's rentals list, rental page and invoice show the right car and photo. Changes the car's details and notes whether the customer's view follows. Booking a new rental waits for the rental round.</p></div><div class="card"><span class="st ok">Reviewed</span><b>17. Vehicle counts and search</b><span class="where">Super admin</span><p>Confirms the tenant's page shows the right vehicle count after adding and retiring a car. Confirms super admin search counts match too. Confirms the numbers belong to that tenant only.</p></div></div>
+
+  <h3 id="customer-systems">What we check in each customer system</h3>
+  <p class="sub" style="margin-bottom:12px">Roles, tenant privacy and phone are checked inside each one. Rentals, Money, Fines and Reviews on the customer wait for the rental round.</p>
+  <div class="sys"><div class="card"><span class="st ok">Reviewed</span><b>1. Add a customer</b><span class="where">Portal</span><p>Adds a customer through the form: name, date of birth, contact, licence, status, gig driver and next of kin. Tries wrong entries like a bad email, a missing name or a duplicate email. Confirms everything saves correctly on the customer's record.</p></div><div class="card"><span class="st ok">Reviewed</span><b>2. Customer list</b><span class="where">Portal</span><p>Confirms the new customer appears with the right type, verification and gig driver details, and clicking opens the record. Tests search, filters and CSV export. Also checks the empty screen for a new operator.</p></div><div class="card"><span class="st ok">Reviewed</span><b>3. Identity, licence, documents</b><span class="where">Portal</span><p>Edits the person's details, address and next of kin. Edits licence and driving details. Uploads, opens and removes documents, and confirms changes stay after a refresh.</p></div><div class="card"><span class="st ok">Reviewed</span><b>4. Send ID check by QR and email</b><span class="where">Portal</span><p>Starts an ID check from the portal using the QR code, emailed link and copy link. Confirms the email arrives and looks right, and the waiting screen tracks progress. Also tests sending to a wrong address.</p></div><div class="card"><span class="st ok">Reviewed</span><b>5. Complete ID check on a phone</b><span class="where">Booking site</span><p>Acting as the customer, opens the link on a phone and captures the document front, back and selfie. Tries a blurry photo, a mismatched face, leaving midway and reusing an old link. Confirms each ends in a clear result.</p></div><div class="card"><span class="st ok">Reviewed</span><b>6. Result back on the customer</b><span class="where">Portal</span><p>Confirms the portal updates to verified or failed without a manual refresh. Confirms the photos and the details read from the document appear on the record. Changes the customer's details and confirms the portal warns the check no longer matches.</p></div><div class="card"><span class="st ok">Reviewed</span><b>7. Registration invite link</b><span class="where">Portal, booking site</span><p>Creates an invite link in the portal, then registers through it as the customer. Tries an expired link, a used link and a wrong one. Confirms the customer appears in the portal correctly and isn't duplicated.</p></div><div class="card"><span class="st ok">Reviewed</span><b>8. Signup and login</b><span class="where">Booking site</span><p>Signs up as a new customer on the booking site, then logs out and back in. Tests forgot password and wrong passwords. Confirms the customer is linked to this tenant only.</p></div><div class="card"><span class="st ok">Reviewed</span><b>9. Details and settings</b><span class="where">Customer portal</span><p>Edits the customer's own details and consent settings, and confirms they save. Confirms the operator sees those changes in the portal. Confirms a customer can never see another customer's data.</p></div><div class="card"><span class="st ok">Reviewed</span><b>10. Verification</b><span class="where">Customer portal</span><p>Runs the ID check from the customer portal, by QR and by uploading photos. Corrects a wrong detail read from the document, and re-verifies. Confirms the operator sees the result and the original details.</p></div><div class="card"><span class="st ok">Reviewed</span><b>11. Guest booking</b><span class="where">Booking site</span><p>Books a car as a guest and confirms a customer gets created with the right details. Follows the documents and ID steps as far as they go. Payment may not complete yet, so notes where it stops.</p></div><div class="card"><span class="st ok">Reviewed</span><b>12. Signed-in booking</b><span class="where">Booking site</span><p>Books a car while logged in and confirms the customer's details are used, and no new customer is created. Confirms an already verified customer isn't asked to verify again. Notes where payment stops.</p></div><div class="card"><span class="st ok">Reviewed</span><b>13. No duplicate customers</b><span class="where">Portal, booking site, customer portal</span><p>Uses the same email across the portal, invite link, signup and guest booking. Confirms it stays one customer, with different letter case too. Confirms the same email at another tenant stays a separate customer.</p></div><div class="card"><span class="st ok">Reviewed</span><b>14. Account, consent, blocked customers</b><span class="where">Portal</span><p>Changes status between Active, Inactive and Rejected with a reason. Blocks a customer for this operator, then adds one to the platform blocklist, and confirms each stops a booking at the right scope. Deletes a customer and checks consent settings.</p></div><div class="card"><span class="st ok">Reviewed</span><b>15. Customer data in super admin</b><span class="where">Super admin</span><p>Confirms a tenant's customer count is right after adding one. Confirms a platform blocklist entry appears in super admin. Confirms the data stays separated by tenant.</p></div></div>
+
+  <h3 id="agreement-systems">What we check in each agreement system</h3>
+  <p class="sub" style="margin-bottom:12px">Standalone agreements only. Agreements through a rental wait for the rental round.</p>
+  <div class="sys"><div class="card"><span class="st ok">Reviewed</span><b>1. Agreements list and filters</b><span class="where">Portal</span><p>Confirms the list loads with the right customer, status and kind. Tests search, and the customer, date, status and kind filters. Also checks the empty screen for a new operator.</p></div><div class="card"><span class="st ok">Reviewed</span><b>2. Template list</b><span class="where">Portal</span><p>Confirms every template shows with its status. Tests search and the show archived switch. Changes templates between active, draft and archived, and confirms only active ones can be sent.</p></div><div class="card"><span class="st ok">Reviewed</span><b>3. Create and edit a template</b><span class="where">Portal</span><p>Creates a template, writes and formats it, and inserts variables. Confirms the preview fills variables correctly and changes save. Tests a blank template and a missing variable.</p></div><div class="card"><span class="st ok">Reviewed</span><b>4. Trax writing help</b><span class="where">Portal</span><p>Asks Trax to draft and change agreement wording, and confirms its changes land in the template. Confirms nothing changes without the operator's action. Tests a failed or slow reply.</p></div><div class="card"><span class="st ok">Reviewed</span><b>5. Operator signature</b><span class="where">Portal</span><p>Adds the operator's signature by drawing it, and confirms it appears on the document. Changes and removes it. Confirms it stays correct after a refresh.</p></div><div class="card"><span class="st ok">Reviewed</span><b>6. Send an agreement</b><span class="where">Portal</span><p>Goes through the three steps: recipient and CC, template, and preview. Tries a wrong email, no recipient and several CC addresses. Confirms the agreement appears in the list as pending. Sends only to team emails, because BoldSign is live.</p></div><div class="card"><span class="st ok">Reviewed</span><b>7. Customer signs by email</b><span class="where">Email, BoldSign</span><p>Confirms the signing email arrives for the recipient and CC, with the right name and branding. Signs on desktop and phone, and declines one. Checks the signed copy has correct content, and every variable filled.</p></div><div class="card"><span class="st ok">Reviewed</span><b>8. Status back in the portal</b><span class="where">Portal</span><p>Confirms the list changes to signed or failed without a manual fix. Opens the agreement and its history, and downloads the signed PDF. Confirms the PDF is the same as what was signed.</p></div><div class="card"><span class="st ok">Reviewed</span><b>9. Agreements in customer portal</b><span class="where">Customer portal</span><p>Logs in as the customer who signed and confirms the agreement appears with the right status. Opens the document and checks its filters. Confirms a customer only ever sees their own agreements.</p></div><div class="card"><span class="st ok">Reviewed</span><b>10. BoldSign connection and credits</b><span class="where">Portal</span><p>Checks the BoldSign card on the Integrations page shows the right connection and live mode. Confirms sends affect credits correctly. Confirms a clear message and credit alert when credits run low, without using them up.</p></div><div class="card"><span class="st ok">Reviewed</span><b>11. Agreements in super admin</b><span class="where">Super admin</span><p>Confirms a tenant's agreement figures are right after sending and signing. Confirms the numbers belong to that tenant only.</p></div></div>
+
+  <h3 id="notification-systems">What we check in apps and notifications</h3>
+  <p class="sub" style="margin-bottom:12px">A general test that the system works. Each flow's own notifications get checked during the full run.</p>
+  <div class="sys"><div class="card"><span class="st ok">Reviewed</span><b>1. Install rental admin app</b><span class="where">Portal</span><p>Installs on iPhone from Add to Home Screen and on Android from the install prompt, following the guide in Settings. Confirms the right tenant name and icon. Confirms it opens as an app, without the browser bars.</p></div><div class="card"><span class="st ok">Reviewed</span><b>2. Install customer app</b><span class="where">Customer portal</span><p>Installs from the booking site on iPhone and Android. Confirms the tenant's name and icon. There's no in-app install prompt in v2 that I could find, so notes how easy it is from the browser menu.</p></div><div class="card"><span class="st ok">Reviewed</span><b>3. Install super admin app</b><span class="where">Super admin</span><p>Installs on iPhone and Android. Confirms the name and icon are clearly Drive247 admin. Confirms it opens as an app and logs in.</p></div><div class="card"><span class="st ok">Reviewed</span><b>4. Using the installed apps</b><span class="where">All apps</span><p>Keeps all three on one phone and confirms they stay separate. Confirms sign-in stays after closing and reopening, and screens fit, including the notch and home bar. Confirms each picks up a new version of the app.</p></div><div class="card"><span class="st ok">Reviewed</span><b>5. Turn on push: rental admin</b><span class="where">Portal</span><p>Follows Push on this device in Settings, and grants permission on each phone. Also tries denying permission and confirms clear guidance. Confirms the device shows as turned on.</p></div><div class="card"><span class="st ok">Reviewed</span><b>6. Turn on push: super admin</b><span class="where">Super admin</span><p>Turns on push in super admin Settings, and grants permission. Confirms the device shows as turned on, and activity options save.</p></div><div class="card"><span class="st ok">Reviewed</span><b>7. Push works</b><span class="where">Portal, super admin</span><p>Sends one test push on each, and confirms it arrives with the right text on iPhone and Android. Triggers one real super admin activity push. Confirms tapping opens the right screen, and turning push off stops it. Not every notification needs testing.</p></div><div class="card"><span class="st ok">Reviewed</span><b>8. Notification settings page</b><span class="where">Portal</span><p>Opens the full-screen notifications page and checks it finds every notification. Moves between team and customer messages, and switches push, bell and email on and off. Confirms changes save with Save and undo with Reset.</p></div><div class="card"><span class="st ok">Reviewed</span><b>9. Changing a notification with Trax</b><span class="where">Portal</span><p>Asks Trax to rewrite a message, and confirms the preview updates straight away. Undoes it, and also edits it manually. Tests variables, like the customer's name, and wrong ones.</p></div><div class="card"><span class="st ok">Reviewed</span><b>10. Send test and preview</b><span class="where">Portal</span><p>Sends a test email and push from the page, and confirms they match the preview. Switches the preview between light and dark mode, on phone and Gmail views. Confirms examples fill in every variable.</p></div><div class="card"><span class="st ok">Reviewed</span><b>11. Email received</b><span class="where">Portal, email</span><p>Sends a test email from Settings, and confirms it arrives. Triggers one real email, like the ID check link. Confirms it reaches the inbox rather than spam.</p></div><div class="card"><span class="st ok">Reviewed</span><b>12. Email format</b><span class="where">Email</span><p>Opens both emails in Gmail, Outlook and a phone, in light and dark mode. Checks the logo, sender name, layout, links and buttons. Confirms every placeholder is filled in. Wording edits in Settings only affect previews and tests for now.</p></div></div>
+
+  <h3>Money: tips for Haris</h3>
+  <p class="sub" style="margin-bottom:8px">Use these whenever a price or total appears during the checks.</p>
+  <ol class="tips"><li>Do the sum yourself first, on a calculator, before you look at the app's number.</li><li>Check each line, not just the total: rate, days, extras, surcharge, discount, tax, fee and deposit.</li><li>Use odd numbers like 47.35, so rounding mistakes show up. Round numbers hide them.</li><li>Compare the same price everywhere it appears: the car's page in the portal and the booking page.</li><li>Change one thing at a time, so you can tell what moved the price.</li><li>Try the edges: 6 and 7 days, the first monthly day, a weekend, a holiday.</li><li>Wrong by even one cent counts. Stop and tell Ghulam straight away.</li><li>Never fix a price calculation alone, because it can change prices for live tenants.</li></ol>
+
+  <h3>Who is doing what</h3>
+  <table>
+    <thead><tr><th>Day</th><th>Ghulam</th><th>Haris</th></tr></thead>
+    <tbody>
+      <tr><td>Thursday</td><td>Landing page, signup, quick tour, Brian call, Stripe</td><td>Vehicle, customer</td></tr>
+      <tr><td>Friday</td><td>To decide</td><td>Agreements, insurance, apps and notifications</td></tr>
+      <tr><td>Saturday</td><td>To decide</td><td>Pricing, business settings</td></tr>
+    </tbody>
+  </table>
+</main>
+<script>
+(function(){
+  let seen=null; const key="plan-scroll";
+  const y=sessionStorage.getItem(key); if(y) window.scrollTo(0,+y);
+  setInterval(async()=>{ try{
+    const r=await fetch(location.pathname,{method:"HEAD",cache:"no-store"});
+    const m=r.headers.get("last-modified");
+    if(seen&&m&&m!==seen){ sessionStorage.setItem(key,String(window.scrollY)); location.reload(); }
+    seen=m||seen;
+  }catch(e){} },2000);
+})();
+</script>
+</body>
+</html>

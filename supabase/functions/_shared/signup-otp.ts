@@ -128,20 +128,91 @@ export function canResend(otp: SignupOtp | undefined | null): boolean {
   return Date.now() - new Date(otp.sentAt).getTime() >= OTP_RESEND_COOLDOWN_MS;
 }
 
-/** The email. Plain, short, and it never says who the account belongs to. */
+const LOGO_LIGHT = "https://www.drive-247.com/logo-light.png";
+const LOGO_DARK = "https://www.drive-247.com/logo-dark.png";
+
+/**
+ * The email. Short, branded, and it never says who the account belongs to.
+ *
+ * LIGHT AND DARK. Clients that honour `prefers-color-scheme` (Apple Mail, iOS
+ * Mail, Outlook for Mac, Hey) get the dark palette and the white-letter logo
+ * from the `<style>` block; Outlook.com gets the same through `[data-ogsc]`.
+ * Gmail ignores both and decides for itself: the web app shows it light, the
+ * phone apps recolour it, so every colour here is one that survives that.
+ * Inline styles are the light defaults, because some clients strip `<style>`.
+ */
 export function otpEmailHtml(code: string): string {
-  return `
-    <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-      <h2 style="margin:0 0 8px;font-size:20px;color:#111">Confirm your email</h2>
-      <p style="margin:0 0 20px;color:#555;font-size:14px;line-height:1.6">
-        Enter this code to finish setting up your Drive247 portal.
-      </p>
-      <div style="font-size:32px;font-weight:700;letter-spacing:8px;text-align:center;
-                  padding:16px;background:#f4f4f5;border-radius:12px;color:#111">${code}</div>
-      <p style="margin:20px 0 0;color:#777;font-size:13px;line-height:1.6">
-        The code expires in 10 minutes. If you did not start a Drive247 signup,
-        you can ignore this email.
-      </p>
-    </div>
-  `;
+  const minutes = Math.round(OTP_TTL_MS / 60_000);
+  const font = "'DM Sans',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>Your Drive247 verification code</title>
+<style>
+  :root { color-scheme: light dark; supported-color-schemes: light dark; }
+  .d-logo { display:none; max-height:0; overflow:hidden; mso-hide:all; }
+  @media (prefers-color-scheme: dark) {
+    .d-page { background:#0e0e16 !important; }
+    .d-card { background:#16161f !important; border-color:#262633 !important; }
+    .d-ink { color:#ededf3 !important; }
+    .d-body { color:#b4b4c4 !important; }
+    .d-muted { color:#8a8aa0 !important; }
+    .d-code { background:#1c1a3d !important; border-color:#2f2c6b !important; color:#c7d2fe !important; }
+    .d-rule { border-color:#262633 !important; }
+    .l-logo { display:none !important; max-height:0 !important; }
+    .d-logo { display:block !important; max-height:none !important; overflow:visible !important; }
+  }
+  [data-ogsc] .d-page { background:#0e0e16 !important; }
+  [data-ogsc] .d-card { background:#16161f !important; border-color:#262633 !important; }
+  [data-ogsc] .d-ink { color:#ededf3 !important; }
+  [data-ogsc] .d-body { color:#b4b4c4 !important; }
+  [data-ogsc] .d-muted { color:#8a8aa0 !important; }
+  [data-ogsc] .d-code { background:#1c1a3d !important; border-color:#2f2c6b !important; color:#c7d2fe !important; }
+  [data-ogsc] .l-logo { display:none !important; }
+  [data-ogsc] .d-logo { display:block !important; max-height:none !important; }
+</style>
+</head>
+<body class="d-page" style="margin:0;padding:0;background:#f4f4f8;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">Your Drive247 code is ${code}. It expires in ${minutes} minutes.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="d-page" style="background:#f4f4f8;">
+  <tr>
+    <td align="center" style="padding:40px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
+        <tr>
+          <td align="center" style="padding:0 0 24px;">
+            <img class="l-logo" src="${LOGO_LIGHT}" width="132" height="30" alt="Drive247" style="display:block;border:0;width:132px;height:auto;">
+            <img class="d-logo" src="${LOGO_DARK}" width="132" height="30" alt="Drive247" style="border:0;width:132px;height:auto;">
+          </td>
+        </tr>
+        <tr>
+          <td class="d-card" style="background:#ffffff;border:1px solid #e8e8f0;border-radius:16px;padding:36px 32px;font-family:${font};">
+            <h1 class="d-ink" style="margin:0 0 10px;font-size:22px;line-height:1.3;font-weight:600;color:#0b0b1a;">Confirm your email</h1>
+            <p class="d-body" style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#4a4a5c;">
+              Here is your code. Enter it on the signup screen and I'll carry on setting up your Drive247 portal.
+            </p>
+            <div class="d-code" style="background:#eef2ff;border:1px solid #e0e7ff;border-radius:12px;padding:20px 12px;text-align:center;font-size:34px;line-height:1;font-weight:700;letter-spacing:10px;color:#4338ca;font-family:${font};">${code}</div>
+            <p class="d-muted" style="margin:16px 0 0;font-size:13px;line-height:1.6;color:#7a7a8c;text-align:center;">
+              This code expires in ${minutes} minutes.
+            </p>
+            <hr class="d-rule" style="border:0;border-top:1px solid #ececf3;margin:28px 0 20px;">
+            <p class="d-muted" style="margin:0;font-size:13px;line-height:1.6;color:#7a7a8c;">
+              Didn't start a Drive247 signup? You can ignore this email. Nobody can use your address without this code.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" class="d-muted" style="padding:20px 0 0;font-family:${font};font-size:12px;line-height:1.6;color:#9a9aac;">
+            Drive247 · <a href="https://www.drive-247.com" class="d-muted" style="color:#9a9aac;text-decoration:none;">drive-247.com</a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`;
 }

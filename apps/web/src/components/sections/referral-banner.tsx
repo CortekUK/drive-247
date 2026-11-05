@@ -10,16 +10,16 @@ import { RememberReferralCode } from "./remember-referral-code";
  */
 export function ReferralBanner({ offer }: { offer: PromoOffer }) {
   return (
-    <div className="border-b border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100">
+    <div className="border-b max-xl:-mt-16 max-xl:mb-16 border-[hsl(var(--v2-success)/0.25)] bg-[hsl(var(--v2-success-light))] text-foreground">
       <RememberReferralCode code={offer.displayCode} />
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 py-3 text-center text-sm sm:px-6">
         <p className="flex items-center gap-2 font-medium">
           <Gift className="h-4 w-4 shrink-0" aria-hidden="true" />
           {offerHeadline(offer)}
         </p>
-        <p className="text-emerald-800 dark:text-emerald-200/80">
+        <p className="text-muted-foreground">
           Your code <span className="font-mono font-semibold">{offer.displayCode}</span> is applied at checkout.{" "}
-          <a href="#pricing" className="underline underline-offset-2">See plans</a>
+          <a href="#pricing" className="underline underline-offset-2 max-xl:-my-3 max-xl:inline-block max-xl:py-3">See plans</a>
         </p>
       </div>
     </div>
