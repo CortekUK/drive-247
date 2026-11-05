@@ -19,7 +19,7 @@ import { useAuditLog } from "@/hooks/use-audit-log";
 import { format, startOfDay } from "date-fns";
 import { parseLocalDate } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
-import { getContractTotal } from "@/lib/vehicle-utils";
+import { financeColumnsForContractTotal, getContractTotal } from "@/lib/vehicle-utils";
 import { editVehicleEnhancedSchema, type EditVehicleEnhancedFormValues } from "@/client-schemas/vehicles/edit-vehicle-enhanced";
 import { useTenant } from "@/contexts/TenantContext";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
@@ -223,10 +223,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
         vehicleData.term_months = null;
         vehicleData.balloon = null;
       } else if (data.acquisition_type === 'Finance') {
-        // For finance vehicles, convert contract total to the structure expected by triggers
-        vehicleData.initial_payment = data.contract_total;
-        vehicleData.monthly_payment = 1; // Dummy value to satisfy constraints
-        vehicleData.term_months = 1; // Dummy value
+        Object.assign(vehicleData, financeColumnsForContractTotal(data.contract_total));
         vehicleData.balloon = 0;
         // Clear purchase price
         vehicleData.purchase_price = null;

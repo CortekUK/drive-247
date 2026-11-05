@@ -51,7 +51,8 @@ import { useAuditLog } from "@/hooks/use-audit-log";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { cn } from "@/lib/utils";
 import { parseLocalDate } from "@/lib/date-utils";
-import { getCurrencySymbol } from "@/lib/format-utils";
+import { getCurrencySymbol, type DistanceUnit } from "@/lib/format-utils";
+import { financeColumnsForContractTotal, notReadyToRentReasons } from "@/lib/vehicle-utils";
 import { acquisitionCostIssue, addVehicleDialogSchema, type AddVehicleDialogFormValues } from "@/client-schemas/vehicles/add-vehicle-dialog";
 import { Button } from "@/components/ui-v2/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui-v2/dialog";
@@ -87,7 +88,7 @@ type Step = {
   name: string;
   art: ComponentType<{ className?: string }>;
   title: string;
-  line: string;
+  line: string | ((unit: DistanceUnit) => string);
   fields: FieldPath<Values>[];
 };
 
@@ -124,7 +125,7 @@ const STEPS: Step[] = [
     name: "Mileage",
     art: AddVehicleMilesArt,
     title: "How far can they drive?",
-    line: "Leave a box empty for unlimited miles. I charge the extra rate for anything over.",
+    line: (unit) => `Leave a box empty for unlimited ${unit === "km" ? "km" : "miles"}. I charge the extra rate for anything over.`,
     fields: ["daily_mileage", "weekly_mileage", "monthly_mileage", "excess_mileage_rate"],
   },
   {
@@ -193,7 +194,7 @@ function TraxHint({
   currency: string;
   onUse: (price: number) => void;
 }) {
-  const { data, isLoading } = useTraxPrice({ tier, make, model, year });
+  const { data, isLoading, isError } = useTraxPrice({ tier, make, model, year });
   const unit = tier === "daily" ? "day" : tier === "weekly" ? "week" : "month";
   if (!make?.trim() || !model?.trim()) return null;
   if (isLoading)
@@ -203,7 +204,9 @@ function TraxHint({
       </span>
     );
   const price = data?.suggested_price;
-  if (!price) return null;
+  // Say so rather than leave a blank: the screen has just promised a price here.
+  if (isError) return <span>Trax couldn't check the market just now</span>;
+  if (!price) return <span>Not enough similar cars for a Trax price yet</span>;
   const rounded = Math.round(price);
   return (
     <span className="inline-flex items-center gap-1">
@@ -238,7 +241,7 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
 
   const [step, setStep] = useState(0);
   // After a save: the "it's in your fleet" screen, in the same frame.
-  const [added, setAdded] = useState<{ id: string; name: string; reg: string } | null>(null);
+  const [added, setAdded] = useState<{ id: string; name: string; reg: string; notReady: string[] } | null>(null);
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [photos, setPhotos] = useState<{ file: File; url: string }[]>([]);
@@ -251,6 +254,9 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
   const { activeLocations } = usePickupLocations();
   const { logAction } = useAuditLog();
   const currency = getCurrencySymbol(tenant?.currency_code || "USD");
+  const distanceUnit: DistanceUnit = tenant?.distance_unit === "km" ? "km" : "miles";
+  const distanceTitle = distanceUnit === "km" ? "Km" : "Miles";
+  const distanceOne = distanceUnit === "km" ? "km" : "mile";
 
   useAuditLogOnOpen({
     open: currentOpen,
@@ -449,10 +455,7 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
         if (data.acquisition_type === "Purchase") {
           vehicleData.purchase_price = data.purchase_price;
         } else {
-          // v1's finance mapping: the triggers read the contract total from these.
-          vehicleData.initial_payment = data.contract_total;
-          vehicleData.monthly_payment = 1;
-          vehicleData.term_months = 1;
+          Object.assign(vehicleData, financeColumnsForContractTotal(data.contract_total));
         }
 
         const { data: inserted, error } = await supabase
@@ -533,7 +536,7 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
         if (data.tax_due_date) await remind(data.tax_due_date, "TAX");
 
         reset();
-        setAdded({ id: inserted.id, name: `${data.make} ${data.model}`, reg });
+        setAdded({ id: inserted.id, name: `${data.make} ${data.model}`, reg, notReady: notReadyToRentReasons(data) });
         for (const key of ["reminders", "reminder-stats", "vehicles-list", "vehicles-pl", "vehicle-count", "vehicle-pl-entries"]) {
           queryClient.invalidateQueries({ queryKey: [key] });
         }
@@ -559,6 +562,7 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
 
   const last = step === STEPS.length - 1;
   const screen = STEPS[step];
+  const screenLine = typeof screen.line === "function" ? screen.line(distanceUnit) : screen.line;
   const selectTrigger = cn(CONTROL, "data-[size=default]:h-11");
 
   /* ── render ────────────────────────────────────────────────────────────── */
@@ -607,7 +611,9 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
               <div className="duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 [animation-delay:120ms] [animation-fill-mode:both] motion-reduce:animate-none">
                 <h3 className="mt-6 text-2xl font-medium text-foreground [text-wrap:balance]">{added.name} is in your fleet.</h3>
                 <p className="mx-auto mt-2 max-w-[26rem] text-sm leading-relaxed text-muted-foreground [text-wrap:balance]">
-                  {added.reg} is ready to rent, with its rates and photos saved. Open it to fine-tune anything.
+                  {added.notReady.length > 0
+                    ? `${added.reg} is saved, but it isn't ready to rent yet: it has ${added.notReady.join(" and ")}. Open it to finish.`
+                    : `${added.reg} is ready to rent, with its rates and photos saved. Open it to fine-tune anything.`}
                 </p>
               </div>
             </div>
@@ -648,7 +654,7 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
             <screen.art className="max-w-[280px]" />
             <h3 className="mt-4 text-center text-xl font-medium leading-snug text-foreground [text-wrap:balance]">{screen.title}</h3>
             <p className="mx-auto mt-1.5 min-h-[2lh] max-w-[24rem] text-center text-sm leading-relaxed text-muted-foreground [text-wrap:balance]">
-              {screen.line}
+              {screenLine}
             </p>
 
             <div className="mt-5 grid w-full grid-cols-2 gap-x-5 gap-y-1">
@@ -744,10 +750,10 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
 
               {step === 4 && (
                 <>
-                  <Cell label="Miles included / day" error={err("daily_mileage")}>{num("daily_mileage", { placeholder: "Unlimited", step: "1" })}</Cell>
-                  <Cell label="Miles included / week" error={err("weekly_mileage")}>{num("weekly_mileage", { placeholder: "Unlimited", step: "1" })}</Cell>
-                  <Cell label="Miles included / month" error={err("monthly_mileage")}>{num("monthly_mileage", { placeholder: "Unlimited", step: "1" })}</Cell>
-                  <Cell label="Extra mile rate" error={err("excess_mileage_rate")} hint="Per mile over the allowance">
+                  <Cell label={`${distanceTitle} included / day`} error={err("daily_mileage")}>{num("daily_mileage", { placeholder: "Unlimited", step: "1" })}</Cell>
+                  <Cell label={`${distanceTitle} included / week`} error={err("weekly_mileage")}>{num("weekly_mileage", { placeholder: "Unlimited", step: "1" })}</Cell>
+                  <Cell label={`${distanceTitle} included / month`} error={err("monthly_mileage")}>{num("monthly_mileage", { placeholder: "Unlimited", step: "1" })}</Cell>
+                  <Cell label={`Extra ${distanceOne} rate`} error={err("excess_mileage_rate")} hint={`Per ${distanceOne} over the allowance`}>
                     {num("excess_mileage_rate", { placeholder: "0.00", prefix: currency, step: "0.01" })}
                   </Cell>
                 </>

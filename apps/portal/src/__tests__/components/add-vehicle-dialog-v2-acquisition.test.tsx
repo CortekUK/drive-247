@@ -31,6 +31,9 @@ vi.mock("@tanstack/react-query", async (original) => ({
 import { AddVehicleDialogV2 } from "@/components/vehicles-v2/add-vehicle-dialog-v2";
 
 /** The visible screen title; the same words also sit in a hidden dialog description. */
+// These walk real screens, and the first render in a busy run is slow.
+vi.setConfig({ testTimeout: 30000 });
+
 const findTitle = (name: string) => screen.findByRole("heading", { level: 3, name });
 const clickNext = () => fireEvent.click(screen.getByRole("button", { name: /next/i }));
 const type = (placeholder: string, value: string) =>

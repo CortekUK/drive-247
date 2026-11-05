@@ -59,6 +59,37 @@ export function computeVehicleStatus(
 }
 
 /**
+ * The columns that store a single contract total on a financed car.
+ *
+ * The ledger and every screen work the total out as
+ * `initial + monthly × term + balloon`, so the whole amount goes in
+ * `initial_payment`. `monthly_payment` must be 0 and not null: the acquisition
+ * trigger only posts to the ledger when it is non-null. It used to be a dummy 1
+ * for 1 month, which recorded every contract $1 too high.
+ */
+export function financeColumnsForContractTotal(contractTotal: number | null | undefined) {
+  return { initial_payment: contractTotal, monthly_payment: 0, term_months: null };
+}
+
+/**
+ * What stops a new car being rented, worded to follow "it has…". Empty when
+ * nothing does. Mirrors the "needs attention" rules on the car's own page.
+ */
+export function notReadyToRentReasons(vehicle: {
+  daily_rent?: number | null;
+  available_daily?: boolean | null;
+  available_weekly?: boolean | null;
+  available_monthly?: boolean | null;
+}): string[] {
+  const reasons: string[] = [];
+  if (!Number(vehicle.daily_rent)) reasons.push("no daily rate");
+  const anyLength =
+    vehicle.available_daily !== false || vehicle.available_weekly !== false || vehicle.available_monthly !== false;
+  if (!anyLength) reasons.push("no hire length switched on");
+  return reasons;
+}
+
+/**
  * Get contract total for finance vehicles
  */
 export function getContractTotal(vehicle: {

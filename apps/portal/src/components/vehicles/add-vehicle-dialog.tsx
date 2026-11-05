@@ -27,6 +27,7 @@ import { format, startOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { addVehicleDialogSchema, type AddVehicleDialogFormValues } from "@/client-schemas/vehicles/add-vehicle-dialog";
 import { getCurrencySymbol } from "@/lib/format-utils";
+import { financeColumnsForContractTotal } from "@/lib/vehicle-utils";
 import { TraxPriceSuggestion } from "@/components/trax/trax-price-suggestion";
 import { TraxIcon } from "@/components/chat/TraxIcon";
 
@@ -197,10 +198,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
       if (data.acquisition_type === 'Purchase') {
         vehicleData.purchase_price = data.purchase_price;
       } else if (data.acquisition_type === 'Finance') {
-        // For finance vehicles, convert contract total to the structure expected by triggers
-        vehicleData.initial_payment = data.contract_total;
-        vehicleData.monthly_payment = 1; // Dummy value to satisfy constraints
-        vehicleData.term_months = 1; // Dummy value
+        Object.assign(vehicleData, financeColumnsForContractTotal(data.contract_total));
       }
 
       // Insert vehicle first

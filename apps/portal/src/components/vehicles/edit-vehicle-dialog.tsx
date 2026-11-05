@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { financeColumnsForContractTotal } from "@/lib/vehicle-utils";
 import { editVehicleSchema, type EditVehicleFormValues } from "@/client-schemas/vehicles/edit-vehicle";
 
 type VehicleFormData = EditVehicleFormValues;
@@ -137,10 +138,7 @@ export const EditVehicleDialog = ({ vehicle, open, onOpenChange }: EditVehicleDi
       if (data.acquisition_type === 'Purchase') {
         updateData.purchase_price = data.purchase_price;
       } else if (data.acquisition_type === 'Finance') {
-        // For finance vehicles, convert contract total to the structure expected by triggers
-        updateData.initial_payment = data.contract_total;
-        updateData.monthly_payment = 1; // Dummy value to satisfy constraints
-        updateData.term_months = 1; // Dummy value
+        Object.assign(updateData, financeColumnsForContractTotal(data.contract_total));
       }
 
       const { data: result, error } = await supabase

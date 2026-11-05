@@ -1801,7 +1801,7 @@ function VehicleDetail() {
                     Finance Information
                   </h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-3">
-                    {vehicle.monthly_payment && (
+                    {Number(vehicle.monthly_payment) > 0 && (
                       <MetricItem label="Monthly Payment" value={Number(vehicle.monthly_payment)} isAmount />
                     )}
                     {vehicle.initial_payment && vehicle.initial_payment > 0 && (
