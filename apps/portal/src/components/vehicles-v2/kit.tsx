@@ -383,17 +383,26 @@ export function WarningBanner({
 export function Field({
   label,
   hint,
+  error,
   children,
 }: {
   label: string;
   hint?: string;
+  /** Shown in place of the hint, in red, when the value was refused. */
+  error?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="min-w-0">
       <label className="mb-2 block text-sm font-medium">{label}</label>
       {children}
-      {hint && <p className="mt-2 text-xs text-muted-foreground">{hint}</p>}
+      {error ? (
+        <p role="alert" className="mt-2 text-xs text-destructive">
+          {error}
+        </p>
+      ) : (
+        hint && <p className="mt-2 text-xs text-muted-foreground">{hint}</p>
+      )}
     </div>
   );
 }
@@ -468,7 +477,10 @@ export function TextInput({
   type?: "text" | "date";
   className?: string;
   disabled?: boolean;
+  /** Applied to each keystroke before it is shown and saved, e.g. capitals for a plate. */
+  transform?: (v: string) => string;
 }) {
+  const { transform, ...affixProps } = rest;
   const [raw, setRaw] = useState(value ?? "");
   const focused = useRef(false);
 
@@ -487,9 +499,10 @@ export function TextInput({
       }}
     >
       <AffixInput
-        {...rest}
+        {...affixProps}
         value={raw}
-        onChange={(v) => {
+        onChange={(input) => {
+          const v = transform ? transform(input) : input;
           setRaw(v);
           onChange(v);
         }}

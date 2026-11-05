@@ -59,6 +59,8 @@ export function VehicleTab({
   onMakeCover,
   isUploading,
   readOnly,
+  fieldErrors = {},
+  revision = 0,
 }: {
   vehicle: VehicleRecord;
   patch: (fields: Partial<VehicleRecord>) => void;
@@ -68,6 +70,10 @@ export function VehicleTab({
   onMakeCover: (id: string) => void;
   isUploading: boolean;
   readOnly: boolean;
+  /** Refused values, by field, from the record's rules. */
+  fieldErrors?: Record<string, string>;
+  /** Changes when the fields are put back to the saved values. */
+  revision?: number;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -147,7 +153,7 @@ export function VehicleTab({
                           variant="ghost"
                           size="xs"
                           onClick={() => onMakeCover(p.id)}
-                          className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                          className="text-muted-foreground transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
                         >
                           <Star className="size-3" />
                           Cover
@@ -166,8 +172,8 @@ export function VehicleTab({
       </Section>
 
       <Section title="The car">
-        <div className="grid grid-cols-2 gap-5">
-          <Field label="Make">
+        <div key={revision} className="grid grid-cols-2 gap-5">
+          <Field label="Make" error={fieldErrors.make}>
             <TextInput
               value={vehicle.make}
               onChange={(v) => patch({ make: v })}
@@ -175,7 +181,7 @@ export function VehicleTab({
               disabled={readOnly}
             />
           </Field>
-          <Field label="Model">
+          <Field label="Model" error={fieldErrors.model}>
             <TextInput
               value={vehicle.model}
               onChange={(v) => patch({ model: v })}
@@ -183,7 +189,7 @@ export function VehicleTab({
               disabled={readOnly}
             />
           </Field>
-          <Field label="Year">
+          <Field label="Year" error={fieldErrors.year}>
             <NumberInput
               value={vehicle.year}
               onChange={(n) => patch({ year: n || null })}
@@ -217,9 +223,10 @@ export function VehicleTab({
               disabled={readOnly}
             />
           </Field>
-          <Field label="Registration plate">
+          <Field label="Registration plate" error={fieldErrors.reg}>
             <TextInput
               value={vehicle.reg}
+              transform={(v) => v.toUpperCase()}
               onChange={(v) => patch({ reg: v })}
               placeholder="6HNA118"
               disabled={readOnly}

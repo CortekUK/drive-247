@@ -259,6 +259,8 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
     patch,
     patchNow,
     saving,
+    fieldErrors,
+    revision,
   } = useVehicleRecord(vehicleId);
   const isLoading = useSkeletonLoading(recordLoading);
   // While the record loads, the screen renders a placeholder car through its
@@ -812,6 +814,8 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
               onMakeCover={makeCover}
               isUploading={isUploading}
               readOnly={readOnly}
+              fieldErrors={fieldErrors}
+              revision={revision}
             />
           )}
 

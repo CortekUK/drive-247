@@ -145,6 +145,49 @@ const VEHICLE_COLUMNS = `
 export const vehicleKey = (tenantId: string | undefined, id: string) =>
   ["vehicle-v2", tenantId, id] as const;
 
+/** The row as last read from or written to the database, without edits not yet saved. */
+const savedKey = (tenantId: string | undefined, id: string) => ["vehicle-v2-saved", tenantId, id] as const;
+
+const FIELD_LABELS: Record<string, string> = {
+  make: "the make", model: "the model", year: "the year", colour: "the colour", reg: "the plate",
+  vin: "the VIN", description: "the description", fuel_type: "the fuel", category: "the class",
+};
+const labelFor = (k: string) => FIELD_LABELS[k] ?? k.replace(/_/g, " ");
+
+/**
+ * The car's own rules, the same ones the Add Vehicle form applies
+ * (client-schemas/vehicles/add-vehicle-dialog.ts). A value that breaks one stays
+ * on screen with this message and is not written.
+ */
+export function vehicleFieldError(field: string, value: unknown): string | null {
+  const text = typeof value === "string" ? value.trim() : value;
+  switch (field) {
+    case "make":
+      return text ? null : "Make is required, so this wasn't saved.";
+    case "model":
+      return text ? null : "Model is required, so this wasn't saved.";
+    case "reg":
+      return text ? null : "A plate is required, so this wasn't saved.";
+    case "year": {
+      const max = new Date().getFullYear() + 1;
+      const y = Number(value);
+      return value != null && Number.isInteger(y) && y >= 1900 && y <= max
+        ? null
+        : `Year must be between 1900 and ${max}, so this wasn't saved.`;
+    }
+    default:
+      return null;
+  }
+}
+
+/** What is written for a field: plates in capitals, and no stray spaces on names. */
+export function cleanForSave(field: string, value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  if (field === "reg") return value.trim().toUpperCase();
+  if (field === "make" || field === "model" || field === "colour") return value.trim();
+  return value;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
  * The record
  * ═════════════════════════════════════════════════════════════════════════ */
@@ -168,7 +211,9 @@ export function useVehicleRecord(id: string) {
         .eq("tenant_id", tenant.id)
         .maybeSingle();
       if (error) throw error;
-      return (data as unknown as VehicleRecord) ?? null;
+      const row = (data as unknown as VehicleRecord) ?? null;
+      queryClient.setQueryData(savedKey(tenant.id, id), row);
+      return row;
     },
     enabled: !!tenant?.id && !!id,
   });
@@ -179,36 +224,96 @@ export function useVehicleRecord(id: string) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  /** Fields holding a value that breaks a rule: shown under the field, never written. */
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  /** Bumped when the screen is put back to the database's values, so open inputs show them. */
+  const [revision, setRevision] = useState(0);
+  /** Writes run one after another, so each one checks against the row the last one left. */
+  const chain = useRef<Promise<void>>(Promise.resolve());
 
-  /** Everything queued so far, in one UPDATE. Safe to call with nothing queued. */
-  const flush = useCallback(async () => {
-    if (timer.current) {
-      clearTimeout(timer.current);
-      timer.current = null;
-    }
-    const fields = pending.current;
+  /** Put fields back to what the database holds, then re-read it. */
+  const backToSaved = useCallback(
+    async (fields: string[]) => {
+      const saved = queryClient.getQueryData<VehicleRecord | null>(savedKey(tenant?.id, id));
+      if (saved) {
+        queryClient.setQueryData(key, (old: VehicleRecord | null | undefined) => {
+          if (!old) return old;
+          const next = { ...old } as unknown as Record<string, unknown>;
+          for (const f of fields) next[f] = (saved as unknown as Record<string, unknown>)[f];
+          return next as unknown as VehicleRecord;
+        });
+      }
+      await queryClient.invalidateQueries({ queryKey: key });
+      setRevision((r) => r + 1);
+    },
+    [queryClient, key, tenant?.id, id],
+  );
+
+  /** One write: everything queued so far, in one UPDATE. Safe to call with nothing queued. */
+  const write = useCallback(async () => {
+    const queued = pending.current;
     pending.current = {};
-    if (!tenant?.id || Object.keys(fields).length === 0) return;
+    if (!tenant?.id || Object.keys(queued).length === 0) return;
+
+    const fields: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(queued)) fields[k] = cleanForSave(k, v);
+    const saved = queryClient.getQueryData<VehicleRecord | null>(savedKey(tenant.id, id)) as unknown as
+      | Record<string, unknown>
+      | null
+      | undefined;
 
     setSaving(true);
-    const { error } = await supabase
+    // Only write if every field being changed still holds what this screen last
+    // read. Another tab or another person may have changed it since, and writing
+    // anyway would replace their change without either of you knowing.
+    let query = supabase
       .from("vehicles")
       .update(fields as never)
       .eq("id", id)
       .eq("tenant_id", tenant.id);
+    if (saved) {
+      for (const k of Object.keys(fields)) {
+        if (!(k in saved)) continue;
+        const was = saved[k];
+        if (was === null || was === undefined) query = query.is(k, null);
+        else if (["string", "number", "boolean"].includes(typeof was)) query = query.eq(k, was as never);
+      }
+    }
+    const { data, error } = await query.select("id");
     setSaving(false);
 
     if (error) {
-      // The cache is now ahead of the database. Say so and re-read, rather
-      // than leaving the operator looking at a value that was never stored.
+      const text = `${error.message ?? ""} ${(error as { details?: string }).details ?? ""}`;
+      const takenPlate = (error as { code?: string }).code === "23505" && /reg/i.test(text);
+      const oldPlate = saved?.reg ? String(saved.reg) : "the old plate";
       toast({
         title: "That change didn't save",
-        description: error.message,
+        description: takenPlate
+          ? `The plate ${String(fields.reg)} is already used by another car. It's back to ${oldPlate}.`
+          : error.message,
         variant: "destructive",
       });
-      queryClient.invalidateQueries({ queryKey: key });
+      await backToSaved(Object.keys(fields));
       return;
     }
+
+    if (!data || data.length === 0) {
+      toast({
+        title: "That change didn't save",
+        description: `This car was changed in another tab or by someone else since you opened it, so ${Object.keys(
+          fields,
+        )
+          .map(labelFor)
+          .join(", ")} wasn't saved. The latest version is now showing.`,
+        variant: "destructive",
+      });
+      await backToSaved(Object.keys(fields));
+      return;
+    }
+
+    queryClient.setQueryData(savedKey(tenant.id, id), (old: VehicleRecord | null | undefined) =>
+      old ? ({ ...old, ...fields } as VehicleRecord) : old,
+    );
     setLastSavedAt(new Date());
     // The vehicles LIST and anything else keyed on this car reads the same row.
     // The list page itself is keyed ["vehicles-list", tenantId], which the
@@ -216,21 +321,46 @@ export function useVehicleRecord(id: string) {
     queryClient.invalidateQueries({ queryKey: ["vehicles"] });
     queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
     queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
-  }, [tenant?.id, id, toast, queryClient, key]);
+  }, [tenant?.id, id, toast, queryClient, backToSaved]);
+
+  /** Write everything queued, after any write already running. */
+  const flush = useCallback(() => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    chain.current = chain.current.then(write, write);
+    return chain.current;
+  }, [write]);
 
   /**
    * Write a field (or several) through to the record.
    *
    * The cache moves now; the database catches up on the timer. Calling this
    * from an input's `onChange` is the intended use — that is what makes the
-   * screen have no Save button.
+   * screen have no Save button. A value that breaks one of the car's rules is
+   * shown with its message and kept out of the write.
    */
   const patch = useCallback(
     (fields: Partial<VehicleRecord>) => {
       queryClient.setQueryData(key, (old: VehicleRecord | null | undefined) =>
         old ? { ...old, ...fields } : old,
       );
-      Object.assign(pending.current, fields);
+      const errors: Record<string, string | null> = {};
+      for (const [k, v] of Object.entries(fields)) {
+        const problem = vehicleFieldError(k, v);
+        errors[k] = problem;
+        if (problem) delete pending.current[k];
+        else pending.current[k] = v;
+      }
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        for (const [k, problem] of Object.entries(errors)) {
+          if (problem) next[k] = problem;
+          else delete next[k];
+        }
+        return next;
+      });
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => {
         void flush();
@@ -273,6 +403,8 @@ export function useVehicleRecord(id: string) {
     flush,
     saving,
     lastSavedAt,
+    fieldErrors,
+    revision,
   };
 }
 
