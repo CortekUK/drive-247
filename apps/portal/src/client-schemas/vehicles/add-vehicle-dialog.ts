@@ -4,6 +4,28 @@ import { startOfDay } from "date-fns";
 // Helper to get today at midnight for date comparisons
 const getToday = () => startOfDay(new Date());
 
+/**
+ * A bought car needs its price, a financed one its contract total.
+ *
+ * Exported because the schema alone cannot enforce this on a stepped form: zod
+ * skips `superRefine` while any required field is missing, and the rates are
+ * required but sit on a LATER screen than this. So the v2 dialog asks this
+ * directly when leaving the "How did you get it?" screen.
+ */
+export function acquisitionCostIssue(data: {
+  acquisition_type?: "Purchase" | "Finance";
+  purchase_price?: number | null;
+  contract_total?: number | null;
+}): { field: "purchase_price" | "contract_total"; message: string } | null {
+  if (data.acquisition_type === "Purchase" && (data.purchase_price === undefined || data.purchase_price === null)) {
+    return { field: "purchase_price", message: "Purchase price is required for purchased vehicles" };
+  }
+  if (data.acquisition_type === "Finance" && (data.contract_total === undefined || data.contract_total === null)) {
+    return { field: "contract_total", message: "Contract total is required for financed vehicles" };
+  }
+  return null;
+}
+
 export const addVehicleDialogSchema = z.object({
   reg: z.string().min(1, "Registration number is required"),
   vin: z.string().optional(),
@@ -56,19 +78,12 @@ export const addVehicleDialogSchema = z.object({
   description: z.string().optional(),
   photo_file: z.instanceof(File).optional(),
 }).superRefine((data, ctx) => {
-  if (data.acquisition_type === 'Purchase' && (data.purchase_price === undefined || data.purchase_price === null)) {
+  const costIssue = acquisitionCostIssue(data);
+  if (costIssue) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "Purchase price is required for purchased vehicles",
-      path: ["purchase_price"],
-    });
-  }
-
-  if (data.acquisition_type === 'Finance' && (data.contract_total === undefined || data.contract_total === null)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Contract total is required for financed vehicles",
-      path: ["contract_total"],
+      message: costIssue.message,
+      path: [costIssue.field],
     });
   }
 

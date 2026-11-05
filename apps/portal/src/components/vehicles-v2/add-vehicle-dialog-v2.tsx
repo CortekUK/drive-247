@@ -52,7 +52,7 @@ import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { cn } from "@/lib/utils";
 import { parseLocalDate } from "@/lib/date-utils";
 import { getCurrencySymbol } from "@/lib/format-utils";
-import { addVehicleDialogSchema, type AddVehicleDialogFormValues } from "@/client-schemas/vehicles/add-vehicle-dialog";
+import { acquisitionCostIssue, addVehicleDialogSchema, type AddVehicleDialogFormValues } from "@/client-schemas/vehicles/add-vehicle-dialog";
 import { Button } from "@/components/ui-v2/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui-v2/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
@@ -368,7 +368,17 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
 
   const next = async () => {
     const ok = await form.trigger(STEPS[step].fields);
-    if (ok) setStep((s) => Math.min(s + 1, STEPS.length - 1));
+    if (!ok) return;
+    // trigger() can't see this rule yet: the rates are still empty on this
+    // screen, and zod skips the cross-field checks until they are filled.
+    if (STEPS[step].fields.includes("purchase_price")) {
+      const issue = acquisitionCostIssue(form.getValues());
+      if (issue) {
+        form.setError(issue.field, { type: "custom", message: issue.message });
+        return;
+      }
+    }
+    setStep((s) => Math.min(s + 1, STEPS.length - 1));
   };
 
   const addPhotos = (files: FileList | null) => {
