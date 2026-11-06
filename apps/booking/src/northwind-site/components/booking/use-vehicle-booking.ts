@@ -47,6 +47,7 @@ import {
   type BookingStage,
 } from "@/lib/abandoned-booking-tracker";
 import { deriveBookingRules, resolveDeliveryModes } from "./booking-rules";
+import { carPickupArrangement } from "./car-pickup-arrangement";
 import {
   readPaymentReturn,
   type BookingPaymentRequest,
@@ -176,14 +177,55 @@ export function useVehicleBooking(vehicleId: string) {
   const { vehicle, isLoading: vehicleLoading, notFound, isError, refetch } =
     useVehicle(vehicleId);
 
-  const { pickupLocations, returnLocations, byId: locationsById } =
-    usePickupLocations();
+  const {
+    pickupLocations: tenantPickupLocations,
+    returnLocations: tenantReturnLocations,
+    byId: locationsById,
+  } = usePickupLocations();
+
+  /* A car the operator pinned to one location is collected there, and only
+     there — see `carPickupArrangement`. Everything below reads these three
+     names, so the form, the quote and the booking all follow it. */
+  const carArrangement = useMemo(
+    () =>
+      carPickupArrangement(
+        vehicle?.pickupLocationId,
+        tenantPickupLocations,
+        tenantReturnLocations,
+      ),
+    [vehicle?.pickupLocationId, tenantPickupLocations, tenantReturnLocations],
+  );
+  const pickupLocations = carArrangement?.pickupLocations ?? tenantPickupLocations;
+  const returnLocations = carArrangement?.returnLocations ?? tenantReturnLocations;
 
   const rules = useMemo(() => deriveBookingRules(tenant), [tenant]);
   const modes = useMemo(
-    () => resolveDeliveryModes(tenant, pickupLocations),
-    [tenant, pickupLocations],
+    () => carArrangement?.modes ?? resolveDeliveryModes(tenant, tenantPickupLocations),
+    [carArrangement, tenant, tenantPickupLocations],
   );
+
+  /* Hold the form on the car's location. The booking store is persisted, so
+     a choice left over from another car (or an earlier visit) would otherwise
+     win; patched only when it differs, so this settles in one pass. */
+  useEffect(() => {
+    if (!hydrated || !carArrangement) return;
+    const id = carArrangement.location.id;
+    const state = useBookingStore.getState();
+    const returnsHere = carArrangement.returnLocations.length === 1;
+    if (
+      state.deliveryOption !== "location" ||
+      state.pickupLocationId !== id ||
+      (returnsHere && !state.sameAsPickup)
+    ) {
+      form.patch({
+        deliveryOption: "location",
+        pickupLocationId: id,
+        ...(returnsHere ? { sameAsPickup: true } : {}),
+      });
+    }
+    // `form` is a fresh object on every store write; see the seeding effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, carArrangement]);
 
   /* ── one-time seeding ──────────────────────────────────────────────────
    * Runs once the persisted booking is back AND the tenant's rules are known,
