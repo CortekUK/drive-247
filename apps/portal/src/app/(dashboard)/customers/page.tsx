@@ -790,8 +790,8 @@ const CustomersList = () => {
         ? 'Verified'
         : status === 'pending'
           ? 'Pending'
-          : status === 'failed'
-            ? 'Failed'
+          : status === 'rejected' || status === 'failed'
+            ? 'Rejected'
             : 'Unverified';
     downloadCsv(
       csvFilename('customers'),
@@ -1098,8 +1098,11 @@ const CustomersList = () => {
                           <ListStatusText tone="success">Verified</ListStatusText>
                         ) : verification === 'pending' ? (
                           <ListStatusText tone="warning">Pending</ListStatusText>
-                        ) : verification === 'failed' ? (
-                          <ListStatusText tone="danger">Failed</ListStatusText>
+                        ) : verification === 'rejected' || verification === 'failed' ? (
+                          // The database stores a failed ID check as 'rejected'
+                          // ('failed' is not an allowed value), so it showed as
+                          // "Unverified" here and in the CSV.
+                          <ListStatusText tone="danger">Rejected</ListStatusText>
                         ) : (
                           <ListStatusText tone="muted">Unverified</ListStatusText>
                         )}
@@ -1207,12 +1210,12 @@ const CustomersList = () => {
                         <TableCell>
                           {(() => {
                             const status = (customer as any).identity_verification_status;
-                            if (status === 'verified') {
+                            if (status === 'verified' || status === 'manually_verified') {
                               return <span className="text-green-600 text-sm font-medium">Verified</span>;
                             } else if (status === 'pending') {
                               return <span className="text-yellow-600 text-sm font-medium">Pending</span>;
-                            } else if (status === 'failed') {
-                              return <span className="text-red-600 text-sm font-medium">Failed</span>;
+                            } else if (status === 'rejected' || status === 'failed') {
+                              return <span className="text-red-600 text-sm font-medium">Rejected</span>;
                             }
                             return <span className="text-muted-foreground text-sm">Unverified</span>;
                           })()}
