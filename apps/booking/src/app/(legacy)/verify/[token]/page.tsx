@@ -9,6 +9,7 @@ import {
   Camera,
   CheckCircle,
   XCircle,
+  CheckCircle2,
   Loader2,
   RotateCcw,
   Upload,
@@ -39,6 +40,8 @@ export default function VerifyPage() {
   const [step, setStep] = useState<VerificationStep>('loading');
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [error, setError] = useState<string>('');
+  // Why the link can't be used — a finished check reads differently from a dead link.
+  const [errorKind, setErrorKind] = useState<'completed' | 'expired'>('expired');
 
   // Image data
   const [documentFrontImage, setDocumentFrontImage] = useState<Blob | null>(null);
@@ -131,7 +134,17 @@ export default function VerifyPage() {
       });
 
       if (error || !data?.ok) {
-        setError(data?.detail || data?.error || 'Invalid or expired QR code');
+        // On a refusal (409 / 410 / 404) the function's own explanation is in
+        // the response body, which `invoke` does not hand back as `data`. It used
+        // to be dropped, so a finished link read "Invalid or expired QR code"
+        // instead of "already completed" (QA sheet C5.12).
+        let body: any = data;
+        if (!body && (error as any)?.context?.json) {
+          try { body = await (error as any).context.json(); } catch { body = null; }
+        }
+        const completed = body?.error === 'Session already completed' || (error as any)?.context?.status === 409;
+        setErrorKind(completed ? 'completed' : 'expired');
+        setError(body?.detail || body?.error || 'Invalid or expired QR code');
         setStep('error');
         return;
       }
@@ -206,9 +219,12 @@ export default function VerifyPage() {
         setIsCameraActive(true);
       }
     } catch (err: any) {
-      let errorMsg = 'Camera unavailable';
-      if (err.name === 'NotAllowedError') errorMsg = 'Camera permission denied';
-      else if (err.name === 'NotFoundError') errorMsg = 'No camera found';
+      // Say what to do, not just what went wrong (QA sheet C5.7).
+      let errorMsg = 'We could not open your camera. Upload a photo instead.';
+      if (err.name === 'NotAllowedError') errorMsg = 'Camera access is blocked. Allow the camera for this site in your browser settings and reload, or upload a photo instead.';
+      else if (err.name === 'NotFoundError') errorMsg = 'No camera was found on this device. Upload a photo instead.';
+      else if (err.message === 'Camera not supported') errorMsg = "This browser can't open the camera here. Upload a photo instead.";
+      else if (err.message === 'Could not access camera') errorMsg = 'We could not open your camera. Allow camera access for this site and reload, or upload a photo instead.';
       else if (err.message) errorMsg = err.message;
       setCameraError(errorMsg);
       setIsCameraActive(false);
@@ -468,12 +484,25 @@ export default function VerifyPage() {
     return (
       <div className="fixed inset-0 bg-gradient-to-b from-gray-900 to-black flex items-center justify-center p-6">
         <div className="text-center max-w-sm">
-          <div className="w-20 h-20 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-6">
-            <XCircle className="h-10 w-10 text-red-500" />
-          </div>
-          <h1 className="text-xl font-semibold text-white mb-2">Session Expired</h1>
-          <p className="text-gray-400 mb-8">{error}</p>
-          <p className="text-sm text-gray-500">Please request a new verification link.</p>
+          {errorKind === 'completed' ? (
+            <>
+              <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-6">
+                <CheckCircle2 className="h-10 w-10 text-green-500" />
+              </div>
+              <h1 className="text-xl font-semibold text-white mb-2">Already verified</h1>
+              <p className="text-gray-400 mb-8">{error}</p>
+              <p className="text-sm text-gray-500">There&apos;s nothing more to do — you can close this page.</p>
+            </>
+          ) : (
+            <>
+              <div className="w-20 h-20 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-6">
+                <XCircle className="h-10 w-10 text-red-500" />
+              </div>
+              <h1 className="text-xl font-semibold text-white mb-2">Session Expired</h1>
+              <p className="text-gray-400 mb-8">{error}</p>
+              <p className="text-sm text-gray-500">Please request a new verification link.</p>
+            </>
+          )}
         </div>
       </div>
     );
