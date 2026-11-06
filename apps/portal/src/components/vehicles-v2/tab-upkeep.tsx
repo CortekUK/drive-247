@@ -94,6 +94,9 @@ export function UpkeepTab({
 }) {
   const fmt = useFmt();
   const [draft, setDraft] = useState({ date: "", type: "", cost: "", mileage: "" });
+  const [warrantyIssue, setWarrantyIssue] = useState<string | null>(null);
+  /** The Add Vehicle form's rule: the warranty must end after it starts. */
+  const warrantyOk = (start: string | null, end: string | null) => !start || !end || end > start;
   const canAdd = Boolean(draft.date && draft.type);
 
   const blocked = rows.filter((r) => r.blocking && r.verdict === "expired");
@@ -136,7 +139,15 @@ export function UpkeepTab({
                 type="date"
                 value={r.date ?? ""}
                 disabled={readOnly}
-                onChange={(e) => patchNow({ [r.key]: e.target.value || null } as Partial<VehicleRecord>)}
+                onChange={(e) => {
+                  const v = e.target.value || null;
+                  if (r.key === "warranty_end_date" && !warrantyOk(vehicle.warranty_start_date, v)) {
+                    setWarrantyIssue("The warranty has to end after it starts, so this wasn't saved.");
+                    return;
+                  }
+                  if (r.key === "warranty_end_date") setWarrantyIssue(null);
+                  patchNow({ [r.key]: v } as Partial<VehicleRecord>);
+                }}
                 className={cn(inputCls, "w-40 shrink-0 py-2 text-xs")}
               />
               <span className="w-36 shrink-0 text-right">
@@ -152,12 +163,25 @@ export function UpkeepTab({
               type="date"
               value={vehicle.warranty_start_date ?? ""}
               disabled={readOnly}
-              onChange={(e) => patchNow({ warranty_start_date: e.target.value || null })}
+              onChange={(e) => {
+                const v = e.target.value || null;
+                if (!warrantyOk(v, vehicle.warranty_end_date)) {
+                  setWarrantyIssue("The warranty has to start before it ends, so this wasn't saved.");
+                  return;
+                }
+                setWarrantyIssue(null);
+                patchNow({ warranty_start_date: v });
+              }}
               className={cn(inputCls, "w-40 shrink-0 py-2 text-xs")}
             />
             <span className="w-36 shrink-0" />
           </div>
         </List>
+        {warrantyIssue && (
+          <p role="alert" className="mt-2 px-1 text-xs text-destructive">
+            {warrantyIssue}
+          </p>
+        )}
       </Section>
 
       <Section

@@ -115,6 +115,10 @@ const VEHICLE_PUBLIC_COLUMN_LIST = [
   'available_daily',
   'available_weekly',
   'available_monthly',
+  // Expiry dates only (no certificate details): an expired inspection or
+  // registration means the car may not legally go out, so it is not sold.
+  'mot_due_date',
+  'tax_due_date',
 ] as const;
 
 /**

@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { applyWebsiteVisibility, durationTierForDays } from '@nw/lib/vehicles/availability-rules';
-import { isSellableOnline } from '@nw/lib/vehicles/sellable';
+import { certificatesExpired, isSellableOnline } from '@nw/lib/vehicles/sellable';
 import { useQuery } from '@tanstack/react-query';
 
 import { supabase } from '@nw/integrations/supabase/client';
@@ -146,6 +146,7 @@ export function normalizeVehicle(
     availableDaily: plain.available_daily !== false,
     availableWeekly: plain.available_weekly !== false,
     availableMonthly: plain.available_monthly !== false,
+    certificatesExpired: certificatesExpired(plain),
 
     primaryPhotoUrl: resolvedImages[0]?.url ?? null,
     images: resolvedImages,

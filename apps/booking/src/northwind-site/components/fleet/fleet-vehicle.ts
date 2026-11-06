@@ -22,6 +22,7 @@
  */
 
 import { withTripIntent, type TripIntent } from '@nw/lib/booking/trip-intent';
+import { certificatesExpired } from '@nw/lib/vehicles/sellable';
 import {
   customerPhotoUrl,
   displayRegistration,
@@ -104,6 +105,8 @@ export interface FleetVehicle {
   availableDaily: boolean;
   availableWeekly: boolean;
   availableMonthly: boolean;
+  /** Inspection or registration has expired. */
+  certificatesExpired: boolean;
 
   /** First photo by `display_order`, else the operator's thumbnail, else null. */
   photoUrl: string | null;
@@ -177,6 +180,7 @@ export function toFleetVehicle(vehicle: Vehicle): FleetVehicle {
     availableDaily: vehicle.availableDaily,
     availableWeekly: vehicle.availableWeekly,
     availableMonthly: vehicle.availableMonthly,
+    certificatesExpired: vehicle.certificatesExpired,
 
     photoUrl: vehicle.primaryPhotoUrl,
   };
@@ -250,6 +254,7 @@ export function fleetVehicleFromRow(
     availableDaily: plain.available_daily !== false,
     availableWeekly: plain.available_weekly !== false,
     availableMonthly: plain.available_monthly !== false,
+    certificatesExpired: certificatesExpired(plain),
 
     photoUrl: primaryPhotoUrl(photos, tenant) ?? trimmed(plain.photo_url),
   };

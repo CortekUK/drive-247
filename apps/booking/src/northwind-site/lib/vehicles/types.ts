@@ -76,6 +76,8 @@ export type PublicVehicleRow = Pick<
   | 'unlimited_mileage_price_daily'
   | 'unlimited_mileage_price_weekly'
   | 'unlimited_mileage_price_monthly'
+  | 'mot_due_date'
+  | 'tax_due_date'
   | 'available_daily'
   | 'available_weekly'
   | 'available_monthly'
@@ -243,6 +245,8 @@ export interface Vehicle {
   availableDaily: boolean;
   availableWeekly: boolean;
   availableMonthly: boolean;
+  /** Inspection or registration has expired: the car may not go out. */
+  certificatesExpired: boolean;
 
   // ── Imagery ──
   /** First photo by `display_order`, else the vehicle's own `photo_url`. */
