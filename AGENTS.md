@@ -15,5 +15,6 @@ The short version:
 - RLS is off on the core tables. Every query must filter by `tenant_id`.
 - v2 work goes in new files beside v1 and is gated by tenant slug (`apps/portal/src/lib/v2.ts`). Never edit v1 screens in place.
 - Database changes are additive only. A new `tenants` column needs `GRANT SELECT (col) ON public.tenants TO anon`.
+- `vehicles` works the same way since 2026-11-06: `anon` reads only granted columns, and key/tracker/lockbox/security-note columns are withheld (`ops/hide-vehicle-key-columns-from-anon.sql`). A new `vehicles` column the booking site reads needs `GRANT SELECT (col) ON public.vehicles TO anon`; never `select('*')` on `vehicles` from the public key. Vehicle documents are staff-only (`ops/lock-vehicle-documents.sql`).
 - Never change an existing edge function or `_shared/` helper. Add a `-v2` one instead.
 - Always start dev servers through the root npm scripts (`npm run dev:portal`, etc.).
