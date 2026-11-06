@@ -156,6 +156,25 @@ const STEPS: Step[] = [
   },
 ];
 
+/**
+ * Why a date of birth can't be accepted, or null. QA sheet C1.4: the form
+ * used to take a birth date in the future, or one making the driver eleven.
+ * The minimum is the business's own `minimum_rental_age`, or 21 when blank —
+ * the same default the booking site applies.
+ */
+export function dobProblem(dob: string | null | undefined, minAge: number, today = new Date()): string | null {
+  if (!dob) return null; // optional
+  const [y, m, d] = dob.slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return null;
+  const t = { y: today.getFullYear(), m: today.getMonth() + 1, d: today.getDate() };
+  if (y > t.y || (y === t.y && (m > t.m || (m === t.m && d > t.d)))) {
+    return "Date of birth can't be in the future.";
+  }
+  const age = t.y - y - (t.m < m || (t.m === m && t.d < d) ? 1 : 0);
+  if (age < minAge) return `They are ${age}. This business rents to drivers aged ${minAge} and over.`;
+  return null;
+}
+
 const EMPTY: Values = {
   customer_type: "Individual",
   company_name: "",
@@ -230,6 +249,21 @@ export function CustomerFormDialogV2({
 
   const form = useForm<Values>({ resolver: zodResolver(customerFormModalSchema), defaultValues: EMPTY });
 
+  /* The business's minimum driver age (blank means 21, as on the booking site). */
+  const { data: minAge = 21 } = useQuery({
+    queryKey: ["tenant-minimum-rental-age", tenant?.id],
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("tenants").select("minimum_rental_age").eq("id", tenant!.id).maybeSingle();
+      return Number(data?.minimum_rental_age) || 21;
+    },
+    enabled: !!tenant?.id,
+  });
+  const dobOk = (dob: string | null | undefined) => {
+    const problem = dobProblem(dob, minAge);
+    if (problem) form.setError("date_of_birth", { type: "manual", message: problem });
+    return !problem;
+  };
+
   useEffect(() => {
     if (!open) return;
     setBlocked(null);
@@ -289,23 +323,38 @@ export function CustomerFormDialogV2({
 
   /* ── the live blocked-ID check (v1's, on leaving the license / ID field) ─ */
 
-  const checkBlocked = async (raw: string | undefined) => {
-    const value = (raw ?? "").trim();
-    if (!value) return setBlocked(null);
+  /*
+   * Checks BOTH numbers each time either field is left. It used to check only
+   * the field just left, and leaving the empty ID field after a blocked
+   * licence cleared the warning — so Next went straight through (QA C1.9).
+   *
+   * Scoped to this tenant: another operator's block (and its reason, and its
+   * customer's name) must never surface here. `limit(1)` because one number
+   * can be blocked more than once, and `maybeSingle` errors on two rows — which
+   * the catch below used to turn into "not blocked".
+   */
+  const checkBlocked = async () => {
+    const values = [form.getValues("license_number"), form.getValues("id_number")]
+      .map((x) => (x ?? "").trim())
+      .filter(Boolean);
+    if (values.length === 0 || !tenant?.id) return setBlocked(null);
     try {
       const { data } = await supabase
         .from("blocked_identities")
         .select("identity_type, reason")
-        .eq("identity_number", value)
+        .eq("tenant_id", tenant.id)
+        .in("identity_number", values)
         .eq("is_active", true)
         .in("identity_type", ["license", "id_card", "passport"])
+        .limit(1)
         .maybeSingle();
       if (data) return setBlocked({ reason: data.reason, type: data.identity_type });
       const { data: bc } = await supabase
         .from("customers")
         .select("name, blocked_reason")
+        .eq("tenant_id", tenant.id)
         .eq("is_blocked", true)
-        .or(`license_number.eq.${value},id_number.eq.${value}`)
+        .or(values.flatMap((x) => [`license_number.eq.${x}`, `id_number.eq.${x}`]).join(","))
         .limit(1)
         .maybeSingle();
       setBlocked(bc ? { reason: bc.blocked_reason || `Belongs to blocked customer ${bc.name}`, type: "license" } : null);
@@ -321,6 +370,10 @@ export function CustomerFormDialogV2({
   const save = form.handleSubmit(
     async (data) => {
       if (blocked) return fail("Blocked identity", `This ${blocked.type} number is blocked: ${blocked.reason}`);
+      if (!dobOk(data.date_of_birth)) {
+        setStep(0);
+        return;
+      }
       // No tenant, no write: every query below is scoped by it (V2_PLAN §5).
       if (!tenant?.id) return fail("Couldn't save", "I couldn't tell which business this is for. Please reload and try again.");
       setLoading(true);
@@ -333,7 +386,11 @@ export function CustomerFormDialogV2({
           if (dup) return fail("Duplicate license number", `A customer with this license number already exists: ${dup.name}`);
         }
         if (data.email) {
-          let q = supabase.from("customers").select("id, name").eq("email", data.email.trim().toLowerCase()).eq("tenant_id", tenant.id);
+          // Case-insensitive: "Ada.Whitfield@Example.com" is the same person as
+          // "ada.whitfield@example.com" (QA C1.18). `%` and `_` are escaped so
+          // the address is matched exactly, not as a pattern.
+          const emailPattern = data.email.trim().replace(/[\\%_]/g, (c) => "\\" + c);
+          let q = supabase.from("customers").select("id, name").ilike("email", emailPattern).eq("tenant_id", tenant.id);
           if (isEditing) q = q.neq("id", customer!.id);
           const { data: dup } = await q.limit(1).maybeSingle();
           if (dup) return fail("Duplicate email", `A customer with this email already exists: ${dup.name}`);
@@ -346,6 +403,7 @@ export function CustomerFormDialogV2({
             const { data: hit } = await supabase
               .from("blocked_identities")
               .select("identity_type, reason")
+              .eq("tenant_id", tenant.id)
               .in("identity_number", ids)
               .eq("is_active", true)
               .in("identity_type", ["license", "id_card", "passport"])
@@ -359,6 +417,7 @@ export function CustomerFormDialogV2({
             const { data: bc } = await supabase
               .from("customers")
               .select("name, license_number, blocked_reason")
+              .eq("tenant_id", tenant.id)
               .eq("is_blocked", true)
               .or(ors.join(","))
               .limit(1)
@@ -373,7 +432,7 @@ export function CustomerFormDialogV2({
         const company = data.customer_type === "Company";
         const payload: Record<string, unknown> = {
           name: data.name,
-          email: data.email || null,
+          email: data.email ? data.email.trim().toLowerCase() : null,
           phone: data.phone || null,
           type: data.customer_type || "Individual",
           customer_type: data.customer_type || "Individual",
@@ -584,7 +643,10 @@ export function CustomerFormDialogV2({
               onSubmit={(e) => {
                 e.preventDefault();
                 if (last) void save();
-                else void form.trigger(screen.fields).then((ok) => ok && setStep(step + 1));
+                // A blocked licence / ID stops the licence step itself (QA C1.9) —
+                // it used to show the warning and still let Next through.
+                else if (blocked && (screen.fields as readonly string[]).includes("license_number")) return;
+                else void form.trigger(screen.fields).then((ok) => ok && (step !== 0 || dobOk(form.getValues("date_of_birth"))) && setStep(step + 1));
               }}
               className="flex flex-col"
             >
@@ -638,10 +700,10 @@ export function CustomerFormDialogV2({
                         className="col-span-2"
                         error={blocked?.type === "license" ? `Blocked: ${blocked.reason}` : err("license_number")}
                       >
-                        {text("license_number", "License number", { upper: true, onBlur: () => void checkBlocked(v.license_number) })}
+                        {text("license_number", "License number", { upper: true, onBlur: () => void checkBlocked() })}
                       </Cell>
                       <Cell label="ID number" className="col-span-2" error={blocked && blocked.type !== "license" ? `Blocked: ${blocked.reason}` : err("id_number")}>
-                        {text("id_number", "Passport or national ID", { upper: true, onBlur: () => void checkBlocked(v.id_number) })}
+                        {text("id_number", "Passport or national ID", { upper: true, onBlur: () => void checkBlocked() })}
                       </Cell>
                     </>
                   )}
