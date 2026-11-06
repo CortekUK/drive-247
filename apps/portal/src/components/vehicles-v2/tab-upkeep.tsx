@@ -97,6 +97,33 @@ export function UpkeepTab({
   const [warrantyIssue, setWarrantyIssue] = useState<string | null>(null);
   /** The Add Vehicle form's rule: the warranty must end after it starts. */
   const warrantyOk = (start: string | null, end: string | null) => !start || !end || end > start;
+  // What is in the two warranty boxes while it differs from what is saved. A
+  // date box reports year 0002, 0020, 0202 as the year is typed digit by digit,
+  // so nothing is checked or saved until the year has four real digits.
+  const [warrantyDraft, setWarrantyDraft] = useState<{ warranty_start_date?: string | null; warranty_end_date?: string | null }>({});
+  const warrantyValue = (key: "warranty_start_date" | "warranty_end_date") =>
+    key in warrantyDraft ? warrantyDraft[key] : vehicle[key];
+  const changeWarranty = (key: "warranty_start_date" | "warranty_end_date", v: string | null) => {
+    setWarrantyDraft((d) => ({ ...d, [key]: v }));
+    if (v && Number(v.slice(0, 4)) < 1900) return;
+    const start = key === "warranty_start_date" ? v : vehicle.warranty_start_date;
+    const end = key === "warranty_end_date" ? v : vehicle.warranty_end_date;
+    if (!warrantyOk(start, end)) {
+      setWarrantyIssue(
+        key === "warranty_end_date"
+          ? "The warranty has to end after it starts, so this wasn't saved."
+          : "The warranty has to start before it ends, so this wasn't saved.",
+      );
+      return;
+    }
+    setWarrantyIssue(null);
+    setWarrantyDraft((d) => {
+      const next = { ...d };
+      delete next[key];
+      return next;
+    });
+    patchNow({ [key]: v } as Partial<VehicleRecord>);
+  };
   const canAdd = Boolean(draft.date && draft.type);
 
   const blocked = rows.filter((r) => r.blocking && r.verdict === "expired");
@@ -137,15 +164,11 @@ export function UpkeepTab({
               </p>
               <input
                 type="date"
-                value={r.date ?? ""}
+                value={(r.key === "warranty_end_date" ? warrantyValue("warranty_end_date") : r.date) ?? ""}
                 disabled={readOnly}
                 onChange={(e) => {
                   const v = e.target.value || null;
-                  if (r.key === "warranty_end_date" && !warrantyOk(vehicle.warranty_start_date, v)) {
-                    setWarrantyIssue("The warranty has to end after it starts, so this wasn't saved.");
-                    return;
-                  }
-                  if (r.key === "warranty_end_date") setWarrantyIssue(null);
+                  if (r.key === "warranty_end_date") return changeWarranty("warranty_end_date", v);
                   patchNow({ [r.key]: v } as Partial<VehicleRecord>);
                 }}
                 className={cn(inputCls, "w-40 shrink-0 py-2 text-xs")}
@@ -161,17 +184,9 @@ export function UpkeepTab({
             </p>
             <input
               type="date"
-              value={vehicle.warranty_start_date ?? ""}
+              value={warrantyValue("warranty_start_date") ?? ""}
               disabled={readOnly}
-              onChange={(e) => {
-                const v = e.target.value || null;
-                if (!warrantyOk(v, vehicle.warranty_end_date)) {
-                  setWarrantyIssue("The warranty has to start before it ends, so this wasn't saved.");
-                  return;
-                }
-                setWarrantyIssue(null);
-                patchNow({ warranty_start_date: v });
-              }}
+              onChange={(e) => changeWarranty("warranty_start_date", e.target.value || null)}
               className={cn(inputCls, "w-40 shrink-0 py-2 text-xs")}
             />
             <span className="w-36 shrink-0" />
