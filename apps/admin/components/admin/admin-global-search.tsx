@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType }
 import { useRouter } from 'next/navigation';
 import { ArrowUpRight, Building2, CornerDownLeft, ExternalLink, Loader2, Search, Settings } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { loadFleetCounts, describeFleet, type FleetCounts } from '@/lib/fleet-counts';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
@@ -650,7 +651,7 @@ type CompanyFacts = {
   slug: string | null;
   subscription_plan: string | null;
   subscription: string | null;
-  vehicles: number | null;
+  vehicles: FleetCounts | null;
   rentals: number | null;
 };
 
@@ -676,14 +677,14 @@ function CompanyBrief({ result, onOpen }: { result: Result; onOpen: (newTab: boo
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
-        (supabase as any).from('vehicles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
+        loadFleetCounts(tenantId),
         (supabase as any).from('rentals').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
       ]);
       if (cancelled) return;
       setFacts({
         ...(tenant.data ?? {}),
         subscription: sub.data?.status ?? null,
-        vehicles: vehicles.count ?? null,
+        vehicles,
         rentals: rentals.count ?? null,
       });
     })();
@@ -697,7 +698,7 @@ function CompanyBrief({ result, onOpen }: { result: Result; onOpen: (newTab: boo
         ['Status', cap(facts.status) ?? '—'],
         ['Type', cap(facts.tenant_type) ?? '—'],
         ['Subscription', facts.subscription ? `${cap(facts.subscription)}${facts.subscription_plan ? ` · ${facts.subscription_plan}` : ''}` : 'None yet'],
-        ['Fleet', facts.vehicles == null ? '—' : `${facts.vehicles} ${facts.vehicles === 1 ? 'car' : 'cars'}`],
+        ['Fleet', facts.vehicles == null ? '—' : describeFleet(facts.vehicles)],
         ['Rentals', facts.rentals == null ? '—' : String(facts.rentals)],
         ['Joined', facts.created_at ? new Date(facts.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'],
         ['Contact', facts.contact_email ?? '—'],

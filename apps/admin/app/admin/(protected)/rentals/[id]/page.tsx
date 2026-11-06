@@ -9,6 +9,7 @@ import { DocumentsEmptyArt } from '@/components/admin/illustrations/scenes/docum
 import { useEffect, useState, type ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { loadFleetCounts, describeFleet, type FleetCounts } from '@/lib/fleet-counts';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -338,6 +339,7 @@ interface PlanFormData {
 
 interface TenantStats {
   totalVehicles: number;
+  fleet: FleetCounts | null;
   activeRentals: number;
   totalCustomers: number;
   staffUsers: number;
@@ -947,16 +949,18 @@ export default function TenantDetailsPage() {
   const loadStats = async (tenantId: string) => {
     setStatsLoading(true);
     try {
-      const [vehiclesRes, activeRentalsRes, completedRentalsRes, customersRes, staffRes] = await Promise.all([
+      const [vehiclesRes, activeRentalsRes, completedRentalsRes, customersRes, staffRes, fleet] = await Promise.all([
         supabase.from('vehicles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
         supabase.from('rentals').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).in('status', ['active', 'in_progress', 'confirmed']),
         supabase.from('rentals').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('status', 'completed'),
         supabase.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
         supabase.from('app_users').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
+        loadFleetCounts(tenantId),
       ]);
 
       setStats({
         totalVehicles: vehiclesRes.count || 0,
+        fleet,
         activeRentals: activeRentalsRes.count || 0,
         completedRentals: completedRentalsRes.count || 0,
         totalCustomers: customersRes.count || 0,
@@ -1718,6 +1722,13 @@ export default function TenantDetailsPage() {
                 <dl className="flex shrink-0 gap-8 max-md:w-full max-md:shrink">
                   {[
                     { label: 'Slug', value: tenant.slug },
+                    // The car count was loaded here but never shown (QA sheet 17.1).
+                    // Same rule as the operator's own screens: retired cars are not
+                    // in the fleet, and are named separately.
+                    {
+                      label: 'Vehicles',
+                      value: statsLoading ? '…' : stats?.fleet ? describeFleet(stats.fleet) : '—',
+                    },
                     {
                       label: 'Created',
                       value: new Date(tenant.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
