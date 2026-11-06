@@ -731,11 +731,17 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
   const vitals = useMemo<Vital[]>(() => {
     if (!vehicle) return [];
     const unit = distanceUnit === "miles" ? "mi" : "km";
-    const cur = (n: number) => new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currencyCode,
-      maximumFractionDigits: 0,
-    }).format(n);
+    // Whole amounts stay whole; an amount with cents shows them (a 47.35
+    // service left the car "Behind by $47").
+    const cur = (n: number) => {
+      const whole = Math.round(n * 100) % 100 === 0;
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: currencyCode,
+        minimumFractionDigits: whole ? 0 : 2,
+        maximumFractionDigits: whole ? 0 : 2,
+      }).format(n);
+    };
     const deposit =
       rentalSettings?.deposit_mode === "global"
         ? Number(rentalSettings?.global_deposit_amount) || 0

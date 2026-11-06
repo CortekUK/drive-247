@@ -183,7 +183,16 @@ export function MoneyTab({
               disabled={readOnly}
             />
           </Field>
-          <Field label="Purchase price">
+          <Field
+            label="Purchase price"
+            hint={
+              // The ledger books a purchase on the day it was bought, so with no
+              // date the price never reaches Cost so far. Say so.
+              vehicle.acquisition_type === "Purchase" && Number(vehicle.purchase_price) > 0 && !vehicle.acquisition_date
+                ? "Add the date it was bought (On) to count it in Cost so far."
+                : undefined
+            }
+          >
             <NumberInput
               value={vehicle.purchase_price}
               onChange={(n) => patch({ purchase_price: n || null })}
