@@ -107,9 +107,9 @@ export function UpkeepTab({
   const changeWarranty = (key: "warranty_start_date" | "warranty_end_date", v: string | null) => {
     setWarrantyDraft((d) => ({ ...d, [key]: v }));
   };
-  const commitWarranty = (key: "warranty_start_date" | "warranty_end_date") => {
-    if (!(key in warrantyDraft)) return;
-    const v = warrantyDraft[key] ?? null;
+  // Reads the box itself: on blur React state can still be a keystroke behind.
+  const commitWarranty = (key: "warranty_start_date" | "warranty_end_date", boxValue: string) => {
+    const v = boxValue || null;
     if (v === (vehicle[key] ?? null)) {
       setWarrantyDraft((d) => {
         const next = { ...d };
@@ -187,7 +187,8 @@ export function UpkeepTab({
                   if (r.key === "warranty_end_date") return changeWarranty("warranty_end_date", v);
                   patchNow({ [r.key]: v } as Partial<VehicleRecord>);
                 }}
-                onBlur={r.key === "warranty_end_date" ? () => commitWarranty("warranty_end_date") : undefined}
+                onBlur={r.key === "warranty_end_date" ? (e) => commitWarranty("warranty_end_date", e.target.value) : undefined}
+                onKeyDown={r.key === "warranty_end_date" ? (e) => e.key === "Enter" && e.currentTarget.blur() : undefined}
                 className={cn(inputCls, "w-40 shrink-0 py-2 text-xs")}
               />
               <span className="w-36 shrink-0 text-right">
@@ -204,7 +205,8 @@ export function UpkeepTab({
               value={warrantyValue("warranty_start_date") ?? ""}
               disabled={readOnly}
               onChange={(e) => changeWarranty("warranty_start_date", e.target.value || null)}
-              onBlur={() => commitWarranty("warranty_start_date")}
+              onBlur={(e) => commitWarranty("warranty_start_date", e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
               className={cn(inputCls, "w-40 shrink-0 py-2 text-xs")}
             />
             <span className="w-36 shrink-0" />
