@@ -28,7 +28,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@nw/integrations/supabase/client';
 import { useCustomer } from '@nw/hooks/use-customer';
 import { useTenant } from '@nw/contexts/TenantContext';
-import { todayDateString } from '@nw/lib/domain';
+import { canRevealRegistration, todayDateString } from '@nw/lib/domain';
 import type { Database } from '@nw/integrations/supabase/types';
 
 // The rental column list, the row type and the normaliser all live in
@@ -41,7 +41,7 @@ import type { Database } from '@nw/integrations/supabase/types';
 // `use-customer-rentals` directly — one definition, one import path.
 import {
   RENTAL_COLUMNS,
-  RENTAL_VEHICLE_EMBED,
+  rentalVehicleEmbed,
   normalizeCustomerRental,
   type CustomerRental,
   type CustomerRentalQueryRow,
@@ -116,7 +116,6 @@ const INVOICE_EMBED = `invoices ( ${[
 const EXTRAS_EMBED =
   'rental_extras_selections ( id, quantity, price_at_booking, billing_type_at_booking, rental_extras ( id, name, description ))';
 
-const RENTAL_DETAIL_SELECT = `${RENTAL_COLUMNS}, ${RENTAL_VEHICLE_EMBED}, ${INVOICE_EMBED}, ${EXTRAS_EMBED}`;
 
 /* ───────────────────────────── view model ──────────────────────────────── */
 
@@ -364,13 +363,13 @@ export function useCustomerRental(
   const id = typeof rentalId === 'string' ? rentalId.trim() : '';
 
   const query = useQuery({
-    queryKey: ['customer-rental', tenantId, customerId, id],
+    queryKey: ['customer-rental', tenantId, customerId, id, canRevealRegistration(tenant)],
     queryFn: async (): Promise<CustomerRentalDetail | null> => {
       if (!customerId || !tenantId || !id) return null;
 
       const { data, error } = await supabase
         .from('rentals')
-        .select(RENTAL_DETAIL_SELECT)
+        .select(`${RENTAL_COLUMNS}, ${rentalVehicleEmbed(tenant)}, ${INVOICE_EMBED}, ${EXTRAS_EMBED}`)
         .eq('id', id)
         // Both, always. The id comes from the URL; these two do not.
         .eq('customer_id', customerId)

@@ -41,6 +41,7 @@ import { useCustomer } from '@nw/hooks/use-customer';
 import { useTenant, type Tenant } from '@nw/contexts/TenantContext';
 import {
   VEHICLE_PHOTO_COLUMNS,
+  canRevealRegistration,
   customerPhotoUrl,
   displayRegistration,
   parseDateOnly,
@@ -140,9 +141,9 @@ export type CustomerRentalRow = Pick<
  * live; repeating them next to a booking made months ago would show today's
  * price against yesterday's contract.
  *
- * `reg` is NOT here, and cannot be: `displayRegistration` withholds it for a
- * tenant with `hide_vehicle_registration`, and the honest way to withhold a
- * field is to never fetch it. See `vehicle-identity.ts`.
+ * `reg` is NOT in the fixed list: it is added by `rentalVehicleEmbed` only
+ * for a tenant that shows plates, so a hidden plate is never fetched. These
+ * queries wait for the tenant, so the answer is always known in time.
  */
 type EmbeddedVehicle = Pick<
   VehicleRow,
@@ -160,6 +161,8 @@ type EmbeddedVehicle = Pick<
   | 'monthly_mileage'
   | 'excess_mileage_rate'
 > & {
+  /** Present only when the tenant shows plates (see `rentalVehicleEmbed`). */
+  reg?: string | null;
   vehicle_photos: Pick<
     VehiclePhotoRow,
     'photo_url' | 'redacted_url' | 'redaction_status' | 'display_order'
@@ -201,6 +204,16 @@ const VEHICLE_EMBED_COLUMNS = [
  * another `)`. It bites the moment the embed is nested one level deeper.
  */
 export const RENTAL_VEHICLE_EMBED = `vehicles ( ${VEHICLE_EMBED_COLUMNS}, ${VEHICLE_PHOTO_COLUMNS})`;
+
+/**
+ * The vehicle sub-select for one tenant: the plate is included only when the
+ * tenant shows plates to customers. Northwind does, and its customers' rentals
+ * showed no plate because the fixed embed never asked for it.
+ */
+export function rentalVehicleEmbed(tenant: Tenant | null): string {
+  const cols = canRevealRegistration(tenant) ? `${VEHICLE_EMBED_COLUMNS}, reg` : VEHICLE_EMBED_COLUMNS;
+  return `vehicles ( ${cols}, ${VEHICLE_PHOTO_COLUMNS})`;
+}
 
 /** The rental columns, shared with `use-customer-rental.ts`. */
 export const RENTAL_COLUMNS = [
@@ -247,7 +260,6 @@ export const RENTAL_COLUMNS = [
   'excess_mileage_rate_override',
 ].join(', ');
 
-const RENTAL_LIST_SELECT = `${RENTAL_COLUMNS}, ${RENTAL_VEHICLE_EMBED}`;
 
 /* ───────────────────────────── view model ──────────────────────────────── */
 
@@ -764,13 +776,13 @@ export function useCustomerRentals(
     // Both ids are in the key. The customer id in particular: without it, one
     // customer signing out and another signing in on the same browser would be
     // served the first one's cached bookings until the stale time elapsed.
-    queryKey: ['customer-rentals', tenantId, customerId],
+    queryKey: ['customer-rentals', tenantId, customerId, canRevealRegistration(tenant)],
     queryFn: async (): Promise<CustomerRental[]> => {
       if (!customerId || !tenantId) return [];
 
       const { data, error } = await supabase
         .from('rentals')
-        .select(RENTAL_LIST_SELECT)
+        .select(`${RENTAL_COLUMNS}, ${rentalVehicleEmbed(tenant)}`)
         // Read the file header before touching either of these.
         .eq('customer_id', customerId)
         .eq('tenant_id', tenantId)
