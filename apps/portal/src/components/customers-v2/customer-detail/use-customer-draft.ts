@@ -29,9 +29,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hviqoaokxvlancmftwuo.supabase.co";
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
 import type { EditableColumn } from "./types";
+import { patchProblems, type Problem } from "./customer-patch-rules";
 
 export type CustomerPatch = Partial<Record<EditableColumn, string | boolean | null>>;
 
@@ -64,9 +68,52 @@ export function useCustomerDraft(id: string) {
   const rowKey = ["customer-v2-row", tenant?.id, id] as const;
 
   const flush = useCallback(async () => {
-    const patch = queued.current;
+    const patch: CustomerPatch = { ...queued.current };
     queued.current = {};
     if (Object.keys(patch).length === 0 || !tenant?.id) return;
+
+    /*
+     * Rules first (QA sheet C3). A field that breaks one is kept off the write
+     * and the operator is told why; the rest of the edit still saves. It stays
+     * on screen so it can be corrected, and a refresh shows what is stored.
+     */
+    const row = queryClient.getQueryData<Record<string, unknown>>(rowKey) ?? null;
+    const problems: Problem[] = patchProblems(patch as Record<string, any>, row as Record<string, any>);
+
+    // Licence / ID: never one that is blocked here, or already another customer's.
+    for (const key of ["license_number", "id_number"] as const) {
+      const value = typeof patch[key] === "string" ? (patch[key] as string).trim() : "";
+      if (!value) continue;
+      const { data: hit } = await (supabase as any)
+        .from("blocked_identities")
+        .select("reason")
+        .eq("tenant_id", tenant.id)
+        .eq("identity_number", value)
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+      if (hit) {
+        problems.push({ fields: [key], message: `${value} is on your blocklist (${hit.reason || "no reason given"}), so it was not saved.` });
+        continue;
+      }
+      const { data: dup } = await (supabase as any)
+        .from("customers")
+        .select("name")
+        .eq("tenant_id", tenant.id)
+        .eq(key, value)
+        .neq("id", id)
+        .limit(1)
+        .maybeSingle();
+      if (dup) {
+        problems.push({ fields: [key], message: `${value} already belongs to ${dup.name}, so it was not saved.` });
+      }
+    }
+
+    if (problems.length) {
+      for (const p of problems) for (const f of p.fields) delete (patch as Record<string, unknown>)[f];
+      toast({ title: "Not saved", description: problems.map((p) => p.message).join(" "), variant: "destructive" });
+      if (Object.keys(patch).length === 0) return;
+    }
 
     setSaving(true);
     const { error } = await (supabase as any)
@@ -124,6 +171,53 @@ export function useCustomerDraft(id: string) {
     },
     [flush]
   );
+
+  /*
+   * ...nor to a refresh or a closed tab (QA sheet C3.5). React's cleanup above
+   * does not run when the page itself unloads, and an ordinary request started
+   * then is cancelled — so an edit made in the last 700ms simply vanished. On
+   * `pagehide` the queued edit is sent as a keepalive request, which the
+   * browser completes after the page is gone. Same rules as `flush`; licence
+   * and ID changes are left to `flush` because they need the blocklist check.
+   */
+  const token = useRef<string | null>(null);
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data }) => (token.current = data.session?.access_token ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      token.current = session?.access_token ?? null;
+    });
+    const onHide = () => {
+      const patch: CustomerPatch = { ...queued.current };
+      delete patch.license_number;
+      delete patch.id_number;
+      if (Object.keys(patch).length === 0 || !tenant?.id || !token.current) return;
+      const row = queryClient.getQueryData<Record<string, unknown>>(rowKey) ?? null;
+      for (const p of patchProblems(patch as Record<string, any>, row as Record<string, any>)) {
+        for (const f of p.fields) delete (patch as Record<string, unknown>)[f];
+      }
+      if (Object.keys(patch).length === 0) return;
+      queued.current = {};
+      if (timer.current) clearTimeout(timer.current);
+      const url = `${SUPABASE_URL}/rest/v1/customers?id=eq.${encodeURIComponent(id)}&tenant_id=eq.${encodeURIComponent(tenant.id)}`;
+      void fetch(url, {
+        method: "PATCH",
+        keepalive: true,
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${token.current}`,
+          "Content-Type": "application/json",
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify(patch),
+      }).catch(() => {});
+    };
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      window.removeEventListener("pagehide", onHide);
+      sub.subscription.unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, tenant?.id, queryClient]);
 
   return { set, saving, savedAt };
 }

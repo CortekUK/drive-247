@@ -250,12 +250,41 @@ export default function AddCustomerDocumentDialog({
     },
     onError: (error) => {
       console.error("Error saving document:", error);
-      toast.error("Failed to save document");
+      toast.error("Failed to save document", {
+        description: error instanceof Error && error.message ? error.message : "Please try again.",
+      });
     },
   });
 
   const onSubmit = (data: DocumentFormData) => {
     mutation.mutate(data);
+  };
+
+  /*
+   * Refuse a file the moment it is chosen, and say why (QA sheet C3.13). The box
+   * already promised "Images, PDFs, documents up to 20MB", but a .bin or a 30 MB
+   * scan was taken, uploaded for a while, and then failed as "Failed to save
+   * document" with no reason.
+   */
+  const acceptFile = (file: File | undefined | null) => {
+    if (!file) return;
+    const MAX = 20 * 1024 * 1024;
+    const okType =
+      file.type.startsWith("image/") ||
+      /\.(pdf|doc|docx|txt|jpe?g|png|gif|webp|heic)$/i.test(file.name);
+    if (!okType) {
+      toast.error(`${file.name} can't be added`, {
+        description: "Only images, PDFs, Word documents and text files are accepted.",
+      });
+      return;
+    }
+    if (file.size > MAX) {
+      toast.error(`${file.name} is too large`, {
+        description: `It is ${(file.size / 1024 / 1024).toFixed(1)} MB; the limit is 20 MB.`,
+      });
+      return;
+    }
+    setSelectedFile(file);
   };
 
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -274,14 +303,16 @@ export default function AddCustomerDocumentDialog({
     setDragActive(false);
     
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setSelectedFile(e.dataTransfer.files[0]);
+      acceptFile(e.dataTransfer.files[0]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
+      acceptFile(e.target.files[0]);
     }
+    e.target.value = "";
   };
 
   const watchDocumentType = form.watch("document_type");
