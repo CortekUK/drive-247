@@ -13,7 +13,8 @@
  * about one of them.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 import { Plus, Trash2 } from "lucide-react";
 import {
   ActionButton,
@@ -101,6 +102,14 @@ export function AddonsTab({
 }) {
   const fmt = useFmt();
   const [dayDraft, setDayDraft] = useState({ date: "", price: "" });
+  const dayIssue = (() => {
+    const t = dayDraft.price.trim();
+    if (dayDraft.date && dayDraft.date < todayISO()) return "That day has already passed, so it can't be priced.";
+    if (t !== "" && !/^\d*\.?\d*$/.test(t)) return "Numbers only for the price.";
+    if (t !== "" && num(t) <= 0) return "The price must be more than $0. To stop bookings that day, block it in Availability.";
+    return null;
+  })();
+  const dayExisting = dayPrices.find((d) => d.date === dayDraft.date);
 
   const perVehicle = useMemo(
     () => allExtras.filter((e) => e.pricing_type === "per_vehicle"),
@@ -115,7 +124,9 @@ export function AddonsTab({
     [vehicleExtras],
   );
 
-  const lifted = (percent: number) => Math.round(dailyRate * (1 + percent / 100));
+  // Cents, not whole dollars: $50 + 15% is $57.50 on the booking site, so it must read $57.50 here.
+  const lifted = (percent: number) => Math.round(dailyRate * (1 + percent / 100) * 100) / 100;
+  const price = (n: number) => (Number.isInteger(n) ? fmt.money(n) : fmt.moneyExact(n));
 
   const weekendOverride = overrides.find((o) => o.rule_type === "weekend");
   const holidayOverride = (id: string) =>
@@ -201,7 +212,7 @@ export function AddonsTab({
         action={
           weekendPercent > 0 && dailyRate > 0 ? (
             <Pill tone="neutral">
-              {fmt.money(dailyRate)} → {fmt.money(lifted(weekendPercent))}
+              {fmt.money(dailyRate)} → {price(lifted(weekendPercent))}
             </Pill>
           ) : undefined
         }
@@ -326,16 +337,25 @@ export function AddonsTab({
             />
             <ActionButton
               variant="outline"
-              disabled={!dayDraft.date || !dayDraft.price}
+              disabled={!dayDraft.date || !dayDraft.price || !!dayIssue}
               onClick={() => {
                 onSetDayPrice(dayDraft.date, num(dayDraft.price));
                 setDayDraft({ date: "", price: "" });
               }}
             >
               <Plus className="size-4" />
-              Add
+              {dayExisting && !dayIssue ? "Replace" : "Add"}
             </ActionButton>
           </div>
+        )}
+        {!readOnly && (dayIssue || dayExisting) && (
+          <p
+            role={dayIssue ? "alert" : "status"}
+            className={cn("mt-2 text-xs", dayIssue ? "text-destructive" : "text-muted-foreground")}
+          >
+            {dayIssue ??
+              `${fmtDate(dayExisting!.date)} already has a price of ${fmt.moneyExact(dayExisting!.price)}. Adding replaces it.`}
+          </p>
         )}
       </Section>
     </Panel>
@@ -360,7 +380,16 @@ function RuleRow({
   onChange: (mode: Mode, value: number | null) => void;
 }) {
   const fmt = useFmt();
-  const mode: Mode = (override?.override_type as Mode) ?? "inherit";
+  const savedMode: Mode = (override?.override_type as Mode) ?? "inherit";
+  // Custom % and Fixed price save nothing until a number is typed, so the pick
+  // is held here; reading only the saved row snapped the dropdown straight back
+  // and the number box never appeared.
+  const [picked, setPicked] = useState<Mode | null>(null);
+  useEffect(() => {
+    setPicked(null);
+  }, [override?.override_type, override?.custom_percent, override?.fixed_price]);
+  const mode: Mode = picked ?? savedMode;
+  const price = (n: number) => (Number.isInteger(n) ? fmt.money(n) : fmt.moneyExact(n));
   const [draft, setDraft] = useState<string>(() =>
     override?.override_type === "fixed_price"
       ? String(override.fixed_price ?? "")
@@ -376,8 +405,8 @@ function RuleRow({
       : mode === "fixed_price"
         ? num(draft)
         : mode === "custom_percent"
-          ? Math.round(dailyRate * (1 + num(draft) / 100))
-          : Math.round(dailyRate * (1 + fleetPercent / 100));
+          ? Math.round(dailyRate * (1 + num(draft) / 100) * 100) / 100
+          : Math.round(dailyRate * (1 + fleetPercent / 100) * 100) / 100;
 
   return (
     <div className="flex flex-wrap items-end gap-3">
@@ -390,6 +419,7 @@ function RuleRow({
             onChange={(v) => {
               const next = v as Mode;
               setDraft("");
+              setPicked(next);
               // Switching to a numeric mode with nothing typed yet would write a
               // null price, so hold off until there is a number to store.
               if (next === "inherit" || next === "excluded") onChange(next, null);
@@ -419,7 +449,7 @@ function RuleRow({
       {dailyRate > 0 && (
         <p className="pb-2.5 text-xs text-muted-foreground">
           {mode === "excluded" ? "Stays at " : "A day costs "}
-          <span className="font-medium text-foreground">{fmt.money(effective)}</span>
+          <span className="font-medium text-foreground">{price(effective)}</span>
         </p>
       )}
     </div>

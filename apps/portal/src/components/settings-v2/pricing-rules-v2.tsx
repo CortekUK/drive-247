@@ -110,6 +110,8 @@ import {
   type HolidayFormFields,
 } from "@/components/settings-v2/pricing-money-logic";
 import { useTenant } from "@/contexts/TenantContext";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
 import { useTenantHolidays, type TenantHoliday, type TenantHolidayInsert } from "@/hooks/use-tenant-holidays";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
@@ -464,6 +466,22 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
   const [saveError, setSaveError] = useState<unknown>(null);
   const [deleteTarget, setDeleteTarget] = useState<TenantHoliday | null>(null);
   const [deleteError, setDeleteError] = useState<unknown>(null);
+  /** Cars this holiday's surcharge skips (tenant_holidays.excluded_vehicle_ids). */
+  const [excludedIds, setExcludedIds] = useState<string[]>([]);
+  const { data: fleet = [] } = useQuery({
+    queryKey: ["holiday-fleet", tenant?.id],
+    enabled: !!tenant?.id && dialogOpen,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("vehicles")
+        .select("id, reg, make, model")
+        .eq("tenant_id", tenant!.id)
+        .not("is_disposed", "is", true)
+        .order("reg");
+      if (error) throw error;
+      return (data ?? []) as { id: string; reg: string; make: string | null; model: string | null }[];
+    },
+  });
 
   useAuditLogOnOpen({
     open: !!deleteTarget,
@@ -484,6 +502,7 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
   const openAdd = () => {
     setEditing(null);
     setForm(EMPTY_HOLIDAY_FORM);
+    setExcludedIds([]);
     setAttempted(false);
     setSaveError(null);
     setDialogOpen(true);
@@ -491,6 +510,7 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
 
   const openEdit = (holiday: TenantHoliday) => {
     setEditing(holiday);
+    setExcludedIds(Array.isArray(holiday.excluded_vehicle_ids) ? (holiday.excluded_vehicle_ids as string[]) : []);
     setForm({
       name: holiday.name,
       start_date: holiday.start_date,
@@ -517,7 +537,8 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
       end_date: form.end_date,
       surcharge_percent: Number(form.surcharge_percent) || 0,
       recurs_annually: form.recurs_annually,
-      excluded_vehicle_ids: [],
+      // Kept as chosen below; this used to send [] and wipe the list on every edit.
+      excluded_vehicle_ids: excludedIds,
     };
     try {
       if (editing) {
@@ -680,13 +701,6 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
               void submit();
             }}
           >
-            {excluded > 0 && (
-              <SettingsDependencyNotice
-                tone="warning"
-                title={`This holiday skips ${excluded} vehicle${excluded === 1 ? "" : "s"}`}
-                body="Saving here clears that list, so the surcharge will apply to those vehicles again. Close without saving to keep it."
-              />
-            )}
             <SettingsField label="Name" htmlFor="v2-holiday-name" hint={shown.name && <FieldError>{shown.name}</FieldError>}>
               <Input
                 id="v2-holiday-name"
@@ -757,6 +771,45 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
                 Repeat every year
               </label>
             </div>
+            <SettingsField
+              label="Cars left out"
+              htmlFor="v2-holiday-excluded"
+              hint={
+                excludedIds.length
+                  ? `The surcharge skips ${excludedIds.length} car${excludedIds.length === 1 ? "" : "s"}.`
+                  : "Tick a car to keep it at its normal price on these dates."
+              }
+            >
+              <div
+                id="v2-holiday-excluded"
+                role="group"
+                aria-label="Cars left out of this holiday"
+                className="max-h-40 space-y-1 overflow-y-auto rounded-lg border px-3 py-2"
+              >
+                {fleet.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No cars yet.</p>
+                ) : (
+                  fleet.map((v) => (
+                    <label key={v.id} className="flex cursor-pointer items-center gap-2.5 py-1 text-sm">
+                      <input
+                        type="checkbox"
+                        className="size-4 accent-primary"
+                        checked={excludedIds.includes(v.id)}
+                        onChange={(e) =>
+                          setExcludedIds((prev) =>
+                            e.target.checked ? [...prev, v.id] : prev.filter((x) => x !== v.id),
+                          )
+                        }
+                      />
+                      <span className="font-medium">{v.reg}</span>
+                      <span className="truncate text-muted-foreground">
+                        {[v.make, v.model].filter(Boolean).join(" ")}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </SettingsField>
             {saveError != null && (
               <p role="alert" className="text-sm text-destructive [overflow-wrap:anywhere]">
                 <span className="font-medium">Couldn&apos;t save.</span> {describeSaveError(saveError)}
