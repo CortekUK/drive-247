@@ -153,6 +153,7 @@ const SKELETON_VEHICLE: VehicleRecord = (() => {
     unlimited_mileage_price_weekly: null,
     unlimited_mileage_price_monthly: null,
     status: "Available",
+    show_on_website: true,
     is_paused: false,
     paused_reason: null,
     paused_at: null,
@@ -426,6 +427,33 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
       });
     }
 
+    /*
+     * The booking site's own rule (northwind-site/lib/vehicles/availability-rules.ts)
+     * also hides a car switched off in Website Content and a car whose status
+     * is anything but Available or Rented. Neither was listed here, so the
+     * Listing said "Live" for a car the site was not showing.
+     */
+    if (vehicle.show_on_website === false) {
+      list.push({
+        key: "website-hidden",
+        label: "Switched off for the website",
+        detail: "Hidden in Website Content → Fleet. Switch it back on there.",
+        severity: "hard",
+        href: "/cms/fleet",
+      });
+    }
+
+    const retired = vehicle.is_disposed || vehicle.status === "Disposed" || vehicle.status === "Sold";
+    if (!retired && !["available", "rented"].includes((vehicle.status ?? "").toLowerCase())) {
+      list.push({
+        key: "status",
+        label: `Status is ${vehicle.status || "not set"}`,
+        detail: "The booking site only lists cars that are Available or Rented. Change it back in Fleet Health.",
+        severity: "hard",
+        href: "/fleet-health",
+      });
+    }
+
     if (vehicle.is_paused) {
       list.push({
         key: "paused",
@@ -574,10 +602,28 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
     distanceUnit,
   ]);
 
+  /* What the booking site offers with this car: every active extra priced for
+     the whole fleet, plus the per-car ones switched on here. This used to list
+     only the per-car ones, so the Listing said "None offered" while the
+     booking page offered the fleet's Toll pass. */
   const offeredExtras = useMemo(
-    () => vehicleExtras.map((v) => v.extra_name).filter(Boolean).join(", "),
-    [vehicleExtras],
+    () =>
+      [
+        ...allExtras.filter((e) => e.pricing_type === "global" && e.is_active).map((e) => e.name),
+        ...vehicleExtras.map((v) => v.extra_name),
+      ]
+        .filter(Boolean)
+        .join(", "),
+    [allExtras, vehicleExtras],
   );
+
+  /* The Listing shows what a customer sees. With no allowance set and no paid
+     upgrade, the booking site advertises "Unlimited"; the record's own wording
+     ("Not specified", which the agreement prints) is kept alongside it. */
+  const listingAllowance =
+    allowanceText === "Not specified"
+      ? "Unlimited, as the booking site shows it — no daily allowance is set"
+      : allowanceText;
 
   const attention = useMemo<Attention<SectionId>[]>(() => {
     if (!vehicle) return [];
@@ -975,7 +1021,7 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
                   : Number(vehicle.security_deposit) || 0
               }
               durations={activeDurations.join(", ")}
-              allowance={allowanceText}
+              allowance={listingAllowance}
               extras={offeredExtras}
             />
           )}

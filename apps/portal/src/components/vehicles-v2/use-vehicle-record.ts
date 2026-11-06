@@ -78,6 +78,8 @@ export interface VehicleRecord {
 
   /* going out */
   status: string | null;
+  /** Website Content → Vehicles switch. `false` hides the car from the booking site. */
+  show_on_website: boolean | null;
   is_paused: boolean;
   paused_reason: string | null;
   paused_at: string | null;
@@ -133,7 +135,7 @@ const VEHICLE_COLUMNS = `
   available_daily, available_weekly, available_monthly,
   daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate,
   unlimited_mileage_available, unlimited_mileage_price_daily, unlimited_mileage_price_weekly, unlimited_mileage_price_monthly,
-  status, is_paused, paused_reason, paused_at, pickup_location_id, garaging_state, lockbox_code, lockbox_instructions,
+  status, show_on_website, is_paused, paused_reason, paused_at, pickup_location_id, garaging_state, lockbox_code, lockbox_instructions,
   mot_due_date, tax_due_date, warranty_start_date, warranty_end_date,
   current_mileage, last_service_date, last_service_mileage, has_service_plan,
   has_logbook, has_spare_key, spare_key_holder, spare_key_notes, has_tracker, has_remote_immobiliser, security_notes,

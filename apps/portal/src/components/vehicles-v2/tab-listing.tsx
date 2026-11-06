@@ -23,6 +23,7 @@
  * decide it, each with a way straight to the tab that owns it.
  */
 
+import Link from "next/link";
 import { ArrowUpRight, CircleCheck, ChevronRight } from "lucide-react";
 import {
   Aside,
@@ -112,9 +113,18 @@ export function ListingTab<K extends string>({
                     <span className="block truncate text-sm font-medium">{b.label}</span>
                     <span className="mt-0.5 block text-xs text-muted-foreground">{b.detail}</span>
                   </span>
-                  {target && <ChevronRight className="size-4 shrink-0 text-muted-foreground" />}
+                  {(target || b.href) && <ChevronRight className="size-4 shrink-0 text-muted-foreground" />}
                 </>
               );
+              const rowCls =
+                "flex w-full cursor-pointer items-center gap-3 rounded-3xl bg-warning-light/60 px-5 py-3.5 text-left ring-1 ring-warning/25 transition-colors hover:bg-warning-light";
+              if (!target && b.href) {
+                return (
+                  <Link key={b.key} href={b.href} className={rowCls}>
+                    {Row}
+                  </Link>
+                );
+              }
               return target ? (
                 <button
                   key={b.key}
@@ -188,8 +198,8 @@ export function ListingTab<K extends string>({
 
       {hidePlate && (
         <Aside>
-          Registration plates are hidden from customers for this tenant, so the plate above is never
-          shown on the site.
+          Registration plates are hidden from customers for this tenant, so the plate is left out
+          above and never shown on the site.
         </Aside>
       )}
     </Panel>

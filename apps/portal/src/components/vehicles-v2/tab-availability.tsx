@@ -72,6 +72,8 @@ export type Blocker = {
   detail: string;
   /** `hard` stops new bookings outright; `soft` blocks only certain dates. */
   severity: "hard" | "soft";
+  /** Where it is fixed, when that is outside this car's record. */
+  href?: string;
 };
 
 export function AvailabilityTab({
