@@ -57,6 +57,14 @@ describe("NumberInput", () => {
     expect(onChange).toHaveBeenLastCalledWith(5);
   });
 
+  it("refuses a decimal in a whole-number box, with a plain reason", () => {
+    const onChange = vi.fn();
+    render(<NumberInput value={700} onChange={onChange} integer />);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "12.5" } });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent("Whole numbers only");
+  });
+
   it("still lets a box be cleared", () => {
     const { input, onChange } = box();
     fireEvent.change(input, { target: { value: "" } });

@@ -213,6 +213,7 @@ export function MoneyTab({
           <Field label="Term">
             <NumberInput
               value={vehicle.term_months}
+              integer
               onChange={(n) => patch({ term_months: n || null })}
               suffix="months"
               placeholder="0"

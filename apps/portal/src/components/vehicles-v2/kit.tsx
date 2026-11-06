@@ -526,6 +526,7 @@ export function NumberInput({
   placeholder,
   disabled,
   min = 0,
+  integer = false,
 }: {
   value: number | null | undefined;
   onChange: (n: number) => void;
@@ -535,6 +536,8 @@ export function NumberInput({
   disabled?: boolean;
   /** The lowest value accepted. Every amount, distance and count on the car is 0 or more. */
   min?: number;
+  /** Whole numbers only, for a value stored as a whole number (miles, months, an odometer). */
+  integer?: boolean;
 }) {
   const [raw, setRaw] = useState(value == null ? "" : String(value));
   const [problem, setProblem] = useState<string | null>(null);
@@ -581,6 +584,10 @@ export function NumberInput({
           // Half-typed ("." or "-.") is not a number yet: wait for the next key.
           if (t !== "" && /^-?\.?$/.test(t)) {
             setProblem(null);
+            return;
+          }
+          if (integer && t.includes(".")) {
+            setProblem("Whole numbers only, so this wasn't saved.");
             return;
           }
           const n = num(v);

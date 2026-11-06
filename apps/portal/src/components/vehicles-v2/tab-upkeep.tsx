@@ -168,6 +168,7 @@ export function UpkeepTab({
           <Field label="Odometer">
             <NumberInput
               value={vehicle.current_mileage}
+              integer
               onChange={(n) => patch({ current_mileage: n || null })}
               suffix={fmt.distUnit}
               placeholder="0"

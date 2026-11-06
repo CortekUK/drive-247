@@ -146,6 +146,7 @@ export function RatesTab({
           <Field label="Daily">
             <NumberInput
               value={vehicle.daily_mileage}
+              integer
               onChange={(n) => patch({ daily_mileage: n || null })}
               suffix={fmt.distUnit}
               placeholder="Unlimited"
@@ -155,6 +156,7 @@ export function RatesTab({
           <Field label="Weekly">
             <NumberInput
               value={vehicle.weekly_mileage}
+              integer
               onChange={(n) => patch({ weekly_mileage: n || null })}
               suffix={fmt.distUnit}
               placeholder="Unlimited"
@@ -164,6 +166,7 @@ export function RatesTab({
           <Field label="Monthly">
             <NumberInput
               value={vehicle.monthly_mileage}
+              integer
               onChange={(n) => patch({ monthly_mileage: n || null })}
               suffix={fmt.distUnit}
               placeholder="Unlimited"
