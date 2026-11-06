@@ -383,8 +383,11 @@ export interface CustomerRental {
 
 /* ──────────────────────────── normalisation ────────────────────────────── */
 
-const CANCELLED_STATUSES = new Set(['cancelled', 'canceled', 'rejected', 'closed']);
-const COMPLETED_STATUSES = new Set(['completed', 'ended', 'returned']);
+// 'closed' is a hire that came back and was closed out, i.e. finished. It sat in
+// the cancelled set, so every closed rental told the customer "This rental was
+// cancelled". Found by test sheet 16.6.
+const CANCELLED_STATUSES = new Set(['cancelled', 'canceled', 'rejected']);
+const COMPLETED_STATUSES = new Set(['completed', 'ended', 'returned', 'closed']);
 const LIVE_STATUSES = new Set(['active', 'confirmed', 'reserved', 'on rent']);
 
 /**
