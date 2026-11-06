@@ -381,6 +381,8 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
     [rentals, today],
   );
   const hasOpenRental = openRentals.length > 0 || overdueRentals.length > 0;
+  // Why the car can't be retired yet: out with a customer, or only booked ahead.
+  const onHireNow = overdueRentals.length > 0 || openRentals.some((r) => r.status === "Active");
 
   /** Days on hire inside the utilisation window, clipped to it at both ends. */
   const daysOnHire = useMemo(() => {
@@ -1043,11 +1045,22 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
               daysOnHire={daysOnHire}
               utilisationWindow={UTILISATION_WINDOW_DAYS}
               hasOpenRental={hasOpenRental}
+              onHireNow={onHireNow}
               onDispose={(input) => {
-                disposeVehicle(input).catch(() => {});
+                // The dashboard's fleet size (Busy days) counts every car not retired —
+                // refresh them so retiring (or undoing it) shows at once.
+                disposeVehicle(input)
+                  .then(() => {
+                    for (const key of ["dashboard-kpis", "busy-days"]) void queryClient.invalidateQueries({ queryKey: [key] });
+                  })
+                  .catch(() => {});
               }}
               onUndoDispose={() => {
-                undoDisposal().catch(() => {});
+                undoDisposal()
+                  .then(() => {
+                    for (const key of ["dashboard-kpis", "busy-days"]) void queryClient.invalidateQueries({ queryKey: [key] });
+                  })
+                  .catch(() => {});
               }}
               isDisposing={isDisposing}
               readOnly={readOnly}

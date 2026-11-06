@@ -62,6 +62,7 @@ export function MoneyTab({
   daysOnHire,
   utilisationWindow,
   hasOpenRental,
+  onHireNow = true,
   onDispose,
   onUndoDispose,
   isDisposing,
@@ -76,6 +77,8 @@ export function MoneyTab({
   daysOnHire: number;
   utilisationWindow: number;
   hasOpenRental: boolean;
+  /** Out with a customer now (vs. only an upcoming booking). */
+  onHireNow?: boolean;
   onDispose: (input: {
     disposal_date: string;
     sale_proceeds: number;
@@ -278,6 +281,7 @@ export function MoneyTab({
         vehicle={vehicle}
         totalRevenue={pl.revenue}
         hasOpenRental={hasOpenRental}
+        onHireNow={onHireNow}
         onDispose={onDispose}
         onUndoDispose={onUndoDispose}
         isDisposing={isDisposing}
@@ -326,6 +330,7 @@ function RetirementSection({
   vehicle,
   totalRevenue,
   hasOpenRental,
+  onHireNow = true,
   onDispose,
   onUndoDispose,
   isDisposing,
@@ -334,6 +339,8 @@ function RetirementSection({
   vehicle: VehicleRecord;
   totalRevenue: number;
   hasOpenRental: boolean;
+  /** Out with a customer now (vs. only an upcoming booking). */
+  onHireNow?: boolean;
   onDispose: (input: {
     disposal_date: string;
     sale_proceeds: number;
@@ -414,7 +421,11 @@ function RetirementSection({
     >
       {hasOpenRental && (
         <div className="mb-4">
-          <Aside tone="warning">Still out on hire — close the open rental first.</Aside>
+          <Aside tone="warning">
+            {onHireNow
+              ? "Still out on hire — close the open rental first."
+              : "A customer has an upcoming booking on this car — cancel it or move it to another car first."}
+          </Aside>
         </div>
       )}
 
