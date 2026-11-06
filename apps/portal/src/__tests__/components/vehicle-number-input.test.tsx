@@ -19,6 +19,21 @@ describe("NumberInput", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Can't be less than 0");
   });
 
+  it("never saves a lone minus sign as 0 while -20 is typed", () => {
+    const { input, onChange } = box();
+    for (const v of ["-", "-2", "-20"]) fireEvent.change(input, { target: { value: v } });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent("Can't be less than 0");
+  });
+
+  it("waits on a half-typed decimal point", () => {
+    const { input, onChange } = box();
+    fireEvent.change(input, { target: { value: "." } });
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.change(input, { target: { value: ".5" } });
+    expect(onChange).toHaveBeenLastCalledWith(0.5);
+  });
+
   it("refuses letters instead of saving 0", () => {
     const { input, onChange } = box();
     fireEvent.change(input, { target: { value: "abc" } });

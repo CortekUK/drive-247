@@ -572,6 +572,17 @@ export function NumberInput({
             setProblem("Numbers only, so this wasn't saved.");
             return;
           }
+          // A minus sign is refused the moment it is typed: below 0 is never
+          // valid here, and "-" on its own must not be read as 0 and saved.
+          if (min >= 0 && t.startsWith("-")) {
+            setProblem(`Can't be less than ${min}, so this wasn't saved.`);
+            return;
+          }
+          // Half-typed ("." or "-.") is not a number yet: wait for the next key.
+          if (t !== "" && /^-?.?$/.test(t)) {
+            setProblem(null);
+            return;
+          }
           const n = num(v);
           if (t !== "" && n < min) {
             setProblem(`Can't be less than ${min}, so this wasn't saved.`);
