@@ -1,4 +1,5 @@
 import { applyWebsiteVisibility } from '@nw/lib/vehicles/availability-rules';
+import { isSellableOnline } from '@nw/lib/vehicles/sellable';
 /**
  * Server-side first paint for /fleet.
  *
@@ -113,7 +114,7 @@ export async function loadFleetSeed(
     return {
       currencyCode: tenant.currency_code,
       distanceUnit: tenant.distance_unit,
-      vehicles: (data ?? []).map((row) => fleetVehicleFromRow(row, tenant)),
+      vehicles: (data ?? []).map((row) => fleetVehicleFromRow(row, tenant)).filter(isSellableOnline),
     };
   } catch (cause) {
     console.error('[fleet-seed] Unexpected failure', cause);

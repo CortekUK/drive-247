@@ -525,6 +525,7 @@ export function NumberInput({
   suffix,
   placeholder,
   disabled,
+  min = 0,
 }: {
   value: number | null | undefined;
   onChange: (n: number) => void;
@@ -532,8 +533,11 @@ export function NumberInput({
   suffix?: string;
   placeholder?: string;
   disabled?: boolean;
+  /** The lowest value accepted. Every amount, distance and count on the car is 0 or more. */
+  min?: number;
 }) {
   const [raw, setRaw] = useState(value == null ? "" : String(value));
+  const [problem, setProblem] = useState<string | null>(null);
   const focused = useRef(false);
 
   useEffect(() => {
@@ -542,12 +546,14 @@ export function NumberInput({
 
   return (
     <span
+      className="block"
       onFocus={() => {
         focused.current = true;
       }}
       onBlur={() => {
         focused.current = false;
         setRaw(value == null ? "" : String(value));
+        setProblem(null);
       }}
     >
       <AffixInput
@@ -558,9 +564,28 @@ export function NumberInput({
         disabled={disabled}
         onChange={(v) => {
           setRaw(v);
-          onChange(num(v));
+          // A typed value that isn't a plain number, or is below the minimum,
+          // is shown with a reason and never published. It used to be read as
+          // 0 (letters) or saved as typed (a minus sign).
+          const t = v.trim().replace(/,/g, "");
+          if (t !== "" && !/^-?\d*\.?\d*$/.test(t)) {
+            setProblem("Numbers only, so this wasn't saved.");
+            return;
+          }
+          const n = num(v);
+          if (t !== "" && n < min) {
+            setProblem(`Can't be less than ${min}, so this wasn't saved.`);
+            return;
+          }
+          setProblem(null);
+          onChange(n);
         }}
       />
+      {problem && (
+        <span role="alert" className="mt-1.5 block text-xs text-destructive">
+          {problem}
+        </span>
+      )}
     </span>
   );
 }

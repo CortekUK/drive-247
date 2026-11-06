@@ -360,6 +360,27 @@ export function DepositSettingsV2({
             {form.security_deposit_enabled && (
               <>
                 <SettingsRow
+                  label="How the amount is set"
+                  description={
+                    form.deposit_mode === "per_vehicle"
+                      ? "Each car's own deposit, set on its Rates & mileage page. Cars without one use the amount below."
+                      : "One amount for every car. A car's own deposit is locked to it."
+                  }
+                >
+                  <Select
+                    value={form.deposit_mode === "per_vehicle" ? "per_vehicle" : "global"}
+                    onValueChange={(v) => setForm((prev) => ({ ...prev, deposit_mode: v }))}
+                  >
+                    <SelectTrigger className="w-48" aria-label="How the deposit amount is set">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="global">Same for every car</SelectItem>
+                      <SelectItem value="per_vehicle">Set on each car</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </SettingsRow>
+                <SettingsRow
                   label="Amount"
                   description={
                     form.deposit_charge_enabled

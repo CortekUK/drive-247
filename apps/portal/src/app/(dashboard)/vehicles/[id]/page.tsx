@@ -433,8 +433,8 @@ function VehicleDetail() {
   } = useVehicleFiles(id!);
 
   // Fetch vehicle details
-  const { data: vehicle, isLoading: vehicleLoading } = useQuery({
-    queryKey: ["vehicle", id],
+  const { data: vehicle, isPending: vehicleLoading } = useQuery({
+    queryKey: ["vehicle", id, tenant?.id],
     queryFn: async () => {
       if (!id) throw new Error("Vehicle ID required");
       const { data, error } = await supabase
@@ -444,7 +444,10 @@ function VehicleDetail() {
           vehicle_photos(id, photo_url, display_order)
         `)
         .eq("id", id)
-        .single();
+        // The car must belong to the company signed in. By id alone, any
+        // portal user who had another company's car link could open it.
+        .eq("tenant_id", tenant!.id)
+        .maybeSingle();
 
       if (error) throw error;
 
@@ -460,7 +463,7 @@ function VehicleDetail() {
 
       return data as unknown as Vehicle;
     },
-    enabled: !!id,
+    enabled: !!id && !!tenant?.id,
   });
 
   // Sync lockbox code from vehicle data

@@ -32,6 +32,7 @@ import {
 } from "@nw/lib/stores/booking-store";
 import { toQuoteVehicle } from "@nw/lib/quote/quote-vehicle";
 import type { PickupLocation, UnavailableReason } from "@nw/lib/vehicles/types";
+import { isSellableOnline } from "@nw/lib/vehicles/sellable";
 
 import {
   describeOutstanding,
@@ -673,7 +674,7 @@ export function useVehicleBooking(vehicleId: string) {
     if (creatingBooking) {
       return null;
     }
-    if (vehicle?.isPaused ?? false) {
+    if ((vehicle?.isPaused ?? false) || (vehicle && !isSellableOnline(vehicle))) {
       return "This vehicle is not bookable right now. Please choose another from the fleet.";
     }
     if (pricingRulesDegraded) {
@@ -689,7 +690,7 @@ export function useVehicleBooking(vehicleId: string) {
   }, [
     paidHandoff,
     creatingBooking,
-    vehicle?.isPaused,
+    vehicle,
     pricingRulesDegraded,
     quote.deliveryBlocked,
     quote.ready,

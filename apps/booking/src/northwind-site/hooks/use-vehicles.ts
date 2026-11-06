@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { applyWebsiteVisibility, durationTierForDays } from '@nw/lib/vehicles/availability-rules';
+import { isSellableOnline } from '@nw/lib/vehicles/sellable';
 import { useQuery } from '@tanstack/react-query';
 
 import { supabase } from '@nw/integrations/supabase/client';
@@ -348,7 +349,7 @@ export function useVehicles(options: UseVehiclesOptions = {}): UseVehiclesResult
         throw new Error(error.message || 'Failed to load vehicles');
       }
 
-      return (data ?? []).map((row) => normalizeVehicle(row, tenant));
+      return (data ?? []).map((row) => normalizeVehicle(row, tenant)).filter(isSellableOnline);
     },
     enabled: enabled && !!tenant,
   });
