@@ -43,7 +43,7 @@ import {
   type FleetFilters,
   type FleetSort,
 } from './fleet-filters';
-import { toFleetVehicle, type FleetSeed, type FleetVehicle, type RatePeriod } from './fleet-vehicle';
+import { rateForPeriod, toFleetVehicle, type FleetSeed, type FleetVehicle, type RatePeriod } from './fleet-vehicle';
 import { useFleetView } from './use-fleet-view';
 
 interface FleetBrowserProps {
@@ -123,9 +123,17 @@ export function FleetBrowser({ seed = null }: FleetBrowserProps) {
 
   const facets = useMemo(() => buildFleetFacets(source, filters), [source, filters]);
 
+  // The Daily / Weekly / Monthly tab is a question the customer is asking
+  // ("what can I hire by the week?"), so a car that isn't offered for that
+  // length is left out rather than listed as "Not offered weekly".
+  const offeredForPeriod = useMemo(
+    () => source.filter((vehicle) => rateForPeriod(vehicle, period).offered),
+    [source, period],
+  );
+
   const results = useMemo(
-    () => sortVehicles(filterVehicles(source, filters), sort),
-    [source, filters, sort],
+    () => sortVehicles(filterVehicles(offeredForPeriod, filters), sort),
+    [offeredForPeriod, filters, sort],
   );
 
   const chips = useMemo(
@@ -231,7 +239,7 @@ export function FleetBrowser({ seed = null }: FleetBrowserProps) {
               className="h-12 w-full"
               onClick={() => setFiltersOpen(false)}
             >
-              Show {formatResultCount(results.length, source.length)}
+              Show {formatResultCount(results.length, offeredForPeriod.length)}
             </Button>
           </div>
         </SheetContent>
@@ -250,7 +258,7 @@ export function FleetBrowser({ seed = null }: FleetBrowserProps) {
           onViewChange={setView}
           period={period}
           onPeriodChange={setPeriod}
-          resultLabel={formatResultCount(results.length, source.length)}
+          resultLabel={formatResultCount(results.length, offeredForPeriod.length)}
           activeFilterCount={activeFilterCount}
           onOpenFilters={() => setFiltersOpen(true)}
         />
@@ -291,6 +299,12 @@ export function FleetBrowser({ seed = null }: FleetBrowserProps) {
                 <Link href="/contact">Talk to us</Link>
               </Button>
             }
+          />
+        ) : offeredForPeriod.length === 0 ? (
+          <StatePanel
+            icon={<SearchX aria-hidden className="size-6 text-brand-text-subtle" />}
+            title={`No cars are offered ${period === 'week' ? 'by the week' : period === 'month' ? 'by the month' : 'by the day'}`}
+            body="Try another hire length above."
           />
         ) : results.length === 0 ? (
           <StatePanel
