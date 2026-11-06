@@ -31,6 +31,40 @@ import {
 } from "./kit";
 import type { BlockedDate } from "@/hooks/use-blocked-dates";
 
+/** "1 day", "5 days" — a single-day block used to read "1 days". */
+export const dayCount = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
+
+/**
+ * Why a draft blocked period cannot be added, or null when it can.
+ *
+ * Checked BEFORE the insert, so the operator gets a sentence instead of what
+ * used to happen: an end before the start reached the database and came back
+ * as `violates check constraint "valid_date_range"`; a range that had already
+ * ended was saved with a "successfully blocked" toast and then vanished,
+ * because the list only loads blocks that end today or later; and a range
+ * over an existing block was saved silently as a second, overlapping row.
+ *
+ * A range that STARTS in the past but runs into today or later is allowed —
+ * "off the road since Monday, back on Friday" is a normal thing to record.
+ * Dates are `YYYY-MM-DD`, so string comparison is date comparison.
+ */
+export function blockDraftProblem(
+  draft: { from: string; to: string; reason: string },
+  existing: Pick<BlockedDate, "start_date" | "end_date" | "reason">[],
+  today: string,
+): string | null {
+  if (!draft.from || !draft.to) return null; // incomplete, not wrong — Add stays off
+  if (draft.to < draft.from) return "The end date is before the start date. Choose an end on or after the start.";
+  if (draft.to < today) return "Those dates are already in the past, so there is nothing left to block. Choose dates from today on.";
+  const clash = existing.find((b) => b.start_date <= draft.to && b.end_date >= draft.from);
+  if (clash) {
+    return `These dates overlap a period already blocked (${fmtDate(clash.start_date)} → ${fmtDate(clash.end_date)}, ${
+      clash.reason || "no reason recorded"
+    }). Change the dates, or unblock that period first.`;
+  }
+  return null;
+}
+
 /** One reason this car cannot be booked. */
 export type Blocker = {
   key: string;
@@ -65,9 +99,10 @@ export function AvailabilityTab({
 }) {
   const [pauseReason, setPauseReason] = useState("");
   const [draft, setDraft] = useState({ from: "", to: "", reason: "" });
-  const canAdd = Boolean(draft.from && draft.to && draft.reason);
   const hard = blockers.filter((b) => b.severity === "hard");
   const today = todayISO();
+  const draftProblem = blockDraftProblem(draft, blockedDates, today);
+  const canAdd = Boolean(draft.from && draft.to && draft.reason.trim()) && !draftProblem;
 
   return (
     <Panel title="Availability" description="Whether this car can be booked, and what is in the way.">
@@ -159,8 +194,15 @@ export function AvailabilityTab({
             {blockedDates.map((b) => (
               <DataRow
                 key={b.id}
-                label={`${fmtDate(b.start_date)} → ${fmtDate(b.end_date)}`}
-                sub={`${b.reason || "No reason recorded"} · ${daysBetween(b.start_date, b.end_date) + 1} days${
+                label={
+                  /* Wraps between the two dates instead of truncating: on a phone
+                     DataRow's single line cut the END date off ("Nov 5, 2026 → Nov…"). */
+                  <span className="whitespace-normal">
+                    <span className="whitespace-nowrap">{fmtDate(b.start_date)} →</span>{" "}
+                    <span className="whitespace-nowrap">{fmtDate(b.end_date)}</span>
+                  </span>
+                }
+                sub={`${b.reason || "No reason recorded"} · ${dayCount(daysBetween(b.start_date, b.end_date) + 1)}${
                   b.source_type && b.source_type !== "manual" ? ` · placed by ${b.source_type}` : ""
                 }`}
                 right={
@@ -202,7 +244,8 @@ export function AvailabilityTab({
               variant="outline"
               disabled={!canAdd}
               onClick={() => {
-                onAddBlock(draft.from, draft.to, draft.reason);
+                if (!canAdd) return;
+                onAddBlock(draft.from, draft.to, draft.reason.trim());
                 setDraft({ from: "", to: "", reason: "" });
               }}
             >
@@ -210,6 +253,11 @@ export function AvailabilityTab({
               Add
             </ActionButton>
           </div>
+        )}
+        {!readOnly && draftProblem && (
+          <p role="alert" className="mt-3 text-sm text-warning">
+            {draftProblem}
+          </p>
         )}
       </Section>
     </Panel>
