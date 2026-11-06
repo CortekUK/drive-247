@@ -73,11 +73,18 @@ export function FormatProvider({
     // which is a RangeError inside Intl — and that helper swallows it and
     // returns its `USD 421.00` fallback. Every whole-dollar figure on the
     // screen printed as an ISO code with cents.
-    money: (n) =>
-      formatCurrency(Number(n) || 0, currencyCode, {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      }),
+    //
+    // Whole amounts stay whole ($50), but an amount with cents shows them: the
+    // car's Money figures (a 47.35 service, an 18,754.94 contract) were rounded
+    // to the dollar, which hid real cents from the operator.
+    money: (n) => {
+      const v = Number(n) || 0;
+      const whole = Math.round(v * 100) % 100 === 0;
+      return formatCurrency(v, currencyCode, {
+        minimumFractionDigits: whole ? 0 : 2,
+        maximumFractionDigits: whole ? 0 : 2,
+      });
+    },
     moneyExact: (n) => formatCurrency(Number(n) || 0, currencyCode),
     dist: (n) => `${(Number(n) || 0).toLocaleString("en-US")} ${unit}`,
     distUnit: unit,
@@ -90,11 +97,11 @@ export function FormatProvider({
 export function useFmt(): Fmt {
   return (
     useContext(FmtContext) ?? {
-      money: (n) =>
-        formatCurrency(Number(n) || 0, "USD", {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 0,
-        }),
+      money: (n) => {
+        const v = Number(n) || 0;
+        const whole = Math.round(v * 100) % 100 === 0;
+        return formatCurrency(v, "USD", { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 });
+      },
       moneyExact: (n) => formatCurrency(Number(n) || 0, "USD"),
       dist: (n) => `${(Number(n) || 0).toLocaleString("en-US")} mi`,
       distUnit: "mi",
