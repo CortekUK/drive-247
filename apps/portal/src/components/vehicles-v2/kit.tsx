@@ -579,7 +579,7 @@ export function NumberInput({
             return;
           }
           // Half-typed ("." or "-.") is not a number yet: wait for the next key.
-          if (t !== "" && /^-?.?$/.test(t)) {
+          if (t !== "" && /^-?\.?$/.test(t)) {
             setProblem(null);
             return;
           }

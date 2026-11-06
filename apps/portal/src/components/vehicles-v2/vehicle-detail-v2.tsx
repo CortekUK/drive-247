@@ -824,7 +824,11 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
               vehicle={vehicle}
               patch={patch}
               patchNow={patchNow}
-              depositMode={(rentalSettings?.deposit_mode as "global" | "per_vehicle") ?? null}
+              depositMode={
+                rentalSettings?.deposit_charge_enabled
+                  ? "global"
+                  : ((rentalSettings?.deposit_mode as "global" | "per_vehicle") ?? null)
+              }
               globalDeposit={rentalSettings?.global_deposit_amount ?? null}
               monthlyTierDays={Number(tenant?.monthly_tier_days) || 28}
               readOnly={readOnly}

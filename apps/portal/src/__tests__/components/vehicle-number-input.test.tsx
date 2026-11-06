@@ -49,6 +49,14 @@ describe("NumberInput", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("saves a single digit straight away, 0 included", () => {
+    const { input, onChange } = box();
+    fireEvent.change(input, { target: { value: "0" } });
+    expect(onChange).toHaveBeenLastCalledWith(0);
+    fireEvent.change(input, { target: { value: "5" } });
+    expect(onChange).toHaveBeenLastCalledWith(5);
+  });
+
   it("still lets a box be cleared", () => {
     const { input, onChange } = box();
     fireEvent.change(input, { target: { value: "" } });

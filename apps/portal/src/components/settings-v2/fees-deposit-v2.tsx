@@ -359,11 +359,12 @@ export function DepositSettingsV2({
             </SettingsRow>
             {form.security_deposit_enabled && (
               <>
+                {!form.deposit_charge_enabled && (
                 <SettingsRow
                   label="How the amount is set"
                   description={
                     form.deposit_mode === "per_vehicle"
-                      ? "Each car's own deposit, set on its Rates & mileage page. Cars without one use the amount below."
+                      ? "Each car's own deposit, set on its Rates & mileage page, is held on the card. Cars without one use the amount below."
                       : "One amount for every car. A car's own deposit is locked to it."
                   }
                 >
@@ -380,6 +381,7 @@ export function DepositSettingsV2({
                     </SelectContent>
                   </Select>
                 </SettingsRow>
+                )}
                 <SettingsRow
                   label="Amount"
                   description={
