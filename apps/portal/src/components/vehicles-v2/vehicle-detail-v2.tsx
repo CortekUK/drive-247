@@ -47,6 +47,7 @@
 
 import { useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -59,7 +60,7 @@ import { useVehicleDailyPrices } from "@/hooks/use-vehicle-daily-prices";
 import { useVehicleDisposal } from "@/hooks/use-vehicle-disposal";
 import { useVehicleEvents } from "@/hooks/use-vehicle-events";
 import { useVehicleExtras } from "@/hooks/use-vehicle-extras";
-import { useVehicleFiles } from "@/hooks/use-vehicle-files";
+import { useVehicleFiles, type VehicleFile } from "@/hooks/use-vehicle-files";
 import { useVehiclePricingOverrides } from "@/hooks/use-vehicle-pricing-overrides";
 import { useVehicleServices } from "@/hooks/use-vehicle-services";
 import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
@@ -274,6 +275,14 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
   const { serviceRecords, addService, deleteService } = useVehicleServices(vehicleId);
   const { files, uploadFile, deleteFile, downloadFile, isUploading: isUploadingFile } =
     useVehicleFiles(vehicleId);
+  /* A database trigger writes the Activity line for every upload and removal,
+     but the Activity list was only re-read on a page refresh, so the newest
+     file never showed until then. Re-read it once the change has landed. */
+  const queryClient = useQueryClient();
+  const refreshActivity = () =>
+    queryClient.invalidateQueries({ queryKey: ["vehicleEvents", tenant?.id, vehicleId] });
+  const uploadFileAndLog = (file: File) => uploadFile(file, { onSettled: refreshActivity });
+  const deleteFileAndLog = (file: VehicleFile) => deleteFile(file, { onSettled: refreshActivity });
   const { blockedDates, addBlockedDate, deleteBlockedDate } = useBlockedDates(vehicleId);
   const { locations } = usePickupLocations();
   const { extras: allExtras } = useRentalExtras();
@@ -936,9 +945,9 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
               patch={patch}
               patchNow={patchNow}
               files={files}
-              onUpload={uploadFile}
+              onUpload={uploadFileAndLog}
               onDownload={downloadFile}
-              onDelete={deleteFile}
+              onDelete={deleteFileAndLog}
               isUploading={isUploadingFile}
               readOnly={readOnly}
             />

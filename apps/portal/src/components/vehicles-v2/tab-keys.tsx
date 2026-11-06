@@ -106,7 +106,7 @@ export function KeysDocsTab({
         </List>
 
         {vehicle.has_spare_key && (
-          <div className="mt-4 grid grid-cols-2 gap-5">
+          <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
             {/* `chk_spare_key_holder` allows exactly 'Company' or 'Customer'.
                 This was a free-text box in an earlier pass, which wrote fine in
                 the UI and then failed on the constraint a second later. */}
