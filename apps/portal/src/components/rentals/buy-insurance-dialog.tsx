@@ -23,16 +23,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
 
 interface BuyInsuranceDialogProps {
@@ -170,6 +160,7 @@ export function BuyInsuranceDialog({
 
   const handleClose = () => {
     setStep(1);
+    setDuplicateWarning(null);
     setCoverage(DEFAULT_COVERAGE);
     setPremium(0);
     onOpenChange(false);
@@ -679,6 +670,38 @@ export function BuyInsuranceDialog({
               You will be prompted to collect payment after the purchase.
             </p>
 
+            {/* Duplicate-policy guard, shown INSIDE this window. It used to be a
+                second dialog opened beside this one, which could end up hidden
+                behind it: the operator clicked Purchase and nothing seemed to
+                happen (R-877941, 2026-11-06). */}
+            {duplicateWarning && (
+              <div role="alert" className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                <p className="flex items-center gap-2 font-medium text-amber-600 dark:text-amber-400">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  Already insured for these dates
+                </p>
+                <p className="mt-1 text-muted-foreground">
+                  {duplicateWarning} Issuing another policy will charge your Bonzah balance a second time for the same period.
+                </p>
+                <div className="mt-3 flex justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setDuplicateWarning(null)} disabled={purchasing}>
+                    Don&apos;t issue
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-amber-600 hover:bg-amber-700"
+                    disabled={purchasing}
+                    onClick={() => {
+                      setDuplicateWarning(null);
+                      handlePurchase(true);
+                    }}
+                  >
+                    Issue anyway
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-between gap-2 pt-2">
               <Button variant="outline" onClick={() => setStep(1)} disabled={purchasing}>
                 <ArrowLeft className="w-4 h-4 mr-1.5" />
@@ -688,7 +711,7 @@ export function BuyInsuranceDialog({
                 <Button variant="outline" onClick={handleClose} disabled={purchasing}>
                   Cancel
                 </Button>
-                <Button onClick={() => handlePurchase()} disabled={purchasing}>
+                <Button onClick={() => handlePurchase()} disabled={purchasing || !!duplicateWarning}>
                   {purchasing ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
@@ -708,36 +731,6 @@ export function BuyInsuranceDialog({
       </DialogContent>
     </Dialog>
 
-    {/* Duplicate-policy guard: the rental already has an active policy covering
-        these dates. Force a deliberate confirmation before issuing a second one. */}
-    <AlertDialog open={!!duplicateWarning} onOpenChange={(v) => { if (!v) setDuplicateWarning(null); }}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-500" />
-            Already insured for these dates
-          </AlertDialogTitle>
-          <AlertDialogDescription>
-            {duplicateWarning}
-            {' '}Issuing another policy will charge your Bonzah balance a second time for the same period.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={purchasing}>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            disabled={purchasing}
-            className="bg-amber-600 hover:bg-amber-700"
-            onClick={(e) => {
-              e.preventDefault();
-              setDuplicateWarning(null);
-              handlePurchase(true);
-            }}
-          >
-            Issue anyway
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
     </>
   );
 }

@@ -475,16 +475,27 @@ serve(async (req) => {
     // second Bonzah policy covering the SAME period — charging the Bonzah balance
     // twice for coverage needed once. Block when an existing non-terminal policy
     // overlaps the requested window, unless the operator explicitly forces it.
-    // Overlap = existing.start <= new.end AND existing.end >= new.start, so
-    // legitimately back-to-back extension policies (non-overlapping) still pass.
+    // Policies are date-only and back-to-back: an extension starts on the very
+    // day the current cover ends (Nov 5→6, then Nov 6→7). That shared boundary
+    // day is not an overlap. The old inclusive test (start <= new.end AND
+    // end >= new.start) counted it as one and blocked every such extension
+    // with a 409 (R-877941, globalmotiontransport, 2026-11-06). Overlap is now
+    // strict, plus an exact repeat of the same window.
     if (!body.force_duplicate) {
-      const { data: existingPolicies, error: dupCheckError } = await supabase
+      const { data: candidatePolicies, error: dupCheckError } = await supabase
         .from('bonzah_insurance_policies')
         .select('policy_no, status, trip_start_date, trip_end_date, premium_amount')
         .eq('rental_id', body.rental_id)
         .in('status', ['active', 'quoted', 'payment_pending', 'payment_confirmed'])
         .lte('trip_start_date', tripEnd)
         .gte('trip_end_date', tripStart)
+      const day = (d: unknown) => String(d ?? '').slice(0, 10)
+      const existingPolicies = (candidatePolicies ?? []).filter((p) => {
+        const s = day(p.trip_start_date), e = day(p.trip_end_date)
+        const overlaps = s < tripEnd && e > tripStart
+        const sameWindow = s === tripStart && e === tripEnd
+        return overlaps || sameWindow
+      })
 
       if (dupCheckError) {
         // Fail open on a read error rather than blocking a legitimate purchase,
