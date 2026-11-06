@@ -60,6 +60,42 @@ export const useVehiclePricingOverrides = (vehicleId?: string) => {
         custom_percent: override.override_type === 'custom_percent' ? override.custom_percent : null,
       };
 
+      // A weekend override has no holiday_id, and the unique key treats NULLs as
+      // distinct, so an upsert never finds the existing weekend row: it inserted
+      // a second one and the old answer kept winning. Update the car's own
+      // weekend row when there is one; the holiday path still upserts.
+      if (payload.holiday_id === null) {
+        const { data: existing, error: findError } = await (supabase as any)
+          .from('vehicle_pricing_overrides')
+          .select('id')
+          .eq('vehicle_id', payload.vehicle_id)
+          .eq('rule_type', payload.rule_type)
+          .is('holiday_id', null);
+        if (findError) throw findError;
+        const ids = ((existing ?? []) as { id: string }[]).map((r) => r.id);
+        if (ids.length > 0) {
+          const { data, error } = await (supabase as any)
+            .from('vehicle_pricing_overrides')
+            .update(payload)
+            .eq('id', ids[0])
+            .select()
+            .single();
+          if (error) throw error;
+          // Any older duplicates from before this fix would otherwise still win.
+          if (ids.length > 1) {
+            await (supabase as any).from('vehicle_pricing_overrides').delete().in('id', ids.slice(1));
+          }
+          return data as VehiclePricingOverride;
+        }
+        const { data, error } = await (supabase as any)
+          .from('vehicle_pricing_overrides')
+          .insert(payload)
+          .select()
+          .single();
+        if (error) throw error;
+        return data as VehiclePricingOverride;
+      }
+
       const { data, error } = await (supabase as any)
         .from('vehicle_pricing_overrides')
         .upsert(payload, { onConflict: 'vehicle_id,rule_type,holiday_id' })
