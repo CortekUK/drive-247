@@ -47,11 +47,12 @@ export function HomeBands() {
   const { appUser } = useAuth();
   const { canView } = useManagerPermissions();
   const { status: announcementsStatus, features } = usePortalAnnouncements();
-  // PREVIEW (Sep 27 2026): sample busy days and booking sources are ON BY
-  // DEFAULT while the design is reviewed (northwind has 8 cars and 17 rentals
-  // in the window, too few to judge a heatmap by); `?demo-insights=0` shows
-  // the real figures. Flip the default back (`=== '1'`) before this widens.
-  const demoInsights = useSearchParams()?.get('demo-insights') !== '0';
+  // Real figures by default. Sample busy days and booking sources were ON BY
+  // DEFAULT from Sep 27 2026 for the design review, with a note to flip this
+  // back before v2 widened. It widened (self-serve signups land on v2), and
+  // QA sheet 15.4 found a new operator's dashboard showing an invented 18-car
+  // fleet. `?demo-insights=1` still shows the samples for design work.
+  const demoInsights = useSearchParams()?.get('demo-insights') === '1';
   const busyQ = useBusyDays();
   const sourcesQ = useBookingSources();
   const demoBusy = useMemo(() => buildDemoBusyDays(), []);

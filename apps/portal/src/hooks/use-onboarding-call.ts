@@ -77,6 +77,10 @@ export function useOnboardingCall({ poll = false }: { poll?: boolean } = {}) {
     staleTime: 60 * 1000,
     // Coming back from adding a vehicle or a logo in another tab ticks the box.
     refetchOnWindowFocus: true,
+    // ...and so does coming back in the SAME tab. With only the staleTime, an
+    // operator who added their first car and returned to the dashboard saw
+    // "Add your first vehicle" still undone for up to a minute (QA sheet 15.2).
+    refetchOnMount: "always",
     refetchInterval: poll ? 4000 : false,
     queryFn: async () => {
       const { data, error } = await supabaseUntyped.rpc("get_my_onboarding_call");

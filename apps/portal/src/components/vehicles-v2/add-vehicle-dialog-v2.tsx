@@ -537,7 +537,9 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
 
         reset();
         setAdded({ id: inserted.id, name: `${data.make} ${data.model}`, reg, notReady: notReadyToRentReasons(data) });
-        for (const key of ["reminders", "reminder-stats", "vehicles-list", "vehicles-pl", "vehicle-count", "vehicle-pl-entries"]) {
+        // The dashboard checklist and fleet card, and the New Rental car picker,
+        // count cars too — refresh them so the new car shows at once.
+        for (const key of ["reminders", "reminder-stats", "vehicles-list", "vehicles-pl", "vehicle-count", "vehicle-pl-entries", "onboarding-call", "setup-guide", "fleet-week", "busy-days", "dashboard-kpis", "swap-vehicle-candidates", "vehicle-picker-look-v2"]) {
           queryClient.invalidateQueries({ queryKey: [key] });
         }
       } catch (error: any) {

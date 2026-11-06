@@ -22,7 +22,7 @@
 
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Car, ShieldAlert, Ban, CalendarX } from "lucide-react";
+import { Search, Car, ShieldAlert, Ban, CalendarX, PauseCircle, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
@@ -40,7 +40,7 @@ function useFleetLook() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicles")
-        .select("id, photo_url, year, colour, category, current_mileage")
+        .select("id, photo_url, year, colour, category, current_mileage, is_paused, paused_reason, available_daily, available_weekly, available_monthly")
         .eq("tenant_id", tenant!.id);
       if (error) throw error;
       return new Map(((data ?? []) as any[]).map((v) => [v.id as string, v]));
@@ -77,6 +77,23 @@ export function VehiclePicker({
     endDate: endDate ?? undefined,
   });
   const { data: look } = useFleetLook();
+
+  /*
+   * Which hire length these dates fall in — the same tiers the price uses
+   * (under 7 days daily, then weekly, then monthly from the tenant's monthly
+   * day). Open-ended dates have no length yet, so nothing is checked.
+   */
+  const lengthTier = useMemo<"daily" | "weekly" | "monthly" | null>(() => {
+    if (!startDate || !endDate) return null;
+    const days = Math.round(
+      (Date.UTC(+endDate.slice(0, 4), +endDate.slice(5, 7) - 1, +endDate.slice(8, 10)) -
+        Date.UTC(+startDate.slice(0, 4), +startDate.slice(5, 7) - 1, +startDate.slice(8, 10))) /
+        86_400_000,
+    );
+    if (!(days > 0)) return null;
+    const monthlyFrom = (tenant as any)?.monthly_tier_days ?? 30;
+    return days >= monthlyFrom ? "monthly" : days >= 7 ? "weekly" : "daily";
+  }, [startDate, endDate, tenant]);
 
   const q = term.trim().toLowerCase();
   const rows = useMemo(() => {
@@ -148,6 +165,18 @@ export function VehiclePicker({
                 const name = [v.make, v.model].filter(Boolean).join(" ") || v.reg;
                 const reason: string | undefined = v.unavailable || v.blocked || v.notRoadLegal ? v.conflictReason : undefined;
                 const usable = !reason;
+                /* Warnings, not refusals: staff may knowingly put a paused car,
+                   or one not offered for this length, on a rental — but never
+                   blind. Neither was shown before. */
+                const warnings: string[] = [];
+                if (extra?.is_paused) {
+                  warnings.push(`Paused${extra.paused_reason ? ` — ${extra.paused_reason}` : ""}. You can still use it.`);
+                }
+                if (lengthTier && extra && extra[`available_${lengthTier}`] === false) {
+                  warnings.push(
+                    `Not offered by the ${lengthTier === "daily" ? "day" : lengthTier === "weekly" ? "week" : "month"} — this rental is a ${lengthTier} hire.`,
+                  );
+                }
                 const active = picked === v.id;
                 const rates = [
                   v.daily_rent ? `${formatCurrency(Number(v.daily_rent), currency)}/day` : null,
@@ -169,7 +198,7 @@ export function VehiclePicker({
                     }}
                     title={reason}
                     className={cn(
-                      "relative grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-6 rounded-2xl px-4 py-3 outline-none transition-colors duration-200 ease-out focus-visible:ring-2 focus-visible:ring-ring/40 motion-reduce:transition-none",
+                      "relative grid grid-cols-1 items-center gap-2 rounded-2xl sm:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] sm:gap-6 px-4 py-3 outline-none transition-colors duration-200 ease-out focus-visible:ring-2 focus-visible:ring-ring/40 motion-reduce:transition-none",
                       !usable ? "cursor-not-allowed opacity-55" : active ? "cursor-pointer bg-primary/10" : "cursor-pointer hover:bg-foreground/[0.04]"
                     )}
                   >
@@ -204,6 +233,16 @@ export function VehiclePicker({
                       <p className="truncate text-[11px] text-muted-foreground">
                         {v.healthStatus === "overdue" ? "Service overdue" : v.status || "No status"}
                       </p>
+                      {warnings.map((w) => (
+                        <p key={w} className="mt-0.5 flex items-start gap-1.5 text-[11px] font-medium text-warning">
+                          {w.startsWith("Paused") ? (
+                            <PauseCircle className="mt-px size-3.5 shrink-0" />
+                          ) : (
+                            <AlertTriangle className="mt-px size-3.5 shrink-0" />
+                          )}
+                          <span>{w}</span>
+                        </p>
+                      ))}
                     </div>
 
                     {/* price */}
