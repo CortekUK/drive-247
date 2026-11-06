@@ -558,6 +558,10 @@ export function CustomerFormDialogV2({
           // The ID check is waiting on the customer's phone: a stray click
           // outside must not throw the QR away. "Later" closes it.
           onInteractOutside={(e) => qr && e.preventDefault()}
+          // Escape too: pressing it to dismiss the "Email link" box closed the
+          // whole ID check and lost the live tracker (sheet C4.8). Escape still
+          // closes that box; "Later" is the way out of the check.
+          onEscapeKeyDown={(e) => qr && e.preventDefault()}
           // Open on the first field to type in, not on the first button —
           // focusing a toggle drew a focus ring round it.
           onOpenAutoFocus={(e) => {

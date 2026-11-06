@@ -110,7 +110,9 @@ Deno.serve(async (req) => {
 
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('slug, company_name, email_from, logo_url, primary_color, accent_color, contact_email, contact_phone, phone')
+      // No `email_from`: tenants has no such column, so selecting it failed the
+      // whole read and every send answered "Tenant not found" (sheet C4.4).
+      .select('slug, company_name, logo_url, primary_color, accent_color, contact_email, contact_phone, phone')
       .eq('id', tenantId)
       .single();
     if (!tenant?.slug) return errorResponse('Tenant not found', 404);
@@ -148,7 +150,8 @@ ${until ? `<p>This link works until ${escapeEmailHtml(until)}.</p>` : ''}
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: `${company} <${tenant.email_from || 'noreply@drive-247.com'}>`,
+        // The same sender the platform's other emails use (_shared/resend-service.ts).
+        from: `${company} <${tenant.slug}@drive-247.com>`,
         to: [to],
         subject: `Verify your ID for ${company}`,
         html,
