@@ -25,7 +25,7 @@ import {
   type FleetFilters,
   type FleetSort,
 } from '@nw/components/fleet/fleet-filters';
-import { toFleetVehicle, type FleetSeed, type FleetVehicle, type RatePeriod } from '@nw/components/fleet/fleet-vehicle';
+import { rateForPeriod, toFleetVehicle, type FleetSeed, type FleetVehicle, type RatePeriod } from '@nw/components/fleet/fleet-vehicle';
 import { useFleetView } from '@nw/components/fleet/use-fleet-view';
 
 const NO_VEHICLES: FleetVehicle[] = [];
@@ -69,7 +69,17 @@ export function useFleetBrowser(seed: FleetSeed | null) {
   const distanceUnit = tenant?.distance_unit ?? seed?.distanceUnit ?? null;
 
   const facets = useMemo(() => buildFleetFacets(source, filters), [source, filters]);
-  const results = useMemo(() => sortVehicles(filterVehicles(source, filters), sort), [source, filters, sort]);
+  // The Daily / Weekly / Monthly tab is a question the customer is asking
+  // ("what can I hire by the week?"), so a car not offered for that length is
+  // left out rather than listed as "Not offered weekly".
+  const offeredForPeriod = useMemo(
+    () => source.filter((vehicle) => rateForPeriod(vehicle, period).offered),
+    [source, period],
+  );
+  const results = useMemo(
+    () => sortVehicles(filterVehicles(offeredForPeriod, filters), sort),
+    [offeredForPeriod, filters, sort],
+  );
 
   const chips = useMemo(
     () =>
@@ -102,6 +112,7 @@ export function useFleetBrowser(seed: FleetSeed | null) {
     tripIntent,
     clearTripIntent,
     source,
+    offeredForPeriod,
     results,
     facets,
     chips,
@@ -111,7 +122,7 @@ export function useFleetBrowser(seed: FleetSeed | null) {
     currencyCode,
     distanceUnit,
     searchPlaceholder,
-    resultLabel: formatResultCount(results.length, source.length),
+    resultLabel: formatResultCount(results.length, offeredForPeriod.length),
     error,
     refetch,
     showSkeleton: isLoading && source.length === 0,

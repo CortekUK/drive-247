@@ -157,12 +157,19 @@ export function FleetBrowser({ seed = null }: FleetBrowserProps) {
               </Button>
             }
           />
+        ) : fleet.offeredForPeriod.length === 0 ? (
+          <EmptyState
+            className="pv2-enter"
+            icon={<SearchX aria-hidden strokeWidth={1.75} className="size-5" />}
+            title={`No cars are offered ${fleet.period === 'week' ? 'by the week' : fleet.period === 'month' ? 'by the month' : 'by the day'}`}
+            description="Try another hire length above."
+          />
         ) : fleet.results.length === 0 ? (
           <EmptyState
             className="pv2-enter"
             icon={<SearchX aria-hidden strokeWidth={1.75} className="size-5" />}
             title="No vehicles match those filters"
-            description={`All ${fleet.source.length} of our vehicles are still available. The current combination just rules them all out.`}
+            description={`All ${fleet.offeredForPeriod.length} of our vehicles are still available. The current combination just rules them all out.`}
             action={
               <Button variant="brand" className="mt-1 h-10" onClick={fleet.clearAll}>
                 Clear all filters
