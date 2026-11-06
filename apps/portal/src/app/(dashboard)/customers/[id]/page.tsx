@@ -224,8 +224,11 @@ const CustomerDetail = () => {
   const [previewImage, setPreviewImage] = useState<{ url: string; label: string } | null>(null);
 
   const { data: customer, isLoading, refetch: refetchCustomer } = useQuery({
-    queryKey: ["customer", id],
+    queryKey: ["customer", id, tenant?.id],
     queryFn: async () => {
+      // Scoped to the signed-in tenant: the customers table does not enforce
+      // tenant isolation itself, so a link to another tenant's customer showed
+      // their name, contact details, date of birth and licence (sheet C2.15).
       const { data, error } = await (supabase as any)
         .from("customers")
         .select(`
@@ -235,12 +238,13 @@ const CustomerDetail = () => {
           nok_full_name, nok_relationship, nok_phone, nok_email, nok_address
         `)
         .eq("id", id)
-        .single();
+        .eq("tenant_id", tenant!.id)
+        .maybeSingle();
 
       if (error) throw error;
-      return data as Customer;
+      return data as Customer | null;
     },
-    enabled: !!id,
+    enabled: !!id && !!tenant?.id,
     staleTime: 0, // Always fetch fresh data
   });
 
@@ -462,7 +466,9 @@ const CustomerDetail = () => {
     refetchInterval: 5000, // Auto-refresh every 5 seconds to show updated status
   });
 
-  if (isLoading) {
+  // The record waits for the tenant (see the scoped query above); until then it
+  // is still loading, not "not found".
+  if (isLoading || !tenant?.id) {
     return <div>Loading customer details...</div>;
   }
 
