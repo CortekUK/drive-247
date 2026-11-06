@@ -542,6 +542,18 @@ export function NumberInput({
   const [raw, setRaw] = useState(value == null ? "" : String(value));
   const [problem, setProblem] = useState<string | null>(null);
   const focused = useRef(false);
+  /** The saved value when typing began: a refused keystroke puts it back. */
+  const atFocus = useRef<number | null | undefined>(value);
+  const published = useRef(false);
+  /** Refuse with a reason. Digits typed before the bad key (the "12" of
+   *  "12.5") were already published, so undo them back to the starting value. */
+  const refuse = (reason: string) => {
+    setProblem(reason);
+    if (published.current && atFocus.current != null) {
+      onChange(atFocus.current);
+      published.current = false;
+    }
+  };
 
   useEffect(() => {
     if (!focused.current) setRaw(value == null ? "" : String(value));
@@ -551,6 +563,10 @@ export function NumberInput({
     <span
       className="block"
       onFocus={() => {
+        if (!focused.current) {
+          atFocus.current = value;
+          published.current = false;
+        }
         focused.current = true;
       }}
       onBlur={() => {
@@ -572,13 +588,13 @@ export function NumberInput({
           // 0 (letters) or saved as typed (a minus sign).
           const t = v.trim().replace(/,/g, "");
           if (t !== "" && !/^-?\d*\.?\d*$/.test(t)) {
-            setProblem("Numbers only, so this wasn't saved.");
+            refuse("Numbers only, so this wasn't saved.");
             return;
           }
           // A minus sign is refused the moment it is typed: below 0 is never
           // valid here, and "-" on its own must not be read as 0 and saved.
           if (min >= 0 && t.startsWith("-")) {
-            setProblem(`Can't be less than ${min}, so this wasn't saved.`);
+            refuse(`Can't be less than ${min}, so this wasn't saved.`);
             return;
           }
           // Half-typed ("." or "-.") is not a number yet: wait for the next key.
@@ -587,15 +603,16 @@ export function NumberInput({
             return;
           }
           if (integer && t.includes(".")) {
-            setProblem("Whole numbers only, so this wasn't saved.");
+            refuse("Whole numbers only, so this wasn't saved.");
             return;
           }
           const n = num(v);
           if (t !== "" && n < min) {
-            setProblem(`Can't be less than ${min}, so this wasn't saved.`);
+            refuse(`Can't be less than ${min}, so this wasn't saved.`);
             return;
           }
           setProblem(null);
+          published.current = true;
           onChange(n);
         }}
       />

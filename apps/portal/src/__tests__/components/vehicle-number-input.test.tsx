@@ -65,6 +65,16 @@ describe("NumberInput", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Whole numbers only");
   });
 
+  it("typing 12.5 key by key ends back at the starting value, not 12", () => {
+    const onChange = vi.fn();
+    render(<NumberInput value={700} onChange={onChange} integer />);
+    const input = screen.getByRole("textbox");
+    fireEvent.focus(input);
+    for (const v of ["1", "12", "12.", "12.5"]) fireEvent.change(input, { target: { value: v } });
+    expect(onChange).toHaveBeenLastCalledWith(700);
+    expect(screen.getByRole("alert")).toHaveTextContent("Whole numbers only");
+  });
+
   it("still lets a box be cleared", () => {
     const { input, onChange } = box();
     fireEvent.change(input, { target: { value: "" } });
