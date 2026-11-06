@@ -412,7 +412,7 @@ export function useSiteContent(seed?: CbpSeed | null): CbpContent {
     queryFn: async () => {
       const [rentals, vehiclesCount, ratings] = await Promise.all([
         supabase.from("rentals").select("*", { count: "exact", head: true }).eq("tenant_id", tenant!.id),
-        supabaseUntyped.from("vehicles").select("*", { count: "exact", head: true })
+        supabaseUntyped.from("vehicles").select("id", { count: "exact", head: true })
           .eq("tenant_id", tenant!.id).eq("is_paused", false).eq("is_disposed", false),
         supabaseUntyped.from("testimonials").select("stars").eq("tenant_id", tenant!.id),
       ]);

@@ -7,6 +7,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
+import { vehiclePublicColumns } from '@/lib/vehicle-identity';
 
 // Type helper for table names
 type TableName = keyof Database['public']['Tables'];
@@ -16,9 +17,11 @@ type TableName = keyof Database['public']['Tables'];
  * @param tenantId - The tenant ID to filter by
  */
 export function getTenantVehicles(tenantId: string) {
+  // Never `*`: the public key may not read the operator-only columns
+  // (keys, tracker, lockbox, security notes), and `*` would be refused.
   return supabase
     .from('vehicles')
-    .select('*')
+    .select(vehiclePublicColumns(null))
     .eq('tenant_id', tenantId)
     .eq('status', 'Available')
     .order('created_at', { ascending: false });
@@ -32,7 +35,7 @@ export function getTenantVehicles(tenantId: string) {
 export function getTenantVehicleById(tenantId: string, vehicleId: string) {
   return supabase
     .from('vehicles')
-    .select('*')
+    .select(vehiclePublicColumns(null))
     .eq('id', vehicleId)
     .eq('tenant_id', tenantId)
     .single();

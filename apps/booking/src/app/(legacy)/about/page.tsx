@@ -120,7 +120,8 @@ const About = () => {
       // @ts-ignore - Supabase type inference issue
       const { count: vehiclesCount } = await supabase
         .from("vehicles")
-        .select("*", { count: "exact", head: true })
+        // `id`, not `*`: the public key cannot read every column of a car.
+        .select("id", { count: "exact", head: true })
         // A count including cars a visitor cannot find would overstate the
         // fleet — this number sits next to "vehicles in our fleet".
         .eq("show_on_website", true)
