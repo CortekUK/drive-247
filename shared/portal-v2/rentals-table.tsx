@@ -72,6 +72,10 @@ export interface RentalsTableRow {
   reference: string;
   /** The second column's value: the customer's full name, or the vehicle. */
   party: string;
+  /** Optional line under it, e.g. the car's plate. The operator list leaves it out. */
+  partySub?: string | null;
+  /** Optional thumbnail beside it, e.g. the car's cover photo. */
+  partyImage?: string | null;
   /** DATE-only "YYYY-MM-DD". */
   start: string | null;
   end: string | null;
@@ -225,7 +229,19 @@ function RentalRow({ row, onOpen }: { row: RentalsTableRow; onOpen: (id: string)
       </TableCell>
 
       <TableCell className={V2_LIST_CLASSES.cell}>
-        <span className={cn("block truncate", V2_LIST_CLASSES.text)}>{row.party}</span>
+        {row.partyImage || row.partySub ? (
+          <div className="flex min-w-0 items-center gap-3">
+            {row.partyImage ? (
+              <img src={row.partyImage} alt="" className="h-9 w-12 shrink-0 rounded-lg object-cover" loading="lazy" />
+            ) : null}
+            <div className="min-w-0">
+              <span className={cn("block truncate", V2_LIST_CLASSES.text)}>{row.party}</span>
+              {row.partySub ? <span className="block truncate text-xs text-v2-muted-fg">{row.partySub}</span> : null}
+            </div>
+          </div>
+        ) : (
+          <span className={cn("block truncate", V2_LIST_CLASSES.text)}>{row.party}</span>
+        )}
       </TableCell>
 
       {/* `tabular-nums` lines the two date columns up down the page. */}

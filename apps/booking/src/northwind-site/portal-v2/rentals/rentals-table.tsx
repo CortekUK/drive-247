@@ -38,6 +38,10 @@ function toRow(rental: CustomerRental): RentalsTableRow {
     id: rental.id,
     reference: rental.reference,
     party: rental.vehicle?.displayName ?? 'Vehicle',
+    // The car the customer will recognise: its cover photo, and the plate where
+    // the tenant shows plates (registration is null otherwise).
+    partySub: rental.vehicle?.registration ?? null,
+    partyImage: rental.vehicle?.imageUrl ?? null,
     start: rental.startDate,
     end: rental.endDate,
     status: customerRentalStatus(rental),
