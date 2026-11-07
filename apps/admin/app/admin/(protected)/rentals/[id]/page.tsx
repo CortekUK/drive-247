@@ -117,6 +117,7 @@ interface Tenant {
   stripe_account_status: string | null;
   bonzah_username: string | null;
   boldsign_mode: string;
+  portal_experience?: string | null;
   integration_tesla_fleet: boolean;
   subscription_gate_disabled: boolean | null;
   /** Serve this tenant's custom booking site instead of the legacy one. */
@@ -337,12 +338,31 @@ interface PlanFormData {
   features: string[];
 }
 
+/**
+ * The mode a tenant really signs in. The v2 product has no BoldSign test mode:
+ * the portal and /api/esign force live for it whatever tenants.boldsign_mode
+ * says (apps/portal/src/lib/lean-areas.ts resolveBoldSignMode, LEAN_TENANTS =
+ * ['northwind'] or portal_experience = 'v2'). This page read the raw column,
+ * so it showed Northwind as "Sandbox" while every agreement went out live
+ * (QA sheet A11.3).
+ */
+const BOLDSIGN_ALWAYS_LIVE_SLUGS = ['northwind'];
+function boldsignForcedLive(t: { slug: string; portal_experience?: string | null }): boolean {
+  return t.portal_experience === 'v2' || BOLDSIGN_ALWAYS_LIVE_SLUGS.includes(t.slug);
+}
+function boldsignIsLive(t: { slug: string; boldsign_mode: string; portal_experience?: string | null }): boolean {
+  return boldsignForcedLive(t) || t.boldsign_mode === 'live';
+}
+
 interface TenantStats {
   totalVehicles: number;
   fleet: FleetCounts | null;
   activeRentals: number;
   totalCustomers: number;
   staffUsers: number;
+  /** Rental + one-off agreements, as the portal's Agreements page lists them (withdrawn ones left out). */
+  agreementsSent: number;
+  agreementsSigned: number;
   completedRentals: number;
 }
 
@@ -949,14 +969,22 @@ export default function TenantDetailsPage() {
   const loadStats = async (tenantId: string) => {
     setStatsLoading(true);
     try {
-      const [vehiclesRes, activeRentalsRes, completedRentalsRes, customersRes, staffRes, fleet] = await Promise.all([
+      const [vehiclesRes, activeRentalsRes, completedRentalsRes, customersRes, staffRes, fleet, rentalAgreementsRes, individualAgreementsRes] = await Promise.all([
         supabase.from('vehicles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
         supabase.from('rentals').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).in('status', ['active', 'in_progress', 'confirmed']),
         supabase.from('rentals').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('status', 'completed'),
         supabase.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
         supabase.from('app_users').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
         loadFleetCounts(tenantId),
+        supabase.from('rental_agreements').select('document_status').eq('tenant_id', tenantId),
+        supabase.from('individual_agreements_v2').select('document_status').eq('tenant_id', tenantId),
       ]);
+      // QA sheet A11.1: the tenant page showed no agreement figures at all.
+      // Same statuses as the portal (shared/portal-v2/agreements/list.ts):
+      // voided/revoked are withdrawn and not listed; signed/completed count as signed.
+      const agreementStatuses = [...(rentalAgreementsRes.data || []), ...(individualAgreementsRes.data || [])]
+        .map((r: { document_status: string | null }) => (r.document_status || '').trim().toLowerCase())
+        .filter((st) => st !== 'voided' && st !== 'revoked');
 
       setStats({
         totalVehicles: vehiclesRes.count || 0,
@@ -965,6 +993,8 @@ export default function TenantDetailsPage() {
         completedRentals: completedRentalsRes.count || 0,
         totalCustomers: customersRes.count || 0,
         staffUsers: staffRes.count || 0,
+        agreementsSent: agreementStatuses.length,
+        agreementsSigned: agreementStatuses.filter((st) => st === 'signed' || st === 'completed').length,
       });
     } catch (error) {
       console.error('Error loading stats:', error);
@@ -1582,7 +1612,7 @@ export default function TenantDetailsPage() {
       logo={<IntegrationLogo src={brandLogo('boldsign.com')} alt="BoldSign" />}
       name="BoldSign"
       description="E-signature for rental agreements."
-      status={<IntegrationStatus tone={tenant.boldsign_mode === 'live' ? 'success' : 'info'} label={tenant.boldsign_mode === 'live' ? 'Production' : 'Sandbox'} />}
+      status={<IntegrationStatus tone={boldsignIsLive(tenant) ? 'success' : 'info'} label={boldsignIsLive(tenant) ? 'Production' : 'Sandbox'} />}
       onOpen={() => setOpenIntegration('boldsign')}
     />,
     // MOCK (Ghulam, Oct 18 2026): placeholder tiles to preview See all with
@@ -1733,6 +1763,14 @@ export default function TenantDetailsPage() {
                     {
                       label: 'Customers',
                       value: statsLoading ? '…' : stats ? stats.totalCustomers.toLocaleString('en-US') : '—',
+                    },
+                    {
+                      label: 'Agreements',
+                      value: statsLoading
+                        ? '…'
+                        : stats
+                          ? `${stats.agreementsSent.toLocaleString('en-US')} sent · ${stats.agreementsSigned.toLocaleString('en-US')} signed`
+                          : '—',
                     },
                     {
                       label: 'Created',
@@ -1976,26 +2014,30 @@ export default function TenantDetailsPage() {
                     <div className="mb-2 flex h-16 items-center"><IntegrationLogo src={brandLogo('boldsign.com')} alt="BoldSign" size={48} /></div>
                     <DialogTitle className="flex items-center gap-2">
                       BoldSign
-                      <IntegrationStatus tone={tenant.boldsign_mode === 'live' ? 'success' : 'info'} label={tenant.boldsign_mode === 'live' ? 'Production' : 'Sandbox'} />
+                      <IntegrationStatus tone={boldsignIsLive(tenant) ? 'success' : 'info'} label={boldsignIsLive(tenant) ? 'Production' : 'Sandbox'} />
                     </DialogTitle>
                     <DialogDescription>Electronic signatures for rental agreements and contracts</DialogDescription>
                   </DialogHeader>
                   <PanelCard>
                     <PanelRow label="Environment">
-                      <span className={cn('font-medium', tenant.boldsign_mode === 'live' ? 'text-success' : 'text-sky-600')}>
-                        {tenant.boldsign_mode === 'live' ? 'Production' : 'Sandbox'}
+                      <span className={cn('font-medium', boldsignIsLive(tenant) ? 'text-success' : 'text-sky-600')}>
+                        {boldsignIsLive(tenant) ? 'Production' : 'Sandbox'}
                       </span>
                     </PanelRow>
                     <PanelRow label="Mode">
-                      <ModeControl
-                        mode={tenant.boldsign_mode || 'test'}
-                        disabled={modeUpdating}
-                        onSwitch={() => handleModeToggle('boldsign', tenant.boldsign_mode === 'live' ? 'test' : 'live')}
-                      />
+                      {boldsignForcedLive(tenant) ? (
+                        <span className="text-sm text-muted-foreground">Always live on the v2 product</span>
+                      ) : (
+                        <ModeControl
+                          mode={tenant.boldsign_mode || 'test'}
+                          disabled={modeUpdating}
+                          onSwitch={() => handleModeToggle('boldsign', tenant.boldsign_mode === 'live' ? 'test' : 'live')}
+                        />
+                      )}
                     </PanelRow>
                   </PanelCard>
                   <PanelNote>
-                    {tenant.boldsign_mode === 'live'
+                    {boldsignIsLive(tenant)
                       ? 'Production documents are legally binding and stored permanently.'
                       : 'Sandbox documents are watermarked and auto-deleted after 14 days.'}
                   </PanelNote>
