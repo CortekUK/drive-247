@@ -146,7 +146,7 @@ function useAiVerification(id: string) {
       const cols =
         "id, status, review_result, rejection_reason, verification_completed_at, ai_face_match_score, " +
         "document_number, document_expiry_date, document_issuing_date, first_name, last_name, date_of_birth, address, " +
-        "face_image_url, selfie_image_url, document_front_url, document_back_url, customer_corrections, customer_corrected_at";
+        "face_image_url, selfie_image_url, document_front_url, document_back_url, document_country, customer_corrections, customer_corrected_at";
       const base = () =>
         (supabase as any)
           .from("identity_verifications")
