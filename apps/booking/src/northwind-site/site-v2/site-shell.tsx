@@ -35,6 +35,22 @@ import { NAV_LINKS } from '@nw/lib/constants';
 
 const NAV_ORDER = ['/', '/fleet', '/promotions', '/reviews', '/about', '/contact'] as const;
 import { cn } from '@nw/lib/utils';
+import { sanitizeNextPath, withNext } from '@/app/(northwind)/northwind-site/(auth)/_components/next-path';
+
+/**
+ * "Sign in" that comes back to this page (sheet C12.3): a guest halfway
+ * through a booking who signs in used to land on /portal and had to find the
+ * car again. Read from window.location so it is the address the customer
+ * sees, not the rewritten internal route.
+ */
+function useSignInHref(): string {
+  const [href, setHref] = useState('/login');
+  useEffect(() => {
+    const here = window.location.pathname + window.location.search;
+    setHref(window.location.pathname === '/' ? '/login' : withNext('/login', sanitizeNextPath(here)));
+  }, []);
+  return href;
+}
 import { brandHslVars } from '@nw/portal-v2/brand';
 
 export function SiteV2Shell({
@@ -198,6 +214,7 @@ function AccountControl() {
   const router = useRouter();
   const { status, displayName, email, initials } = useCustomer();
   const { signingOut, signOut } = useSignOut();
+  const signInHref = useSignInHref();
 
   // Hold the slot while the session resolves, so "Sign in" does not flash for
   // a customer who is in fact signed in.
@@ -205,7 +222,7 @@ function AccountControl() {
 
   if (status === 'anonymous') {
     return (
-      <Link href="/login" className={PILL_OUTLINE}>
+      <Link href={signInHref} className={PILL_OUTLINE}>
         Sign in
       </Link>
     );
@@ -399,6 +416,7 @@ function MenuSheet({
 }) {
   const host = useSyncExternalStore(noSubscribe, () => document.body, () => null);
   const { status } = useCustomer();
+  const signInHref = useSignInHref();
   const tab = open ? 0 : -1;
 
   // The page stays still behind the sheet; Escape closes it.
@@ -468,7 +486,7 @@ function MenuSheet({
             Your account
           </Link>
         ) : (
-          <Link href="/login" onClick={onClose} tabIndex={tab} className={cn(PILL_OUTLINE, 'h-12 text-[15px]')}>
+          <Link href={signInHref} onClick={onClose} tabIndex={tab} className={cn(PILL_OUTLINE, 'h-12 text-[15px]')}>
             Sign in
           </Link>
         )}
