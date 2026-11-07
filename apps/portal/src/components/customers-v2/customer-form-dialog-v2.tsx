@@ -550,7 +550,10 @@ export function CustomerFormDialogV2({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={close}>
+      {/* While an ID check is live, nothing but "Later" / "Done" (which call
+          close directly) may shut this window: Escape still closed it despite
+          onEscapeKeyDown below, and with it went the live tracker (sheet C4.8). */}
+      <Dialog open={open} onOpenChange={(o) => { if (!o && qr) return; close(o); }}>
         <DialogContent
           className="gap-0 overflow-hidden p-0 sm:max-w-[720px]"
           style={FORM_DIALOG_WASH}
