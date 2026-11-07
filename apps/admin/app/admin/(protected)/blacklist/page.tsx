@@ -9,6 +9,25 @@ import { FilterSearch } from '@/components/admin/filter-primitives';
 import { PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 import { cn } from '@/lib/utils';
 
+interface BlocklistEntry {
+  id: string;
+  identity_type: string;
+  identity_number: string;
+  reason: string | null;
+  customer_name: string | null;
+  tenant_id: string;
+  tenant_name: string;
+  created_at: string;
+}
+
+const IDENTITY_LABEL: Record<string, string> = {
+  license: "Driver's licence",
+  id_card: 'ID card',
+  passport: 'Passport',
+  email: 'Email',
+  other: 'Other',
+};
+
 interface BlockedCustomer {
   id: string;
   name: string;
@@ -38,10 +57,36 @@ export default function BlacklistPage() {
   const [dialogEmail, setDialogEmail] = useState('');
   const [dialogReason, setDialogReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  // Every operator's own blocklist entries (licences, IDs, emails). A made-up
+  // or hand-added entry has no customer record, so the customer table above
+  // never showed it and super admin could not see what operators were
+  // refusing (QA sheet C15.3).
+  const [entries, setEntries] = useState<BlocklistEntry[]>([]);
 
   useEffect(() => {
     loadBlockedCustomers();
+    loadEntries();
   }, []);
+
+  const loadEntries = async () => {
+    const { data, error } = await supabase
+      .from('blocked_identities')
+      .select('id, identity_type, identity_number, reason, customer_name, tenant_id, created_at')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('Error loading blocklist entries:', error);
+      return;
+    }
+    const ids = [...new Set((data || []).map((e) => e.tenant_id).filter(Boolean))];
+    const { data: tenants } = ids.length
+      ? await supabase.from('tenants').select('id, company_name').in('id', ids)
+      : { data: [] as { id: string; company_name: string }[] };
+    const names = new Map((tenants || []).map((t) => [t.id, t.company_name]));
+    setEntries(
+      (data || []).map((e) => ({ ...e, tenant_name: names.get(e.tenant_id) || 'Unknown' })) as BlocklistEntry[],
+    );
+  };
 
   const loadBlockedCustomers = async () => {
     try {
@@ -222,6 +267,15 @@ export default function BlacklistPage() {
       c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.tenant_name?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const q = searchQuery.toLowerCase();
+  const filteredEntries = entries.filter(
+    (e) =>
+      e.identity_number?.toLowerCase().includes(q) ||
+      e.customer_name?.toLowerCase().includes(q) ||
+      e.tenant_name?.toLowerCase().includes(q) ||
+      e.reason?.toLowerCase().includes(q),
   );
 
   // Stats
@@ -446,6 +500,47 @@ export default function BlacklistPage() {
               body="A customer blocked here is refused by every operator on Drive247, not just the one who flagged them."
             />
           )
+        )}
+      </div>
+
+      {/* Each operator's own blocklist: IDs and emails they refuse, including
+          hand-added ones with no customer record behind them. */}
+      <div className="mt-8 mb-3 flex items-baseline justify-between gap-4 px-1">
+        <h2 className="text-base font-semibold tracking-tight text-foreground">Blocklist entries</h2>
+        <p className="text-xs text-muted-foreground">
+          {filteredEntries.length} {filteredEntries.length === 1 ? 'entry' : 'entries'} · added by each company
+        </p>
+      </div>
+      <div className="overflow-x-auto rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10">
+        <table className="min-w-full divide-y divide-dark-border max-md:[&_td]:whitespace-nowrap">
+          <thead className="bg-card/95">
+            <tr>
+              {['Identity', 'Type', 'Name given', 'Company', 'Reason', 'Added'].map((h) => (
+                <th key={h} className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-dark-border">
+            {filteredEntries.map((e) => (
+              <tr key={e.id}>
+                <td className="px-3 py-3 font-mono text-sm text-foreground">{e.identity_number}</td>
+                <td className="px-3 py-3 text-sm text-muted-foreground">{IDENTITY_LABEL[e.identity_type] || e.identity_type}</td>
+                <td className="px-3 py-3 text-sm text-foreground">{e.customer_name || '—'}</td>
+                <td className="px-3 py-3 text-sm text-foreground">{e.tenant_name}</td>
+                <td className="max-w-xs px-3 py-3 text-sm text-muted-foreground max-md:max-w-none">{e.reason || '—'}</td>
+                <td className="px-3 py-3 text-sm text-muted-foreground">
+                  {new Date(e.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filteredEntries.length === 0 && (
+          <p className="px-6 py-8 text-center text-sm text-muted-foreground">
+            {searchQuery ? 'No blocklist entries match your search.' : 'No company has added a blocklist entry.'}
+          </p>
         )}
       </div>
 

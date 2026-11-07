@@ -1729,6 +1729,11 @@ export default function TenantDetailsPage() {
                       label: 'Vehicles',
                       value: statsLoading ? '…' : stats?.fleet ? describeFleet(stats.fleet) : '—',
                     },
+                    // Loaded with the other stats but never shown (QA sheet C15.1).
+                    {
+                      label: 'Customers',
+                      value: statsLoading ? '…' : stats ? stats.totalCustomers.toLocaleString('en-US') : '—',
+                    },
                     {
                       label: 'Created',
                       value: new Date(tenant.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
