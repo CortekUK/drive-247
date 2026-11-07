@@ -1074,6 +1074,15 @@ const CustomersList = () => {
                           >
                             {customer.name}
                           </button>
+                          {/* Sheet C14.1: Inactive / Rejected / Blocked saved on the record
+                              but the list looked the same as for an Active customer. */}
+                          {customer.is_blocked ? (
+                            <span className="shrink-0 text-xs font-medium text-destructive">Blocked</span>
+                          ) : customer.status === "Rejected" ? (
+                            <span className="shrink-0 text-xs font-medium text-destructive">Rejected</span>
+                          ) : customer.status === "Inactive" ? (
+                            <span className="shrink-0 text-xs text-muted-foreground">Inactive</span>
+                          ) : null}
                           {hasNextOfKin(customer) && (
                             <span title="Emergency contact on file" className="shrink-0">
                               <Shield className="h-3 w-3 text-muted-foreground" />
