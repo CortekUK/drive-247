@@ -214,11 +214,32 @@ async function send(ctx: AgreementsContextV2, body: Record<string, unknown>, dep
     if (!template) value = { ...value, templateId: null };
   }
 
+  // The customer it was sent to, when the email is exactly one of THIS
+  // tenant's customers. The customer portal lists an individual agreement by
+  // customer_id (individual_agreements_v2_customer_select), and nothing set it,
+  // so no customer ever saw one sent to them (test sheet A9.1). An email that
+  // matches no customer (or more than one) stays unlinked and shows to no one.
+  // Best effort: a failed lookup never stops the send, it only leaves it unlinked.
+  let customerId: string | null = null;
+  try {
+    const pattern = value.recipientEmail.trim().replace(/[\\%_]/g, (c) => `\\${c}`);
+    const { data: matches, error } = await client
+      .from('customers')
+      .select('id')
+      .eq('tenant_id', tenant.id)
+      .ilike('email', pattern)
+      .limit(2);
+    if (!error && Array.isArray(matches) && matches.length === 1) customerId = String(matches[0].id);
+  } catch (e) {
+    console.warn('[agreements-v2/send] customer lookup skipped:', e instanceof Error ? e.message : e);
+  }
+
   // ── 2. the row, before anything is charged ──
   const { data: inserted, error: insertError } = await client
     .from(INDIVIDUAL_TABLE)
     .insert({
       tenant_id: tenant.id,
+      customer_id: customerId,
       recipient_name: value.recipientName,
       recipient_email: value.recipientEmail,
       cc_emails: value.cc,
