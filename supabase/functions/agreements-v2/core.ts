@@ -100,7 +100,7 @@ export async function handleAgreementsV2(req: Request, deps: AgreementsDepsV2): 
   // (the customer portal's Agreements page), and nothing else.
   const auth = await authenticateAgreementsV2(req.headers, deps.client, {
     write: action === 'send' || action === 'ready',
-    customer: action === 'document' || action === 'history' || action === 'sign-link',
+    customer: action === 'document' || action === 'history' || action === 'sign-link' || action === 'sync',
   });
   if (!auth.ok || !auth.context) return auth.outcome!;
   const ctx = auth.context;
@@ -424,13 +424,18 @@ async function sync(ctx: AgreementsContextV2, deps: AgreementsDepsV2): Promise<O
   const now = deps.now ?? (() => new Date());
   const cutoff = new Date(now().getTime() - STALE_AFTER_MS).toISOString();
 
-  const { data, error } = await client
+  let query = client
     .from(INDIVIDUAL_TABLE)
     .select('id, document_id, boldsign_mode, document_status')
     .eq('tenant_id', tenant.id)
     .not('document_id', 'is', null)
     .not('document_status', 'in', `(${TERMINAL_DOCUMENT_STATUSES.join(',')})`)
-    .lt('updated_at', cutoff)
+    .lt('updated_at', cutoff);
+  // A signed-in customer refreshes only agreements sent to them. Individual
+  // agreements have no webhook, so without this one they had just signed kept
+  // showing Pending until someone opened the operator's list (test sheet A9.4).
+  if (ctx.caller.customerId) query = query.eq('customer_id', ctx.caller.customerId);
+  const { data, error } = await query
     .order('updated_at', { ascending: true })
     .limit(MAX_PER_CALL);
   if (error) {

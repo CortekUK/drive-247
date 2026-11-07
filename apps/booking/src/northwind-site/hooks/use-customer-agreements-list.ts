@@ -76,6 +76,11 @@ export function useCustomerAgreementsList() {
     queryKey: ['customer-agreements-list', tenantId, customerId],
     enabled: !!tenantId && !!customerId,
     queryFn: async (): Promise<AgreementListRow[]> => {
+      // Ask the signing service for the latest status of this customer's
+      // waiting individual agreements first (they have no webhook), so one
+      // just signed shows Signed (test sheet A9.4). Best effort: a failure
+      // only means the stored status is shown.
+      await callAgreements({ action: 'sync' }).catch(() => undefined);
       const [rental, individual] = await Promise.all([
         sb
           .from('rental_agreements')
