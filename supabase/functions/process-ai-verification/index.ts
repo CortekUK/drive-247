@@ -393,10 +393,24 @@ serve(async (req) => {
       if (ocrData?.dateOfBirth) {
         customerUpdate.date_of_birth = ocrData.dateOfBirth;
       }
-      await supabaseClient
+      const { error: custErr } = await supabaseClient
         .from('customers')
         .update(customerUpdate)
         .eq('id', verification.customer_id);
+      if (custErr) {
+        // The licence-number index is platform-wide, so a person who already
+        // rents from another company under the same licence made this whole
+        // update fail — the verdict was dropped and the customer sat on
+        // "pending" for good (QA sheet C6.5). Save the verdict regardless;
+        // the number is still on the verification row.
+        console.error('[ProcessAI] customer update failed, retrying without licence number:', custErr.message);
+        delete customerUpdate.license_number;
+        const { error: retryErr } = await supabaseClient
+          .from('customers')
+          .update(customerUpdate)
+          .eq('id', verification.customer_id);
+        if (retryErr) console.error('[ProcessAI] customer update failed again:', retryErr.message);
+      }
     }
 
     // Check for blocked identities

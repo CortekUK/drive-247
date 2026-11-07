@@ -20,8 +20,8 @@
  * rows a second way is how two screens start quoting different numbers.
  * ────────────────────────────────────────────────────────────────────────── */
 
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerRentals } from "@/hooks/use-customer-rentals";
@@ -105,9 +105,42 @@ export function useCustomerRow(id: string) {
  * platform has ever carried, and 227 passed checks displayed as "Pending"
  * beside the customer's own approved licence photos. Same rule here.
  */
+/** Face-match score as a whole percent. Stored as a 0–1 fraction (0.9929); older rows may hold 0–100. */
+export function facePercent(score: unknown): number {
+  const n = Number(score);
+  return Math.round(n <= 1 ? n * 100 : n);
+}
+
 function useAiVerification(id: string) {
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
+
+  // The customer finishes the check on their own phone, so the result has to
+  // reach this screen by itself (QA sheet C6.1). Realtime pushes the change;
+  // the poll below is the fallback for a socket that died quietly.
+  useEffect(() => {
+    if (!tenant?.id || !id) return;
+    const channel = supabase
+      .channel(`customer-v2-verification-${tenant.id}-${id}`)
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "identity_verifications", filter: `customer_id=eq.${id}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["customer-v2-verification", tenant.id, id] });
+          queryClient.invalidateQueries({ queryKey: ["customer-v2-row", tenant.id, id] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [tenant?.id, id, queryClient]);
+
   return useQuery({
+    // A check still in progress is re-read every 5s; a finished one every 30s,
+    // which also catches a newer check started from another screen.
+    refetchInterval: (q: any) => ((q?.state?.data as any)?.status === "completed" ? 30_000 : 5_000),
+    refetchOnWindowFocus: true,
     queryKey: ["customer-v2-verification", tenant?.id, id],
     queryFn: async () => {
       const cols =
@@ -497,7 +530,7 @@ export function useCustomerRecord(id: string) {
     if (v?.verification_completed_at) {
       push(
         passed
-          ? `Identity verified${v.ai_face_match_score ? ` · ${Math.round(Number(v.ai_face_match_score))}% face match` : ""}`
+          ? `Identity verified${v.ai_face_match_score ? ` · ${facePercent(v.ai_face_match_score)}% face match` : ""}`
           : declined
             ? "Identity check declined"
             : "Identity check submitted",
@@ -555,7 +588,10 @@ export function useCustomerRecord(id: string) {
       ai: {
         state: aiState,
         completedAt: v?.verification_completed_at ?? null,
-        faceMatchScore: v?.ai_face_match_score == null ? null : Math.round(Number(v.ai_face_match_score)),
+        // Stored as a 0–1 fraction (0.9929); older rows may hold 0–100. A pass
+        // read "1% face match" when the fraction was rounded as a percent (C6.2).
+        faceMatchScore:
+          v?.ai_face_match_score == null ? null : facePercent(v.ai_face_match_score),
         photos: {
           face: v?.face_image_url ?? null,
           selfie: v?.selfie_image_url ?? null,
