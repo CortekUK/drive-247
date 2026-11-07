@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, Download, ExternalLink, Loader2, RefreshCw, RotateCw } from "lucide-react";
+import { AlertTriangle, Download, ExternalLink, Loader2, PenLine, RefreshCw, RotateCw } from "lucide-react";
 import { Button } from "../timeline/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../tabs";
@@ -74,6 +74,12 @@ export interface AgreementViewDialogProps {
   downloading?: boolean;
   /** Given only when this viewer may resend this row. */
   onResend?: (row: AgreementListRow) => void;
+  /**
+   * Given only to the recipient (the customer portal): resolves a one-time
+   * signing link for a waiting agreement. Test sheet A9.3: a customer opening
+   * an unsigned agreement had no way to sign it here.
+   */
+  onSign?: (row: AgreementListRow) => Promise<string>;
 }
 
 export function AgreementViewDialog({
@@ -86,7 +92,10 @@ export function AgreementViewDialog({
   renderHtml,
   downloading = false,
   onResend,
+  onSign,
 }: AgreementViewDialogProps) {
+  const [signing, setSigning] = useState(false);
+  const [signError, setSignError] = useState<string | null>(null);
   const [state, setState] = useState<LoadState>({ status: "idle" });
   const [attempt, setAttempt] = useState(0);
   const blobRef = useRef<string | null>(null);
@@ -139,6 +148,18 @@ export function AgreementViewDialog({
   const pdfUrl = pdfDoc?.url ?? null;
   const reference = row ? agreementReference(row) : null;
   const canResendRow = !!row && !!onResend && row.status !== "signed" && !!row.customerEmail && !!row.customerName;
+  const canSignRow = !!row && !!onSign && row.status === "pending";
+  const sign = async () => {
+    if (!row || !onSign || signing) return;
+    setSigning(true);
+    setSignError(null);
+    try {
+      window.location.assign(await onSign(row));
+    } catch (e) {
+      setSignError(e instanceof Error && e.message ? e.message : "The signing page could not be opened. Try again.");
+      setSigning(false);
+    }
+  };
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   useEffect(() => setSaveError(null), [row?.id, open]);
@@ -288,9 +309,25 @@ export function AgreementViewDialog({
                 className={cn(
                   "flex shrink-0 flex-col gap-2 border-t border-v2-border px-5 py-4",
                   // On a phone the corner icons carry Download and New tab; keep the foot only for what is left.
-                  !canResendRow && !saveError && !(state.status === "ready" && state.doc.kind === "html") && "max-md:hidden",
+                  !canResendRow && !canSignRow && !saveError && !(state.status === "ready" && state.doc.kind === "html") && "max-md:hidden",
                 )}
               >
+                {canSignRow && (
+                  <>
+                    <Button size="default" onClick={() => void sign()} disabled={signing} className="w-full">
+                      {signing ? <Loader2 className="animate-spin" /> : <PenLine />}
+                      Sign now
+                    </Button>
+                    <p className="text-xs text-v2-muted-fg">
+                      Waiting for your signature. You can also sign from the email we sent{row.customerEmail ? ` to ${row.customerEmail}` : ""}.
+                    </p>
+                    {signError && (
+                      <p role="alert" className="text-xs text-destructive">
+                        {signError}
+                      </p>
+                    )}
+                  </>
+                )}
                 <Button size="default" onClick={() => void download()} disabled={!pdfDoc || saving || downloading} className="w-full max-md:hidden">
                   {saving || downloading ? <Loader2 className="animate-spin" /> : <Download />}
                   {row.status === "signed" ? "Download signed PDF" : "Download PDF"}

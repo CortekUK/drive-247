@@ -30,6 +30,7 @@ import { useTenant } from '@nw/contexts/TenantContext';
 import {
   fetchCustomerAgreementDocument,
   fetchCustomerAgreementHistory,
+  fetchCustomerSignLink,
   useCustomerAgreementsList,
 } from '@nw/hooks/use-customer-agreements-list';
 import { cn } from '@nw/lib/utils';
@@ -169,6 +170,9 @@ export default function PortalAgreementsPage() {
         }}
         loadDocument={(row) => loadAgreementDocument(row, CUSTOMER_SOURCE)}
         fetchHistory={fetchCustomerAgreementHistory}
+        // Individual agreements are signed on the provider's page; a rental's
+        // agreement is signed from its rental, so only those get Sign now here.
+        onSign={viewRow?.kind === 'individual' ? (row) => fetchCustomerSignLink(row.id) : undefined}
         party={{ label: 'Company', name: companyName, email: companyEmail, emailLabel: 'Company email' }}
         renderHtml={(html) => (
           // An agreement that never reached the signing service exists only as

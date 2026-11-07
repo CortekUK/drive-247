@@ -178,6 +178,21 @@ export function getDocumentProperties(documentId: string, apiKey: string, deps: 
   });
 }
 
+/** A one-time link that opens the provider's signing page for this signer. */
+export function getEmbeddedSignLink(
+  documentId: string,
+  signerEmail: string,
+  redirectUrl: string | null,
+  apiKey: string,
+  deps: ProviderDeps,
+): Promise<Response> {
+  const q = new URLSearchParams({ documentId, signerEmail });
+  if (redirectUrl) q.set('redirectUrl', redirectUrl);
+  return deps.fetch(`${boldSignBaseUrl(deps.env)}/v1/document/getEmbeddedSignLink?${q.toString()}`, {
+    headers: { 'X-API-KEY': apiKey },
+  });
+}
+
 export function downloadDocument(documentId: string, apiKey: string, deps: ProviderDeps): Promise<Response> {
   return deps.fetch(`${boldSignBaseUrl(deps.env)}/v1/document/download?documentId=${encodeURIComponent(documentId)}`, {
     headers: { 'X-API-KEY': apiKey },

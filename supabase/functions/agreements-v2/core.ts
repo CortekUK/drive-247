@@ -46,6 +46,7 @@ import {
   buildSendForm,
   downloadDocument,
   getBoldSignApiKey,
+  getEmbeddedSignLink,
   getDocumentProperties,
   mapDocumentStatus,
   providerErrorMessage,
@@ -90,7 +91,7 @@ export async function handleAgreementsV2(req: Request, deps: AgreementsDepsV2): 
   if (!body || typeof body !== 'object' || Array.isArray(body)) return bad('The request could not be read.');
 
   const action = body.action;
-  if (action !== 'ready' && action !== 'send' && action !== 'sync' && action !== 'document' && action !== 'history') {
+  if (action !== 'ready' && action !== 'send' && action !== 'sync' && action !== 'document' && action !== 'history' && action !== 'sign-link') {
     return bad('Unknown action.');
   }
 
@@ -99,7 +100,7 @@ export async function handleAgreementsV2(req: Request, deps: AgreementsDepsV2): 
   // (the customer portal's Agreements page), and nothing else.
   const auth = await authenticateAgreementsV2(req.headers, deps.client, {
     write: action === 'send' || action === 'ready',
-    customer: action === 'document' || action === 'history',
+    customer: action === 'document' || action === 'history' || action === 'sign-link',
   });
   if (!auth.ok || !auth.context) return auth.outcome!;
   const ctx = auth.context;
@@ -116,6 +117,8 @@ export async function handleAgreementsV2(req: Request, deps: AgreementsDepsV2): 
         return await documentOf(ctx, body.id, deps);
       case 'history':
         return await historyOf(ctx, body.id, body.kind, deps);
+      case 'sign-link':
+        return await signLinkOf(ctx, body, deps);
     }
   } catch (e) {
     console.error(`[agreements-v2/${action}] unexpected error:`, e);
@@ -467,6 +470,58 @@ async function sync(ctx: AgreementsContextV2, deps: AgreementsDepsV2): Promise<O
     await Promise.all(rows.slice(i, i + CONCURRENCY).map(syncOne));
   }
   return reply(200, { ok: true, updated });
+}
+
+/* ── sign-link ───────────────────────────────────────────────────────────
+ * Test sheet A9.3: a customer opening an unsigned agreement in their portal
+ * had no way to sign it there (only the provider's email). This hands the
+ * signed-in customer a one-time signing link for an agreement sent to THEM
+ * (customer_id is theirs, same tenant) that is still waiting. Staff never get
+ * one: signing is the recipient's act.
+ */
+const NOT_SIGNABLE = new Set(['declined', 'expired', 'voided', 'revoked', 'send_failed', 'credit_failed', 'failed']);
+
+async function signLinkOf(ctx: AgreementsContextV2, body: Record<string, unknown>, deps: AgreementsDepsV2): Promise<Outcome> {
+  const { client } = deps;
+  const { tenant, boldsignMode } = ctx;
+  if (!ctx.caller.customerId) return reply(403, { ok: false, error: 'Only the person the agreement was sent to can sign it.' });
+  if (!isUuidV2(body.id)) return reply(404, { ok: false, error: NOT_FOUND });
+
+  const { data: row, error } = await client
+    .from(INDIVIDUAL_TABLE)
+    .select('id, document_id, boldsign_mode, document_status, recipient_email')
+    .eq('id', body.id)
+    .eq('tenant_id', tenant.id)
+    .eq('customer_id', ctx.caller.customerId)
+    .maybeSingle();
+  if (error && !isMissingTableError(error)) return reply(500, { ok: false, error: 'The agreement could not be loaded. Try again.' });
+  if (!row) return reply(404, { ok: false, error: NOT_FOUND });
+
+  const status = String(row.document_status ?? '').toLowerCase();
+  if (SIGNED.has(status)) return reply(409, { ok: false, error: 'This agreement is already signed.' });
+  if (NOT_SIGNABLE.has(status)) {
+    return reply(409, { ok: false, error: 'This agreement can no longer be signed. Ask the company to send it again.' });
+  }
+  if (!row.document_id) return reply(409, { ok: false, error: "This agreement hasn't gone out for signing yet." });
+
+  const apiKey = getBoldSignApiKey(deps.env, rowMode(row.boldsign_mode, boldsignMode));
+  if (!apiKey) return reply(500, { ok: false, error: 'Signing is not configured on this server.' });
+
+  // Back to the customer's own Agreements page on this tenant's site, nowhere else.
+  const back = typeof body.returnUrl === 'string' ? body.returnUrl : '';
+  const redirectUrl = tenant.slug && back.startsWith(`https://${tenant.slug}.drive-247.com/portal/agreements`) ? back : null;
+
+  let response: Response;
+  try {
+    response = await getEmbeddedSignLink(String(row.document_id), String(row.recipient_email), redirectUrl, apiKey, { fetch: deps.fetch, env: deps.env });
+  } catch {
+    return reply(502, { ok: false, error: "The signing service couldn't be reached. Try again in a moment." });
+  }
+  if (!response.ok) return reply(502, { ok: false, error: providerErrorMessage(response.status, await response.text().catch(() => '')) });
+  const json = await response.json().catch(() => null);
+  const signLink = typeof json?.signLink === 'string' ? json.signLink : null;
+  if (!signLink) return reply(502, { ok: false, error: "The signing service didn't return a link. Try again." });
+  return reply(200, { ok: true, signLink });
 }
 
 /* ── document ──────────────────────────────────────────────────────────── */

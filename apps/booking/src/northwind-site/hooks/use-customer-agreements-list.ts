@@ -173,6 +173,17 @@ export async function fetchCustomerAgreementDocument(id: string): Promise<Indivi
   throw new Error('No document came back.');
 }
 
+/**
+ * A one-time link to the signing page for one of the customer's own waiting
+ * individual agreements (test sheet A9.3). Comes back to this Agreements page.
+ */
+export async function fetchCustomerSignLink(id: string): Promise<string> {
+  const returnUrl = typeof window !== 'undefined' ? `${window.location.origin}/portal/agreements` : undefined;
+  const data = await callAgreements({ action: 'sign-link', id, returnUrl });
+  if (typeof data.signLink === 'string' && data.signLink) return data.signLink;
+  throw new Error('The signing page could not be opened. Try again.');
+}
+
 /** Every step of an agreement, oldest first (the operator's activity log). */
 export async function fetchCustomerAgreementHistory(
   id: string,
