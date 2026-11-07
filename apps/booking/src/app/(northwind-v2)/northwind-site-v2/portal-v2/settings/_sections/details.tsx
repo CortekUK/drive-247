@@ -102,6 +102,23 @@ function useTrackedDraft<T>(
   return [draft, setDraft, dirty];
 }
 
+/** Why a phone number can't be saved, or null. Empty is allowed. */
+function phoneIssue(raw: string): string | null {
+  const v = raw.trim();
+  if (v === '') return null;
+  if (!/^\+?[\d\s().-]+$/.test(v)) return 'Use numbers only, for example +1 555 010 4735.';
+  const digits = v.replace(/\D/g, '').length;
+  if (digits < 10 || digits > 15) return 'Enter the full phone number, with the area code.';
+  return null;
+}
+
+/** Why a US ZIP code can't be saved, or null. Empty is allowed. */
+function zipIssue(raw: string): string | null {
+  const v = raw.trim();
+  if (v === '' || /^\d{5}(-\d{4})?$/.test(v)) return null;
+  return 'Enter a 5-digit ZIP code, for example 62704.';
+}
+
 /** Shows "Saved" for a few seconds, then goes quiet. */
 function useSavedFlash(): [boolean, () => void] {
   const [saved, setSaved] = useState(false);
@@ -184,6 +201,10 @@ export function DetailsSettings() {
   const age = dateOfBirth && now ? ageInYears(dateOfBirth, now) : null;
   const suggestedTimezone = useMemo(() => detectTimezone(), []);
   const nameMissing = profile !== null && profile.name.trim() === '';
+  // Sheet C9.3: letters in the phone and a 2-digit ZIP used to save silently.
+  const phoneProblem = profile === null ? null : phoneIssue(profile.phone);
+  const zipProblem = profile === null ? null : zipIssue(profile.addressZip);
+  const invalid = nameMissing || phoneProblem !== null || zipProblem !== null;
 
   return (
     <div className="flex flex-col gap-8">
@@ -208,7 +229,7 @@ export function DetailsSettings() {
             id={FORM_ID}
             onSubmit={(event) => {
               event.preventDefault();
-              if (nameMissing) return;
+              if (invalid) return;
               void onSave();
             }}
           >
@@ -240,8 +261,15 @@ export function DetailsSettings() {
                 onChange={(event) => setField('phone', event.target.value)}
                 autoComplete="tel"
                 placeholder="+1 555 000 0000"
+                aria-invalid={phoneProblem ? true : undefined}
+                aria-describedby={phoneProblem ? 'settings-phone-error' : undefined}
                 className={cn(PV_INPUT, 'max-w-md')}
               />
+              {phoneProblem ? (
+                <RowHint tone="danger" id="settings-phone-error">
+                  {phoneProblem}
+                </RowHint>
+              ) : null}
             </SettingsRow>
 
             <SettingsRow
@@ -358,9 +386,16 @@ export function DetailsSettings() {
                   onChange={(event) => setField('addressZip', event.target.value.slice(0, 10))}
                   autoComplete="postal-code"
                   placeholder="ZIP"
+                  aria-invalid={zipProblem ? true : undefined}
+                  aria-describedby={zipProblem ? 'settings-address-zip-error' : undefined}
                   className={PV_INPUT}
                 />
               </div>
+              {zipProblem ? (
+                <RowHint tone="danger" id="settings-address-zip-error">
+                  {zipProblem}
+                </RowHint>
+              ) : null}
             </SettingsRow>
           </form>
 
