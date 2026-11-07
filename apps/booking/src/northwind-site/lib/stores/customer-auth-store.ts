@@ -381,7 +381,10 @@ async function findBlockReason(
   profile: CustomerProfile,
 ): Promise<string | null> {
   if (profile.is_blocked) {
-    return profile.blocked_reason ?? BLOCKED_MESSAGE;
+    // Never the staff's own note: `blocked_reason` is written for the team
+    // ("suspected fraud", "QA C12.9 test block") and the sign-in page showed
+    // it word for word, without even saying the account was blocked (C12.9).
+    return BLOCKED_MESSAGE;
   }
 
   const [globally, locally] = await Promise.all([
