@@ -166,8 +166,16 @@ export function SectionLicence({ c, set, onJump, canEdit }: SectionProps) {
           hint="Uber, Lyft, DoorDash and similar."
         />
 
-        {c.licence.isGigDriver && (
+        {/* Proof the customer sent from their own portal shows even before the
+            switch is on (sheet C9.8: it was saved but invisible here). The
+            switch stays the operator's call — it decides gig driver rates. */}
+        {(c.licence.isGigDriver || (gigImages || []).length > 0) && (
           <div className="mt-5">
+            {!c.licence.isGigDriver && (
+              <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
+                The customer sent this proof from their account. Turn the switch on if it checks out.
+              </p>
+            )}
             {(gigImages || []).length === 0 ? (
               <EmptyHint>No proof uploaded yet. A screenshot of their driver dashboard is enough.</EmptyHint>
             ) : (
