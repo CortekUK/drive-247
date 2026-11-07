@@ -99,8 +99,8 @@ export function InviteLinkDialogV2({ open, onOpenChange }: { open: boolean; onOp
           <p className="mx-auto mt-1.5 min-h-[2lh] max-w-[26rem] text-sm leading-relaxed text-muted-foreground [text-wrap:balance]">
             {link
               ? link.expiresAt
-                ? `It works until ${format(new Date(link.expiresAt), "MMM d 'at' h:mm a")}. Send it any way you like.`
-                : "Send it any way you like."
+                ? `It works until ${format(new Date(link.expiresAt), "MMM d 'at' h:mm a")} and signs up one customer. Links you made earlier keep working until they're used or expire.`
+                : "It signs up one customer. Links you made earlier keep working until they're used or expire."
               : "I'll make a link to a short form on your booking site. They fill in their details and verify their ID. It works for 7 days."}
           </p>
 

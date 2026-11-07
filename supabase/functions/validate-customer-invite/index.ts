@@ -17,6 +17,24 @@ function errorResponse(message: string, status = 400) {
   return jsonResponse({ error: message }, status);
 }
 
+const RESERVED_SUBDOMAINS = new Set(['www', 'admin', 'portal', 'api', 'app']);
+
+/**
+ * The tenant whose booking site this request came from, read from the
+ * browser's Origin header: "test" for https://test.drive-247.com. null when it
+ * can't be told (a custom domain, localhost, a server call), so only a clear
+ * mismatch is ever refused.
+ */
+function siteTenantSlug(req: Request): string | null {
+  try {
+    const host = new URL(req.headers.get('origin') ?? '').hostname.toLowerCase();
+    const m = host.match(/^([a-z0-9-]+)\.drive-247\.com$/);
+    return m && !RESERVED_SUBDOMAINS.has(m[1]) ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -67,6 +85,13 @@ Deno.serve(async (req) => {
 
     if (tenantError || !tenant) {
       return errorResponse('Tenant not found', 404);
+    }
+
+    // An invite only works on its own company's site. Opened on another
+    // tenant's site it showed this tenant's form there (sheet C7.12).
+    const site = siteTenantSlug(req);
+    if (site && site !== String(tenant.slug).toLowerCase()) {
+      return errorResponse("This invite link isn't for this website. Open the link exactly as it was sent to you.", 404);
     }
 
     return jsonResponse({
