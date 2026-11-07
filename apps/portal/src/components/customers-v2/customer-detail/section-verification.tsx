@@ -322,6 +322,20 @@ export function SectionVerification({ c, onJump, canEdit, drift }: SectionProps 
                     .join(", ")}
                 />
               </div>
+              {/* Sheet C10.7: after the customer corrected a detail, this screen
+                  showed only the corrected value; the original read was lost. */}
+              {c.ai.customerCorrection && (
+                <div className="mt-5">
+                  <p className="mb-2.5 text-xs font-medium">
+                    Corrected by the customer{c.ai.customerCorrection.at ? ` on ${fmtDate(c.ai.customerCorrection.at)}` : ""}
+                  </p>
+                  <div className={listCls}>
+                    {c.ai.customerCorrection.changes.map((x) => (
+                      <Row key={x.label} label={x.label} value={`Scan read ${x.scanned || "nothing"} · now ${x.corrected || "blank"}`} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </Section>
           )}
 

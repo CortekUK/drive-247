@@ -146,7 +146,7 @@ function useAiVerification(id: string) {
       const cols =
         "id, status, review_result, rejection_reason, verification_completed_at, ai_face_match_score, " +
         "document_number, document_expiry_date, document_issuing_date, first_name, last_name, date_of_birth, address, " +
-        "face_image_url, selfie_image_url, document_front_url, document_back_url";
+        "face_image_url, selfie_image_url, document_front_url, document_back_url, customer_corrections, customer_corrected_at";
       const base = () =>
         (supabase as any)
           .from("identity_verifications")
@@ -611,6 +611,23 @@ export function useCustomerRecord(id: string) {
                 address: s(v.address),
               }
             : null,
+        customerCorrection: (() => {
+          const original = v?.customer_corrections?.original as Record<string, unknown> | undefined;
+          if (!v?.customer_corrected_at || !original) return null;
+          const labels: Record<string, string> = {
+            first_name: "First name",
+            last_name: "Last name",
+            date_of_birth: "Date of birth",
+            document_number: "Licence number",
+            document_expiry_date: "Licence expiry",
+            document_country: "Country of issue",
+            address: "Address",
+          };
+          const changes = Object.keys(labels)
+            .map((key) => ({ label: labels[key], scanned: s(original[key] as string), corrected: s((v as any)[key]) }))
+            .filter((x) => x.scanned !== x.corrected);
+          return changes.length ? { at: v.customer_corrected_at, changes } : null;
+        })(),
         declineReason: v?.rejection_reason ?? null,
         // The newest "the verdict still stands" decision, if there is one. It
         // lives in the audit trail rather than on the verification row — see
