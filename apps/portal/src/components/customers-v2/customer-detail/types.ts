@@ -112,6 +112,12 @@ export type AiVerification = {
    *  operator cannot edit or replace these. */
   photos: { face: string | null; selfie: string | null; docFront: string | null; docBack: string | null };
   extracted: Extracted | null;
+  /**
+   * The customer corrected what the scan read, from their own portal
+   * (`customer_correct_verification`). `extracted` then holds the corrected
+   * values; these are the originals the scan read, field by field.
+   */
+  customerCorrection?: { at: string | null; changes: { label: string; scanned: string; corrected: string }[] } | null;
   declineReason: string | null;
   /**
    * The values a member of staff has already looked at and said "the verdict
