@@ -54,6 +54,23 @@ export const QR_LIFETIME_S = 900;
 
 /* ─────────────────────────────── helpers ────────────────────────────────── */
 
+/**
+ * The reason the edge function gave. On a 4xx/5xx supabase-js leaves `data`
+ * empty and keeps the JSON body on `error.context`, so reading only
+ * `data.error` showed customers "Edge Function returned a non-2xx status
+ * code" (sheet C7.8) and every bad link the same generic line (C7.9-C7.12).
+ */
+async function serverMessage(error: unknown): Promise<string | null> {
+  const res = (error as { context?: unknown } | null)?.context;
+  if (!(res instanceof Response)) return null;
+  try {
+    const body = await res.clone().json();
+    return typeof body?.error === "string" && body.error ? body.error : null;
+  } catch {
+    return null;
+  }
+}
+
 export function validateInvite(v: InviteValues): InviteErrors {
   const e: InviteErrors = {};
   if (v.name.trim().length < 2) e.name = "Enter your full name.";
@@ -138,7 +155,9 @@ export function useInviteRegistration({
         const { data, error } = await supabase.functions.invoke("validate-customer-invite", { body: { token } });
         if (cancelled) return;
         if (error || !data?.ok) {
-          setInvalidReason(data?.error || "This invite link is invalid or has expired.");
+          const reason = data?.error || (await serverMessage(error));
+          if (cancelled) return;
+          setInvalidReason(reason || "This invite link is invalid or has expired.");
           setPhase("invalid");
           return;
         }
@@ -262,7 +281,7 @@ export function useInviteRegistration({
           gigDriverImagePaths: paths.length ? paths : undefined,
         },
       });
-      if (error || !data?.ok) throw new Error(data?.error || error?.message || "Registration failed");
+      if (error || !data?.ok) throw new Error(data?.error || (await serverMessage(error)) || "Registration failed. Please try again.");
       setPhase("done");
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Registration failed. Please try again.");
