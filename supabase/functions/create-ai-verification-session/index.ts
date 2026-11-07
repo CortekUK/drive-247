@@ -164,6 +164,19 @@ async function createSessionForCustomer(
       };
     }
 
+    // A newer check replaces any older one still open for this customer: its
+    // link would otherwise stay live for 3 hours and a customer could finish an
+    // out-of-date check. Expiring it makes that link say "Session expired" and
+    // ask for the new one (sheet C4.11). Completed checks are left as they are.
+    const { error: supersedeError } = await supabase
+      .from('identity_verifications')
+      .update({ qr_session_expires_at: new Date().toISOString() })
+      .eq('customer_id', customerId)
+      .neq('id', verification.id)
+      .neq('status', 'completed')
+      .gt('qr_session_expires_at', new Date().toISOString());
+    if (supersedeError) console.error('Could not expire older verification links:', supersedeError);
+
     // Update customer status to pending
     await supabase
       .from('customers')

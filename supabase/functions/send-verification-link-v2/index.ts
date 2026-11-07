@@ -34,6 +34,25 @@ import {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** The same link create-ai-verification-session puts in the QR code. */
+/**
+ * Can this address's domain receive mail at all? A domain with no MX, A or
+ * AAAA record can never deliver, yet Resend accepts the send and the operator
+ * saw "Emailed" (sheet C4.8). Only a definite "no such record" counts: any
+ * other DNS trouble lets the send go ahead, so a lookup hiccup never blocks a
+ * real customer.
+ */
+async function domainAcceptsMail(domain: string): Promise<boolean> {
+  for (const type of ['MX', 'A', 'AAAA'] as const) {
+    try {
+      const records = await Deno.resolveDns(domain, type);
+      if (records.length > 0) return true;
+    } catch (e) {
+      if ((e as { name?: string })?.name !== 'NotFound') return true;
+    }
+  }
+  return false;
+}
+
 function buildVerifyUrl(tenantSlug: string, token: string): string {
   const baseUrl = Deno.env.get('BOOKING_APP_URL') || `https://${tenantSlug}.drive-247.com`;
   return `${baseUrl}/verify/${token}`;
@@ -107,6 +126,10 @@ Deno.serve(async (req) => {
 
     const to = override || (customer.email ?? '').trim().toLowerCase();
     if (!to) return errorResponse('Add an email address to send the link to.');
+    const domain = to.split('@')[1] ?? '';
+    if (!domain || !(await domainAcceptsMail(domain))) {
+      return errorResponse(`Nothing can be delivered to @${domain || '?'}. Check the address, or copy the link instead.`, 400);
+    }
 
     const { data: tenant } = await supabase
       .from('tenants')
