@@ -1,0 +1,246 @@
+/*
+ * Trax as a widget (trax-widget-section.tsx): a computer with other apps open and Trax
+ * floating over them bottom right, and a phone with Trax inside the app. Flat like the rest
+ * of the page: card colours and hairlines, no shadows. The one motion is the widget's feed.
+ */
+.wg-section {
+  --wg-a: hsl(var(--v2-primary));
+  --wg-tint: color-mix(in srgb, hsl(var(--v2-primary)) 12%, hsl(var(--v2-card)));
+  --wg-line: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --wg-bar: color-mix(in srgb, var(--foreground) 9%, transparent);
+  padding-block: clamp(72px, 9vw, 136px);
+  overflow-x: clip;
+}
+.dark .wg-section { --wg-tint: color-mix(in srgb, hsl(var(--v2-primary)) 26%, hsl(var(--v2-card))); }
+.wg-inner { width: min(100% - 2 * clamp(16px, 3vw, 64px), 1240px); margin-inline: auto; }
+
+.wg-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 40px;
+  max-width: 1120px;
+  margin: clamp(40px, 4.4vw, 64px) auto 0;
+}
+@media (min-width: 1000px) {
+  .wg-stage { grid-template-columns: minmax(0, 1fr) 236px; align-items: center; gap: clamp(32px, 4vw, 56px); }
+}
+
+/* ---- The computer ------------------------------------------------------------------ */
+.wg-desk {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border: 1px solid var(--wg-line);
+  border-radius: 22px;
+  /* Solid underneath the wallpaper, so the page line passes behind the screen. */
+  background-color: hsl(var(--v2-card));
+  background-image:
+    linear-gradient(160deg,
+      color-mix(in srgb, hsl(var(--v2-primary)) 16%, hsl(var(--v2-card))) 0%,
+      color-mix(in srgb, hsl(var(--v2-chart-2)) 14%, hsl(var(--v2-card))) 55%,
+      color-mix(in srgb, hsl(var(--v2-primary)) 8%, hsl(var(--v2-card))) 100%);
+}
+.dark .wg-desk {
+  background-image:
+    linear-gradient(160deg,
+      color-mix(in srgb, hsl(var(--v2-primary)) 30%, hsl(var(--v2-card))) 0%,
+      color-mix(in srgb, hsl(var(--v2-chart-3)) 18%, hsl(var(--v2-card))) 55%,
+      color-mix(in srgb, hsl(var(--v2-primary)) 14%, hsl(var(--v2-card))) 100%);
+}
+.wg-menubar {
+  position: absolute;
+  inset: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  height: 28px;
+  padding-inline: 16px;
+  background: color-mix(in srgb, hsl(var(--v2-card)) 72%, transparent);
+  border-bottom: 1px solid var(--wg-line);
+  font-size: 12px;
+  font-weight: 500;
+  color: hsl(var(--v2-foreground) / 0.75);
+}
+
+.wg-win {
+  position: absolute;
+  overflow: hidden;
+  border: 1px solid var(--wg-line);
+  border-radius: 12px;
+  background: hsl(var(--v2-card));
+}
+.wg-win.is-mail { left: 5%; top: 13%; width: 47%; height: 64%; }
+.wg-win.is-sheet { left: 36%; top: 29%; width: 38%; height: 50%; }
+.wg-win-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 32px;
+  padding-inline: 12px;
+  border-bottom: 1px solid var(--wg-line);
+  font-size: 12px;
+  color: hsl(var(--v2-foreground) / 0.8);
+}
+.wg-win-bar b { font-weight: 600; }
+.wg-lights { display: inline-flex; gap: 6px; }
+.wg-lights i { width: 9px; height: 9px; border-radius: 999px; background: var(--wg-bar); }
+.wg-rows { display: grid; gap: 0; margin: 0; padding: 4px 0; list-style: none; }
+.wg-rows li { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--wg-line); }
+.wg-dot { flex: none; width: 22px; height: 22px; border-radius: 999px; background: var(--wg-bar); }
+.wg-bar { display: block; height: 8px; border-radius: 999px; background: var(--wg-bar); }
+.wg-bar.is-short { flex: none; width: 14%; margin-left: auto; }
+.wg-cells { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; padding: 0; background: var(--wg-line); }
+.wg-cells span { height: 30px; background: hsl(var(--v2-card)); }
+.wg-cells span::after { content: ""; display: block; width: 56%; height: 7px; margin: 11px 0 0 10px; border-radius: 999px; background: var(--wg-bar); }
+.wg-cells span.is-head::after { width: 40%; background: color-mix(in srgb, var(--foreground) 16%, transparent); }
+
+/* Trax, floating over the other apps. */
+.wg-widget {
+  position: absolute;
+  right: 3.5%;
+  bottom: 5%;
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+  width: min(46%, 330px);
+}
+.wg-feed { display: grid; width: 100%; margin: 0; padding: 0; list-style: none; }
+.wg-card {
+  grid-area: 1 / 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 12px 12px 12px;
+  border: 1px solid var(--wg-line);
+  border-radius: 16px;
+  background: hsl(var(--v2-card));
+  transition: opacity 200ms ease-out, transform 200ms ease-out;
+}
+/* The note before sits just behind, its top edge showing. */
+.wg-card.is-back { opacity: 0.6; transform: translateY(-12px) scale(0.94); }
+.wg-card.is-new { animation: wg-arrive 200ms ease-out both; }
+@keyframes wg-arrive { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.wg-card-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--wg-tint);
+  color: var(--wg-a);
+}
+.dark .wg-card-icon { color: hsl(var(--v2-link)); }
+.wg-card-icon svg { width: 16px; height: 16px; }
+.wg-card-body { display: grid; gap: 3px; min-width: 0; font-size: 12.5px; line-height: 1.4; color: hsl(var(--v2-muted-foreground)); }
+.wg-card-body b { font-size: 13px; font-weight: 600; color: hsl(var(--v2-foreground)); }
+.wg-card-body em {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  justify-self: start;
+  height: 26px;
+  margin-top: 6px;
+  padding-inline: 12px;
+  border-radius: 999px;
+  background: hsl(var(--v2-primary));
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+  color: #fff;
+  transition: background-color 200ms ease-out, color 200ms ease-out;
+}
+.wg-card-body em.is-done { background: hsl(var(--v2-success) / 0.12); color: hsl(var(--v2-success)); }
+.wg-card-body em svg { width: 13px; height: 13px; }
+.wg-orb { display: inline-flex; }
+
+/* ---- The phone ---------------------------------------------------------------------- */
+.wg-phone {
+  width: min(100%, 236px);
+  padding: 7px;
+  border-radius: 40px;
+  background: #0c0c10;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12);
+}
+.wg-screen {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 390 / 844;
+  border-radius: 33px;
+  background: hsl(var(--v2-card));
+}
+.wg-status {
+  position: absolute;
+  z-index: 2;
+  inset: 0 0 auto;
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 3px 22px 0;
+  background: color-mix(in srgb, hsl(var(--v2-primary)) 12%, hsl(var(--v2-card)));
+  font-size: 11px;
+  color: hsl(var(--v2-foreground));
+}
+.wg-status b { font-weight: 600; }
+.wg-shot { position: absolute; top: 28px; left: 0; width: 100%; height: calc(100% - 28px); object-fit: cover; object-position: top; }
+.wg-phone-note {
+  position: absolute;
+  z-index: 3;
+  right: 10px;
+  bottom: 56px;
+  left: 10px;
+  display: grid;
+  gap: 8px;
+  padding: 10px 11px;
+  border: 1px solid var(--wg-line);
+  border-radius: 16px;
+  background: hsl(var(--v2-card));
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: hsl(var(--v2-foreground));
+}
+.wg-phone-text b { display: block; margin-bottom: 2px; font-weight: 600; }
+.wg-phone-note em {
+  justify-self: start;
+  height: 24px;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: hsl(var(--v2-primary));
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 24px;
+  color: #fff;
+}
+.wg-phone-orb { position: absolute; z-index: 3; right: 12px; bottom: 14px; display: inline-flex; }
+
+/* ---- Points --------------------------------------------------------------------------- */
+.wg-points { display: grid; gap: 24px 32px; margin: clamp(40px, 4.4vw, 64px) 0 0; padding: 0; list-style: none; }
+@media (min-width: 640px) { .wg-points { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1000px) { .wg-points { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.wg-points svg { width: 22px; height: 22px; color: var(--wg-a); }
+.dark .wg-points svg { color: hsl(var(--v2-link)); }
+.wg-points b { display: block; margin-top: 12px; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; color: hsl(var(--v2-foreground)); }
+.wg-points p { margin-top: 6px; font-size: 14.5px; line-height: 1.5; color: hsl(var(--v2-muted-foreground)); }
+.wg-note { margin-top: 32px; text-align: center; font-size: 14px; color: hsl(var(--v2-muted-foreground)); }
+
+/* ---- Smaller screens ------------------------------------------------------------------- */
+@media (max-width: 759.98px) {
+  .wg-desk { aspect-ratio: 4 / 3.4; border-radius: 18px; }
+  .wg-win.is-mail { left: 4%; width: 62%; }
+  .wg-win.is-sheet { left: 30%; width: 56%; }
+  .wg-widget { right: 4%; width: 78%; }
+}
+@media (max-width: 479.98px) {
+  .wg-phone { display: none; }
+  .wg-card { padding: 10px; gap: 8px; }
+  .wg-card-body { font-size: 11.5px; }
+  .wg-card-icon { width: 28px; height: 28px; border-radius: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wg-card, .wg-card-body em { transition: none; }
+  .wg-card.is-new { animation: none; }
+}

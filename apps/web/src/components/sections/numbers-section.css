@@ -1,0 +1,26 @@
+/* Drive247 in numbers: four big figures on the page's own ground, hairlines above each. */
+.nm { padding-block: clamp(96px, 11vw, 160px) clamp(40px, 5vw, 72px); }
+.nm-grid {
+  display: grid;
+  gap: 40px 32px;
+  margin-top: clamp(40px, 5vw, 72px);
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 560px) { .nm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1000px) { .nm-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px; } }
+.nm-stat { min-width: 0; padding-top: 24px; border-top: 1px solid var(--border); }
+.nm-value {
+  font-size: clamp(3rem, 5.2vw, 5.75rem);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--foreground);
+}
+.nm-unit { color: hsl(var(--v2-primary)); }
+.dark .nm-unit { color: hsl(var(--v2-link)); }
+.nm-label { margin-top: 20px; font-size: 1.0625rem; font-weight: 600; color: var(--foreground); }
+.nm-detail { margin-top: 6px; font-size: 0.9375rem; line-height: 1.5; color: var(--muted-foreground); }
+.nm-note { margin-top: clamp(28px, 3.5vw, 44px); font-size: 13px; color: var(--muted-foreground); }

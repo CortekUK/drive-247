@@ -1,0 +1,13 @@
+/* The heading's entrance: each word rises 12px and fades in, in turn. Transform and opacity only. */
+.tw-word {
+  display: inline-block;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 400ms ease-out, transform 600ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.tw-word.on { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tw-word { opacity: 1; transform: none; transition: none; }
+}

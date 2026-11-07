@@ -1,0 +1,176 @@
+/*
+ * Trax inside the page (trax-pointer.tsx). While it travels only the orb shows; once it has
+ * arrived, the note opens around it with a pointer at the spot it's talking about, and a ring
+ * marks that spot. Flat like the page's cards: card colour and a hairline, no shadow. The
+ * travel is the one long motion (an exception to the 200ms standard, like a carousel); the
+ * note itself opens and closes on the standard 200ms.
+ */
+.tp-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+
+/* The anchor Trax travels by: the label's bottom-left (above a picture) or top-left (beside). */
+.tp-card {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--tp-w, 300px);
+  height: 0;
+  color: hsl(var(--v2-foreground));
+  transform-origin: 0 0;
+  opacity: 0;
+  transition:
+    transform var(--tp-move, 600ms) cubic-bezier(0.65, 0, 0.35, 1),
+    opacity 200ms ease-in;
+}
+.tp-card.is-here { opacity: 1; transition: transform var(--tp-move, 600ms) cubic-bezier(0.65, 0, 0.35, 1), opacity 200ms ease-out; }
+.tp-box {
+  position: absolute;
+  top: 0;
+  left: 0;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 36px 12px 12px;
+  border-radius: 20px;
+}
+.tp-card.is-above .tp-box { top: auto; bottom: 0; }
+
+/* The label's paper, and its pointer: only once Trax has arrived. */
+.tp-box::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border: 1.5px solid hsl(var(--v2-primary) / 0.35);
+  border-radius: inherit;
+  background: color-mix(in srgb, hsl(var(--v2-primary)) 6%, hsl(var(--v2-card)));
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 200ms ease-in, transform 200ms ease-in;
+}
+.tp-caret {
+  position: absolute;
+  z-index: -1;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid hsl(var(--v2-primary) / 0.35);
+  border-radius: 3px;
+  background: color-mix(in srgb, hsl(var(--v2-primary)) 6%, hsl(var(--v2-card)));
+  rotate: 45deg;
+  opacity: 0;
+  transition: opacity 200ms ease-in;
+}
+.tp-card.is-above .tp-caret { display: none; }
+.tp-card.is-below .tp-caret { top: -7px; left: calc(var(--tp-caret) - 7px); border-right: 0; border-bottom: 0; }
+.tp-card.is-right .tp-caret { left: -7px; top: calc(var(--tp-caret) - 7px); border-top: 0; border-right: 0; }
+.tp-card.is-left .tp-caret { right: -7px; top: calc(var(--tp-caret) - 7px); border-bottom: 0; border-left: 0; }
+.tp-card.is-open .tp-box::before { opacity: 1; transform: none; transition: opacity 200ms ease-out, transform 200ms ease-out; }
+.tp-card.is-open .tp-caret { opacity: 1; transition: opacity 200ms ease-out; }
+
+/* The line from the label down to what it marks. */
+.tp-lead {
+  position: absolute;
+  width: 2px;
+  border-radius: 2px;
+  background: hsl(var(--v2-primary));
+  transform: scaleY(0);
+  transform-origin: top;
+  opacity: 0;
+  transition: transform 200ms ease-in, opacity 200ms ease-in;
+}
+.tp-lead.is-across { width: auto; height: 2px; transform: scaleX(0); transform-origin: right; }
+.tp-lead.is-on { transform: none; opacity: 1; transition: transform 300ms ease-out, opacity 200ms ease-out; }
+
+.tp-orb { display: inline-flex; flex: none; }
+.tp-orb .tm-mark.is-md { width: 48px; height: 48px; }
+.tp-orb .tm-mark.is-md > svg { width: 24px; height: 24px; }
+.tp-name { display: block; margin-bottom: 2px; font-size: 13px; font-weight: 700; letter-spacing: 0.01em; color: hsl(var(--v2-primary)); }
+.dark .tp-name { color: hsl(var(--v2-link)); }
+/* A hairline so the orb keeps its edge over any screen. */
+.tp-orb .tm-mark::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.4);
+}
+
+.tp-body {
+  min-width: 0;
+  padding-top: 2px;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.45;
+  opacity: 0;
+  transition: opacity 150ms ease-in;
+}
+.tp-card.is-open .tp-body { opacity: 1; transition: opacity 200ms ease-out; }
+.tp-text { text-wrap: pretty; }
+.tp-word { animation: tp-word 160ms ease-out both; }
+@keyframes tp-word { from { opacity: 0; } to { opacity: 1; } }
+.tp-typing { display: inline-flex; align-items: center; gap: 5px; height: 20px; }
+.tp-typing i {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: hsl(var(--v2-primary) / 0.6);
+  animation: tp-dot 1s ease-in-out infinite;
+}
+.tp-typing i:nth-child(2) { animation-delay: 150ms; }
+.tp-typing i:nth-child(3) { animation-delay: 300ms; }
+@keyframes tp-dot {
+  0%, 80%, 100% { opacity: 0.35; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-3px); }
+}
+
+.tp-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: hsl(var(--v2-muted-foreground));
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease-in, background-color 200ms ease-out, color 200ms ease-out;
+}
+.tp-card.is-open .tp-close { opacity: 1; pointer-events: auto; transition: opacity 200ms ease-out, background-color 200ms ease-out, color 200ms ease-out; }
+.tp-close:hover { background: hsl(var(--v2-muted)); color: hsl(var(--v2-foreground)); }
+.tp-close:focus-visible { outline: 2px solid hsl(var(--v2-primary)); outline-offset: 2px; }
+.tp-close svg { width: 14px; height: 14px; }
+
+/* The spot Trax is pointing at: a ring round a word, or round a part of a screen. */
+.tp-ring {
+  position: absolute;
+  border: 2.5px solid hsl(var(--v2-primary));
+  border-radius: 10px;
+  background: hsl(var(--v2-primary) / 0.06);
+  opacity: 0;
+  transition: opacity 200ms ease-in;
+}
+.tp-ring.is-area { border-radius: 14px; }
+.tp-ring.is-on { opacity: 1; transition: opacity 200ms ease-out; }
+
+@media (max-width: 767.98px) {
+  .tp-body { font-size: 13.5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tp-card, .tp-card.is-here, .tp-box::before, .tp-caret, .tp-body, .tp-close, .tp-ring, .tp-lead { transition: none; }
+  .tp-word, .tp-typing i { animation: none; }
+}

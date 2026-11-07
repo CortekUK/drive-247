@@ -1,0 +1,224 @@
+/*
+ * Multi-chat: the portal's Messages screen in a browser window, conversations, the thread
+ * with every channel in it, the composer with its channel switch, and the renter beside it.
+ * Then what it does in four short points. Flat, on the page's own ground.
+ */
+.mc-section {
+  --mc-a: hsl(var(--v2-primary));
+  --mc-tint: color-mix(in srgb, hsl(var(--v2-primary)) 11%, hsl(var(--v2-card)));
+  padding-block: clamp(104px, 11vw, 176px);
+}
+.dark .mc-section { --mc-tint: color-mix(in srgb, hsl(var(--v2-primary)) 24%, hsl(var(--v2-card))); }
+.mc-inner { width: min(100% - 2 * clamp(20px, 4vw, 80px), 1560px); margin-inline: auto; }
+
+.mc-head { text-align: center; }
+.mc-title { font-size: clamp(2.25rem, 4.4vw, 4rem); line-height: 1.06; color: var(--foreground); }
+.mc-sub { max-width: 46rem; margin: 18px auto 0; font-size: clamp(1rem, 1.3vw, 1.1875rem); line-height: 1.5; color: var(--muted-foreground); }
+.mc-tip { margin-top: clamp(40px, 4.5vw, 64px); font-size: 16px; text-align: center; color: hsl(var(--v2-foreground)); }
+
+.mc-window { margin-top: 20px; overflow: hidden; border: 1px solid hsl(var(--v2-border)); border-radius: 20px; }
+.mc-window .pg-browser { border-radius: 0; }
+.mc-window .pg-tabs, .mc-window .pg-address, .mc-window .pg-screen { opacity: 1; translate: none; }
+
+.mc-app {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 600px;
+  background: color-mix(in srgb, hsl(var(--v2-primary)) 4%, hsl(var(--v2-card)));
+  color: hsl(var(--v2-foreground));
+}
+@media (min-width: 760px) { .mc-app { grid-template-columns: 290px minmax(0, 1fr); height: clamp(660px, 80vh, 840px); min-height: 0; } }
+@media (min-width: 1150px) { .mc-app { grid-template-columns: 320px minmax(0, 1fr) 320px; } }
+
+/* Conversations */
+.mc-rail { display: none; padding: 24px 14px; border-right: 1px solid hsl(var(--v2-border)); }
+@media (min-width: 760px) { .mc-rail { display: block; } }
+.mc-rail-title { padding: 2px 12px 16px; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+.mc-rail ul { display: grid; gap: 4px; }
+.mc-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 200ms ease-out;
+}
+.mc-row:hover { background: hsl(var(--v2-muted) / 0.7); }
+.mc-row.is-open { background: var(--mc-tint); }
+.mc-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--mc-tint);
+  color: var(--mc-a);
+  font-size: 14px;
+  font-weight: 700;
+}
+.dark .mc-avatar { color: hsl(var(--v2-link)); }
+.mc-row.is-open .mc-avatar { background: var(--mc-a); color: #fff; }
+.mc-avatar.is-big { width: 76px; height: 76px; font-size: 22px; }
+.mc-row-text { display: grid; flex: 1; min-width: 0; gap: 4px; }
+.mc-row-top { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.mc-row-top b { font-size: 15px; font-weight: 600; }
+.mc-row-top small { flex: none; font-size: 12px; color: hsl(var(--v2-muted-foreground)); }
+.mc-row-last { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 14px; color: hsl(var(--v2-muted-foreground)); }
+.mc-row-last svg { flex: none; width: 14px; height: 14px; }
+.mc-row-last span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-unread {
+  display: grid;
+  place-items: center;
+  flex: none;
+  min-width: 20px;
+  height: 20px;
+  padding-inline: 5px;
+  border-radius: 99px;
+  background: var(--mc-a);
+  color: #fff;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+/* The conversation */
+.mc-convo { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.mc-convo-head { display: flex; align-items: center; gap: 12px; padding: 18px 28px; border-bottom: 1px solid hsl(var(--v2-border)); }
+.mc-convo-head b { display: block; font-size: 17px; font-weight: 700; }
+.mc-convo-head small { font-size: 13px; color: hsl(var(--v2-muted-foreground)); }
+.mc-thread { display: flex; flex: 1; flex-direction: column; gap: 18px; min-height: 0; padding: 28px; overflow-y: auto; scrollbar-width: thin; }
+/* Short threads sit at the bottom, by the composer, as a chat does. */
+.mc-thread > li:first-child { margin-top: auto; }
+.mc-thread > li { animation: mc-in 200ms ease-out both; }
+@keyframes mc-in { from { opacity: 0; translate: 0 12px; } }
+.mc-msg { display: grid; gap: 6px; max-width: min(78%, 560px); }
+.mc-msg small { font-size: 12px; color: hsl(var(--v2-muted-foreground)); }
+.mc-msg.is-you { justify-self: end; justify-items: end; align-self: flex-end; }
+.mc-bubble { padding: 13px 17px; border-radius: 20px 20px 20px 6px; background: hsl(var(--v2-card)); border: 1px solid hsl(var(--v2-border)); font-size: 15px; line-height: 1.5; }
+.mc-msg.is-you .mc-bubble { border-color: transparent; border-radius: 20px 20px 6px 20px; background: var(--mc-a); color: #fff; }
+.mc-subject { display: block; margin-bottom: 3px; font-weight: 700; }
+.mc-call { display: grid; gap: 6px; align-self: center; width: min(100%, 520px); padding: 16px 18px; border: 1px dashed color-mix(in srgb, hsl(var(--v2-primary)) 40%, hsl(var(--v2-border))); border-radius: 18px; background: hsl(var(--v2-card)); font-size: 14.5px; }
+.mc-call-top { display: flex; align-items: center; gap: 8px; }
+.mc-call-top svg { width: 15px; height: 15px; color: var(--mc-a); }
+.mc-call-top small { margin-left: auto; font-size: 12px; color: hsl(var(--v2-muted-foreground)); }
+.mc-call-sum { display: flex; gap: 8px; line-height: 1.45; color: hsl(var(--v2-muted-foreground)); }
+.mc-call-sum svg { flex: none; width: 14px; height: 14px; margin-top: 2px; color: var(--mc-a); }
+
+/* The composer */
+.mc-composer { padding: 0 28px 28px; }
+.mc-switch { display: flex; gap: 4px; width: fit-content; max-width: 100%; padding: 4px; border-radius: 99px; background: hsl(var(--v2-muted)); }
+.mc-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding-inline: 15px;
+  border-radius: 99px;
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--v2-muted-foreground));
+  cursor: pointer;
+  transition: background-color 200ms ease-out, color 200ms ease-out;
+}
+.mc-switch button svg { width: 16px; height: 16px; }
+.mc-switch button:hover { color: hsl(var(--v2-foreground)); }
+.mc-switch button[aria-checked="true"] { background: var(--mc-a); color: #fff; }
+.mc-box, .mc-callbox {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 16px 18px;
+  border: 1px solid color-mix(in srgb, hsl(var(--v2-primary)) 40%, hsl(var(--v2-border)));
+  border-radius: 20px;
+  background: hsl(var(--v2-card));
+  animation: mc-in 200ms ease-out both;
+}
+.mc-email-to { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; padding-bottom: 10px; border-bottom: 1px solid hsl(var(--v2-border)); font-size: 14px; }
+.mc-email-to small { font-size: 12px; color: hsl(var(--v2-muted-foreground)); }
+.mc-draft { font-size: 15px; line-height: 1.55; color: hsl(var(--v2-muted-foreground)); }
+.mc-draft.is-empty { font-style: italic; }
+.mc-trax { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 12.5px; font-weight: 600; color: var(--mc-a); }
+.dark .mc-trax { color: hsl(var(--v2-link)); }
+.mc-trax svg { width: 13px; height: 13px; }
+.mc-send {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  gap: 8px;
+  height: 44px;
+  padding-inline: 20px;
+  border-radius: 99px;
+  background: var(--mc-a);
+  color: #fff;
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 200ms ease-out, opacity 200ms ease-out;
+}
+.mc-send svg { width: 15px; height: 15px; }
+.mc-send:hover:not(:disabled) { background: hsl(var(--v2-primary-hover)); }
+.mc-send:disabled { opacity: 0.4; cursor: default; }
+.mc-callbox { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.mc-callbox b { display: block; font-size: 17px; font-weight: 700; }
+.mc-callbox small { font-size: 13.5px; color: hsl(var(--v2-muted-foreground)); }
+/* The next thing to press: a soft ring that breathes until it is pressed. */
+.mc-hint::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border: 2px solid var(--mc-a);
+  border-radius: inherit;
+  pointer-events: none;
+  animation: mc-breathe 1600ms ease-out infinite;
+}
+@keyframes mc-breathe {
+  0% { opacity: 0.9; scale: 0.96; }
+  70%, 100% { opacity: 0; scale: 1.08; }
+}
+
+/* Who you're talking to */
+.mc-who { display: none; padding: 32px 24px; border-left: 1px solid hsl(var(--v2-border)); text-align: center; }
+@media (min-width: 1150px) { .mc-who { display: grid; align-content: start; justify-items: center; gap: 14px; } }
+.mc-who > b { font-size: 19px; font-weight: 700; }
+.mc-who dl { display: grid; gap: 12px; width: 100%; margin-top: 8px; padding-block: 16px; border-block: 1px solid hsl(var(--v2-border)); font-size: 14px; text-align: left; }
+.mc-who dl div { display: grid; gap: 2px; }
+.mc-who dt { display: inline-flex; align-items: center; gap: 6px; color: hsl(var(--v2-muted-foreground)); }
+.mc-who dt svg { width: 14px; height: 14px; }
+.mc-who dd { font-weight: 600; overflow-wrap: anywhere; }
+.mc-who-title { justify-self: start; margin-top: 6px; font-size: 13px; font-weight: 700; color: hsl(var(--v2-muted-foreground)); }
+.mc-rental { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 6px 12px; width: 100%; padding: 16px; border: 1px solid hsl(var(--v2-border)); border-radius: 16px; background: hsl(var(--v2-card)); font-size: 14.5px; text-align: left; }
+.mc-rental > svg { width: 18px; height: 18px; color: var(--mc-a); }
+.mc-rental b { display: block; font-weight: 600; }
+.mc-rental small { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: hsl(var(--v2-muted-foreground)); }
+.mc-rental small svg { width: 12px; height: 12px; }
+.mc-rental em { grid-column: 2; justify-self: start; padding: 1px 8px; border-radius: 99px; background: var(--mc-tint); color: var(--mc-a); font-size: 12.5px; font-style: normal; font-weight: 600; }
+.dark .mc-rental em { color: hsl(var(--v2-link)); }
+
+.mc-features { display: grid; gap: 32px 40px; margin-top: clamp(48px, 5vw, 72px); }
+@media (min-width: 640px) { .mc-features { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1000px) { .mc-features { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.mc-features svg { width: 24px; height: 24px; color: var(--mc-a); }
+.dark .mc-features svg { color: hsl(var(--v2-link)); }
+.mc-features b { display: block; margin-top: 14px; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; color: hsl(var(--v2-foreground)); }
+.mc-features p { margin-top: 8px; font-size: 15px; line-height: 1.55; color: hsl(var(--v2-muted-foreground)); }
+
+/* A phone: the channel switch keeps its labels by scrolling sideways. */
+@media (max-width: 479.98px) {
+  .mc-convo-head { padding: 14px 18px; }
+  .mc-thread { gap: 14px; padding: 18px; }
+  .mc-composer { padding: 0 16px 16px; }
+  .mc-switch { overflow-x: auto; }
+  .mc-switch button { padding-inline: 10px; font-size: 12.5px; }
+  .mc-callbox { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mc-thread > li, .mc-box, .mc-callbox, .mc-hint::after { animation: none; }
+  .mc-row, .mc-switch button, .mc-send { transition: none; }
+}

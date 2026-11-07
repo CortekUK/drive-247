@@ -4,85 +4,53 @@ import type { CSSProperties } from "react";
 import { Globe } from "lucide-react";
 import { useFadeIn } from "@/hooks/use-fade-in";
 import "./integrations-section.css";
+import { Accent, SectionHeading } from "./section-heading";
 
 /*
- * What Drive247 connects to, all in one view: the words on the left, a bubble for each
- * integration on the right, each with its logo and what it does for the business.
+ * What Drive247 connects to: the portal's own Integrations board
+ * (apps/portal/.../integrations/integrations-board.tsx), three to a row, all nine on one screen.
+ * Its pins and status tags are for an operator's account, so they aren't here.
  *
- * Every bubble is a panel on the portal's Integrations page, and every line is one that
- * panel can back (apps/portal/.../integrations/_panels/_intros.ts). Turo Sync, Inshur
- * and CheckMyDriver are deliberately not here: they aren't on general release.
+ * The lines are the board's. Turo Sync, Inshur and CheckMyDriver are deliberately left out:
+ * they aren't on general release. Tesla and Zoho are narrower than the board's, to what the
+ * panels behind them are known to do. The board's two Twilio cards are one here, which also
+ * makes the rows come out even.
  *
  * Logos are the originals, from logo.dev as on that page, with its publishable key.
  */
 const LOGO_TOKEN = "pk_EmodMTbiSPiHDa2fIPUo3w";
 const brandLogo = (domain: string) => `https://img.logo.dev/${domain}?token=${LOGO_TOKEN}&size=256&format=png`;
 
-type Bubble = {
+type Card = {
   name: string;
-  /** The integration's primary colour, for the bubble's wash. */
-  brand: string;
+  /** The integration's own colour, for the faint tint on its card. */
+  tint: string;
   text: string;
-  logo: { src: string; dark?: string; wide?: boolean } | null;
+  logo?: string;
+  /** Bonzah's logo is a wordmark, with a version for each theme. */
+  wordmark?: { light: string; dark: string };
 };
 
-/* In reading order across the three staggered rows. Similar colours are kept apart. */
-const BUBBLES: Bubble[] = [
-  {
-    name: "Stripe",
-    brand: "#635bff",
-    logo: { src: brandLogo("stripe.com") },
-    text: "Card payments, deposits and payouts to your bank.",
-  },
-  {
-    name: "Zoho Books",
-    brand: "#f9b21d",
-    logo: { src: brandLogo("zoho.com") },
-    text: "Invoices and payments, with no retyping.",
-  },
-  {
-    name: "Twilio",
-    brand: "#f22f46",
-    logo: { src: brandLogo("twilio.com") },
-    text: "Texts from your number, and calls with voicemail.",
-  },
-  {
-    name: "Xero",
-    brand: "#13b5ea",
-    logo: { src: brandLogo("xero.com") },
-    text: "Invoices and payments, against your own accounts.",
-  },
+const CARDS: Card[] = [
+  { name: "Stripe Connect", tint: "#635bff", logo: brandLogo("stripe.com"), text: "Accept booking payments, deposits & payouts." },
+  { name: "Square", tint: "#6b7280", logo: brandLogo("squareup.com"), text: "Take booking payments through your Square account." },
   {
     name: "Bonzah",
-    brand: "#d90052",
-    logo: { src: "/landing-v3/partners/bonzah-logo.svg", dark: "/landing-v4/site/bonzah-logo-dark.svg", wide: true },
-    text: "Per-rental insurance cover, right at checkout.",
+    tint: "#d6246e",
+    wordmark: { light: "/landing-v3/partners/bonzah-logo.svg", dark: "/landing-v4/site/bonzah-logo-dark.svg" },
+    text: "Per-rental insurance coverage at checkout.",
   },
+  { name: "BoldSign", tint: "#ff5a1f", logo: brandLogo("boldsign.com"), text: "E-signature for rental agreements." },
   {
-    name: "Square",
-    // Square is black: softened, or its wash reads far heavier than the others.
-    brand: "color-mix(in srgb, var(--foreground) 45%, transparent)",
-    logo: { src: brandLogo("squareup.com") },
-    text: "Booking payments through your own account.",
+    name: "Twilio",
+    tint: "#f22f46",
+    logo: brandLogo("twilio.com"),
+    text: "SMS notifications, reminders & 2-way chat, plus call forwarding, voicemail & recordings.",
   },
-  {
-    name: "BoldSign",
-    brand: "#f05a28",
-    logo: { src: brandLogo("boldsign.com") },
-    text: "Agreements signed online, saved on the rental.",
-  },
-  {
-    name: "Your own domain",
-    brand: "hsl(var(--v2-primary))",
-    logo: null,
-    text: "Customers book at an address you own.",
-  },
-  {
-    name: "Tesla",
-    brand: "#e31937",
-    logo: { src: brandLogo("tesla.com") },
-    text: "Supercharging matched to the right rental.",
-  },
+  { name: "Tesla", tint: "#e31937", logo: brandLogo("tesla.com"), text: "Supercharging sessions matched to the right rental." },
+  { name: "Custom Domain", tint: "#4f46e5", text: "Use your own domain for booking & portal." },
+  { name: "Xero", tint: "#13b5ea", logo: brandLogo("xero.com"), text: "Sync invoices & payments to Xero." },
+  { name: "Zoho", tint: "#e09a12", logo: brandLogo("zoho.com"), text: "Sync invoices & payments to Zoho Books." },
 ];
 
 export function IntegrationsSection() {
@@ -91,36 +59,45 @@ export function IntegrationsSection() {
     <section id="integrations" className="ig-section">
       <div ref={ref} className={`ig-inner${visible ? " is-in" : ""}`}>
         <div className="ig-copy">
-          <h2 className="ig-title font-medium tracking-tighter">Works with the tools you already use.</h2>
-          <p className="ig-sub">Payments, accounts, messages, signatures and insurance, all connected to your bookings.</p>
+          <SectionHeading
+            title={
+              <>
+                Works with <Accent>the tools you use</Accent>
+              </>
+            }
+            sub={
+              <>
+                Connect the tools that power payments, documents, messaging and more.
+              </>
+            }
+          />
         </div>
 
-        <ul className="ig-bubbles" aria-label="Integrations">
-          {BUBBLES.map((bubble, i) => (
-            <li key={bubble.name} className="ig-slot" style={{ "--ig-i": i } as CSSProperties}>
-              <article className="ig-bubble" style={{ "--ig-brand": bubble.brand } as CSSProperties}>
-                <span className="ig-logo">
-                  {bubble.logo ? (
-                    <>
-                      {/* Third-party and fixed-size, so these skip the image optimiser. */}
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={bubble.logo.src}
-                        alt=""
-                        className={`${bubble.logo.wide ? "is-wide" : ""}${bubble.logo.dark ? " dark:hidden" : ""}`}
-                      />
-                      {bubble.logo.dark && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={bubble.logo.dark} alt="" className="is-wide hidden dark:block" />
-                      )}
-                    </>
-                  ) : (
-                    <Globe strokeWidth={1.75} aria-hidden />
-                  )}
-                </span>
-                <h3>{bubble.name}</h3>
-                <p>{bubble.text}</p>
-              </article>
+        <ul className="ig-grid" aria-label="Integrations">
+          {CARDS.map((card, i) => (
+            <li key={card.name} className="ig-card" style={{ "--ig-i": i, "--ig-c": card.tint } as CSSProperties}>
+              <div className="ig-mark">
+                {card.wordmark ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={card.wordmark.light} alt="" className="ig-wordmark dark:hidden" />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={card.wordmark.dark} alt="" className="ig-wordmark hidden dark:block" />
+                  </>
+                ) : card.logo ? (
+                  // Third-party and fixed-size, so these skip the image optimiser.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={card.logo} alt="" className="ig-logo" />
+                ) : (
+                  <span className="ig-logo ig-logo-own">
+                    <Globe strokeWidth={1.5} aria-hidden />
+                  </span>
+                )}
+              </div>
+              <div className="ig-words">
+                <h3>{card.name}</h3>
+                <p>{card.text}</p>
+              </div>
             </li>
           ))}
         </ul>

@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
+import { Check } from "lucide-react";
 import { HeroTitle } from "./hero-motion";
 import "./hero.css";
 
@@ -25,7 +26,27 @@ const SCREENS: Screen[] = [
   close("trax", "Trax answers", 0.8),
 ];
 
-export function Hero() {
+/**
+ * Three things a first-time visitor should know before scrolling: it is free to try,
+ * Drive247 takes no cut of their bookings, and someone will help them set up.
+ *
+ * `trialDays` comes from the live plans (the shortest trial among them), so the chip
+ * never promises more than every plan gives; with no trial on offer it is left out.
+ * "0% commission" is true on every charge path today (no application fees), and the
+ * free 30-minute onboarding call is offered to every self-serve signup.
+ */
+function proofPoints(trialDays: number): string[] {
+  return [
+    ...(trialDays > 0 ? [`${trialDays}-day free trial`] : []),
+    "Free onboarding call",
+    // Longest last: on a phone the first two then share a row.
+    "0% commission on your bookings",
+  ];
+}
+
+export function Hero({ trialDays = 0 }: { trialDays?: number }) {
+  const proof = proofPoints(trialDays);
+
   return (
     <section className="hg-hero">
       <div className="hg-grid" aria-hidden />
@@ -49,8 +70,17 @@ export function Hero() {
         <HeroTitle />
 
         <p className="hg-sub text-base leading-relaxed text-white/85 sm:text-lg">
-          The one place to run your car rental business. Bookings, payments, agreements, your website and Trax, all working together so nothing holds you back.
+          For <b className="hg-who">independent car rental operators and Turo hosts with 1 to 50 cars</b>. Bookings, payments, agreements, your website and Trax, all in one place.
         </p>
+
+        <ul className="hg-proof" aria-label="What you get">
+          {proof.map((point) => (
+            <li key={point}>
+              <Check strokeWidth={2.5} aria-hidden />
+              {point}
+            </li>
+          ))}
+        </ul>
       </div>
 
       {/* Real screens, edge to edge. The set is doubled so the loop has no seam. */}

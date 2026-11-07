@@ -1,0 +1,293 @@
+/*
+ * Beyond Turo: one worked example in four steps, each a 100% bar of the same trips split
+ * between direct (brand purple, the operator's own) and Turo (a quiet grey that stays), then
+ * what Drive247 gives you for the path. Flat cards with 1px borders on the page's own ground.
+ *
+ * Wide screens: the four steps sit side by side as columns, their bars aligned on one row
+ * (subgrid), so the purple climbs from step to step. Narrow screens: the steps stack and each
+ * bar lies flat, filling from the left.
+ */
+.bt {
+  --bt-direct-fill: hsl(var(--v2-primary));
+  --bt-turo-fill: color-mix(in srgb, var(--foreground) 8%, hsl(var(--v2-card)));
+  --bt-ink: hsl(var(--v2-primary));
+  padding-block: clamp(96px, 11vw, 160px);
+}
+.dark .bt {
+  --bt-turo-fill: color-mix(in srgb, var(--foreground) 11%, hsl(var(--v2-card)));
+  --bt-ink: hsl(var(--v2-link));
+}
+.bt .ct-title, .bt-sub-line, .bt-more-title { text-wrap: balance; }
+/* Each half of the heading, and each sentence of the sub line, starts its own line. */
+.bt-brand-line, .bt-sub-line { display: block; }
+.bt-addr { font-weight: 500; white-space: nowrap; color: var(--foreground); }
+.bt-step-text, .bt-piece-text, .bt-notes dd { text-wrap: pretty; }
+
+/* A small outlined label: "Example" on the chart, "Early access" on Turo Sync. */
+.bt-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0;
+  white-space: nowrap;
+  color: var(--bt-ink);
+}
+
+/* ── The example ─────────────────────────────────────────────────────────── */
+.bt-path {
+  --bt-pad: clamp(20px, 3vw, 44px);
+  margin-top: clamp(36px, 4.5vw, 56px);
+  overflow: hidden;
+  border: 1px solid hsl(var(--v2-border));
+  border-radius: 28px;
+  background: hsl(var(--v2-card));
+}
+.bt-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px 32px;
+  padding: clamp(22px, 2.6vw, 36px) var(--bt-pad) 0;
+}
+.bt-head-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: clamp(1.0625rem, 1.3vw, 1.25rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+}
+.bt-head-sub { margin-top: 6px; font-size: 14px; line-height: 1.5; color: var(--muted-foreground); }
+.bt-legend { display: flex; gap: 18px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted-foreground); }
+.bt-legend li { display: inline-flex; align-items: center; gap: 8px; }
+.bt-legend i { width: 12px; height: 12px; border-radius: 4px; }
+.bt-legend .is-direct { background: var(--bt-direct-fill); }
+.bt-legend .is-turo { background: var(--bt-turo-fill); outline: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent); outline-offset: -1px; }
+
+/* The four steps. Each spans four rows of the list (title, text, bar, what you keep), so the bars line up. */
+.bt-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  column-gap: clamp(16px, 2.2vw, 36px);
+  margin: 0;
+  padding: clamp(26px, 3vw, 40px) var(--bt-pad) clamp(28px, 3.2vw, 44px);
+  list-style: none;
+}
+.bt-step {
+  display: grid;
+  grid-row: span 4;
+  grid-template-rows: subgrid;
+  min-width: 0;
+}
+.bt-step-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: clamp(1rem, 1.25vw, 1.1875rem);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  color: var(--foreground);
+}
+.bt-n {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-top: -1px;
+  border-radius: 8px;
+  background: hsl(var(--v2-primary) / 0.1);
+  color: var(--bt-ink);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.dark .bt-n { background: hsl(var(--v2-link) / 0.14); }
+.bt-step-text {
+  margin: 8px 0 22px;
+  font-size: clamp(14px, 1.05vw, 15px);
+  line-height: 1.55;
+  color: var(--muted-foreground);
+}
+
+/* One step's trips, split by where they booked. The direct share is the purple from the bottom. */
+.bt-bar {
+  position: relative;
+  height: clamp(200px, 16vw, 248px);
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--bt-turo-fill);
+  font-size: 13px;
+  line-height: 16px;
+}
+.bt-bar b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.bt-word { font-weight: 500; }
+.bt-turo {
+  position: absolute;
+  inset: 0 0 calc(var(--bt-direct) * 1%);
+  display: grid;
+  place-items: center;
+  color: var(--foreground);
+}
+.bt-turo .bt-word { color: var(--muted-foreground); }
+.bt-fill {
+  position: absolute;
+  inset: auto 0 0;
+  display: grid;
+  place-items: center;
+  height: calc(var(--bt-direct) * 1%);
+  border-top: 2px solid hsl(var(--v2-card));
+  background: var(--bt-direct-fill);
+  color: #fff;
+}
+.bt-fill .bt-word { color: rgb(255 255 255 / 0.85); }
+
+.bt-keep { display: flex; flex-direction: column; gap: 2px; margin-top: 16px; }
+.bt-keep-label { font-size: 13px; color: var(--muted-foreground); }
+.bt-keep-value {
+  font-size: clamp(1.5rem, 2.5vw, 2.375rem);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--foreground);
+}
+.bt-keep-value small { font-size: 13px; font-weight: 500; letter-spacing: 0; color: var(--muted-foreground); }
+.bt-keep-gain { font-size: 13px; font-weight: 500; color: var(--muted-foreground); }
+.bt-keep-gain.is-up { color: var(--bt-ink); }
+
+/* The assumptions, on the card's foot. */
+.bt-notes {
+  display: grid;
+  gap: 10px;
+  padding: clamp(18px, 2vw, 26px) var(--bt-pad) clamp(20px, 2.2vw, 28px);
+  border-top: 1px solid hsl(var(--v2-border));
+  background: color-mix(in srgb, hsl(var(--v2-primary)) 4%, hsl(var(--v2-card)));
+  font-size: 13px;
+  line-height: 1.55;
+  color: hsl(var(--v2-muted-on-tint));
+}
+.bt-notes-lead { font-weight: 600; color: var(--foreground); }
+.bt-notes dl { display: grid; gap: 10px 32px; margin: 0; }
+.bt-notes dt { font-weight: 600; color: var(--foreground); }
+.bt-notes dd { margin: 2px 0 0; }
+.bt-notes a {
+  color: var(--bt-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+@media (min-width: 900px) {
+  .bt-notes dl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* ── What Drive247 gives you ─────────────────────────────────────────────── */
+.bt-more-title {
+  margin-top: clamp(48px, 6vw, 88px);
+  font-size: clamp(1.25rem, 1.8vw, 1.625rem);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+}
+.bt-pieces {
+  display: grid;
+  gap: clamp(14px, 1.6vw, 24px);
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 640px) { .bt-pieces { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .bt-pieces { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.bt-piece {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: clamp(20px, 2vw, 28px);
+  border: 1px solid hsl(var(--v2-border));
+  border-radius: 24px;
+  background: hsl(var(--v2-card));
+}
+.bt-piece-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: hsl(var(--v2-primary) / 0.1);
+  color: var(--bt-ink);
+}
+.dark .bt-piece-icon { background: hsl(var(--v2-link) / 0.14); }
+.bt-piece-icon svg { width: 20px; height: 20px; }
+.bt-piece-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 18px;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+}
+.bt-piece-text { margin-top: 6px; font-size: 15px; line-height: 1.55; color: var(--muted-foreground); }
+
+/* ── Narrow: the steps stack, and each bar lies flat ─────────────────────── */
+@media (max-width: 719.98px) {
+  .bt-steps { grid-template-columns: minmax(0, 1fr); padding-top: 6px; padding-bottom: 6px; }
+  .bt-step {
+    display: block;
+    grid-row: auto;
+    padding-block: 22px;
+    border-top: 1px solid hsl(var(--v2-border));
+  }
+  .bt-step:first-child { border-top: 0; }
+  .bt-step-text { margin-bottom: 16px; }
+  .bt-bar { height: 40px; border-radius: 12px; font-size: 12px; }
+  .bt-turo { inset: 0 0 0 calc(var(--bt-direct) * 1%); }
+  .bt-fill {
+    inset: 0 auto 0 0;
+    width: calc(var(--bt-direct) * 1%);
+    height: auto;
+    border-top: 0;
+    border-right: 2px solid hsl(var(--v2-card));
+  }
+  .bt-word { display: none; }
+  /* A share too thin to hold its label (10% is about 28px wide on a 360px phone) carries it just outside, on its right. */
+  .bt-step.is-thin .bt-fill > span {
+    position: absolute;
+    top: 50%;
+    left: calc(100% + 8px);
+    translate: 0 -50%;
+    white-space: nowrap;
+    color: var(--bt-ink);
+  }
+  .bt-keep { flex-flow: row wrap; align-items: baseline; gap: 2px 10px; margin-top: 14px; }
+  .bt-keep-value { font-size: 1.5rem; }
+}
+
+/* ── The one animation: the direct share rises into each bar as it arrives ─ */
+.bt-path[data-armed] .bt-step:not(.is-risen) .bt-fill { transform: translateY(100%); }
+.bt-path[data-armed] .bt-step.is-risen .bt-fill {
+  transition: transform 900ms cubic-bezier(0.22, 1, 0.36, 1) var(--bt-at, 0ms);
+}
+@media (max-width: 719.98px) {
+  .bt-path[data-armed] .bt-step:not(.is-risen) .bt-fill { transform: translateX(-100%); }
+  /* Stacked, each bar arrives on its own as you scroll, so none waits for another. */
+  .bt-path[data-armed] .bt-step.is-risen .bt-fill { transition-delay: 0ms; }
+}
+/* The script never arms the chart under reduced motion; this holds even if it did. */
+@media (prefers-reduced-motion: reduce) {
+  .bt-path[data-armed] .bt-step:not(.is-risen) .bt-fill,
+  .bt-path[data-armed] .bt-step.is-risen .bt-fill { transform: none; transition: none; }
+}

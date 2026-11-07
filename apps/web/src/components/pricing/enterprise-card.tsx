@@ -6,9 +6,9 @@ import type { EnterpriseCard as EnterpriseCardData } from "@/lib/enterprise-card
  * The last card on the pricing grid: drawn like a PlanCard, but its button is a
  * link to a contact page, never a checkout. Edited on the admin Signup Plans page.
  */
-export function EnterpriseCard({ card }: { card: EnterpriseCardData }) {
+export function EnterpriseCard({ card, compact = false }: { card: EnterpriseCardData; compact?: boolean }) {
   return (
-    <div className="pc-card is-night">
+    <div className={`pc-card is-night${compact ? " is-compact" : ""}`}>
       <div>
         <p className="pc-name">{card.name}</p>
         {card.fleetBand && <p className="pc-band">{card.fleetBand}</p>}
@@ -20,7 +20,7 @@ export function EnterpriseCard({ card }: { card: EnterpriseCardData }) {
       <Button asChild size="lg" className="pc-btn">
         <a href={card.ctaHref}>{card.ctaLabel}</a>
       </Button>
-      {card.bullets.length > 0 ? (
+      {compact ? null : card.bullets.length > 0 ? (
         <ul className="pc-list">
           {card.bullets.map((bullet) => (
             <li key={bullet}>{bullet}</li>

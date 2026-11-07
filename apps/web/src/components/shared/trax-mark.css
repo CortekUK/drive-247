@@ -1,0 +1,53 @@
+/*
+ * Trax's mark (shared/trax-mark.tsx). Moved here from trax-section.css so every Trax on the
+ * page is the same mark. The halo and the turning fill are the Trax-only exception to the
+ * flat rule, and both stop under reduced motion.
+ */
+.tm-mark {
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: #fff;
+}
+.tm-mark.is-xs { width: 20px; height: 20px; }
+.tm-mark.is-xs > svg { width: 12px; height: 12px; }
+.tm-mark.is-sm { width: 28px; height: 28px; }
+.tm-mark.is-sm > svg { width: 14px; height: 14px; }
+.tm-mark.is-md { width: 40px; height: 40px; }
+.tm-mark.is-md > svg { width: 20px; height: 20px; }
+.tm-mark.is-lg { width: 56px; height: 56px; }
+.tm-mark.is-lg > svg { width: 26px; height: 26px; }
+.tm-mark > svg { position: relative; filter: drop-shadow(0 1px 2px hsl(var(--v2-chart-5) / 0.55)); }
+.tm-mark-clip { position: absolute; inset: 0; overflow: hidden; border-radius: 999px; }
+.tm-mark-fill {
+  position: absolute;
+  inset: -25%;
+  background: conic-gradient(from 180deg, hsl(var(--v2-chart-2)), hsl(var(--v2-primary)), hsl(var(--v2-chart-4)), hsl(var(--v2-chart-1)), hsl(var(--v2-chart-2)));
+}
+.dark .tm-mark-fill {
+  background: conic-gradient(from 180deg, hsl(var(--v2-chart-2)), hsl(var(--v2-chart-3)), hsl(var(--v2-chart-1)), hsl(var(--v2-chart-4)), hsl(var(--v2-chart-2)));
+}
+.tm-mark[data-animated="true"] .tm-mark-fill { animation: tm-spin 12s linear infinite; }
+.tm-mark-halo {
+  position: absolute;
+  z-index: -1;
+  inset: -20px;
+  border-radius: 999px;
+  filter: blur(24px);
+  background: radial-gradient(closest-side, hsl(var(--v2-chart-2) / 0.6), hsl(var(--v2-primary) / 0.25) 60%, transparent);
+  animation: tm-mark-breathe 4s ease-in-out infinite;
+}
+.tm-mark.is-xs .tm-mark-halo { inset: -8px; filter: blur(10px); }
+.tm-mark.is-sm .tm-mark-halo { inset: -12px; filter: blur(14px); }
+@keyframes tm-spin { to { transform: rotate(360deg); } }
+@keyframes tm-mark-breathe {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.6; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tm-mark-fill, .tm-mark-halo { animation: none !important; }
+}

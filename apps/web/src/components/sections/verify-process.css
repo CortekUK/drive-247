@@ -1,0 +1,169 @@
+/*
+ * The ID check played through: the QR panel and the phone side by side, the steps beneath.
+ * The phone keeps the real capture page's black camera look, brackets and white shutter.
+ * Everything scales from the panel's own size, so it fits a short laptop and a phone.
+ */
+.vp-stage {
+  --vp-brand: #4f44d8;
+  --vp-u: clamp(9.5px, min(0.92vw, 1.42svh), 14px);
+  display: grid;
+  justify-items: center;
+  column-gap: calc(var(--vp-u) * 3.4);
+  row-gap: calc(var(--vp-u) * 2);
+  width: min(100%, 60em);
+  font-size: var(--vp-u);
+  position: relative;
+}
+.dark .vp-stage { --vp-brand: #a79ff5; }
+
+/* The QR panel */
+.vp-card { padding: 1.6em; border: 1px solid hsl(var(--v2-border)); border-radius: 1.4em; background: hsl(var(--v2-card)); color: hsl(var(--v2-foreground)); transition: opacity 300ms ease-out; }
+.vp-card > b { display: block; font-size: 1.3em; font-weight: 600; letter-spacing: -0.01em; }
+.vp-card > p { margin-top: 0.35em; font-size: 1em; line-height: 1.45; color: hsl(var(--v2-muted-foreground)); }
+.vp-qr { position: relative; width: 12em; margin-top: 1.1em; padding: 0.7em; overflow: hidden; border: 1px solid hsl(var(--v2-border)); border-radius: 0.9em; background: #fff; }
+.vp-qr img { display: block; width: 100%; height: auto; }
+.vp-qr-scan { position: absolute; inset-inline: 0; top: 0; height: 2px; background: var(--vp-brand); opacity: 0; }
+[data-scene="qr"] .vp-qr-scan { animation: vp-scan 1.4s ease-in-out 500ms 2; }
+@keyframes vp-scan { 0% { opacity: 0; top: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; top: 100%; } }
+.vp-progress { margin-top: 1.1em; }
+.vp-progress > span { display: flex; justify-content: space-between; gap: 1em; font-size: 1em; }
+.vp-progress b { font-weight: 500; }
+.vp-progress em { font-style: normal; font-variant-numeric: tabular-nums; color: hsl(var(--v2-muted-foreground)); }
+.vp-progress > i { display: block; height: 0.45em; margin-top: 0.5em; overflow: hidden; border-radius: 1em; background: hsl(var(--v2-foreground) / 0.1); }
+.vp-progress u { display: block; height: 100%; border-radius: 1em; background: var(--vp-brand); transition: width 500ms ease-out; }
+
+.vp-link { position: absolute; top: 36%; left: calc(100% - 22em - 3.1em); width: 2.8em; border-top: 2.5px dotted var(--vp-brand); opacity: 0; transition: opacity 200ms ease-out; }
+[data-scene="qr"] .vp-link { opacity: 0.7; }
+
+/* The phone */
+.vp-phone { width: 23em; padding: 0.6em; border-radius: 2.8em; background: #0c0c10; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14), 0 1.4em 3.2em rgb(13 8 70 / 0.22); }
+.vp-phone-screen { position: relative; aspect-ratio: 390 / 760; overflow: hidden; border-radius: 2.3em; background: #000; color: #fff; }
+.vp-scene { position: absolute; inset: 0; opacity: 0; visibility: hidden; transition: opacity 200ms ease-in, visibility 0s linear 200ms; }
+.vp-scene.is-on { opacity: 1; visibility: visible; transition: opacity 200ms ease-out; }
+
+/* The link arriving on their phone */
+.vp-message { display: flex; flex-direction: column; height: 100%; justify-content: center; padding: 1.7em; background: #fff; color: #14141c; }
+.vp-message > span { font-size: 1em; font-weight: 600; color: #4f44d8; }
+.vp-message > b { margin-top: 0.5em; font-size: 1.9em; font-weight: 700; line-height: 1.1; letter-spacing: -0.03em; }
+.vp-message > p { margin-top: 0.7em; font-size: 1.05em; line-height: 1.4; color: #5c5c66; }
+.vp-message > u { margin-top: 1.4em; padding: 0.85em; border-radius: 0.9em; background: #4f44d8; color: #fff; font-size: 1em; font-weight: 600; text-align: center; text-decoration: none; }
+
+/* The capture page, as it really looks */
+.vp-camera { position: relative; display: flex; flex-direction: column; height: 100%; background: linear-gradient(#2a2a30, #17171b); }
+.vp-camera-top { display: flex; align-items: center; justify-content: space-between; padding: 1.3em 1.2em 0; }
+.vp-camera-top svg { width: 1.4em; height: 1.4em; color: rgb(255 255 255 / 0.65); }
+.vp-camera-top > span:first-child { width: 1.4em; }
+.vp-dots { display: flex; gap: 0.4em; }
+.vp-dots i { width: 1.5em; height: 0.3em; border-radius: 1em; background: rgb(255 255 255 / 0.3); }
+.vp-dots .is-past { background: #22c55e; }
+.vp-dots .is-now { width: 2em; background: #fff; }
+.vp-view { position: relative; flex: 1 1 0; display: grid; place-items: center; min-height: 0; margin: 1.2em 1.1em; }
+.vp-view::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  --c: rgb(255 255 255 / 0.85);
+  background:
+    linear-gradient(var(--c), var(--c)) 0 0 / 2em 3px, linear-gradient(var(--c), var(--c)) 0 0 / 3px 2em,
+    linear-gradient(var(--c), var(--c)) 100% 0 / 2em 3px, linear-gradient(var(--c), var(--c)) 100% 0 / 3px 2em,
+    linear-gradient(var(--c), var(--c)) 0 100% / 2em 3px, linear-gradient(var(--c), var(--c)) 0 100% / 3px 2em,
+    linear-gradient(var(--c), var(--c)) 100% 100% / 2em 3px, linear-gradient(var(--c), var(--c)) 100% 100% / 3px 2em;
+  background-repeat: no-repeat;
+}
+.vp-view::after { content: ""; position: absolute; inset-inline: 0; top: 0; height: 2px; background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.8), transparent); }
+.is-on .vp-view::after { animation: vp-scan 1.5s ease-in-out infinite; }
+/* The selfie has its oval, not brackets. */
+.vp-view:has(.vp-oval)::before, .vp-view:has(.vp-oval)::after { display: none; }
+.vp-camera-foot { display: flex; flex-direction: column; align-items: center; gap: 0.25em; padding: 0 1em 1.4em; text-align: center; }
+.vp-camera-foot b { font-size: 1.25em; font-weight: 600; }
+.vp-camera-foot span { font-size: 0.92em; color: rgb(255 255 255 / 0.6); }
+.vp-shutter { width: 3.6em; height: 3.6em; margin-top: 0.8em; border-radius: 50%; background: #fff; box-shadow: inset 0 0 0 0.3em #fff, inset 0 0 0 0.5em rgb(0 0 0 / 0.2); }
+
+/* A sample licence, held in the frame */
+.vp-licence { position: relative; display: grid; grid-template-columns: 4.2em minmax(0, 1fr); grid-template-rows: auto 1fr; gap: 0.5em 0.7em; width: 86%; aspect-ratio: 1.58; padding: 0.7em; border-radius: 0.7em; background: linear-gradient(135deg, #f2f1fb, #d8d5f4); color: #1c1a4a; rotate: -2deg; }
+.vp-licence > b { grid-column: 1 / -1; font-size: 0.8em; font-weight: 700; letter-spacing: 0.06em; }
+.vp-photo { overflow: hidden; border-radius: 0.3em; background: #dcd8fb; }
+.vp-photo .vp-person { display: block; width: 100%; height: 100%; object-fit: cover; }
+.vp-oval .vp-person { position: absolute; left: 50%; bottom: -2%; width: 86%; translate: -50% 0; }
+.vp-lines { display: flex; flex-direction: column; gap: 0.45em; }
+.vp-lines em { font-size: 0.85em; font-style: normal; font-weight: 600; white-space: nowrap; }
+.vp-lines i { display: block; height: 0.4em; border-radius: 1em; background: rgb(28 26 74 / 0.25); }
+.vp-lines i:last-child { width: 62%; }
+.vp-licence small { position: absolute; right: 0.7em; bottom: 0.5em; font-size: 0.68em; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.55; }
+.vp-licence.is-back { display: block; rotate: 1.5deg; padding: 0; overflow: hidden; }
+.vp-strip { display: block; height: 22%; margin-top: 12%; background: #1c1a4a; }
+.vp-barcode { display: block; height: 24%; margin: 12% 8% 0; background: repeating-linear-gradient(90deg, #1c1a4a 0 2px, transparent 2px 4px, #1c1a4a 4px 5px, transparent 5px 8px); }
+
+/* The selfie: a plain outline of a head, so no real face is ever shown. */
+.vp-oval { position: relative; display: block; width: 62%; aspect-ratio: 0.78; overflow: hidden; border: 3px solid rgb(255 255 255 / 0.7); border-radius: 50%; background: rgb(255 255 255 / 0.08); }
+
+/* The real result page */
+.vp-done { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1.4em; background: linear-gradient(rgb(20 83 45 / 0.62), #000); text-align: center; }
+.vp-done-ring { display: grid; place-items: center; width: 5em; height: 5em; border-radius: 50%; background: rgb(34 197 94 / 0.2); color: #22c55e; }
+.vp-done-ring svg { width: 52%; height: 52%; }
+.is-on .vp-done-ring { animation: vp-land 400ms cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes vp-land { from { scale: 0.6; opacity: 0; } }
+.vp-done > b { margin-top: 0.7em; font-size: 2em; font-weight: 700; letter-spacing: -0.03em; }
+.vp-done > p { margin-top: 0.3em; font-size: 1em; line-height: 1.4; color: rgb(255 255 255 / 0.72); }
+.vp-done > div { width: 100%; margin-top: 1.2em; padding: 0.9em 1em; border-radius: 0.9em; background: rgb(255 255 255 / 0.1); font-size: 1.05em; font-weight: 500; text-align: left; }
+.vp-done small { display: block; margin-bottom: 0.25em; font-size: 0.72em; letter-spacing: 0.08em; text-transform: uppercase; color: rgb(255 255 255 / 0.6); }
+
+
+/* Phones: no room beside the phone, so the QR panel gives way and the phone tells it. */
+@media (max-width: 999.98px) {
+  .vp-stage { --vp-u: clamp(11px, 3vw, 14px); grid-template-columns: minmax(0, 1fr); justify-items: center; }
+  .vp-card, .vp-link { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vp-scene, .vp-progress u { transition: none; }
+  .vp-qr-scan, .is-on .vp-view::after, .is-on .vp-done-ring { animation: none; }
+}
+
+/* The verdict in the portal replaces the QR panel's content on the last step. */
+.vp-card { position: relative; }
+.vp-result { position: absolute; z-index: 2; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 1.6em; border-radius: inherit; background: hsl(var(--v2-card)); opacity: 0; transition: opacity 300ms ease-out; }
+.vp-result > b { font-size: 1.3em; font-weight: 600; letter-spacing: -0.01em; }
+.vp-result > p { margin-top: 0.35em; color: hsl(var(--v2-muted-foreground)); }
+.vp-result img { width: 100%; height: auto; margin-top: 1.1em; border: 1px solid hsl(var(--v2-border)); border-radius: 0.9em; }
+.vp-result { pointer-events: none; }
+[data-scene="done"] .vp-result { opacity: 1; }
+
+/* The live cursor. Moves between targets; its words fade in each time it arrives. */
+.vp-cursor {
+  --vp-c: #4f44d8;
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: flex-start;
+  pointer-events: none;
+  transition: translate 650ms cubic-bezier(0.65, 0, 0.35, 1);
+}
+.vp-cursor.is-you { --vp-c: #0f172a; }
+.dark .vp-cursor { --vp-c: #8b80f9; }
+.dark .vp-cursor.is-you { --vp-c: #f4f4f6; }
+.vp-cursor svg { flex: none; width: 1.7em; height: 1.7em; filter: drop-shadow(0 2px 3px rgb(13 8 70 / 0.25)); }
+.vp-cursor path { fill: var(--vp-c); stroke: #fff; stroke-width: 1.6; stroke-linejoin: round; }
+.vp-cursor span {
+  margin: 1.35em 0 0 -0.2em;
+  max-width: 17em;
+  padding: 0.55em 0.85em;
+  border-radius: 0.25em 1em 1em 1em;
+  background: var(--vp-c);
+  box-shadow: 0 6px 18px rgb(13 8 70 / 0.22);
+  color: #fff;
+  font-size: 0.98em;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+  animation: vp-say 300ms ease-out 450ms both;
+}
+.dark .vp-cursor.is-you span, .dark .vp-cursor.is-you b { color: #0f172a; }
+.vp-cursor b { display: block; font-size: 0.78em; font-weight: 600; opacity: 0.75; }
+@keyframes vp-say { from { opacity: 0; translate: 0 6px; } }
+@media (max-width: 999.98px) { .vp-cursor { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .vp-cursor { transition: none; }
+  .vp-cursor span { animation: none; }
+}

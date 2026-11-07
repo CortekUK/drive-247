@@ -168,6 +168,9 @@ function rowGapX(row: HTMLElement) {
 
 /* Where the thread leaves this area, for the section that carries it on. */
 export function threadEndX() {
+  // The next section's rail, when it is showing: the thread runs straight on down it.
+  const rail = document.querySelector<HTMLElement>(".rc-rail")?.getBoundingClientRect();
+  if (rail?.width) return rail.left + rail.width / 2;
   const rows = document.querySelectorAll<HTMLElement>("#features .pg-row");
   return rows.length ? rowGapX(rows[rows.length - 1]) : null;
 }
@@ -191,7 +194,7 @@ function useThread() {
         const x = rowGapX(row);
         return [[x, row.offsetTop - 24], [x, row.offsetTop + row.offsetHeight + 56]];
       });
-      const points: [number, number][] = [[stops[0][0], 0], ...spans, [stops[stops.length - 1][0], h]];
+      const points: [number, number][] = [[stops[0][0], 0], ...spans, [threadEndX() ?? stops[stops.length - 1][0], h]];
       const d = points.reduce((path, [x, y], i) => {
         if (i === 0) return `M${x} ${y}`;
         const [px, py] = points[i - 1];

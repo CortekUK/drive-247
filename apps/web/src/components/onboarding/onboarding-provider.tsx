@@ -25,7 +25,12 @@ import {
   readReferralCodeFromDocument,
   writeReferralCodeInDocument,
 } from "@/lib/referral-cookie";
-import { checkSlugShape, normalizeSlugClient } from "@/lib/signup-validation";
+import {
+  checkSlugShape,
+  deriveSlugFromCompanyName,
+  normalizeSlugClient,
+} from "@/lib/signup-validation";
+import { takeSignupPrefill } from "@/lib/signup-prefill";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
 
 import {
@@ -1226,6 +1231,22 @@ export function OnboardingProvider({
       }
 
       dispatch({ type: "setPlan", planId });
+
+      // A name typed into the landing page's closing section. Only fills an
+      // empty field, and the web address follows it exactly as if it had been
+      // typed here (`slugTouched` stays false). A resume that hydrates the draft
+      // from the server still overwrites it, which is the right way round.
+      const prefill = takeSignupPrefill();
+      if (prefill && !current.business.companyName.trim()) {
+        dispatch({
+          type: "business",
+          patch: {
+            companyName: prefill,
+            slug: deriveSlugFromCompanyName(prefill),
+            slugTouched: false,
+          },
+        });
+      }
 
       /**
        * Resume, or start fresh?

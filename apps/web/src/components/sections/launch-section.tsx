@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { threadEndX } from "./operations-dashboard";
 import "./launch-section.css";
+import { Accent, SectionHeading } from "./section-heading";
 
 /*
  * Opening a shop, in four scenes, with no people or car in them. Each sits at the top of
@@ -313,7 +313,7 @@ const STEPS = [
   { art: PlanArt, title: "Pick your plan", body: "Start with a free trial." },
   { art: NameArt, title: "Name your business", body: "Your name becomes your web address, and your portal is built." },
   { art: ConnectArt, title: "Connect Stripe or Square", body: "So you can take payments from day one." },
-  { art: LiveArt, title: "You're launched", body: "Your booking site is live. Add your cars and take bookings." },
+  { art: LiveArt, title: "You're launched", body: "Your site is live. Add your cars, with a free onboarding call." },
 ];
 
 /* Must match the media query that shows .ls-line in launch-section.css. */
@@ -324,7 +324,7 @@ const DRAW_SHARE = 0.86;
 const NODE_R = 18;
 
 /*
- * The features thread, carried on. It comes in along the left of the heading, turns into the
+ * The page line, carried on. It comes in along the left of the heading, turns into the
  * row, and runs from card to card, passing behind each. A card fills as a whole the moment the
  * tip reaches it. Where the row can't sit in one line, the cards fill as they scroll in.
  */
@@ -342,12 +342,17 @@ function useLaunchLine() {
     const media = matchMedia(LINE_MEDIA);
 
     const measure = () => {
-      const startX = threadEndX();
-      if (!media.matches || startX === null) {
+      const section = trackRef.current?.parentElement;
+      if (!media.matches) {
         setLine(null);
+        delete section?.dataset.lineIn;
+        delete section?.dataset.lineOut;
         return;
       }
       const box = pin.getBoundingClientRect();
+      // The page line (components/tour/page-line.tsx) brings the thread in at the middle of
+      // the screen; from there it turns into the lane beside the heading.
+      const startX = box.width / 2;
       const tiles = [...pin.querySelectorAll(".ls-card")].map((card) => card.getBoundingClientRect());
       const left = tiles[0].left - box.left;
       const y = tiles[0].top + tiles[0].height / 2 - box.top;
@@ -359,6 +364,11 @@ function useLaunchLine() {
       // On behind the last card and down out of the section, to where Trax picks it up.
       const track = trackRef.current!;
       const bottom = box.height + track.parentElement!.offsetHeight - track.offsetHeight;
+      // Where the page line meets this one, in page pixels.
+      if (section) {
+        section.dataset.lineIn = String(Math.round(box.left + startX));
+        section.dataset.lineOut = String(Math.round(box.left + endX));
+      }
       setLine({
         w: box.width,
         h: box.height,
@@ -459,16 +469,19 @@ export function LaunchSection() {
           )}
 
           <div className="ls-head ls-inner">
-            <h2
+            <SectionHeading
               id="launch-heading"
-              className="text-3xl font-bold tracking-tighter sm:text-4xl lg:text-[56px] lg:leading-[1.05]"
-            >
-              Launch in minutes.
-            </h2>
-            <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-muted-foreground">
-              Pick a plan and name your business. Your portal and booking site are built and online in minutes,
-              ready for your cars.
-            </p>
+              title={
+                <>
+                  Launch in <Accent>minutes.</Accent>
+                </>
+              }
+              sub={
+                <>
+                  Pick a plan and name your business. Your portal and booking site are built and online in minutes, ready for your cars.
+                </>
+              }
+            />
           </div>
 
           <ol className="ls-steps">

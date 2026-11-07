@@ -1,69 +1,128 @@
 /*
- * Four cards in one row, each in a soft tint of its own colour: the words on top, a real
- * screen beneath, running off the card's corner.
+ * Four features, left and right. The section holds still while scrolling moves the active
+ * heading down the list and changes the real screen beside it. Each screen sits on a soft
+ * tint of its feature's colour, floating whole; on phones it runs off the corner of a shorter panel.
  */
-.rc-section { padding-block: clamp(32px, 4vw, 56px); }
-.rc-grid { display: grid; gap: 14px; width: min(100%, 1560px); margin-inline: auto; padding-inline: clamp(12px, 2.4vw, 40px); }
-.rc-card {
+.rc-track { padding-block: clamp(48px, 8vw, 96px); }
+.rc-pin { width: min(100%, 1480px); margin-inline: auto; padding-inline: 1.25rem; }
+.rc-list { display: grid; gap: clamp(40px, 8vw, 64px); }
+.rc-list > li { min-width: 0; }
+.rc-list button { display: block; width: 100%; text-align: left; cursor: default; }
+.rc-list h2 { font-size: clamp(2rem, 7vw, 3rem); font-weight: 700; line-height: 1.08; letter-spacing: -0.04em; color: hsl(var(--v2-foreground)); }
+.rc-detail p { text-wrap: pretty; margin-top: 10px; font-size: 1.125rem; line-height: 1.4; letter-spacing: -0.012em; color: hsl(var(--v2-muted-foreground)); }
+.rc-detail ul { margin-top: 16px; border-top: 1px solid hsl(var(--v2-border)); }
+.rc-detail li { padding-block: 9px; border-bottom: 1px solid hsl(var(--v2-border)); font-size: 0.9375rem; font-weight: 500; color: hsl(var(--v2-foreground)); }
+.rc-stage, .rc-rail { display: none; }
+
+.rc-panel {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
   overflow: hidden;
   border: 1px solid hsl(var(--rc-h) 40% 84%);
   border-radius: 24px;
-  background: linear-gradient(170deg, hsl(var(--rc-h) 72% 91%), hsl(var(--rc-h) 60% 97%));
-  opacity: 0;
-  translate: 0 12px;
+  background: linear-gradient(160deg, hsl(var(--rc-h) 72% 91%), hsl(var(--rc-h) 60% 97%));
 }
-.is-in .rc-card { opacity: 1; translate: 0 0; transition: opacity 200ms ease-out var(--rc-at, 0ms), translate 200ms ease-out var(--rc-at, 0ms); }
-.rc-card.is-verify { --rc-h: 172; }
-.rc-card.is-insurance { --rc-h: 212; }
-.rc-card.is-agreements { --rc-h: 36; }
-.rc-card.is-payments { --rc-h: 262; }
-.dark .rc-card { background: linear-gradient(170deg, hsl(var(--rc-h) 30% 19%), hsl(var(--rc-h) 18% 12%)); border-color: hsl(var(--rc-h) 22% 26%); }
-
-.rc-copy { flex: none; padding: clamp(22px, 2.4vw, 36px); }
-.rc-copy h2 { font-size: clamp(1.875rem, min(3vw, 5.4svh), 3.25rem); font-weight: 700; line-height: 1.04; letter-spacing: -0.04em; color: hsl(var(--v2-foreground)); }
-.rc-copy p { margin-top: clamp(8px, 1.4svh, 14px); font-size: clamp(1rem, min(1.3vw, 2.3svh), 1.25rem); line-height: 1.35; letter-spacing: -0.012em; color: hsl(var(--v2-muted-foreground)); }
-.rc-copy ul { margin-top: clamp(10px, 2svh, 22px); border-top: 1px solid hsl(var(--rc-h) 30% 80% / 0.8); }
-.dark .rc-copy ul, .dark .rc-copy li { border-color: hsl(var(--rc-h) 22% 28%); }
-.rc-copy li { padding-block: clamp(5px, 0.9svh, 9px); border-bottom: 1px solid hsl(var(--rc-h) 30% 80% / 0.8); font-size: clamp(0.8125rem, 1vw, 0.9375rem); font-weight: 500; color: hsl(var(--v2-foreground)); }
-
-/* Every screen runs off the card's corner, so no card is left with an empty foot. */
-.rc-shot { --rc-pad: clamp(20px, 1.8vw, 30px); position: relative; height: 260px; overflow: hidden; }
-.rc-shot img {
+.rc-panel.is-verify { --rc-h: 172; }
+.rc-panel.is-insurance { --rc-h: 212; }
+.rc-panel.is-agreements { --rc-h: 36; }
+.rc-panel.is-payments { --rc-h: 262; }
+.dark .rc-panel { border-color: hsl(var(--rc-h) 22% 26%); background: linear-gradient(160deg, hsl(var(--rc-h) 30% 19%), hsl(var(--rc-h) 18% 12%)); }
+.rc-panel img {
   position: absolute;
-  top: 0;
-  left: var(--rc-pad);
-  width: max(100% - var(--rc-pad), 520px);
+  top: clamp(20px, 3.4vw, 52px);
+  left: clamp(20px, 3.4vw, 52px);
+  width: max(calc(100% - clamp(20px, 3.4vw, 52px)), 620px);
   max-width: none;
-  height: 100%;
+  height: auto;
   border: 1px solid hsl(var(--v2-border));
   border-right: 0;
   border-bottom: 0;
   border-radius: 14px 0 0 0;
-  object-fit: cover;
-  object-position: left top;
+}
+.rc-inline { margin-top: 20px; padding: 28px 22px; }
+
+/* Keep in step with HOLD in the component. */
+@media (min-width: 1000px) and (min-height: 640px) and (prefers-reduced-motion: no-preference) {
+  /* Nine units: the WEIGHTS in the component. */
+  .rc-track { height: calc(100svh + 9 * 50svh); padding-block: 0; }
+  .rc-pin {
+    position: sticky;
+    top: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
+    gap: clamp(40px, 5vw, 88px);
+    align-items: center;
+    height: 100svh;
+    padding: 88px clamp(40px, 4.5vw, 72px) 24px;
+  }
+  .rc-inline { display: none; }
+
+  .rc-rail span[data-handed-over]::after { display: none; }
+  .rc-list { display: block; padding-left: 28px; }
+  /* The page's thread, in the same two strokes, running the full height of the held screen. */
+  .rc-rail {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: clamp(40px, 4.5vw, 72px);
+    display: block;
+    width: 1.5px;
+    background: repeating-linear-gradient(to bottom, hsl(var(--v2-primary) / 0.3) 0 2px, transparent 2px 9px);
+  }
+  .rc-rail span { position: absolute; top: 0; left: 0; display: block; width: 100%; height: 0; background: hsl(var(--v2-primary)); }
+  .rc-rail span::after {
+    content: "";
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    width: 12px;
+    height: 12px;
+    border: 2px solid hsl(var(--v2-background));
+    border-radius: 50%;
+    background: hsl(var(--v2-primary));
+    translate: -50% 0;
+  }
+
+  .rc-list > li { padding-block: clamp(8px, 1.7svh, 16px); }
+  .rc-list button { cursor: pointer; }
+  .rc-list button:focus-visible { outline: 2px solid hsl(var(--v2-primary)); outline-offset: 4px; border-radius: 6px; }
+  .rc-list h2 { font-size: clamp(1.75rem, min(3.1vw, 5.6svh), 3.25rem); color: hsl(var(--v2-foreground) / 0.32); transition: color 200ms ease-out; }
+  .rc-list button:hover h2 { color: hsl(var(--v2-foreground) / 0.6); }
+  .rc-list > .is-active h2, .rc-list > .is-active button:hover h2 { color: hsl(var(--v2-foreground)); }
+
+  /* The active feature opens under its heading; the others close to just their headings. */
+  .rc-detail { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 300ms ease-out, opacity 200ms ease-out; }
+  .rc-detail > div { min-height: 0; overflow: hidden; }
+  .is-active > .rc-detail { grid-template-rows: 1fr; opacity: 1; }
+  .rc-detail p { font-size: clamp(1rem, min(1.3vw, 2.3svh), 1.25rem); }
+  .rc-detail ul { margin-top: clamp(10px, 1.6svh, 16px); }
+  .rc-detail li { padding-block: clamp(5px, 0.9svh, 9px); }
+  .rc-detail li:last-child { border-bottom: 0; }
+  .rc-detail li { transition: color 200ms ease-out; }
+  .rc-detail li[data-on] { color: hsl(var(--v2-primary)); font-weight: 600; }
+  .dark .rc-detail li[data-on] { color: hsl(var(--v2-link)); }
+
+  .rc-stage { position: relative; display: block; height: 100%; min-height: 0; }
+  /* The whole screen floats centred on its tint, so none of it is cut off. */
+  /* The box hugs its drawing and sits centred beside the list. */
+  .rc-stage .rc-panel { --rc-pad: clamp(20px, 2.4vw, 40px); display: grid; place-items: center; height: fit-content; margin-block: auto; padding: var(--rc-pad); }
+  .rc-stage .rc-panel img {
+    position: static;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: calc(100svh - 112px - 2 * var(--rc-pad));
+    border: 1px solid hsl(var(--v2-border));
+    border-radius: 14px;
+    box-shadow: 0 18px 48px rgb(13 8 70 / 0.1);
+  }
+  .rc-stage .rc-panel { position: absolute; inset: 0; opacity: 0; translate: 0 12px; visibility: hidden; transition: opacity 200ms ease-in, translate 200ms ease-in, visibility 0s linear 200ms; }
+  .rc-stage .rc-panel.is-active { opacity: 1; translate: 0 0; visibility: visible; transition: opacity 200ms ease-out, translate 200ms ease-out; }
 }
 
-@media (min-width: 720px) {
-  .rc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .rc-card { min-height: 520px; }
-  .rc-shot { flex: 1 1 0; height: auto; min-height: 220px; }
+/* Every feature plays its drawings in one box, the Launch section's card: a 1px line, 24px corners, a pale wash of the accent. */
+.rc-panel, .dark .rc-panel {
+  border: 1px solid color-mix(in srgb, hsl(var(--v2-primary)) 22%, hsl(var(--v2-border)));
+  background: color-mix(in srgb, hsl(var(--v2-primary)) 7%, hsl(var(--v2-card)));
 }
-/* All four in one row, filling the screen under the floating nav. */
-@media (min-width: 1200px) {
-  .rc-section { padding-block: 80px 16px; }
-  .rc-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); min-height: calc(100svh - 96px); }
-  .rc-copy { padding: clamp(20px, 1.8vw, 30px); }
-  .rc-copy h2 { font-size: clamp(1.75rem, min(2.35vw, 5svh), 2.75rem); }
-  .rc-copy p { font-size: clamp(1rem, min(1.2vw, 2.3svh), 1.1875rem); }
-}
-@media (min-width: 1200px) and (max-height: 720px) {
-  .rc-copy ul { display: none; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .rc-card { opacity: 1; translate: none; }
-  .is-in .rc-card { transition: none; }
-}
+.dark .rc-panel { background: color-mix(in srgb, hsl(var(--v2-primary)) 10%, hsl(var(--v2-card))); }
+

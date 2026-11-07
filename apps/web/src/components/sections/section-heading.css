@@ -1,0 +1,90 @@
+/*
+ * The landing page's section heading (Ghulam, 2026-11-07), in the style of "Know your
+ * numbers", centred and a size up: one confident line at medium weight, the key words in the
+ * solid brand colour, and a plain muted line underneath. Type as in `.ct-title` / `.ct-sub`
+ * (components/content/content.css), set larger for a section's main heading.
+ */
+.sh {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: clamp(32px, 4.5vw, 72px);
+  margin-bottom: clamp(56px, 7.5vw, 112px);
+  text-align: center;
+}
+
+/* Optional pill above the title, for a section that needs naming. */
+.sh-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: clamp(16px, 1.8vw, 24px);
+  padding: 7px 15px 7px 13px;
+  border: 1px solid hsl(var(--v2-primary) / 0.22);
+  border-radius: 999px;
+  background: hsl(var(--v2-primary) / 0.07);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  color: hsl(var(--v2-primary));
+}
+.sh-label::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.sh-title {
+  max-width: 100%;
+  font-size: clamp(2.5rem, 5.2vw, 5rem);
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+  color: var(--foreground);
+  text-wrap: balance;
+}
+.sh-accent { color: hsl(var(--v2-primary)); }
+
+.sh-sub {
+  max-width: 40rem;
+  margin-top: clamp(14px, 1.6vw, 22px);
+  font-size: clamp(1.0625rem, 1.4vw, 1.25rem);
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  text-wrap: balance;
+}
+.sh-sub b { font-weight: 600; color: var(--foreground); }
+
+.dark .sh-label {
+  border-color: hsl(var(--v2-link) / 0.3);
+  background: hsl(var(--v2-link) / 0.1);
+  color: hsl(var(--v2-link));
+}
+.dark .sh-accent { color: hsl(var(--v2-link)); }
+
+/* The heading takes three quarters of the section's width (Ghulam, 2026-11-07), so a long
+   title wraps instead of running edge to edge. Phones and small tablets keep the full width. */
+@media (min-width: 900px) {
+  .sh { max-width: 90%; }
+  .sh:not(.sh-left) { margin-inline: auto; }
+  /* Fill each line across that width (without leaving one word alone on the last line),
+     and let the line underneath use it too. */
+  .sh-title { text-wrap: pretty; }
+  .sh-sub { max-width: 100%; }
+}
+
+/* Left-aligned: the whole heading on the left edge, lined up with the section's content. */
+.sh.sh-left {
+  align-items: flex-start;
+  text-align: left;
+}
+/* On the left the line wraps naturally, as under "Know your numbers", not in two even halves. */
+.sh.sh-left .sh-sub { text-wrap: pretty; }
+
+/* A section head that pairs the heading with a link (blog, stories): link under it, centred. */
+.ct-head:has(.sh) { flex-direction: column; align-items: center; }
+.ct-head:has(.sh) > div { display: contents; }

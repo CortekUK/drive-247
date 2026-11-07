@@ -1,0 +1,141 @@
+/*
+ * Know your numbers: the heading and three points, then the portal's Insights → P&L
+ * screen in a flat card. Table look copied from the real one: indigo-washed header,
+ * a ticker line per car, the margin bar, the whole-fleet line in a soft accent wash.
+ */
+.kn { padding-block: clamp(96px, 11vw, 160px); }
+
+.kn-points {
+  display: grid;
+  gap: 18px 32px;
+  margin-top: clamp(28px, 3.5vw, 44px);
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 900px) { .kn-points { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.kn-points li { position: relative; padding-left: 20px; }
+.kn-points li::before {
+  content: "";
+  position: absolute;
+  top: 0.5em;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: hsl(var(--v2-primary));
+}
+.kn-points strong { display: block; font-size: 1.0625rem; font-weight: 600; color: var(--foreground); }
+.kn-points span { display: block; margin-top: 4px; font-size: 0.9375rem; line-height: 1.55; color: var(--muted-foreground); }
+
+/* The screen. */
+.kn-window {
+  margin-top: clamp(36px, 4.5vw, 56px);
+  overflow: hidden;
+  border: 1px solid hsl(var(--v2-border));
+  border-radius: 28px;
+  background: hsl(var(--v2-card));
+}
+.kn-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  padding: 16px 22px;
+  border-bottom: 1px solid hsl(var(--v2-border));
+}
+.kn-page { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.02em; color: var(--foreground); }
+.kn-views { display: inline-flex; padding: 2px; border-radius: 999px; background: var(--muted); }
+.kn-views span { padding: 6px 14px; border-radius: 999px; font-size: 13px; color: var(--muted-foreground); white-space: nowrap; }
+.kn-views .is-on { background: hsl(var(--v2-primary)); color: #fff; }
+.kn-period { margin-left: auto; font-size: 13px; color: var(--muted-foreground); }
+
+.kn-scroll { overflow-x: auto; }
+.kn-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; color: var(--foreground); }
+.kn-table th {
+  padding: 12px 16px;
+  background: color-mix(in srgb, hsl(var(--v2-primary)) 7%, hsl(var(--v2-background)));
+  font-size: 12px;
+  font-weight: 500;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+}
+.kn-table th button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: color 200ms ease-out;
+}
+.kn-table th button:hover { color: var(--foreground); }
+.kn-table th button.is-active { color: hsl(var(--v2-primary)); }
+.kn-table th svg { width: 12px; height: 12px; }
+.kn-table th .kn-idle { opacity: 0.4; }
+.kn-range { margin-left: 6px; font-weight: 400; opacity: 0.7; }
+.kn-table .kn-left { text-align: left; }
+
+.kn-table tbody tr { position: relative; background: hsl(var(--v2-card)); transition: background-color 200ms ease-out; }
+.kn-table tbody tr:hover { background: color-mix(in srgb, hsl(var(--v2-primary)) 4%, hsl(var(--v2-card))); }
+.kn-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.kn-table td.kn-c-spark { padding-block: 8px; }
+.kn-car { font-weight: 500; }
+.kn-plate { margin-top: 2px; font-size: 12px; color: var(--muted-foreground); }
+.kn-muted { color: var(--muted-foreground); }
+.kn-days { margin-left: 6px; font-size: 12px; }
+.kn-spark { display: block; color: hsl(var(--v2-primary)); }
+.kn-kept { font-size: 15px; font-weight: 600; }
+.kn-kept.is-negative, .kn-margin .is-negative { color: hsl(var(--v2-destructive)); }
+.kn-change { display: inline-flex; align-items: center; gap: 2px; font-weight: 500; color: var(--muted-foreground); }
+.kn-change.is-up { color: hsl(var(--v2-primary)); }
+.kn-change svg { width: 12px; height: 12px; }
+.kn-margin { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; width: 80px; }
+.kn-margin-bar { display: block; width: 100%; height: 4px; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--foreground) 7%, transparent); }
+.kn-margin-bar span { display: block; height: 100%; border-radius: 999px; background: hsl(var(--v2-primary)); }
+
+/* The whole-fleet line: the answer the rows add up to. */
+.kn-table tfoot td {
+  padding-block: 16px;
+  border-top: 2px solid hsl(var(--v2-primary) / 0.3);
+  border-bottom: 0;
+  background: color-mix(in srgb, hsl(var(--v2-primary)) 11%, hsl(var(--v2-background)));
+}
+.kn-fleet { font-size: 1rem; font-weight: 600; }
+.kn-fleet-kept { font-size: 1.125rem; font-weight: 600; color: hsl(var(--v2-primary)); }
+.kn-strong { font-size: 15px; font-weight: 500; }
+
+.dark .kn-spark,
+.dark .kn-table th button.is-active,
+.dark .kn-change.is-up,
+.dark .kn-fleet-kept { color: hsl(var(--v2-link)); }
+
+.kn-note { margin-top: 14px; font-size: 13px; color: var(--muted-foreground); }
+
+/* Narrower screens keep the columns that answer "is this car making money". */
+@media (max-width: 1099.98px) {
+  .kn-c-spark, .kn-c-change { display: none; }
+  .kn-table th, .kn-table td { padding-inline: 12px; }
+}
+@media (max-width: 899.98px) {
+  .kn-c-margin { display: none; }
+}
+@media (max-width: 699.98px) {
+  .kn-c-spent, .kn-c-out, .kn-views { display: none; }
+}
+@media (max-width: 479.98px) {
+  .kn-c-perday { display: none; }
+  .kn-table { font-size: 13px; }
+  .kn-table th, .kn-table td { padding-inline: 10px; }
+  .kn-table td.kn-left { white-space: normal; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kn-table tbody tr, .kn-table th button { transition: none; }
+}

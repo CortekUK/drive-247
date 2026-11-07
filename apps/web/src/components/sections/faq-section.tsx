@@ -6,6 +6,7 @@ import { AccordionContent } from "@/components/ui/accordion";
 import { FAQ_ITEMS } from "@/lib/constants";
 import { useFadeIn } from "@/hooks/use-fade-in";
 import "./faq-section.css";
+import { Accent, SectionHeading } from "./section-heading";
 
 export function FAQSection() {
   const { ref, visible } = useFadeIn();
@@ -17,10 +18,18 @@ export function FAQSection() {
       </svg>
 
       <div ref={ref} className={`relative mx-auto max-w-3xl px-4 sm:px-6 ${visible ? "fade-in-visible" : "fade-in-hidden"}`}>
-        <h2 className="text-center text-5xl font-bold tracking-tighter sm:text-6xl">FAQs</h2>
-        <p className="mt-5 text-center text-lg leading-relaxed text-muted-foreground">
-          Everything operators ask before switching to Drive247
-        </p>
+        <SectionHeading
+          title={
+            <>
+              Questions, <Accent>answered</Accent>
+            </>
+          }
+          sub={
+            <>
+              Everything operators ask before switching to Drive247
+            </>
+          }
+        />
 
         <AccordionPrimitive.Root type="single" collapsible defaultValue="faq-0" className="fq-list">
           {FAQ_ITEMS.map((item, i) => (

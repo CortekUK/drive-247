@@ -1,132 +1,138 @@
 /*
- * Integrations: everything in one view. The words on the left, and on the right a bubble per
- * integration in three staggered rows, sized from the screen so all nine always fit.
- * Glass, as on the hero's tiles, over the integration's own colour. No drop shadow.
+ * Integrations: three to a row, all nine on one screen. Each card: the logo, the words, and a
+ * faint wash of the integration's own colour coming in from the top corner. Flat, no shadows:
+ * what defines a card is its edge, drawn in that colour too, and the Drive247 mark in fine
+ * dots, in the same colour, coming in from the far corner.
  */
-.ig-section {
-  /* A bubble's width. Three rows overlap into 2.76 of these; a row and its offset take 3.57. */
-  --ig-d: min((100vw - 80px) / 2, 280px);
-  padding-block: clamp(72px, 10svh, 112px);
-}
-.ig-inner {
-  display: grid;
-  gap: clamp(28px, 4svh, 44px);
-  justify-items: center;
-  width: 100%;
-  max-width: 1560px;
-  margin-inline: auto;
-  padding-inline: clamp(16px, 3vw, 56px);
-}
+.ig-section { padding-block: clamp(72px, 9vw, 136px); }
+.ig-inner { width: min(100% - 2 * clamp(20px, 4vw, 80px), 1560px); margin-inline: auto; }
 
 /* The words */
-.ig-copy { max-width: 34rem; text-align: center; }
-.ig-title { font-size: clamp(2.25rem, 3.8vw, 4rem); line-height: 1.06; color: var(--foreground); }
-.ig-sub { margin-top: clamp(12px, 2svh, 20px); font-size: clamp(1rem, 1.3vw, 1.1875rem); line-height: 1.55; color: var(--muted-foreground); }
+.ig-copy { text-align: center; }
+.ig-title { font-size: clamp(2.25rem, 4.4vw, 4rem); line-height: 1.06; color: var(--foreground); }
+.ig-sub { margin-top: 12px; font-size: clamp(1rem, 1.3vw, 1.1875rem); line-height: 1.5; color: var(--muted-foreground); }
 
-/* The bubbles: two columns on a phone, each second one dropped half a bubble. */
-.ig-bubbles {
+/* The cards */
+.ig-grid {
   display: grid;
-  grid-template-columns: repeat(2, var(--ig-d));
-  gap: 12px;
-  padding-bottom: calc(var(--ig-d) / 2);
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: 1fr;
+  gap: clamp(14px, 1.6vw, 24px);
+  margin-top: clamp(32px, 3.6vw, 56px);
 }
-.ig-slot {
-  width: var(--ig-d);
-  height: var(--ig-d);
+.ig-card {
+  --ig-wash: 13%;
+  --ig-edge: 42%;
+  --ig-ring: 92%;
+  --ig-pad: clamp(18px, 1.8vw, 28px);
+  --ig-size: clamp(44px, 3.8vw, 60px);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* The words sit straight under the logo, so the names are level across a row whatever the length of the line below. */
+  gap: clamp(12px, 1.2vw, 20px);
+  min-width: 0;
+  padding: var(--ig-pad);
+  border: 1px solid transparent;
+  border-radius: 22px;
+  /* The wash inside, and the edge: in the card's colour at the logo's corner, neutral by the far one. */
+  background:
+    linear-gradient(155deg, color-mix(in srgb, var(--ig-c) var(--ig-wash), hsl(var(--v2-card))), hsl(var(--v2-card)) 62%) padding-box,
+    linear-gradient(155deg, color-mix(in srgb, var(--ig-c) var(--ig-edge), hsl(var(--v2-border))), hsl(var(--v2-border)) 55%) border-box;
+  color: var(--foreground);
   opacity: 0;
   translate: 0 12px;
   transition: opacity 200ms ease-out, translate 200ms ease-out;
-  transition-delay: calc(var(--ig-i) * 45ms);
+  transition-delay: calc(var(--ig-i) * 30ms);
 }
-.ig-slot:nth-child(even) { position: relative; top: calc(var(--ig-d) / 2); }
-.is-in .ig-slot { opacity: 1; translate: 0 0; }
+.dark .ig-card { --ig-wash: 20%; --ig-edge: 50%; --ig-ring: 88%; }
+.is-in .ig-card { opacity: 1; translate: 0 0; }
 
-.ig-bubble {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  padding: 11%;
-  border: 1px solid color-mix(in srgb, var(--foreground) 16%, transparent);
-  border-radius: 50%;
-  background:
-    linear-gradient(135deg, rgb(255 255 255 / 0.72), rgb(255 255 255 / 0.2) 40%, transparent 60%),
-    linear-gradient(to top right, color-mix(in srgb, var(--ig-brand) 46%, transparent), transparent 90%),
-    rgb(255 255 255 / 0.4);
-  background-clip: padding-box;
-  text-align: center;
-  color: var(--foreground);
-  transition: scale 200ms ease-out;
+/*
+ * The Drive247 mark, the D from the logo with its slash, in the far corner and cut by the
+ * card's edges. Like the hero's chevrons it is drawn in crisp fine dots: the picture
+ * (drive247-mark-shape.webp, the D cut from logo-light.png, its slash fainter) gives only the
+ * shape, and the dots and the colour, fading towards the words, come from here. It is sized
+ * from the card's height, so it keeps the same place in a short card and a tall one.
+ */
+.ig-card::before {
+  --ig-dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='5' height='5'%3E%3Crect width='2' height='2'/%3E%3C/svg%3E");
+  content: "";
+  position: absolute;
+  z-index: -1;
+  /* The D sits beside the logo and ends above the words; just its top and its right side run off the card. */
+  top: 28%;
+  left: 100%;
+  height: 77%;
+  aspect-ratio: 1;
+  translate: -75% -50%;
+  pointer-events: none;
+  background: linear-gradient(215deg, color-mix(in srgb, var(--ig-c) var(--ig-ring), transparent) 45%, color-mix(in srgb, var(--ig-c) 20%, transparent) 88%);
+  -webkit-mask-image: var(--ig-dots), url("/v2/drive247-mark-shape.webp");
+  -webkit-mask-size: 5px 5px, 100% 100%;
+  -webkit-mask-repeat: repeat, no-repeat;
+  -webkit-mask-composite: source-in;
+  mask-image: var(--ig-dots), url("/v2/drive247-mark-shape.webp");
+  mask-size: 5px 5px, 100% 100%;
+  mask-repeat: repeat, no-repeat;
+  mask-composite: intersect;
+  transition: transform 200ms ease-out;
 }
-.dark .ig-bubble {
-  border-color: rgb(255 255 255 / 0.26);
-  background:
-    linear-gradient(135deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.02) 40%, transparent 60%),
-    linear-gradient(to top right, color-mix(in srgb, var(--ig-brand) 50%, transparent), transparent 90%),
-    rgb(255 255 255 / 0.04);
-  background-clip: padding-box;
-}
-.ig-slot:hover { z-index: 1; }
-.ig-bubble:hover { scale: 1.05; }
+/* It moves a little further into the card under the mouse. */
+.ig-card:hover::before { transform: translate(-8px, 4px); }
 
-/* The logo as it comes, with no frame of ours around it. */
-.ig-logo { flex: none; display: block; height: calc(var(--ig-d) * 0.2); color: hsl(var(--v2-primary)); }
-.dark .ig-logo { color: hsl(var(--v2-link)); }
-.ig-logo img { width: calc(var(--ig-d) * 0.2); height: 100%; object-fit: contain; border-radius: 22%; }
-.ig-logo img.is-wide { width: calc(var(--ig-d) * 0.46); border-radius: 0; }
-.ig-logo svg { width: calc(var(--ig-d) * 0.2); height: 100%; }
-.ig-bubble h3 {
-  margin-top: calc(var(--ig-d) * 0.035);
-  font-size: max(14px, calc(var(--ig-d) * 0.076));
-  font-weight: 600;
-  line-height: 1.15;
-  letter-spacing: -0.02em;
+.ig-mark { display: flex; align-items: center; height: var(--ig-size); }
+.ig-logo { width: var(--ig-size); height: var(--ig-size); object-fit: contain; border-radius: 22%; }
+.ig-logo-own {
+  display: grid;
+  place-items: center;
+  background: hsl(var(--v2-primary));
+  color: #fff;
 }
-.ig-bubble p {
-  margin-top: calc(var(--ig-d) * 0.018);
-  font-size: max(11px, calc(var(--ig-d) * 0.058));
-  line-height: 1.35;
-  color: color-mix(in srgb, var(--foreground) 80%, transparent);
+.ig-logo-own svg { width: 56%; height: 56%; }
+.ig-wordmark { width: auto; height: 76%; max-width: 100%; object-fit: contain; object-position: left; }
+
+.ig-words h3 { font-size: clamp(1.0625rem, 1.4vw, 1.375rem); font-weight: 600; line-height: 1.2; letter-spacing: -0.015em; }
+.ig-words p { margin-top: 6px; font-size: clamp(0.8125rem, 1.05vw, 1rem); line-height: 1.45; color: var(--muted-foreground); }
+
+@media (min-width: 720px) {
+  .ig-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
-/* Three staggered rows: on half-width columns, the middle row starting half a bubble in. */
-@media (min-width: 768px) {
-  .ig-section { --ig-d: min((100svh - 300px) / 2.76, (100vw - 80px) / 3.57, 300px); }
-  .ig-bubbles {
-    grid-template-columns: repeat(7, calc(var(--ig-d) * 0.51));
-    grid-auto-rows: calc(var(--ig-d) * 0.88);
-    gap: 0;
-    padding-bottom: calc(var(--ig-d) * 0.12);
-  }
-  .ig-slot { grid-column-end: span 2; }
-  .ig-slot:nth-child(even) { position: static; }
-  .ig-slot:nth-child(3n + 1) { grid-column-start: 1; }
-  .ig-slot:nth-child(4), .ig-slot:nth-child(5), .ig-slot:nth-child(6) { grid-row: 2; }
-  .ig-slot:nth-child(4) { grid-column-start: 2; }
-  .ig-slot:nth-child(5) { grid-column-start: 4; }
-  .ig-slot:nth-child(6) { grid-column-start: 6; }
-  .ig-slot:nth-child(1), .ig-slot:nth-child(7) { grid-column-start: 1; }
-  .ig-slot:nth-child(2), .ig-slot:nth-child(8) { grid-column-start: 3; }
-  .ig-slot:nth-child(3), .ig-slot:nth-child(9) { grid-column-start: 5; }
-  .ig-slot:nth-child(1), .ig-slot:nth-child(2), .ig-slot:nth-child(3) { grid-row: 1; }
-  .ig-slot:nth-child(7), .ig-slot:nth-child(8), .ig-slot:nth-child(9) { grid-row: 3; }
-}
-/* Wide enough for the words beside them, so the bubbles get the screen's whole height. */
-@media (min-width: 1100px) {
-  .ig-section {
-    --ig-d: min((100svh - 132px) / 2.76, (66vw - 40px) / 3.57, 320px);
+/*
+ * One screen: the heading and all three rows fill exactly the screen's height, under the nav.
+ * Sizes follow the screen's height here, so a shorter laptop screen gets smaller cards
+ * rather than a scroll.
+ */
+@media (min-width: 1100px) and (min-height: 680px) {
+  .ig-section { padding-block: 0; }
+  .ig-inner {
     display: flex;
-    align-items: center;
-    min-height: 100svh;
-    padding-block: 92px 40px;
+    flex-direction: column;
+    height: 100svh;
+    padding-block: clamp(88px, 12svh, 116px) clamp(20px, 4svh, 44px);
   }
-  .ig-inner { grid-template-columns: minmax(0, 1fr) auto; align-items: center; justify-items: start; gap: clamp(32px, 4vw, 72px); }
-  .ig-copy { text-align: left; }
+  .ig-title { font-size: clamp(2rem, 5.6svh, 3.75rem); }
+  .ig-sub { margin-top: clamp(4px, 1svh, 12px); font-size: clamp(0.9375rem, 2svh, 1.1875rem); }
+  .ig-grid {
+    flex: 1;
+    min-height: 0;
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: auto;
+    gap: clamp(12px, 2svh, 24px) clamp(14px, 1.4vw, 24px);
+    margin-top: clamp(20px, 3.6svh, 44px);
+  }
+  .ig-card {
+    --ig-pad: clamp(16px, 2.6svh, 30px);
+    --ig-size: clamp(36px, 5.6svh, 64px);
+    gap: clamp(10px, 1.6svh, 18px);
+  }
+  .ig-words h3 { font-size: clamp(1rem, 2.5svh, 1.5rem); }
+  .ig-words p { margin-top: clamp(3px, 0.6svh, 6px); font-size: clamp(0.8125rem, 1.75svh, 1.0625rem); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ig-slot { opacity: 1; translate: 0 0; transition: none; }
-  .ig-bubble { transition: none; }
-  .ig-bubble:hover { scale: 1; }
+  .ig-card { opacity: 1; translate: 0 0; transition: none; }
+  .ig-card::before { transition: none; }
 }

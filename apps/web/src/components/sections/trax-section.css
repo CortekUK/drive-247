@@ -73,15 +73,7 @@
   padding-top: clamp(84px, 11svh, 112px);
   color: var(--foreground);
 }
-.tm-title {
-  font-size: clamp(2.5rem, min(8.4svh, 10vw), 4.75rem);
-  line-height: 1.06;
-}
-.tm-sub {
-  max-width: 40rem;
-  margin: clamp(10px, 1.8svh, 18px) auto 0;
-  color: var(--muted-foreground);
-}
+/* .tm-title / .tm-sub now only mark the shared heading for the line's measurements. */
 
 /* The three stages, so it's always clear which one is happening. */
 .tm-stages {
@@ -386,39 +378,7 @@
 }
 .tm-actions svg { width: 15px; height: 15px; }
 
-.tm-mark {
-  position: relative;
-  isolation: isolate;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  color: #fff;
-}
-.tm-mark.is-xs { width: 20px; height: 20px; }
-.tm-mark.is-xs > svg { width: 12px; height: 12px; }
-.tm-mark.is-md { width: 40px; height: 40px; }
-.tm-mark.is-md > svg { width: 20px; height: 20px; }
-.tm-mark > svg { position: relative; filter: drop-shadow(0 1px 2px hsl(var(--v2-chart-5) / 0.55)); }
-.tm-mark-clip { position: absolute; inset: 0; overflow: hidden; border-radius: 999px; }
-.tm-mark-fill {
-  position: absolute;
-  inset: -25%;
-  background: conic-gradient(from 180deg, hsl(var(--v2-chart-2)), hsl(var(--v2-primary)), hsl(var(--v2-chart-4)), hsl(var(--v2-chart-1)), hsl(var(--v2-chart-2)));
-}
-.tm-mark[data-animated="true"] .tm-mark-fill { animation: tm-spin 12s linear infinite; }
-.tm-mark-halo {
-  position: absolute;
-  z-index: -1;
-  inset: -20px;
-  border-radius: 999px;
-  filter: blur(24px);
-  background: radial-gradient(closest-side, hsl(var(--v2-chart-2) / 0.6), hsl(var(--v2-primary) / 0.25) 60%, transparent);
-  animation: tm-breathe 4s ease-in-out infinite;
-}
-.tm-mark.is-xs .tm-mark-halo { inset: -8px; filter: blur(10px); }
-@keyframes tm-spin { to { transform: rotate(360deg); } }
+/* The mark itself (.tm-mark and its parts) lives in shared/trax-mark.css. */
 
 .tm-body { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
 .tm-greeting {
@@ -505,6 +465,10 @@
 }
 /* AnswerChart: one measure, one hue, every bar direct-labelled. */
 .tm-chart { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+/* Records, one to a line, each led by what it is. */
+.tm-list { display: grid; gap: 6px; margin-top: 8px; }
+.tm-list li { display: grid; grid-template-columns: 68px minmax(0, 1fr); gap: 10px; align-items: baseline; font-size: 13px; line-height: 1.4; }
+.tm-list b { font-size: 11.5px; font-weight: 600; color: var(--tm-accent); }
 .tm-chart-row {
   display: grid;
   grid-template-columns: 94px minmax(0, 1fr) auto;
@@ -631,6 +595,48 @@
 .tm-suggest svg { width: 14px; height: 14px; color: hsl(var(--v2-primary)); }
 .dark .tm-suggest svg { color: hsl(var(--v2-chart-2)); }
 
+/* The everyday questions, under the screen: one is always the one on show. */
+.tm-topics {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: calc(100% - 2rem);
+  margin: clamp(20px, 3svh, 32px) auto 0;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  border-radius: 999px;
+  background: hsl(var(--v2-card));
+}
+.tm-topics-lead { padding-inline: 12px 4px; font-size: 13px; color: hsl(var(--v2-muted-foreground)); }
+.tm-topic {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding-inline: 12px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--foreground);
+  cursor: pointer;
+  transition: background-color 200ms ease-out, color 200ms ease-out;
+}
+.tm-topic svg { width: 16px; height: 16px; color: var(--tm-accent); }
+.tm-topic:hover { background: hsl(var(--v2-muted)); }
+.tm-topic[aria-pressed="true"] { background: color-mix(in srgb, hsl(var(--v2-primary)) 14%, hsl(var(--v2-card))); color: var(--tm-accent); }
+.dark .tm-topic[aria-pressed="true"] { background: color-mix(in srgb, hsl(var(--v2-primary)) 34%, hsl(var(--v2-card))); }
+/* A phone: two by two, the label above them. */
+@media (max-width: 640px) {
+  .tm-topics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: calc(100% - 2rem); border-radius: 20px; }
+  .tm-topics-lead { grid-column: 1 / -1; padding: 6px 0 2px; text-align: center; }
+  .tm-topic { justify-content: center; height: auto; min-height: 40px; padding: 6px 10px; border-radius: 14px; font-size: 13px; text-align: center; }
+}
+
 .tm-in { animation: tm-rise 200ms ease-out both; }
 @keyframes tm-rise {
   from { opacity: 0; transform: translateY(12px); }
@@ -716,19 +722,23 @@
   .tm-track { height: 400svh; }
   .tm-pin { position: sticky; top: 0; height: 100svh; }
   /* The screen: a gap, then the words, then a gap, then this section, filling the screen as it holds. */
-  .tm-section { height: 100svh; min-height: 0; padding-top: 152px; padding-bottom: 52px; }
+  .tm-section { height: 100svh; min-height: 0; padding-top: 152px; padding-bottom: 108px; }
+  /* Solid, and over the thread as it leaves the screen, like the stages at the top; clear of the fade at the very bottom. */
+  .tm-topics { position: absolute; right: 0; bottom: 50px; left: 0; margin: 0 auto; }
   .tm-stage { min-height: 0; margin-top: 0; }
   /* Four boxes share the height, so a short laptop still fits them. */
-  .tm-art-svg { height: clamp(28px, calc((100svh - 228px) / 4 - 66px), 96px); }
+  /* 284px: the space above the stage and below it, where the question buttons sit. */
+  .tm-art-svg { height: clamp(28px, calc((100svh - 284px) / 4 - 66px), 96px); }
   /* Solid, and over the thread, which runs behind it on the way to the screen. */
   .tm-stages { position: absolute; z-index: 3; top: 82px; left: 50%; margin: 0; translate: -50% 0; }
-  .tm-stages b { transition: none; }
+  .tm-track[data-scroll="true"] .tm-stages b { transition: none; }
   /* Already there when the thread arrives, and measured where it stands. */
   .tm-section[data-seen="false"] .tm-stage { opacity: 1; }
   .tm-section[data-seen="true"] .tm-stage { animation: none; }
 }
-/* A short screen can't hold the record check as well: the answer and its chart come first. */
-@media (min-width: 1200px) and (min-height: 640px) and (max-height: 779px) and (prefers-reduced-motion: no-preference) {
+/* A short screen can't hold the record check as well: the answer and its chart come first.
+   The question buttons under the screen take some of its height, hence up to 859px. */
+@media (min-width: 1200px) and (min-height: 640px) and (max-height: 859px) and (prefers-reduced-motion: no-preference) {
   .tm-msg .tm-evidence { display: none; }
 }
 

@@ -9,9 +9,6 @@ export function CTABand() {
 
   return (
     <section className="cb-band">
-      <div className="cb-photo" aria-hidden />
-      <div className="cb-tint" aria-hidden />
-
       <div ref={ref} className={`cb-copy ${visible ? "fade-in-visible" : "fade-in-hidden"}`}>
         <p className="cb-kicker">Get started</p>
         <h2 className="cb-title">
@@ -29,6 +26,12 @@ export function CTABand() {
             See pricing
           </a>
         </div>
+      </div>
+
+      {/* Light: a strip below the words. Dark: the band's whole ground, behind them. */}
+      <div className="cb-scene" aria-hidden>
+        <div className="cb-photo" />
+        <div className="cb-tint" />
       </div>
     </section>
   );

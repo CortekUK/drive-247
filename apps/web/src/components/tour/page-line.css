@@ -1,0 +1,42 @@
+/*
+ * The page line's layer: under every section (the page's own stacking context, .lp-v2, puts
+ * z-index -1 above the page ground and below the content), so screens and cards hide it and
+ * it shows wherever the page is open. The look comes from the thread classes in
+ * portal-glass.css; these add only what the routed parts need.
+ */
+.ln-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.ln-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+}
+.ln-live {
+  stroke: hsl(var(--v2-primary));
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.ln-node {
+  transition: fill 200ms ease-out, stroke 200ms ease-out;
+}
+.ln-node.is-on {
+  fill: hsl(var(--v2-primary));
+  stroke: hsl(var(--v2-primary));
+}
+/* The end of the line: a ring around the last dot. */
+.ln-end.is-on {
+  stroke: hsl(var(--v2-background));
+  stroke-width: 2;
+  outline: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ln-node { transition: none; }
+}

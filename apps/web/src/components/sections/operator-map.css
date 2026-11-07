@@ -1,0 +1,121 @@
+/*
+ * The operator map: a full screen of tiles, hairlines between them, each tile one
+ * operator's logo in the page's ink. The heading is a tile of its own, in the brand.
+ */
+.om { position: relative; }
+.om-map {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  min-height: 100vh;
+  overflow: hidden;
+  background: hsl(var(--v2-border));
+}
+.om-list { position: absolute; inset: 0; margin: 0; padding: 0; list-style: none; pointer-events: none; }
+.om-list > li { pointer-events: auto; }
+
+/* Each tile is placed by its share; 1px less on two sides leaves the hairlines. */
+.om-cell {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: calc(var(--w) - 1px);
+  height: calc(var(--h) - 1px);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: hsl(var(--v2-card));
+  container-type: size;
+}
+/* After the first layout, tiles glide to their new places when the shares change. */
+.om-map.is-live .om-cell {
+  transition:
+    left 900ms cubic-bezier(0.16, 1, 0.3, 1),
+    top 900ms cubic-bezier(0.16, 1, 0.3, 1),
+    width 900ms cubic-bezier(0.16, 1, 0.3, 1),
+    height 900ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.om-logo {
+  width: 64%;
+  height: 52%;
+  background-color: color-mix(in srgb, var(--foreground) 72%, transparent);
+  -webkit-mask: var(--om-mask) center / contain no-repeat;
+  mask: var(--om-mask) center / contain no-repeat;
+  animation: om-appear 400ms ease-out both;
+  transition: background-color 200ms ease-in;
+}
+.om-cell:hover .om-logo { background-color: var(--foreground); transition-timing-function: ease-out; }
+/* No usable logo: the name, set as a wordmark that scales with its tile. */
+.om-word {
+  display: -webkit-box;
+  max-width: 84%;
+  overflow: hidden;
+  font-size: clamp(10px, min(10cqi, 18cqb), 44px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  text-align: center;
+  overflow-wrap: anywhere;
+  color: color-mix(in srgb, var(--foreground) 72%, transparent);
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  animation: om-appear 400ms ease-out both;
+}
+/* Who it is, on hover, where the tile has room. */
+.om-name {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  left: 10px;
+  overflow: hidden;
+  font-size: 11.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted-foreground);
+  opacity: 0;
+  transition: opacity 200ms ease-in;
+}
+.om-cell:hover .om-name { opacity: 1; transition-timing-function: ease-out; }
+@container (max-height: 88px) { .om-name { display: none; } }
+
+/* A tile that just grew flashes its edge once. */
+.om-cell.is-grown::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 0 2px hsl(var(--v2-primary));
+  animation: om-flash 1800ms ease-out both;
+  pointer-events: none;
+}
+
+.om-head {
+  place-items: end start;
+  align-content: end;
+  padding: clamp(14px, 5cqi, 44px);
+  background: hsl(var(--v2-primary));
+  color: #fff;
+}
+.om-title {
+  max-width: 14ch;
+  font-size: clamp(20px, min(12cqi, 19cqb), 72px);
+  font-weight: 600;
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+}
+.om-sub {
+  max-width: 36ch;
+  margin-top: 0.9em;
+  font-size: clamp(11px, min(4cqi, 6.5cqb), 18px);
+  line-height: 1.45;
+  color: rgb(255 255 255 / 0.82);
+}
+@container (max-height: 200px) { .om-sub { display: none; } }
+
+@keyframes om-appear { from { opacity: 0; } to { opacity: 1; } }
+@keyframes om-flash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .om-map.is-live .om-cell, .om-logo, .om-word, .om-name { transition: none; animation: none; }
+  .om-cell.is-grown::after { animation: none; opacity: 0; }
+}

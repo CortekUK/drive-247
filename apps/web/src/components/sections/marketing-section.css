@@ -1,0 +1,121 @@
+/*
+ * Marketing: the portal's Marketing screen in a browser window, then what it does in four
+ * short points. Flat, on the page's own ground, like the booking example above it.
+ */
+.mk-section {
+  --mk-a: hsl(var(--v2-primary));
+  --mk-tint: color-mix(in srgb, hsl(var(--v2-primary)) 11%, hsl(var(--v2-card)));
+  padding-block: clamp(72px, 9vw, 136px);
+}
+.dark .mk-section { --mk-tint: color-mix(in srgb, hsl(var(--v2-primary)) 24%, hsl(var(--v2-card))); }
+.mk-inner { width: min(100% - 2 * clamp(16px, 3vw, 64px), 1240px); margin-inline: auto; }
+
+.mk-head { display: grid; justify-items: center; text-align: center; }
+/* Not built yet, said plainly before anything else. */
+.mk-soon, .mk-later {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 99px;
+  background: var(--mk-tint);
+  color: var(--mk-a);
+  font-weight: 600;
+}
+.dark .mk-soon, .dark .mk-later { color: hsl(var(--v2-link)); }
+.mk-soon { height: 28px; margin-bottom: 18px; padding-inline: 12px; border: 1px solid color-mix(in srgb, hsl(var(--v2-primary)) 30%, transparent); font-size: 13px; }
+.mk-title { font-size: clamp(2.25rem, 4.4vw, 4rem); line-height: 1.06; color: var(--foreground); }
+.mk-sub { max-width: 40rem; margin-top: 14px; font-size: clamp(1rem, 1.3vw, 1.1875rem); line-height: 1.5; color: var(--muted-foreground); }
+
+.mk-window { margin-top: clamp(32px, 3.6vw, 48px); overflow: hidden; border: 1px solid hsl(var(--v2-border)); border-radius: 14px; }
+.mk-window .pg-browser { border-radius: 0; }
+/* The shared window builds itself in on other sections; this one is there from the start. */
+.mk-window .pg-tabs, .mk-window .pg-address, .mk-window .pg-screen { opacity: 1; translate: none; }
+
+/* The portal screen */
+.mk-app { padding: clamp(18px, 2.4vw, 32px); background: color-mix(in srgb, hsl(var(--v2-primary)) 4%, hsl(var(--v2-card))); color: hsl(var(--v2-foreground)); }
+.mk-app-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 24px; }
+.mk-app-head h3 { font-size: clamp(22px, 2.2vw, 28px); font-weight: 700; letter-spacing: -0.03em; }
+.mk-app-head p { margin-top: 2px; font-size: 13.5px; color: hsl(var(--v2-muted-foreground)); }
+.mk-connected { display: flex; flex-wrap: wrap; gap: 8px; }
+.mk-connected span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px 0 8px;
+  border: 1px solid hsl(var(--v2-border));
+  border-radius: 99px;
+  background: hsl(var(--v2-card));
+  font-size: 13px;
+  font-weight: 600;
+}
+.mk-connected img { width: 20px; height: 20px; border-radius: 5px; }
+.mk-connected i { width: 8px; height: 8px; border-radius: 50%; background: hsl(var(--v2-success)); }
+
+.mk-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+.mk-filter button {
+  height: 32px;
+  padding-inline: 14px;
+  border-radius: 99px;
+  background: hsl(var(--v2-muted));
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--v2-foreground));
+  cursor: pointer;
+  transition: background-color 200ms ease-out, color 200ms ease-out;
+}
+.mk-filter button:hover { background: var(--mk-tint); }
+.mk-filter button[aria-pressed="true"] { background: var(--mk-a); color: #fff; }
+
+.mk-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+@media (min-width: 760px) { .mk-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.mk-kpis div { padding: 14px 16px; border: 1px solid hsl(var(--v2-border)); border-radius: 16px; background: hsl(var(--v2-card)); }
+.mk-kpis dt { font-size: 12.5px; color: hsl(var(--v2-muted-foreground)); }
+.mk-kpis dd { margin-top: 4px; font-size: clamp(20px, 2vw, 26px); font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.mk-kpis .is-key { border-color: color-mix(in srgb, hsl(var(--v2-primary)) 45%, hsl(var(--v2-border))); background: var(--mk-tint); }
+@media (max-width: 759.98px) { .mk-kpis .is-key { grid-column: 1 / -1; } }
+
+/* Trax, reading the table for you. */
+.mk-trax {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, hsl(var(--v2-primary)) 35%, hsl(var(--v2-border)));
+  border-radius: 14px;
+  background: hsl(var(--v2-card));
+  font-size: 13.5px;
+  line-height: 1.45;
+  animation: mk-in 200ms ease-out both;
+}
+.mk-trax svg { flex: none; width: 16px; height: 16px; margin-top: 2px; color: var(--mk-a); }
+.mk-trax b { font-weight: 600; }
+@keyframes mk-in { from { opacity: 0; translate: 0 12px; } }
+
+.mk-table-wrap { margin-top: 14px; overflow-x: auto; border: 1px solid hsl(var(--v2-border)); border-radius: 16px; background: hsl(var(--v2-card)); }
+.mk-table { width: 100%; border-collapse: collapse; font-size: 13.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mk-table th { padding: 12px 14px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-align: left; text-transform: uppercase; color: hsl(var(--v2-muted-foreground)); }
+.mk-table td { padding: 11px 14px; border-top: 1px solid hsl(var(--v2-border)); }
+.mk-table tr.is-paused td { color: hsl(var(--v2-muted-foreground)); }
+.mk-camp { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+.mk-camp img { width: 24px; height: 24px; border-radius: 6px; }
+.mk-camp small { display: block; font-size: 11.5px; font-weight: 500; color: hsl(var(--v2-muted-foreground)); }
+.mk-return { display: grid; grid-template-columns: 90px auto; align-items: center; gap: 10px; }
+.mk-return i { height: 8px; border-radius: 99px; background: var(--mk-a); transition: width 200ms ease-out; }
+.mk-return b { font-weight: 600; }
+@media (max-width: 699.98px) { .mk-opt { display: none; } }
+
+/* What it does */
+.mk-features { display: grid; gap: 24px 32px; margin-top: clamp(32px, 3.6vw, 48px); }
+@media (min-width: 640px) { .mk-features { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1000px) { .mk-features { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.mk-features svg { width: 22px; height: 22px; color: var(--mk-a); }
+.dark .mk-features svg { color: hsl(var(--v2-link)); }
+.mk-features b { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; color: hsl(var(--v2-foreground)); }
+.mk-later { height: 22px; padding-inline: 8px; font-size: 11.5px; }
+.mk-features p { margin-top: 6px; font-size: 14.5px; line-height: 1.5; color: hsl(var(--v2-muted-foreground)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-trax { animation: none; }
+  .mk-return i, .mk-filter button { transition: none; }
+}

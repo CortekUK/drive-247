@@ -1,0 +1,95 @@
+/*
+ * The ID verification illustrations: the Launch section's palette (one accent, deep to
+ * pale), drawn straight on the page with nothing behind them. Each step's drawing comes in
+ * with the page's motion, 200ms ease-out, opacity and a 12px lift; inside a drawing, the
+ * scan sweeps, the selfie ring turns, the checks tick in and the stamp lands.
+ */
+.va {
+  --va-ink: color-mix(in srgb, var(--foreground) 88%, hsl(var(--v2-card)));
+  --va-card: hsl(var(--v2-card));
+  --va-acc: hsl(var(--v2-primary));
+  --va-deep: #2e2a8f;
+  --va-warm: #a8a2f7;
+  --va-mid: #d4d0fb;
+  --va-soft: color-mix(in srgb, hsl(var(--v2-primary)) 20%, hsl(var(--v2-card)));
+  --va-on: #fff;
+  --va-text: #2e2a8f;
+  display: grid;
+  place-items: center;
+  width: 100%;
+}
+.dark .va { --va-text: var(--foreground); --va-deep: #7068ee; --va-mid: #5b52c9; --va-soft: color-mix(in srgb, hsl(var(--v2-primary)) 30%, hsl(var(--v2-card))); }
+.va svg { display: block; width: 100%; height: auto; overflow: visible; }
+.va text { font-family: inherit; }
+.rc-stage .va svg { max-height: calc(100svh - 112px - 2 * var(--rc-pad, 0px)); }
+/* The real screens, one per theme. */
+.va-dark { display: none; }
+.dark .va-light { display: none; }
+.dark .va-dark { display: inline; }
+.va-scene.is-on .va-shot { animation: va-rise 240ms ease-out 120ms both; }
+
+.va-scene { opacity: 0; transform: translateY(12px); transition: opacity 200ms ease-in, transform 200ms ease-in; }
+.va-scene.is-on { opacity: 1; transform: none; transition: opacity 200ms ease-out, transform 200ms ease-out; }
+
+/* The licence turns over: one face out, the other in. */
+.va-face { opacity: 0; transition: opacity 200ms ease-out; }
+.va-face.is-on { opacity: 1; }
+.va-beam { animation: va-scan 1800ms ease-in-out infinite alternate; }
+@keyframes va-scan { to { transform: translateY(210px); } }
+
+/* The selfie: the ring turns, the dots run to the licence photo, the match lands. */
+.va-orbit { transform-box: fill-box; transform-origin: center; animation: va-spin 12s linear infinite; }
+@keyframes va-spin { to { transform: rotate(360deg); } }
+.va-link { animation: va-flow 1100ms linear infinite; }
+@keyframes va-flow { to { stroke-dashoffset: -22; } }
+.va-match { transform-box: fill-box; transform-origin: center; }
+.va-scene.is-on .va-match { animation: va-pop 320ms ease-out 260ms both; }
+@keyframes va-pop { from { opacity: 0; transform: scale(0.7); } }
+
+/* The verdict: each check ticks in, then the stamp lands and the keys are free to go. */
+.va-reveal { transform-box: fill-box; transform-origin: 50% 100%; transform: scaleY(0); }
+.va-scene.is-on .va-reveal { animation: va-unroll 900ms ease-out 260ms both; }
+@keyframes va-unroll { from { transform: scaleY(1); } to { transform: scaleY(0); } }
+@keyframes va-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.va-stamp { opacity: 0; transform-box: fill-box; transform-origin: center; }
+.va-stamp.is-on { animation: va-land 320ms ease-out forwards; }
+@keyframes va-land { from { opacity: 0; transform: scale(1.5); } to { opacity: 1; transform: none; } }
+.va-keys { opacity: 0; transform-box: fill-box; transform-origin: 50% 0; transition: opacity 200ms ease-out; }
+.va-keys.is-on { opacity: 1; animation: va-swing 1100ms ease-out 200ms; }
+@keyframes va-swing {
+  25% { transform: rotate(7deg); }
+  55% { transform: rotate(-4deg); }
+  80% { transform: rotate(1.5deg); }
+}
+
+/* Insurance, Agreements and Payments (feature-art.tsx): each drawing's one moment. */
+.va-pop { transform-box: fill-box; transform-origin: center; }
+.va-scene.is-on .va-pop { animation: va-pop 320ms ease-out 300ms both; }
+.va-scene.is-on .va-fly { animation: va-fly 420ms ease-out 120ms both; }
+@keyframes va-fly { from { opacity: 0; transform: translate(-28px, 18px); } }
+.va-sign { stroke-dasharray: 1; stroke-dashoffset: 1; }
+.va-scene.is-on .va-sign { animation: va-ink 1200ms ease-out 500ms forwards; }
+@keyframes va-ink { to { stroke-dashoffset: 0; } }
+.va-scene.is-on .va-knob { animation: va-knob 260ms ease-out 400ms both; }
+@keyframes va-knob { from { transform: translateX(-22px); } }
+.va-coin { animation: va-coin 1600ms ease-in infinite; }
+@keyframes va-coin {
+  0% { opacity: 0; transform: translateY(-16px); }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(70px); }
+}
+.va-rise { transform-box: fill-box; transform-origin: 50% 100%; }
+.va-scene.is-on .va-rise { animation: va-grow 360ms ease-out both; }
+@keyframes va-grow { from { transform: scaleY(0.2); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .va-scene.is-on .va-pop, .va-scene.is-on .va-fly, .va-scene.is-on .va-knob, .va-coin, .va-scene.is-on .va-rise { animation: none; }
+  .va-sign { stroke-dashoffset: 0; }
+  .va-scene.is-on .va-sign { animation: none; }
+  .va-scene, .va-face, .va-keys { transition: none; }
+  .va-beam { display: none; }
+  .va-orbit, .va-link, .va-scene.is-on .va-match, .va-keys.is-on { animation: none; }
+  .va-scene.is-on .va-reveal, .va-scene.is-on .va-shot { animation: none; }
+  .va-stamp.is-on { opacity: 1; animation: none; }
+}

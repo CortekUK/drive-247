@@ -1,0 +1,128 @@
+/*
+ * The pricing breakdown, under the plan cards: promises, the full feature table, what costs
+ * extra and who it's paid to, and a month worked out. Flat, bordered, in the page's indigo.
+ */
+.pb {
+  --pb-a: hsl(var(--v2-primary));
+  --pb-tint: color-mix(in srgb, hsl(var(--v2-primary)) 11%, hsl(var(--v2-card)));
+  margin-top: clamp(40px, 4.4vw, 64px);
+  color: hsl(var(--v2-foreground));
+}
+.dark .pb { --pb-tint: color-mix(in srgb, hsl(var(--v2-primary)) 24%, hsl(var(--v2-card))); }
+
+.pb-promises { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 28px; font-size: 15px; font-weight: 600; }
+.pb-promises li { display: inline-flex; align-items: center; gap: 8px; }
+.pb-promises svg { width: 18px; height: 18px; color: var(--pb-a); }
+.dark .pb-promises svg { color: hsl(var(--v2-link)); }
+
+.pb-block { margin-top: clamp(56px, 6vw, 88px); }
+.pb-h { font-size: clamp(1.75rem, 3vw, 2.5rem); font-weight: 600; line-height: 1.1; letter-spacing: -0.035em; text-align: center; }
+.pb-lead { max-width: 40rem; margin: 10px auto 0; font-size: 16px; line-height: 1.5; text-align: center; color: hsl(var(--v2-muted-foreground)); }
+
+/* 1. The table */
+.pb-table-wrap { margin-top: 28px; overflow-x: auto; border: 1px solid hsl(var(--v2-border)); border-radius: 20px; background: hsl(var(--v2-card)); }
+.pb-table { width: 100%; min-width: 620px; border-collapse: collapse; font-size: 14px; }
+.pb-table thead th { position: sticky; top: 0; padding: 18px 16px 14px; border-bottom: 1px solid hsl(var(--v2-border)); background: hsl(var(--v2-card)); text-align: center; vertical-align: bottom; }
+.pb-table thead th:first-child { text-align: left; }
+.pb-table thead b { display: block; font-size: 15px; font-weight: 700; }
+.pb-table thead span { display: block; margin-top: 2px; font-size: 22px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.pb-table thead small { font-size: 13px; font-weight: 500; color: hsl(var(--v2-muted-foreground)); }
+.pb-table thead th.is-hi { background: var(--pb-tint); color: var(--pb-a); }
+.dark .pb-table thead th.is-hi { color: hsl(var(--v2-link)); }
+.pb-table tbody th { padding: 11px 16px; font-weight: 500; text-align: left; }
+.pb-table td { padding: 11px 16px; text-align: center; font-variant-numeric: tabular-nums; }
+.pb-table tbody tr + tr > * { border-top: 1px solid color-mix(in srgb, hsl(var(--v2-border)) 70%, transparent); }
+.pb-table td svg { width: 18px; height: 18px; margin-inline: auto; color: var(--pb-a); }
+.dark .pb-table td svg { color: hsl(var(--v2-link)); }
+.pb-table .pb-key th, .pb-table .pb-key td { font-weight: 600; }
+.pb-table td.pb-val { font-size: 13.5px; font-weight: 600; }
+.pb-table .pb-group th {
+  padding: 18px 16px 8px;
+  border-top: 1px solid hsl(var(--v2-border));
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: hsl(var(--v2-muted-foreground));
+}
+.pb-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.pb-chip { display: inline-flex; padding: 2px 9px; border-radius: 99px; background: var(--pb-tint); color: var(--pb-a); font-size: 12px; font-style: normal; font-weight: 600; white-space: nowrap; }
+.dark .pb-chip { color: hsl(var(--v2-link)); }
+.pb-chip.is-renter { background: color-mix(in srgb, hsl(var(--v2-success)) 14%, hsl(var(--v2-card))); color: hsl(var(--v2-success)); }
+.pb-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 24px; margin-top: 14px; font-size: 13px; color: hsl(var(--v2-muted-foreground)); }
+.pb-legend span { display: inline-flex; align-items: center; gap: 8px; }
+.pb-legend svg { width: 16px; height: 16px; color: var(--pb-a); }
+
+/* 2. Extras */
+.pb-extras { display: grid; gap: 16px; margin-top: 28px; }
+@media (min-width: 900px) { .pb-extras { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pb-card { padding: 20px; border: 1px solid hsl(var(--v2-border)); border-radius: 20px; background: hsl(var(--v2-card)); }
+.pb-card-title { font-size: 13px; font-weight: 700; letter-spacing: 0.02em; color: hsl(var(--v2-muted-foreground)); }
+.pb-list { display: grid; margin-top: 8px; }
+.pb-list li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding-block: 14px; }
+.pb-list li + li { border-top: 1px solid hsl(var(--v2-border)); }
+.pb-list svg { width: 20px; height: 20px; margin-top: 1px; color: var(--pb-a); }
+.dark .pb-list svg { color: hsl(var(--v2-link)); }
+.pb-list b { display: block; font-size: 15px; font-weight: 600; }
+.pb-list small { display: block; margin-top: 2px; font-size: 13.5px; line-height: 1.45; color: hsl(var(--v2-muted-foreground)); }
+.pb-list strong { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; text-align: right; font-variant-numeric: tabular-nums; }
+.pb-list strong small { margin-top: 0; font-size: 12px; font-weight: 500; letter-spacing: 0; }
+.pb-list em { padding: 3px 10px; border-radius: 99px; background: hsl(var(--v2-muted)); font-size: 12px; font-style: normal; font-weight: 600; white-space: nowrap; }
+
+/* 3. A month */
+.pb-tabs { display: flex; justify-content: center; gap: 6px; margin-top: 24px; }
+.pb-tabs button {
+  height: 36px;
+  padding-inline: 16px;
+  border-radius: 99px;
+  background: hsl(var(--v2-muted));
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 200ms ease-out, color 200ms ease-out;
+}
+.pb-tabs button:hover { background: var(--pb-tint); }
+.pb-tabs button[aria-selected="true"] { background: var(--pb-a); color: #fff; }
+.pb-month { margin-top: 20px; animation: pb-in 200ms ease-out both; }
+@keyframes pb-in { from { opacity: 0; translate: 0 12px; } }
+.pb-month-case { font-size: 15px; font-weight: 600; text-align: center; }
+.pb-bill { display: grid; gap: 16px; margin-top: 16px; }
+@media (min-width: 900px) { .pb-bill { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.pb-bill-col { padding: 20px; border: 1px solid hsl(var(--v2-border)); border-radius: 20px; background: hsl(var(--v2-card)); }
+.pb-bill-col dl { display: grid; margin-top: 8px; font-size: 14.5px; }
+.pb-bill-col dl div { display: flex; justify-content: space-between; gap: 12px; padding-block: 9px; }
+.pb-bill-col dl div + div { border-top: 1px solid color-mix(in srgb, hsl(var(--v2-border)) 70%, transparent); }
+.pb-bill-col dt { color: hsl(var(--v2-muted-foreground)); }
+.pb-bill-col dd { font-weight: 600; font-variant-numeric: tabular-nums; }
+.pb-bill-col .is-total { margin-top: 4px; border-top: 1px solid hsl(var(--v2-border)) !important; font-size: 17px; }
+.pb-bill-col .is-total dt { color: hsl(var(--v2-foreground)); font-weight: 600; }
+.pb-bill-col .is-total dd { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+.pb-note { margin-top: 10px; font-size: 13px; line-height: 1.45; color: hsl(var(--v2-muted-foreground)); }
+.pb-bill-col.is-compare { background: hsl(var(--v2-muted) / 0.5); }
+.pb-turo { margin-top: 10px; font-size: clamp(32px, 3.4vw, 44px); font-weight: 700; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; color: hsl(var(--v2-muted-foreground)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pb-month { animation: none; }
+  .pb-tabs button { transition: none; }
+}
+
+/* Merged: the plan cards head their own columns, the rows run beneath them. */
+.pb-merged { min-width: calc(260px + var(--pb-cols) * 230px); table-layout: fixed; }
+.pb-merged thead th { position: static; height: 1px; padding: 14px 7px; border-bottom: 0; vertical-align: top; text-align: left; }
+.pb-merged thead th:nth-child(2) { padding-left: 14px; }
+.pb-merged thead th:last-child { padding-right: 14px; }
+.pb-merged thead th:first-child { width: 260px; padding: 28px 20px 14px; vertical-align: bottom; }
+.pb-merged .pb-corner b { display: block; font-size: 22px; font-weight: 700; line-height: 1.15; letter-spacing: -0.03em; }
+.pb-merged .pb-corner span { display: block; margin-top: 8px; font-size: 14px; font-weight: 400; line-height: 1.45; letter-spacing: 0; color: hsl(var(--v2-muted-foreground)); }
+.pb-merged thead .pc-card { height: 100%; }
+.pb-merged thead .pc-card:hover { translate: none; }
+.pb-merged .pb-key:first-child > * { border-top: 1px solid hsl(var(--v2-border)); }
+/* Phones: the feature names stay pinned at the left while the plans scroll past. */
+@media (max-width: 767.98px) {
+  .pb-merged { min-width: calc(150px + var(--pb-cols) * 220px); }
+  .pb-merged thead th:first-child { width: 150px; padding: 18px 12px 14px; }
+  .pb-merged .pb-corner b { font-size: 17px; }
+  .pb-merged .pb-corner span { display: none; }
+  .pb-merged th:first-child, .pb-merged tbody th[scope="row"] { position: sticky; left: 0; z-index: 1; background: hsl(var(--v2-card)); box-shadow: 1px 0 0 hsl(var(--v2-border)); }
+  .pb-merged tbody th[scope="row"] { font-size: 13px; }
+}

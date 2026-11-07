@@ -1,0 +1,199 @@
+/*
+ * Installed on every phone: three phones in a row, your portal, the home screen both apps
+ * live on, and your renters' app. One moment of motion: as the section arrives each app
+ * gets a notification, sliding down from the top of its screen.
+ */
+.pw-section {
+  --pw-a: hsl(var(--v2-primary));
+  --pw-tint: color-mix(in srgb, hsl(var(--v2-primary)) 11%, hsl(var(--v2-card)));
+  padding-block: clamp(72px, 9vw, 136px);
+  overflow-x: clip;
+}
+.dark .pw-section { --pw-tint: color-mix(in srgb, hsl(var(--v2-primary)) 24%, hsl(var(--v2-card))); }
+.pw-inner { width: min(100% - 2 * clamp(16px, 3vw, 64px), 1240px); margin-inline: auto; }
+
+.pw-head { text-align: center; }
+.pw-title { font-size: clamp(2.25rem, 4.4vw, 4rem); line-height: 1.06; color: var(--foreground); }
+.pw-sub { max-width: 40rem; margin: 14px auto 0; font-size: clamp(1rem, 1.3vw, 1.1875rem); line-height: 1.5; color: var(--muted-foreground); }
+
+/* The three phones */
+.pw-stage {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px 16px;
+  align-items: start;
+  max-width: 1040px;
+  margin: clamp(40px, 4.4vw, 64px) auto 0;
+}
+.pw-col { display: grid; justify-items: center; gap: 18px; margin: 0; }
+.pw-col.is-home { display: none; }
+@media (min-width: 900px) {
+  .pw-stage { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(24px, 4vw, 64px); }
+  .pw-col.is-home { display: grid; }
+  .pw-col.is-ops { order: 1; }
+  .pw-col.is-home { order: 2; }
+  .pw-col.is-renter { order: 3; }
+  /* The home screen stands a little forward; the apps sit back either side. */
+  .pw-col.is-ops, .pw-col.is-renter { margin-top: 40px; }
+}
+.pw-col figcaption { display: grid; gap: 4px; max-width: 280px; text-align: center; }
+.pw-col figcaption b { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; color: hsl(var(--v2-foreground)); }
+.pw-col figcaption span { font-size: 14px; line-height: 1.45; color: hsl(var(--v2-muted-foreground)); }
+
+.pw-phone {
+  width: min(100%, 280px);
+  padding: 8px;
+  border-radius: 44px;
+  background: #0c0c10;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12);
+}
+.pw-screen {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 390 / 844;
+  border-radius: 36px;
+  background: hsl(var(--v2-card));
+}
+.pw-shot { position: absolute; top: 34px; left: 0; width: 100%; height: calc(100% - 34px); object-fit: cover; object-position: top; }
+/* An installed app runs full screen: only the phone's own status bar above it, no browser. */
+.pw-status {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  inset-inline: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 34px;
+  padding: 4px 22px 0 26px;
+  background: color-mix(in srgb, hsl(var(--v2-primary)) 12%, hsl(var(--v2-card)));
+  font-size: 12px;
+  color: hsl(var(--v2-foreground));
+}
+.pw-status b { font-weight: 600; }
+.pw-status span { display: inline-flex; gap: 4px; }
+.pw-status svg { width: 13px; height: 13px; }
+.pw-status.is-light { background: transparent; color: #fff; }
+
+/* The notification each app gets */
+.pw-note {
+  position: absolute;
+  z-index: 3;
+  top: 37px;
+  inset-inline: 5px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 10px;
+  border-radius: 18px;
+  background: color-mix(in srgb, hsl(var(--v2-card)) 92%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+  backdrop-filter: blur(12px);
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: hsl(var(--v2-foreground));
+  opacity: 0;
+  translate: 0 -24px;
+}
+.is-in .pw-note { animation: pw-drop 260ms ease-out forwards; }
+@keyframes pw-drop { to { opacity: 1; translate: 0 0; } }
+.pw-note-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--pw-a);
+  color: #fff;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 700;
+}
+.pw-note-top { display: flex; justify-content: space-between; gap: 6px; }
+.pw-note-top b { font-weight: 600; }
+.pw-note-top small { color: hsl(var(--v2-muted-foreground)); }
+
+/* The home screen */
+.pw-phone.is-home { width: min(100%, 300px); }
+.pw-home { background: linear-gradient(160deg, #6d5cf6 0%, #3b2fb8 55%, #1d1666 100%); }
+.dark .pw-home { background: linear-gradient(160deg, #3f33b5 0%, #241b7a 55%, #110d3d 100%); }
+.pw-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 8px; padding: 52px 16px 0; }
+.pw-app { display: grid; justify-items: center; gap: 5px; }
+.pw-app i {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 13px;
+  background: rgb(255 255 255 / 0.18);
+  color: rgb(255 255 255 / 0.9);
+  font-size: 22px;
+  font-style: normal;
+  font-weight: 700;
+}
+.pw-app i svg { width: 22px; height: 22px; }
+.pw-app small { max-width: calc(100% + 8px); overflow: hidden; font-size: 9.5px; text-overflow: ellipsis; white-space: nowrap; color: rgb(255 255 255 / 0.92); }
+.pw-app.is-ours i { background: #fff; color: var(--pw-a); }
+.pw-app.is-renter i { background: #111827; color: #fff; }
+.pw-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding-inline: 4px;
+  border-radius: 99px;
+  background: #ef4444;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fff;
+}
+/* The two new arrivals settle onto the screen. */
+.pw-app.is-ours { opacity: 0; scale: 0.6; }
+.is-in .pw-app.is-ours { animation: pw-pop 260ms ease-out forwards; }
+.is-in .pw-app.is-ops { animation-delay: 200ms; }
+.is-in .pw-app.is-renter { animation-delay: 380ms; }
+@keyframes pw-pop { to { opacity: 1; scale: 1; } }
+.pw-dock {
+  position: absolute;
+  bottom: 12px;
+  inset-inline: 12px;
+  display: flex;
+  justify-content: space-around;
+  padding: 10px;
+  border-radius: 26px;
+  background: rgb(255 255 255 / 0.18);
+}
+.pw-dock i { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 13px; background: rgb(255 255 255 / 0.22); color: #fff; }
+.pw-dock svg { width: 22px; height: 22px; }
+
+/* What it means */
+.pw-points { display: grid; gap: 24px 32px; margin-top: clamp(40px, 4.4vw, 64px); }
+@media (min-width: 640px) { .pw-points { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1000px) { .pw-points { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.pw-points svg { width: 22px; height: 22px; color: var(--pw-a); }
+.dark .pw-points svg { color: hsl(var(--v2-link)); }
+.pw-points b { display: block; margin-top: 12px; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; color: hsl(var(--v2-foreground)); }
+.pw-points p { margin-top: 6px; font-size: 14.5px; line-height: 1.5; color: hsl(var(--v2-muted-foreground)); }
+
+/* Phones: two apps side by side, smaller. */
+@media (max-width: 559.98px) {
+  .pw-phone { padding: 5px; border-radius: 30px; }
+  .pw-screen { border-radius: 25px; }
+  .pw-status { height: 24px; padding-inline: 14px; font-size: 9px; }
+  .pw-status svg { width: 9px; height: 9px; }
+  .pw-shot { top: 24px; height: calc(100% - 24px); }
+  .pw-note { top: 28px; inset-inline: 4px; padding: 6px; gap: 6px; border-radius: 12px; font-size: 9px; }
+  .pw-note-icon { width: 20px; height: 20px; border-radius: 6px; font-size: 10px; }
+  .pw-col figcaption b { font-size: 14px; }
+  .pw-col figcaption span { font-size: 12.5px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pw-note, .pw-app.is-ours { opacity: 1; translate: none; scale: none; }
+  .is-in .pw-note, .is-in .pw-app.is-ours { animation: none; }
+}

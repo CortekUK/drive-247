@@ -3,9 +3,11 @@
 import { OnboardingProvider } from "@/components/onboarding/onboarding-provider";
 import { EnterpriseCard } from "@/components/pricing/enterprise-card";
 import { PlanCard } from "@/components/pricing/plan-card";
+import { PricingBreakdown } from "@/components/pricing/pricing-breakdown";
 import type { EnterpriseCard as EnterpriseCardData } from "@/lib/enterprise-card-server";
 import { useFadeIn } from "@/hooks/use-fade-in";
 import type { PromoOffer } from "@/lib/promo-offer";
+import { Accent, SectionHeading } from "./section-heading";
 import {
   SIGNUP_PLANS,
   type SignupPlan,
@@ -38,6 +40,12 @@ interface PricingSectionProps {
   offer?: PromoOffer | null;
   /** The contact-only Enterprise card, always last; null when it is switched off. */
   enterprise?: EnterpriseCardData | null;
+  /**
+   * The full breakdown under the cards: everything included, what costs extra and who
+   * it's paid to, and a month worked out. The live landing page turns it on; the signup
+   * journey, which only needs the cards, leaves it off.
+   */
+  detailed?: boolean;
 }
 
 /**
@@ -64,6 +72,7 @@ export function PricingSection({
   onSelectPlan,
   offer = null,
   enterprise = null,
+  detailed = false,
 }: PricingSectionProps) {
   // A low threshold: stacked on a phone the grid is far taller than the screen, and
   // the default 15% of it can be more than a short (landscape) viewport ever shows,
@@ -87,28 +96,15 @@ export function PricingSection({
       className="bg-muted/50 py-20 sm:py-24"
     >
       <div className="mx-auto max-w-[1360px] px-4 sm:px-6">
-        {/* Section heading */}
-        <div className="flex items-center justify-center gap-4">
-          <div className="h-px w-12 bg-border" />
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-            Pricing
-          </p>
-          <div className="h-px w-12 bg-border" />
-        </div>
-
-        <h2
+        <SectionHeading
           id="pricing-heading"
-          className="mt-5 text-center text-3xl font-bold tracking-tighter sm:text-4xl lg:text-[44px] lg:leading-tight"
-        >
-          Simple pricing,{" "}
-          <span className="text-indigo-600 dark:text-indigo-400">
-            sized to your fleet
-          </span>
-        </h2>
-
-        <p className="mx-auto mt-3 max-w-xl text-center leading-relaxed text-muted-foreground">
-          Pick the plan that fits your fleet today. Every plan includes the whole platform. Your portal and booking site are ready the day you sign up.
-        </p>
+          title={
+            <>
+              Simple pricing, <Accent>sized to your fleet</Accent>
+            </>
+          }
+          sub="Pick the plan that fits your fleet today. Every plan includes the whole platform. Your portal and booking site are ready the day you sign up."
+        />
 
         {sharedTrial ? (
           <p className="mt-4 text-center text-sm font-semibold text-indigo-600 dark:text-indigo-400">
@@ -116,52 +112,60 @@ export function PricingSection({
           </p>
         ) : null}
 
+        {detailed ? (
+          <div ref={ref} className={`mt-12 ${visible ? "fade-in-visible" : "fade-in-hidden"}`}>
+            <PricingBreakdown plans={catalogue} enterprise={enterprise} offer={offer} onSelect={onSelectPlan} showTrial={sharedTrial === null} />
+          </div>
+        ) : (
+          <>
         {/* Cards. useFadeIn is applied once, on the wrapper, exactly as the
-            other sections do — the observer is one-shot, so it must sit on a
-            node that is present from first paint. */}
-        <div
-          ref={ref}
-          // `items-stretch` (not `items-start`) is what makes the three cards
-          // one height: each PlanCard is `h-full`, so it only fills the row if
-          // the row stretches it. With `items-start` every card shrink-wrapped
-          // its own content and the tiers ended up visibly different sizes.
-          /*
-            Columns follow the number of VISIBLE plans, and the grid narrows to
-            match. `md:grid-cols-3` was hardcoded, so hiding a plan in the admin
-            dashboard left the remaining cards clinging to the left with a
-            third of the row empty — the layout silently assumed three plans
-            forever. One plan centres at card width, two at two-thirds, three
-            at full width, so the section stays balanced whatever is published.
-          */
-          /*
-            From md the cards share five rows (subgrid, in each card), so names,
-            prices, descriptions, buttons and lists all line up across the row
-            however long any one of them is. `pc-grid-wrap` marks the grid whose
-            cards can wrap: the row gap has to be a margin there (plan-cards.css),
-            because a grid gap would also open up inside each card.
-          */
-          className={`mx-auto mt-12 grid gap-4 md:items-stretch md:gap-y-0 ${
-            cardCount === 1
-              ? "max-w-sm md:grid-cols-1"
-              : cardCount === 2
-                ? "max-w-3xl md:grid-cols-2"
-                : cardCount === 3
-                  ? "md:grid-cols-3"
-                  : "pc-grid-wrap md:grid-cols-2 lg:grid-cols-4"
-          } ${visible ? "fade-in-visible" : "fade-in-hidden"}`}
-        >
-          {catalogue.map((plan, i) => (
-            <PlanCard
-              key={plan.id}
-              plan={plan}
-              onSelect={onSelectPlan}
-              offer={offer}
-              tone={TONES[Math.min(i, TONES.length - 1)]}
-              showTrial={sharedTrial === null}
-            />
-          ))}
-          {enterprise && <EnterpriseCard card={enterprise} />}
-        </div>
+              other sections do — the observer is one-shot, so it must sit on a
+              node that is present from first paint. */}
+          <div
+            ref={ref}
+            // `items-stretch` (not `items-start`) is what makes the three cards
+            // one height: each PlanCard is `h-full`, so it only fills the row if
+            // the row stretches it. With `items-start` every card shrink-wrapped
+            // its own content and the tiers ended up visibly different sizes.
+            /*
+              Columns follow the number of VISIBLE plans, and the grid narrows to
+              match. `md:grid-cols-3` was hardcoded, so hiding a plan in the admin
+              dashboard left the remaining cards clinging to the left with a
+              third of the row empty — the layout silently assumed three plans
+              forever. One plan centres at card width, two at two-thirds, three
+              at full width, so the section stays balanced whatever is published.
+            */
+            /*
+              From md the cards share five rows (subgrid, in each card), so names,
+              prices, descriptions, buttons and lists all line up across the row
+              however long any one of them is. `pc-grid-wrap` marks the grid whose
+              cards can wrap: the row gap has to be a margin there (plan-cards.css),
+              because a grid gap would also open up inside each card.
+            */
+            className={`mx-auto mt-12 grid gap-4 md:items-stretch md:gap-y-0 ${
+              cardCount === 1
+                ? "max-w-sm md:grid-cols-1"
+                : cardCount === 2
+                  ? "max-w-3xl md:grid-cols-2"
+                  : cardCount === 3
+                    ? "md:grid-cols-3"
+                    : "pc-grid-wrap md:grid-cols-2 lg:grid-cols-4"
+            } ${visible ? "fade-in-visible" : "fade-in-hidden"}`}
+          >
+            {catalogue.map((plan, i) => (
+              <PlanCard
+                key={plan.id}
+                plan={plan}
+                onSelect={onSelectPlan}
+                offer={offer}
+                tone={TONES[Math.min(i, TONES.length - 1)]}
+                showTrial={sharedTrial === null}
+              />
+            ))}
+            {enterprise && <EnterpriseCard card={enterprise} />}
+          </div>
+          </>
+        )}
 
       </div>
     </section>

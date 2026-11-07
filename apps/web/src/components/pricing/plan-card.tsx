@@ -32,6 +32,8 @@ interface PlanCardProps {
   offer?: PromoOffer | null;
   /** The card's colour; the grid deepens it plan by plan. */
   tone?: "lilac" | "brand" | "deep";
+  /** Head of the comparison table: the table rows say what the bullets would. */
+  compact?: boolean;
   /** Off when the section states one shared trial above the cards. */
   showTrial?: boolean;
 }
@@ -48,7 +50,7 @@ interface PlanCardProps {
  * Must be rendered inside <OnboardingProvider> (supplied by PricingSection)
  * UNLESS `onSelect` is given, in which case the provider is never consulted.
  */
-export function PlanCard({ plan, onSelect, offer, tone = "lilac", showTrial = true }: PlanCardProps) {
+export function PlanCard({ plan, onSelect, offer, tone = "lilac", showTrial = true, compact = false }: PlanCardProps) {
   // `open()` never throws and never rejects — every failure mode (missing Stripe
   // config, missing Supabase env, a dead network) surfaces as a banner inside the
   // dialog itself, per the onboarding spec. The card therefore has no error
@@ -72,7 +74,7 @@ export function PlanCard({ plan, onSelect, offer, tone = "lilac", showTrial = tr
   };
 
   return (
-    <div className={cn("pc-card", tone !== "lilac" && `is-${tone}`)}>
+    <div className={cn("pc-card", tone !== "lilac" && `is-${tone}`, compact && "is-compact")}>
       {plan.highlighted && <span className="pc-tag">Most popular</span>}
 
       <div>
@@ -120,11 +122,13 @@ export function PlanCard({ plan, onSelect, offer, tone = "lilac", showTrial = tr
         {trialDays > 0 ? "Start free trial" : "Subscribe"}
       </Button>
 
-      <ul className="pc-list">
-        {plan.bullets.map((bullet) => (
-          <li key={bullet}>{bullet}</li>
-        ))}
-      </ul>
+      {!compact && (
+        <ul className="pc-list">
+          {plan.bullets.map((bullet) => (
+            <li key={bullet}>{bullet}</li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -1,0 +1,215 @@
+/* The booking calendar: a full board, today at a glance, one booking opened. Brand purple. */
+.cs-section { --cs-brand: #4f44d8; --cs-ok: #16a34a; padding-block: clamp(72px, 9vw, 136px); }
+.dark .cs-section { --cs-brand: #a79ff5; --cs-ok: #4ade80; }
+.cs-inner { width: min(100%, 1400px); margin-inline: auto; padding-inline: 1.25rem; }
+.cs-head { text-align: center; }
+.cs-kicker { font-size: 14px; font-weight: 600; color: var(--cs-brand); }
+.cs-head h2 { margin-top: 12px; font-size: clamp(2.25rem, 5vw, 4.5rem); font-weight: 700; line-height: 1.04; letter-spacing: -0.045em; color: hsl(var(--v2-foreground)); text-wrap: balance; }
+.cs-head > p:last-child { max-width: 40rem; margin: 16px auto 0; font-size: clamp(1.0625rem, 1.4vw, 1.25rem); line-height: 1.5; color: hsl(var(--v2-muted-foreground)); }
+
+.cs-board {
+  --u: clamp(8.5px, 0.82vw, 12px);
+  position: relative;
+  margin-top: clamp(36px, 5vw, 64px);
+  padding: 1.8em;
+  border: 1px solid hsl(var(--v2-border));
+  border-radius: 1.8em;
+  background: hsl(var(--v2-card));
+  box-shadow: 0 2.4em 5em rgb(13 8 70 / 0.1);
+  font-size: var(--u);
+  color: hsl(var(--v2-foreground));
+}
+
+/* Top bar */
+.cs-top { display: flex; flex-wrap: wrap; align-items: center; gap: 0.9em; }
+.cs-title { display: flex; align-items: center; gap: 0.7em; margin-right: auto; }
+.cs-title > svg { width: 1.6em; height: 1.6em; color: var(--cs-brand); }
+.cs-title > b { font-size: 1.55em; font-weight: 600; letter-spacing: -0.02em; }
+.cs-nav { display: flex; align-items: center; gap: 0.2em; margin-left: 0.4em; padding: 0.2em; border: 1px solid hsl(var(--v2-border)); border-radius: 0.8em; }
+.cs-nav svg { width: 1.3em; height: 1.3em; color: hsl(var(--v2-muted-foreground)); }
+.cs-nav i { padding: 0.2em 0.6em; font-size: 0.95em; font-style: normal; font-weight: 500; }
+.cs-search { display: flex; align-items: center; gap: 0.5em; width: 17em; height: 2.6em; padding-inline: 0.9em; border-radius: 0.8em; background: hsl(var(--v2-foreground) / 0.05); font-size: 0.95em; color: hsl(var(--v2-muted-foreground)); }
+.cs-search svg { width: 1.15em; height: 1.15em; }
+.cs-seg { display: flex; padding: 0.25em; border-radius: 0.8em; background: hsl(var(--v2-foreground) / 0.05); }
+.cs-seg i { padding: 0.45em 0.85em; border-radius: 0.6em; font-size: 0.95em; font-style: normal; color: hsl(var(--v2-muted-foreground)); }
+.cs-seg .is-on { background: hsl(var(--v2-card)); box-shadow: 0 1px 3px rgb(13 8 70 / 0.12); color: hsl(var(--v2-foreground)); font-weight: 600; }
+.cs-top u { display: inline-flex; align-items: center; gap: 0.4em; padding: 0.6em 1.1em; border-radius: 0.8em; background: var(--cs-brand); color: #fff; font-size: 0.95em; font-weight: 600; text-decoration: none; }
+.dark .cs-top u { color: #16131f; }
+.cs-top u svg { width: 1.1em; height: 1.1em; }
+
+/* Stats and legend */
+.cs-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 0.8em 2.4em; margin-top: 1.4em; padding: 1.1em 1.3em; border-radius: 1em; background: hsl(var(--v2-foreground) / 0.03); }
+.cs-stats > span:not(.cs-legend) { display: flex; align-items: baseline; gap: 0.5em; font-size: 0.95em; color: hsl(var(--v2-muted-foreground)); }
+.cs-stats > span > b { font-size: 1.7em; font-weight: 700; letter-spacing: -0.03em; color: hsl(var(--v2-foreground)); }
+.cs-legend { display: flex; flex-wrap: wrap; gap: 0.6em 1.3em; margin-left: auto; }
+.cs-legend em { display: flex; align-items: center; gap: 0.45em; font-size: 0.9em; font-style: normal; color: hsl(var(--v2-muted-foreground)); }
+.cs-legend i { width: 1.1em; height: 0.75em; border-radius: 0.25em; }
+
+/* The grid */
+.cs-grid { position: relative; display: grid; grid-template-columns: 14em minmax(0, 1fr); margin-top: 1.2em; }
+.cs-corner { display: flex; align-items: flex-end; padding: 0 0 0.9em 0.2em; border-bottom: 1px solid hsl(var(--v2-border)); font-size: 0.9em; font-weight: 600; color: hsl(var(--v2-muted-foreground)); }
+.cs-days { display: grid; grid-template-columns: repeat(var(--cs-days), minmax(0, 1fr)); border-bottom: 1px solid hsl(var(--v2-border)); }
+.cs-day { display: flex; flex-direction: column; align-items: center; gap: 0.15em; padding: 0.5em 0 0.7em; }
+.cs-day small { font-size: 0.8em; color: hsl(var(--v2-muted-foreground)); }
+.cs-day b { display: grid; place-items: center; width: 1.9em; height: 1.9em; border-radius: 50%; font-size: 1.05em; font-weight: 600; }
+.cs-day em { padding: 0.05em 0.45em; border-radius: 99px; background: rgb(217 119 6 / 0.12); color: #b45309; font-size: 0.72em; font-style: normal; font-weight: 600; }
+.dark .cs-day em { color: #fbbf24; }
+.cs-day.is-weekend { background: hsl(var(--v2-foreground) / 0.025); }
+.cs-day.is-today b { background: var(--cs-brand); color: #fff; }
+.dark .cs-day.is-today b { color: #16131f; }
+.cs-row { display: contents; }
+.cs-car { display: flex; align-items: center; gap: 0.8em; height: 4.4em; padding-right: 1em; border-bottom: 1px solid hsl(var(--v2-border)); }
+.cs-car > i { flex: none; display: grid; place-items: center; width: 2.4em; height: 2.4em; border-radius: 0.7em; color: #fff; font-size: 0.95em; font-style: normal; font-weight: 700; }
+.cs-car b { display: block; font-size: 1.02em; font-weight: 600; white-space: nowrap; }
+.cs-car small { display: block; font-size: 0.82em; color: hsl(var(--v2-muted-foreground)); }
+.cs-lane {
+  position: relative;
+  border-bottom: 1px solid hsl(var(--v2-border));
+  background:
+    linear-gradient(90deg, transparent calc(100% / var(--cs-days) * 5), hsl(var(--v2-foreground) / 0.025) calc(100% / var(--cs-days) * 5) calc(100% / var(--cs-days) * 7), transparent calc(100% / var(--cs-days) * 7) calc(100% / var(--cs-days) * 12), hsl(var(--v2-foreground) / 0.025) calc(100% / var(--cs-days) * 12)),
+    repeating-linear-gradient(90deg, transparent 0 calc(100% / var(--cs-days) - 1px), hsl(var(--v2-border) / 0.7) calc(100% / var(--cs-days) - 1px) calc(100% / var(--cs-days)));
+}
+.cs-bar {
+  position: absolute;
+  top: 0.7em;
+  bottom: 0.7em;
+  left: calc(100% / var(--cs-days) * var(--cs-from) + 0.25em);
+  width: calc(100% / var(--cs-days) * var(--cs-span) - 0.5em);
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding-inline: 0.4em 0.8em;
+  overflow: hidden;
+  border-radius: 0.8em;
+  font-size: 0.92em;
+  font-style: normal;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0;
+  translate: -14px 0;
+}
+.is-in .cs-bar { opacity: 1; translate: 0 0; transition: opacity 200ms ease-out var(--cs-at), translate 400ms cubic-bezier(0.16, 1, 0.3, 1) var(--cs-at); }
+.cs-avatar { flex: none; display: grid; place-items: center; width: 2.1em; height: 2.1em; border-radius: 50%; background: rgb(255 255 255 / 0.25); font-size: 0.78em; font-weight: 700; }
+.cs-avatar.is-big { width: 3em; height: 3em; font-size: 0.95em; background: hsl(var(--v2-primary) / 0.14); color: var(--cs-brand); }
+.cs-bar.is-out, .cs-legend .is-out { background: var(--cs-brand); color: #fff; }
+.dark .cs-bar.is-out { color: #16131f; }
+.cs-bar.is-returning, .cs-legend .is-returning { background: linear-gradient(90deg, var(--cs-brand) 70%, #f59e0b); color: #fff; }
+.dark .cs-bar.is-returning { color: #16131f; }
+.cs-bar.is-booked, .cs-legend .is-booked { background: hsl(var(--v2-primary) / 0.13); color: var(--cs-brand); box-shadow: inset 0 0 0 1px hsl(var(--v2-primary) / 0.3); }
+.cs-bar.is-booked .cs-avatar { background: hsl(var(--v2-primary) / 0.16); }
+.cs-bar.is-pending, .cs-legend .is-pending { background: rgb(245 158 11 / 0.12); color: #b45309; box-shadow: inset 0 0 0 1px rgb(245 158 11 / 0.45); }
+.dark .cs-bar.is-pending { color: #fbbf24; }
+.cs-bar.is-pending .cs-avatar { background: rgb(245 158 11 / 0.18); }
+.cs-bar.is-blocked, .cs-legend .is-blocked { padding-left: 0.9em; background: repeating-linear-gradient(135deg, hsl(var(--v2-foreground) / 0.09) 0 6px, transparent 6px 12px); color: hsl(var(--v2-muted-foreground)); box-shadow: inset 0 0 0 1px hsl(var(--v2-foreground) / 0.18); }
+.cs-bar.is-open { box-shadow: inset 0 0 0 2px var(--cs-brand), 0 0.6em 1.4em rgb(79 68 216 / 0.25); }
+/* Now: a line down today */
+.cs-now { position: absolute; top: 0; bottom: 0; left: calc(14em + (100% - 14em) / var(--cs-days) * (var(--cs-today) + 0.5)); width: 2px; background: var(--cs-brand); opacity: 0.55; pointer-events: none; }
+.cs-now::before { content: ""; position: absolute; top: 4.2em; left: -0.32em; width: 0.8em; height: 0.8em; border-radius: 50%; background: var(--cs-brand); }
+
+/* The opened booking */
+.cs-pop {
+  position: absolute;
+  z-index: 2;
+  top: 21.5em;
+  left: calc(14em + 1.8em + (100% - 17.6em) / 14 * 5);
+  width: 24em;
+  padding: 1.3em;
+  border: 1px solid hsl(var(--v2-border));
+  border-radius: 1.2em;
+  background: hsl(var(--v2-card));
+  box-shadow: 0 1.6em 3.6em rgb(13 8 70 / 0.22);
+  opacity: 0;
+  translate: 0 12px;
+}
+.is-in .cs-pop { opacity: 1; translate: 0 0; transition: opacity 200ms ease-out 1300ms, translate 200ms ease-out 1300ms; }
+.cs-pop-head { display: flex; align-items: center; gap: 0.8em; }
+.cs-pop-head b { display: block; font-size: 1.15em; font-weight: 600; }
+.cs-pop-head small { display: block; font-size: 0.85em; color: hsl(var(--v2-muted-foreground)); }
+.cs-pop-head em { margin-left: auto; padding: 0.25em 0.7em; border-radius: 99px; background: hsl(var(--v2-primary) / 0.12); color: var(--cs-brand); font-size: 0.82em; font-style: normal; font-weight: 600; }
+.cs-pop-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6em; margin-top: 1.1em; }
+.cs-pop-dates span { padding: 0.7em 0.8em; border-radius: 0.8em; background: hsl(var(--v2-foreground) / 0.04); font-size: 0.95em; font-weight: 500; }
+.cs-pop-dates small { display: block; margin-bottom: 0.15em; font-size: 0.8em; font-weight: 400; color: hsl(var(--v2-muted-foreground)); }
+.cs-pop ul { display: grid; gap: 0.1em; margin-top: 0.9em; }
+.cs-pop li { display: flex; align-items: center; gap: 0.6em; padding-block: 0.55em; border-top: 1px solid hsl(var(--v2-border)); font-size: 0.95em; }
+.cs-pop li > svg:first-child { width: 1.2em; height: 1.2em; color: hsl(var(--v2-muted-foreground)); }
+.cs-pop li b { font-weight: 600; }
+.cs-pop li > svg:last-child { width: 1.1em; height: 1.1em; margin-left: auto; color: var(--cs-ok); }
+
+.cs-cursor { position: absolute; z-index: 3; top: 19.2em; left: calc(14em + 1.8em + (100% - 17.6em) / 14 * 8.6); display: flex; align-items: flex-start; pointer-events: none; opacity: 0; translate: 0 12px; }
+.is-in .cs-cursor { opacity: 1; translate: 0 0; transition: opacity 200ms ease-out 1100ms, translate 200ms ease-out 1100ms; }
+.cs-cursor svg { flex: none; width: 1.9em; height: 1.9em; filter: drop-shadow(0 2px 3px rgb(13 8 70 / 0.25)); }
+.cs-cursor path { fill: #0f172a; stroke: #fff; stroke-width: 1.6; stroke-linejoin: round; }
+.dark .cs-cursor path { fill: #f4f4f6; stroke: #16131f; }
+.cs-cursor span { margin: 1.4em 0 0 -0.2em; padding: 0.55em 0.85em; border-radius: 0.25em 1em 1em 1em; background: #0f172a; color: #fff; font-size: 1em; font-weight: 500; line-height: 1.3; white-space: nowrap; box-shadow: 0 6px 18px rgb(13 8 70 / 0.22); }
+.dark .cs-cursor span { background: #f4f4f6; color: #0f172a; }
+.cs-cursor b { display: block; font-size: 0.78em; font-weight: 600; opacity: 0.75; }
+
+.cs-can { display: grid; gap: 4px 32px; margin-top: clamp(28px, 4vw, 48px); }
+.cs-can > div { padding-block: 14px; border-top: 1px solid hsl(var(--v2-border)); }
+.cs-can dt { font-size: 16px; font-weight: 600; color: hsl(var(--v2-foreground)); }
+.cs-can dd { margin-top: 4px; font-size: 14px; line-height: 1.45; color: hsl(var(--v2-muted-foreground)); }
+@media (min-width: 720px) { .cs-can { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .cs-can { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+/* Smaller screens: the board scrolls sideways inside itself rather than squeezing the days. */
+@media (max-width: 1099.98px) {
+  .cs-board { overflow-x: auto; padding: 1.3em; }
+  .cs-top, .cs-stats, .cs-grid { min-width: 92em; }
+  .cs-pop, .cs-cursor { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cs-bar, .cs-pop, .cs-cursor { opacity: 1; translate: none; transition: none !important; }
+}
+
+/* The line under the heading: kept to two lines. */
+.sh .cs-sub { max-width: 44rem; }
+
+/* Less room above this heading than the shared default. */
+#calendar .sh { margin-top: 0; margin-bottom: clamp(32px, 4vw, 56px); }
+#calendar.cs-section { padding-top: clamp(104px, 13vw, 184px); }
+
+/* Minimal and framed (Ghulam, 2026-11-07): no drop shadow, a soft brand-tinted frame around
+   the screen, and the extras (search, stats strip) left out so the calendar itself leads. */
+#calendar .cs-board {
+  box-shadow:
+    0 0 0 clamp(8px, 0.9vw, 14px) hsl(var(--v2-primary) / 0.06),
+    0 0 0 calc(clamp(8px, 0.9vw, 14px) + 1px) hsl(var(--v2-primary) / 0.14);
+  margin-inline: clamp(8px, 0.9vw, 14px);
+}
+.dark #calendar .cs-board {
+  box-shadow:
+    0 0 0 clamp(8px, 0.9vw, 14px) rgb(255 255 255 / 0.04),
+    0 0 0 calc(clamp(8px, 0.9vw, 14px) + 1px) rgb(255 255 255 / 0.1);
+}
+#calendar .cs-search,
+#calendar .cs-stats { display: none; }
+#calendar .cs-grid { margin-top: 1.6em; }
+
+/* Bigger (Ghulam, 2026-11-07): everything in the board is sized in em off --u, so raising it
+   scales the whole calendar; the section also widens to the page's full content width. */
+#calendar .cs-inner { width: min(100%, 1600px); }
+#calendar .cs-board { --u: clamp(9.5px, 1vw, 14.5px); }
+
+/* In a browser window, like the "Your own" rows (Ghulam, 2026-11-07). The window replaces the
+   lavender frame; the board becomes the page inside it. */
+#calendar .cs-window { overflow: hidden; border: 1px solid hsl(var(--v2-border)); border-radius: 20px; background: hsl(var(--v2-card)); }
+#calendar .cs-window .pg-browser { border-radius: 0; }
+#calendar .cs-window .pg-tabs, #calendar .cs-window .pg-address, #calendar .cs-window .pg-screen { opacity: 1; translate: none; }
+#calendar .cs-window .cs-board,
+.dark #calendar .cs-window .cs-board { margin: 0; border: 0; border-radius: 0; box-shadow: none; padding-bottom: 7em; }
+
+/* In the same dark tablet as the "Your own" rows; it is always shown, not built on scroll. */
+#calendar .cs-tablet { opacity: 1; translate: none; scale: none; }
+#calendar .cs-tablet .cs-window { border: 0; border-radius: clamp(8px, 1vw, 14px); }
+
+
+/* A size down (Ghulam, 2026-11-07): smaller calendar, and the tablet a little narrower. */
+#calendar .cs-board { --u: clamp(8.5px, 0.85vw, 12.5px); }
+#calendar .cs-tablet { max-width: 1320px; margin-inline: auto; }
+
+/* A thin border instead of the thick tablet bezel (Ghulam, 2026-11-07). */
+#calendar .cs-tablet { padding: 5px; border-radius: clamp(14px, 1.4vw, 20px); }
+#calendar .cs-tablet .pg-tablet-camera { display: none; }
+#calendar .cs-tablet { transition: background-color 200ms ease-out; }
+#calendar .cs-tablet.is-lit { background: hsl(var(--v2-primary)); }
+@media (prefers-reduced-motion: reduce) { #calendar .cs-tablet { transition: none; } }

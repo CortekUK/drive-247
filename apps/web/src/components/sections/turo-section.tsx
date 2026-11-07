@@ -5,6 +5,7 @@ import { ChevronsLeftRight } from "lucide-react";
 import { useFadeIn } from "@/hooks/use-fade-in";
 import { SIGNUP_PLANS, smallestPlanFor, type SignupPlan } from "@/lib/plans";
 import "./turo-section.css";
+import { Accent, SectionHeading } from "./section-heading";
 
 /*
  * Turo's US earnings plans, from its own help centre, for plans available from January 7,
@@ -172,16 +173,19 @@ export function TuroSection({ plans = SIGNUP_PLANS }: { plans?: readonly SignupP
     <section id="turo" aria-labelledby="turo-heading" className="tu-section">
       <div ref={ref} className={`tu-inner ${visible ? "fade-in-visible" : "fade-in-hidden"}`}>
         <div className="tu-head">
-          <h2
+          <SectionHeading
             id="turo-heading"
-            className="text-3xl font-bold tracking-tighter sm:text-4xl lg:text-[56px] lg:leading-[1.05]"
-          >
-            Turo keeps up to 30% of every trip. <span className="tu-accent">We keep 0%.</span>
-          </h2>
-          <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-muted-foreground">
-            Drive247 is a flat monthly price with no commission. Your renters book on your site, pay into your account
-            and stay your customers.
-          </p>
+            title={
+              <>
+                Turo keeps up to 30% of every trip. <Accent>We keep 0%.</Accent>
+              </>
+            }
+            sub={
+              <>
+                Drive247 is a flat monthly price with no commission. Your renters book on your site, pay into your account and stay your customers.
+              </>
+            }
+          />
         </div>
 
         <div ref={reveal.track} className="tu-reveal-track">

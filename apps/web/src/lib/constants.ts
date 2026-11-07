@@ -20,7 +20,7 @@ export const GHL_BOOKING_URL = configuredHttpsUrl(
 export const SITE_META = {
   title: "Drive247 — Direct Booking Platform for Independent Car Rental Operators",
   description:
-    "A branded booking site, operator portal and renter portal, with Trax built in. For US operators who want more control than Turo.",
+    "For independent car rental operators and Turo hosts with 1 to 50 cars: a branded booking site, operator portal and renter portal, with Trax built in.",
   ogImage: "/og.png",
 };
 

@@ -1,16 +1,25 @@
 /*
- * The footer is dark in both themes. Its wordmark is cut out of the brand's pixel texture
- * and runs off the bottom, fading at the sides and the foot.
+ * Light: the footer sits on the page's own ground (the legal pages', on those), ink text,
+ * no edge above it. Dark: near-black, as before. In both, the wordmark is cut out of the
+ * brand's pixel texture and runs off the bottom, fading at the sides and the foot.
  */
 /* At least one full screen, so the section above never shows when scrolled to the end. */
-.ft-dark {
+.ft {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   min-height: 100svh;
-  background: #0b0b0e;
-  color: #fff;
+  color: var(--foreground);
 }
+.ft-head { color: var(--foreground); }
+.ft-muted { color: var(--muted-foreground); }
+.ft a:hover { color: var(--foreground); }
+
+.dark .ft { background: #0b0b0e; color: #fff; }
+.dark .ft-head { color: #fff; }
+.dark .ft-muted { color: rgb(255 255 255 / 0.7); }
+.dark .ft a:hover { color: #fff; }
+
 .ft-word {
   display: block;
   width: 100%;
@@ -33,7 +42,7 @@
 /* The wordmark is small on a phone: fade it less so every letter stays readable, and
    lift it clear of the floating theme button in the corner. */
 @media (max-width: 639.98px) {
-  .ft-dark { padding-bottom: 72px; }
+  .ft { padding-bottom: 72px; }
   .ft-word {
     -webkit-mask-image: linear-gradient(to bottom, #000 80%, rgb(0 0 0 / 0.55)), linear-gradient(to right, transparent, #000 3%, #000 97%, transparent);
     mask-image: linear-gradient(to bottom, #000 80%, rgb(0 0 0 / 0.55)), linear-gradient(to right, transparent, #000 3%, #000 97%, transparent);

@@ -101,3 +101,14 @@
   .pc-card, .pc-card [data-slot="button"].pc-btn { transition: none; }
   .pc-card:hover { translate: none; }
 }
+
+/* In the comparison table: tighter, no list, the rows below carry the detail. */
+.pc-card.is-compact { padding: 22px; border-radius: 18px; }
+.pc-card.is-compact .pc-price { margin-top: 18px; }
+.pc-card.is-compact .pc-amount { font-size: clamp(2rem, 2.6vw, 2.6rem); }
+.pc-card.is-compact .pc-tagline { min-height: 0; margin-bottom: 16px; font-size: 14px; }
+.pc-card.is-compact [data-slot="button"].pc-btn { margin-top: auto; }
+
+/* Not a grid row of its own in the table, so it lays out as a plain column. */
+.pc-card.is-compact { display: flex; grid-template-rows: none; grid-row: auto; }
+.pc-card.is-compact .pc-tag { top: 14px; right: 14px; left: auto; translate: none; padding: 3px 9px; font-size: 11px; }

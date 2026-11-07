@@ -1,0 +1,57 @@
+/* Profit by car: words on the left, the board and Trax's read of it on the right. */
+.pf-section { --pf-brand: #4f44d8; padding-block: clamp(72px, 9vw, 136px); }
+.dark .pf-section { --pf-brand: #a79ff5; }
+.pf-inner { display: grid; gap: 48px; align-items: center; width: min(100%, 1360px); margin-inline: auto; padding-inline: 1.25rem; }
+.pf-kicker { font-size: 14px; font-weight: 600; color: var(--pf-brand); }
+.pf-copy h2 { margin-top: 12px; font-size: clamp(2.25rem, 4.4vw, 4rem); font-weight: 700; line-height: 1.04; letter-spacing: -0.045em; color: hsl(var(--v2-foreground)); text-wrap: balance; }
+.pf-lead { margin-top: 18px; max-width: 36rem; font-size: clamp(1.0625rem, 1.3vw, 1.25rem); line-height: 1.5; color: hsl(var(--v2-muted-foreground)); }
+.pf-points { display: grid; gap: 4px 28px; margin-top: 28px; }
+.pf-points > div { padding-block: 12px; border-top: 1px solid hsl(var(--v2-border)); }
+.pf-points dt { font-size: 15px; font-weight: 600; color: hsl(var(--v2-foreground)); }
+.pf-points dd { margin-top: 3px; font-size: 14px; line-height: 1.45; color: hsl(var(--v2-muted-foreground)); }
+
+.pf-stage { --u: clamp(10px, 1vw, 14px); position: relative; width: 100%; max-width: 44em; justify-self: center; font-size: var(--u); color: hsl(var(--v2-foreground)); }
+.pf-board { padding: 1.6em; border: 1px solid hsl(var(--v2-border)); border-radius: 1.4em; background: hsl(var(--v2-card)); }
+.pf-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1em; }
+.pf-head small { display: block; font-size: 0.95em; color: hsl(var(--v2-muted-foreground)); }
+.pf-head b { display: block; margin-top: 0.15em; font-size: 3.2em; font-weight: 700; line-height: 1; letter-spacing: -0.04em; }
+.pf-head em { font-size: 1em; font-style: normal; font-weight: 600; color: var(--pf-brand); }
+.pf-cols, .pf-board li { display: grid; grid-template-columns: 10em minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 1.2em; }
+.pf-cols { margin-top: 1.6em; padding-bottom: 0.6em; border-bottom: 1px solid hsl(var(--v2-border)); font-size: 0.85em; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: hsl(var(--v2-muted-foreground)); }
+.pf-board li { padding-block: 1em; border-bottom: 1px solid hsl(var(--v2-border)); font-size: 1em; }
+.pf-board li:last-child { border-bottom: 0; padding-bottom: 0; }
+.pf-board li > b { font-weight: 600; }
+.pf-days, .pf-profit { display: flex; align-items: center; gap: 0.7em; font-size: 0.95em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pf-days i, .pf-profit i { display: block; height: 0.6em; border-radius: 1em; transform-origin: left; scale: 0 1; }
+.pf-days i { width: calc(var(--pf-days) * 60%); background: hsl(var(--v2-foreground) / 0.18); }
+.pf-profit i { width: calc(var(--pf-w) * 60%); background: var(--pf-brand); }
+.pf-profit { font-weight: 600; }
+.is-loss .pf-profit { color: #dc2626; }
+.is-loss .pf-profit i { background: #dc2626; }
+.is-loss > b::after { content: "losing money"; display: table; margin-top: 0.35em; padding: 0.15em 0.5em; border-radius: 99px; background: rgb(220 38 38 / 0.1); color: #dc2626; font-size: 0.75em; font-weight: 600; }
+.pf-board li { opacity: 0; translate: 0 12px; }
+.is-in .pf-board li { opacity: 1; translate: 0 0; transition: opacity 200ms ease-out var(--pf-at), translate 200ms ease-out var(--pf-at); }
+.is-in .pf-days i, .is-in .pf-profit i { scale: 1 1; transition: scale 700ms cubic-bezier(0.16, 1, 0.3, 1) calc(var(--pf-at) + 150ms); }
+
+/* Trax's read, below the board: the brand's voice, first person. */
+.pf-trax { position: relative; margin: -1.4em 4% 0 8%; display: flex; gap: 0.9em; padding: 1.1em 1.3em; border-radius: 1.2em; background: #0f172a; color: #fff; box-shadow: 0 1.2em 2.6em rgb(13 8 70 / 0.22); opacity: 0; translate: 0 12px; }
+.dark .pf-trax { background: #f4f4f6; color: #0f172a; }
+.is-in .pf-trax { opacity: 1; translate: 0 0; transition: opacity 200ms ease-out 1100ms, translate 200ms ease-out 1100ms; }
+.pf-trax-mark { flex: none; display: grid; place-items: center; width: 2.4em; height: 2.4em; border-radius: 50%; background: var(--pf-brand); color: #fff; }
+.pf-trax-mark svg { width: 50%; height: 50%; }
+.pf-trax p { font-size: 1.02em; line-height: 1.45; }
+.pf-trax b { display: block; margin-bottom: 0.15em; font-size: 0.85em; opacity: 0.7; }
+
+@media (min-width: 640px) { .pf-points { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1100px) {
+  .pf-inner { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: clamp(48px, 5vw, 96px); padding-inline: clamp(40px, 4.5vw, 88px); }
+}
+@media (max-width: 639.98px) {
+  .pf-stage { --u: clamp(8.5px, 2.4vw, 11px); }
+  .pf-cols, .pf-board li { grid-template-columns: 8.5em minmax(0, 1fr) minmax(0, 1fr); gap: 0.8em; }
+  .is-loss > b::after { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-board li, .pf-trax { opacity: 1; translate: none; transition: none !important; }
+  .pf-days i, .pf-profit i { scale: none; }
+}

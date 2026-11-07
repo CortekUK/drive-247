@@ -4,10 +4,13 @@ import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   ArrowUp,
   CalendarClock,
+  Car,
   Check,
+  CircleDollarSign,
   History,
   KeyRound,
   LifeBuoy,
+  ListChecks,
   Maximize2,
   MessageCircle,
   Plus,
@@ -26,8 +29,10 @@ import {
   PaymentsArt,
   RentalsArt,
 } from "./trax-art";
+import { TraxMark } from "@/components/shared/trax-mark";
 import { LINE_MEDIA } from "./launch-section";
 import "./trax-section.css";
+import { Accent, SectionHeading } from "./section-heading";
 
 /*
  * A question goes in at the middle, and Trax goes out along the branches to the parts
@@ -36,6 +41,15 @@ import "./trax-section.css";
  * Every branch is a dataset trax-support really reads (support/business-catalog*.ts):
  * vehicles, rentals, customers, maintenance, payments, invoices, deposits, expenses.
  * The names and amounts are demo content.
+ *
+ * The four questions are the everyday ones an operator asks, each one a thing Trax really
+ * answers today (support/model-tools.ts):
+ * - today's priorities: rentals by start and end date, customers' identity verification,
+ *   unpaid invoices (list_business_records, query_business_data);
+ * - who owes money: query_customer_balances, from the account's own ledger;
+ * - how the cars are doing: revenue and costs grouped by vehicle (profit_and_loss, expenses);
+ * - returns due: rentals by end date, the basis the catalog names for "returns due".
+ * It reads and answers; it doesn't act on its own, and nothing here says it does.
  */
 
 type NodeId = "rentals" | "customers" | "fleet" | "maintenance" | "payments" | "invoices" | "deposits" | "expenses";
@@ -55,6 +69,9 @@ const LEFT: NodeId[] = ["rentals", "customers", "fleet", "maintenance"];
 const RIGHT: NodeId[] = ["payments", "invoices", "deposits", "expenses"];
 
 type Query = {
+  /** The button that asks it. */
+  topic: string;
+  icon: typeof Search;
   ask: string;
   /** The branches Trax takes, in order, and what it finds at the end of each. */
   path: { id: NodeId; found: string }[];
@@ -62,20 +79,42 @@ type Query = {
     text: string;
     /** Drawn as the portal's AnswerChart: one measure, every bar direct-labelled. */
     chart?: { label: string; value: number; display: string }[];
-    after?: string;
+    /** Records, one to a line: what the answer is made of. */
+    list?: { label: string; value: string }[];
   };
 };
 
 const QUERIES: Query[] = [
   {
-    ask: "Who owes me the most right now?",
+    topic: "Today's priorities",
+    icon: ListChecks,
+    ask: "What needs my attention today?",
+    path: [
+      { id: "rentals", found: "3 pickups, 2 returns today" },
+      { id: "customers", found: "1 licence not verified" },
+      { id: "invoices", found: "4 unpaid, $1,240" },
+      { id: "maintenance", found: "1 job booked for Friday" },
+    ],
+    answer: {
+      text: "Three things today, most urgent first:",
+      list: [
+        { label: "Verify", value: "Jordan Lee picks up today and hasn't verified their licence yet." },
+        { label: "Returns", value: "The Kia Telluride and the Ford Explorer are due back today." },
+        { label: "Unpaid", value: "4 invoices are still open, $1,240 in total." },
+      ],
+    },
+  },
+  {
+    topic: "Who owes me",
+    icon: CircleDollarSign,
+    ask: "Who still owes me money?",
     path: [
       { id: "customers", found: "10 with a balance" },
       { id: "invoices", found: "14 still unpaid" },
       { id: "payments", found: "31 payments matched" },
     ],
     answer: {
-      text: "Larkspur Freight Co owes the most. That's 10 customers and $5,791.67 in total.",
+      text: "10 customers owe you $5,791.67. Larkspur Freight Co owes the most.",
       chart: [
         { label: "Larkspur Freight", value: 2238.5, display: "$2,238.50" },
         { label: "Nina Kowalski", value: 750.5, display: "$750.50" },
@@ -84,42 +123,42 @@ const QUERIES: Query[] = [
     },
   },
   {
-    ask: "Which cars can I rent out this weekend?",
+    topic: "Best-earning cars",
+    icon: Car,
+    ask: "Which cars earned the most last month?",
     path: [
-      { id: "fleet", found: "10 cars" },
-      { id: "rentals", found: "6 out on Saturday" },
-      { id: "maintenance", found: "1 in the shop" },
-    ],
-    answer: {
-      text: "Three cars are free all weekend: the Kia Telluride, the Ford Explorer and the Nissan Versa.",
-    },
-  },
-  {
-    ask: "How did I do last month?",
-    path: [
+      { id: "fleet", found: "12 cars" },
       { id: "rentals", found: "53 rentals" },
       { id: "payments", found: "$42,480 came in" },
-      { id: "maintenance", found: "6 jobs paid for" },
-      { id: "expenses", found: "$24,240 went out" },
-      { id: "deposits", found: "Kept apart from income" },
+      { id: "expenses", found: "$6,180 spent on cars" },
     ],
     answer: {
-      text: "A good month. You kept $18,240 across 53 rentals, with deposits left out.",
+      text: "Your Tesla Model 3 earned the most: $6,420 from 9 rentals. The Nissan Versa earned the least, after $1,150 in repairs.",
       chart: [
-        { label: "Took in", value: 42480, display: "$42,480" },
-        { label: "Spent", value: 24240, display: "$24,240" },
-        { label: "Kept", value: 18240, display: "$18,240" },
+        { label: "Tesla Model 3", value: 6420, display: "$6,420" },
+        { label: "Kia Telluride", value: 5310, display: "$5,310" },
+        { label: "Ford Explorer", value: 4880, display: "$4,880" },
       ],
     },
   },
   {
-    ask: "Is Sophia's deposit still held?",
+    topic: "Returns this week",
+    icon: CalendarClock,
+    ask: "Which cars are due back this week?",
     path: [
-      { id: "customers", found: "Sophia Martinez" },
-      { id: "rentals", found: "Tesla, back on Sunday" },
-      { id: "deposits", found: "$500 held" },
+      { id: "rentals", found: "5 ending this week" },
+      { id: "customers", found: "5 renters" },
+      { id: "deposits", found: "$1,500 held on them" },
     ],
-    answer: { text: "Yes. $500 is held on Sophia's Tesla rental, and the car is due back on Sunday." },
+    answer: {
+      text: "Five cars are due back this week, two of them tomorrow.",
+      list: [
+        { label: "Tomorrow", value: "Kia Telluride, Liam Foster" },
+        { label: "Tomorrow", value: "Ford Explorer, Mia Chen" },
+        { label: "Thursday", value: "Tesla Model 3, Sophia Martinez" },
+        { label: "Friday", value: "Nissan Versa and Hyundai Sonata" },
+      ],
+    },
   },
 ];
 
@@ -138,17 +177,6 @@ function TraxIcon() {
       <circle cx="12" cy="1.5" r="1.5" fill={c} opacity="0.7" />
       <path d="M9.5 15.5 C10.5 16.8 13.5 16.8 14.5 15.5" stroke={c} strokeWidth="1.3" strokeLinecap="round" fill="none" opacity="0.5" />
     </svg>
-  );
-}
-
-/* The mark from trax-greeting.tsx: an iridescent conic fill that turns, and a halo. */
-function TraxMark({ size, animated = false }: { size: "xs" | "md"; animated?: boolean }) {
-  return (
-    <span className={`tm-mark is-${size}`} data-animated={animated} aria-hidden>
-      {animated && <i className="tm-mark-halo" />}
-      <span className="tm-mark-clip"><i className="tm-mark-fill" /></span>
-      <Sparkles strokeWidth={2} />
-    </span>
   );
 }
 
@@ -191,7 +219,7 @@ const TUCK = 30;
  * The one exception is the wheel: the thread reaching the screen starts it, then it turns by itself.
  * These are the points along that scroll, 0 to 1. Elsewhere it loops on its own timers.
  */
-const SCROLL_QUERY = 2;
+const SCROLL_QUERY = 0;
 /* The thread touches the screen as the section lands; a moment later the question starts. */
 const LINE_IN_END = 0.015;
 const TYPE_START = 0.04;
@@ -232,6 +260,11 @@ export function TraxSection() {
   // The screen glows from when the thread touches it until the answer arrives.
   const [touched, setTouched] = useState(false);
   const [wheelOn, setWheelOn] = useState(false);
+  // Once the visitor asks a question of their own, they drive: the scroll stops playing the
+  // opening one, and nothing moves on to another question until they ask it.
+  const [picked, setPicked] = useState(false);
+  const pickedRef = useRef(false);
+  const driven = scrolled && !picked;
 
   // At rest the section shows a finished exchange, so it is never empty.
   const [q, setQ] = useState(0);
@@ -287,21 +320,25 @@ export function TraxSection() {
     if (!holder || !whole) return;
     const media = matchMedia(LINE_MEDIA);
     const measure = () => {
-      const cards = document.querySelectorAll(".ls-card");
-      const card = cards[cards.length - 1]?.getBoundingClientRect();
       const screen = panel.current?.getBoundingClientRect();
       const title = whole.querySelector(".tm-title")?.getBoundingClientRect();
       const sub = whole.querySelector(".tm-sub")?.getBoundingClientRect();
       const tail = holder.parentElement?.nextElementSibling as HTMLElement | null;
-      if (!media.matches || !card || !screen || !title || !sub) {
+      if (!media.matches || !screen || !title || !sub) {
         setThread(null);
+        delete whole.dataset.lineIn;
+        delete whole.dataset.lineOut;
         return;
       }
       const outer = whole.getBoundingClientRect();
       const box = holder.getBoundingClientRect();
-      const startX = card.left + card.width / 2 - outer.left;
       const lane = sub.right + 28 - outer.left;
+      // The page line (components/tour/page-line.tsx) brings the thread to this lane and
+      // picks it up again under the screen; these tell it where, in page pixels.
+      const startX = lane;
       const midX = screen.left + screen.width / 2 - box.left;
+      whole.dataset.lineIn = String(Math.round(outer.left + lane));
+      whole.dataset.lineOut = String(Math.round(box.left + midX));
       const textTop = title.top - outer.top;
       const textEnd = sub.bottom - outer.top;
       const pinTop = holder.parentElement!.getBoundingClientRect().top - outer.top;
@@ -355,28 +392,31 @@ export function TraxSection() {
       const top = rail.getBoundingClientRect().top;
       const p = clamp01(-top / (rail.offsetHeight - holder.offsetHeight));
 
-      [
-        (p - TYPE_START) / (SEARCH_START - TYPE_START),
-        (p - SEARCH_START) / (ANSWER_AT - SEARCH_START),
-        (p - ANSWER_AT) / (ANSWER_READ - ANSWER_AT),
-      ].forEach((share, i) => {
-        const bar = stageBars.current[i];
-        if (bar) bar.style.transform = `translateX(${(clamp01(share) - 1) * 100}%)`;
-      });
+      // A question the visitor asked themselves plays on its own; the scroll still draws the thread.
+      if (!pickedRef.current) {
+        [
+          (p - TYPE_START) / (SEARCH_START - TYPE_START),
+          (p - SEARCH_START) / (ANSWER_AT - SEARCH_START),
+          (p - ANSWER_AT) / (ANSWER_READ - ANSWER_AT),
+        ].forEach((share, i) => {
+          const bar = stageBars.current[i];
+          if (bar) bar.style.transform = `translateX(${(clamp01(share) - 1) * 100}%)`;
+        });
 
-      let reached = 0;
-      script.path.forEach(({ id }, i) => {
-        const done = clamp01((p - SEARCH_START - i * slice) / (slice * 1.2));
-        const el = litEls.current[id];
-        if (el) el.style.strokeDashoffset = String(1 - done);
-        if (done >= 1) reached += 1;
-      });
+        let reached = 0;
+        script.path.forEach(({ id }, i) => {
+          const done = clamp01((p - SEARCH_START - i * slice) / (slice * 1.2));
+          const el = litEls.current[id];
+          if (el) el.style.strokeDashoffset = String(1 - done);
+          if (done >= 1) reached += 1;
+        });
 
-      setTouched(p >= LINE_IN_END && p < ANSWER_AT);
-      setWheelOn(p >= LINE_IN_END);
-      setPhase(p < SEARCH_START ? "typing" : p < ANSWER_AT ? "search" : "answer");
-      setTyped(Math.round(script.ask.length * clamp01((p - TYPE_START) / (TYPE_END - TYPE_START))));
-      setHit(reached);
+        setTouched(p >= LINE_IN_END && p < ANSWER_AT);
+        setWheelOn(p >= LINE_IN_END);
+        setPhase(p < SEARCH_START ? "typing" : p < ANSWER_AT ? "search" : "answer");
+        setTyped(Math.round(script.ask.length * clamp01((p - TYPE_START) / (TYPE_END - TYPE_START))));
+        setHit(reached);
+      }
 
       if (!lead || !leadDot || !into || !out || !tip) return;
       // Tip at 70% of the screen, as the launch section's line left it, until the section lands.
@@ -397,7 +437,8 @@ export function TraxSection() {
       const at = outShare > 0 ? out.getPointAtLength(out.getTotalLength() * outShare) : into.getPointAtLength(into.getTotalLength() * inShare);
       tip.setAttribute("cx", String(at.x));
       tip.setAttribute("cy", String(at.y));
-      tip.style.visibility = outShare > 0 || (inShare > 0 && inShare < 1) ? "visible" : "hidden";
+      // Once the line is out of the bottom, the page line's tip carries on, so this one goes.
+      tip.style.visibility = (outShare > 0 && outShare < 1) || (inShare > 0 && inShare < 1) ? "visible" : "hidden";
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(paint);
@@ -421,7 +462,7 @@ export function TraxSection() {
   }, [running, reduced]);
 
   useEffect(() => {
-    if (!running || scrolled) return;
+    if (!running || driven) return;
     let wait: number;
     let then: () => void;
 
@@ -446,7 +487,7 @@ export function TraxSection() {
         then = () => setPhase("answer");
       }
     } else {
-      if (hovered) return;
+      if (hovered || picked) return;
       wait = reduced ? 9000 : 3600;
       then = () => {
         const next = (q + 1) % QUERIES.length;
@@ -463,7 +504,25 @@ export function TraxSection() {
 
     const timer = setTimeout(then, wait);
     return () => clearTimeout(timer);
-  }, [running, scrolled, hovered, reduced, q, phase, typed, hit, query]);
+  }, [running, driven, picked, hovered, reduced, q, phase, typed, hit, query]);
+
+  // A question of the visitor's own, from the buttons under the screen.
+  const ask = (next: number) => {
+    pickedRef.current = true;
+    setPicked(true);
+    stageBars.current.forEach((bar) => bar?.style.removeProperty("transform"));
+    setTouched(false);
+    setWheelOn(true);
+    setQ(next);
+    if (reduced) {
+      setPhase("answer");
+      setHit(QUERIES[next].path.length);
+    } else {
+      setPhase("typing");
+      setTyped(0);
+      setHit(0);
+    }
+  };
 
   // Faster while searching, changing the rate of the running roll so it never jumps.
   useEffect(() => {
@@ -589,13 +648,23 @@ export function TraxSection() {
     )}
 
     <div className="tm-copy">
-      <h2 className="tm-title font-medium tracking-tighter">I&apos;m Trax. Just ask.</h2>
-      <p className="tm-sub text-base leading-relaxed sm:text-lg">
-        I check your rentals, payments and fleet, then answer from your own records.
-      </p>
+      <SectionHeading
+        titleClassName="tm-title"
+        subClassName="tm-sub"
+        title={
+          <>
+            I&apos;m Trax. <Accent>Just ask.</Accent>
+          </>
+        }
+        sub={
+          <>
+            I&apos;m built into Drive247. I check your rentals, payments and fleet, then answer from your own records.
+          </>
+        }
+      />
     </div>
 
-    <div ref={track} className="tm-track" data-scroll={scrolled}>
+    <div ref={track} className="tm-track" data-scroll={driven}>
     <div ref={pin} className="tm-pin">
     <ol className="tm-stages">
       {STAGES.map((item, i) => {
@@ -629,7 +698,7 @@ export function TraxSection() {
           */}
         <i ref={wheel} className="tm-wheel" data-running={running && wheelOn} aria-hidden />
 
-        <svg className="tm-wires" data-scroll={scrolled} data-idle={scrolled && phase === "typing"} width={size.width} height={size.height} viewBox={`0 0 ${size.width || 1} ${size.height || 1}`} aria-hidden>
+        <svg className="tm-wires" data-scroll={driven} data-idle={driven && phase === "typing"} width={size.width} height={size.height} viewBox={`0 0 ${size.width || 1} ${size.height || 1}`} aria-hidden>
           <defs>
             <linearGradient id="tm-iris" gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={size.width} y2={0}>
               <stop offset="0" className="tm-iris-a" />
@@ -640,7 +709,7 @@ export function TraxSection() {
           {(Object.keys(paths) as NodeId[]).map((id) => (
             <path key={id} d={paths[id]} className="tm-wire" />
           ))}
-          {(scrolled ? query.path : visited).map(({ id }) => (
+          {(driven ? query.path : visited).map(({ id }) => (
             <path
               key={`${q}-${id}`}
               ref={(el) => {
@@ -745,6 +814,16 @@ export function TraxSection() {
                               ))}
                             </div>
                           )}
+                          {query.answer.list && (
+                            <ul className="tm-list">
+                              {query.answer.list.map((row, i) => (
+                                <li key={`${row.label}-${i}`} className={reduced ? undefined : "tm-in"} style={{ animationDelay: `${400 + i * 90}ms` }}>
+                                  <b>{row.label}</b>
+                                  <span>{row.value}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                         </div>
                         <span className="tm-prov">AI answer · Live records checked</span>
                         <div className="tm-evidence">
@@ -795,6 +874,24 @@ export function TraxSection() {
         </div>
 
         <div className="tm-col is-right">{RIGHT.map(renderNode)}</div>
+      </div>
+
+      {/* The everyday questions: ask any of them and watch Trax work it out. */}
+      <div className="tm-topics" role="group" aria-label="Ask Trax about">
+        <span className="tm-topics-lead">Ask Trax about</span>
+        {QUERIES.map((item, i) => (
+          <button
+            key={item.topic}
+            type="button"
+            className="tm-topic"
+            aria-pressed={i === q}
+            title={item.ask}
+            onClick={() => ask(i)}
+          >
+            <item.icon strokeWidth={2} aria-hidden />
+            {item.topic}
+          </button>
+        ))}
       </div>
     </div>
 
