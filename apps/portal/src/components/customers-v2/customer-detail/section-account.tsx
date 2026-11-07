@@ -336,10 +336,18 @@ export function SectionAccount({ c, set, onJump, canEdit }: SectionProps) {
             title="Delete customer"
             description="Removes this customer for good, and their sign-in if nothing else uses it. Their rentals, payments and fines can go with them, so to keep that history set them to Inactive instead."
           >
-            <Button variant="destructive" disabled={isDeleting} onClick={() => setConfirmDelete(true)}>
-              <Trash2 className="size-4" />
-              Delete customer
-            </Button>
+            {c.rentals.length > 0 ? (
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {c.identity.name || "This customer"} has {c.rentals.length} rental{c.rentals.length === 1 ? "" : "s"},
+                so they can&apos;t be deleted: their rentals, payments and ledger would be erased with them. Set them to
+                Inactive above instead — that keeps the history and stops the account being used.
+              </p>
+            ) : (
+              <Button variant="destructive" disabled={isDeleting} onClick={() => setConfirmDelete(true)}>
+                <Trash2 className="size-4" />
+                Delete customer
+              </Button>
+            )}
           </DangerSection>
         </div>
       )}

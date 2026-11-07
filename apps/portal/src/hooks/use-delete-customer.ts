@@ -54,6 +54,20 @@ export function useDeleteCustomer() {
     async (customer: DeletableCustomer, options: DeleteCustomerOptions = {}): Promise<boolean> => {
       setIsDeleting(true);
       try {
+        // A customer with rentals is not deleted (sheet C14.11). The foreign
+        // keys cascade, so the delete would silently take their rentals,
+        // payments, fines and ledger entries with it, rewriting the books.
+        const { count: rentalCount, error: countError } = await supabase
+          .from("rentals")
+          .select("id", { count: "exact", head: true })
+          .eq("customer_id", customer.id);
+        if (countError) throw countError;
+        if ((rentalCount ?? 0) > 0) {
+          throw new Error(
+            `${customer.name} has ${rentalCount} rental${rentalCount === 1 ? "" : "s"}, so they can't be deleted: their rentals, payments and ledger would go too. Set them to Inactive instead.`
+          );
+        }
+
         // Get the auth_user_id BEFORE deleting (cascade will remove customer_users)
         const { data: customerUser } = await supabase
           .from("customer_users")
