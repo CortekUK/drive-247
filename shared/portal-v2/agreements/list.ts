@@ -45,6 +45,27 @@ export const AGREEMENT_STATUS_LABEL: Record<AgreementStatus, string> = {
   failed: "Failed",
 };
 
+/**
+ * Why a "Failed" agreement failed, from its stored status. D16 keeps the list to
+ * three statuses, so a customer who DECLINED read exactly like a send the
+ * service refused (QA sheet A8.2). The open agreement now says which.
+ */
+export function agreementFailedReason(rawStatus: string | null | undefined): string | null {
+  switch ((rawStatus ?? "").toLowerCase()) {
+    case "declined":
+      return "The customer declined to sign it.";
+    case "expired":
+      return "It expired before it was signed.";
+    case "credit_failed":
+      return "It was never sent: there were no e-sign credits left.";
+    case "send_failed":
+    case "failed":
+      return "It was never sent: the signing service turned it down.";
+    default:
+      return null;
+  }
+}
+
 export const AGREEMENT_STATUS_TONE: Record<AgreementStatus, V2ListTone> = {
   signed: "success",
   pending: "warning",

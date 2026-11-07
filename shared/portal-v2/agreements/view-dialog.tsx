@@ -29,6 +29,7 @@ import {
   AGREEMENT_LINK_LABEL,
   AGREEMENT_STATUS_LABEL,
   AGREEMENT_STATUS_TONE,
+  agreementFailedReason,
   agreementReference,
   formatAgreementSentAt,
   type AgreementListRow,
@@ -281,6 +282,9 @@ export function AgreementViewDialog({
                       <span className={cn("text-sm font-medium", V2_LIST_TONES[AGREEMENT_STATUS_TONE[row.status]])}>
                         {AGREEMENT_STATUS_LABEL[row.status]}
                       </span>
+                      {row.status === "failed" && agreementFailedReason(row.rawStatus) && (
+                        <span className="mt-0.5 block text-xs text-v2-muted-fg">{agreementFailedReason(row.rawStatus)}</span>
+                      )}
                     </dd>
                     <dt className="font-medium">Linked to</dt>
                     <dd className="text-v2-fg">
