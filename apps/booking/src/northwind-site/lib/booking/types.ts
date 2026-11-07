@@ -73,7 +73,9 @@ export type CreateBookingFailureKind =
   /** The operator took the vehicle off the road since the page loaded. */
   | "vehicle-paused"
   /** A write was refused — permissions, a constraint, or the network. */
-  | "write-failed";
+  | "write-failed"
+  /** The email is on this operator's blocklist (or the platform's). */
+  | "customer-blocked";
 
 export interface CreateBookingFailure {
   kind: CreateBookingFailureKind;

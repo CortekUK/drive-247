@@ -109,6 +109,41 @@ function writeFailed(what: string, detail: string): CreateBookingResult {
   return { ok: false, failure };
 }
 
+const BLOCKED_COPY =
+  "We can't take this booking online. Please contact us directly if you think this is a mistake.";
+
+function blocked(detail: string): CreateBookingResult {
+  // Not retryable: the same email meets the same block every time.
+  return { ok: false, failure: { kind: "customer-blocked", message: BLOCKED_COPY, retryable: false, detail } };
+}
+
+/**
+ * Is this email blocked — by this operator (a blocked customer row or a
+ * blocklist entry) or across the platform (not whitelisted)? The same three
+ * checks the customer sign-in already runs; a guest booking skipped all of
+ * them, so a blocked person could book by simply not signing in (QA sheet
+ * C11.3). The reason is the operator's and is never shown to the customer.
+ */
+async function blockedByEmail(tenantId: string, email: string): Promise<string | null> {
+  const [customer, identity, global] = await Promise.all([
+    supabase.from("customers").select("id").eq("tenant_id", tenantId).ilike("email", email).eq("is_blocked", true).limit(1),
+    supabase
+      .from("blocked_identities")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("is_active", true)
+      .eq("identity_type", "email")
+      .ilike("identity_number", email)
+      .limit(1),
+    supabase.from("global_blacklist").select("id, is_whitelisted").ilike("email", email).limit(1),
+  ]);
+  if ((customer.data ?? []).length > 0) return "customer row is blocked";
+  if ((identity.data ?? []).length > 0) return "email is on the operator's blocklist";
+  const g = (global.data ?? [])[0] as { is_whitelisted?: boolean } | undefined;
+  if (g && !g.is_whitelisted) return "email is on the platform blacklist";
+  return null;
+}
+
 /** A trigger exception surfaces as a message, not a distinguishable code. */
 function isOverlapError(error: PostgrestError): boolean {
   return error.code === "23P01" || /vehicle rental overlap/i.test(error.message ?? "");
@@ -188,6 +223,12 @@ export async function createBooking(
   const normalizedEmail = form.customerEmail.trim().toLowerCase();
   const customerName = form.customerName.trim();
   const customerPhone = form.customerPhone.trim();
+  // Asked for on the form; a YYYY-MM-DD string or empty.
+  const customerDob = /^\d{4}-\d{2}-\d{2}$/.test(form.driverDOB ?? "") ? form.driverDOB : null;
+
+  // Nothing is written — no customer, no rental — for a blocked email.
+  const blockReason = await blockedByEmail(tenantId, normalizedEmail.replace(/[\\%_]/g, (c) => "\\" + c));
+  if (blockReason) return blocked(blockReason);
 
   // v1 looks up within the tenant first (that is where the unique index lives),
   // then falls back to a tenant-less row. Case-insensitively, because the column
@@ -196,17 +237,17 @@ export async function createBooking(
   // supabase-js reports as an empty `{}`.
   const tenantMatch = await supabase
     .from("customers")
-    .select("id, tenant_id")
+    .select("id, tenant_id, date_of_birth")
     .ilike("email", normalizedEmail)
     .eq("tenant_id", tenantId)
     .maybeSingle();
 
-  let existing: { id: string; tenant_id: string | null } | null = tenantMatch.data;
+  let existing: { id: string; tenant_id: string | null; date_of_birth?: string | null } | null = tenantMatch.data;
 
   if (!existing) {
     const globalMatch = await supabase
       .from("customers")
-      .select("id, tenant_id")
+      .select("id, tenant_id, date_of_birth")
       .ilike("email", normalizedEmail)
       .is("tenant_id", null)
       .maybeSingle();
@@ -223,9 +264,12 @@ export async function createBooking(
       tenant_id?: string;
       sms_consent?: boolean;
       sms_consent_at?: string | null;
+      date_of_birth?: string;
     } = { name: customerName, phone: customerPhone, status: "Active" };
 
     if (existing.tenant_id === null) update.tenant_id = tenantId;
+    // Fill a missing birth date; never overwrite one already on the record.
+    if (customerDob && !existing.date_of_birth) update.date_of_birth = customerDob;
     // Never CLEAR an existing consent — an opt-in that was given once stays
     // given until the customer revokes it through the channel that granted it.
     if (form.smsConsent) {
@@ -261,6 +305,8 @@ export async function createBooking(
         is_blocked: false,
         sms_consent: form.smsConsent,
         sms_consent_at: smsConsentAt,
+        // v1 left this NULL; v2 asks for it, so the new record should carry it (QA sheet C11.5).
+        date_of_birth: customerDob,
         tenant_id: tenantId,
       })
       .select("id")
