@@ -265,6 +265,12 @@ function EditorWorkspace({
         "aria-label": "Agreement text",
         spellcheck: "true",
       },
+      // The signing dock floats over the bottom of the page. Without a margin the
+      // editor only scrolled the caret to the very bottom edge, so the line being
+      // typed — and the formatting bar above a selection — sat under the dock
+      // (QA sheet A3.2). Keep the caret clear of it.
+      scrollThreshold: { top: 24, right: 0, bottom: 140, left: 0 },
+      scrollMargin: { top: 24, right: 0, bottom: 140, left: 0 },
     },
     onCreate: ({ editor: e }) => {
       e.commands.focus("start");

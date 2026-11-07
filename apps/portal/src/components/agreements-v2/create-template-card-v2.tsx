@@ -36,8 +36,14 @@ export const CREATE_TEMPLATE_DISABLED_SUBTITLE = "Ask an admin to create agreeme
 export const CREATE_TEMPLATE_BUSY_SUBTITLE = "Creating your template…";
 
 /** The featured deck's own action surface (featured-deck-view-v2.tsx ACTION_CLASS), with no dots below it. */
+// NOT `relative`. The card sits on the front face of the overview flip
+// (shared/portal-v2/overview-flip.tsx: preserve-3d + backface-visibility), and
+// there Chrome drops a positioned button inside the `isolate` card out of hit
+// testing: taps on the title and the middle of the card landed on the card's
+// own frame and did nothing, so on a phone Template Studio could not be opened
+// at all (QA sheet A3.16). A static button is hit-tested normally.
 const ACTION_CLASS =
-  "relative flex min-h-0 flex-1 flex-col justify-between rounded-2xl p-5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed";
+  "flex min-h-0 flex-1 flex-col justify-between rounded-2xl p-5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed";
 
 export function CreateTemplateCardV2({
   onCreate,
