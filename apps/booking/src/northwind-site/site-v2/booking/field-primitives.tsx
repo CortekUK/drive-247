@@ -231,12 +231,14 @@ export function TextField({
   optional,
   hint,
   className,
+  readOnly,
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
   error?: string;
+  readOnly?: boolean;
   placeholder?: string;
   type?: "text" | "email" | "tel";
   autoComplete?: string;
@@ -261,7 +263,9 @@ export function TextField({
         aria-required={required || undefined}
         aria-invalid={error ? true : undefined}
         onChange={(event) => onChange(event.target.value)}
-        className={FIELD_INPUT_CLASS}
+        readOnly={readOnly}
+        aria-readonly={readOnly || undefined}
+        className={cn(FIELD_INPUT_CLASS, readOnly && "cursor-default opacity-70")}
       />
       {hint ? <FieldHint>{hint}</FieldHint> : null}
       <FieldError message={error} />

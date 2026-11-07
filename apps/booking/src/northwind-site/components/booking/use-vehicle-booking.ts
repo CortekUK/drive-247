@@ -10,6 +10,7 @@ import { useVehicle } from "@nw/hooks/use-vehicle";
 import { useVehicleBookedDates } from "@nw/hooks/use-vehicle-availability";
 import { useTenantBranding } from "@nw/hooks/use-tenant-branding";
 import { useCreateBooking } from "@nw/hooks/use-create-booking";
+import { useCustomerAuthStore } from "@nw/lib/stores/customer-auth-store";
 import {
   readTripIntentFromLocation,
   sameTripAddress,
@@ -384,6 +385,29 @@ export function useVehicleBooking(vehicleId: string) {
     // `form` is a fresh object on every store write (see the seeding above).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, tenant?.id, vehicleId]);
+
+  /* ── a signed-in customer ───────────────────────────────────────────────
+   * Sheet C12.1: a customer who was logged in still got an empty "Your
+   * details". Fill what is empty from their account (also after logging in
+   * midway, C12.3), and always book under the account's own email: the
+   * booking finds the customer by email, so another address would attach it
+   * to a different customer (C12.2). Name and phone stay editable; the
+   * booking saves them back to the account.
+   */
+  const signedInCustomer = useCustomerAuthStore((s) => s.membership?.customer ?? null);
+  useEffect(() => {
+    if (!hydrated || !signedInCustomer) return;
+    const s = useBookingStore.getState();
+    const patch: Parameters<typeof form.patch>[0] = {};
+    const email = (signedInCustomer.email ?? "").trim();
+    if (email && s.customerEmail.trim().toLowerCase() !== email.toLowerCase()) patch.customerEmail = email;
+    if (!s.customerName.trim() && signedInCustomer.name) patch.customerName = signedInCustomer.name;
+    if (!s.customerPhone.trim() && signedInCustomer.phone) patch.customerPhone = signedInCustomer.phone;
+    if (!s.driverDOB && signedInCustomer.date_of_birth) patch.driverDOB = String(signedInCustomer.date_of_birth).slice(0, 10);
+    if (Object.keys(patch).length > 0) form.patch(patch);
+    // `form` is a fresh object on every store write (see the seeding above).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, signedInCustomer?.id, signedInCustomer?.email]);
 
   /* ── availability ─────────────────────────────────────────────────────── */
 

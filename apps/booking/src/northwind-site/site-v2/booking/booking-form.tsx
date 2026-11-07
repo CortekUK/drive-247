@@ -25,6 +25,7 @@ import {
 import { useTenantBranding } from "@nw/hooks/use-tenant-branding";
 import type { QuoteResult } from "@nw/lib/quote/types";
 import { useBookingStore } from "@nw/lib/stores/booking-store";
+import { useCustomerAuthStore } from "@nw/lib/stores/customer-auth-store";
 import { cn } from "@nw/lib/utils";
 import { ICON_TILE } from "@nw/site-v2/kit";
 import type { PickupLocation, RentalExtra } from "@nw/lib/vehicles/types";
@@ -110,6 +111,8 @@ export function BookingForm({
 }: BookingFormProps) {
   const { formatCurrency } = useTenantBranding();
   const form = useBookingStore();
+  // Signed in: the details come from the account, and the email is fixed to it.
+  const signedIn = useCustomerAuthStore((s) => !!s.membership?.customer?.email);
   const {
     mode,
     required,
@@ -337,6 +340,7 @@ export function BookingForm({
             label="Full name"
             value={form.customerName}
             onChange={(value) => form.set("customerName", value)}
+            hint={signedIn ? "From your account. A change here is saved to your account when you book." : undefined}
             placeholder="As it appears on your licence"
             autoComplete="name"
             required
@@ -349,6 +353,8 @@ export function BookingForm({
             inputMode="email"
             value={form.customerEmail}
             onChange={(value) => form.set("customerEmail", value)}
+            readOnly={signedIn}
+            hint={signedIn ? "You're signed in with this email, so the booking goes on your account. To use another email, sign out first." : undefined}
             placeholder="you@example.com"
             autoComplete="email"
             required
