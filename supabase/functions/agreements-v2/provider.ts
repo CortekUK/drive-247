@@ -193,6 +193,15 @@ export function getEmbeddedSignLink(
   });
 }
 
+/** Revoke (void) a document that is still out for signing. BoldSign's field is `message`. */
+export function revokeDocument(documentId: string, message: string, apiKey: string, deps: ProviderDeps): Promise<Response> {
+  return deps.fetch(`${boldSignBaseUrl(deps.env)}/v1/document/revoke?documentId=${encodeURIComponent(documentId)}`, {
+    method: 'POST',
+    headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  });
+}
+
 export function downloadDocument(documentId: string, apiKey: string, deps: ProviderDeps): Promise<Response> {
   return deps.fetch(`${boldSignBaseUrl(deps.env)}/v1/document/download?documentId=${encodeURIComponent(documentId)}`, {
     headers: { 'X-API-KEY': apiKey },

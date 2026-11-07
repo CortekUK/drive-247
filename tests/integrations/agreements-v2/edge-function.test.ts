@@ -842,6 +842,29 @@ describe('resend', () => {
     expect(sentForms[0].get('CC[0][EmailAddress]')).toBe('boss@example.com');
   });
 
+  // QA sheet A8.8, owner's decision Nov 8 2026: a resend of a copy that is still
+  // out for signing VOIDS it, so only the new copy can be signed.
+  it('voids the replaced copy when it was still out for signing', async () => {
+    state.rows.push({ ...oldRow, document_status: 'sent', document_id: 'doc-old', boldsign_mode: 'live' });
+    const res = await send(resendBody());
+    expect(res.status).toBe(200);
+    const revoke = providerCalls().find((c) => c.url.includes('/v1/document/revoke'));
+    expect(revoke?.url).toContain('documentId=doc-old');
+    expect(revoke?.init.method).toBe('POST');
+    expect(JSON.parse(revoke!.init.body)).toHaveProperty('message');
+    const oldUpdate = opsOn('individual_agreements_v2', 'update').find((u) => filterValue(u, 'id') === OLD_ROW);
+    expect(oldUpdate?.payload).toEqual({ document_status: 'voided' });
+  });
+
+  it('leaves the replaced copy alone when the provider refuses to void it', async () => {
+    state.rows.push({ ...oldRow, document_status: 'sent', document_id: 'doc-old', boldsign_mode: 'live' });
+    state.fetchImpl = async (url: string) =>
+      url.includes('/v1/document/revoke') ? new Response('nope', { status: 400 }) : okSend();
+    const res = await send(resendBody());
+    expect(res.status).toBe(200);
+    expect(opsOn('individual_agreements_v2', 'update').some((u) => filterValue(u, 'id') === OLD_ROW)).toBe(false);
+  });
+
   it("cannot resend another tenant's agreement (404), and nothing is recorded or charged", async () => {
     state.rows.push({ ...oldRow, tenant_id: TENANT_B });
     const res = await send(resendBody());

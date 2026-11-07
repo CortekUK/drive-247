@@ -50,6 +50,7 @@ import {
   getDocumentProperties,
   mapDocumentStatus,
   providerErrorMessage,
+  revokeDocument,
   sendDocument,
   toIsoTimestamp,
   type EnvReader,
@@ -183,14 +184,17 @@ async function send(ctx: AgreementsContextV2, body: Record<string, unknown>, dep
   const pdf = decodePdfBase64(body.pdfBase64);
   if (!pdf.ok || !pdf.bytes) return bad(pdf.error ?? 'The agreement PDF could not be read.', 'pdfBase64');
 
-  // A resend points back at one of THIS tenant's rows. The old row is only
-  // read, never written: "another row is made" (D17).
+  // A resend points back at one of THIS tenant's rows. "Another row is made"
+  // (D17) — and, once the new copy is out, the old one is VOIDED (owner's
+  // decision, Nov 8 2026, QA sheet A8.8): leaving it live meant the customer
+  // held two signable copies of the same agreement. See step 6.
   let resentFromId: string | null = null;
+  let resentFrom: { id: string; document_id: string | null; document_status: string | null; boldsign_mode: string | null } | null = null;
   if (body.resendOf !== undefined && body.resendOf !== null && body.resendOf !== '') {
     if (!isUuidV2(body.resendOf)) return reply(404, { ok: false, error: NOT_FOUND });
     const { data: old, error } = await client
       .from(INDIVIDUAL_TABLE)
-      .select('id')
+      .select('id, document_id, document_status, boldsign_mode')
       .eq('id', body.resendOf)
       .eq('tenant_id', tenant.id)
       .maybeSingle();
@@ -200,6 +204,12 @@ async function send(ctx: AgreementsContextV2, body: Record<string, unknown>, dep
     }
     if (!old?.id) return reply(404, { ok: false, error: NOT_FOUND });
     resentFromId = String(old.id);
+    resentFrom = {
+      id: String(old.id),
+      document_id: old.document_id ? String(old.document_id) : null,
+      document_status: old.document_status ? String(old.document_status) : null,
+      boldsign_mode: old.boldsign_mode ? String(old.boldsign_mode) : null,
+    };
   }
 
   // templateId is only PROVENANCE: the content sent is the operator's own
@@ -371,6 +381,25 @@ async function send(ctx: AgreementsContextV2, body: Record<string, unknown>, dep
   if (updateError) {
     // The document is out and paid for; say where it is so it can be linked by hand.
     console.error('[agreements-v2/send] SENT but could not record document', documentId, 'on row', id, updateError);
+  }
+
+  // ── 6. a resend voids the copy it replaces ──
+  // Only a copy still out for signing, and only marked voided once the
+  // provider has agreed: a row saying voided while the document is live is
+  // worse than one saying live (the rental path learned this the hard way).
+  // A failure here does not undo the send — the new copy is out either way.
+  if (resentFrom?.document_id && !(TERMINAL_DOCUMENT_STATUSES as readonly string[]).includes((resentFrom.document_status ?? '').toLowerCase())) {
+    try {
+      const oldMode: 'test' | 'live' = resentFrom.boldsign_mode === 'test' || resentFrom.boldsign_mode === 'live' ? resentFrom.boldsign_mode : boldsignMode;
+      const revoked = await revokeDocument(resentFrom.document_id, 'Replaced by a newer copy of this agreement.', getBoldSignApiKey(deps.env, oldMode), provider);
+      if (revoked.ok) {
+        await client.from(INDIVIDUAL_TABLE).update({ document_status: 'voided' }).eq('id', resentFrom.id).eq('tenant_id', tenant.id);
+      } else {
+        console.error('[agreements-v2/send] could not void the replaced copy', resentFrom.document_id, revoked.status, (await revoked.text().catch(() => '')).slice(0, 300));
+      }
+    } catch (e) {
+      console.error('[agreements-v2/send] could not void the replaced copy', resentFrom.document_id, e);
+    }
   }
 
   if (deducted?.auto_refill_needed) {
