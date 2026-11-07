@@ -1184,12 +1184,21 @@ describe('customer (the customer portal Agreements page)', () => {
     expect((await call({ action: 'document', id: OLD_ROW, tenantId: TENANT_A })).status).not.toBe(200);
   });
 
-  it('may not send, check readiness or sync', async () => {
-    for (const action of ['send', 'ready', 'sync']) {
+  it('may not send or check readiness', async () => {
+    for (const action of ['send', 'ready']) {
       const res = await call(action === 'send' ? validBody() : { action });
       expect(res.status, action).toBe(403);
     }
     expect(opsOn('customer_users')).toHaveLength(0);
+  });
+
+  // Individual agreements have no webhook: the customer portal refreshes the
+  // status of the customer's OWN waiting agreements (test sheet A9.4).
+  it('may sync, but only agreements sent to them', async () => {
+    const res = await call({ action: 'sync' });
+    expect(res.status).toBe(200);
+    const read = opsOn('individual_agreements_v2')[0];
+    expect(filterValue(read, 'customer_id')).toBe(ME);
   });
 
   it('is refused with no customer link either', async () => {
