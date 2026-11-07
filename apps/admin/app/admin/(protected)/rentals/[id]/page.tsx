@@ -1733,9 +1733,11 @@ export default function TenantDetailsPage() {
           <Card className="shrink-0">
             <CardContent className="px-7 py-6 max-md:px-5 max-md:py-5">
               {/* On a phone the who and the what stack. */}
-              <div className="flex items-center gap-6 max-md:flex-col max-md:items-start max-md:gap-4">
+              {/* Wraps: with five figures the row no longer fits beside the admin,
+                  and without wrapping it crushed their email to one letter a line. */}
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-4 max-md:flex-col max-md:items-start max-md:gap-4">
                 {/* Who: the admin, and the address to reach them, in full. */}
-                <div className="flex min-w-0 flex-1 items-center gap-3">
+                <div className="flex min-w-[16rem] flex-1 items-center gap-3 max-md:min-w-0">
                   <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold uppercase text-primary">
                     {(tenant.admin_name || tenant.company_name).charAt(0)}
                   </span>
@@ -1749,7 +1751,7 @@ export default function TenantDetailsPage() {
                   </div>
                 </div>
                 {/* What: its slug and when it joined. */}
-                <dl className="flex shrink-0 gap-8 max-md:w-full max-md:shrink">
+                <dl className="flex shrink-0 flex-wrap gap-x-8 gap-y-3 max-md:w-full max-md:shrink">
                   {[
                     { label: 'Slug', value: tenant.slug },
                     // The car count was loaded here but never shown (QA sheet 17.1).
