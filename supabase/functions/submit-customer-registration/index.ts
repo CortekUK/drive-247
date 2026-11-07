@@ -94,14 +94,18 @@ Deno.serve(async (req) => {
       return errorResponse('Registration cannot be completed. Please contact support.', 403);
     }
 
-    // Check duplicate email (global unique constraint on customers.email)
+    // Check duplicate email WITHIN THIS COMPANY. The unique index is
+    // (email, tenant_id), not email alone: this used to search every company,
+    // so a person who rents elsewhere could never register by invite here
+    // (QA sheet C13.7). Case-blind, like the rest of the customer entry points.
     if (email) {
       const { data: dupEmail } = await supabase
         .from('customers')
         .select('id, name')
-        .eq('email', email.trim().toLowerCase())
+        .eq('tenant_id', tenantId)
+        .ilike('email', email.trim().toLowerCase().replace(/[\\%_]/g, (c: string) => '\\' + c))
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (dupEmail) {
         await supabase
