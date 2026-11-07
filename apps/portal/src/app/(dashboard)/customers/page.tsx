@@ -531,7 +531,10 @@ const CustomersList = () => {
         e.preventDefault();
         handleAddCustomer();
       }
-      if (e.key === 'Escape' && isModalOpen) {
+      // The dialog handles Escape itself, and refuses it while an ID check is
+      // live (it calls preventDefault). This page-wide shortcut used to close
+      // the window anyway and lose the live tracker (sheet C4.8).
+      if (e.key === 'Escape' && isModalOpen && !e.defaultPrevented) {
         setIsModalOpen(false);
       }
     };
