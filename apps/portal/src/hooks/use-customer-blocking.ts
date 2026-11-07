@@ -317,7 +317,7 @@ export function useCustomerBlockingActions() {
       // First get the identity to check if it's an email type
       const { data: identity } = await supabase
         .from('blocked_identities')
-        .select('identity_type, identity_number, customer_name')
+        .select('identity_type, identity_number, customer_name, reason')
         .eq('id', identityId)
         .single();
 
@@ -333,6 +333,35 @@ export function useCustomerBlockingActions() {
       const { error } = await query;
 
       if (error) throw error;
+
+      // Adding the entry blocked every customer here with that licence, ID or
+      // email (with the entry's reason); removing it left them blocked, so it
+      // was never "allowed again" (sheet C14.8). Lift the blocks this entry
+      // made, unless another active entry still covers the same identity. A
+      // block staff set by hand has its own reason and is left alone.
+      const field =
+        identity?.identity_type === 'license' ? 'license_number'
+          : identity?.identity_type === 'id_card' ? 'id_number'
+            : identity?.identity_type === 'email' ? 'email'
+              : null;
+      if (field && identity?.identity_number && tenant?.id) {
+        const { count: stillCovered } = await supabase
+          .from('blocked_identities')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', tenant.id)
+          .eq('identity_number', identity.identity_number)
+          .eq('is_active', true);
+        if (!stillCovered) {
+          let unblock = supabase
+            .from('customers')
+            .update({ is_blocked: false, blocked_at: null, blocked_reason: null })
+            .eq('tenant_id', tenant.id)
+            .eq(field, identity.identity_number)
+            .eq('is_blocked', true);
+          unblock = identity.reason ? unblock.eq('blocked_reason', identity.reason) : unblock.is('blocked_reason', null);
+          await unblock;
+        }
+      }
 
       // If it was an email type, update global blacklist
       if (identity?.identity_type === 'email' && identity?.identity_number) {
