@@ -109,6 +109,10 @@ export const ORIGINAL_ONLY_SEGMENTS: readonly string[] = [
   // tenant never reads this list and keeps (legacy)/register.
   'sms-opt-in',
   'verify',
+  // The per-tenant install manifest (src/app/manifest.webmanifest/route.ts).
+  // Rewritten into the new design it 404'd, so the customer portal could not
+  // be installed as an app with Northwind's name and icon (sheet C9.10).
+  'manifest.webmanifest',
 ];
 
 export type BookingDesignRoute =
