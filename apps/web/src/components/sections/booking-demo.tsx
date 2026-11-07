@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Car, Check, CreditCard, KeyRound, LayoutDashboard, Lock, RotateCcw, Sparkles, Users } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useSitePreview } from "@/lib/site-preview";
+import { SiteHome } from "./site-home";
+import { CalendarCheck, Car, Check, CreditCard, FileSignature, FileText, Globe, KeyRound, LayoutDashboard, Lock, MessageCircle, RotateCcw, ShieldCheck, Sparkles, UserRound, Users } from "lucide-react";
 import { useFadeIn } from "@/hooks/use-fade-in";
 import { BrowserChrome } from "./portal-glass";
 import "./booking-demo.css";
@@ -18,7 +20,15 @@ import { Accent, SectionHeading } from "./section-heading";
  * visitor's browser from today, so the example never shows a month that has passed.
  */
 
-type Stage = "dates" | "car" | "checkout" | "booked" | "portal";
+type Stage = "dates" | "car" | "checkout" | "booked";
+type View = "home" | "site" | "renter" | "portal";
+
+const VIEWS: { id: View; label: string; icon: typeof Globe }[] = [
+  { id: "home", label: "Your website", icon: Globe },
+  { id: "site", label: "Booking", icon: CalendarCheck },
+  { id: "renter", label: "Customer portal", icon: UserRound },
+  { id: "portal", label: "Your portal", icon: LayoutDashboard },
+];
 
 const CARS = [
   { id: "sonata", name: "Hyundai Sonata", meta: "Sedan · 5 seats · Automatic", rate: 59, photo: "/landing-v4/cars/sonata.webp" },
@@ -50,8 +60,9 @@ const longDate = (d: Date) => `${DAY[d.getDay()]} ${d.getDate()} ${MONTH[d.getMo
 const shortDate = (d: Date) => `${MONTH[d.getMonth()]} ${d.getDate()}`;
 const money = (n: number) => `$${n.toLocaleString("en-US")}`;
 
-function stepOf(stage: Stage) {
-  return stage === "dates" ? 0 : stage === "car" ? 1 : stage === "checkout" ? 2 : 3;
+function stepOf(stage: Stage, view: View) {
+  if (view === "portal") return 3;
+  return stage === "dates" ? 0 : stage === "car" ? 1 : 2;
 }
 
 export function BookingDemo() {
@@ -64,6 +75,8 @@ export function BookingDemo() {
     setToday(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
   }, []);
 
+  const site = useSitePreview();
+  const [view, setView] = useState<View>("home");
   const [stage, setStage] = useState<Stage>("dates");
   const [pickup, setPickup] = useState<number | null>(null);
   const [back, setBack] = useState<number | null>(null);
@@ -101,19 +114,29 @@ export function BookingDemo() {
   const pay = () => {
     setBookingRef(`R-${Math.random().toString(16).slice(2, 8)}`);
     setStage("booked");
-    timer.current = window.setTimeout(() => setStage("portal"), 1800);
+    timer.current = window.setTimeout(() => setView("portal"), 1800);
   };
   const reset = () => {
     window.clearTimeout(timer.current);
     setStage("dates");
+    setView("site");
     setPickup(null);
     setBack(null);
     setCarId(null);
   };
 
   // What to do next, said once above the window; the thing to press also gets a soft ring.
+  const booked = stage === "booked" && car !== null;
   const tip =
-    stage === "dates"
+    view === "home"
+      ? "Your website's home page, in your template and colour. Press Find a car to book one."
+      : view === "renter"
+      ? booked
+        ? `This is what ${RENTER.name} sees after logging in to your site: the booking, the payment and what to do before pickup.`
+        : `This is what your renters see after logging in to your site. Book a car first and it shows up here.`
+      : view === "portal" && !booked
+        ? "Your own portal. Book a car on the booking site and watch it arrive here."
+        : stage === "dates"
       ? pickup === null
         ? "Tap the day you'd pick the car up."
         : back === null
@@ -125,34 +148,54 @@ export function BookingDemo() {
           : "Choose any car. Each one is priced for your dates."
         : stage === "checkout"
           ? "Your details are filled in. Press Pay to book."
-          : stage === "booked"
+          : view === "site"
             ? "Booked. Now watch where it lands."
             : "There it is, at the top of your Rentals, the moment it was booked.";
 
-  const step = stepOf(stage);
-  const portal = stage === "portal";
+  const step = stepOf(stage, view);
+  const portal = view === "portal";
   const hint = (on: boolean) => (on ? " bd-hint" : "");
 
   return (
-    <section id="booking-demo" aria-labelledby="booking-demo-heading" className="bd-section">
+    <section id="booking-demo" aria-labelledby="booking-demo-heading" className="bd-section" style={{ "--bd-a": site.colour.hex } as CSSProperties}>
       <div ref={ref} className={`bd-inner ${visible ? "fade-in-visible" : "fade-in-hidden"}`}>
         <div className="bd-head">
           <SectionHeading
             id="booking-demo-heading"
             title={
               <>
-                Experience your own <Accent>booking website</Accent>
+                Try all three of <Accent>your sites</Accent>
               </>
             }
             sub={
               <>
-                Book a car the way your renters will: choose dates, pick a car and check out. Then see the booking land in your portal.
+                Your booking site, your renters&apos; portal and your own portal, in the colour and under the name you chose above. Book a car the way a renter would, then see it in both portals.
               </>
             }
           />
         </div>
 
+        <div className="bd-views" role="tablist" aria-label="Your sites">
+          {VIEWS.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              role="tab"
+              aria-selected={view === v.id}
+              className={view === v.id ? "is-on" : undefined}
+              onClick={() => {
+                window.clearTimeout(timer.current);
+                setView(v.id);
+              }}
+            >
+              <v.icon aria-hidden />
+              {v.label}
+            </button>
+          ))}
+        </div>
+
         <div className="bd-guide">
+          {(view === "site" || view === "portal") && (
           <ol className="bd-rail" aria-label="The example, step by step">
             {STEPS.map((label, i) => (
               <li key={label} className={i < step ? "is-done" : i === step ? "is-now" : undefined}>
@@ -164,6 +207,7 @@ export function BookingDemo() {
               </li>
             ))}
           </ol>
+          )}
           <div className="bd-tipline">
             <p className="bd-tip" aria-live="polite">
               {tip}
@@ -177,13 +221,35 @@ export function BookingDemo() {
           </div>
         </div>
 
-        <div className="bd-window">
+        <div className={`bd-window${view === "home" ? " is-home" : ""}`}>
           <BrowserChrome
-            tab={portal ? "Rentals · Your portal" : "Book a car · Your Rentals"}
-            url={portal ? "northwind.portal.drive-247.com/rentals" : "yourrentals.com/booking"}
+            tab={portal ? `Rentals · ${site.name}` : view === "renter" ? `My bookings · ${site.name}` : view === "home" ? site.name : `Book a car · ${site.name}`}
+            url={
+              view === "home"
+                ? `${site.slug}.drive-247.com`
+                : portal
+                ? `${site.slug}.portal.drive-247.com/rentals`
+                : view === "renter"
+                  ? `${site.slug}.drive-247.com/portal`
+                  : `${site.slug}.drive-247.com/booking`
+            }
           >
-            {portal ? (
+            {view === "home" ? (
+              <SiteHome template={site.template} accent={site.colour.hex} name={site.name} initial={site.initial} onBook={() => setView("site")} />
+            ) : view === "renter" ? (
+              <RenterPortal
+                site={site}
+                booking={
+                  booked && car
+                    ? { ref: bookingRef, car, from: pickup !== null ? dateAt(pickup) : null, to: back !== null ? dateAt(back) : null, total }
+                    : null
+                }
+                onBook={() => setView("site")}
+              />
+            ) : portal ? (
               <Portal
+                site={site}
+                booked={booked}
                 today={today}
                 fresh={{
                   ref: bookingRef,
@@ -195,11 +261,11 @@ export function BookingDemo() {
                 }}
               />
             ) : (
-              <div className="bd-site">
+              <div className={`bd-site${site.template === "glass" ? " is-glass" : ""}`}>
                 <header className="bd-site-bar">
                   <span className="bd-brand">
-                    <i aria-hidden />
-                    Your Rentals
+                    <i aria-hidden>{site.initial}</i>
+                    {site.name}
                   </span>
                   <nav className="bd-site-nav" aria-hidden>
                     <span>Fleet and Pricing</span>
@@ -337,6 +403,9 @@ export function BookingDemo() {
                           {back !== null && dateAt(back) ? longDate(dateAt(back)!) : ""}. Booking {bookingRef}.
                         </p>
                         <p className="bd-lead">A confirmation is on its way to {RENTER.email}.</p>
+                        <button type="button" className="bd-link" onClick={() => { window.clearTimeout(timer.current); setView("renter"); }}>
+                          See it in the renter&apos;s portal
+                        </button>
                       </div>
                     ) : (
                       <>
@@ -522,10 +591,16 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
+type Site = ReturnType<typeof useSitePreview>;
+
 function Portal({
+  site,
+  booked,
   today,
   fresh,
 }: {
+  site: Site;
+  booked: boolean;
   today: Date | null;
   fresh: { ref: string; name: string; car: string; from: Date | null; to: Date | null; days: number };
 }) {
@@ -534,8 +609,8 @@ function Portal({
     <div className="bd-portal">
       <aside className="bd-side" aria-hidden>
         <span className="bd-org">
-          <i>N</i>
-          Northwind
+          <i>{site.initial}</i>
+          {site.name}
         </span>
         <span>
           <LayoutDashboard />
@@ -555,12 +630,14 @@ function Portal({
         </span>
       </aside>
       <div className="bd-main">
+        {booked && (
         <div className="bd-toast" role="status">
           <Sparkles aria-hidden />
           <span>
             {fresh.name} just booked the {fresh.car} on your website. I&apos;ve added it to Rentals.
           </span>
         </div>
+        )}
         <h3 className="bd-main-title">Rentals</h3>
         <p className="bd-main-sub">Manage rental agreements and contracts</p>
         <div className="bd-table-wrap">
@@ -576,6 +653,7 @@ function Portal({
               </tr>
             </thead>
             <tbody>
+              {booked && (
               <tr className="is-new">
                 <td>
                   {fresh.ref}
@@ -587,6 +665,7 @@ function Portal({
                 <td className="bd-opt">{fresh.to ? shortDate(fresh.to) : ""}</td>
                 <td className="is-pending">Pending</td>
               </tr>
+              )}
               {EARLIER.map((row) => (
                 <tr key={row.ref}>
                   <td>{row.ref}</td>
@@ -599,6 +678,116 @@ function Portal({
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* What a renter sees after logging in to the operator's site: their booking, its payment and agreement. */
+function RenterPortal({
+  site,
+  booking,
+  onBook,
+}: {
+  site: Site;
+  booking: { ref: string; car: (typeof CARS)[number]; from: Date | null; to: Date | null; total: number } | null;
+  onBook: () => void;
+}) {
+  const first = RENTER.name.split(" ")[0];
+  return (
+    <div className="bd-renter">
+      <header className="bd-site-bar">
+        <span className="bd-brand">
+          <i aria-hidden>{site.initial}</i>
+          {site.name}
+        </span>
+        <span className="bd-who" aria-hidden>
+          <i>{RENTER.name.split(" ").map((w) => w[0]).join("")}</i>
+          {RENTER.name}
+        </span>
+      </header>
+      <div className="bd-renter-body">
+        <aside className="bd-side" aria-hidden>
+          <span className="is-on">
+            <KeyRound />
+            My bookings
+          </span>
+          <span>
+            <CreditCard />
+            Payments
+          </span>
+          <span>
+            <FileSignature />
+            Agreements
+          </span>
+          <span>
+            <FileText />
+            Documents
+          </span>
+          <span>
+            <ShieldCheck />
+            Insurance
+          </span>
+          <span>
+            <MessageCircle />
+            Messages
+          </span>
+        </aside>
+        <div className="bd-main">
+          <h3 className="bd-main-title">Welcome back, {first}</h3>
+          <p className="bd-main-sub">Your bookings with {site.name}, all in one place.</p>
+          {booking ? (
+            <div className="bd-rbook">
+              <div className="bd-rbook-car">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={booking.car.photo} alt="" />
+              </div>
+              <div className="bd-rbook-info">
+                <span className="bd-rbook-tag">Upcoming · {booking.ref}</span>
+                <b>{booking.car.name}</b>
+                <small>
+                  {booking.from ? longDate(booking.from) : ""} to {booking.to ? longDate(booking.to) : ""} · 10:00 AM
+                </small>
+                <ul className="bd-rtodo">
+                  <li className="is-done">
+                    <Check aria-hidden /> Paid {money(booking.total)}
+                  </li>
+                  <li>
+                    <FileSignature aria-hidden /> Sign your agreement
+                  </li>
+                  <li>
+                    <ShieldCheck aria-hidden /> Verify your licence
+                  </li>
+                </ul>
+              </div>
+            </div>
+          ) : (
+            <div className="bd-rempty">
+              <Car aria-hidden />
+              <p>No bookings yet. Book a car on the booking site and it appears here.</p>
+              <button type="button" className="bd-go bd-hint" onClick={onBook}>
+                Book a car
+              </button>
+            </div>
+          )}
+          <div className="bd-rgrid">
+            <div>
+              <small>Payments</small>
+              <b>{booking ? money(booking.total) : "$0"}</b>
+              <span>{booking ? "Paid by Visa ending 4242" : "Nothing due"}</span>
+            </div>
+            <div>
+              <small>Agreements</small>
+              <b>{booking ? "1 to sign" : "None"}</b>
+              <span>Signed online, kept here</span>
+            </div>
+            <div>
+              <small>Messages</small>
+              <b>{site.name}</b>
+              <span>Replies within the hour</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

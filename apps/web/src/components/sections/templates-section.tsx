@@ -1,69 +1,27 @@
 "use client";
 
 import { Check, Pencil } from "lucide-react";
-import { useState, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
+import { SITE_COLOURS, SITE_TEMPLATES, setSiteColour, setSiteTemplate, useSitePreview } from "@/lib/site-preview";
+import { SiteHome } from "./site-home";
 import { useReveal } from "./operations-dashboard";
 import "./templates-section.css";
 import { Accent, SectionHeading } from "./section-heading";
 
 /*
- * Booking-site templates, and the editor that changes them. The template names and looks
- * are placeholders for now (mock data, at Ghulam's request), drawn as mini sites.
+ * Pick your colour: the booking site in the editor takes it at once, under the name typed
+ * in the next section. The demo after that shows all three of your sites in the same colour.
  */
-const TEMPLATES = [
-  { id: "summit", name: "Summit", feel: "Bold and modern", brand: "Summit Rentals", accent: "#4f44d8", ground: "#f4f2ff", dark: false },
-  { id: "coast", name: "Coast", feel: "Light and airy", brand: "Coastline Cars", accent: "#0e7490", ground: "#ecfeff", dark: false },
-  { id: "metro", name: "Metro", feel: "Dark and premium", brand: "Metro Drive", accent: "#f59e0b", ground: "#111118", dark: true },
-  { id: "canyon", name: "Canyon", feel: "Warm and friendly", brand: "Canyon Auto", accent: "#c2410c", ground: "#fff7ed", dark: false },
-  { id: "fleet", name: "Fleet", feel: "Clean and corporate", brand: "Fleetline", accent: "#1d4ed8", ground: "#f8fafc", dark: false },
-  { id: "drift", name: "Drift", feel: "Sporty and bright", brand: "Drift Rentals", accent: "#db2777", ground: "#fdf2f8", dark: false },
-];
-
 const EDITS = [
   ["Your words", "Change any heading, line or button."],
   ["Your photos", "Swap in your own cars and your own place."],
-  ["Your colours and logo", "Match the site to your brand in a click."],
+  ["Your logo", "Add it once and it shows on every page."],
   ["Publish when ready", "See every change as you make it, then go live."],
 ];
 
-function MiniSite({ t }: { t: (typeof TEMPLATES)[number] }) {
-  return (
-    <div className={`tp-site${t.dark ? " is-dark" : ""}`} style={{ "--tp-acc": t.accent, "--tp-ground": t.ground } as CSSProperties}>
-      <div className="tp-nav">
-        <b>{t.brand}</b>
-        <span>
-          <i />
-          <i />
-          <i />
-        </span>
-        <u>Book</u>
-      </div>
-      <div className="tp-hero">
-        <div>
-          <strong>Your next drive starts here.</strong>
-          <i />
-          <i />
-          <u>Find a car</u>
-        </div>
-        <span className="tp-photo" />
-      </div>
-      <div className="tp-cars">
-        {[0, 1, 2].map((n) => (
-          <span key={n}>
-            <i />
-            <b />
-            <em />
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function TemplatesSection() {
   const { ref, visible } = useReveal();
-  const [picked, setPicked] = useState(0);
-  const t = TEMPLATES[picked];
+  const { colour, template, name, slug, initial } = useSitePreview();
 
   return (
     <section id="templates" aria-labelledby="templates-heading" className="tp-section">
@@ -72,12 +30,12 @@ export function TemplatesSection() {
           id="templates-heading"
           title={
             <>
-              Pick a template. <Accent>Make it yours.</Accent>
+              Pick a template and a colour. <Accent>Make it yours.</Accent>
             </>
           }
           sub={
             <>
-              Start your booking site from a ready-made template, then change the words, photos and colours yourself in the editor. No designer, no developer.
+              Choose how your booking site looks and the colour it wears, and your renters&apos; portal and your own portal wear it too. Then change the words and photos yourself in the editor. No designer, no developer.
             </>
           }
         />
@@ -91,52 +49,74 @@ export function TemplatesSection() {
                 <i />
                 <i />
               </span>
-              <span className="tp-url">{t.brand.toLowerCase().replace(/\s+/g, "")}.com</span>
+              <span className="tp-url">{slug}.drive-247.com</span>
               <span className="tp-mode">
                 <Pencil strokeWidth={2.2} />
                 Editing
               </span>
             </div>
-            <div className="tp-canvas" key={t.id}>
-              <MiniSite t={t} />
-              <span className="tp-select" aria-hidden />
+            <div className="tp-canvas">
+              <SiteHome template={template} accent={colour.hex} name={name} initial={initial} />
               <div className="tp-cursor" aria-hidden>
                 <svg viewBox="0 0 24 24">
                   <path d="M3 2.5 20.5 10l-7.4 2.3-3 7.2Z" />
                 </svg>
                 <span>
                   <b>You</b>
-                  Changing my headline
+                  Trying my look
                 </span>
               </div>
             </div>
           </div>
 
-          {/* The templates to choose from */}
-          <div className="tp-pick" role="radiogroup" aria-label="Templates">
-            {TEMPLATES.map((item, i) => (
-              <button
-                key={item.id}
-                type="button"
-                role="radio"
-                aria-checked={i === picked}
-                className={i === picked ? "is-on" : ""}
-                onClick={() => setPicked(i)}
-              >
-                <span className="tp-thumb">
-                  <MiniSite t={item} />
-                </span>
-                <span className="tp-name">
-                  <b>{item.name}</b>
-                  {item.feel}
-                </span>
-                {i === picked && (
-                  <span className="tp-tick">
-                    <Check strokeWidth={3} />
-                  </span>
-                )}
-              </button>
-            ))}
+          {/* The colours to choose from */}
+          <div className="tp-pick">
+            <p className="tp-pick-title">Your template</p>
+            <div className="tp-temps" role="radiogroup" aria-label="Your site's template">
+              {SITE_TEMPLATES.map((t) => {
+                const on = t.id === template;
+                return (
+                  <button key={t.id} type="button" role="radio" aria-checked={on} className={on ? "is-on" : ""} onClick={() => setSiteTemplate(t.id)}>
+                    <span className="tp-temp-thumb" aria-hidden>
+                      <SiteHome template={t.id} accent={colour.hex} name={name} initial={initial} />
+                    </span>
+                    <span className="tp-temp-name">
+                      <b>{t.name}</b>
+                      {t.feel}
+                    </span>
+                    {on && (
+                      <span className="tp-tick">
+                        <Check strokeWidth={3} />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="tp-pick-title is-next">Your colour</p>
+            <div className="tp-swatches" role="radiogroup" aria-label="Your site's colour">
+              {SITE_COLOURS.map((c) => {
+                const on = c.id === colour.id;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    className={on ? "is-on" : ""}
+                    style={{ "--sw": c.hex } as CSSProperties}
+                    onClick={() => setSiteColour(c.id)}
+                  >
+                    <span className="tp-dot">{on && <Check strokeWidth={3} aria-hidden />}</span>
+                    {c.name}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="tp-pick-note">
+              Next, type your company&apos;s name. Then try your booking site, your renters&apos; portal and your own portal below, in{" "}
+              <b style={{ color: colour.hex }}>{colour.name}</b>.
+            </p>
           </div>
         </div>
 

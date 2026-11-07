@@ -128,13 +128,13 @@
   width: 14px;
   height: 14px;
   border-radius: 4px;
-  background: hsl(var(--v2-primary));
+  background: var(--nb-acc, hsl(var(--v2-primary)));
   color: #fff;
   font-size: 9px;
   font-weight: 700;
   line-height: 1;
 }
-.nb-host { color: hsl(var(--v2-primary)); font-weight: 600; }
+.nb-host { color: var(--nb-acc, hsl(var(--v2-primary))); font-weight: 600; }
 .nb-screen { aspect-ratio: 1917 / 992; container-type: inline-size; }
 
 /* Over the capture's own logo, on its own flat ground (#e7e9fe light, #1a1a1a dark). */
@@ -158,7 +158,7 @@
   width: 2cqw;
   height: 2cqw;
   border-radius: 0.5cqw;
-  background: hsl(var(--v2-primary));
+  background: var(--nb-acc, hsl(var(--v2-primary)));
   color: #fff;
   font-size: 1.1cqw;
   font-weight: 700;

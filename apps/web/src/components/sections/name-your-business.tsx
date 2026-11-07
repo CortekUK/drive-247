@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import Image from "next/image";
 import { ArrowLeft, ArrowRight, Check, Lock, Plus, RotateCw, X } from "lucide-react";
 
 import { slugAvailabilityAnon } from "@/components/onboarding/onboarding-api";
 import { saveSignupPrefill } from "@/lib/signup-prefill";
+import { setSiteName, useSitePreview } from "@/lib/site-preview";
 import { checkSlugShape, deriveSlugFromCompanyName, FIELD_MAX } from "@/lib/signup-validation";
 import "./portal-glass.css";
 import "./name-your-business.css";
@@ -83,6 +84,7 @@ export function NameYourBusiness({ signup }: { signup: boolean }) {
   const [name, setName] = useState("");
   const [focused, setFocused] = useState(false);
   const [check, setCheck] = useState<Check | null>(null);
+  const { colour } = useSitePreview();
 
   useEffect(() => {
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -158,7 +160,7 @@ export function NameYourBusiness({ signup }: { signup: boolean }) {
   };
 
   return (
-    <section ref={sectionRef} className={`nb ${arrived ? "is-in" : ""}`} aria-labelledby="nb-title">
+    <section ref={sectionRef} className={`nb ${arrived ? "is-in" : ""}`} aria-labelledby="nb-title" style={{ "--nb-acc": colour.hex } as CSSProperties}>
       <div className="nb-row">
         <div className="nb-copy">
           <p className="nb-kicker">Get started</p>
@@ -166,8 +168,7 @@ export function NameYourBusiness({ signup }: { signup: boolean }) {
             What&apos;s your rental company called?
           </h2>
           <p className="nb-sub">
-            Type it in and see your booking site wear it. Sign up and it goes live at that address,
-            with your name on it.
+            Type it in and see your booking site wear it, in the colour you picked. Then try all three of your sites just below. Sign up and it goes live at that address, with your name on it.
           </p>
 
           <form className="nb-form" onSubmit={onSubmit}>
@@ -176,7 +177,10 @@ export function NameYourBusiness({ signup }: { signup: boolean }) {
                 className="nb-input"
                 type="text"
                 value={name}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(event) => {
+                  setName(event.target.value);
+                  setSiteName(event.target.value);
+                }}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
                 placeholder={focused || reducedMotion ? "Your company name" : sample || " "}

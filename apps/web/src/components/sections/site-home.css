@@ -1,0 +1,135 @@
+/*
+ * A booking site's home page, in either template. Everything is in em off one size that
+ * follows the frame's width, so the drawing is the same at any width: a picture of the
+ * page, not a page that reflows.
+ */
+.ws-frame { container-type: inline-size; width: 100%; }
+.ws {
+  --ws-ink: #0c0a1e;
+  --ws-mute: #5b5b6b;
+  --ws-tint: color-mix(in srgb, var(--ws-a) 10%, #fff);
+  position: relative;
+  overflow: hidden;
+  font-size: 1.1cqw;
+  color: var(--ws-ink);
+  text-align: left;
+  transition: background-color 250ms ease-out;
+}
+.ws *, .ws *::before { transition: background-color 250ms ease-out, color 250ms ease-out, border-color 250ms ease-out; }
+.ws svg { width: 1.2em; height: 1.2em; flex: none; }
+.ws button { font: inherit; }
+
+.ws-brand { display: inline-flex; align-items: center; gap: 0.5em; font-size: 1.35em; font-weight: 800; letter-spacing: -0.03em; white-space: nowrap; }
+.ws-brand i { display: grid; place-items: center; width: 1.5em; height: 1.5em; border-radius: 0.4em; background: var(--ws-a); color: #fff; font-size: 0.8em; font-style: normal; }
+.ws-nav { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 1.5em; }
+.ws-links { display: flex; align-items: center; gap: 0.3em; font-size: 0.95em; color: var(--ws-mute); }
+.ws-links > * { padding: 0.45em 0.8em; border-radius: 99px; white-space: nowrap; }
+.ws-links b { background: var(--ws-tint); color: var(--ws-a); font-weight: 500; }
+.ws-acts { display: flex; align-items: center; gap: 0.6em; }
+.ws-signin { padding: 0.6em 1.1em; border: 1px solid rgb(12 10 30 / 0.1); border-radius: 99px; background: #fff; font-size: 0.95em; white-space: nowrap; }
+.ws-btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.45em; padding: 0.65em 1.2em; border-radius: 99px; background: var(--ws-a); color: #fff; font-size: 0.95em; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.ws-btn:hover { filter: brightness(0.92); }
+.ws-btn.is-ink { padding: 0.9em 1.7em; background: #0c0a1e; font-size: 1.05em; }
+.ws-btn.is-plain { padding: 0.9em 1.7em; border: 1px solid rgb(12 10 30 / 0.12); background: #fff; color: var(--ws-ink); font-size: 1.05em; font-weight: 500; }
+.ws-btn.is-full { width: 100%; margin-top: 0.8em; }
+.ws-btn.is-find { align-self: stretch; padding-inline: 1.8em; font-size: 1.15em; }
+
+/* The search bar along the foot, as both templates have it */
+.ws-search { display: flex; align-items: center; gap: 0.6em; padding: 0.55em 0.55em 0.55em 1.6em; border-radius: 99px; background: #fff; box-shadow: 0 1.4em 3em -1.8em rgb(12 10 30 / 0.3); }
+.ws-search > span { display: grid; grid-template-columns: auto 1fr; column-gap: 0.8em; align-items: center; flex: 1; padding-block: 0.4em; color: var(--ws-mute); font-size: 1.05em; white-space: nowrap; }
+.ws-search > span + span { padding-left: 1em; border-left: 1px solid rgb(12 10 30 / 0.1); }
+.ws-search > span svg { grid-row: span 2; width: 1.3em; height: 1.3em; color: var(--ws-ink); }
+.ws-search small { font-size: 0.8em; font-weight: 500; color: var(--ws-ink); }
+
+/* ── Classic: the default site ─────────────────────────────── */
+.ws-classic { padding: 1.6em 4.4em 3em; background: linear-gradient(to bottom, color-mix(in srgb, var(--ws-a) 9%, #fff), color-mix(in srgb, var(--ws-a) 4%, #fff)); }
+.ws-c-hero { display: grid; grid-template-columns: 1fr 1fr; gap: 3em; align-items: center; padding-block: 3.6em 3.4em; }
+.ws-c-title { font-size: 4.7em; font-weight: 800; line-height: 0.98; letter-spacing: -0.055em; }
+.ws-c-title em { position: relative; font-style: normal; color: var(--ws-a); }
+.ws-c-title em::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0.02em; height: 0.12em; border-radius: 1em; background: color-mix(in srgb, var(--ws-a) 55%, transparent); }
+.ws-c-sub { max-width: 28em; margin-top: 1.4em; font-size: 1.25em; line-height: 1.5; color: var(--ws-mute); }
+.ws-c-btns { display: flex; gap: 0.8em; margin-top: 2em; }
+.ws-c-art { position: relative; align-self: stretch; min-height: 26em; margin-left: 3em; border-radius: 2.4em; background:
+  linear-gradient(color-mix(in srgb, var(--ws-a) 14%, transparent) 1px, transparent 1px) 0 0 / 2.6em 2.6em,
+  linear-gradient(90deg, color-mix(in srgb, var(--ws-a) 14%, transparent) 1px, transparent 1px) 0 0 / 2.6em 2.6em,
+  color-mix(in srgb, var(--ws-a) 12%, #fff); }
+.ws-c-phone { position: absolute; top: -1.6em; left: 50%; width: 13.5em; padding: 0.9em 0.9em 1.1em; translate: -50% 0; rotate: -3deg; border: 0.35em solid #0c0a1e; border-radius: 2em; background: #fff; box-shadow: 0 2em 3em -2em rgb(12 10 30 / 0.4); }
+.ws-c-phone img { display: block; width: 100%; aspect-ratio: 1.7; object-fit: contain; border-radius: 1em; background: var(--ws-tint); }
+.ws-c-phone > b { display: block; margin-top: 0.7em; font-size: 1.15em; }
+.ws-c-phone > small { font-size: 0.8em; color: var(--ws-mute); }
+.ws-c-price { display: flex; align-items: baseline; justify-content: space-between; margin-top: 0.8em; }
+.ws-c-price small { font-size: 0.8em; color: var(--ws-mute); }
+.ws-c-price b { font-size: 1.2em; }
+.ws-chip { position: absolute; display: flex; align-items: center; gap: 0.5em; padding: 0.7em 1em; border-radius: 0.9em; background: #fff; font-size: 0.95em; font-weight: 600; white-space: nowrap; box-shadow: 0 1em 2em -1.2em rgb(12 10 30 / 0.35); }
+.ws-chip svg { color: var(--ws-a); }
+.ws-chip.is-1 { top: 4.5em; left: -2.4em; }
+.ws-chip.is-2 { top: 11em; right: -1.4em; }
+.ws-chip.is-3 { bottom: 1.6em; right: 2em; }
+
+/* ── Glass: template 2 ─────────────────────────────────────── */
+.ws-glass { padding: 1.4em 1.6em 2.4em; background: color-mix(in srgb, var(--ws-a) 30%, #9aa6c4); }
+.ws-backdrop { position: absolute; inset: 0; background: url("/v2/templates/glass-backdrop.webp") center / cover; }
+.ws-backdrop::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--ws-a) 34%, transparent); mix-blend-mode: color; transition: background-color 250ms ease-out; }
+.ws-pane, .ws-pane-thin { position: relative; border: 1px solid rgb(255 255 255 / 0.7); }
+.ws-pane {
+  background: color-mix(in oklab, var(--ws-a) 7%, rgb(255 255 255 / 0.46));
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.8), 0 2.4em 4.6em -2.4em color-mix(in oklab, var(--ws-a) 45%, rgb(10 10 30 / 0.6));
+}
+.ws-pane-thin {
+  background: linear-gradient(color-mix(in oklab, var(--ws-a) 5%, rgb(255 255 255 / 0.72)), color-mix(in oklab, var(--ws-a) 7%, rgb(255 255 255 / 0.5)));
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+.ws-glass .ws-nav { padding: 0.7em 0.7em 0.7em 1.6em; border-radius: 99px; }
+.ws-glass .ws-links { padding: 0.25em; border-radius: 99px; }
+.ws-glass .ws-signin { border-color: transparent; }
+.ws-sheet { display: flex; flex-direction: column; align-items: center; margin: 1.6em 3.6em 0; padding: 3em 3.4em 2.4em; border-radius: 3em; }
+.ws-g-title { font-size: 3.6em; font-weight: 800; line-height: 1; letter-spacing: -0.055em; text-align: center; }
+.ws-g-sub { max-width: 24em; margin-top: 0.9em; font-size: 1.2em; line-height: 1.5; text-align: center; color: rgb(12 10 30 / 0.6); }
+.ws-show { position: relative; display: grid; place-items: center; width: 100%; height: 27em; margin-top: 0.6em; }
+.ws-model { position: absolute; top: 0; font-size: 9.6em; font-weight: 900; line-height: 1; letter-spacing: -0.04em; background: linear-gradient(to bottom, #2a2a38 30%, rgb(42 42 56 / 0.15)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.ws-show img { position: relative; width: 40em; max-width: 70%; margin-top: 10em; filter: drop-shadow(0 1.6em 1.6em rgb(10 10 30 / 0.3)); }
+.ws-arrow { position: absolute; top: 55%; display: grid; place-items: center; width: 3.4em; height: 3.4em; border-radius: 50%; background: rgb(255 255 255 / 0.85); color: var(--ws-ink); }
+.ws-arrow.is-left { left: 0; }
+.ws-arrow.is-right { right: 0; }
+.ws-dots { display: flex; gap: 0.5em; margin-top: 0.6em; }
+.ws-dots i { width: 0.5em; height: 0.5em; border-radius: 1em; background: rgb(12 10 30 / 0.3); }
+.ws-dots i:first-child { width: 1.8em; background: #0c0a1e; }
+.ws-toggle { display: flex; gap: 0.3em; margin-top: 1.8em; padding: 0.3em; border-radius: 99px; font-size: 1.05em; }
+.ws-toggle > * { padding: 0.6em 1.6em; border-radius: 99px; font-weight: 500; }
+.ws-toggle b { background: #fff; }
+.ws-toggle span { color: rgb(12 10 30 / 0.65); }
+.ws-glass .ws-search { align-self: stretch; margin: 0.9em 4em 0; box-shadow: none; }
+.ws-glass .ws-search > span svg { width: 2.2em; height: 2.2em; padding: 0.45em; border-radius: 0.6em; background: color-mix(in srgb, var(--ws-a) 14%, transparent); color: var(--ws-a); }
+.ws-glass .ws-search > span + span { border-color: rgb(12 10 30 / 0.12); }
+.ws-glass .ws-btn.is-find { border-radius: 99px; box-shadow: 0 1em 2em -1em var(--ws-a); }
+.ws-perks { display: flex; gap: 1.8em; margin-top: 1.2em; font-size: 1em; color: rgb(12 10 30 / 0.65); }
+.ws-perks span { display: flex; align-items: center; gap: 0.45em; }
+.ws-perks svg { color: var(--ws-a); }
+
+/* Narrow frames (a phone): the page as a phone shows it, stacked. */
+@container (max-width: 560px) {
+  .ws { font-size: 3.4cqw; }
+  .ws-links, .ws-signin, .ws-opt { display: none; }
+  .ws-classic { padding: 1.2em 1.2em 1.8em; }
+  .ws-c-hero { grid-template-columns: 1fr; padding-block: 2em 1.6em; }
+  .ws-c-title { font-size: 2.9em; }
+  .ws-c-sub { font-size: 1.05em; }
+  .ws-c-art { display: none; }
+  .ws-search { flex-direction: column; align-items: stretch; gap: 0; padding: 0.6em; border-radius: 1.4em; }
+  .ws-search > span { padding: 0.7em 0.6em; }
+  .ws-search > span + span { padding-left: 0.6em; border-left: 0; border-top: 1px solid rgb(12 10 30 / 0.1); }
+  .ws-btn.is-find { margin-top: 0.4em; padding-block: 0.8em; }
+  .ws-glass { padding: 0.8em 0.8em 1.4em; }
+  .ws-sheet { margin: 1em 0 0; padding: 1.8em 1em 1.4em; border-radius: 1.8em; }
+  .ws-g-title { font-size: 2.3em; }
+  .ws-g-sub { font-size: 1em; }
+  .ws-show { height: 13em; }
+  .ws-model { font-size: 5em; }
+  .ws-show img { margin-top: 5em; max-width: 86%; }
+  .ws-arrow { display: none; }
+  .ws-glass .ws-search { margin-inline: 0; }
+  .ws-perks { flex-direction: column; gap: 0.5em; }
+}
