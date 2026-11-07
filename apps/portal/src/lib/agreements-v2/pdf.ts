@@ -383,6 +383,17 @@ function newPage(ctx: PdfCtx) {
   ctx.y = PAGE_H - MARGIN;
 }
 
+/**
+ * The height, in points, of the tallest signer field whose tag is in this text.
+ * MUST match the TextTagDefinitions sizes in agreements-v2/provider.ts.
+ */
+const SIGNER_FIELD_HEIGHT: Record<string, number> = { sig1: 50, init1: 40, date1: 30 };
+export function signerFieldHeight(text: string): number {
+  let h = 0;
+  for (const m of text.matchAll(/\{\{@(\w+)\}\}/g)) h = Math.max(h, SIGNER_FIELD_HEIGHT[m[1]] ?? 0);
+  return h;
+}
+
 function ensureSpace(ctx: PdfCtx, needed: number) {
   if (ctx.y - needed < MARGIN) newPage(ctx);
 }
@@ -521,9 +532,15 @@ async function renderBlocksToPdf(ctx: PdfCtx, blocks: PdfBlock[]) {
         break;
       }
       case 'paragraph': {
-        ensureSpace(ctx, LH.body);
+        // A signer field is placed AT its tag and is taller than a line of text
+        // (the sizes sent in supabase/functions/agreements-v2/provider.ts), so a
+        // signature on "Signature:" covered the "Date signed:" line under it in
+        // every signed copy (QA sheet A7.11). Leave the field's height clear
+        // below its line, and keep the field on one page.
+        const fieldHeight = signerFieldHeight((block.runs || []).map((r) => r.text).join(''));
+        ensureSpace(ctx, Math.max(LH.body, fieldHeight));
         drawWrappedRuns(ctx, block.runs || [], S.body, LH.body, false, 0, block.align || 'left');
-        ctx.y -= 2;
+        ctx.y -= 2 + Math.max(0, fieldHeight - LH.body);
         break;
       }
       case 'image': {
