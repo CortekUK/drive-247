@@ -1,8 +1,10 @@
 'use client';
 
 /**
- * Settings → Consent (owner, Oct 21 2026): what the customer has agreed to,
- * and nothing to switch. WhatsApp is gone (it is not collected); more consents
+ * Settings → Consent (owner, Oct 21 2026): what the customer has agreed to.
+ * One switch (test sheet C9.7, Nov 7 2026): text messages, the customer-level
+ * `customers.sms_consent` the operator sees under Customer → Consent; stamped
+ * by `saveNotifications` only when it turns on (A2P 10DLC audit). WhatsApp is gone (it is not collected); more consents
  * (location and the rest) come later.
  *
  *   ACCOUNT. The rental company's privacy policy and terms of service: that
@@ -20,7 +22,7 @@
  * AND tenant, as every portal read is.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 
@@ -28,6 +30,7 @@ import { formatDate, formatTimestamp } from '@nw/components/portal/format';
 import { LoadError } from '@nw/portal-v2/primitives';
 import { useTenant } from '@nw/contexts/TenantContext';
 import { useCustomer } from '@nw/hooks/use-customer';
+import { useCustomerSettings } from '@nw/hooks/use-customer-settings';
 import { supabase } from '@nw/integrations/supabase/client';
 import { cn } from '@nw/lib/utils';
 import { RentalsEmptyArt } from '@portal-v2-shared/empty-states/empty-scenes';
@@ -44,7 +47,7 @@ import {
 } from '@portal-v2-shared/list-table';
 import { V2_LIST_CLASSES, type V2ListTone } from '@portal-v2-shared/list-styles';
 
-import { ReadOnlyValue, SettingsPageHeader, SettingsRow, SettingsSkeleton, StatusPill } from '../_components/settings-ui';
+import { ReadOnlyValue, SettingsPageHeader, SettingsRow, SettingsSkeleton, StatusPill, SwitchRow } from '../_components/settings-ui';
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- untyped embeds */
 const sb = supabase as any;
@@ -190,6 +193,8 @@ export function ConsentSettings() {
             <PolicyRow label="Terms of service" href="/terms" row={account.terms} current={tenant?.terms_version ?? null} />
           </div>
 
+          <TextMessagesRow company={company} />
+
           <section aria-labelledby="consent-rentals-title" className="flex flex-col gap-3">
             <div>
               <h2 id="consent-rentals-title" className="text-[17px] font-semibold tracking-tight text-pv-fg">
@@ -240,6 +245,44 @@ export function ConsentSettings() {
           </section>
         </>
       )}
+    </div>
+  );
+}
+
+/** Text messages from the company — saved the moment it is switched. */
+function TextMessagesRow({ company }: { company: string }) {
+  const { settings, saveNotifications, isSavingNotifications } = useCustomerSettings();
+  const [status, setStatus] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+  if (!settings) return null;
+  const on = settings.smsConsent;
+  return (
+    <div>
+      <SwitchRow
+        id="consent-sms"
+        title="Text messages"
+        checked={on}
+        disabled={isSavingNotifications}
+        onChange={async (next) => {
+          setStatus(null);
+          try {
+            await saveNotifications({ smsConsent: next, whatsappOptIn: settings.whatsappOptIn });
+            setStatus({ tone: 'ok', text: next ? 'Saved. You agreed to text messages.' : 'Saved. You will not get text messages.' });
+          } catch (err) {
+            setStatus({ tone: 'error', text: err instanceof Error && err.message ? `Not saved: ${err.message}` : 'Not saved. Please try again.' });
+          }
+        }}
+        description={
+          <>
+            {`${company} can text you about your bookings: confirmations, pickup reminders, payment links and lockbox codes.`}
+            {on && settings.smsConsentAt ? ` Agreed on ${formatTimestamp(settings.smsConsentAt) ?? settings.smsConsentAt}.` : null}
+            {status ? (
+              <span role="status" className={cn('mt-1 block font-medium', status.tone === 'ok' ? 'text-pv-success' : 'text-pv-danger')}>
+                {status.text}
+              </span>
+            ) : null}
+          </>
+        }
+      />
     </div>
   );
 }
