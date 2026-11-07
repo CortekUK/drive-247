@@ -190,10 +190,22 @@ Deno.serve(async (req) => {
           if (verification.document_number) customerSync.license_number = verification.document_number;
           if (verification.date_of_birth) customerSync.date_of_birth = verification.date_of_birth;
 
-          const { error: syncError } = await supabase
+          let { error: syncError } = await supabase
             .from('customers')
             .update(customerSync)
             .eq('id', newCustomer.id);
+          // customers.license_number is unique across the whole platform, so a
+          // licence already on another customer (the same person at another
+          // company) refused the whole update and the verified status was lost:
+          // the portal showed a just-verified customer as "Unverified" (sheet
+          // C7.7). Keep the verdict; leave the licence number off.
+          if (syncError?.code === '23505' && 'license_number' in customerSync) {
+            delete customerSync.license_number;
+            ({ error: syncError } = await supabase
+              .from('customers')
+              .update(customerSync)
+              .eq('id', newCustomer.id));
+          }
           if (syncError) console.error('Error syncing verification status to customer:', syncError);
         }
       }
