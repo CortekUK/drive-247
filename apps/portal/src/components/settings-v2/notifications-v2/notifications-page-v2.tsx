@@ -78,7 +78,7 @@ import {
   type GmailPreviewView,
   type PreviewSwitchOption,
 } from "./email-preview-gmail";
-import { NOTIFICATIONS_SETUP, useNotificationsSelection } from "./notifications-selection-store";
+import { NOTIFICATIONS_SETUP, useNotificationsSelection, type SetupSection } from "./notifications-selection-store";
 import { NotificationsList } from "./notifications-rail";
 import { AndroidLockScreenPhone, LockScreenPhone, type PhoneEdit } from "./phone-previews";
 import { emailBodyFromPreview, unfillVariables } from "./inline-edit";
@@ -447,7 +447,7 @@ export function NotificationsPageV2({ canEdit, registerSave, todaySettings, scro
                 <ArrowLeft className="size-4" aria-hidden="true" />
               </Link>
               <div className="min-w-0 flex-1">
-                <MobilePicker selected={selected} onSelect={select} />
+                <MobilePicker selected={selected} setupSection={setupSection} onSelect={select} onOpenSetup={openSetup} />
               </div>
             </div>
             {/* Phones: the list (and its notice) is hidden, so the notice sits under the header. */}
@@ -1031,19 +1031,43 @@ function AppMessagePhones({
 /* Phones: the rail's choice as a select                                       */
 /* -------------------------------------------------------------------------- */
 
-function MobilePicker({ selected, onSelect }: { selected: string | null; onSelect: (key: string, side?: NotificationDirection) => void }) {
+function MobilePicker({
+  selected,
+  setupSection,
+  onSelect,
+  onOpenSetup,
+}: {
+  selected: string | null;
+  setupSection: SetupSection;
+  onSelect: (key: string, side?: NotificationDirection) => void;
+  onOpenSetup: (section: SetupSection) => void;
+}) {
+  // Setup sub-sections are reachable on phones too (Email sender AND Push
+  // notifications), matching the desktop rail. Encoded as `setup:<section>`
+  // so the one <select> can both pick a notification and open a setup.
+  const SETUP_PREFIX = "setup:";
+  const value =
+    selected === NOTIFICATIONS_SETUP ? `${SETUP_PREFIX}${setupSection}` : selected ?? "";
   return (
     <label className="block md:hidden">
       <span className="sr-only">Choose a notification</span>
       <select
-        value={selected ?? ""}
+        value={value}
         onChange={(e) => {
-          const item = getNotificationItem(e.target.value);
-          onSelect(e.target.value, item?.direction);
+          const v = e.target.value;
+          if (v.startsWith(SETUP_PREFIX)) {
+            onOpenSetup(v.slice(SETUP_PREFIX.length) as SetupSection);
+            return;
+          }
+          const item = getNotificationItem(v);
+          onSelect(v, item?.direction);
         }}
         className="h-10 w-full rounded-lg border bg-background px-3 text-sm"
       >
-        <option value={NOTIFICATIONS_SETUP}>Setups</option>
+        <optgroup label="Setups">
+          <option value={`${SETUP_PREFIX}email`}>Email sender</option>
+          <option value={`${SETUP_PREFIX}push`}>Push notifications</option>
+        </optgroup>
         {NOTIFICATION_DIRECTION_GROUPS.map((group) =>
           categoryGroups(group.direction).map(({ category, items }) => (
             <optgroup key={`${group.direction}-${category.id}`} label={`${group.title} · ${category.label}`}>
