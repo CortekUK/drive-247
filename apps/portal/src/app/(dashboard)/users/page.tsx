@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth, type AppUser } from '@/stores/auth-store';
 import { supabase } from '@/integrations/supabase/client';
+import { functionErrorMessage } from '@/lib/function-error';
 import {
   Table,
   TableBody,
@@ -157,7 +158,7 @@ export default function UsersManagement() {
         }
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error, 'Failed to create user'));
       if (!result.success) throw new Error(result.error || 'Failed to create user');
 
       // Send welcome email.
@@ -226,7 +227,7 @@ export default function UsersManagement() {
         body: { userId, newPassword }
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error, 'Failed to reset password'));
       if (!data.success) throw new Error(data.error || 'Failed to reset password');
 
       return data;
@@ -256,7 +257,7 @@ export default function UsersManagement() {
         body: { userId, newRole, ...(newRole === 'manager' && permissions ? { permissions } : {}) }
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error, 'Failed to update role'));
       if (!data.success) throw new Error(data.error || 'Failed to update role');
 
       return data;
@@ -289,7 +290,7 @@ export default function UsersManagement() {
         body: { userId, permissions }
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error, 'Failed to update permissions'));
       if (!data.success) throw new Error(data.error || 'Failed to update permissions');
 
       return data;
@@ -320,7 +321,7 @@ export default function UsersManagement() {
         body: { userId, isActive }
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error, 'Failed to update user status'));
       if (!data.success) throw new Error(data.error || 'Failed to update user status');
 
       return data;
@@ -802,7 +803,7 @@ export default function UsersManagement() {
 
       {/* Change Role Dialog */}
       <Dialog open={showRoleDialog} onOpenChange={setShowRoleDialog}>
-        <DialogContent className={selectedRole === 'manager' ? 'sm:max-w-[650px]' : ''}>
+        <DialogContent className={selectedRole === 'manager' ? 'sm:max-w-[650px] max-h-[90vh] overflow-y-auto' : ''}>
           <DialogHeader>
             <DialogTitle>Change User Role</DialogTitle>
             <DialogDescription>
@@ -863,7 +864,7 @@ export default function UsersManagement() {
 
       {/* Edit Manager Permissions Dialog */}
       <Dialog open={showEditPermissionsDialog} onOpenChange={setShowEditPermissionsDialog}>
-        <DialogContent className="sm:max-w-[650px]">
+        <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Manager Permissions</DialogTitle>
             <DialogDescription>

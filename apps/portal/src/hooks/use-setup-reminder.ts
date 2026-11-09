@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { toProviderId } from "@/lib/payment-provider";
 
 interface TenantReminderFields {
   logo_url: string | null;
@@ -11,6 +12,7 @@ interface TenantReminderFields {
   own_stripe_test_account_id: string | null;
   integration_bonzah: boolean | null;
   bonzah_username: string | null;
+  payment_provider: string | null;
 }
 
 export interface SetupReminderState {
@@ -36,7 +38,8 @@ export interface SetupReminderState {
  *
  * Completion rules are deliberately kept in step with the dashboard's own
  * checklist so the two can never disagree:
- *  - Stripe   → `use-setup-status.ts` (`stripe_onboarding_complete` + status active)
+ *  - Stripe   → `use-setup-status.ts` (`stripe_onboarding_complete` + status active);
+ *               never a task for a Square tenant (`payment_provider`)
  *  - Bonzah   → `use-bonzah-balance.ts` `hasOwnCredentials`, plus an in-flight
  *               onboarding submission (pending/approved) so we stop nagging the
  *               moment the tenant has applied and is waiting on review.
@@ -52,7 +55,7 @@ export function useSetupReminder(): SetupReminderState {
         (supabase as any)
           .from("tenants")
           .select(
-            "logo_url, stripe_onboarding_complete, stripe_account_status, own_stripe_account_id, own_stripe_test_account_id, integration_bonzah, bonzah_username"
+            "logo_url, stripe_onboarding_complete, stripe_account_status, own_stripe_account_id, own_stripe_test_account_id, integration_bonzah, bonzah_username, payment_provider"
           )
           .eq("id", tenant!.id)
           .single(),
@@ -90,11 +93,16 @@ export function useSetupReminder(): SetupReminderState {
   // completed legacy Express onboarding counts as done.
   const ownStripeConnected =
     !!fields?.own_stripe_account_id || !!fields?.own_stripe_test_account_id;
-  const needsStripe = !(
-    ownStripeConnected ||
-    (fields?.stripe_onboarding_complete === true &&
-      fields?.stripe_account_status === "active")
-  );
+  // A Square tenant takes payments through Square and never connects Stripe,
+  // so there is nothing to remind them of.
+  const onStripe = toProviderId(fields?.payment_provider) === "stripe";
+  const needsStripe =
+    onStripe &&
+    !(
+      ownStripeConnected ||
+      (fields?.stripe_onboarding_complete === true &&
+        fields?.stripe_account_status === "active")
+    );
   // Mirrors `hasOwnCredentials` in use-bonzah-balance.ts.
   const bonzahConnected = !!fields?.integration_bonzah && !!fields?.bonzah_username;
   const needsBonzah = bonzahSubmissionCount === 0 && !bonzahConnected;

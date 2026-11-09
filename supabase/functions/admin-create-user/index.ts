@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
+import { ALLOWED_TAB_KEYS } from '../_shared/manager-tab-keys.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,18 +19,6 @@ interface CreateUserRequest {
   tenant_id?: string; // Optional: super admins can specify tenant_id for the new user
   permissions?: PermissionEntry[]; // Required when role is 'manager'
 }
-
-const ALLOWED_TAB_KEYS = [
-  'vehicles', 'rentals', 'pending_bookings', 'availability',
-  'customers', 'blocked_customers', 'messages',
-  'payments', 'invoices', 'fines',
-  'documents', 'reminders', 'reports', 'pl_dashboard',
-  'cms', 'audit_logs', 'settings',
-  'settings.general', 'settings.locations', 'settings.branding',
-  'settings.rental', 'settings.extras', 'settings.payments',
-  'settings.reminders', 'settings.templates', 'settings.integrations',
-  'settings.subscription',
-];
 
 Deno.serve(async (req) => {
   console.log('admin-create-user function called');

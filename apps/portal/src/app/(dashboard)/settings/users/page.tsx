@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth, type AppUser } from '@/stores/auth-store';
 import { supabase } from '@/integrations/supabase/client';
+import { functionErrorMessage } from '@/lib/function-error';
 import {
   Table,
   TableBody,
@@ -114,7 +115,7 @@ export default function UsersManagement() {
         body: { userId, newPassword }
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error, 'Failed to reset password'));
       if (!data.success) throw new Error(data.error || 'Failed to reset password');
 
       return data;
@@ -144,7 +145,7 @@ export default function UsersManagement() {
         body: { userId, newRole }
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error, 'Failed to update role'));
       if (!data.success) throw new Error(data.error || 'Failed to update role');
 
       return data;
@@ -172,7 +173,7 @@ export default function UsersManagement() {
         body: { userId, isActive }
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error, 'Failed to update user status'));
       if (!data.success) throw new Error(data.error || 'Failed to update user status');
 
       return data;

@@ -22,6 +22,14 @@
  * it away — the point is that they connect. It auto-hides the instant an
  * `own_stripe_account_id` exists, and on `/settings` where the connect action
  * already lives.
+ *
+ * NOT FOR SQUARE TENANTS
+ * ----------------------
+ * A tenant whose `payment_provider` is Square takes every payment through
+ * Square; its Stripe columns stay at their defaults (`stripe_mode` = test, no
+ * account) for good. That is not a misconfiguration, so the banner never shows
+ * for them. Luxurious Car Rentals reported it as a permanent red notice they
+ * could not close (Nov 2026).
  */
 "use client";
 
@@ -30,6 +38,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { toProviderId } from "@/lib/payment-provider";
 import { toast } from "@/hooks/use-toast";
 import type { AppBanner } from "../banner-types";
 
@@ -37,6 +46,7 @@ interface StripeModeRow {
   id: string;
   stripe_mode: "test" | "live" | null;
   own_stripe_account_id: string | null;
+  payment_provider: string | null;
 }
 
 export function useConnectStripeBanner(): AppBanner[] {
@@ -51,7 +61,7 @@ export function useConnectStripeBanner(): AppBanner[] {
     queryFn: async (): Promise<StripeModeRow | null> => {
       const { data, error } = await supabaseUntyped
         .from("tenants")
-        .select("id, stripe_mode, own_stripe_account_id")
+        .select("id, stripe_mode, own_stripe_account_id, payment_provider")
         .eq("id", tenantId!)
         .single();
       if (error) throw error;
@@ -95,9 +105,13 @@ export function useConnectStripeBanner(): AppBanner[] {
   }, [data?.id, connecting]);
 
   return useMemo(() => {
+    // Square tenants never connect Stripe, so Stripe's test mode means nothing
+    // to them: no banner. (toProviderId reads an unloaded row as Stripe, and an
+    // unloaded row has no stripe_mode either, so nothing flashes meanwhile.)
+    const onStripe = toProviderId(data?.payment_provider) === "stripe";
     const inTestMode = data?.stripe_mode === "test";
     const notConnected = !data?.own_stripe_account_id;
-    if (!inTestMode || !notConnected) return [];
+    if (!onStripe || !inTestMode || !notConnected) return [];
 
     return [
       {
@@ -125,5 +139,5 @@ export function useConnectStripeBanner(): AppBanner[] {
         // No `dismissal` => the operator cannot close it until they connect.
       },
     ];
-  }, [data?.stripe_mode, data?.own_stripe_account_id, connecting, connect]);
+  }, [data?.payment_provider, data?.stripe_mode, data?.own_stripe_account_id, connecting, connect]);
 }
