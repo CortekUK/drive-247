@@ -139,6 +139,12 @@ const NotificationsPageV2 = dynamic(
   { ssr: false, loading: () => <SettingsSectionSkeleton variant="form" rows={4} label="Loading notifications" /> },
 );
 
+/** Settings › Install app: the install guide on its own page (reads `window`, so client-only). */
+const InstallAppPageV2 = dynamic(
+  () => import('@/components/settings-v2/notifications-v2/install-app-page-v2').then((m) => m.InstallAppPageV2),
+  { ssr: false, loading: () => <SettingsSectionSkeleton variant="form" rows={3} label="Loading install steps" /> },
+);
+
 /**
  * The parts the promo code Edit and Delete dialogs are drawn with. v1 keeps
  * exactly the components it always used; the v2 canary gets the v2 ones, so a
@@ -253,6 +259,8 @@ const V2_SETTINGS_PAGES: Record<string, { section: string; title: string; descri
   notifications: { section: 'Notifications', title: 'Notifications', description: 'Every email, push and in-app message: when it is sent, what it says and who gets it.', permTab: 'notifications' },
   reminders: { section: 'Notifications', title: 'Team emails', description: 'Which emails your team receives.', permTab: 'reminders' },
   push: { section: 'Notifications', title: 'Push notifications', description: "Alerts on your team's phones and browsers.", permTab: 'push' },
+  // No permission of its own (an unknown key is viewable by every role): installing changes nothing on the account.
+  install: { section: 'Notifications', title: 'Install app', description: 'Put this portal on your phone or computer as an app, with its own icon and full screen.', permTab: 'install' },
   templates: { section: 'Templates', title: 'Customer messages', description: 'The reminders, emails and agreement your customers receive, including the lockbox code email.', permTab: 'templates' },
   insurance: { section: 'Bonzah', title: 'Bonzah application', description: 'Apply for Bonzah insurance. Everything else about Bonzah is in its Integrations card.', permTab: 'insurance' },
 };
@@ -275,7 +283,7 @@ const V2_SETTINGS_PAGES: Record<string, { section: string; title: string; descri
  * Send test, so a viewer can still open every notification and switch the
  * previews between Desktop / Phone and iPhone / Android.
  */
-const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'duration', 'lockbox', 'tax-and-deposit', 'booking-site', 'modules', 'locations', 'templates', 'pricing', 'installments', 'payg', 'auto-extend', 'promos', 'extras', 'notifications']);
+const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'duration', 'lockbox', 'tax-and-deposit', 'booking-site', 'modules', 'locations', 'templates', 'pricing', 'installments', 'payg', 'auto-extend', 'promos', 'extras', 'notifications', 'install']);
 
 /**
  * v2 pages whose forms save through ONE sticky bar at the end of the page
@@ -3796,6 +3804,9 @@ const Settings = () => {
         // its drafts and the email sender save through the page's bar. Team
         // emails' reminder settings still decide today's sending, so they sit
         // at its end ("What's sent today").
+        case 'install':
+          return <InstallAppPageV2 />;
+
         case 'notifications':
           return (
             <NotificationsPageV2
@@ -3861,7 +3872,8 @@ const Settings = () => {
               />
             ) : (
               <>
-                {!canEditPage && <SettingsReadOnlyNotice />}
+                {/* Install app has nothing to edit, so "View only" would be noise there. */}
+                {!canEditPage && v2Page !== 'install' && <SettingsReadOnlyNotice />}
                 {/* A native disabled fieldset: keyboard-safe, unlike the old
                     pointer-events wrapper, and values stay selectable.
                     Team emails, Push, Notifications, General and Tax and

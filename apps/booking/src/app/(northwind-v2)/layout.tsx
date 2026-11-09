@@ -3,6 +3,7 @@ import { DM_Sans } from "next/font/google";
 import { headers } from "next/headers";
 
 import { Providers } from "@/app/(northwind)/providers";
+import { PWA_INSTALL_PROMPT_STASH_SCRIPT } from "@/lib/pwa-install-stash";
 import { CmsEditOverlay } from "@nw/components/cms/edit-overlay";
 import { ServiceWorkerRegistrarV2 } from "@nw/components/pwa/service-worker-registrar";
 import { CMS_EDIT_HEADER, TENANT_HEADER } from "@nw/lib/constants";
@@ -101,6 +102,9 @@ export default async function NorthwindV2RootLayout({ children }: { children: Re
             so these two lines are right for every host. */}
         <link rel="manifest" href="/manifest.webmanifest" />
         <link rel="apple-touch-icon" href="/pwa-icon/180.png" />
+        {/* Parks Chrome's install prompt before React mounts: Settings › Install app
+            reads it. See lib/pwa-install-stash.ts. */}
+        <script dangerouslySetInnerHTML={{ __html: PWA_INSTALL_PROMPT_STASH_SCRIPT }} />
       </head>
       <body className={`${dmSans.variable} font-sans`}>
         <Providers tenantSlug={tenantSlug}>

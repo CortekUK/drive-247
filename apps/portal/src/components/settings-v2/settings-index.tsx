@@ -217,6 +217,16 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
           "sender from address reply to send test preview subject variables " +
           "phone browser install home screen payment reminders reminder rules",
       },
+      {
+        // Ghulam, Nov 9 2026: the install steps on their own, so someone who
+        // only wants the portal on their phone finds them without opening
+        // Notifications. Listed for every role: installing changes nothing.
+        title: "Install app",
+        description: "Put this portal on your phone or computer as an app: full screen, its own icon, and steps for every device.",
+        href: "/settings?tab=install",
+        tab: "install",
+        keywords: "install pwa home screen add to home screen app icon phone android iphone desktop download",
+      },
     ],
   },
   {

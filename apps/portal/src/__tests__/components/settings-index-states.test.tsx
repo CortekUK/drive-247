@@ -169,19 +169,23 @@ describe("SettingsIndexV2 structure", () => {
       ["Pay as you go", "/settings?tab=payg"],
       ["Auto-extension", "/settings?tab=auto-extend"],
       ["Notifications", "/settings?tab=notifications"],
+      // The install steps on their own (Ghulam, Nov 9 2026).
+      ["Install app", "/settings?tab=install"],
       // Agreement templates moved to the Agreements tab (Agreements v2, D1), and
       // Customer messages off the index entirely (Sep 24 2026) — it is edited
       // from the tab that sends the message.
     ]);
   });
 
-  it("Notifications is one entry (Team emails and Push notifications are part of it), and the last group", async () => {
+  it("Notifications is one entry plus Install app (Team emails and Push notifications are part of it), and the last group", async () => {
     const { SETTINGS_INDEX_SECTIONS } = await import("@/components/settings-v2/settings-index");
     const titles = SETTINGS_INDEX_SECTIONS.map((section) => section.title);
     expect(titles.indexOf("Notifications")).toBe(titles.length - 1);
     const notifications = SETTINGS_INDEX_SECTIONS.find((section) => section.title === "Notifications")!;
     expect(notifications.items.map((item) => [item.title, item.href, item.tab])).toEqual([
       ["Notifications", "/settings?tab=notifications", "notifications"],
+      // Ghulam, Nov 9 2026: the install steps as an entry of their own, for every role.
+      ["Install app", "/settings?tab=install", "install"],
     ]);
     render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
     const hrefs = entries().map(([, href]) => href);

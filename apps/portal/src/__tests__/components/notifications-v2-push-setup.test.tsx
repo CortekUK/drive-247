@@ -43,6 +43,9 @@ vi.mock("@/hooks/use-push-notifications", () => ({
 vi.mock("@/hooks/use-pwa-install", () => ({ usePwaInstall: () => h.pwa }));
 vi.mock("@/lib/push", () => ({
   capturePwaInstallPrompt: h.lib.capturePwaInstallPrompt,
+  // The install guide's button reads these (Nov 9 2026); no prompt in jsdom.
+  isInstallPromptAvailable: () => false,
+  promptPwaInstall: async () => false,
   registerServiceWorker: h.lib.registerServiceWorker,
   registerServiceWorkerV2: h.lib.registerServiceWorkerV2,
 }));

@@ -10,6 +10,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClientProvider } from '@/components/QueryClientProvider';
 import { ThemeProvider } from 'next-themes';
 import type { CustomerThemeMode } from '@/lib/theme-mode';
+import { PWA_INSTALL_PROMPT_STASH_SCRIPT } from '@/lib/pwa-install-stash';
 import { ThemeInitializer } from '@/components/ThemeInitializer';
 import GDPRConsent from '@/components/GDPRConsent';
 import ScrollToTopOnNavigate from '@/components/ScrollToTopOnNavigate';
@@ -175,6 +176,9 @@ export default async function RootLayout({
             so these two lines are right for every host. */}
         <link rel="manifest" href="/manifest.webmanifest" />
         <link rel="apple-touch-icon" href="/pwa-icon/180.png" />
+        {/* Parks Chrome's install prompt before React mounts, for the portal's
+            Install button. See lib/pwa-install-stash.ts. */}
+        <script dangerouslySetInnerHTML={{ __html: PWA_INSTALL_PROMPT_STASH_SCRIPT }} />
       </head>
       <body className={`${inter.className} overflow-x-hidden`} suppressHydrationWarning>
         <NextTopLoader color="hsl(var(--primary))" height={2} showSpinner={false} />

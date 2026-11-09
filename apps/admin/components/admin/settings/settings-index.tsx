@@ -27,6 +27,7 @@ export type AdminSettingsTab =
   | 'booking-site'
   | 'signup'
   | 'notifications'
+  | 'install'
   | 'sessions';
 
 interface SettingsIndexItem {
@@ -139,6 +140,14 @@ export const ADMIN_SETTINGS_SECTIONS: SettingsIndexSection[] = [
           'Get a push on your phone when something happens on any tenant, even while this dashboard is closed.',
         tab: 'notifications',
         keywords: 'push phone mobile alerts devices',
+      },
+      {
+        // Ghulam, Nov 9 2026: the install on its own, found from the index.
+        title: 'Install app',
+        description:
+          'Put this dashboard on your phone or computer as an app: full screen, its own icon, and the steps for iPhone, Android and desktop.',
+        tab: 'install',
+        keywords: 'install pwa home screen add to home screen app icon phone android iphone desktop download',
       },
     ],
   },

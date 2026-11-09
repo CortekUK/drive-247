@@ -6,6 +6,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { ConfirmHost } from '@/components/ui/confirm';
 import { ServiceWorkerRegistrar } from '@/components/push/service-worker-registrar';
 import { THEME_SCRIPT } from '@/lib/theme-script';
+import { PWA_INSTALL_PROMPT_STASH_SCRIPT } from '@/lib/pwa-install-stash';
 
 /**
  * The v2 design's typeface, matching the portal canary. Self-hosted by
@@ -65,6 +66,9 @@ export default function RootLayout({
       <head>
         {/* Dark mode before first paint — see lib/theme.ts. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        {/* Parks Chrome's install prompt before React mounts: Settings › Install app
+            reads it. See lib/pwa-install-stash.ts. */}
+        <script dangerouslySetInnerHTML={{ __html: PWA_INSTALL_PROMPT_STASH_SCRIPT }} />
       </head>
       <body suppressHydrationWarning>
         {/* Indigo, matching --primary (248 68% 51%) — the loader sits above the

@@ -28,6 +28,7 @@ import {
   Bell, Check, Send, Download, Globe, Lock, MoreVertical, Plus, Search, Share,
 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
+import { isInstallPromptAvailable, promptPwaInstall } from "@/lib/push";
 import { cn } from "@/lib/utils";
 import { AndroidIcon, AppleIcon, ChromeIcon } from "./brand-icons";
 
@@ -109,20 +110,9 @@ function stepsFor(platform: Platform, { host, name, iconUrl }: GuideProps): Guid
 /* Install app                                                                 */
 /* -------------------------------------------------------------------------- */
 
-/** Chrome's install event; not in the DOM typings. */
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
-}
-
-/** Kept at module level: Chrome fires the event once, possibly before this mounts. */
-let deferredPrompt: BeforeInstallPromptEvent | null = null;
-if (typeof window !== "undefined") {
-  window.addEventListener("beforeinstallprompt", (e) => {
-    e.preventDefault();
-    deferredPrompt = e as BeforeInstallPromptEvent;
-  });
-}
+// Chrome's `beforeinstallprompt` is parked by lib/push.ts (and the <head> stash
+// script before any bundle runs), not by a listener of this chunk's own: the
+// chunk loads when Settings opens, long after Chrome has fired the event once.
 
 function isInstalled(): boolean {
   if (typeof window === "undefined") return false;
@@ -142,12 +132,8 @@ export function InstallAppButton({ onNoPrompt }: { onNoPrompt: (platform: Platfo
   }, []);
 
   const install = async () => {
-    if (deferredPrompt) {
-      const event = deferredPrompt;
-      deferredPrompt = null;
-      await event.prompt();
-      const choice = await event.userChoice.catch(() => null);
-      if (choice?.outcome === "accepted") setInstalled(true);
+    if (isInstallPromptAvailable()) {
+      if (await promptPwaInstall()) setInstalled(true);
       return;
     }
     // No prompt to show (iPhone, another browser, or dismissed before): the guide.
@@ -180,12 +166,17 @@ export function PushInstallGuide({
   appName,
   iconUrl,
   className,
+  title = "Install the app and get push notifications",
+  intro = "Pick your device to see the steps. Each person on your team does this on their own devices.",
 }: {
   /** e.g. northwind.portal.drive-247.com */
   portalHost: string;
   appName: string;
   iconUrl?: string | null;
   className?: string;
+  /** The heading; Settings › Install app has its own page title above, so it passes a shorter one. */
+  title?: string;
+  intro?: string;
 }) {
   // The chosen device; starts on the one in hand. Its steps show right below
   // the cards, all at once, laid across the width so nothing scrolls
@@ -207,11 +198,9 @@ export function PushInstallGuide({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 id="push-guide-title" className="font-heading text-base font-semibold tracking-tight text-foreground">
-            Install the app and get push notifications
+            {title}
           </h2>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">
-            Pick your device to see the steps. Each person on your team does this on their own devices.
-          </p>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">{intro}</p>
         </div>
         <InstallAppButton onNoPrompt={setPlatform} />
       </div>

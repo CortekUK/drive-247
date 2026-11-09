@@ -179,6 +179,29 @@ interface BeforeInstallPromptEvent extends Event {
 let deferredInstallPrompt: BeforeInstallPromptEvent | null = null;
 const installListeners = new Set<(available: boolean) => void>();
 
+declare global {
+  interface Window {
+    /** `beforeinstallprompt`, parked by PWA_INSTALL_PROMPT_STASH_SCRIPT before any bundle ran. */
+    __pwaInstallPrompt?: BeforeInstallPromptEvent | null;
+  }
+}
+
+/**
+ * Moves a parked event into `deferredInstallPrompt`. The <head> script in
+ * `lib/pwa-install-stash.ts` parks it: Chrome fires `beforeinstallprompt` once
+ * and early, often before React has mounted, so a listener armed from an effect
+ * (ours waits for the tenant row) can miss it; on Nov 9 2026 the customer site
+ * did, and Settings › Install app never showed its button.
+ */
+function adoptStashedInstallPrompt(): void {
+  if (deferredInstallPrompt !== null || typeof window === 'undefined') return;
+  const stashed = window.__pwaInstallPrompt;
+  if (stashed) {
+    deferredInstallPrompt = stashed;
+    installListeners.forEach((fn) => fn(true));
+  }
+}
+
 /**
  * Must be armed at app start.
  *
@@ -189,6 +212,8 @@ const installListeners = new Set<(available: boolean) => void>();
  */
 export function capturePwaInstallPrompt(): () => void {
   if (typeof window === 'undefined') return () => {};
+  // The event may already have fired, into the <head> stash.
+  adoptStashedInstallPrompt();
 
   const onBeforeInstall = (event: Event) => {
     // Suppress Chrome's own mini-infobar so the install happens from OUR button,
@@ -200,6 +225,7 @@ export function capturePwaInstallPrompt(): () => void {
 
   const onInstalled = () => {
     deferredInstallPrompt = null;
+    window.__pwaInstallPrompt = null;
     installListeners.forEach((fn) => fn(false));
   };
 
@@ -213,6 +239,7 @@ export function capturePwaInstallPrompt(): () => void {
 }
 
 export function isInstallPromptAvailable(): boolean {
+  adoptStashedInstallPrompt();
   return deferredInstallPrompt !== null;
 }
 
@@ -228,9 +255,11 @@ export function subscribeToInstallAvailability(fn: (available: boolean) => void)
  * same event — so it is cleared either way.
  */
 export async function promptPwaInstall(): Promise<boolean> {
+  adoptStashedInstallPrompt();
   const event = deferredInstallPrompt;
   if (!event) return false;
   deferredInstallPrompt = null;
+  if (typeof window !== 'undefined') window.__pwaInstallPrompt = null;
   installListeners.forEach((fn) => fn(false));
 
   try {

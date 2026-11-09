@@ -14,6 +14,7 @@ import "@/styles/auto-skeleton.css";
 import { V2Provider } from "@/lib/v2-context";
 import { readPortalTenant } from "@/lib/portal-tenant";
 import { resolvePortalGates } from "@/lib/v2-server";
+import { PWA_INSTALL_PROMPT_STASH_SCRIPT } from "@/lib/pwa-install-stash";
 
 export const dynamic = "force-dynamic";
 
@@ -216,7 +217,12 @@ export default async function RootLayout({
         {/* v1 only. The cached CSS is v1's tokens on :root, which the v2
             theme overrides on <body> anyway; v2 gets its colour from the
             brand vars on <body> below instead. */}
-        {v2Flags.theme ? null : (
+        {v2Flags.theme ? (
+          // v2 only, so v1's document stays byte for byte: parks Chrome's install
+          // prompt before React mounts, for Settings › Install app. See
+          // lib/pwa-install-stash.ts.
+          <script dangerouslySetInnerHTML={{ __html: PWA_INSTALL_PROMPT_STASH_SCRIPT }} />
+        ) : (
           <script dangerouslySetInnerHTML={{ __html: brandingScript }} />
         )}
       </head>

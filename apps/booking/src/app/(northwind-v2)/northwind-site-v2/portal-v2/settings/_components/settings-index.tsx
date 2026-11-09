@@ -27,7 +27,7 @@ import { usePageSearch } from '@portal-v2-shared/page-search-slot';
 
 import { SETTINGS_PAGE_TITLE } from './settings-ui';
 
-export type SettingsSectionKey = 'details' | 'verification' | 'gig-driver' | 'consent' | 'account';
+export type SettingsSectionKey = 'details' | 'verification' | 'gig-driver' | 'consent' | 'account' | 'install';
 
 interface Tile {
   key: SettingsSectionKey;
@@ -83,6 +83,13 @@ export function SettingsIndex() {
         title: 'Account',
         description: 'Your photo and name, and how you sign in: email, password and Google.',
         keywords: 'photo avatar picture name sign in login password google email security profile',
+      },
+      {
+        // Ghulam, Nov 9 2026: the install steps as a setting of their own.
+        key: 'install',
+        title: 'Install app',
+        description: `Put ${company} on your phone or computer as an app, with its own icon and full screen.`,
+        keywords: 'install pwa home screen add to home screen app icon phone android iphone desktop download',
       },
     ];
     const q = query.trim().toLowerCase();

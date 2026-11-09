@@ -10,6 +10,7 @@ import {
 import {
   BookingSiteSettingsPage,
   ContactFormSettingsPage,
+  InstallSettingsPage,
   LandingSettingsPage,
   NotificationsSettingsPage,
   SessionsSettingsPage,
@@ -29,6 +30,7 @@ const PAGES: Record<AdminSettingsTab, ComponentType> = {
   'booking-site': BookingSiteSettingsPage,
   signup: SignupSettingsPage,
   notifications: NotificationsSettingsPage,
+  install: InstallSettingsPage,
   sessions: SessionsSettingsPage,
 };
 

@@ -6,7 +6,7 @@
  * the operator portal there is no breadcrumb: the Settings gear on the profile
  * row is the way back to the index.
  *
- *   Details · Verification · Gig driver · Consent · Account
+ *   Details · Verification · Gig driver · Consent · Account · Install app
  *
  * (Oct 21 2026, second pass: Address and license folded into Details, ID
  * verification into Verification, My profile into Account. Every section is a
@@ -24,10 +24,11 @@ import { AccountSettings } from './_sections/account';
 import { ConsentSettings } from './_sections/consent';
 import { DetailsSettings } from './_sections/details';
 import { GigDriverSettings } from './_sections/gig-driver';
+import { InstallAppSettings } from './_sections/install';
 import { VerificationSettings } from './_sections/verification';
 
 const ABSORBED: Record<string, SettingsSectionKey> = { address: 'details', profile: 'account' };
-const SECTIONS: readonly SettingsSectionKey[] = ['details', 'verification', 'gig-driver', 'consent', 'account'];
+const SECTIONS: readonly SettingsSectionKey[] = ['details', 'verification', 'gig-driver', 'consent', 'account', 'install'];
 
 export default function PortalSettingsPage() {
   const searchParams = useSearchParams();
@@ -50,6 +51,8 @@ export default function PortalSettingsPage() {
         <GigDriverSettings />
       ) : section === 'consent' ? (
         <ConsentSettings />
+      ) : section === 'install' ? (
+        <InstallAppSettings />
       ) : (
         <AccountSettings />
       )}

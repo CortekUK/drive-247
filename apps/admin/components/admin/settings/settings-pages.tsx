@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from '@/components/ui/sonner';
 import { ForceLogoutAllControl } from '@/components/admin/ForceLogoutAllControl';
 import { PlatformPushSettings } from '@/components/admin/PlatformPushSettings';
+import { InstallDashboardSettings } from '@/components/admin/InstallDashboardSettings';
 import { LandingVersionSwitch } from '@/components/admin/landing-version-switch';
 import { SignupOtpSwitch } from '@/components/admin/signup-otp-switch';
 import { NorthwindSiteVersionCard } from '@/components/admin/developer/northwind-site-version-card';
@@ -235,6 +236,22 @@ export function NotificationsSettingsPage() {
         description="A push on your phone when something happens on any tenant, even while this dashboard is closed. Changes save as you make them."
       />
       <PlatformPushSettings />
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Install app                                                                 */
+/* -------------------------------------------------------------------------- */
+
+export function InstallSettingsPage() {
+  return (
+    <div className={cn(SETTINGS_COLUMN, 'md:pt-2')}>
+      <SettingsPageHeader
+        title="Install app"
+        description="Drive247 Admin on your phone or computer as an app: full screen, from its own icon, ready for push. Nothing here is saved; it is about this device."
+      />
+      <InstallDashboardSettings />
     </div>
   );
 }
