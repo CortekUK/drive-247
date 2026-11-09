@@ -28,12 +28,12 @@ const inter = Inter({ subsets: ['latin'] });
 export const dynamic = 'force-dynamic';
 
 // Default metadata fallback
-// `manifest` and `appleWebApp` belong on EVERY branch, including the fallbacks.
+// `appleWebApp` belongs on EVERY branch, including the fallbacks (the manifest
+// and apple-touch-icon links are rendered by RootLayout's <head> below — see why there).
 // iOS reads them only at "Add to Home Screen"; if the tenant lookup happens to
 // fail on the visit where someone installs, the icon is created without them and
 // the install is permanently a bookmark that can never receive push.
 const PWA_METADATA = {
-  manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent' as const,
@@ -57,7 +57,7 @@ const defaultMetadata: Metadata = {
   title: 'Premium Car Rentals',
   description: 'Premium car rentals with exceptional service',
   ...PWA_METADATA,
-  icons: { icon: PLATFORM_FAVICONS, apple: '/icons/apple-touch-icon.png' },
+  icons: { icon: PLATFORM_FAVICONS },
 };
 
 // Generate metadata dynamically based on tenant
@@ -114,9 +114,6 @@ export async function generateMetadata(): Promise<Metadata> {
         // back to the theme-aware Drive247 pair rather than a single file.
         icon: tenant.favicon_url ?? PLATFORM_FAVICONS,
         ...(tenant.favicon_url ? { shortcut: tenant.favicon_url } : {}),
-        // iOS takes the Home Screen icon from here, NOT from the manifest, and
-        // it must be opaque — a transparent PNG is flattened onto black.
-        apple: '/icons/apple-touch-icon.png',
       },
     };
   } catch (error) {
@@ -168,6 +165,17 @@ export default async function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Rendered straight into <head> on purpose, NOT through metadata: Next
+            streams async metadata into <body> whenever the tenant lookup has not
+            finished when the shell flushes, and Chrome reads a manifest link (and
+            Safari an apple-touch-icon) from <head> only — a cold start left the
+            site uninstallable with Drive247's icon. Both answers are host-based,
+            and /pwa-icon falls back to the platform icon when there is no tenant,
+            so these two lines are right for every host. */}
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <link rel="apple-touch-icon" href="/pwa-icon/180.png" />
+      </head>
       <body className={`${inter.className} overflow-x-hidden`} suppressHydrationWarning>
         <NextTopLoader color="hsl(var(--primary))" height={2} showSpinner={false} />
         <QueryClientProvider>

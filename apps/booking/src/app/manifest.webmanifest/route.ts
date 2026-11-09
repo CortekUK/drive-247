@@ -32,13 +32,28 @@ interface ManifestIcon {
 }
 
 /**
- * Locally generated icons, correctly sized and composited onto an opaque
- * background. Always present, so an install never lands on a broken icon.
+ * The platform's own icons, correctly sized and composited onto an opaque
+ * background. Used only when no tenant resolves, so an install never lands on
+ * a broken icon.
  */
 const LOCAL_ICONS: ManifestIcon[] = [
   { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
   { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
   { src: '/icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+];
+
+/**
+ * The tenant's icons, drawn on request by app/pwa-icon/[name]/route.tsx: the
+ * tenant's favicon on an opaque square at exactly these sizes, or the first
+ * letter of its name on its brand colour when it has none. Until this, a
+ * tenant without a favicon installed with Drive247's icon, and one with a
+ * favicon had it listed at a size it probably was not, with no maskable
+ * variant, so Android's masks cropped it.
+ */
+const TENANT_ICONS: ManifestIcon[] = [
+  { src: '/pwa-icon/192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+  { src: '/pwa-icon/512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+  { src: '/pwa-icon/512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
 ];
 
 export async function GET() {
@@ -60,7 +75,7 @@ export async function GET() {
 
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('app_name, company_name, meta_description, favicon_url, primary_color')
+        .select('app_name, company_name, meta_description, primary_color')
         .eq('slug', tenantSlug)
         .maybeSingle();
 
@@ -71,17 +86,9 @@ export async function GET() {
         shortName = name.length > 12 ? name.slice(0, 12).trim() : name;
         description = tenant.meta_description || `Book your next vehicle with ${name}.`;
         themeColor = tenant.primary_color || FALLBACK_THEME;
-
-        // A favicon is square by convention, which a logo very often is not — a
-        // wide logo squeezed into a square icon slot is the usual way tenant
-        // branding makes an install look broken. Only the favicon is promoted,
-        // and the local set stays behind it as a guaranteed fallback.
-        if (tenant.favicon_url) {
-          icons = [
-            { src: tenant.favicon_url, sizes: '192x192', type: 'image/png', purpose: 'any' },
-            ...LOCAL_ICONS,
-          ];
-        }
+        // The icon route reads the favicon itself (and falls back to the
+        // platform icon when drawing fails), so nothing here can break an install.
+        icons = TENANT_ICONS;
       }
     }
   } catch (error) {

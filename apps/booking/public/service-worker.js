@@ -1,11 +1,28 @@
 const CACHE_NAME = 'supreme-drive-v5';
 const STATIC_ASSETS = [
   '/',
-  '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/maskable-512.png'
 ];
+
+// Shown when a page is asked for offline and nothing is cached for it: an
+// honest message with a retry, instead of the browser's own error page. The
+// portal's and the admin's workers do the same; the wording is brand-neutral
+// because this one worker serves every tenant's site.
+const OFFLINE_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>You're offline</title>
+<style>html,body{height:100%;margin:0}body{display:flex;align-items:center;justify-content:center;padding:24px;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#fff;color:#111;text-align:center}
+h1{margin:0 0 8px;font-size:22px}p{margin:0;font-size:15px;color:#555}
+button{margin-top:20px;padding:10px 18px;border:1px solid #ddd;border-radius:999px;background:#fff;font:inherit;cursor:pointer}</style></head>
+<body><main><h1>You're offline</h1><p>Reconnect to load this page.</p><button type="button" onclick="location.reload()">Try again</button></main></body></html>`;
+
+const offlineResponse = () =>
+  new Response(OFFLINE_HTML, {
+    status: 503,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+  });
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -66,8 +83,11 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
           return res;
         })
+        // Offline: the same page if it was seen before, else the offline page.
+        // (It used to fall back to the cached home page, which showed a visitor
+        // who asked for a booking the marketing site with no explanation.)
         .catch(() =>
-          caches.match(req).then((m) => m || caches.match('/'))
+          caches.match(req).then((m) => m || offlineResponse())
         )
     );
     return;

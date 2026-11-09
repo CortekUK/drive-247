@@ -40,6 +40,9 @@ export type Tenant = Pick<
   | "payment_provider"
   | "contact_email"
   | "contact_phone"
+  // Push: whether the service worker is installed on this tenant's site at all
+  // (components/pwa/service-worker-registrar.tsx).
+  | "push_notifications_enabled"
   // Branding
   | "app_name"
   | "primary_color"
@@ -160,6 +163,7 @@ const TENANT_SELECT = [
   "payment_provider",
   "contact_email",
   "contact_phone",
+  "push_notifications_enabled",
   "app_name",
   "primary_color",
   "secondary_color",

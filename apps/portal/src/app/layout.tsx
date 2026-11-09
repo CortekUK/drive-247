@@ -112,8 +112,10 @@ export async function generateMetadata(): Promise<Metadata> {
         icon: tenant.favicon_url ?? PLATFORM_FAVICONS,
         ...(tenant.favicon_url ? { shortcut: tenant.favicon_url } : {}),
         // iOS takes the Home Screen icon from here, NOT the manifest, and it
-        // must be opaque — a transparent PNG gets flattened onto black.
-        apple: "/icons/apple-touch-icon.png",
+        // must be opaque — a transparent PNG gets flattened onto black. The
+        // route draws the operator's favicon on an opaque square, or their
+        // initial on their brand colour; it was Drive247's icon for everyone.
+        apple: "/pwa-icon/180.png",
       },
     };
   } catch (error) {

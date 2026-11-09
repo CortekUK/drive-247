@@ -17,11 +17,39 @@ export const dynamic = 'force-dynamic';
 
 const FALLBACK_NAME = 'Drive247 Ops';
 // Drive247 brand purple, sampled from the mark's ring gradient.
-const THEME = '#6333f7';
+const FALLBACK_THEME = '#6333f7';
+
+interface ManifestIcon {
+  src: string;
+  sizes: string;
+  type: string;
+  purpose: string;
+}
+
+/** The platform's own icons, for a request no tenant answers to. */
+const PLATFORM_ICONS: ManifestIcon[] = [
+  { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+  { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+  { src: '/icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+];
+
+/**
+ * The operator's icons, drawn on request by app/pwa-icon/[name]/route.tsx:
+ * their favicon on an opaque square at exactly these sizes, or the first
+ * letter of their name on their brand colour when they have none. Until this
+ * the manifest said "Acme Ops" over Drive247's icon for every operator.
+ */
+const TENANT_ICONS: ManifestIcon[] = [
+  { src: '/pwa-icon/192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+  { src: '/pwa-icon/512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+  { src: '/pwa-icon/512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+];
 
 export async function GET() {
   let name = FALLBACK_NAME;
   let shortName = 'Ops';
+  let themeColor = FALLBACK_THEME;
+  let icons = PLATFORM_ICONS;
 
   try {
     const headersList = await headers();
@@ -34,7 +62,7 @@ export async function GET() {
       );
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('company_name')
+        .select('company_name, primary_color')
         .eq('slug', tenantSlug)
         .maybeSingle();
 
@@ -44,6 +72,12 @@ export async function GET() {
         shortName = tenant.company_name.length > 12
           ? tenant.company_name.slice(0, 12).trim()
           : tenant.company_name;
+        // The installed app's title bar and splash take the operator's brand
+        // colour, as the v2 portal itself does.
+        if (tenant.primary_color && /^#[0-9a-f]{6}$/i.test(tenant.primary_color)) {
+          themeColor = tenant.primary_color;
+        }
+        icons = TENANT_ICONS;
       }
     }
   } catch (error) {
@@ -59,12 +93,8 @@ export async function GET() {
     display: 'standalone',
     orientation: 'portrait',
     background_color: '#ffffff',
-    theme_color: THEME,
-    icons: [
-      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-      { src: '/icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-    ],
+    theme_color: themeColor,
+    icons,
     categories: ['business', 'productivity'],
   };
 
