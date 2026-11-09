@@ -836,7 +836,12 @@ function logoHtml(b: ResolvedBrand, width?: number | null, height?: number | nul
   // A table cell, not a styled div, so Outlook draws the plate too.
   return (
     '<table role="presentation" align="center" border="0" cellpadding="0" cellspacing="0" style="margin:0 auto;border-collapse:separate;">' +
-    '<tr><td data-email-logo-plate="" bgcolor="#ffffff" style="background-color:#ffffff;border-radius:10px;padding:10px 16px;">' +
+    // Dark mode (N12.4, 2026-11-09): the Gmail and Outlook apps turn a light
+    // bgcolor / background-color dark but leave images alone, raster or CSS, so
+    // a dark logo vanished on a plate gone dark. The white gradient keeps the
+    // plate white there; bgcolor is still the plate for Outlook on Windows,
+    // which draws no CSS backgrounds.
+    '<tr><td data-email-logo-plate="" bgcolor="#ffffff" style="background-color:#ffffff;background-image:linear-gradient(#ffffff,#ffffff);border-radius:10px;padding:10px 16px;">' +
     '<img src="' +
     escapeAttr(b.logoUrl) +
     '" alt="' +
@@ -848,7 +853,10 @@ function logoHtml(b: ResolvedBrand, width?: number | null, height?: number | nul
     "border:0;outline:none;text-decoration:none;font-family:" +
     EMAIL_FONT_STACK +
     ";font-size:20px;font-weight:700;color:" +
-    b.onPrimary +
+    // The alt text sits on the white plate, so it is dark. It took the header's
+    // text colour before, and with the logo blocked (Outlook's safe-senders
+    // rule) the plate read as empty: white on white (N12.6, 2026-11-09).
+    COLORS.dark +
     ';">' +
     "</td></tr></table>"
   );

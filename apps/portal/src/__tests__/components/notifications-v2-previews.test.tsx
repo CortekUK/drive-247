@@ -17,6 +17,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import {
   EmailPreviewGmail,
+  GmailViewContext,
   GMAIL_CLIP_BYTES,
   GMAIL_PREVIEW_CAPTION,
   GMAIL_PREVIEW_VIEWS,
@@ -519,5 +520,63 @@ describe("InAppPreview", () => {
     rerender(<InAppPreview audience="team" title="New booking" body="B" link="/rentals/123" />);
     expect(screen.getByText("/rentals/123")).toBeInTheDocument();
     expect(container.textContent).toContain("Opens /rentals/123 when clicked.");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Editing the subject in place (N10.13, 2026-11-09)                           */
+/* -------------------------------------------------------------------------- */
+
+describe("EmailPreviewGmail: editing the subject in place", () => {
+  function renderEditable(onEditSubject: (text: string) => void) {
+    return render(
+      <GmailViewContext.Provider value={{ view: "desktop", onEditSubject }}>
+        <EmailPreviewGmail
+          subject="Your booking is confirmed"
+          html={HTML}
+          fromName="Northwind Rentals"
+          fromAddress="northwind@drive-247.com"
+          toAddress="jo@example.com"
+          sentAtLabel="9:41 AM (0 minutes ago)"
+        />
+      </GmailViewContext.Provider>,
+    );
+  }
+
+  it("keeps the Inbox chip outside the editable subject, so a blur commits the subject alone", () => {
+    const onEditSubject = vi.fn();
+    const { container } = renderEditable(onEditSubject);
+    const subject = container.querySelector<HTMLElement>("[data-gmail-subject]");
+    expect(subject).not.toBeNull();
+    expect(subject!.getAttribute("contenteditable")).toBe("plaintext-only");
+    // The editable holds the subject and nothing else: no chip, no icons.
+    expect(subject!.textContent).toBe("Your booking is confirmed");
+    expect(subject!.querySelector("*")).toBeNull();
+    // The chip is still drawn beside it, on the subject line.
+    const line = subject!.closest("[data-gmail-subject-line]");
+    expect(line).not.toBeNull();
+    expect(line!.textContent).toContain("Inbox");
+    // jsdom has no innerText; the component reads it on blur.
+    Object.defineProperty(subject!, "innerText", { value: subject!.textContent, configurable: true });
+    fireEvent.blur(subject!);
+    expect(onEditSubject).toHaveBeenCalledTimes(1);
+    expect(onEditSubject).toHaveBeenCalledWith("Your booking is confirmed");
+    expect(onEditSubject.mock.calls[0][0]).not.toContain("Inbox");
+  });
+
+  it("is plain text when nothing edits it", () => {
+    const { container } = render(
+      <EmailPreviewGmail
+        subject="Your booking is confirmed"
+        html={HTML}
+        fromName="Northwind Rentals"
+        fromAddress="northwind@drive-247.com"
+        toAddress="jo@example.com"
+      />,
+    );
+    const subject = container.querySelector<HTMLElement>("[data-gmail-subject]");
+    expect(subject).not.toBeNull();
+    expect(subject!.hasAttribute("contenteditable")).toBe(false);
+    expect(subject!.textContent).toBe("Your booking is confirmed");
   });
 });

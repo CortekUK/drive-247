@@ -72,7 +72,9 @@ describe("renderNotificationEmailHtml", () => {
   });
 
   it("uses nothing Gmail drops or ignores", () => {
-    for (const banned of ["linear-gradient", "box-shadow", "var(--", "<style", "display:flex", "display:grid", "<link"]) {
+    // The one gradient, the logo plate's white one, is a dark-mode defence the
+    // apps leave alone (N12.4); Gmail draws gradients, Outlook falls back to bgcolor.
+    for (const banned of ["box-shadow", "var(--", "<style", "display:flex", "display:grid", "<link"]) {
       expect(html).not.toContain(banned);
     }
   });
@@ -102,6 +104,11 @@ describe("renderNotificationEmailHtml", () => {
     expect(img?.getAttribute("src")).toBe("https://cdn.example.com/logo.png");
     expect(img?.getAttribute("alt")).toBe("Coastline Car Rentals");
     expect(img?.getAttribute("height")).toBe("48");
+    // The alt text shows when a client blocks the image (Outlook, until the sender is
+    // trusted). It sits on the white plate, so it must be dark, not the header's
+    // white (N12.6, 2026-11-09).
+    expect(img?.getAttribute("style")).toContain("color:#111111");
+    expect(img?.getAttribute("style")).not.toContain("color:#ffffff");
 
     const sized = renderNotificationEmailHtml({
       bodyHtml: "<p>x</p>",
@@ -112,6 +119,17 @@ describe("renderNotificationEmailHtml", () => {
     const sizedImg = parse(sized).querySelector("img");
     expect(sizedImg?.getAttribute("width")).toBe("192");
     expect(sizedImg?.getAttribute("height")).toBe("48");
+  });
+
+  it("keeps the logo plate white in dark mode: a white gradient the apps do not recolour, bgcolor for Outlook", () => {
+    const withLogo = renderNotificationEmailHtml({
+      bodyHtml: "<p>x</p>",
+      brand: { ...brand, logoUrl: "https://cdn.example.com/logo.png" },
+    });
+    const plate = parse(withLogo).querySelector("[data-email-logo-plate]");
+    expect(plate?.getAttribute("bgcolor")).toBe("#ffffff");
+    expect(plate?.getAttribute("style")).toContain("background-color:#ffffff");
+    expect(plate?.getAttribute("style")).toContain("background-image:linear-gradient(#ffffff,#ffffff)");
   });
 
   it("ignores a logo that is not an http(s) URL", () => {

@@ -428,9 +428,18 @@ describe("sendTestResult / buildTestRequest", () => {
     });
     expect(sendTestResult({ success: true, sent: 1 }, "email", "jo@x.co").message).toContain("jo@x.co");
     expect(sendTestResult({ success: true, sent: 2 }, "push")).toEqual({ kind: "sent", message: "Sent to 2 of your devices." });
-    expect(sendTestResult({ success: false, code: "no_devices", message: "No devices." }, "push")).toEqual({
+    // No device could take the push: the box's own sentence, which says that
+    // nothing was sent and where devices are turned on; the server's is a
+    // bare instruction ("Turn on notifications on this device first.").
+    expect(sendTestResult({ success: false, code: "no_devices", message: "Turn on notifications on this device first." }, "push")).toEqual({
       kind: "none",
-      message: "No devices.",
+      message: SEND_TEST_COPY.noDevices,
+    });
+    expect(SEND_TEST_COPY.noDevices).toMatch(/^Nothing was sent/);
+    // A push that reached nobody for another reason still carries the server's words.
+    expect(sendTestResult({ success: true, sent: 0, message: "Your devices are asleep." }, "push")).toEqual({
+      kind: "none",
+      message: "Your devices are asleep.",
     });
     expect(sendTestResult({ success: false, error: "Limit reached." }, "email")).toEqual({
       kind: "error",
@@ -560,7 +569,8 @@ describe("SendTestBox", () => {
     await clickAsync(buttonByText(SEND_TEST_COPY.send));
     expect(h.sendTest).toHaveBeenCalledWith({ channel: "push", notificationKey: "booking_confirmed", title: "Booked", body: "Alex booked" });
     expect(resultEl()?.getAttribute("data-send-test-result")).toBe("none");
-    expect(resultEl()?.textContent).toContain("None of your devices have push on.");
+    expect(resultEl()?.textContent).toContain(SEND_TEST_COPY.noDevices);
+    expect(resultEl()?.textContent).not.toContain("None of your devices have push on.");
   });
 
   it("can't send: the button is disabled and says why", () => {

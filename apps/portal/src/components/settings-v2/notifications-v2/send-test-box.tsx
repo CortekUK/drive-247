@@ -75,7 +75,13 @@ const errorMessage = (err: unknown): string =>
       ? err.trim()
       : SEND_TEST_COPY.failedFallback;
 
-/** How a reply reads in the box. The server's own sentence wins whenever it sent one. */
+/**
+ * How a reply reads in the box. The server's own sentence wins whenever it sent
+ * one, with one exception: when no device could take a push, the server's
+ * "Turn on notifications on this device first." is a bare instruction and does
+ * not say that nothing went out, so the box says so in its own words, and
+ * where devices are turned on (N10.14, 2026-11-09).
+ */
 export function sendTestResult(
   response: NotificationTestResponse | null | undefined,
   channel: SendTestChannel,
@@ -86,7 +92,12 @@ export function sendTestResult(
   const error = typeof response.error === "string" ? response.error.trim() : "";
 
   const nothingReached = channel === "push" && (response.code === "no_devices" || (response.success && response.sent === 0));
-  if (nothingReached) return { kind: "none", message: message || error || SEND_TEST_COPY.noDevices };
+  if (nothingReached) {
+    return {
+      kind: "none",
+      message: response.code === "no_devices" ? SEND_TEST_COPY.noDevices : message || error || SEND_TEST_COPY.noDevices,
+    };
+  }
 
   if (response.success !== true || error) {
     return { kind: "error", message: error || message || SEND_TEST_COPY.failedFallback };

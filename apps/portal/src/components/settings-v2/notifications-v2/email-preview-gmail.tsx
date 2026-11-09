@@ -851,8 +851,7 @@ export function EmailPreviewGmail({
         </div>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 16, padding: "12px 0 20px 56px" }}>
           <p
-            data-gmail-subject=""
-            {...editableText(controlled?.onEditSubject)}
+            data-gmail-subject-line=""
             style={{
               margin: 0,
               minWidth: 0,
@@ -864,7 +863,12 @@ export function EmailPreviewGmail({
               overflowWrap: "anywhere",
             }}
           >
-            {shownSubject}
+            {/* Only the subject is editable. The Inbox chip sits beside it, not
+                inside it: inside, its label was committed as part of the
+                subject on blur ("…RAV4Inbox"; N10.13, 2026-11-09). */}
+            <span data-gmail-subject="" {...editableText(controlled?.onEditSubject)}>
+              {shownSubject}
+            </span>
             <InboxChip />
           </p>
           <span aria-hidden="true" style={{ marginLeft: "auto", display: "flex", gap: 20, paddingTop: 5, color: G.icon }}>
@@ -942,8 +946,7 @@ export function EmailPreviewGmail({
         </div>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "4px 16px 16px" }}>
           <p
-            data-gmail-subject=""
-            {...editableText(controlled?.onEditSubject)}
+            data-gmail-subject-line=""
             style={{
               margin: 0,
               minWidth: 0,
@@ -955,7 +958,12 @@ export function EmailPreviewGmail({
               overflowWrap: "anywhere",
             }}
           >
-            {shownSubject}
+            {/* Only the subject is editable. The Inbox chip sits beside it, not
+                inside it: inside, its label was committed as part of the
+                subject on blur ("…RAV4Inbox"; N10.13, 2026-11-09). */}
+            <span data-gmail-subject="" {...editableText(controlled?.onEditSubject)}>
+              {shownSubject}
+            </span>
             <InboxChip />
           </p>
           <Star aria-hidden="true" size={20} style={{ marginLeft: "auto", flexShrink: 0, marginTop: 4, color: G.icon }} />

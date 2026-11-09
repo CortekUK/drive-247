@@ -404,11 +404,29 @@ export function NotificationsPageV2({ canEdit, registerSave, todaySettings, scro
         data-notifications-page=""
       >
         <div className="flex min-h-0 flex-1">
-          {/* Left: every notification, and Setups. No Back link or top bar
-              (Ghulam, Oct 1 2026): Esc leaves; Save floats over the preview
-              only while there is something to save. */}
+          {/* Left: ← Settings, then every notification, and Setups. No top
+              bar (Ghulam, Oct 1 2026): Esc leaves too; Save floats over the
+              preview only while there is something to save. The link goes
+              through the leave guard like any other (use-leave-guard-v2
+              listens to anchor clicks), so unsaved edits ask first (QA N8.2,
+              N8.10). The D18 notice sits at the foot of this pane, on every
+              notification and on Setups (QA N8.11); while storage is off the
+              main pane's own notice says the same, so it is not repeated. */}
           <div className="hidden w-[272px] shrink-0 flex-col md:flex">
+            <Link
+              href="/settings"
+              data-notifications-back=""
+              className="mx-3 mt-3 inline-flex h-8 w-fit shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[13px] font-medium text-muted-foreground transition-colors duration-200 ease-out hover:bg-muted hover:text-foreground motion-reduce:transition-none"
+            >
+              <ArrowLeft className="size-4" aria-hidden="true" />
+              Settings
+            </Link>
             <NotificationsList className="min-h-0 flex-1" />
+            {!storageOff && (
+              <p role="note" data-notifications-notice="sending-unchanged" className="shrink-0 border-t px-4 py-2.5 text-[11.5px] leading-snug text-muted-foreground">
+                {COPY.notice}
+              </p>
+            )}
           </div>
 
           <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -432,6 +450,12 @@ export function NotificationsPageV2({ canEdit, registerSave, todaySettings, scro
                 <MobilePicker selected={selected} onSelect={select} />
               </div>
             </div>
+            {/* Phones: the list (and its notice) is hidden, so the notice sits under the header. */}
+            {!storageOff && (
+              <p role="note" data-notifications-notice="sending-unchanged-phone" className="border-b px-4 py-2 text-[11.5px] leading-snug text-muted-foreground md:hidden">
+                {COPY.notice}
+              </p>
+            )}
 
             {showSetup ? (
               // A column, so a short setup still puts the save bar at the bottom.
