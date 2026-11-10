@@ -37,7 +37,7 @@ import {
   AuthSubmitV2,
   AuthTextFieldV2,
 } from './auth-fields-v2';
-import { AuthSplitShell, authLinkInk } from './auth-split-shell';
+import { AuthSplitShell, authLinkInk, useAuthHref } from './auth-split-shell';
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
@@ -57,6 +57,7 @@ export function ForgotPasswordV2() {
   const prefix = useId();
   const { resetPassword, confirmPasswordReset } = useCustomerAuth();
   const { tenant } = useTenant();
+  const authHref = useAuthHref();
   const ink = authLinkInk(tenant);
 
   const [step, setStep] = useState<Step>('request');
@@ -145,7 +146,7 @@ export function ForgotPasswordV2() {
           Your password has been changed. For safety, any other device still signed in as you will need it again
           next time it asks.
         </AuthNoticeV2>
-        <Link href="/login" className={`${AUTH_PRIMARY_BUTTON} mt-5`}>
+        <Link href={authHref('/login')} className={`${AUTH_PRIMARY_BUTTON} mt-5`}>
           Sign in
         </Link>
       </AuthSplitShell>
@@ -308,7 +309,7 @@ export function ForgotPasswordV2() {
 
       <p className="mt-6 text-center text-sm text-pv-muted-fg">
         Remembered it?{' '}
-        <Link href="/login" className={LINK_CLASS} style={{ color: ink }}>
+        <Link href={authHref('/login')} className={LINK_CLASS} style={{ color: ink }}>
           Back to sign in
         </Link>
       </p>

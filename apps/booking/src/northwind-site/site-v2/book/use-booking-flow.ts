@@ -408,8 +408,11 @@ export function useBookingFlow() {
     });
     // Addresses typed in the home page's search (?pickup= / ?dropoff=) ride along.
     setTarget("checkout");
-    startNavigating(() => router.push(withTripIntent(`/booking/${chosen.vehicle.id}`, readTripIntentFromLocation())));
-  }, [chosen, tripValid, current, router]);
+    // The car's page under wherever this flow lives: /booking/<id>, or
+    // /template-2/booking/<id> on Template 2's preview link.
+    const base = (pathname ?? "/booking").replace(/\/$/, "");
+    startNavigating(() => router.push(withTripIntent(`${base}/${chosen.vehicle.id}`, readTripIntentFromLocation())));
+  }, [chosen, tripValid, current, router, pathname]);
 
   const startOver = useCallback(() => {
     setTrip(null);

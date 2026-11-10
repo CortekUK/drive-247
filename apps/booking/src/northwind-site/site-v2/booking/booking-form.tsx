@@ -205,9 +205,11 @@ export function BookingForm({
       >
         {/*
           A date and its time stay two-up even on a phone (v1's reasoning: they
-          read as one answer, and a time picker has no use for the full width).
+          read as one answer, and a time picker has no use for the full width),
+          until the phone is too narrow to show "10:00 AM" whole: below 380px
+          they stack.
         */}
-        <FieldGrid className="grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        <FieldGrid className="grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] max-[379px]:grid-cols-1">
           <DateField
             id="pickup-date"
             label="Pickup date"

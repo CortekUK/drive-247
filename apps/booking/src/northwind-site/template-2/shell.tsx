@@ -33,6 +33,7 @@ import { NAV_LINKS } from '@nw/lib/constants';
 import { cn } from '@nw/lib/utils';
 import { brandHslVars } from '@nw/portal-v2/brand';
 import { T2_HOME, t2Href } from '@nw/template-2/links';
+import { Template2PendingPage } from '@nw/template-2/pending-page';
 
 const SceneColour = createContext<(colour: string | null) => void>(() => {});
 
@@ -94,7 +95,9 @@ export function Template2Shell({
       </div>
       <GlassNav links={links} tenantName={tenantName} tenantLogoUrl={tenantLogoUrl} siteSettings={siteSettings} />
       <SceneColour.Provider value={setSceneColour}>
-        <main className="flex-1">{children}</main>
+        <main className="flex-1">
+          <Template2PendingPage>{children}</Template2PendingPage>
+        </main>
       </SceneColour.Provider>
       {footer}
     </div>
@@ -174,7 +177,7 @@ function GlassNav({
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
             <AccountLink />
             <Link
-              href="/booking"
+              href={t2Href('/booking')}
               className={cn('g2-cta hidden h-11 items-center gap-1.5 rounded-full px-5 text-[14px] font-semibold sm:inline-flex', FOCUS)}
             >
               Book a car
@@ -214,7 +217,7 @@ function GlassNav({
               ))}
             </nav>
             <Link
-              href="/booking"
+              href={t2Href('/booking')}
               className={cn('g2-cta mt-1 flex h-12 items-center justify-center gap-1.5 rounded-full text-[15px] font-semibold sm:hidden', FOCUS)}
             >
               Book a car
@@ -237,7 +240,7 @@ function AccountLink() {
   if (status === 'loading') return <span aria-hidden className="hidden h-11 w-20 sm:block" />;
   if (status === 'anonymous') {
     return (
-      <Link href="/login" className={CLASS}>
+      <Link href={t2Href('/login')} className={CLASS}>
         Sign in
       </Link>
     );

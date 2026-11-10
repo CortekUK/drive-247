@@ -28,8 +28,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, ChevronLeft, ChevronRight, KeyRound } from 'lucide-react-nw';
 
 import { cn } from '@nw/lib/utils';
-import { CountUp } from '@nw/site-v2/sections/count-up';
 import type { SiteNumber } from '@nw/site-v2/sections/site-numbers';
+import { T2Count } from '@nw/template-2/count-up';
 
 const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--g2-accent)]/50';
 
@@ -347,7 +347,7 @@ function Numbers({ numbers }: { numbers: SiteNumber[] }) {
         >
           <dt className="mt-1.5 text-[13.5px] font-medium text-[var(--g2-ink-soft)]">{stat.label}</dt>
           <dd className="text-[38px] font-semibold leading-none tracking-[-0.045em] text-[var(--g2-ink)] tabular-nums sm:text-[46px] lg:text-[clamp(38px,5.4svh,54px)]">
-            <CountUp to={stat.to} decimals={stat.decimals} prefix={stat.prefix} suffix={stat.suffix} />
+            <T2Count to={stat.to} decimals={stat.decimals} prefix={stat.prefix} suffix={stat.suffix} />
           </dd>
         </div>
       ))}

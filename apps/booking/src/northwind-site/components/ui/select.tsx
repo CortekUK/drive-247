@@ -54,8 +54,10 @@ function SelectTrigger({
 function SelectContent({
   className,
   children,
-  position = "item-aligned",
-  align = "center",
+  // A list that drops down from its field, never one laid over the field so
+  // that the chosen option lines up with it ("item-aligned").
+  position = "popper",
+  align = "start",
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
   return (

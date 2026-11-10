@@ -30,6 +30,7 @@ import { useFaqs } from '@nw/hooks/use-faqs';
 import type { FaqItem } from '@nw/lib/cms/types';
 import { cn } from '@nw/lib/utils';
 import { HOW_IT_WORKS, unnumbered, type Question } from '@nw/site-v2/sections/home-faq-list';
+import { t2Href } from '@nw/template-2/links';
 
 const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--g2-accent)]/50';
 
@@ -184,7 +185,7 @@ export function Template2Questions({ seed }: { seed: FaqItem[] | null }) {
                 <MessageCircle aria-hidden className="size-4 shrink-0 text-[var(--g2-accent-ink)]" strokeWidth={2} />
                 <span>
                   Something else?{' '}
-                  <Link href="/contact" className={cn('rounded font-semibold text-[var(--g2-accent-ink)] hover:underline', FOCUS)}>
+                  <Link href={t2Href('/contact')} className={cn('rounded font-semibold text-[var(--g2-accent-ink)] hover:underline', FOCUS)}>
                     Message us
                   </Link>{' '}
                   and we will get back to you.

@@ -33,19 +33,16 @@ import {
   type RatePeriod,
 } from '@nw/components/fleet/fleet-vehicle';
 import { cn } from '@nw/lib/utils';
+import { T2Count } from '@nw/template-2/count-up';
 import { useFleetBrowser } from '@nw/site-v2/fleet/use-fleet-browser';
 import { RollingPrice } from '@nw/template-2/fleet';
 import { t2CarHref } from '@nw/template-2/links';
+import { PERIOD, periodTiles } from '@nw/template-2/rates';
 
 const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--g2-accent)]/50';
 /** A page of cars at a time; 12 fills two or three columns evenly. */
 const PAGE_SIZE = 12;
 
-const PERIOD: Record<RatePeriod, { title: string; unit: string; days: number }> = {
-  day: { title: 'By the day', unit: 'a day', days: 1 },
-  week: { title: 'By the week', unit: 'a week', days: 7 },
-  month: { title: 'By the month', unit: 'a month', days: 30 },
-};
 
 export function Template2FleetPage({ seed }: { seed: FleetSeed | null }) {
   const fleet = useFleetBrowser(seed);
@@ -56,29 +53,7 @@ export function Template2FleetPage({ seed }: { seed: FleetSeed | null }) {
   const shown = fleet.results.slice(0, limit);
   const remaining = fleet.results.length - shown.length;
 
-  // Each period's lowest price, what that is a day, and the best saving a day
-  // over renting the same car daily: car by car, never cheapest against cheapest.
-  const tiles = useMemo(
-    () =>
-      (['day', 'week', 'month'] as const)
-        .map((key) => {
-          const prices = fleet.source
-            .map((car) => rateForPeriod(car, key))
-            .filter((rate) => rate.offered && rate.amount != null && rate.amount > 0)
-            .map((rate) => rate.amount as number);
-          if (prices.length === 0) return null;
-          const lowest = Math.min(...prices);
-          const savings = fleet.source
-            .map((car) => {
-              const rate = rateForPeriod(car, key);
-              return rate.offered && rate.amount && car.dailyRent ? 1 - rate.amount / (PERIOD[key].days * car.dailyRent) : 0;
-            })
-            .filter((saving) => saving > 0);
-          return { key, lowest, perDay: lowest / PERIOD[key].days, best: savings.length > 0 ? Math.round(Math.max(...savings) * 100) : 0 };
-        })
-        .filter((tile): tile is NonNullable<typeof tile> => tile !== null),
-    [fleet.source],
-  );
+  const tiles = useMemo(() => periodTiles(fleet.source), [fleet.source]);
 
   const categories = fleet.facets.categories;
   const chosenKinds = fleet.filters.categories;
@@ -140,7 +115,7 @@ export function Template2FleetPage({ seed }: { seed: FleetSeed | null }) {
                       <span className="mt-2 block text-[15px] text-[var(--g2-ink-soft)]">
                         from{' '}
                         <span className="text-[28px] font-semibold tracking-[-0.04em] text-[var(--g2-ink)] tabular-nums sm:text-[32px]">
-                          {formatMoney(lowest, currencyCode)}
+                          <T2Count to={lowest} format={(n) => formatMoney(n, currencyCode)} />
                         </span>{' '}
                         {PERIOD[key].unit}
                       </span>
