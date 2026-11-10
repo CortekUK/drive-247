@@ -112,9 +112,10 @@ describe("v2 General: three stacked sections, the pages that came out of it, and
   const TAX_AND_DEPOSIT_PERMS = ["fees", "preauth"];
   const NOTIFICATIONS_PERMS = ["notifications"];
 
-  it("General is Regional, Driver requirements then Monthly rate; Tax and deposit is Tax and fees then Security deposit", () => {
+  it("General is Company details, Regional, Driver requirements then Monthly rate; Tax and deposit is Tax and fees then Security deposit", () => {
     expect(V2_GENERAL_SECTIONS.map((s) => [s.anchor, s.title, s.permTab, s.tab])).toEqual([
-      ["regional", "Regional", "general", "general"],
+      ["company", "Company details", "general", "general"],
+      ["regional", "Regional", "general", null],
       ["driver-requirements", "Driver requirements", "requirements", "requirements"],
       ["monthly-rate", "Monthly rate", "pricing", null],
     ]);
@@ -152,7 +153,7 @@ describe("v2 General: three stacked sections, the pages that came out of it, and
   });
 
   it("v2PageSections lists a sectioned page's sections, and nothing for any other page", () => {
-    expect(v2PageSections("general").map((s) => s.anchor)).toEqual(["regional", "driver-requirements", "monthly-rate"]);
+    expect(v2PageSections("general").map((s) => s.anchor)).toEqual(["company", "regional", "driver-requirements", "monthly-rate"]);
     expect(v2PageSections("tax-and-deposit").map((s) => s.anchor)).toEqual(["tax-and-fees", "security-deposit"]);
     expect(v2PageSections("notifications").map((s) => s.anchor)).toEqual(["notifications-email", "notifications-push"]);
     expect(v2PageSections("lockbox")).toEqual([]);
@@ -180,15 +181,16 @@ describe("v2 General: three stacked sections, the pages that came out of it, and
   });
 
   it("atPageTop says which section IS the top of its page, rather than inferring it from the index", () => {
-    // Regional and Tax and fees are the first thing under their page title, so
-    // their old tab opens the page with nothing to scroll to. Notifications'
-    // email section is FIRST but not at the top (the page draws its notice and
-    // its Channels heading above it), so `?tab=reminders` still scrolls.
+    // Company details and Tax and fees are the first thing under their page
+    // title, so their old tab opens the page with nothing to scroll to.
+    // Notifications' email section is FIRST but not at the top (the page draws
+    // its notice and its Channels heading above it), so `?tab=reminders` still
+    // scrolls.
     const atTop = Object.entries(V2_SECTIONED_PAGES).flatMap(([page, { sections }]) =>
       sections.filter((s) => s.atPageTop).map((s) => [page, s.anchor]),
     );
     expect(atTop).toEqual([
-      ["general", "regional"],
+      ["general", "company"],
       ["tax-and-deposit", "tax-and-fees"],
     ]);
     expect(V2_NOTIFICATIONS_SECTIONS.every((s) => !s.atPageTop)).toBe(true);

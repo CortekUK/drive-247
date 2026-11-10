@@ -201,8 +201,8 @@ describe("settings page (v2): General is three stacked sections; five sections l
     expect(general).toMatch(/return renderV2Sections\(v2Sections, sectionBody\);/);
     expect(general).not.toContain("<SettingsTabs");
     expect(general).not.toContain("<SettingsTabPanel");
-    // Three sections, in the lead's order.
-    expect(V2_GENERAL_SECTIONS.map((s) => s.anchor)).toEqual(["regional", "driver-requirements", "monthly-rate"]);
+    // Four sections, in the lead's order (Company details added 2026-11-10, QA B1).
+    expect(V2_GENERAL_SECTIONS.map((s) => s.anchor)).toEqual(["company", "regional", "driver-requirements", "monthly-rate"]);
     // Each is drawn by General, under its OWN permission.
     for (const [anchor, perm] of [
       ["driver-requirements", "requirements"],

@@ -4,7 +4,9 @@ import { headers } from "next/headers";
 import { supabase } from "@nw/integrations/supabase/client";
 import { CMS_EDIT_HEADER, DEV_FALLBACK_TENANT_SLUG, TENANT_HEADER } from "@nw/lib/constants";
 
+import { DEFAULT_SITE_CONTACT } from "./defaults";
 import { getSection } from "./merge";
+import { withCompanyContact, type CompanyContactRow } from "./site-contact";
 import {
   fetchBlogPost,
   fetchBlogPosts,
@@ -16,7 +18,7 @@ import {
   type BlogPostSummary,
   type PromotionsResult,
 } from "./queries";
-import type { CmsPageSlug, FaqItem, PageSections, TestimonialItem } from "./types";
+import type { CmsPageSlug, FaqItem, PageSections, SiteContactContent, TestimonialItem } from "./types";
 
 /**
  * Server-side CMS loading. NOT a client module — it reads `next/headers` and
@@ -54,6 +56,14 @@ export interface CmsTenant {
   /** The tab / Home Screen icon and the browser-bar colour, for the root layout's metadata. */
   favicon_url: string | null;
   primary_color: string | null;
+  /**
+   * The company's own contact details, from the portal's Settings > General >
+   * Company details. `loadSiteContact` fills Site settings' blanks with them.
+   */
+  contact_email: CompanyContactRow["contact_email"];
+  contact_phone: CompanyContactRow["contact_phone"];
+  phone: CompanyContactRow["phone"];
+  address: CompanyContactRow["address"];
 }
 
 /** The slug the middleware resolved for this request. */
@@ -75,7 +85,7 @@ export const resolveTenant = cache(async (): Promise<CmsTenant | null> => {
     const { data, error } = await supabase
       .from("tenants")
       .select(
-        "id, currency_code, company_name, app_name, meta_title, meta_description, og_image_url, logo_url, favicon_url, primary_color",
+        "id, currency_code, company_name, app_name, meta_title, meta_description, og_image_url, logo_url, favicon_url, primary_color, contact_email, contact_phone, phone, address",
       )
       .eq("slug", slug)
       .in("status", ["active", "suspended"])
@@ -135,6 +145,20 @@ export async function loadSection<T>(
 ): Promise<T> {
   return getSection(await loadPageSections(slug), key, fallback);
 }
+
+/**
+ * `site-settings / contact` as the site shows it: Site settings first, the
+ * company's own details (Settings > General > Company details) for its
+ * blanks. The rule is `withCompanyContact` in site-contact.ts; this is the
+ * loader that feeds it, deduped per request like every loader here.
+ */
+export const loadSiteContact = cache(async (): Promise<SiteContactContent> => {
+  const [site, tenant] = await Promise.all([
+    loadSection("site-settings", "contact", DEFAULT_SITE_CONTACT),
+    resolveTenant(),
+  ]);
+  return withCompanyContact(site, tenant);
+});
 
 /**
  * The table-backed loaders return `null`, not `[]`, when there is no tenant to

@@ -115,7 +115,10 @@ export type V2GeneralSection = V2PageSection;
  * in pricing-rules-v2 (a test keeps the two copies equal).
  */
 export const V2_GENERAL_SECTIONS: readonly V2PageSection[] = [
-  { anchor: "regional", title: "Regional", description: "The currency and distance unit used across prices, invoices and mileage.", permTab: "general", tab: "general", atPageTop: true },
+  // Company details first (QA B1, 2026-11-10): before it, a v2 tenant had no
+  // way to change its name, contact details or address from the portal.
+  { anchor: "company", title: "Company details", description: "Your company name, contact details and address, as shown on your booking site, in emails and on agreements.", permTab: "general", tab: "general", atPageTop: true },
+  { anchor: "regional", title: "Regional", description: "The currency and distance unit used across prices, invoices and mileage.", permTab: "general", tab: null },
   { anchor: "driver-requirements", title: "Driver requirements", description: "Who can rent from you, and the ID they must verify.", permTab: "requirements", tab: "requirements" },
   { anchor: "monthly-rate", title: "Monthly rate", description: "When a rental is long enough to be priced at your monthly rate instead of the daily or weekly one.", permTab: "pricing", tab: null },
 ];

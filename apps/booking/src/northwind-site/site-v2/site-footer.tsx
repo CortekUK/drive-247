@@ -2,8 +2,8 @@ import Link from 'next/link';
 import { Mail, MapPin, Phone } from 'lucide-react-nw';
 
 import { loadFleetSeed } from '@nw/components/fleet/fleet-seed';
-import { DEFAULT_SITE_CONTACT, DEFAULT_SITE_SOCIAL } from '@nw/lib/cms/defaults';
-import { getTenantSlug, loadBlogEnabled, loadSection } from '@nw/lib/cms/server';
+import { DEFAULT_SITE_SOCIAL } from '@nw/lib/cms/defaults';
+import { getTenantSlug, loadBlogEnabled, loadSection, loadSiteContact } from '@nw/lib/cms/server';
 import { socialLinks } from '@nw/lib/cms/social';
 import { FOOTER_LINKS } from '@nw/lib/constants';
 import { cn } from '@nw/lib/utils';
@@ -34,7 +34,9 @@ const HEADING = 'text-[14px] font-bold text-white';
 export async function SiteV2Footer({ tenantName }: { tenantName: string | null }) {
   const slug = await getTenantSlug();
   const [contact, social, fleet, blogEnabled] = await Promise.all([
-    loadSection('site-settings', 'contact', DEFAULT_SITE_CONTACT),
+    // Site settings > Contact, with the company's own details (Settings >
+    // General) filling what it leaves blank.
+    loadSiteContact(),
     loadSection('site-settings', 'social', DEFAULT_SITE_SOCIAL),
     slug ? loadFleetSeed(slug) : Promise.resolve(null),
     loadBlogEnabled(),

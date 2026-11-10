@@ -88,6 +88,7 @@ import { isV2 } from '@/lib/v2';
 import { PromoCodesTableV2 } from '@/components/settings-v2/promo-codes-table-v2';
 import { SettingsIndexV2 } from '@/components/settings-v2/settings-index';
 import * as BusinessV2 from '@/components/settings-v2/business-settings-states';
+import { useCompanySiteOverrideV2 } from '@/hooks/use-company-site-override-v2';
 import { BusinessRentalGate, DurationPageV2, LockboxPageV2, RequirementsPageV2, ReturnReminderPanelV2, makeBusinessSave } from '@/components/settings-v2/business-rules-pages';
 import { keepUnsavedBusinessEdits, rentalEditsCoveredBySections, rentalFormDiffers } from '@/components/settings-v2/business-rules-logic';
 import { SETTINGS_COLUMN_BESIDE_TRAX, SettingsField, SettingsPageHeader, SettingsPageHeaderSkeleton, SettingsPageSaveProvider, SettingsPanel, SettingsRow, SettingsRowAlignProvider, SettingsSection, SettingsStickySaveBar, SettingsTabPanel, SettingsTabs, Unit, useScrollToSection } from '@/components/settings-v2/settings-kit';
@@ -238,7 +239,7 @@ const MovedToWebsite = ({
  * V2_HIDDEN_SETTINGS_PAGES, which is empty now).
  */
 const V2_SETTINGS_PAGES: Record<string, { section: string; title: string; description: string; permTab: string }> = {
-  general: { section: 'Business', title: 'General', description: 'Your currency and distance unit, the rules a driver must meet, and when your monthly rate starts.', permTab: 'general' },
+  general: { section: 'Business', title: 'General', description: 'Your company details, currency and distance unit, the rules a driver must meet, and when your monthly rate starts.', permTab: 'general' },
   locations: { section: 'Business', title: 'Locations', description: 'Where customers pick up and return cars, and where you deliver.', permTab: 'locations' },
   duration: { section: 'Business', title: 'Booking rules', description: 'How far ahead customers book, how long a rental can be, and the gap between rentals.', permTab: 'duration' },
   lockbox: { section: 'Business', title: 'Lockbox', description: 'Leave the keys in a lockbox and email the code to the customer.', permTab: 'lockbox' },
@@ -1326,6 +1327,23 @@ const Settings = () => {
       terms_version: tenant?.terms_version || '1.0',
     });
   }, [settings, tenant, v2Chrome]);
+
+  // v2 (northwind) General > Company details: the tenant's own name, contact
+  // email, phone and address (BusinessV2.BusinessCompanyPanel). Kept apart
+  // from generalForm, which v1 shares. Reset from the tenant row whenever it
+  // reloads, unless the form holds unsaved edits: a save refetches the tenant,
+  // and that reload must not wipe what the user is still typing elsewhere.
+  const companySaved = useMemo(() => BusinessV2.savedCompanyV2(tenant), [tenant]);
+  const [companyForm, setCompanyForm] = useState<BusinessV2.CompanyValues>(companySaved);
+  const companySavedRef = React.useRef(companySaved);
+  useEffect(() => {
+    const previous = companySavedRef.current;
+    companySavedRef.current = companySaved;
+    setCompanyForm((prev) => (BusinessV2.isCompanyDirty(prev, previous) ? prev : companySaved));
+  }, [companySaved]);
+  // What the booking site shows instead of these details, if its own Site
+  // settings fill them; v2 only, the v1 page has no Company details section.
+  const companySiteOverride = useCompanySiteOverrideV2(v2Chrome ? tenant?.id : null);
 
   // Branding form state
   const [brandingForm, setBrandingForm] = useState({
@@ -3105,11 +3123,12 @@ const Settings = () => {
     const renderBody = (page: string): React.ReactNode => {
       switch (page) {
         case 'general': {
-          // Three stacked sections (V2_GENERAL_SECTIONS): Regional, Driver
-          // requirements, Monthly rate. Each is shown and edited under its own
-          // permission and loads and fails on its own, so a failed org-settings
-          // read no longer hides Driver requirements. All three are on the page
-          // at once, and the page's one save bar saves whichever are dirty.
+          // Four stacked sections (V2_GENERAL_SECTIONS): Company details,
+          // Regional, Driver requirements, Monthly rate. Each is shown and
+          // edited under its own permission and loads and fails on its own, so
+          // a failed org-settings read no longer hides Driver requirements. All
+          // four are on the page at once, and the page's one save bar saves
+          // whichever are dirty.
           const canEditGeneral = canEditSettings('general');
           // Regional: nothing editable until the real org settings and tenant
           // are in (the placeholder is USD / miles), a relabel confirm, and an
@@ -3119,6 +3138,34 @@ const Settings = () => {
 
           const sectionBody = (anchor: string): React.ReactNode => {
             switch (anchor) {
+              // Company details: the tenant's own row (company_name,
+              // contact_email, contact_phone + phone, address). Checked in the
+              // panel, written here, then TenantContext is refetched so the
+              // sidebar, emails and previews pick the new values up at once.
+              case 'company':
+                return (
+                  <BusinessV2.BusinessCompanyPanel
+                    form={companyForm}
+                    onFormChange={(patch) => setCompanyForm((prev) => ({ ...prev, ...patch }))}
+                    saved={companySaved}
+                    canEdit={canEditGeneral}
+                    ready={!!tenant}
+                    onSave={async () => {
+                      await BusinessV2.saveCompanyV2({
+                        tenantId: tenant?.id,
+                        values: companyForm,
+                        writeTenant: async (patch) =>
+                          await supabase.from('tenants').update(patch as never).eq('id', tenant?.id as string).select('id'),
+                      });
+                      await refetchTenant();
+                      logAction({ action: "settings_updated", entityType: "settings", entityId: tenant?.id || "unknown", details: { section: "company" } });
+                    }}
+                    onDiscard={() => setCompanyForm(companySaved)}
+                    registerSave={registerV2SectionSave}
+                    siteOverride={companySiteOverride.isSuccess ? companySiteOverride.data : undefined}
+                  />
+                );
+
               case 'regional':
                 return (
                   <BusinessV2.BusinessRegionalPanel
