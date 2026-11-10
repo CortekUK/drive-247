@@ -56,6 +56,8 @@ export const V2_BUILT_SEGMENTS: readonly string[] = [];
  *
  * `template-2` is the booking site's second design ("Glass", Oct 29 2026) on a
  * temporary preview link while it is built — see src/northwind-site/template-2.
+ * `template-3` is the third design ("Cinematic", Nov 9 2026), likewise on a
+ * preview link — see src/northwind-site/template-3.
  */
 export const V2_ONLY_SEGMENTS: readonly string[] = [
   '',
@@ -73,6 +75,7 @@ export const V2_ONLY_SEGMENTS: readonly string[] = [
   'reviews',
   'signup',
   'template-2',
+  'template-3',
   'terms',
 ];
 
