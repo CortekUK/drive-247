@@ -7,6 +7,18 @@ import { supabase } from '@nw/integrations/supabase/client';
 import { useTenant } from '@nw/contexts/TenantContext';
 import { formatDateOnly, parseDateOnly, todayDateString } from '@nw/lib/domain';
 import type { UnavailableReason } from '@nw/lib/vehicles/types';
+import {
+  FALLBACK_OPERATOR_TIMEZONE,
+  heldDays,
+  rentalInterval,
+  timedClash,
+  tripInterval,
+  wallClockToMs,
+  type HeldDays,
+  type Interval,
+  type TimedTrip,
+} from '@nw/lib/vehicles/availability-time';
+import { isClockTime } from '@nw/components/booking/time-utils';
 
 /* ══════════════════════════ the occupancy rule ══════════════════════════
  * Ported from apps/booking/src/lib/vehicle-availability.ts. Pure, so it can be
@@ -50,6 +62,13 @@ export interface UseVehicleAvailabilityOptions {
   /** 'YYYY-MM-DD'. Both dates are required before anything is filtered. */
   startDate?: string | null;
   endDate?: string | null;
+  /**
+   * 'HH:MM' on the operator's clock. With both, a car is judged by the CLOCK:
+   * one back at 10:00 is free again from 10:00 plus the turnaround buffer.
+   * Without them the judgement is by whole days, as before.
+   */
+  pickupTime?: string | null;
+  dropoffTime?: string | null;
   /** Escape hatch for callers that must defer the query. Defaults to true. */
   enabled?: boolean;
 }
@@ -106,7 +125,7 @@ export function useVehicleAvailability(
   options: UseVehicleAvailabilityOptions = {},
 ): UseVehicleAvailabilityResult {
   const { tenant, isLoading: tenantLoading } = useTenant();
-  const { startDate = null, endDate = null, enabled = true } = options;
+  const { startDate = null, endDate = null, pickupTime = null, dropoffTime = null, enabled = true } = options;
 
   // A half-filled picker must not be treated as a one-day window.
   const hasRange = !!startDate && !!endDate;
@@ -116,10 +135,15 @@ export function useVehicleAvailability(
   const reqEnd = hasRange && endDate ? endDate.split('T')[0] : null;
 
   const bufferMinutes = tenant?.buffer_time_minutes ?? 0;
+  const timezone = tenant?.timezone ?? FALLBACK_OPERATOR_TIMEZONE;
+  // Times only count as a pair; a lone one would make a half-day window.
+  const timed = !!pickupTime && !!dropoffTime && isClockTime(pickupTime) && isClockTime(dropoffTime);
+  const reqPickupTime = timed ? pickupTime : null;
+  const reqDropoffTime = timed ? dropoffTime : null;
   const isFiltering = enabled && !!tenant && !!reqStart && !!reqEnd;
 
   const query = useQuery({
-    queryKey: ['vehicle-availability', tenant?.id, reqStart, reqEnd, bufferMinutes],
+    queryKey: ['vehicle-availability', tenant?.id, reqStart, reqEnd, reqPickupTime, reqDropoffTime, bufferMinutes, timezone],
     queryFn: async (): Promise<AvailabilitySnapshot> => {
       if (!tenant?.id || !reqStart || !reqEnd) return EMPTY_SNAPSHOT;
 
@@ -128,7 +152,7 @@ export function useVehicleAvailability(
       const [openRentals, blocks] = await Promise.all([
         supabase
           .from('rentals')
-          .select('vehicle_id, start_date, end_date, status')
+          .select('vehicle_id, start_date, pickup_time, end_date, return_time, status')
           .eq('tenant_id', tenant.id)
           .not('status', 'in', RELEASED_RENTAL_STATUSES)
           .not('vehicle_id', 'is', null),
@@ -160,10 +184,28 @@ export function useVehicleAvailability(
 
       // ── 1. open rentals ──
       const today = todayDateString();
+      // With times, the customer's trip as an instant range in the operator's
+      // zone; without, null, and the whole-day rule below applies.
+      const trip: Interval | null =
+        reqPickupTime && reqDropoffTime
+          ? tripInterval(
+              { pickupDate: reqStart, pickupTime: reqPickupTime, dropoffDate: reqEnd, dropoffTime: reqDropoffTime },
+              timezone,
+            )
+          : null;
+      // 'rented' is the firmer reason; it may replace 'buffer' but not the reverse.
+      const mark = (vehicleId: string, reason: UnavailableReason) => {
+        const had = unavailable.get(vehicleId);
+        if (!had || (reason === 'rented' && had === 'buffer')) unavailable.set(vehicleId, reason);
+      };
       for (const rental of openRentals.data ?? []) {
         if (!rental.vehicle_id) continue;
-        if (rentalOccupiesWindow(rental, reqStart, reqEnd, today)) {
-          unavailable.set(rental.vehicle_id, 'rented');
+        if (trip) {
+          const held = rentalInterval(rental, timezone, today);
+          const clash = held ? timedClash(trip, held, bufferMinutes) : null;
+          if (clash) mark(rental.vehicle_id, clash);
+        } else if (rentalOccupiesWindow(rental, reqStart, reqEnd, today)) {
+          mark(rental.vehicle_id, 'rented');
         }
       }
 
@@ -207,18 +249,20 @@ export function useVehicleAvailability(
           throw new Error(completedError.message || 'Failed to check availability');
         }
 
-        // Local midnight of the pickup day — the same parse the pricing engine
-        // uses, so the buffer and the bill agree on which day "pickup" is.
-        const pickupAt = parseDateOnly(reqStart).getTime();
+        // The pickup instant when the time is known; else local midnight of the
+        // pickup day — the same parse the pricing engine uses, so the buffer
+        // and the bill agree on which day "pickup" is.
+        const pickupAt = trip ? trip.start : parseDateOnly(reqStart).getTime();
 
         for (const rental of completed ?? []) {
           if (!rental.vehicle_id || !rental.end_date) continue;
           if (unavailable.has(rental.vehicle_id)) continue;
 
-          const endedAt = new Date(
-            `${rental.end_date}T${rental.return_time ?? '23:59'}`,
-          ).getTime();
-          if (Number.isNaN(endedAt)) continue;
+          // With a timed trip, the return on the operator's clock, not the browser's.
+          const endedAt = trip
+            ? wallClockToMs(rental.end_date, rental.return_time, timezone, '23:59:59')
+            : new Date(`${rental.end_date}T${rental.return_time ?? '23:59'}`).getTime();
+          if (endedAt === null || Number.isNaN(endedAt)) continue;
 
           // Pickup lands after the car came back but before the buffer expires.
           if (bufferOccupiesPickup(pickupAt, endedAt, bufferMinutes)) {
@@ -303,6 +347,10 @@ export interface OccupiedRange {
   isOpenEnded: boolean;
   /** Short reason, safe to show a customer ("Booked", "Unavailable"). */
   label: string;
+  /** When the car is held, on the clock; null for a date-only block. */
+  interval: Interval | null;
+  /** The days this range holds outright, and the boundary days it only touches. */
+  held: HeldDays;
 }
 
 export interface UseVehicleBookedDatesResult {
@@ -312,8 +360,14 @@ export interface UseVehicleBookedDatesResult {
   /** Local-midnight Dates, for a date picker's `disabled` matcher. */
   occupiedDates: Date[];
   isDateOccupied: (date: Date | string) => boolean;
-  /** True when EVERY day in the inclusive range is free. */
-  isRangeAvailable: (startDate: string, endDate: string) => boolean;
+  /**
+   * Why this trip cannot have the car, or null. With both times it judges by
+   * the clock, including the tenant's turnaround buffer on either side; with
+   * only dates, by whole days.
+   */
+  clashFor: (trip: TimedTrip) => UnavailableReason | null;
+  /** `clashFor(...) === null`, in the shape the validator takes. */
+  isRangeAvailable: (startDate: string, endDate: string, startTime?: string, endTime?: string) => boolean;
   isLoading: boolean;
   isError: boolean;
   error: Error | null;
@@ -351,9 +405,11 @@ export function useVehicleBookedDates(
 ): UseVehicleBookedDatesResult {
   const { tenant, isLoading: tenantLoading } = useTenant();
   const id = typeof vehicleId === 'string' ? vehicleId.trim() : '';
+  const timezone = tenant?.timezone ?? FALLBACK_OPERATOR_TIMEZONE;
+  const bufferMinutes = tenant?.buffer_time_minutes ?? 0;
 
   const query = useQuery({
-    queryKey: ['vehicle-booked-dates', tenant?.id, id],
+    queryKey: ['vehicle-booked-dates', tenant?.id, id, timezone],
     queryFn: async (): Promise<OccupiedRange[]> => {
       if (!tenant?.id || !id) return [];
 
@@ -362,7 +418,7 @@ export function useVehicleBookedDates(
       const [rentals, blocks] = await Promise.all([
         supabase
           .from('rentals')
-          .select('id, start_date, end_date, status')
+          .select('id, start_date, pickup_time, end_date, return_time, status')
           .eq('tenant_id', tenant.id)
           .eq('vehicle_id', id)
           .in('status', [...OPEN_RENTAL_STATUSES]),
@@ -410,6 +466,8 @@ export function useVehicleBookedDates(
           // Deliberately generic. The customer does not need — and must not be
           // shown — another customer's rental reference.
           label: 'Booked',
+          interval: rentalInterval(rental, timezone, today),
+          held: heldDays(rental, today, horizon),
         });
       }
 
@@ -421,6 +479,8 @@ export function useVehicleBookedDates(
           isOpenEnded: false,
           // `reason` is an internal operator note; never surface it verbatim.
           label: 'Unavailable',
+          interval: null,
+          held: { whole: eachDayKey(block.start_date, block.end_date), partial: [] },
         });
       }
 
@@ -431,15 +491,24 @@ export function useVehicleBookedDates(
 
   const ranges = useMemo(() => query.data ?? [], [query.data]);
 
+  // Days the car is held outright — what a date picker greys out. A boundary
+  // day a rental only touches (out at 10:00, back at 10:00) stays pickable;
+  // whether the chosen TIMES clash is for `clashFor` to say.
   const occupiedDateKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const range of ranges) {
-      for (const key of eachDayKey(range.startDate, range.endDate)) {
-        keys.add(key);
-      }
+      for (const key of range.held.whole) keys.add(key);
     }
     return keys;
   }, [ranges]);
+  // Every day touched at all — the whole-day judgement, for callers without times.
+  const touchedDateKeys = useMemo(() => {
+    const keys = new Set<string>(occupiedDateKeys);
+    for (const range of ranges) {
+      for (const key of range.held.partial) keys.add(key);
+    }
+    return keys;
+  }, [ranges, occupiedDateKeys]);
 
   const occupiedDates = useMemo(
     () => [...occupiedDateKeys].sort().map((key) => parseDateOnly(key)),
@@ -454,14 +523,46 @@ export function useVehicleBookedDates(
     [occupiedDateKeys],
   );
 
+  const clashFor = useCallback(
+    (trip: TimedTrip): UnavailableReason | null => {
+      const start = trip.pickupDate.split('T')[0];
+      const end = trip.dropoffDate.split('T')[0];
+      if (!start || !end) return null;
+      const timed =
+        isClockTime(trip.pickupTime) && isClockTime(trip.dropoffTime)
+          ? tripInterval({ ...trip, pickupDate: start, dropoffDate: end }, timezone)
+          : null;
+      let reason: UnavailableReason | null = null;
+      for (const range of ranges) {
+        let hit: UnavailableReason | null = null;
+        if (range.type === 'blocked' || !timed || !range.interval) {
+          // Blocks are whole days; so is a rental when the times are not known.
+          const days = range.type === 'blocked' ? range.held.whole : [...range.held.whole, ...range.held.partial];
+          if (days.some((key) => key >= start && key <= end)) hit = range.type === 'blocked' ? 'blocked' : 'rented';
+        } else {
+          hit = timedClash(timed, range.interval, bufferMinutes);
+        }
+        // The firmest reason wins: rented, then blocked, then buffer.
+        if (hit === 'rented') return 'rented';
+        if (hit === 'blocked') reason = 'blocked';
+        else if (hit === 'buffer' && reason === null) reason = 'buffer';
+      }
+      return reason;
+    },
+    [ranges, timezone, bufferMinutes],
+  );
+
   const isRangeAvailable = useCallback(
-    (startDate: string, endDate: string): boolean => {
+    (startDate: string, endDate: string, startTime?: string, endTime?: string): boolean => {
       if (!startDate || !endDate) return true;
+      if (startTime && endTime && isClockTime(startTime) && isClockTime(endTime)) {
+        return clashFor({ pickupDate: startDate, pickupTime: startTime, dropoffDate: endDate, dropoffTime: endTime }) === null;
+      }
       return eachDayKey(startDate.split('T')[0], endDate.split('T')[0]).every(
-        (key) => !occupiedDateKeys.has(key),
+        (key) => !touchedDateKeys.has(key),
       );
     },
-    [occupiedDateKeys],
+    [clashFor, touchedDateKeys],
   );
 
   const refetch = useCallback(async () => {
@@ -473,6 +574,7 @@ export function useVehicleBookedDates(
     occupiedDateKeys,
     occupiedDates,
     isDateOccupied,
+    clashFor,
     isRangeAvailable,
     isLoading:
       tenantLoading ||

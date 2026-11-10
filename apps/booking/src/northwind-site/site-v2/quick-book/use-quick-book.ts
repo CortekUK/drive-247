@@ -4,8 +4,20 @@ import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { deriveBookingRules } from "@nw/components/booking/booking-rules";
-import { addDaysIso, isIsoDate, localDateToIso, todayIso } from "@nw/components/booking/time-utils";
-import { firstLegalPickup, firstLegalReturn } from "@nw/components/booking/trip-window";
+import {
+  addDaysIso,
+  formatHourSpan,
+  formatIsoDateLabel,
+  isIsoDate,
+  localDateToIso,
+  todayIso,
+} from "@nw/components/booking/time-utils";
+import {
+  firstLegalPickup,
+  firstLegalReturnDay,
+  firstLegalReturnSlot,
+  isReturnSlotLegal,
+} from "@nw/components/booking/trip-window";
 import { useTenant } from "@nw/contexts/TenantContext";
 import {
   HOLIDAY_COLUMNS,
@@ -107,14 +119,18 @@ export function useQuickBook() {
   /** The trip on screen: what the customer chose, else the first legal one. */
   const seededTrip = useMemo<Trip>(() => {
     const first = firstLegalPickup(rules);
+    // The return floor follows the clock, as the full booking flow's does.
+    const dropoffDate = firstLegalReturnDay(first.date, first.slot, rules);
     return {
       pickupDate: first.date,
       pickupTime: first.slot,
-      dropoffDate: firstLegalReturn(first.date, rules),
-      dropoffTime: first.preferredSlot,
+      dropoffDate,
+      dropoffTime: firstLegalReturnSlot(first.date, first.slot, dropoffDate, rules, first.preferredSlot) ?? first.preferredSlot,
     };
   }, [rules]);
   const current = trip ?? seededTrip;
+  /** The last return the calendar pulled inside the rules, said in the status line. */
+  const [moved, setMoved] = useState<{ rule: "minimum" | "maximum"; to: string } | null>(null);
 
   const minPickupIso = addDaysIso(todayIso(), Math.max(0, Math.ceil(rules.leadTimeHours / 24)));
   const isPickupDateDisabled = useCallback(
@@ -129,18 +145,32 @@ export function useQuickBook() {
     [current.pickupDate, rules.maxRentalDays],
   );
 
+  /** A return slot is open when it is at least the shortest rental after the pickup on screen. */
+  const isReturnSlotOpen = useCallback(
+    (date: string, slot: string) => isReturnSlotLegal(current.pickupDate, current.pickupTime, date, slot, rules),
+    [current.pickupDate, current.pickupTime, rules],
+  );
+
   const updateTrip = useCallback(
     (patch: Partial<Trip>) => {
-      setTrip((previous) => {
-        const next = { ...(previous ?? seededTrip), ...patch };
-        // A pickup moved past the return drags the return to the first legal one.
-        if (patch.pickupDate && next.dropoffDate <= next.pickupDate) {
-          next.dropoffDate = firstLegalReturn(next.pickupDate, rules);
-        }
-        return next;
-      });
+      const next = { ...current, ...patch };
+      // A pickup moved past the return drags the return to the first legal one.
+      if (next.dropoffDate <= next.pickupDate) {
+        next.dropoffDate = firstLegalReturnDay(next.pickupDate, next.pickupTime, rules);
+      }
+      // The return sits at least the shortest rental after the pickup: the day
+      // moves when no slot on it is far enough, then the slot settles.
+      const latest = rules.timeSlots[rules.timeSlots.length - 1] ?? next.dropoffTime;
+      if (!isReturnSlotLegal(next.pickupDate, next.pickupTime, next.dropoffDate, latest, rules)) {
+        const day = firstLegalReturnDay(next.pickupDate, next.pickupTime, rules);
+        if (day !== next.dropoffDate) setMoved({ rule: "minimum", to: day });
+        next.dropoffDate = day;
+      }
+      next.dropoffTime =
+        firstLegalReturnSlot(next.pickupDate, next.pickupTime, next.dropoffDate, rules, next.dropoffTime) ?? next.dropoffTime;
+      setTrip(next);
     },
-    [seededTrip, rules],
+    [current, rules],
   );
 
   /** Whole days between pickup and return, at least 1. */
@@ -155,9 +185,12 @@ export function useQuickBook() {
     (a: string, b: string) => {
       const pickupDate = a <= b ? a : b;
       const wanted = a <= b ? b : a;
-      const floor = firstLegalReturn(pickupDate, rules);
+      const floor = firstLegalReturnDay(pickupDate, current.pickupTime, rules);
       const ceiling = addDaysIso(pickupDate, rules.maxRentalDays);
-      updateTrip({ pickupDate, dropoffDate: wanted < floor ? floor : wanted > ceiling ? ceiling : wanted });
+      const dropoffDate = wanted < floor ? floor : wanted > ceiling ? ceiling : wanted;
+      // A return pulled inside the rules is said in the status line, not slipped in.
+      setMoved(dropoffDate === wanted ? null : { rule: wanted < floor ? "minimum" : "maximum", to: dropoffDate });
+      updateTrip({ pickupDate, dropoffDate });
     },
     [rules, updateTrip],
   );
@@ -173,7 +206,17 @@ export function useQuickBook() {
     isIsoDate(current.dropoffDate) &&
     current.dropoffDate > current.pickupDate &&
     current.pickupTime !== "" &&
-    current.dropoffTime !== "";
+    current.dropoffTime !== "" &&
+    isReturnSlotOpen(current.dropoffDate, current.dropoffTime);
+
+  /** Why the calendar moved the return, for the status line. */
+  const tripNote = useMemo(() => {
+    if (!moved) return null;
+    const to = formatIsoDateLabel(moved.to);
+    return moved.rule === "minimum"
+      ? `The shortest rental is ${formatHourSpan(rules.minRentalHours)}, so your return moved to ${to}.`
+      : `The longest rental is ${rules.maxRentalDays} days, so your return moved to ${to}.`;
+  }, [moved, rules.minRentalHours, rules.maxRentalDays]);
 
   /* ── the cars free for these dates, priced ───────────────────────────── */
 
@@ -188,6 +231,8 @@ export function useQuickBook() {
   const availability = useVehicleAvailability({
     startDate: datesForQuery?.pickupDate ?? null,
     endDate: datesForQuery?.dropoffDate ?? null,
+    pickupTime: datesForQuery?.pickupTime ?? null,
+    dropoffTime: datesForQuery?.dropoffTime ?? null,
     enabled: datesForQuery !== null,
   });
 
@@ -310,8 +355,10 @@ export function useQuickBook() {
     setTripRange,
     startTripOn,
     tripValid,
+    tripNote,
     isPickupDateDisabled,
     isReturnDateDisabled,
+    isReturnSlotOpen,
     cars,
     carsLoading,
     carsError: fleet.isError || availability.isError || fleetRules.isError,

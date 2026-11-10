@@ -42,6 +42,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { Pill } from "./_kit";
+import { AlertTriangle } from "lucide-react";
+import { formatInTimeZone } from "date-fns-tz";
+import { bookingRuleNotes, type BookingRuleNote, type BookingRuleSettings } from "@/lib/booking-rule-notes";
 
 type Taken = { kind: "booked" | "maintenance" | "blocked" | "closed"; label: string };
 
@@ -139,6 +142,8 @@ export function RentalDatesDialog({
   pickupAt,
   returnAt,
   onApply,
+  rules = null,
+  timezone,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -149,6 +154,10 @@ export function RentalDatesDialog({
   pickupAt: string;
   returnAt: string;
   onApply: (pickupAt: string, returnAt: string) => void;
+  /** Settings → Booking rules. The dialog NOTES a trip that breaks them; it does not refuse it. */
+  rules?: BookingRuleSettings | null;
+  /** The tenant's zone, so "how far ahead" is judged where the car is. */
+  timezone?: string;
 }) {
   const { data: taken, isLoading } = useCarCalendar(open ? vehicleId : null, rentalId);
   const [start, setStart] = useState<string | null>(null);
@@ -205,6 +214,18 @@ export function RentalDatesDialog({
     setEnd(k);
   };
 
+  // The booking site's rules, read against what is picked so far: the notice
+  // as soon as there is a pickup, the shortest and longest once there is a
+  // return. Said beside the dates — the admin may still use them.
+  const notes = useMemo<BookingRuleNote[]>(() => {
+    if (!start) return [];
+    return bookingRuleNotes({
+      pickupAt: `${start}T${startTime}`,
+      returnAt: end ? `${end}T${endTime}` : "",
+      now: tenantClock(timezone),
+      settings: rules,
+    });
+  }, [start, startTime, end, endTime, rules, timezone]);
   const preview = start && !end && hover && hover > start ? hover : end;
   const days = start && end ? differenceInCalendarDays(fromYmd(end), fromYmd(start)) : null;
 
@@ -301,7 +322,7 @@ export function RentalDatesDialog({
         </div>
 
         {problem && <p className="rounded-2xl bg-destructive/[0.07] px-4 py-2.5 text-xs text-destructive">{problem}</p>}
-
+        <BookingRuleNotes notes={notes} />
         {/* the two ends, each with its time */}
         <div className="grid grid-cols-2 gap-3">
           <End label="Pickup" day={start} time={startTime} setTime={setStartTime} active={!start || !!end} />
@@ -333,6 +354,41 @@ function Key({ className, label }: { className: string; label: string }) {
       <span className={cn("size-2.5 rounded-sm", className)} />
       {label}
     </span>
+  );
+}
+
+/** "yyyy-MM-ddTHH:mm" right now on the tenant's own clock (the admin may be elsewhere). */
+export function tenantClock(timezone: string | undefined): string {
+  const pattern = "yyyy-MM-dd'T'HH:mm";
+  try {
+    return formatInTimeZone(new Date(), timezone || "UTC", pattern);
+  } catch {
+    return format(new Date(), pattern);
+  }
+}
+
+/**
+ * The booking site's rules this trip breaks — said, not enforced. The site
+ * would refuse these dates; an admin may take the booking anyway (a walk-in,
+ * a one-night favour, a long lease), and should know they are doing so.
+ */
+export function BookingRuleNotes({ notes, className }: { notes: BookingRuleNote[]; className?: string }) {
+  if (notes.length === 0) return null;
+  return (
+    <div role="status" className={cn("rounded-2xl bg-warning/10 px-4 py-2.5 text-xs ring-1 ring-warning/30", className)}>
+      <p className="flex items-center gap-1.5 font-semibold text-foreground">
+        <AlertTriangle aria-hidden className="size-3.5 text-warning" />
+        Outside your booking rules
+      </p>
+      <ul className="mt-1 list-disc space-y-0.5 pl-5 text-foreground">
+        {notes.map((n) => (
+          <li key={n.rule}>{n.text}</li>
+        ))}
+      </ul>
+      <p className="mt-1 text-muted-foreground">
+        The booking site would refuse these dates. You can still use them here — admin override.
+      </p>
+    </div>
   );
 }
 

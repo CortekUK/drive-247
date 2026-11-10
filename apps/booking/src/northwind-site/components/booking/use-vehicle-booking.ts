@@ -61,7 +61,7 @@ import {
   resolveBrowserTimezone,
   todayIso,
 } from "./time-utils";
-import { firstLegalPickup, firstLegalReturn } from "./trip-window";
+import { firstLegalPickup, firstLegalReturnDay, firstLegalReturnSlot } from "./trip-window";
 import { usePromoCode } from "./use-promo-code";
 import { validateBooking, type BookingField } from "./validation";
 
@@ -327,14 +327,20 @@ export function useVehicleBooking(vehicleId: string) {
       patch.pickupDate = firstPickup;
     }
     const pickupDate = patch.pickupDate ?? state.pickupDate;
+    if (state.pickupTime === "") patch.pickupTime = firstSlot;
+    const pickupTime = patch.pickupTime ?? state.pickupTime;
 
-    const firstReturn = firstLegalReturn(pickupDate, rules);
+    // The return floor follows the clock, as the booking flow's does: under a
+    // 1 day 2 hours minimum a 10:00 pickup seeds tomorrow from 12:00.
+    const firstReturn = firstLegalReturnDay(pickupDate, pickupTime, rules);
     if (!isIsoDate(state.dropoffDate) || state.dropoffDate < firstReturn) {
       patch.dropoffDate = firstReturn;
     }
+    const dropoffDate = patch.dropoffDate ?? state.dropoffDate;
 
-    if (state.pickupTime === "") patch.pickupTime = firstSlot;
-    if (state.dropoffTime === "") patch.dropoffTime = preferredSlot;
+    if (state.dropoffTime === "") {
+      patch.dropoffTime = firstLegalReturnSlot(pickupDate, pickupTime, dropoffDate, rules, preferredSlot) ?? preferredSlot;
+    }
 
     if (Object.keys(patch).length > 0) form.patch(patch);
     // `form` is a fresh object on every store write; depending on it would make
@@ -428,14 +434,17 @@ export function useVehicleBooking(vehicleId: string) {
   const quoteStart = rangeReady ? form.pickupDate : null;
   const quoteEnd = rangeReady ? form.dropoffDate : null;
 
+  // Judged by the clock once both times are picked (a car back at 10:00 is
+  // free again from 10:00 plus the turnaround buffer); by whole days before.
   const unavailableReason = useMemo<UnavailableReason | null>(() => {
     if (!quoteStart || !quoteEnd) return null;
-    const clash = bookedDates.ranges.find(
-      (range) => range.startDate <= quoteEnd && range.endDate >= quoteStart,
-    );
-    if (!clash) return null;
-    return clash.type === "blocked" ? "blocked" : "rented";
-  }, [bookedDates.ranges, quoteStart, quoteEnd]);
+    return bookedDates.clashFor({
+      pickupDate: quoteStart,
+      pickupTime: form.pickupTime,
+      dropoffDate: quoteEnd,
+      dropoffTime: form.dropoffTime,
+    });
+  }, [bookedDates.clashFor, quoteStart, quoteEnd, form.pickupTime, form.dropoffTime]);
 
   const minPickupIso = useMemo(
     () => addDaysIso(todayIso(), Math.max(0, Math.ceil(rules.leadTimeHours / 24))),
