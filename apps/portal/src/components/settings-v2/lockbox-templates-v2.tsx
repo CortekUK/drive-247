@@ -307,6 +307,15 @@ export function LockboxTemplatesSectionV2({
   const segments = smsSegments(smsLength);
   const smsReady = !!tenant?.integration_twilio_sms;
 
+  // Live email preview: the subject and body with every {{variable}} filled with the
+  // same example values the SMS estimate uses (and that notify-lockbox-code substitutes).
+  const previewOpts = {
+    codeLength: rentalSettings?.lockbox_code_length,
+    defaultInstructions: instructions.trim() ? instructions : defaults.instructions,
+  };
+  const emailSubjectPreview = renderLockboxSmsExample(email.subject, previewOpts);
+  const emailBodyPreview = renderLockboxSmsExample(email.body, previewOpts);
+
   const saveInstructions = () =>
     instructionsSave.run(async () => {
       try {
@@ -527,6 +536,22 @@ export function LockboxTemplatesSectionV2({
             />
             {emailIssues.bodyError && <p className="text-xs text-destructive">{emailIssues.bodyError}</p>}
             {emailIssues.missingCode && missingCodeCopy(emailArmed)}
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Preview (with example details filled in)</p>
+            <div className="rounded-xl border border-border bg-muted/30 p-4">
+              <p className="mb-2 text-sm font-semibold text-foreground">
+                {emailSubjectPreview.trim() ? (
+                  emailSubjectPreview
+                ) : (
+                  <span className="font-normal text-muted-foreground">No subject yet</span>
+                )}
+              </p>
+              <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                {emailBodyPreview.trim() ? emailBodyPreview : "Nothing to preview yet."}
+              </p>
+            </div>
           </div>
           {!pageSave && (
             <Button

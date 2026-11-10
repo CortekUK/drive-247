@@ -3824,7 +3824,7 @@ const Settings = () => {
               {/* The lockbox code email, moved here from Key handover (now the
                   Lockbox page, whose Templates link targets this id). Email only: the code is
                   never texted, so the text-message template is not shown. */}
-              {v2ShowLockboxMessages && (
+              {v2ShowLockboxMessages && rentalForm.lockbox_enabled && (
                 <div id={settingsSectionId('lockbox-messages')} className="scroll-mt-24">
                   <LockboxTemplatesSectionV2
                     defaults={{ instructions: DEFAULT_LOCKBOX_INSTRUCTIONS, email: DEFAULT_LOCKBOX_EMAIL, sms: DEFAULT_LOCKBOX_SMS }}
