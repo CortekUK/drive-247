@@ -626,7 +626,10 @@ export function RentalsListV2() {
       )}
 
       {/* Rentals started with New Rental and not yet given a customer. */}
-      {currentView !== "calendar" && <RentalDrafts />}
+      {/* Drafts are half-made rentals: only someone who may edit rentals can
+          open or discard one. A viewer, or a manager given Rentals as view
+          only, had Discard buttons here (QA B8.6, 2026-11-10). */}
+      {currentView !== "calendar" && canEdit('rentals') && <RentalDrafts />}
 
       {/* Calendar View */}
       {currentView === "calendar" ? (
