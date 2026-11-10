@@ -3363,17 +3363,14 @@ const Settings = () => {
                     aria-label="Toggle Gig Driver booking option"
                   />
                 </SettingsRow>
-                <SettingsRow
-                  label="Show the average daily price"
-                  description="Vehicle cards show the price per day for the chosen dates, instead of the base rate."
-                >
-                  <SwitchV2
-                    checked={avgDailyEnabled}
-                    onCheckedChange={(next) => savePricingFlag('show_effective_daily_rate', next, avgDailyEnabled, persistedAvgDaily, setPendingAvgDaily, setSavingAvgDaily, next ? 'Showing effective average daily price' : 'Showing base rate on vehicle cards')}
-                    disabled={savingAvgDaily || !canEditGeneral}
-                    aria-label="Toggle effective daily price on vehicle cards"
-                  />
-                </SettingsRow>
+                {/* "Show the average daily price" is intentionally omitted on the
+                    v2 Booking-site page. It drives `show_effective_daily_rate`,
+                    which only the legacy booking site (MultiStepBookingWidget)
+                    reads; the v2 / new-design storefront (northwind-site) never
+                    consumes it, so here the toggle would be a no-op. Hidden so
+                    operators aren't shown a control that does nothing. The v1
+                    settings path below still exposes it for tenants on the legacy
+                    storefront. (QA B6.1, branch Business-Setting.) */}
                 <SettingsRow
                   label="Hide the price breakdown at checkout"
                   description="Checkout shows only the rental total, tax and grand total."
