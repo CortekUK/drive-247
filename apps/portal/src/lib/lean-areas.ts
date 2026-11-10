@@ -345,8 +345,23 @@ export type LeanHiddenArea = (typeof LEAN_HIDDEN_AREAS)[number];
  * way). Registering a key ahead of its call sites is the safe direction — an
  * unused key gates nothing.
  */
+/**
+ * Areas once hidden wholesale from lean tenants that have since been PROMOTED to
+ * per-tenant optional modules on v2. Their Settings → Optional modules switch,
+ * their sidebar entry and their page now follow the tenant's own flag
+ * (`vehicle_owners_enabled` / `fleet_health_enabled`) — exactly as they already
+ * do for every non-lean tenant — instead of being suppressed by the lean tier.
+ * They stay listed in `LEAN_HIDDEN_AREAS` above purely so the `LeanHiddenArea`
+ * type and the existing `useIsAreaHidden(...)` call sites keep compiling; this
+ * set just exempts them from the hide. The per-tenant flag still gates the page
+ * (incl. the route — see the vehicle-owners / owner-payouts / fleet-health page
+ * guards), so a typed link to a turned-off module 404s. (QA B7.1 / B7.2.)
+ */
+const LEAN_PROMOTED_AREAS: readonly LeanHiddenArea[] = ['owners', 'fleet-health'];
+
 export function isAreaHiddenForLean(area: LeanHiddenArea, lean: boolean): boolean {
   if (!lean) return false;
+  if (LEAN_PROMOTED_AREAS.includes(area)) return false;
   return LEAN_HIDDEN_AREAS.includes(area);
 }
 

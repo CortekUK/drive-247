@@ -37,7 +37,14 @@ export default function OwnerPayoutsPage() {
   // 15 live owner_payouts rows -- keep the page during the first-paint tick
   // before TenantContext resolves.
   const ownersHidden = useIsAreaHidden("owners");
-  if (ownersHidden) notFound();
+  // Optional module (QA B7.1): on a lean tenant the per-tenant flag gates the
+  // whole page, so a typed link to a turned-off module 404s. Non-lean tenants
+  // never enter this clause; `tenant != null` keeps the fail-open first paint.
+  const ownersOffForLean =
+    useIsLean() &&
+    tenant != null &&
+    (tenant as { vehicle_owners_enabled?: boolean }).vehicle_owners_enabled !== true;
+  if (ownersHidden || ownersOffForLean) notFound();
   const currency = tenant?.currency_code || "USD";
   const today = new Date();
 
