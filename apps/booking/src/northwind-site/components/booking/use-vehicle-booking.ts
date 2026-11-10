@@ -540,6 +540,26 @@ export function useVehicleBooking(vehicleId: string) {
     return flat > 0 ? `+${formatCurrency(flat)}` : "Free";
   }, [mode, tiersActive, tierRange, tenant?.area_delivery_fee, formatCurrency]);
 
+  /**
+   * A plain-language note of how far we deliver, shown under the delivery
+   * address. v2 has no geocoder, so a typed address is not measured against the
+   * radius; this says the coverage out loud and promises we confirm an
+   * out-of-area address before any charge, so a far address is explained rather
+   * than silently accepted.
+   */
+  const areaCoverageHint = useMemo(() => {
+    if (mode !== "area") return null;
+    const rawKm = tenant?.pickup_area_radius_km ?? tenant?.return_area_radius_km ?? null;
+    const km = rawKm == null ? null : Number(rawKm);
+    if (km == null || !Number.isFinite(km) || km <= 0) {
+      return "We deliver within our local area. If your address is outside it, we'll confirm we can reach it before you pay — you won't be charged until we do.";
+    }
+    const miles = (tenant?.distance_unit ?? "km") === "mi";
+    const value = miles ? Math.round(km * 0.621371) : Math.round(km);
+    const unit = miles ? "miles" : "km";
+    return `We deliver within about ${value} ${unit} of our base. If your address is outside that, we'll confirm we can reach it before you pay — you won't be charged until we do.`;
+  }, [mode, tenant?.pickup_area_radius_km, tenant?.return_area_radius_km, tenant?.distance_unit]);
+
   const pickupDelivery = useMemo<QuoteDeliverySelection>(
     () =>
       buildLeg({
@@ -1193,6 +1213,7 @@ export function useVehicleBooking(vehicleId: string) {
     isReturnDateDisabled,
     areaFeeHint,
     areaFeePending,
+    areaCoverageHint,
     promo,
     rentalDays: validation.rentalDays,
   };
