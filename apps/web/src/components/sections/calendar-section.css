@@ -213,3 +213,11 @@
 #calendar .cs-tablet { transition: background-color 200ms ease-out; }
 #calendar .cs-tablet.is-lit { background: hsl(var(--v2-primary)); }
 @media (prefers-reduced-motion: reduce) { #calendar .cs-tablet { transition: none; } }
+
+/* The bookings are buttons now: each opens its sheet (calendar-sheet.tsx). */
+button.cs-bar { border: 0; font-family: inherit; line-height: inherit; text-align: left; cursor: pointer; transition: filter 150ms ease-out; }
+button.cs-bar:hover { filter: brightness(0.97) saturate(1.1); }
+button.cs-bar:focus-visible { outline: 2px solid var(--cs-brand); outline-offset: 2px; }
+
+/* The labels on the sliding track's calendar (product-track.css shows and places them). */
+.cs-note, .cs-free, .cs-now-label { display: none; }

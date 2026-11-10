@@ -1,0 +1,284 @@
+/*
+ * Your booking site, in one section and on one screen (your-site.tsx): the working site on
+ * the left (about 75%), the setup and the site's four screens as cards on the right (25%). Flat, on the page's own ground: 1px
+ * borders, no shadows. Motion is the page's: 200ms ease-out, opacity plus a 12px lift.
+ */
+.ys { --ys-a: hsl(var(--v2-primary)); padding-block: clamp(64px, 9vw, 120px); }
+.ys-inner { display: grid; gap: 28px; width: min(100% - 2 * clamp(16px, 3vw, 64px), 1240px); margin-inline: auto; }
+.ys-side, .ys-demo { min-width: 0; }
+/* Stacked (small screens): the setup first, then the site. */
+.ys-side { order: 1; }
+.ys-demo { order: 2; }
+
+.ys-title { font-size: clamp(2.25rem, 7vw, 3.5rem); font-weight: 700; line-height: 1.04; letter-spacing: -0.045em; color: hsl(var(--v2-foreground)); text-wrap: balance; }
+
+/* The setup is one panel: a card on the page's ground, the settings inside it, a hairline between. */
+.ys-side { padding: clamp(16px, 1.4vw, 24px); border: 1px solid hsl(var(--v2-border)); border-radius: 20px; background: hsl(var(--v2-card)); }
+.ys-bar { border-bottom: 1px solid hsl(var(--v2-border)); }
+.ys-set:first-child { padding-top: 0; }
+.ys-set { min-width: 0; padding-block: 16px; }
+.ys-set + .ys-set { border-top: 1px solid hsl(var(--v2-border)); }
+.ys-label { display: flex; align-items: baseline; gap: 8px; font-size: 14px; font-weight: 700; color: hsl(var(--v2-foreground)); }
+.ys-label span { font-weight: 500; color: hsl(var(--v2-muted-foreground)); }
+
+/* The name. */
+.ys-input {
+  width: 100%;
+  height: 48px;
+  margin-top: 10px;
+  padding-inline: 16px;
+  border: 0;
+  border-radius: 12px;
+  outline: 0;
+  background: hsl(var(--v2-background));
+  box-shadow: inset 0 0 0 1px hsl(var(--v2-border));
+  font-size: 16px;
+  font-weight: 500;
+  color: hsl(var(--v2-foreground));
+  transition: box-shadow 200ms ease-in;
+}
+.ys-input::placeholder { color: hsl(var(--v2-muted-foreground)); opacity: 0.85; }
+.ys-input:focus { box-shadow: inset 0 0 0 1.5px hsl(var(--v2-primary)), 0 0 0 4px hsl(var(--v2-primary) / 0.14); transition-timing-function: ease-out; }
+.ys-status { display: flex; align-items: flex-start; gap: 6px; min-height: 20px; margin-top: 8px; font-size: 13px; line-height: 1.5; color: hsl(var(--v2-muted-foreground)); }
+.ys-status svg { flex: none; width: 14px; height: 14px; margin-top: 3px; }
+.ys-status.is-free { color: hsl(var(--v2-success)); }
+.ys-status b { font-weight: 600; color: hsl(var(--v2-foreground)); overflow-wrap: anywhere; }
+
+/* The templates: two rows in one list, each with a small sign, its name and what it feels like. */
+.ys-temps { display: grid; margin-top: 10px; overflow: hidden; border: 1px solid hsl(var(--v2-border)); border-radius: 14px; background: hsl(var(--v2-background)); }
+.ys-temps button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  padding: 10px 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 200ms ease-out, box-shadow 200ms ease-out;
+}
+.ys-temps button + button { border-top: 1px solid hsl(var(--v2-border)); }
+.ys-temps button:hover { background: color-mix(in srgb, var(--ys-a) 5%, transparent); }
+.ys-temps button.is-on { background: color-mix(in srgb, var(--ys-a) 10%, hsl(var(--v2-card))); box-shadow: inset 3px 0 0 var(--ys-a); }
+.ys-temps button:focus-visible { outline: 2px solid var(--ys-a); outline-offset: -2px; }
+.ys-temps b { font-size: 14px; font-weight: 600; line-height: 1.3; color: hsl(var(--v2-foreground)); }
+.ys-temps small { grid-column: 2; font-size: 12.5px; line-height: 1.35; color: hsl(var(--v2-muted-foreground)); }
+/* The sign: Classic is a bright page with a headline and a button; Glass is a pane over colour. */
+.ys-emblem { position: relative; grid-row: 1 / span 2; width: 40px; height: 30px; overflow: hidden; border-radius: 7px; box-shadow: inset 0 0 0 1px rgb(12 10 30 / 0.1); }
+.ys-emblem::before, .ys-emblem::after { content: ""; position: absolute; }
+.ys-emblem.is-classic { background: #fff; }
+.ys-emblem.is-classic::before { left: 6px; top: 8px; width: 18px; height: 4px; border-radius: 2px; background: #0c0a1e; box-shadow: 0 7px 0 -0.5px rgb(12 10 30 / 0.25); }
+.ys-emblem.is-classic::after { right: 6px; bottom: 6px; width: 10px; height: 5px; border-radius: 3px; background: var(--ys-a); }
+.ys-emblem.is-glass { background: linear-gradient(135deg, color-mix(in srgb, var(--ys-a) 55%, #fff), var(--ys-a)); }
+.ys-emblem.is-glass::before { inset: 6px 6px -4px; border-radius: 5px 5px 0 0; background: rgb(255 255 255 / 0.55); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.7); }
+.ys-emblem.is-glass::after { left: 12px; top: 12px; width: 16px; height: 3px; border-radius: 2px; background: rgb(12 10 30 / 0.7); }
+.ys-radio { grid-column: 3; grid-row: 1 / span 2; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px hsl(var(--v2-border)); color: #fff; }
+.is-on > .ys-radio { background: var(--ys-a); box-shadow: none; }
+.ys-radio svg { width: 11px; height: 11px; }
+
+/* The colours: ten dots in a row, the chosen one ringed. */
+.ys-swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.ys-swatches button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--sw);
+  color: #fff;
+  cursor: pointer;
+  transition: box-shadow 200ms ease-out, scale 200ms ease-out;
+}
+.ys-swatches button:hover { scale: 1.08; }
+.ys-swatches button.is-on { box-shadow: 0 0 0 2px hsl(var(--v2-card)), 0 0 0 4px var(--sw); }
+.ys-swatches button:focus-visible { outline: 2px solid hsl(var(--v2-foreground)); outline-offset: 4px; }
+.ys-swatches svg { width: 13px; height: 13px; }
+/* Graphite would vanish on a dark ground: every dot gets a faint edge there. */
+.dark .ys-swatches button { outline: 1px solid rgb(255 255 255 / 0.16); outline-offset: -1px; }
+.dark .ys-swatches button:focus-visible { outline: 2px solid hsl(var(--v2-foreground)); outline-offset: 4px; }
+
+/* The site's four screens, as cards. Only in the one-screen layout: stacked, the demo's own tabs do it. */
+.ys-nav { display: none; }
+.ys-cards { display: grid; margin-top: 10px; overflow: hidden; border: 1px solid hsl(var(--v2-border)); border-radius: 14px; background: hsl(var(--v2-background)); }
+.ys-cards li + li { border-top: 1px solid hsl(var(--v2-border)); }
+.ys-cards button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 200ms ease-out, box-shadow 200ms ease-out;
+}
+.ys-cards button:hover { background: color-mix(in srgb, var(--ys-a) 5%, transparent); }
+/* The screen you are on: a tint, and a bar of your colour down its edge. */
+.ys-cards button.is-on { background: color-mix(in srgb, var(--ys-a) 10%, hsl(var(--v2-card))); box-shadow: inset 3px 0 0 var(--ys-a); }
+.ys-cards button:focus-visible { outline: 2px solid var(--ys-a); outline-offset: -2px; border-radius: 12px; }
+.ys-step-no {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: hsl(var(--v2-card));
+  box-shadow: inset 0 0 0 1px hsl(var(--v2-border));
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: hsl(var(--v2-muted-foreground));
+  transition: background-color 200ms ease-out, color 200ms ease-out;
+}
+.ys-step-no svg { width: 12px; height: 12px; }
+/* A finished screen keeps its green tick, also while it is the one showing. */
+.ys-cards .is-on .ys-step-no { background: var(--ys-a); box-shadow: none; color: #fff; }
+.ys-cards .is-done .ys-step-no { background: hsl(var(--v2-success)); box-shadow: none; color: #fff; }
+.ys-cards b { flex: 1; min-width: 0; }
+.ys-next { flex: none; padding: 2px 8px; border-radius: 99px; background: var(--ys-a); color: #fff; font-size: 11px; font-weight: 600; }
+.ys-cards b { font-size: 14px; font-weight: 600; line-height: 1.3; color: hsl(var(--v2-foreground)); }
+/* What to do now, in one or two lines. Room for three, so the panel does not jump as it changes. */
+.ys-tip { min-height: 4.35em; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--ys-a) 8%, hsl(var(--v2-card))); font-size: 13px; line-height: 1.45; color: hsl(var(--v2-foreground)); text-wrap: pretty; }
+.ys-reset { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; font-size: 12.5px; font-weight: 600; color: hsl(var(--v2-muted-foreground)); cursor: pointer; transition: color 200ms ease-out; }
+.ys-reset:hover { color: hsl(var(--v2-foreground)); }
+.ys-reset svg { width: 13px; height: 13px; }
+
+/* The way in: the button, and the address it leads to. */
+.ys-close { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 18px; }
+.ys-go {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: none;
+  height: 48px;
+  padding-inline: 22px;
+  border-radius: 999px;
+  background: hsl(var(--v2-primary));
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 200ms ease-out;
+}
+.ys-go:hover { background: hsl(var(--v2-primary-hover)); }
+.ys-go:focus-visible { outline: 2px solid hsl(var(--v2-primary)); outline-offset: 3px; }
+.ys-go svg { width: 17px; height: 17px; transition: translate 200ms ease-out; }
+.ys-go:hover svg { translate: 2px 0; }
+.ys-close-line { min-width: 0; font-size: 13px; line-height: 1.4; color: hsl(var(--v2-muted-foreground)); }
+.ys-close-line b { display: block; font-weight: 600; color: hsl(var(--v2-foreground)); overflow-wrap: anywhere; }
+
+/* Arriving: the words and setup, then the site. */
+.ys-side, .ys-demo { opacity: 0; translate: 0 12px; }
+.is-in > .ys-side, .is-in > .ys-demo { opacity: 1; translate: 0 0; transition: opacity 200ms ease-out, translate 200ms ease-out; }
+.is-in > .ys-demo { transition-delay: 80ms; }
+
+/*
+ * One screen. Keep in step with FRAME in the component.
+ * The section is exactly as tall as the screen: a one-line heading, then the site on the left
+ * and the setup on the right, both filling the height. The window inside is laid out at its
+ * design width and scaled to fit (the component sets its width, zoom and height), so its
+ * screen scrolls inside itself.
+ */
+@media (min-width: 1100px) and (min-height: 700px) {
+  /* No header rides over this part of the page, so the section uses the screen's full height. */
+  .ys { height: 100svh; padding: clamp(20px, 3svh, 32px) 0 24px; }
+  /* Room after the play screen before the page moves on to the phones (Ghulam, 2026-11-10). */
+  .ys { margin-bottom: clamp(120px, 22svh, 260px); }
+  .ys-inner {
+    height: 100%;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: clamp(10px, 1.8svh, 18px) clamp(24px, 2.4vw, 40px);
+    width: min(100% - 2 * clamp(32px, 4vw, 64px), 1720px);
+  }
+  /* No heading on the one-screen layout (Ghulam, 2026-11-10): the window takes its space. It stays for screen readers. */
+  .ys-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .ys-demo { order: 0; grid-column: 1; grid-row: 1; height: 100%; min-height: 0; }
+  /* The setup runs the full height, beside the heading too. */
+  .ys-side { order: 0; grid-column: 2; grid-row: 1; display: flex; flex-direction: column; min-height: 0; }
+
+  /* The column has the screen's full height, so the settings share it out rather than huddle at the top. */
+  .ys-bar { flex: 1; display: flex; flex-direction: column; min-height: 0; border-bottom: 0; }
+  .ys-set { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; padding-block: clamp(8px, 1.7svh, 20px); }
+  .ys-set:first-child { justify-content: flex-start; padding-top: 0; }
+  .ys-label { font-size: clamp(14px, 1.8svh, 16px); }
+  .ys-input { height: clamp(44px, 6svh, 54px); }
+  .ys-cards button, .ys-temps button { padding-block: clamp(6px, 1.1svh, 12px); }
+  .ys-go { height: clamp(46px, 6svh, 54px); }
+  .ys-nav { display: block; }
+  /* The button sits at the foot of the column, level with the window's bottom edge. */
+  .ys-close { margin-top: auto; padding-top: clamp(8px, 1.4svh, 16px); }
+  .ys-close .ys-go { flex: 1 1 100%; }
+  /* The address is already said under the name, so here the button stands alone. */
+  .ys-close-line { display: none; }
+  /* Ten dots in one row, as big as the column lets them be. */
+  .ys-swatches { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: clamp(4px, 0.5vw, 8px); }
+  .ys-swatches button { width: 100%; height: auto; aspect-ratio: 1; }
+  .ys-swatches svg { width: 46%; height: 46%; }
+
+  /* The site fills the column's height: the guide, then the window taking the rest. */
+  .ys-demo .bd-demo { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  /* The cards on the right choose the screen here. */
+  .ys-demo .bd-views { display: none; }
+  .ys-demo .bd-guide, .ys-demo .bd-views + .bd-guide { flex: none; gap: 6px; margin-top: 0; }
+  /* No guide above the window here: the panel on the right carries the steps, the tip and Start over. */
+  .ys-demo .bd-guide { display: none; }
+  .ys-demo .bd-window { flex: 1; min-height: 0; margin-top: 0; }
+  .ys-demo .bd-window .pg-browser { display: flex; flex-direction: column; }
+  .ys-demo .bd-window .pg-screen, .ys-demo .bd-window.is-home .pg-screen { flex: 1; min-height: 0; height: auto; overflow: auto; scrollbar-width: thin; }
+}
+/* Shorter screens: the template pictures and the cards' second lines give way. */
+/* Mid-height screens: the template rows drop their second line to make room for the guide. */
+@media (min-width: 1100px) and (min-height: 820px) and (max-height: 959.98px) {
+  .ys-temps small { display: none; }
+  .ys-set { padding-block: clamp(8px, 1.3svh, 14px); }
+}
+@media (min-width: 1100px) and (min-height: 700px) and (max-height: 839.98px) {
+  /* Shorter screens: the two templates sit side by side, and everything draws in a little. */
+  .ys-temps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ys-temps button { column-gap: 8px; padding: 7px 10px; }
+  .ys-temps button + button { border-top: 0; border-left: 1px solid hsl(var(--v2-border)); }
+  .ys-temps small, .ys-radio { display: none; }
+  .ys-emblem { width: 30px; height: 22px; scale: 1; }
+  .ys-emblem.is-classic::before { left: 4px; top: 5px; width: 13px; height: 3px; box-shadow: 0 5px 0 -0.5px rgb(12 10 30 / 0.25); }
+  .ys-emblem.is-classic::after { right: 4px; bottom: 4px; width: 8px; height: 4px; }
+  .ys-emblem.is-glass::before { inset: 4px 4px -4px; }
+  .ys-emblem.is-glass::after { left: 8px; top: 8px; width: 13px; }
+  .ys-set { padding-block: clamp(5px, 1svh, 9px); }
+  .ys-input { height: 42px; margin-top: 6px; }
+  .ys-status { margin-top: 5px; font-size: 12.5px; line-height: 1.4; }
+  .ys-swatches, .ys-temps, .ys-cards { margin-top: 6px; }
+  .ys-cards button { padding-block: clamp(4px, 0.8svh, 7px); }
+  .ys-cards b { font-size: 13px; }
+  .ys-step-no { width: 20px; height: 20px; font-size: 11px; }
+  .ys-tip { min-height: 0; margin-top: 6px; padding: 7px 10px; font-size: 12.5px; line-height: 1.4; }
+  .ys-go { height: 42px; }
+  .ys-close { padding-top: 6px; }
+}
+
+@media (max-width: 479.98px) {
+  .ys-go { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ys-side, .ys-demo { opacity: 1; translate: none; transition: none !important; }
+  .ys-input, .ys-temps button, .ys-cards button, .ys-swatches button, .ys-go, .ys-go svg { transition: none; }
+  .ys-swatches button:hover { scale: 1; }
+}
+
+/*
+ * The site page fills its window (Ghulam, 2026-11-10: "use the full height, there's a blank
+ * space at the bottom"): each level down to the page stretches, and the hero takes the spare
+ * height, so the search bar sits at the bottom of the window with no white strip under it.
+ */
+@media (min-width: 1100px) {
+  .ys-demo .bd-window .pg-screen { display: flex; flex-direction: column; }
+  .ys-demo .bd-window .pg-screen > * { flex: 1 0 auto; display: flex; flex-direction: column; }
+  .ys-demo .ws-frame { flex: 1 0 auto; display: flex; flex-direction: column; }
+  .ys-demo .ws { flex: 1 0 auto; display: flex; flex-direction: column; }
+  .ys-demo .ws-classic .ws-c-hero { flex: 1 0 auto; }
+  .ys-demo .ws-glass .ws-sheet { flex: 1 0 auto; justify-content: center; }
+  /* Both portals are two-column grids (sidebar, page): they stretch, but stay grids. */
+  .ys-demo .bd-window .pg-screen > .bd-portal, .ys-demo .bd-window .pg-screen > .cp { display: grid; }
+}

@@ -13,6 +13,25 @@ import "./site-home.css";
  */
 
 const NAV = ["Fleet and Pricing", "Promotions", "Reviews", "About", "Contact"];
+/** The page each nav label opens, in the demo (demo-pages.tsx SitePage). */
+const NAV_PAGE = ["fleet", "promotions", "reviews", "about", "contact"] as const;
+export type SiteHomeNav = (typeof NAV_PAGE)[number];
+
+/*
+ * Only a live drawing gets real buttons; one drawn with no `onBook` gets plain spans.
+ * Kept out here, not inside SiteHome: made in there it was a new component on every render,
+ * so its button was thrown away and rebuilt each time the name changed, and a press that
+ * straddled a render was lost.
+ */
+function Act({ onBook, className, children }: { onBook?: () => void; className: string; children: ReactNode }) {
+  return onBook ? (
+    <button type="button" className={className} onClick={onBook}>
+      {children}
+    </button>
+  ) : (
+    <span className={className}>{children}</span>
+  );
+}
 
 export function SiteHome({
   template,
@@ -20,23 +39,24 @@ export function SiteHome({
   name,
   initial,
   onBook,
+  onNav,
+  onSignIn,
 }: {
   template: SiteTemplate;
   accent: string;
   name: string;
   initial: string;
   onBook?: () => void;
+  /** A live drawing: the nav opens the site's other pages, and Sign in the customer's portal. */
+  onNav?: (page: SiteHomeNav) => void;
+  onSignIn?: () => void;
 }) {
+  const links = NAV.map((n, i) => (
+    <Act key={n} onBook={onNav && (() => onNav(NAV_PAGE[i]))} className="ws-link">
+      {n}
+    </Act>
+  ));
   const style = { "--ws-a": accent } as CSSProperties;
-  // Only a live drawing gets real buttons; a thumbnail inside a picker button must not.
-  const Act = ({ className, children }: { className: string; children: ReactNode }) =>
-    onBook ? (
-      <button type="button" className={className} onClick={onBook}>
-        {children}
-      </button>
-    ) : (
-      <span className={className}>{children}</span>
-    );
   return (
     <div className="ws-frame">
       {template === "glass" ? (
@@ -45,13 +65,13 @@ export function SiteHome({
           <header className="ws-nav ws-pane-thin">
             <Brand name={name} initial={initial} />
             <span className="ws-links ws-pane-thin">
-              {NAV.map((n) => (
-                <span key={n}>{n}</span>
-              ))}
+              {links}
             </span>
             <span className="ws-acts">
-              <span className="ws-signin">Sign in</span>
-              <Act className="ws-btn">
+              <Act onBook={onSignIn} className="ws-signin">
+                {onSignIn ? "Dashboard" : "Sign in"}
+              </Act>
+              <Act onBook={onBook} className="ws-btn">
                 Book a car
               </Act>
             </span>
@@ -80,7 +100,7 @@ export function SiteHome({
               <b>Return to same place</b>
               <span>Different return</span>
             </span>
-            <Search Act={Act} glass />
+            <Search onBook={onBook} glass />
             <span className="ws-perks" aria-hidden>
               <span>
                 <BadgeCheck /> Licence checked online
@@ -100,13 +120,13 @@ export function SiteHome({
             <Brand name={name} initial={initial} />
             <span className="ws-links">
               <b>Home</b>
-              {NAV.map((n) => (
-                <span key={n}>{n}</span>
-              ))}
+              {links}
             </span>
             <span className="ws-acts">
-              <span className="ws-signin">Sign in</span>
-              <Act className="ws-btn">
+              <Act onBook={onSignIn} className="ws-signin">
+                {onSignIn ? "Dashboard" : "Sign in"}
+              </Act>
+              <Act onBook={onBook} className="ws-btn">
                 Book a car
               </Act>
             </span>
@@ -118,13 +138,15 @@ export function SiteHome({
               </h4>
               <p className="ws-c-sub">Pick a car, choose your dates and pay online. We&apos;ll have it clean and waiting for you.</p>
               <span className="ws-c-btns">
-                <Act className="ws-btn is-ink">
+                <Act onBook={onBook} className="ws-btn is-ink">
                   Choose your dates
                 </Act>
-                <span className="ws-btn is-plain">See all cars</span>
+                <Act onBook={onNav && (() => onNav("fleet"))} className="ws-btn is-plain">
+                  See all cars
+                </Act>
               </span>
             </div>
-            <div className="ws-c-art" aria-hidden>
+            <div className="ws-c-art" aria-hidden={!onBook}>
               <div className="ws-c-phone">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/landing-v4/cars/sonata.webp" alt="" />
@@ -134,7 +156,9 @@ export function SiteHome({
                   <small>Price</small>
                   <b>$59</b>
                 </span>
-                <span className="ws-btn is-full">Book this car</span>
+                <Act onBook={onBook} className="ws-btn is-full">
+                  Book this car
+                </Act>
               </div>
               <span className="ws-chip is-1">
                 <BadgeCheck /> Licence checked
@@ -147,7 +171,7 @@ export function SiteHome({
               </span>
             </div>
           </div>
-          <Search Act={Act} />
+          <Search onBook={onBook} />
         </div>
       )}
     </div>
@@ -163,7 +187,7 @@ function Brand({ name, initial }: { name: string; initial: string }) {
   );
 }
 
-function Search({ Act, glass = false }: { Act: (p: { className: string; children: ReactNode }) => ReactNode; glass?: boolean }) {
+function Search({ onBook, glass = false }: { onBook?: () => void; glass?: boolean }) {
   return (
     <div className={`ws-search${glass ? " ws-pane-thin" : ""}`}>
       <span>
@@ -188,7 +212,7 @@ function Search({ Act, glass = false }: { Act: (p: { className: string; children
         <small>Return</small>
         Add date
       </span>
-      <Act className="ws-btn is-find">
+      <Act onBook={onBook} className="ws-btn is-find">
         Find a car <ArrowRight />
       </Act>
     </div>

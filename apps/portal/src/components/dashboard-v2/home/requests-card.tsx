@@ -252,7 +252,7 @@ export function RequestsCard() {
   // kind, most with a portrait — is ON BY DEFAULT while the design is
   // reviewed; `?demo-requests=0` shows the tenant's real requests. Client-side
   // only. Flip the default back (`=== '1'`) before this widens past the canary.
-  const demo = useSearchParams()?.get('demo-requests') !== '0';
+  const demo = useSearchParams()?.get('demo-requests') === '1'; // samples opt-in only (Nov 10 2026): real signups land on v2
   const sample = useMemo(() => buildDemoRequests(), []);
   const isLoading = useSkeletonLoading(!demo && live.isLoading);
   const all = isLoading ? SKELETON_REQUESTS : demo ? sample : live.requests;

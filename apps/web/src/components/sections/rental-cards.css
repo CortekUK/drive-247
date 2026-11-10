@@ -12,7 +12,52 @@
 .rc-detail p { text-wrap: pretty; margin-top: 10px; font-size: 1.125rem; line-height: 1.4; letter-spacing: -0.012em; color: hsl(var(--v2-muted-foreground)); }
 .rc-detail ul { margin-top: 16px; border-top: 1px solid hsl(var(--v2-border)); }
 .rc-detail li { padding-block: 9px; border-bottom: 1px solid hsl(var(--v2-border)); font-size: 0.9375rem; font-weight: 500; color: hsl(var(--v2-foreground)); }
+
+/* Numbered steps: a number, the step, and (where written) one line on what happens in it. */
+.rc-step { display: flex; align-items: flex-start; gap: 14px; }
+.rc-step-n {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-top: -2px;
+  border: 1px solid hsl(var(--v2-border));
+  border-radius: 50%;
+  background: hsl(var(--v2-card));
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: hsl(var(--v2-muted-foreground));
+  position: relative;
+  isolation: isolate;
+  transition: border-color 200ms ease-out, color 200ms ease-out;
+}
+/*
+ * The line's colour fills the circle once the line has reached it: a fill that grows out from
+ * the middle, a beat after the line starts moving, so it reads as the line arriving.
+ */
+.rc-step-n::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  background: hsl(var(--v2-primary));
+  scale: 0;
+  opacity: 0;
+  transition: scale 200ms ease-in, opacity 200ms ease-in;
+}
+.rc-step:is([data-on], [data-done]) .rc-step-n { border-color: hsl(var(--v2-primary)); color: #fff; transition-delay: 180ms; }
+.rc-step:is([data-on], [data-done]) .rc-step-n::before { scale: 1; opacity: 1; transition: scale 420ms cubic-bezier(0.22, 1, 0.36, 1) 180ms, opacity 200ms ease-out 180ms; }
+@media (prefers-reduced-motion: reduce) { .rc-step-n::before { transition: none !important; } }
+.rc-step-body { display: flex; flex-direction: column; min-width: 0; }
+.rc-step-title { display: block; }
+.rc-step-detail { display: block; font-size: 0.9375rem; font-weight: 400; line-height: 1.5; color: hsl(var(--v2-muted-foreground)); }
+.rc-step-detail > span { display: block; min-height: 0; overflow: hidden; padding-top: 4px; }
+@media (prefers-reduced-motion: reduce) { .rc-step-n, .rc-step-detail { transition: none; } }
 .rc-stage, .rc-rail { display: none; }
+.rc-steps { position: relative; }
+.rc-steps-line, .rc-branch { display: none; }
 
 .rc-panel {
   position: relative;
@@ -42,14 +87,15 @@
 
 /* Keep in step with HOLD in the component. */
 @media (min-width: 1000px) and (min-height: 640px) and (prefers-reduced-motion: no-preference) {
-  /* Nine units: the WEIGHTS in the component. */
-  .rc-track { height: calc(100svh + 9 * 50svh); padding-block: 0; }
+  /* Ten units: the WEIGHTS in the component. */
+  .rc-track { height: calc(100svh + 10 * 50svh); padding-block: 0; }
   .rc-pin {
     position: sticky;
     top: 0;
     display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
-    gap: clamp(40px, 5vw, 88px);
+    /* About a third words, two thirds picture. */
+    grid-template-columns: minmax(0, 3fr) minmax(0, 7fr);
+    gap: clamp(32px, 3.5vw, 64px);
     align-items: center;
     height: 100svh;
     padding: 88px clamp(40px, 4.5vw, 72px) 24px;
@@ -68,7 +114,37 @@
     width: 1.5px;
     background: repeating-linear-gradient(to bottom, hsl(var(--v2-primary) / 0.3) 0 2px, transparent 2px 9px);
   }
-  .rc-rail span { position: absolute; top: 0; left: 0; display: block; width: 100%; height: 0; background: hsl(var(--v2-primary)); }
+  /* It moves from one step's number to the next, rather than jumping. */
+  .rc-rail span { position: absolute; top: 0; left: 0; display: block; width: 100%; height: 0; background: hsl(var(--v2-primary)); transition: height 300ms ease-out; }
+  /* Once it turns into the first number, the turn takes over from its tip. */
+  .rc-rail span[data-turned]::after { opacity: 0; }
+
+  /* The turn into the feature's first number. */
+  .rc-branch {
+    position: absolute;
+    left: 0;
+    display: block;
+    height: 1.5px;
+    margin-top: -0.75px;
+    background: hsl(var(--v2-primary));
+    transform-origin: left center;
+    scale: 0 1;
+    transition: scale 200ms ease-in, top 300ms ease-out;
+  }
+  .rc-branch[data-on] { scale: 1 1; transition: scale 220ms ease-out 80ms, top 300ms ease-out; }
+
+  /* The steps' own line, through the middle of the numbers, filled down to the step on screen. */
+  .rc-steps-line {
+    position: absolute;
+    left: 13.25px;
+    z-index: 0;
+    display: block;
+    width: 1.5px;
+    background: repeating-linear-gradient(to bottom, hsl(var(--v2-primary) / 0.3) 0 2px, transparent 2px 9px);
+  }
+  .rc-steps-line > span { display: block; width: 100%; height: 0; background: hsl(var(--v2-primary)); transition: height 300ms ease-out; }
+  .rc-steps .rc-step-n { z-index: 1; }
+
   .rc-rail span::after {
     content: "";
     position: absolute;
@@ -85,7 +161,7 @@
   .rc-list > li { padding-block: clamp(8px, 1.7svh, 16px); }
   .rc-list button { cursor: pointer; }
   .rc-list button:focus-visible { outline: 2px solid hsl(var(--v2-primary)); outline-offset: 4px; border-radius: 6px; }
-  .rc-list h2 { font-size: clamp(1.75rem, min(3.1vw, 5.6svh), 3.25rem); color: hsl(var(--v2-foreground) / 0.32); transition: color 200ms ease-out; }
+  .rc-list h2 { font-size: clamp(1.75rem, min(2.9vw, 5.6svh), 3.25rem); color: hsl(var(--v2-foreground) / 0.32); transition: color 200ms ease-out; }
   .rc-list button:hover h2 { color: hsl(var(--v2-foreground) / 0.6); }
   .rc-list > .is-active h2, .rc-list > .is-active button:hover h2 { color: hsl(var(--v2-foreground)); }
 
@@ -100,6 +176,9 @@
   .rc-detail li { transition: color 200ms ease-out; }
   .rc-detail li[data-on] { color: hsl(var(--v2-primary)); font-weight: 600; }
   .dark .rc-detail li[data-on] { color: hsl(var(--v2-link)); }
+  /* The step's line opens while it is the step on screen. */
+  .rc-step-detail { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 300ms ease-out, opacity 200ms ease-out; }
+  .rc-step[data-on] .rc-step-detail { grid-template-rows: 1fr; opacity: 1; }
 
   .rc-stage { position: relative; display: block; height: 100%; min-height: 0; }
   /* The whole screen floats centred on its tint, so none of it is cut off. */
@@ -119,10 +198,7 @@
   .rc-stage .rc-panel.is-active { opacity: 1; translate: 0 0; visibility: visible; transition: opacity 200ms ease-out, translate 200ms ease-out; }
 }
 
-/* Every feature plays its drawings in one box, the Launch section's card: a 1px line, 24px corners, a pale wash of the accent. */
-.rc-panel, .dark .rc-panel {
-  border: 1px solid color-mix(in srgb, hsl(var(--v2-primary)) 22%, hsl(var(--v2-border)));
-  background: color-mix(in srgb, hsl(var(--v2-primary)) 7%, hsl(var(--v2-card)));
-}
-.dark .rc-panel { background: color-mix(in srgb, hsl(var(--v2-primary)) 10%, hsl(var(--v2-card))); }
-
+/* No box: every feature's picture sits straight on the page. */
+.rc-panel, .dark .rc-panel { overflow: visible; border: 0; border-radius: 0; background: none; }
+.rc-inline { padding: 0; }
+.rc-stage .rc-panel { --rc-pad: 0px; }

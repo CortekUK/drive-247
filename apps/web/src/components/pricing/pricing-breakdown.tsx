@@ -1,141 +1,125 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 
-import {
-  BadgePercent,
-  Check,
-  CircleSlash,
-  ReceiptText,
-  Users,
-} from "lucide-react";
-import type { SignupPlan, SignupPlanId } from "@/lib/plans";
+import { Check } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useOptionalOnboarding } from "@/components/onboarding/onboarding-provider";
+import { formatPlanPriceUsd, type SignupPlan, type SignupPlanId } from "@/lib/plans";
 import type { EnterpriseCard as EnterpriseCardData } from "@/lib/enterprise-card-server";
-import type { PromoOffer } from "@/lib/promo-offer";
-import { EnterpriseCard } from "./enterprise-card";
-import { PlanCard } from "./plan-card";
+import { discountedPrice, type PromoOffer } from "@/lib/promo-offer";
+import { DepotArt, DrivewayArt, HeadquartersArt, LotArt } from "./plan-art";
 import "./pricing-breakdown.css";
 
 /*
- * Under the plan cards: everything a plan includes, what costs extra and who it is paid to,
- * and what a whole month really costs. Answers "$129–$349 with no breakdown looks expensive":
- * nothing about the bill is left for the operator to find out later.
+ * Pricing (Ghulam, 2026-11-10): four long cards side by side in one container,
+ * one per plan. On top of each: its drawing, a name for the size of business it is for, the
+ * price and the button. Under that, the breakdown, the same lines in the same order in every
+ * card, so reading across compares the plans. Hovering a line lights it in all four.
+ * The drawing, name, price and button of each card stay pinned to the top of the screen while its
+ * breakdown scrolls, so the price is always in view next to the line being compared.
  *
- * MOCK (Ghulam, 2026-11-07: "even if you have to mock something, do mock it for now"):
- * the add-on prices below are placeholders in the shape of the monthly add-on proposal
- * (memory: project_agreement_credits_economics). Today's live prices are credits, $1 each
- * in the smallest pack: 7 per e-signed agreement, 2 per text, 31 per licence check.
- * Set the real figures before this goes live. Card fees are Stripe's published US rate.
+ * Add-ons are priced by use. Their live prices are credits today and the monthly add-on
+ * prices are not agreed, so no figure is quoted here.
  */
 
-type Cell = "yes" | "usage" | "renter";
+/* What a business of each size is called, smallest first. Enterprise is always the last. */
+const LOOKS = [
+  { nick: "The Driveway", art: DrivewayArt },
+  { nick: "The Lot", art: LotArt },
+  { nick: "The Depot", art: DepotArt },
+] as const;
+const ENTERPRISE_LOOK = { nick: "The Headquarters", art: HeadquartersArt };
 
-/*
- * Where the plans do differ, it is in support, and the plans say so in their own bullets
- * (signup_plans, edited by a super admin). These rows read those bullets, so the table and
- * the cards above it can never disagree.
- */
-const has = (p: SignupPlan, words: string) => p.bullets.some((b) => b.toLowerCase().includes(words));
-const onboarding = (p: SignupPlan) => (has(p, "onboarding") ? "30 minutes, free" : "Included");
-const support = (p: SignupPlan) => (has(p, "priority") ? "Priority" : "Standard");
-const slack = (p: SignupPlan) => {
-  const line = p.bullets.find((b) => b.toLowerCase().includes("slack"));
-  if (!line) return "Not offered";
-  if (line.toLowerCase().includes("included")) return "Included";
-  const price = line.match(/\$\d+/)?.[0];
-  return price ? `${price} a month` : "Available";
-};
-
-const GROUPS: { title: string; rows: { name: string; cell?: Cell; value?: (p: SignupPlan) => string }[] }[] = [
-  {
-    title: "Your booking website",
-    rows: [
-      { name: "A booking website in your own brand" },
-      { name: "Online booking, checkout and payment" },
-      { name: "Your own domain" },
-      { name: "Fleet, promotions, reviews and contact pages" },
-    ],
-  },
-  {
-    title: "Rentals and fleet",
-    rows: [
-      { name: "Rentals, extensions and returns" },
-      { name: "Availability calendar" },
-      { name: "Fleet records and maintenance" },
-      { name: "Fines and tolls" },
-      { name: "Key handover and lockbox codes" },
-    ],
-  },
-  {
-    title: "Renters",
-    rows: [
-      { name: "Customer records and history" },
-      { name: "A portal for every renter" },
-      { name: "ID and licence checks", cell: "usage" },
-      { name: "E-signed rental agreements", cell: "usage" },
-      { name: "Insurance with Bonzah", cell: "renter" },
-    ],
-  },
-  {
-    title: "Payments",
-    rows: [
-      { name: "Stripe or Square, paid into your own account" },
-      { name: "Deposits and holds" },
-      { name: "Invoices and receipts" },
-      { name: "0% commission on every booking" },
-    ],
-  },
-  {
-    title: "Messages",
-    rows: [
-      { name: "Texts and WhatsApp with renters", cell: "usage" },
-      { name: "Booking emails and reminders" },
-    ],
-  },
-  {
-    title: "Your numbers",
-    rows: [
-      { name: "Insights and finances" },
-      { name: "Xero and Zoho sync" },
-      { name: "Trax, built in" },
-    ],
-  },
-  {
-    title: "Team and support",
-    rows: [
-      { name: "Unlimited staff logins with roles" },
-      { name: "Unlimited bookings and customers" },
-      { name: "Onboarding session", value: onboarding },
-      { name: "Support from inside your portal", value: support },
-      { name: "Your own Slack channel with us", value: slack },
-    ],
-  },
-];
-
-const PROMISES = [
-  { icon: BadgePercent, text: "0% commission on bookings" },
-  { icon: CircleSlash, text: "No setup fee" },
-  { icon: ReceiptText, text: "No contract. Cancel anytime" },
-  { icon: Users, text: "Unlimited staff and bookings" },
-];
+type Val = { text: string; quiet?: boolean } | "yes" | "addon";
 
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
-
-const TONES = ["lilac", "brand", "deep"] as const;
-
-/* What Enterprise has where the plans differ, read from its own card where it says. */
-const enterpriseValue = (row: string, card: EnterpriseCardData) => {
-  const said = (w: string) => card.bullets.some((b) => b.toLowerCase().includes(w));
-  if (row === "Onboarding session") return said("onboarding") ? "Assisted, with data migration" : "Included";
-  if (row === "Support from inside your portal") return said("named") ? "Named contact" : "Dedicated";
-  if (row === "Your own Slack channel with us") return said("slack") ? "Included" : "On request";
-  return null;
-};
+const says = (bullets: readonly string[], words: string) => bullets.some((b) => b.toLowerCase().includes(words));
 
 /*
- * The plans and the comparison, as one: each plan's card heads its own column, and the
- * rows below say what is in it. Enterprise, when it is switched on, is the last column.
+ * Where the plans differ they say so in their own bullets (signup_plans and the Enterprise
+ * card, both edited by a super admin). These lines read those bullets, so the breakdown and
+ * the plans can never disagree.
  */
+const ROWS: { label: string; plan(p: SignupPlan): Val; enterprise(c: EnterpriseCardData): Val }[] = [
+  {
+    label: "Per car, at a full fleet",
+    plan: (p) => (p.maxVehicles > 0 ? { text: `${money(p.priceUsd / p.maxVehicles)} a month` } : { text: "By fleet" }),
+    enterprise: () => ({ text: "Custom" }),
+  },
+  {
+    label: "Support",
+    plan: (p) => ({ text: says(p.bullets, "priority") ? "Priority" : "Standard" }),
+    enterprise: (c) => ({ text: says(c.bullets, "named") ? "Named contact" : "Dedicated" }),
+  },
+  {
+    label: "Onboarding",
+    plan: (p) => ({ text: says(p.bullets, "onboarding") ? "30 minutes, free" : "Included" }),
+    enterprise: (c) => ({ text: says(c.bullets, "migration") ? "With data migration" : "Assisted" }),
+  },
+  {
+    label: "Slack channel with us",
+    plan: (p) => {
+      const line = p.bullets.find((b) => b.toLowerCase().includes("slack"));
+      if (!line) return { text: "Not offered", quiet: true };
+      if (line.toLowerCase().includes("included")) return { text: "Included" };
+      const price = line.match(/\$\d+/)?.[0];
+      return { text: price ? `${price} a month` : "On request" };
+    },
+    enterprise: (c) => ({ text: says(c.bullets, "slack") ? "Included" : "On request" }),
+  },
+  { label: "Booking site on your own domain", plan: () => "yes", enterprise: () => "yes" },
+  { label: "Rentals, fleet and calendar", plan: () => "yes", enterprise: () => "yes" },
+  { label: "Renter portal and records", plan: () => "yes", enterprise: () => "yes" },
+  { label: "Payments into your own account", plan: () => ({ text: "0% commission" }), enterprise: () => ({ text: "0% commission" }) },
+  { label: "Insights, finances and Trax", plan: () => "yes", enterprise: () => "yes" },
+  { label: "ID checks, e-sign and texts", plan: () => "addon", enterprise: () => "addon" },
+  { label: "Staff logins and bookings", plan: () => ({ text: "Unlimited" }), enterprise: () => ({ text: "Unlimited" }) },
+];
+
+/** "$79", "$79.20". */
+const usd = (n: number) => `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
+
+function Value({ val }: { val: Val }) {
+  if (val === "yes") return <Check aria-label="Included" />;
+  if (val === "addon") return <i className="pb-chip">Add-on</i>;
+  return <b className={val.quiet ? "is-quiet" : undefined}>{val.text}</b>;
+}
+
+/* The lines of one card. `hot` is the line the visitor is on, lit in every card at once. */
+function Rows({ values, hot, onHot }: { values: Val[]; hot: number | null; onHot(i: number | null): void }) {
+  return (
+    <>
+      {ROWS.map((row, i) => (
+        <div key={row.label} className={`pb-row${hot === i ? " is-hot" : ""}`} onMouseEnter={() => onHot(i)} onMouseLeave={() => onHot(null)}>
+          <span>{row.label}</span>
+          <Value val={values[i]} />
+        </div>
+      ))}
+    </>
+  );
+}
+
+function Head({ look, name, band, tagline, tag, children }: { look: { nick: string; art: () => ReactNode }; name: string; band: string; tagline: string; tag?: boolean; children: ReactNode }) {
+  return (
+    <>
+      {/* Stays at the top of the screen while the breakdown scrolls under it, like a sheet's frozen header. */}
+      <div className="pb-stick">
+        {tag && <span className="pb-tag">Most popular</span>}
+        {/* No drawings on the cards (Ghulam, 2026-11-10): the big numbers carry them. look.art stays in plan-art.tsx. */}
+        <p className="pb-nick">{look.nick}</p>
+        <p className="pb-plan">
+          {name}
+          {band && <span> · {band}</span>}
+        </p>
+        {children}
+      </div>
+      {/* The one part of the top that scrolls away, so the pinned part stays short. */}
+      <p className="pb-tagline">{tagline}</p>
+    </>
+  );
+}
+
 export function PricingBreakdown({
   plans,
   enterprise = null,
@@ -149,114 +133,78 @@ export function PricingBreakdown({
   onSelect?(planId: SignupPlanId): void;
   showTrial?: boolean;
 }) {
+  const [hot, setHot] = useState<number | null>(null);
+  // `open()` never throws: every failure shows inside the signup dialog itself.
+  const onboarding = useOptionalOnboarding();
+  if (!onSelect && !onboarding) {
+    throw new Error("<PricingBreakdown> needs either an onSelect handler or <OnboardingProvider>");
+  }
+  const press = (id: SignupPlanId) => (onSelect ? onSelect(id) : onboarding?.open(id));
   const cols = plans.length + (enterprise ? 1 : 0);
+
   return (
     <div className="pb">
-      <div className="pb-table-wrap">
-        <table className="pb-table pb-merged" style={{ "--pb-cols": cols } as CSSProperties}>
-          <thead>
-            <tr>
-              <th scope="col" className="pb-corner">
-                <b>Everything in every plan</b>
-                <span>The whole platform on all of them. The difference is the size of fleet each is priced for.</span>
-              </th>
-              {plans.map((p, i) => (
-                <th key={p.id} scope="col">
-                  <PlanCard plan={p} onSelect={onSelect} offer={offer} tone={TONES[Math.min(i, TONES.length - 1)]} showTrial={showTrial} compact />
-                </th>
-              ))}
-              {enterprise && (
-                <th scope="col">
-                  <EnterpriseCard card={enterprise} compact />
-                </th>
+      <div className="pb-grid" style={{ "--pb-cols": cols, "--pb-rows": ROWS.length } as CSSProperties}>
+        {plans.map((p, i) => {
+          const trialDays = p.trialDays ?? 0;
+          return (
+            <article key={p.id} className={`pb-col${p.highlighted ? " is-hi" : ""}`}>
+              <Head look={LOOKS[Math.min(i, LOOKS.length - 1)]} name={p.name} band={p.fleetBand} tagline={p.tagline} tag={p.highlighted}>
+                <p className="pb-price">
+                  {offer && (
+                    <s aria-label={`was ${formatPlanPriceUsd(p)}`}>{formatPlanPriceUsd(p)}</s>
+                  )}
+                  <strong>{offer ? usd(discountedPrice(p.priceUsd, offer)) : formatPlanPriceUsd(p)}</strong>
+                  <span>/month</span>
+                </p>
+                {offer && (
+                  <p className="pb-note">
+                    {offer.discountText} {offer.durationText}
+                  </p>
+                )}
+                {/* Said once above the cards when every plan has the same trial. */}
+                {showTrial && trialDays > 0 && <p className="pb-note">{trialDays}-day free trial, card required</p>}
+                <Button
+                  size="lg"
+                  onClick={() => press(p.id)}
+                  // Several buttons with one label are ambiguous out of context, so the name carries the plan and price.
+                  aria-label={
+                    trialDays > 0
+                      ? `Start a ${trialDays}-day free trial of ${p.name}, then ${formatPlanPriceUsd(p)} per month`
+                      : `Subscribe to ${p.name}, ${formatPlanPriceUsd(p)} per month`
+                  }
+                  className="pb-btn"
+                >
+                  {trialDays > 0 ? "Start free trial" : "Subscribe"}
+                </Button>
+              </Head>
+              <Rows values={ROWS.map((r) => r.plan(p))} hot={hot} onHot={setHot} />
+            </article>
+          );
+        })}
+
+        {enterprise && (
+          <article className="pb-col">
+            <Head look={ENTERPRISE_LOOK} name={enterprise.name} band={enterprise.fleetBand} tagline={enterprise.tagline}>
+              <p className="pb-price">
+                <strong>{enterprise.priceLabel}</strong>
+              </p>
+              {/* Holds the trial line's room, so this button lines up with the plans' buttons. */}
+              {showTrial && (
+                <p className="pb-note" aria-hidden style={{ visibility: "hidden" }}>
+                  &nbsp;
+                </p>
               )}
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="pb-key">
-              <th scope="row">Sized for</th>
-              {plans.map((p) => (
-                <td key={p.id}>{p.fleetBand}</td>
-              ))}
-              {enterprise && <td>{enterprise.fleetBand ?? "51+ vehicles"}</td>}
-            </tr>
-            <tr className="pb-key">
-              <th scope="row">At a full fleet, per car</th>
-              {plans.map((p) => (
-                <td key={p.id}>{money(p.priceUsd / p.maxVehicles)} a month</td>
-              ))}
-              {enterprise && <td>Custom</td>}
-            </tr>
-            {plans.some((p) => (p.trialDays ?? 0) > 0) && (
-              <tr className="pb-key">
-                <th scope="row">Free trial</th>
-                {plans.map((p) => (
-                  <td key={p.id}>{p.trialDays ? `${p.trialDays} days` : "None"}</td>
-                ))}
-                {enterprise && <td>Talk to us</td>}
-              </tr>
-            )}
-            {GROUPS.map((group) => (
-              <Group key={group.title} group={group} plans={plans} enterprise={enterprise} />
-            ))}
-          </tbody>
-        </table>
+              <Button asChild size="lg" className="pb-btn">
+                <a href={enterprise.ctaHref}>{enterprise.ctaLabel}</a>
+              </Button>
+            </Head>
+            <Rows values={ROWS.map((r) => r.enterprise(enterprise))} hot={hot} onHot={setHot} />
+          </article>
+        )}
       </div>
-      <p className="pb-legend">
-        <span>
-          <Check aria-hidden /> Included
-        </span>
-        <span>
-          <i className="pb-chip">Add-on</i> Priced by use
-        </span>
-        <span>
-          <i className="pb-chip is-renter">Renter pays</i> Charged to your renter at checkout
-        </span>
-      </p>
 
-      <ul className="pb-promises">
-        {PROMISES.map((p) => (
-          <li key={p.text}>
-            <p.icon aria-hidden />
-            {p.text}
-          </li>
-        ))}
-      </ul>
+      <p className="pb-foot">No setup fee and no contract. Add-ons are priced by use, so you pay for them only when you use them.</p>
     </div>
-  );
-}
-
-function Group({ group, plans, enterprise }: { group: (typeof GROUPS)[number]; plans: readonly SignupPlan[]; enterprise: EnterpriseCardData | null }) {
-  return (
-    <>
-      <tr className="pb-group">
-        <th scope="rowgroup" colSpan={plans.length + 1 + (enterprise ? 1 : 0)}>
-          {group.title}
-        </th>
-      </tr>
-      {group.rows.map((row) => (
-        <tr key={row.name}>
-          <th scope="row">{row.name}</th>
-          {plans.map((p) => (
-            <td key={p.id} className={row.value ? "pb-val" : undefined}>
-              {row.value ? (
-                row.value(p)
-              ) : row.cell === "usage" ? (
-                <i className="pb-chip">Add-on</i>
-              ) : row.cell === "renter" ? (
-                <i className="pb-chip is-renter">Renter pays</i>
-              ) : (
-                <Check aria-label="Included" />
-              )}
-            </td>
-          ))}
-          {enterprise && (
-            <td className={enterpriseValue(row.name, enterprise) ? "pb-val" : undefined}>
-              {enterpriseValue(row.name, enterprise) ?? (row.cell === "renter" ? <i className="pb-chip is-renter">Renter pays</i> : <Check aria-label="Included" />)}
-            </td>
-          )}
-        </tr>
-      ))}
-    </>
   );
 }

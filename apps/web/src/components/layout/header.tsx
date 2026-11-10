@@ -4,15 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Menu, X } from "lucide-react";
-import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { HeaderCta } from "./header-cta";
-import { FloatingTrial } from "./floating-trial";
 
 const PILL_LINKS = [
   { label: "Features", href: "#features" },
   { label: "Trax", href: "#trax" },
   { label: "Pricing", href: "#pricing" },
-  { label: "FAQ", href: "#faq" },
 ];
 
 /**
@@ -72,20 +69,15 @@ export function Header({
     };
   }, [menuOpen]);
 
-  const themeDock = (
-    <div className="fixed bottom-4 left-4 z-50 rounded-full border bg-card p-1 max-xl:p-0 max-xl:[&_button]:size-11">
-      <ThemeToggle />
-    </div>
-  );
-
   if (overHero && floatingTrial && !pillPage) {
     return (
       <>
         {/* The pill's place in the flow, kept: the hero is drawn 4rem up into it
             (.hg-hero margin-top), so without this the hero would lose its top. */}
         <div aria-hidden className="h-16" />
-        <FloatingTrial />
-        {themeDock}
+        {/* The floating "Start free trial" button, off for now (Ghulam, 2026-11-10).
+            To bring it back, import FloatingTrial from "./floating-trial" and put
+            <FloatingTrial /> here again. */}
       </>
     );
   }
@@ -159,7 +151,6 @@ export function Header({
             )}
           </div>
         </header>
-        {themeDock}
       </>
     );
   }
@@ -194,7 +185,6 @@ export function Header({
         </Link>
 
         <div className="flex items-center gap-3">
-          <ThemeToggle />
           {/* "Book a strategy call", or "Dashboard" once the server confirms
               this caller already has a live portal. */}
           <HeaderCta />

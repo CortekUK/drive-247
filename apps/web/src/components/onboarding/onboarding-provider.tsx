@@ -60,7 +60,11 @@ import {
   writeLocalTenantDraft,
   writePendingOauth,
 } from "./tenant-draft";
+import { isMockSignup, mockResetSignup } from "./mock-signup";
 import { OnboardingScreen } from "./onboarding-screen";
+
+/** This tab's open signup screen, so a refresh can reopen it. */
+const OPEN_PLAN_KEY = "d247.signup.openPlan";
 import { ProvisioningScreen } from "./provisioning-screen";
 import {
   EMPTY_BUSINESS_DRAFT,
@@ -1463,11 +1467,57 @@ export function OnboardingProvider({
     void completeGoogleReturn(code, oauthError);
   }, [completeGoogleReturn]);
 
+  /**
+   * A refresh puts them back where they were.
+   *
+   * While the signup screen is open, this tab remembers the plan it is open
+   * on (sessionStorage, so it is this tab only and ends with it). On the next
+   * load the screen reopens through `open()`, which asks `signup-resume` which
+   * step they belong on: the card, the build, or the finished "You're live."
+   * screen. Closing the screen forgets it.
+   */
+  const restoreCheckedRef = useRef(false);
+  useEffect(() => {
+    let planId: string | null = null;
+    try {
+      planId = window.sessionStorage.getItem(OPEN_PLAN_KEY);
+    } catch {
+      /* storage blocked: nothing to restore */
+    }
+    restoreCheckedRef.current = true;
+    if (!isSignupPlanId(planId)) return;
+    // The Google and Stripe returns reopen the screen themselves.
+    if (new URLSearchParams(window.location.search).get("signup")) return;
+    const restorePlan = planId;
+    void (resumeProbeRef.current ?? Promise.resolve()).finally(() => {
+      window.setTimeout(() => open(restorePlan), 0);
+    });
+    // Mount only: `open` is stable enough for a one-shot restore.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!restoreCheckedRef.current) return;
+    try {
+      if (isOpen && state.planId) window.sessionStorage.setItem(OPEN_PLAN_KEY, state.planId);
+      else if (!isOpen) window.sessionStorage.removeItem(OPEN_PLAN_KEY);
+    } catch {
+      /* storage blocked: a refresh simply starts over */
+    }
+  }, [isOpen, state.planId]);
+
   const closeNow = useCallback(() => {
     setCloseConfirmOpen(false);
     setIsOpen(false);
     setPlanSwitchBlocked(null);
     const step = stateRef.current.step;
+    // Localhost rehearsal: closing the finished screen ends the run, so the
+    // next one starts from the top (mock-signup.ts).
+    if (step === "done" && isMockSignup()) {
+      mockResetSignup();
+      window.location.reload();
+      return;
+    }
     // A terminal or abandoned overlay returns to the idle state; a half-finished
     // dialog keeps its step so re-opening in the same page session is instant.
     if (step === "done" || step === "provisioning") {

@@ -39,7 +39,7 @@ export function useTourLayout(layer: RefObject<HTMLElement | null>): TourLayout 
     if (main) {
       sizes.observe(main);
       for (const child of main.children) sizes.observe(child);
-      marks.observe(main, { subtree: true, attributes: true, attributeFilter: ["data-line-in", "data-line-out"] });
+      marks.observe(main, { subtree: true, attributes: true, attributeFilter: ["data-line-in", "data-line-out", "data-line-steps", "data-line-out-y"] });
     }
     const media = matchMedia(LINE_MEDIA);
     media.addEventListener("change", onChange);

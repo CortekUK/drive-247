@@ -95,8 +95,14 @@
   opacity: 0;
   translate: 0 -24px;
 }
-.is-in .pw-note { animation: pw-drop 260ms ease-out forwards; }
-@keyframes pw-drop { to { opacity: 1; translate: 0 0; } }
+/* Each pass: slide down, stay, slide away; the next notification comes on the next pass. */
+.is-in .pw-note { animation: pw-cycle 4200ms ease-out infinite both; animation-play-state: paused; }
+.is-in.pw-live .pw-note { animation-play-state: running; }
+@keyframes pw-cycle {
+  0% { opacity: 0; translate: 0 -24px; }
+  7%, 78% { opacity: 1; translate: 0 0; }
+  86%, 100% { opacity: 0; translate: 0 -24px; }
+}
 .pw-note-icon {
   display: grid;
   place-items: center;
@@ -151,7 +157,10 @@
   font-size: 10.5px;
   font-weight: 700;
   color: #fff;
+  animation: pw-badge 300ms ease-out;
 }
+/* A badge pops as its count goes up. */
+@keyframes pw-badge { from { scale: 0.4; } 60% { scale: 1.2; } to { scale: 1; } }
 /* The two new arrivals settle onto the screen. */
 .pw-app.is-ours { opacity: 0; scale: 0.6; }
 .is-in .pw-app.is-ours { animation: pw-pop 260ms ease-out forwards; }
@@ -197,3 +206,89 @@
   .pw-note, .pw-app.is-ours { opacity: 1; translate: none; scale: none; }
   .is-in .pw-note, .is-in .pw-app.is-ours { animation: none; }
 }
+
+/*
+ * One screen (Ghulam, 2026-11-10: "make sure the heading and the fonts fit in one screen"):
+ * on a wide screen the words go left (heading, line, the four points) and the three phones
+ * right, all held to the view's height. The phones size from the height, so a short screen
+ * gets smaller phones, never a scroll.
+ */
+@media (min-width: 1100px) and (min-height: 640px) {
+  .pw-section { display: flex; align-items: center; min-height: 100svh; padding-block: clamp(56px, 8svh, 88px); }
+  .pw-inner {
+    display: grid;
+    grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.25fr);
+    grid-template-rows: auto;
+    grid-template-areas: "head stage";
+    column-gap: clamp(28px, 3vw, 56px);
+    align-items: center;
+    width: min(100% - 2 * clamp(32px, 3.5vw, 64px), 1700px);
+  }
+  /* The words line up with the tops of the phones (Ghulam, 2026-11-10). */
+  .pw-head { grid-area: head; align-self: start; text-align: left; }
+  .pw-head .sh { align-items: flex-start; margin: 0; text-align: left; }
+  .pw-head .sh-title { font-size: clamp(3rem, min(6vw, 11svh), 7.5rem); line-height: 1.06; text-wrap: balance; }
+  .pw-head .sh-sub { max-width: 40rem; font-size: clamp(1.25rem, min(1.75vw, 3.1svh), 1.875rem); text-wrap: pretty; }
+
+  .pw-stage { grid-area: stage; max-width: none; margin: 0; gap: clamp(10px, 1.2vw, 20px); }
+  .pw-phone { width: min(100%, 340px, calc((100svh - 190px) * 0.46)); }
+  .pw-col { gap: 12px; }
+  .pw-col.is-ops, .pw-col.is-renter { margin-top: clamp(24px, 4svh, 40px); }
+  .pw-col figcaption b { font-size: 14.5px; }
+  .pw-col figcaption span { font-size: 13px; }
+
+  .pw-points { grid-area: points; align-self: start; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 2.6svh, 24px) 28px; margin-top: clamp(24px, 4svh, 40px); }
+  .pw-points b { margin-top: 8px; font-size: 15px; }
+  .pw-points p { font-size: 13.5px; }
+}
+
+/* The home screen scales with its phone, so smaller phones never crowd their icons. */
+.pw-phone.is-home { container-type: inline-size; }
+.pw-home .pw-grid { gap: 6cqw 3cqw; padding: 19cqw 6cqw 0; }
+.pw-home .pw-app i { width: 18cqw; height: 18cqw; border-radius: 5cqw; font-size: 8cqw; }
+.pw-home .pw-app i svg { width: 8cqw; height: 8cqw; }
+.pw-home .pw-app small { font-size: max(8px, 3.4cqw); }
+.pw-home .pw-dock i { width: 17cqw; height: 17cqw; border-radius: 5cqw; }
+.pw-home .pw-dock svg { width: 8cqw; height: 8cqw; }
+
+/* The four points as mild cards (Ghulam, 2026-11-10): a soft white fill and a hairline ring. */
+.pw-points li {
+  padding: 18px 20px;
+  border-radius: 18px;
+  background: hsl(0 0% 100% / 0.55);
+  box-shadow: 0 0 0 1px hsl(239 40% 60% / 0.12);
+}
+.pw-points svg { display: block; }
+@media (min-width: 1100px) and (min-height: 640px) {
+  .pw-points { gap: 12px; }
+  .pw-points li { padding: clamp(12px, 2svh, 18px) 18px; }
+  .pw-points b { margin-top: 6px; }
+  .pw-points p { margin-top: 4px; line-height: 1.45; }
+}
+@media (prefers-reduced-motion: reduce) { .pw-badge { animation: none; } }
+
+/* The point illustrations (pwa-section.tsx PointArt). */
+.pw-points .pw-art { display: block; width: 120px; height: 64px; margin-bottom: 4px; }
+.pw-art .a-soft { fill: hsl(239 84% 67% / 0.08); stroke: hsl(239 84% 67% / 0.35); stroke-width: 1; }
+.pw-art .a-card { fill: #fff; stroke: hsl(239 84% 67% / 0.3); stroke-width: 1; }
+.pw-art .a-fill { fill: hsl(239 84% 67% / 0.18); }
+.pw-art .a-ink { fill: hsl(239 40% 30% / 0.35); }
+.pw-art .a-brand { fill: #4f44d8; }
+.pw-art .a-line { stroke: #6366f1; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+.pw-art .a-dot { fill: #4f44d8; }
+.pw-art .a-dot.is-off { fill: hsl(239 84% 67% / 0.3); }
+@media (min-width: 1100px) and (min-height: 640px) { .pw-points .pw-art { width: 96px; height: 52px; } }
+
+/* The Drive247 mark as the app icon and the notification icon. */
+img.pw-note-icon { object-fit: cover; padding: 0; background: #fff; box-shadow: 0 0 0 1px rgb(0 0 0 / 0.06); }
+.pw-app.is-ours i { overflow: visible; background: #fff; }
+.pw-app.is-ours i > img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+
+.pw-nowrap { white-space: nowrap; }
+@media (min-width: 1100px) and (min-height: 640px) {
+  .pw-head .sh-title { text-wrap: wrap; }
+  .pw-head .sh-sub { margin-top: clamp(18px, 3svh, 32px); }
+}
+
+/* More room above the phones section (Ghulam, 2026-11-10). */
+.pw-section { margin-top: clamp(120px, 18svh, 240px); }

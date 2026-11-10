@@ -1,0 +1,32 @@
+/*
+ * The Book a demo dialog draws in the operator portal's colours on every page, not only the
+ * landing page: it opens over the blog, the legal pages and the 404 too, and it sits in a
+ * portal outside `.lp-v2`. `.pv2-tokens` (on the same element) brings the portal's own
+ * values; this points the names the utilities read at them, as landing-theme.css does.
+ */
+@import "../../../../../shared/portal-v2/tokens.css";
+
+.bd-dialog {
+  --background: hsl(var(--v2-background));
+  --foreground: hsl(var(--v2-foreground));
+  --card: hsl(var(--v2-card));
+  --popover: hsl(var(--v2-popover));
+  --popover-foreground: hsl(var(--v2-popover-foreground));
+  --primary: hsl(var(--v2-primary));
+  --primary-foreground: hsl(var(--v2-primary-foreground));
+  --muted: hsl(var(--v2-muted));
+  --muted-foreground: hsl(var(--v2-muted-foreground));
+  --destructive: hsl(var(--v2-destructive));
+  --border: hsl(var(--v2-border));
+  --input: hsl(var(--v2-input));
+  --ring: hsl(var(--v2-ring));
+  color: var(--foreground);
+  border-radius: var(--v2-radius-4xl);
+  /* The accent wash behind the portal's "add" dialogs (FORM_DIALOG_WASH), on its popover ground. */
+  background-color: var(--popover);
+  background-image:
+    radial-gradient(40rem 26rem at 105% -10%, hsl(var(--v2-wash) / 0.3), transparent 62%),
+    radial-gradient(34rem 24rem at -8% -6%, hsl(var(--v2-chart-3) / 0.24), transparent 58%),
+    radial-gradient(36rem 22rem at 50% 118%, hsl(var(--v2-wash) / 0.2), transparent 62%),
+    linear-gradient(180deg, hsl(var(--v2-wash) / 0.08) 0%, transparent 45%);
+}

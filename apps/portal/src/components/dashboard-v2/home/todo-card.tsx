@@ -486,7 +486,7 @@ export function TodoCard() {
   // every tick, delete and add changes this list in memory only and never
   // reaches `tenant_notes`. Flip the default back (`=== '1'`) before this
   // widens past the canary.
-  const demo = useSearchParams()?.get('demo-todos') !== '0';
+  const demo = useSearchParams()?.get('demo-todos') === '1'; // samples opt-in only (Nov 10 2026): real signups land on v2
   const [demoNotes, setDemoNotes] = useState<TenantNote[]>(() => buildDemoTodos());
 
   const isLoading = useSkeletonLoading(!demo && real.isLoading);

@@ -148,6 +148,7 @@ export const BILLING_SCENARIO_KEY = "d247.dev.billingScenario";
 export const BILLING_SCENARIOS = [
   { id: "off", label: "Off", hint: "Real subscription state" },
   { id: "active", label: "Active", hint: "Paid, renewing normally" },
+  { id: "trial", label: "Free trial", hint: "Fresh signup, 14 days left" },
   { id: "payment_failed", label: "Payment failed", hint: "Card declined, window open" },
   { id: "overdue", label: "Overdue", hint: "Due date passed, window open" },
   { id: "grace_expiring", label: "Grace, nearly out", hint: "Same warning, stronger tone" },

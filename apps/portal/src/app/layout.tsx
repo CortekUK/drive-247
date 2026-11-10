@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ARRIVAL_COVER_CSS, ARRIVAL_COVER_SCRIPT } from "@/lib/arrival-cover";
 import type { CSSProperties } from "react";
 import { headers } from "next/headers";
 import { Manrope } from "next/font/google";
@@ -225,6 +226,10 @@ export default async function RootLayout({
         ) : (
           <script dangerouslySetInnerHTML={{ __html: brandingScript }} />
         )}
+        {/* A brand-new operator arriving: cover the dashboard until the
+            first-run questions are up (lib/arrival-cover.ts). */}
+        <style dangerouslySetInnerHTML={{ __html: ARRIVAL_COVER_CSS }} />
+        <script dangerouslySetInnerHTML={{ __html: ARRIVAL_COVER_SCRIPT }} />
       </head>
       <body suppressHydrationWarning className={themeClass} style={brandStyle}>
         {/* `experience` carries the tenant-level half of the same answer:

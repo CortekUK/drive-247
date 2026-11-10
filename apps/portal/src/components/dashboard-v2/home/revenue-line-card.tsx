@@ -55,7 +55,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { CarMascot } from './car-mascot';
 import { AutoSkeleton } from '@/components/skeleton-v2/auto-skeleton';
 import { useSkeletonLoading } from '@/hooks/use-skeleton-loading';
 import { skeletonFaker } from '@/lib/skeleton-data';
@@ -301,6 +300,40 @@ function TrendCard({
   );
 }
 
+/**
+ * Nothing collected yet. In place of a flat line at $0: a faint, dashed sample
+ * of the climbing line this card will draw, and one clear sentence. No mascot.
+ */
+function RevenueEmpty() {
+  return (
+    <div className="relative flex h-full items-center">
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 600 120"
+        preserveAspectRatio="none"
+        className="absolute inset-x-0 bottom-6 h-[70%] w-full text-[var(--pv-accent-ink)]"
+      >
+        <path d="M0 112 H600" stroke="var(--pv-line)" strokeWidth="1.5" />
+        <path
+          d="M0 108 C60 106 90 98 140 92 S230 80 270 70 S360 56 400 42 S500 24 600 10"
+          fill="none"
+          stroke="currentColor"
+          strokeOpacity="0.22"
+          strokeWidth="2"
+          strokeDasharray="5 6"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+      <div className="relative mx-auto max-w-[360px] rounded-xl bg-[var(--pv-paper)]/80 px-4 py-2 text-center backdrop-blur-[2px]">
+        <p className="text-[13.5px] font-semibold text-[var(--pv-ink)]">Your first payment will show here</p>
+        <p className="mt-1 text-[12px] leading-relaxed text-[var(--pv-ink-3)]">
+          As money comes in, I add it up day by day and this line climbs.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function RevenueLineCard({ className }: { className?: string }) {
   const { tenant } = useTenant();
   // The range and what the chart draws, chosen from the ⋯ menu (Sep 29 2026)
@@ -437,7 +470,9 @@ export function RevenueLineCard({ className }: { className?: string }) {
           </p>
         )}
 
-        {data && (
+        {data && empty && !isLoading && <RevenueEmpty />}
+
+        {data && !(empty && !isLoading) && (
           <>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart
@@ -573,14 +608,6 @@ export function RevenueLineCard({ className }: { className?: string }) {
               </ComposedChart>
             </ResponsiveContainer>
 
-            {empty && (
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-center">
-                <CarMascot mood="waiting" className="w-[104px]" />
-                <p className="text-[13px] text-[var(--pv-ink-3)]">
-                  No payments collected in the {RANGE_WORDS[range]}.
-                </p>
-              </div>
-            )}
           </>
         )}
       </div>

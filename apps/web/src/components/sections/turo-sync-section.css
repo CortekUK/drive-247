@@ -8,7 +8,7 @@
 
 .tx-kicker { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: var(--tx-brand); }
 .tx-kicker em { padding: 3px 9px; border: 1px solid currentColor; border-radius: 99px; font-size: 12px; font-style: normal; font-weight: 500; }
-.tx-copy h2 { margin-top: 14px; font-size: clamp(2.25rem, 4.4vw, 4rem); font-weight: 700; line-height: 1.04; letter-spacing: -0.045em; color: hsl(var(--v2-foreground)); text-wrap: balance; }
+.tx-copy h2 { margin-top: 14px; font-size: clamp(2.25rem, 4.4vw, 4rem); font-weight: 400; line-height: 1.08; letter-spacing: -0.03em; color: hsl(var(--v2-foreground)); text-wrap: balance; }
 .tx-lead { margin-top: 18px; max-width: 36rem; font-size: clamp(1.0625rem, 1.3vw, 1.25rem); line-height: 1.5; color: hsl(var(--v2-muted-foreground)); }
 .tx-points { display: grid; gap: 4px 28px; margin-top: 28px; }
 .tx-points > div { padding-block: 12px; border-top: 1px solid hsl(var(--v2-border)); }
@@ -122,3 +122,5 @@
 .tx-store .tx-chrome { width: 18px; height: 18px; }
 .tx-chrome-ext { display: grid; place-items: center; width: 2.2em; height: 2.2em; }
 .tx-chrome-ext .tx-chrome { width: 1.5em; height: 1.5em; }
+
+/* The Turo story (turo-story.tsx), in this section's left-aligned copy. */

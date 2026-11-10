@@ -8,11 +8,14 @@ export function BrowserChrome({
   tab,
   url,
   screenStyle,
+  nav,
   children,
 }: {
   tab: string;
   url: string;
   screenStyle?: CSSProperties;
+  /** A window that can be clicked around (the demo): its back and forward arrows work. */
+  nav?: { back?: () => void; forward?: () => void };
   children: ReactNode;
 }) {
   return (
@@ -30,9 +33,22 @@ export function BrowserChrome({
         </span>
         <Plus strokeWidth={2} className="pg-newtab" />
       </div>
-      <div className="pg-address" aria-hidden>
-        <ArrowLeft strokeWidth={2} />
-        <ArrowRight strokeWidth={2} className="pg-off" />
+      <div className="pg-address" aria-hidden={nav ? undefined : true}>
+        {nav ? (
+          <>
+            <button type="button" aria-label="Back" disabled={!nav.back} onClick={nav.back}>
+              <ArrowLeft strokeWidth={2} aria-hidden />
+            </button>
+            <button type="button" aria-label="Forward" disabled={!nav.forward} onClick={nav.forward}>
+              <ArrowRight strokeWidth={2} aria-hidden />
+            </button>
+          </>
+        ) : (
+          <>
+            <ArrowLeft strokeWidth={2} />
+            <ArrowRight strokeWidth={2} className="pg-off" />
+          </>
+        )}
         <RotateCw strokeWidth={2} />
         <span className="pg-url">
           <Lock strokeWidth={2} />

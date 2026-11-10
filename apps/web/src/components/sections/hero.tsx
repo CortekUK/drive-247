@@ -70,7 +70,7 @@ export function Hero({ trialDays = 0 }: { trialDays?: number }) {
         <HeroTitle />
 
         <p className="hg-sub text-base leading-relaxed text-white/85 sm:text-lg">
-          For <b className="hg-who">independent car rental operators and Turo hosts with 1 to 50 cars</b>. Bookings, payments, agreements, your website and Trax, all in one place.
+          For <b className="hg-who">independent car rental operators</b>. Bookings, payments, agreements, your website and Trax, all in one place.
         </p>
 
         <ul className="hg-proof" aria-label="What you get">

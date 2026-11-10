@@ -3,32 +3,44 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useSitePreview } from "@/lib/site-preview";
 import { SiteHome } from "./site-home";
-import { CalendarCheck, Car, Check, CreditCard, FileSignature, FileText, Globe, KeyRound, LayoutDashboard, Lock, MessageCircle, RotateCcw, ShieldCheck, Sparkles, UserRound, Users } from "lucide-react";
-import { useFadeIn } from "@/hooks/use-fade-in";
+import { ArrowLeft, ArrowRight, CalendarCheck, Car, Check, CreditCard, FileSignature, FileText, Globe, KeyRound, LayoutDashboard, Loader2, Lock, MessageCircle, RotateCcw, ShieldCheck, Sparkles, UserRound, Users } from "lucide-react";
 import { BrowserChrome } from "./portal-glass";
+import { AdminCustomers, AdminDashboard, AdminRentalsTop, AdminShell, AdminVehicles } from "./demo-admin";
+import { ADMIN_NAV, RENTER_NAV, RenterPortalV2, SITE_NAV, SiteFooter, SiteHeader, SitePageBody, type AdminPage, type RenterPage, type SitePage } from "./demo-pages";
 import "./booking-demo.css";
-import { Accent, SectionHeading } from "./section-heading";
 
 /*
- * Experience your own booking website: a working example of the booking site Drive247 builds
+ * The working part of "Your booking site" (your-site.tsx), which sets the name, template and
+ * colour this reads from the shared store. It has no heading or section of its own.
+ *
+ * A working example of the booking site Drive247 builds
  * for an operator, in a browser window. The visitor books a car the way a renter would, in
  * the real site's three steps (Trip details, Your car, Checkout: apps/booking/.../site-v2/book),
  * and the window then turns to the operator's portal, where the booking sits at the top of
  * Rentals (the real screen: public/v2/dash-main.png).
+ *
+ * It is one linked journey across the four screens (Ghulam, 2026-11-10: "a proper guided
+ * experience"): see the website, book a car, then be the renter (sign the agreement, verify
+ * the licence in the customer portal), then be the operator (open the booking in Rentals and
+ * approve it). What is done on one screen shows on the others. `onJourney` reports where the
+ * visitor is, so the section around this can show the steps and what to do next.
  *
  * Nothing here is sent anywhere and no card is charged. The dates are worked out in the
  * visitor's browser from today, so the example never shows a month that has passed.
  */
 
 type Stage = "dates" | "car" | "checkout" | "booked";
-type View = "home" | "site" | "renter" | "portal";
+export type DemoView = "home" | "site" | "renter" | "portal";
+type View = DemoView;
 
-const VIEWS: { id: View; label: string; icon: typeof Globe }[] = [
-  { id: "home", label: "Your website", icon: Globe },
-  { id: "site", label: "Booking", icon: CalendarCheck },
-  { id: "renter", label: "Customer portal", icon: UserRound },
-  { id: "portal", label: "Your portal", icon: LayoutDashboard },
+/* The four screens of the demo. `about` is the line on its card in your-site.tsx. */
+export const DEMO_VIEWS: { id: View; label: string; about: string; icon: typeof Globe }[] = [
+  { id: "home", label: "Your booking site", about: "Your home page", icon: Globe },
+  { id: "site", label: "Your booking widget", about: "Book a car as a renter", icon: CalendarCheck },
+  { id: "renter", label: "Your customer's portal", about: "What your renter sees", icon: UserRound },
+  { id: "portal", label: "Your admin portal", about: "Where the booking lands", icon: LayoutDashboard },
 ];
+const VIEWS = DEMO_VIEWS;
 
 const CARS = [
   { id: "sonata", name: "Hyundai Sonata", meta: "Sedan · 5 seats · Automatic", rate: 59, photo: "/landing-v4/cars/sonata.webp" },
@@ -44,9 +56,12 @@ const EARLIER = [
   { ref: "R-abed7c", name: "Liam Foster", car: "Genesis GV80", from: 3, to: 9, status: "Pending" },
   { ref: "R-24090e", name: "Mia Chen", car: "Hyundai Sonata", from: 5, to: 8, status: "Pending" },
   { ref: "R-d93dea", name: "Owen Price", car: "Chevrolet Camaro", from: -20, to: -16, status: "Completed" },
+  { ref: "R-4f3bbe", name: "Priya Nair", car: "Jeep Wrangler", from: -2, to: 4, status: "Active" },
+  { ref: "R-bf3260", name: "Daniel Okafor", car: "Ford Explorer", from: -1, to: 6, status: "Active" },
+  { ref: "R-9b4eed", name: "Ava Morgan", car: "Tesla Model 3", from: -34, to: -30, status: "Completed" },
 ] as const;
 
-const STEPS = ["Choose dates", "Pick a car", "Check out", "See it in your portal"];
+const STEPS = ["Choose dates", "Pick a car", "Check out", "See it in your admin portal"];
 const SITE_STEPS = ["Trip details", "Your car", "Checkout"];
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
@@ -58,6 +73,7 @@ const WEEKS = 5;
 const addDays = (date: Date, n: number) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + n);
 const longDate = (d: Date) => `${DAY[d.getDay()]} ${d.getDate()} ${MONTH[d.getMonth()]}`;
 const shortDate = (d: Date) => `${MONTH[d.getMonth()]} ${d.getDate()}`;
+const fullDate = (d: Date) => `${MONTH[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 const money = (n: number) => `$${n.toLocaleString("en-US")}`;
 
 function stepOf(stage: Stage, view: View) {
@@ -65,9 +81,21 @@ function stepOf(stage: Stage, view: View) {
   return stage === "dates" ? 0 : stage === "car" ? 1 : 2;
 }
 
-export function BookingDemo() {
-  const { ref, visible } = useFadeIn();
+/** Where the visitor is in the journey: the step they are on (4 = all done), and what to do next. */
+export type DemoJourney = { step: number; tip: string; started: boolean; reset: () => void };
+/* The steps are the four screens themselves, under the names on their tabs (Ghulam, 2026-11-10). */
+export const JOURNEY_STEPS: { view: DemoView; label: string }[] = DEMO_VIEWS.map((v) => ({ view: v.id, label: v.label }));
+type Verify = "no" | "checking" | "yes";
 
+/*
+ * `view` and `onView` let the section around it own which screen is showing, so its cards
+ * and the tabs here stay one choice. Left out, the demo keeps the choice itself.
+ */
+export function BookingDemoStage({
+  view: givenView,
+  onView,
+  onJourney,
+}: { view?: DemoView; onView?: (view: DemoView) => void; onJourney?: (journey: DemoJourney) => void } = {}) {
   // Today, in the visitor's own browser. Until it is known the calendar draws without numbers.
   const [today, setToday] = useState<Date | null>(null);
   useEffect(() => {
@@ -76,14 +104,48 @@ export function BookingDemo() {
   }, []);
 
   const site = useSitePreview();
-  const [view, setView] = useState<View>("home");
+  const [ownView, setOwnView] = useState<View>("home");
+  const view = givenView ?? ownView;
+  const setView = onView ?? setOwnView;
   const [stage, setStage] = useState<Stage>("dates");
   const [pickup, setPickup] = useState<number | null>(null);
   const [back, setBack] = useState<number | null>(null);
   const [carId, setCarId] = useState<string | null>(null);
   const [bookingRef, setBookingRef] = useState("");
+  // After the booking: what the renter has done, and what the operator has done about it.
+  const [signed, setSigned] = useState(false);
+  const [verified, setVerified] = useState<Verify>("no");
+  const [opened, setOpened] = useState(false);
+  const [approved, setApproved] = useState(false);
+  const [toured, setToured] = useState(false);
+  // Where the visitor is inside each of the three places: the preview is theirs to click around.
+  const [sitePage, setSitePage] = useState<SitePage>("home");
+  const [renterPage, setRenterPage] = useState<RenterPage>("rentals");
+  const [adminPage, setAdminPage] = useState<AdminPage>("rentals");
+  const brand = { name: site.name, initial: site.initial, slug: site.slug };
+  const goSite = (page: SitePage) => {
+    setSitePage(page);
+    setView("home");
+  };
+  // No sign-in in the preview: "Sign in" walks straight into the customer's portal.
+  const goRenter = () => {
+    // With a booking made, straight to it: that is where the renter's two jobs are.
+    setRenterPage(booked ? "rental" : "rentals");
+    setView("renter");
+  };
+  const goAdmin = () => {
+    setAdminPage(booked ? "rentals" : "dashboard");
+    setView("portal");
+  };
+  const verifyTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(verifyTimer.current), []);
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(timer.current), []);
+  // Leaving the booking site by any route (a tab here, a card outside) cancels the move to the portal.
+  useEffect(() => {
+    if (view !== "site") window.clearTimeout(timer.current);
+    if (view !== "home") setToured(true);
+  }, [view]);
 
   // Five weeks from this week's Monday. Bookings can start tomorrow.
   const start = useMemo(() => (today ? addDays(today, -((today.getDay() + 6) % 7)) : null), [today]);
@@ -114,7 +176,10 @@ export function BookingDemo() {
   const pay = () => {
     setBookingRef(`R-${Math.random().toString(16).slice(2, 8)}`);
     setStage("booked");
-    timer.current = window.setTimeout(() => setView("portal"), 1800);
+    timer.current = window.setTimeout(() => {
+      setAdminPage("rentals");
+      setView("portal");
+    }, 1800);
   };
   const reset = () => {
     window.clearTimeout(timer.current);
@@ -123,22 +188,53 @@ export function BookingDemo() {
     setPickup(null);
     setBack(null);
     setCarId(null);
+    window.clearTimeout(verifyTimer.current);
+    setSigned(false);
+    setVerified("no");
+    setOpened(false);
+    setApproved(false);
+  };
+  const verify = () => {
+    setVerified("checking");
+    verifyTimer.current = window.setTimeout(() => setVerified("yes"), 1500);
   };
 
   // What to do next, said once above the window; the thing to press also gets a soft ring.
   const booked = stage === "booked" && car !== null;
   const tip =
-    view === "home"
-      ? "Your website's home page, in your template and colour. Press Find a car to book one."
+    view === "home" && sitePage !== "home"
+      ? `Your booking site's ${SITE_NAV.find((p) => p.id === sitePage)?.label} page. Every page is yours to edit. Book a car opens your booking widget.`
+      : view === "renter" && booked && renterPage === "rentals"
+        ? "Your customer's portal. Open the rental to see what's left to do before pickup."
+        : view === "renter" && renterPage !== "rental" && renterPage !== "rentals"
+          ? `Your customer's portal, ${RENTER_NAV.find((p) => p.id === renterPage)?.label}. Look around: Rentals has what to do before pickup.`
+        : view === "portal" && adminPage !== "rentals"
+          ? `Your admin portal, ${ADMIN_NAV.find((p) => p.id === adminPage)?.label}. New bookings from your site land in Rentals.`
+          : view === "home"
+      ? "Your booking site. Click any page, press Book a car for the widget, or Dashboard for your customer's portal."
       : view === "renter"
       ? booked
-        ? `This is what ${RENTER.name} sees after logging in to your site: the booking, the payment and what to do before pickup.`
-        : `This is what your renters see after logging in to your site. Book a car first and it shows up here.`
+        ? approved
+          ? `${RENTER.name} sees it confirmed: paid, signed, verified and approved. That's the whole journey.`
+          : !signed
+            ? `Your customer's portal. You're ${RENTER.name} now. Press Sign to sign the rental agreement.`
+            : verified !== "yes"
+              ? "Signed. Now press Verify to check the driving licence."
+              : "All done on the customer's side. Open your admin portal to approve the booking."
+        : `Your customer's portal. Book a car in your booking widget and it shows up here.`
       : view === "portal" && !booked
-        ? "Your own portal. Book a car on the booking site and watch it arrive here."
+        ? "Your admin portal. Book a car in your booking widget and watch it arrive here."
+        : view === "portal"
+          ? approved
+            ? `Approved. ${RENTER.name} gets a confirmation and the car is held for those dates. That's the whole journey.`
+            : !opened
+              ? "Your admin portal. There it is, at the top of your Rentals, the moment it was booked. Open it."
+              : signed && verified === "yes"
+                ? "Paid, signed and verified. Press Approve booking."
+                : "It's paid. The agreement and the licence wait on the renter. Open your customer's portal."
         : stage === "dates"
       ? pickup === null
-        ? "Tap the day you'd pick the car up."
+        ? "Your booking widget. Tap the day you'd pick the car up."
         : back === null
           ? "Now tap the day you'd bring it back."
           : "Those are your dates. Press See cars."
@@ -148,33 +244,59 @@ export function BookingDemo() {
           : "Choose any car. Each one is priced for your dates."
         : stage === "checkout"
           ? "Your details are filled in. Press Pay to book."
-          : view === "site"
-            ? "Booked. Now watch where it lands."
-            : "There it is, at the top of your Rentals, the moment it was booked.";
+          : "Booked. Now watch where it lands.";
 
   const step = stepOf(stage, view);
+
+  /*
+   * The window's own back and forward. Every place the visitor lands is a stop: the screen,
+   * and the page inside it. Going back or forward walks the stops without adding new ones.
+   */
+  const here = `${view}|${sitePage}|${renterPage}|${adminPage}|${view === "portal" && opened ? "open" : ""}`;
+  const trail = useRef<{ stops: string[]; at: number; moving: boolean }>({ stops: [], at: -1, moving: false });
+  const [, redraw] = useState(0);
+  useEffect(() => {
+    const t = trail.current;
+    if (t.moving) {
+      t.moving = false;
+    } else if (t.stops[t.at] !== here) {
+      t.stops = [...t.stops.slice(0, t.at + 1), here];
+      t.at = t.stops.length - 1;
+    }
+    redraw((n) => n + 1);
+  }, [here]);
+  const travel = (by: number) => {
+    const t = trail.current;
+    const stop = t.stops[t.at + by];
+    if (!stop) return;
+    t.at += by;
+    t.moving = true;
+    window.clearTimeout(timer.current);
+    const [toView, toSite, toRenter, toAdmin, toOpen] = stop.split("|");
+    setSitePage(toSite as SitePage);
+    setRenterPage(toRenter as RenterPage);
+    setAdminPage(toAdmin as AdminPage);
+    setOpened(toOpen === "open");
+    setView(toView as View);
+  };
+  const canBack = trail.current.at > 0;
+  const canForward = trail.current.at < trail.current.stops.length - 1;
+
+  // The journey's four steps, each done once and for all, whichever screen is showing.
+  const done = [toured || booked, booked, booked && signed && verified === "yes", booked && approved];
+  const at = done.indexOf(false);
+  const journeyStep = at === -1 ? JOURNEY_STEPS.length : at;
+  const started = pickup !== null || stage !== "dates";
+  const resetRef = useRef(reset);
+  resetRef.current = reset;
+  useEffect(() => {
+    onJourney?.({ step: journeyStep, tip, started, reset: () => resetRef.current() });
+  }, [onJourney, journeyStep, tip, started]);
   const portal = view === "portal";
   const hint = (on: boolean) => (on ? " bd-hint" : "");
 
   return (
-    <section id="booking-demo" aria-labelledby="booking-demo-heading" className="bd-section" style={{ "--bd-a": site.colour.hex } as CSSProperties}>
-      <div ref={ref} className={`bd-inner ${visible ? "fade-in-visible" : "fade-in-hidden"}`}>
-        <div className="bd-head">
-          <SectionHeading
-            id="booking-demo-heading"
-            title={
-              <>
-                Try all three of <Accent>your sites</Accent>
-              </>
-            }
-            sub={
-              <>
-                Your booking site, your renters&apos; portal and your own portal, in the colour and under the name you chose above. Book a car the way a renter would, then see it in both portals.
-              </>
-            }
-          />
-        </div>
-
+    <div id="booking-demo" className="bd-demo" style={{ "--bd-a": site.colour.hex } as CSSProperties}>
         <div className="bd-views" role="tablist" aria-label="Your sites">
           {VIEWS.map((v) => (
             <button
@@ -223,28 +345,76 @@ export function BookingDemo() {
 
         <div className={`bd-window${view === "home" ? " is-home" : ""}`}>
           <BrowserChrome
-            tab={portal ? `Rentals · ${site.name}` : view === "renter" ? `My bookings · ${site.name}` : view === "home" ? site.name : `Book a car · ${site.name}`}
+            nav={{ back: canBack ? () => travel(-1) : undefined, forward: canForward ? () => travel(1) : undefined }}
+            tab={
+              portal
+                ? `${ADMIN_NAV.find((p) => p.id === adminPage)?.label} · ${site.name}`
+                : view === "renter"
+                  ? `${RENTER_NAV.find((p) => p.id === renterPage)?.label ?? "Rentals"} · ${site.name}`
+                  : view === "home"
+                    ? sitePage === "home"
+                      ? site.name
+                      : `${SITE_NAV.find((p) => p.id === sitePage)?.label} · ${site.name}`
+                    : `Book a car · ${site.name}`
+            }
             url={
               view === "home"
-                ? `${site.slug}.drive-247.com`
+                ? `${site.slug}.drive-247.com${sitePage === "home" ? "" : `/${sitePage}`}`
                 : portal
-                ? `${site.slug}.portal.drive-247.com/rentals`
-                : view === "renter"
-                  ? `${site.slug}.drive-247.com/portal`
-                  : `${site.slug}.drive-247.com/booking`
+                  ? `${site.slug}.portal.drive-247.com/${adminPage}`
+                  : view === "renter"
+                    ? `${site.slug}.drive-247.com/portal/${renterPage === "rental" ? `rentals/${bookingRef}` : renterPage}`
+                    : `${site.slug}.drive-247.com/booking`
             }
           >
-            {view === "home" ? (
-              <SiteHome template={site.template} accent={site.colour.hex} name={site.name} initial={site.initial} onBook={() => setView("site")} />
+            {view === "home" && sitePage === "home" ? (
+              <div className="dp-home">
+                <SiteHome
+                  template={site.template}
+                  accent={site.colour.hex}
+                  name={site.name}
+                  initial={site.initial}
+                  onBook={() => setView("site")}
+                  onNav={goSite}
+                  onSignIn={goRenter}
+                />
+                <SiteFooter brand={brand} onNav={goSite} onSignIn={goRenter} onAdmin={goAdmin} />
+              </div>
+            ) : view === "home" ? (
+              <div className={`bd-site${site.template === "glass" ? " is-glass" : ""}`}>
+                <SiteHeader brand={brand} page={sitePage} onNav={goSite} onSignIn={goRenter} onBook={() => setView("site")} />
+                <SitePageBody key={sitePage} page={sitePage as Exclude<SitePage, "home">} brand={brand} cars={CARS} onBook={() => setView("site")} />
+                <SiteFooter brand={brand} onNav={goSite} onSignIn={goRenter} onAdmin={goAdmin} />
+              </div>
             ) : view === "renter" ? (
-              <RenterPortal
-                site={site}
+              <RenterPortalV2
+                brand={brand}
+                renter={RENTER}
+                page={renterPage === "rental" && !(booked && car) ? "rentals" : renterPage}
+                onPage={setRenterPage}
                 booking={
-                  booked && car
-                    ? { ref: bookingRef, car, from: pickup !== null ? dateAt(pickup) : null, to: back !== null ? dateAt(back) : null, total }
+                  booked && car && pickup !== null && back !== null && dateAt(pickup) && dateAt(back)
+                    ? {
+                        ref: bookingRef,
+                        car,
+                        total,
+                        days,
+                        from: shortDate(dateAt(pickup)!),
+                        to: shortDate(dateAt(back)!),
+                        fromFull: fullDate(dateAt(pickup)!),
+                        toFull: fullDate(dateAt(back)!),
+                        bookedOn: today ? fullDate(today) : "",
+                      }
                     : null
                 }
+                signed={signed}
+                verified={verified}
+                approved={approved}
+                onSign={() => setSigned(true)}
+                onVerify={verify}
+                onAdmin={goAdmin}
                 onBook={() => setView("site")}
+                onSite={() => goSite("home")}
               />
             ) : portal ? (
               <Portal
@@ -258,25 +428,23 @@ export function BookingDemo() {
                   from: pickup !== null ? dateAt(pickup) : null,
                   to: back !== null ? dateAt(back) : null,
                   days,
+                  total,
                 }}
+                signed={signed}
+                verified={verified === "yes"}
+                approved={approved}
+                opened={opened}
+                onOpen={() => setOpened(true)}
+                onClose={() => setOpened(false)}
+                onApprove={() => setApproved(true)}
+                onRenter={goRenter}
+                page={adminPage}
+                onPage={setAdminPage}
+                cars={CARS}
               />
             ) : (
               <div className={`bd-site${site.template === "glass" ? " is-glass" : ""}`}>
-                <header className="bd-site-bar">
-                  <span className="bd-brand">
-                    <i aria-hidden>{site.initial}</i>
-                    {site.name}
-                  </span>
-                  <nav className="bd-site-nav" aria-hidden>
-                    <span>Fleet and Pricing</span>
-                    <span>Reviews</span>
-                    <span>About</span>
-                    <span>Contact</span>
-                  </nav>
-                  <span className="bd-site-cta" aria-hidden>
-                    Book a car
-                  </span>
-                </header>
+                <SiteHeader brand={brand} page={null} onNav={goSite} onSignIn={goRenter} onBook={() => setView("site")} />
 
                 <ol className="bd-site-steps" aria-label="Booking steps">
                   {SITE_STEPS.map((label, i) => {
@@ -403,8 +571,8 @@ export function BookingDemo() {
                           {back !== null && dateAt(back) ? longDate(dateAt(back)!) : ""}. Booking {bookingRef}.
                         </p>
                         <p className="bd-lead">A confirmation is on its way to {RENTER.email}.</p>
-                        <button type="button" className="bd-link" onClick={() => { window.clearTimeout(timer.current); setView("renter"); }}>
-                          See it in the renter&apos;s portal
+                        <button type="button" className="bd-link" onClick={() => { window.clearTimeout(timer.current); goRenter(); }}>
+                          See it in your customer&apos;s portal
                         </button>
                       </div>
                     ) : (
@@ -453,8 +621,7 @@ export function BookingDemo() {
             )}
           </BrowserChrome>
         </div>
-      </div>
-    </section>
+    </div>
   );
 }
 
@@ -598,38 +765,114 @@ function Portal({
   booked,
   today,
   fresh,
+  signed,
+  verified,
+  approved,
+  opened,
+  onOpen,
+  onClose,
+  onApprove,
+  onRenter,
+  page,
+  onPage,
+  cars,
 }: {
   site: Site;
   booked: boolean;
   today: Date | null;
-  fresh: { ref: string; name: string; car: string; from: Date | null; to: Date | null; days: number };
+  page: AdminPage;
+  onPage: (page: AdminPage) => void;
+  cars: typeof CARS;
+  fresh: { ref: string; name: string; car: string; from: Date | null; to: Date | null; days: number; total: number };
+  signed: boolean;
+  verified: boolean;
+  approved: boolean;
+  opened: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  onApprove: () => void;
+  onRenter: () => void;
 }) {
   const at = (n: number) => (today ? shortDate(addDays(today, n)) : "");
+  const first = fresh.name.split(" ")[0];
+  const ready = signed && verified;
+  const detail = booked && opened;
   return (
-    <div className="bd-portal">
-      <aside className="bd-side" aria-hidden>
-        <span className="bd-org">
-          <i>{site.initial}</i>
-          {site.name}
-        </span>
-        <span>
-          <LayoutDashboard />
-          Dashboard
-        </span>
-        <span>
-          <Users />
-          Customers
-        </span>
-        <span>
-          <Car />
-          Vehicles
-        </span>
-        <span className="is-on">
-          <KeyRound />
-          Rentals
-        </span>
-      </aside>
-      <div className="bd-main">
+    <AdminShell brand={site} page={page} onPage={onPage}>
+      {page === "dashboard" ? (
+        <AdminDashboard key="dashboard" fresh={booked ? { name: fresh.name, car: fresh.car, total: fresh.total } : null} approved={approved} onRentals={() => onPage("rentals")} />
+      ) : page === "customers" ? (
+        <AdminCustomers key="customers" fresh={booked ? { name: fresh.name, email: RENTER.email } : null} verified={verified} />
+      ) : page === "vehicles" ? (
+        <AdminVehicles key="vehicles" cars={cars} fresh={booked ? { car: fresh.car } : null} />
+      ) : detail ? (
+        // The booking, opened: what is in, what is still waiting on the renter, and the approval.
+        <div key="detail" className="bd-main">
+          <button type="button" className="bd-backlink" onClick={onClose}>
+            <ArrowLeft aria-hidden />
+            Rentals
+          </button>
+          <div className="bd-toast" role="status">
+            <Sparkles aria-hidden />
+            <span>
+              {approved
+                ? `Done. I've sent ${first} the confirmation and held the ${fresh.car} on your calendar.`
+                : ready
+                  ? `${first} has paid, signed and verified. It's ready for you to approve.`
+                  : `${first} has paid. I'm waiting on ${!signed ? "the signed agreement" : ""}${!signed && !verified ? " and " : ""}${!verified ? "the licence check" : ""}.`}
+            </span>
+          </div>
+          <h3 className="bd-main-title">
+            {fresh.ref} <span className={`bd-state${approved ? " is-ok" : ""}`}>{approved ? "Confirmed" : "Pending"}</span>
+          </h3>
+          <p className="bd-main-sub">
+            {fresh.name} · {fresh.car} · {fresh.from ? longDate(fresh.from) : ""} to {fresh.to ? longDate(fresh.to) : ""} · {fresh.days}{" "}
+            {fresh.days === 1 ? "day" : "days"}
+          </p>
+          <ul className="bd-checks">
+            <li className="is-done">
+              <span className="bd-check-dot">
+                <Check strokeWidth={3} aria-hidden />
+              </span>
+              <b>Payment</b>
+              <small>{money(fresh.total)} paid by Visa ending 4242, into your account</small>
+            </li>
+            <li className={signed ? "is-done" : undefined}>
+              <span className="bd-check-dot">{signed ? <Check strokeWidth={3} aria-hidden /> : <FileSignature aria-hidden />}</span>
+              <b>Agreement</b>
+              <small>{signed ? `Signed by ${fresh.name}, kept on this rental` : "Sent to the renter, not signed yet"}</small>
+            </li>
+            <li className={verified ? "is-done" : undefined}>
+              <span className="bd-check-dot">{verified ? <Check strokeWidth={3} aria-hidden /> : <ShieldCheck aria-hidden />}</span>
+              <b>Licence</b>
+              <small>{verified ? "Verified, with a 94% face match" : "Waiting for the renter's licence and selfie"}</small>
+            </li>
+          </ul>
+          <div className="bd-detail-acts">
+            {approved ? (
+              <p className="bd-approved" role="status">
+                <Check strokeWidth={3} aria-hidden />
+                Booking approved. The keys are good to go.
+              </p>
+            ) : ready ? (
+              <button type="button" className="bd-go bd-hint" onClick={onApprove}>
+                Approve booking
+              </button>
+            ) : (
+              <>
+                <button type="button" className="bd-go" disabled>
+                  Approve booking
+                </button>
+                <button type="button" className="bd-next bd-hint" onClick={onRenter}>
+                  Go to your customer&apos;s portal
+                  <ArrowRight aria-hidden />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      ) : (
+      <div key="list" className="bd-main">
         {booked && (
         <div className="bd-toast" role="status">
           <Sparkles aria-hidden />
@@ -638,158 +881,58 @@ function Portal({
           </span>
         </div>
         )}
-        <h3 className="bd-main-title">Rentals</h3>
-        <p className="bd-main-sub">Manage rental agreements and contracts</p>
-        <div className="bd-table-wrap">
-          <table className="bd-table">
+        <AdminRentalsTop fresh={booked ? { total: fresh.total } : null} />
+        <div className="cp-card cp-table-wrap">
+          <table className="cp-table">
             <thead>
               <tr>
                 <th>Rental #</th>
                 <th>Customer</th>
-                <th className="bd-opt">Vehicle</th>
-                <th className="bd-opt">Pickup</th>
-                <th className="bd-opt">Return</th>
+                <th>Vehicle</th>
+                <th>Pickup</th>
+                <th>Return</th>
                 <th>Status</th>
+                <th aria-label="Open" />
               </tr>
             </thead>
             <tbody>
               {booked && (
-              <tr className="is-new">
+              <tr className="np-new is-link" onClick={onOpen}>
                 <td>
                   {fresh.ref}
                   <span className="bd-new">From your website</span>
                 </td>
                 <td>{fresh.name}</td>
-                <td className="bd-opt">{fresh.car}</td>
-                <td className="bd-opt">{fresh.from ? shortDate(fresh.from) : ""}</td>
-                <td className="bd-opt">{fresh.to ? shortDate(fresh.to) : ""}</td>
-                <td className="is-pending">Pending</td>
+                <td>{fresh.car}</td>
+                <td>{fresh.from ? shortDate(fresh.from) : ""}</td>
+                <td>{fresh.to ? shortDate(fresh.to) : ""}</td>
+                <td className={approved ? "is-ok" : "is-warn"}>{approved ? "Confirmed" : "Pending"}</td>
+                <td>
+                  <button type="button" className={`bd-open${approved ? "" : " bd-hint"}`} onClick={onOpen}>
+                    Open
+                  </button>
+                </td>
               </tr>
               )}
               {EARLIER.map((row) => (
                 <tr key={row.ref}>
                   <td>{row.ref}</td>
                   <td>{row.name}</td>
-                  <td className="bd-opt">{row.car}</td>
-                  <td className="bd-opt">{at(row.from)}</td>
-                  <td className="bd-opt">{at(row.to)}</td>
-                  <td className={row.status === "Pending" ? "is-pending" : "is-done"}>{row.status}</td>
+                  <td>{row.car}</td>
+                  <td>{at(row.from)}</td>
+                  <td>{at(row.to)}</td>
+                  <td className={row.status === "Pending" ? "is-warn" : row.status === "Active" ? "is-info" : "is-muted"}>{row.status}</td>
+                  <td />
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        <p className="cp-count np-count">
+          Showing {EARLIER.length + (booked ? 1 : 0)} of {EARLIER.length + (booked ? 1 : 0)} rentals <span>Show more</span>
+        </p>
       </div>
-    </div>
-  );
-}
-
-/* What a renter sees after logging in to the operator's site: their booking, its payment and agreement. */
-function RenterPortal({
-  site,
-  booking,
-  onBook,
-}: {
-  site: Site;
-  booking: { ref: string; car: (typeof CARS)[number]; from: Date | null; to: Date | null; total: number } | null;
-  onBook: () => void;
-}) {
-  const first = RENTER.name.split(" ")[0];
-  return (
-    <div className="bd-renter">
-      <header className="bd-site-bar">
-        <span className="bd-brand">
-          <i aria-hidden>{site.initial}</i>
-          {site.name}
-        </span>
-        <span className="bd-who" aria-hidden>
-          <i>{RENTER.name.split(" ").map((w) => w[0]).join("")}</i>
-          {RENTER.name}
-        </span>
-      </header>
-      <div className="bd-renter-body">
-        <aside className="bd-side" aria-hidden>
-          <span className="is-on">
-            <KeyRound />
-            My bookings
-          </span>
-          <span>
-            <CreditCard />
-            Payments
-          </span>
-          <span>
-            <FileSignature />
-            Agreements
-          </span>
-          <span>
-            <FileText />
-            Documents
-          </span>
-          <span>
-            <ShieldCheck />
-            Insurance
-          </span>
-          <span>
-            <MessageCircle />
-            Messages
-          </span>
-        </aside>
-        <div className="bd-main">
-          <h3 className="bd-main-title">Welcome back, {first}</h3>
-          <p className="bd-main-sub">Your bookings with {site.name}, all in one place.</p>
-          {booking ? (
-            <div className="bd-rbook">
-              <div className="bd-rbook-car">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={booking.car.photo} alt="" />
-              </div>
-              <div className="bd-rbook-info">
-                <span className="bd-rbook-tag">Upcoming · {booking.ref}</span>
-                <b>{booking.car.name}</b>
-                <small>
-                  {booking.from ? longDate(booking.from) : ""} to {booking.to ? longDate(booking.to) : ""} · 10:00 AM
-                </small>
-                <ul className="bd-rtodo">
-                  <li className="is-done">
-                    <Check aria-hidden /> Paid {money(booking.total)}
-                  </li>
-                  <li>
-                    <FileSignature aria-hidden /> Sign your agreement
-                  </li>
-                  <li>
-                    <ShieldCheck aria-hidden /> Verify your licence
-                  </li>
-                </ul>
-              </div>
-            </div>
-          ) : (
-            <div className="bd-rempty">
-              <Car aria-hidden />
-              <p>No bookings yet. Book a car on the booking site and it appears here.</p>
-              <button type="button" className="bd-go bd-hint" onClick={onBook}>
-                Book a car
-              </button>
-            </div>
-          )}
-          <div className="bd-rgrid">
-            <div>
-              <small>Payments</small>
-              <b>{booking ? money(booking.total) : "$0"}</b>
-              <span>{booking ? "Paid by Visa ending 4242" : "Nothing due"}</span>
-            </div>
-            <div>
-              <small>Agreements</small>
-              <b>{booking ? "1 to sign" : "None"}</b>
-              <span>Signed online, kept here</span>
-            </div>
-            <div>
-              <small>Messages</small>
-              <b>{site.name}</b>
-              <span>Replies within the hour</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+      )}
+    </AdminShell>
   );
 }

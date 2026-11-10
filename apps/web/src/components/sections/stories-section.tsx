@@ -1,7 +1,4 @@
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
-
-import { StoryCard } from "@/components/content/story-card";
+import { StoryPoster } from "@/components/content/story-poster";
 import { STORIES } from "@/content/stories";
 import "@/components/content/content.css";
 import { Accent, SectionHeading } from "./section-heading";
@@ -15,15 +12,16 @@ export function StoriesSection() {
   if (STORIES.length === 0) return null;
 
   return (
-    <section className="ct-section" aria-labelledby="st-title">
+    <section className="ct-section st-section" aria-labelledby="st-title">
       <div className="ct-inner">
-        <div className="ct-head">
+        <div className="ct-head ct-head-left">
           <div>
             <SectionHeading
               id="st-title"
+              align="left"
               title={
                 <>
-                  How operators <Accent>run on Drive247</Accent>
+                  Customer <Accent>stories</Accent>
                 </>
               }
               sub={
@@ -33,14 +31,10 @@ export function StoriesSection() {
               }
             />
           </div>
-          <Link href="/customers" className="ct-all">
-            All customer stories
-            <ArrowRight strokeWidth={2} aria-hidden />
-          </Link>
         </div>
         <div className="ct-grid">
           {STORIES.slice(0, 3).map((story) => (
-            <StoryCard key={story.slug} story={story} />
+            <StoryPoster key={story.slug} story={story} />
           ))}
         </div>
       </div>

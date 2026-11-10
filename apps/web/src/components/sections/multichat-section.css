@@ -192,12 +192,12 @@
 .mc-who dt svg { width: 14px; height: 14px; }
 .mc-who dd { font-weight: 600; overflow-wrap: anywhere; }
 .mc-who-title { justify-self: start; margin-top: 6px; font-size: 13px; font-weight: 700; color: hsl(var(--v2-muted-foreground)); }
-.mc-rental { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 6px 12px; width: 100%; padding: 16px; border: 1px solid hsl(var(--v2-border)); border-radius: 16px; background: hsl(var(--v2-card)); font-size: 14.5px; text-align: left; }
+.mc-rental { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px 12px; width: 100%; padding: 16px; border: 1px solid hsl(var(--v2-border)); border-radius: 16px; background: hsl(var(--v2-card)); font-size: 14.5px; text-align: left; }
 .mc-rental > svg { width: 18px; height: 18px; color: var(--mc-a); }
 .mc-rental b { display: block; font-weight: 600; }
 .mc-rental small { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: hsl(var(--v2-muted-foreground)); }
 .mc-rental small svg { width: 12px; height: 12px; }
-.mc-rental em { grid-column: 2; justify-self: start; padding: 1px 8px; border-radius: 99px; background: var(--mc-tint); color: var(--mc-a); font-size: 12.5px; font-style: normal; font-weight: 600; }
+.mc-rental em { grid-column: 1; justify-self: start; padding: 1px 8px; border-radius: 99px; background: var(--mc-tint); color: var(--mc-a); font-size: 12.5px; font-style: normal; font-weight: 600; }
 .dark .mc-rental em { color: hsl(var(--v2-link)); }
 
 .mc-features { display: grid; gap: 32px 40px; margin-top: clamp(48px, 5vw, 72px); }
@@ -222,3 +222,83 @@
   .mc-thread > li, .mc-box, .mc-callbox, .mc-hint::after { animation: none; }
   .mc-row, .mc-switch button, .mc-send { transition: none; }
 }
+
+/* Labels for the sliding track's screen (product-track.css shows and places them). */
+.pt-label { display: none; }
+
+/*
+ * The call record (mc-call-record.tsx), after the portal's: recording, summary, checkpoints,
+ * action items you can tick, and the transcript.
+ */
+.mc-call-record { align-self: center; width: min(100%, 640px); }
+.mcr {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  border-radius: 22px;
+  background: hsl(var(--v2-card));
+  box-shadow: 0 0 0 1px hsl(var(--v2-primary) / 0.15), 0 12px 32px -18px hsl(var(--v2-primary) / 0.35);
+  font-size: 13.5px;
+}
+.mcr-head { display: flex; align-items: center; gap: 12px; }
+.mcr-icon { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 50%; background: rgb(16 185 129 / 0.1); color: #059669; }
+.mcr-icon svg { width: 16px; height: 16px; }
+.mcr-title { flex: 1; min-width: 0; }
+.mcr-title b { display: block; font-size: 14.5px; font-weight: 600; }
+.mcr-title small { font-size: 12px; color: hsl(var(--v2-muted-foreground)); }
+.mcr-dl { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding-inline: 12px; border: 1px solid hsl(var(--v2-border)); border-radius: 99px; font-size: 12px; font-weight: 500; cursor: pointer; }
+.mcr-dl svg { width: 13px; height: 13px; }
+.mcr-player { display: flex; align-items: center; gap: 12px; margin-top: 4px; padding: 8px 12px; border-radius: 16px; background: hsl(var(--v2-primary) / 0.05); }
+.mcr-play { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 50%; background: hsl(var(--v2-primary)); color: #fff; cursor: pointer; }
+.mcr-play svg { width: 14px; height: 14px; fill: currentColor; }
+.mcr-wave { display: flex; flex: 1; align-items: center; gap: 2px; height: 28px; cursor: pointer; }
+.mcr-wave span { flex: 1; border-radius: 99px; background: hsl(var(--v2-primary) / 0.2); transition: background-color 200ms ease-out; }
+.mcr-wave span.is-on { background: hsl(var(--v2-primary)); }
+.mcr-time { flex: none; width: 72px; font-size: 11.5px; text-align: right; font-variant-numeric: tabular-nums; color: hsl(var(--v2-muted-foreground)); }
+.mcr-label { display: flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: hsl(var(--v2-muted-foreground)); }
+.mcr-label svg { width: 12px; height: 12px; color: hsl(var(--v2-primary)); }
+.mcr-summary { margin-top: -4px; line-height: 1.55; color: hsl(var(--v2-foreground) / 0.9); }
+.mcr-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.mcr-checks, .mcr-actions { display: grid; gap: 6px; margin-top: 6px; }
+.mcr-checks li { display: flex; align-items: flex-start; gap: 8px; }
+.mcr-checks i { display: grid; place-items: center; flex: none; width: 16px; height: 16px; margin-top: 1px; border-radius: 50%; background: rgb(16 185 129 / 0.15); color: #059669; }
+.mcr-checks i svg { width: 10px; height: 10px; }
+.mcr-actions button { display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left; cursor: pointer; }
+.mcr-actions i { display: grid; place-items: center; flex: none; width: 16px; height: 16px; margin-top: 1px; border: 2px solid hsl(var(--v2-muted-foreground) / 0.35); border-radius: 5px; color: #fff; transition: background-color 200ms ease-out, border-color 200ms ease-out; }
+.mcr-actions i svg { width: 10px; height: 10px; }
+.mcr-actions .is-done i { border-color: hsl(var(--v2-primary)); background: hsl(var(--v2-primary)); }
+.mcr-actions .is-done span { color: hsl(var(--v2-muted-foreground)); text-decoration: line-through; }
+.mcr-lines { display: grid; gap: 2px; }
+.mcr-line { display: flex; gap: 12px; width: 100%; padding: 6px 8px; border-radius: 12px; text-align: left; cursor: pointer; transition: background-color 200ms ease-out; }
+.mcr-line:hover { background: hsl(var(--v2-primary) / 0.05); }
+.mcr-line.is-live { background: hsl(var(--v2-primary) / 0.1); }
+.mcr-line > small { flex: none; width: 32px; padding-top: 1px; font-size: 11px; font-variant-numeric: tabular-nums; color: hsl(var(--v2-muted-foreground)); }
+.mcr-line b { display: block; font-size: 11.5px; font-weight: 600; }
+.mcr-line b.is-you { color: hsl(var(--v2-primary)); }
+.mcr-line span { line-height: 1.5; color: hsl(var(--v2-foreground) / 0.85); }
+.mcr-more { display: inline-flex; align-items: center; gap: 4px; justify-self: start; padding: 4px 8px; border-radius: 99px; font-size: 12px; font-weight: 500; color: hsl(var(--v2-primary)); cursor: pointer; }
+.mcr-more:hover { background: hsl(var(--v2-primary) / 0.08); }
+.mcr-more svg { width: 14px; height: 14px; transition: rotate 200ms ease-out; }
+.mcr-more svg.is-up { rotate: 180deg; }
+@media (max-width: 559.98px) { .mcr-cols { grid-template-columns: 1fr; } }
+
+/* The renter at a glance: numbers, checks, past rentals and a note. */
+.mc-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; margin-top: 4px; }
+.mc-stats div { padding: 10px 12px; border: 1px solid hsl(var(--v2-border)); border-radius: 12px; background: hsl(var(--v2-card) / 0.7); }
+.mc-stats dt { font-size: 11.5px; color: hsl(var(--v2-muted-foreground)); }
+.mc-stats dd { margin-top: 2px; font-size: 15px; font-weight: 500; }
+.mc-checks { display: grid; gap: 8px; width: 100%; font-size: 13.5px; }
+.mc-checks li { display: flex; align-items: center; gap: 8px; color: hsl(var(--v2-muted-foreground)); }
+.mc-checks i { width: 8px; height: 8px; border-radius: 50%; background: #d97706; }
+.mc-checks .is-ok { color: hsl(var(--v2-foreground)); }
+.mc-checks .is-ok i { background: #16a34a; }
+.mc-past { display: grid; width: 100%; font-size: 13.5px; }
+.mc-past li { display: flex; justify-content: space-between; padding-block: 8px; border-bottom: 1px solid hsl(var(--v2-border)); }
+.mc-past b { font-weight: 500; }
+.mc-past small { color: hsl(var(--v2-muted-foreground)); }
+.mc-note { width: 100%; padding: 10px 12px; border-radius: 12px; background: hsl(48 96% 89% / 0.5); font-size: 13.5px; line-height: 1.5; }
+
+/* A broadcast: one message to many renters (bulk messages). */
+.mc-broadcast { position: relative; display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 12px; border: 1px dashed hsl(var(--v2-primary) / 0.3); border-radius: 16px; }
+.mc-avatar.is-group svg { width: 18px; height: 18px; }
+.mcr-player, .mcr-label { position: relative; }

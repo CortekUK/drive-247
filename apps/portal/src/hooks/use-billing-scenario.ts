@@ -97,6 +97,24 @@ function patchFor(scenario: Exclude<BillingScenarioId, "off">): Partial<Overrida
         isResolved: true,
       };
 
+    /* A brand-new signup on its free trial: what the localhost signup
+       rehearsal hands off to (apps/web mock-signup.ts). */
+    case "trial":
+      return {
+        isSubscribed: true,
+        hasExpiredSubscription: false,
+        isTrialing: true,
+        trialDaysRemaining: 14,
+        isPastDue: false,
+        isInGracePeriod: false,
+        isGraceExpired: false,
+        graceDaysRemaining: 0,
+        graceSeverity: "none",
+        graceEndsAt: null,
+        owesOutstandingInvoice: false,
+        isResolved: true,
+      };
+
     /* A card declined. Stripe has moved the subscription to past_due and is
        still retrying; the operator keeps full access and sees the warning. */
     case "payment_failed":

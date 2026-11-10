@@ -8,9 +8,9 @@ import type { MapOperator } from "./operator-map";
  * landing page's operator map. Server only: it reads with the service role, and only
  * the shares (never the counts, ids or anything else) leave this module.
  *
- * Who is on the map: production tenants that are not suspended and hold a live plan
- * (active, trialing or past due). A company that signs up appears on its own; one
- * that leaves drops off. Test tenants (northwind) are not production and never show.
+ * Who is on the wall: every production tenant that has ever run on Drive247, whatever
+ * its plan or status today. A company that signs up appears on its own. Test tenants
+ * (northwind) are not production and never show.
  *
  * Read at most once a minute (the page is rendered per request). A failed read throws
  * inside the cache, so it is never stored: the page hides the section for that one
@@ -18,7 +18,6 @@ import type { MapOperator } from "./operator-map";
  * map off the page for a minute or more after a single failure.)
  */
 
-const LIVE_PLAN = ["active", "trialing", "past_due"];
 const NOT_A_BOOKING = '("Cancelled","Canceled","Rejected")';
 
 /** Every operator counts as this many bookings, so a new one still gets a real tile. */
@@ -47,23 +46,11 @@ async function readOperators(): Promise<MapOperator[]> {
   const { data: tenants, error: tenantError } = await db
     .from("tenants")
     .select("id, slug, company_name, logo_url")
-    .eq("tenant_type", "production")
-    .eq("status", "active");
+    .eq("tenant_type", "production");
   if (tenantError) throw tenantError;
   if (!tenants?.length) return [];
 
-  const { data: plans, error: planError } = await db
-    .from("tenant_subscriptions")
-    .select("tenant_id")
-    .in(
-      "tenant_id",
-      tenants.map((tenant) => tenant.id),
-    )
-    .in("status", LIVE_PLAN);
-  if (planError) throw planError;
-
-  const live = new Set((plans ?? []).map((plan) => plan.tenant_id as string));
-  const operators = tenants.filter((tenant) => live.has(tenant.id) && !NOT_A_CUSTOMER.has(tenant.slug));
+  const operators = tenants.filter((tenant) => !NOT_A_CUSTOMER.has(tenant.slug));
   if (!operators.length) return [];
 
   // Counted here rather than by the database so no new SQL is needed. Paged, because
@@ -105,7 +92,7 @@ async function readOperators(): Promise<MapOperator[]> {
     });
 }
 
-const readCached = unstable_cache(readOperators, ["operator-map-v2"], { revalidate: 60 });
+const readCached = unstable_cache(readOperators, ["operator-map-v3"], { revalidate: 60 });
 
 export async function fetchOperatorMap(): Promise<MapOperator[]> {
   try {

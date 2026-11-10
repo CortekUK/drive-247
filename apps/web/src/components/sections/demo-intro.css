@@ -1,0 +1,22 @@
+/*
+ * The screen before the demo (demo-intro.tsx): big words on the left, and the page line
+ * running down the right into an arrowhead that points at the demo below.
+ */
+.di { position: relative; display: grid; align-items: center; padding: clamp(72px, 9vw, 136px) clamp(20px, 4vw, 64px) clamp(32px, 5vw, 64px); }
+.di-words { max-width: 46rem; }
+.di-title { font-size: clamp(2.5rem, 6.2vw, 6.5rem); font-weight: 400; line-height: 1.04; letter-spacing: -0.035em; color: hsl(var(--v2-foreground)); text-wrap: balance; }
+.di-sub { max-width: 34rem; margin-top: clamp(16px, 1.8vw, 28px); font-size: clamp(1.0625rem, 1.5vw, 1.5rem); line-height: 1.45; color: hsl(var(--v2-muted-foreground)); text-wrap: pretty; }
+/* Where the page has no line, a plain arrow under the words points the way. */
+.di-arrow { width: 72px; height: 72px; margin-top: 28px; color: hsl(var(--v2-primary)); }
+
+/* The line's own part: behind the words, in page pixels of this section. */
+.di-art { position: absolute; top: 0; left: 0; pointer-events: none; }
+.di-live { stroke: hsl(var(--v2-primary)); stroke-width: 1.5; stroke-linecap: round; visibility: hidden; }
+
+/* Keep in step with LINE_MEDIA (launch-section.tsx): where the page line is drawn. */
+@media (min-width: 1200px) and (min-height: 640px) {
+  .di { min-height: 100svh; padding-block: 0; }
+  /* The words keep to the left of the arrow's lane (74% across, demoArrowX). */
+  .di-words { max-width: min(60vw, 62rem); }
+  .di.has-line .di-arrow { display: none; }
+}

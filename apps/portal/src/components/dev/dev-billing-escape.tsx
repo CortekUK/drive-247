@@ -56,7 +56,9 @@ function useActiveScenario(): { id: BillingScenarioId; label: string } | null {
     () => "off" as BillingScenarioId,
   );
 
-  if (scenario === "off") return null;
+  // "trial" is the localhost signup rehearsal's arrival state: it should look
+  // like a real new signup, so no preview marker.
+  if (scenario === "off" || scenario === "trial") return null;
   if (!tenant?.slug || !isCanary) return null;
 
   return {

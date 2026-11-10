@@ -131,6 +131,9 @@ export function BusyDaysCard({ data: loadedData, isLoading }: { data: BusyDays |
     return { byDate, busiest, avg, quietest, months, share };
   }, [data]);
 
+  // No car has gone out yet: the highlights would only say "busiest day 0%".
+  const nothingYet = !isLoading && !!data && data.days.every((d) => d.rented === 0);
+
   return (
     <div className="flex flex-col rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)] p-6 lg:col-span-2">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -152,7 +155,16 @@ export function BusyDaysCard({ data: loadedData, isLoading }: { data: BusyDays |
         <div aria-hidden="true" className="mt-5 h-[220px] animate-pulse rounded-xl bg-[var(--pv-wash)] motion-reduce:animate-none" />
       ) : (
         <AutoSkeleton loading={isLoading}>
-          {/* Three plain highlights. */}
+          {nothingYet ? (
+            <div className="mt-5 border-b border-[var(--pv-line)] pb-5">
+              <p className="text-[13.5px] font-semibold text-[var(--pv-ink)]">No cars out yet</p>
+              <p className="mt-1 max-w-[520px] text-[12px] leading-relaxed text-[var(--pv-ink-3)]">
+                Once your cars start going out, I shade each day by how much of the fleet was on the road, so your busy
+                weeks and quiet ones stand out.
+              </p>
+            </div>
+          ) : (
+          /* Three plain highlights. */
           <dl className="mt-5 grid grid-cols-3 gap-3 border-b border-[var(--pv-line)] pb-5 sm:gap-4">
             <div>
               <dt className="text-[11px] text-[var(--pv-ink-3)]">Busiest day</dt>
@@ -174,6 +186,7 @@ export function BusyDaysCard({ data: loadedData, isLoading }: { data: BusyDays |
               </dd>
             </div>
           </dl>
+          )}
 
           {/* Three months side by side; on a phone, one month per screen,
               swiped sideways and opening on the current month. */}

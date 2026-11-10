@@ -1,96 +1,111 @@
 /*
- * Book a demo: one calm panel after pricing. Words and the button on the left, what
- * happens on the call on the right. Flat: a faint brand wash and a 1px border, no shadow.
+ * Book a demo: one purple card, white on it (Ghulam, 2026-11-10). Bryan's picture, a line in
+ * his hand, the button, centred. On a screen with the page line, the line writes the quote.
+ *
+ * The whole section is the card, so the line it draws is inside the purple from its first
+ * pixel to its last and can be white all the way: the page's purple line meets the card's
+ * edge and carries on through it in white.
  */
-.dc { padding-block: clamp(80px, 9vw, 136px); }
-.dc-panel {
-  display: grid;
-  gap: clamp(32px, 4vw, 64px);
-  padding: clamp(28px, 5vw, 64px);
-  border: 1px solid hsl(var(--v2-primary) / 0.16);
-  border-radius: 32px;
-  background: linear-gradient(155deg, hsl(var(--v2-primary) / 0.12), hsl(var(--v2-primary) / 0.03) 70%);
+.dc {
+  position: relative;
+  /* A short band from one edge of the screen to the other (Ghulam, 2026-11-10: the height is right, the width end to end). */
+  margin-block: clamp(40px, 5vw, 80px);
+  padding: clamp(40px, 4vw, 60px) 1.25rem clamp(36px, 3.6vw, 52px);
+  background: hsl(var(--v2-primary));
+  overflow: hidden;
 }
-@media (min-width: 1000px) {
-  .dc-panel { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: center; }
+.dc-card {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100%, 1080px);
+  margin-inline: auto;
+  text-align: center;
 }
-.dc-sub {
-  max-width: 34rem;
-  margin-top: 16px;
-  font-size: clamp(1rem, 1.3vw, 1.1875rem);
-  line-height: 1.55;
-  color: var(--muted-foreground);
+
+/* The picture: a circle with a clear ring, sitting on a soft glow. */
+.dc-photo {
+  position: relative;
+  width: clamp(84px, 7.5vw, 104px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  outline: 1px solid rgb(255 255 255 / 0.6);
+  outline-offset: 7px;
 }
-.dc-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 28px; }
+.dc-photo::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -70%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(255 255 255 / 0.22), transparent);
+  pointer-events: none;
+}
+/* Out of flow, so a tall photo cannot stretch the circle into an oval. */
+.dc-photo img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+
+/* The line, in his hand. */
+.dc-quote { position: relative; width: 100%; margin-top: clamp(24px, 2.6vw, 36px); }
+.dc-text {
+  font-family: var(--font-dc-script), "Snell Roundhand", cursive;
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  font-weight: 600;
+  line-height: 1.22;
+  color: #fff;
+  text-wrap: balance;
+}
+/* Set word by word and never shown: it only tells the script where the lines break. */
+.dc-measure { position: absolute; inset-inline: 0; top: 0; visibility: hidden; pointer-events: none; }
+.dc-measure span { display: inline-block; white-space: pre; }
+/* One written line. The padding gives the script's long strokes room inside the ink's edge. */
+.dc-line {
+  display: block;
+  width: fit-content;
+  margin-inline: auto;
+  margin-block: -0.12em;
+  padding: 0.12em 0.3em;
+  white-space: nowrap;
+}
+/*
+ * The ink: everything left of --ink is down, with a soft edge where the pen is. A line that
+ * is finished drops the mask altogether.
+ */
+.dc.has-line .dc-line:not(.is-inked) {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(var(--ink, 0px) - 18px), transparent calc(var(--ink, 0px) + 4px));
+  mask-image: linear-gradient(90deg, #000 calc(var(--ink, 0px) - 18px), transparent calc(var(--ink, 0px) + 4px));
+}
+
+/* The line's own part, in page pixels of this section, above the card's content. */
+.dc-art { position: absolute; z-index: 1; top: 0; left: 0; pointer-events: none; }
+.dc-live { stroke: #fff; stroke-width: 1.5; stroke-linecap: round; visibility: hidden; }
+.dc .pg-thread-rest { stroke: rgb(255 255 255 / 0.4); }
+.dc .pg-thread-tip { fill: #fff; stroke: hsl(var(--v2-primary)); }
+
+.dc-who { display: grid; gap: 2px; margin-top: clamp(12px, 1.4vw, 18px); font-size: 15px; }
+.dc-who b { font-weight: 600; color: #fff; }
+.dc-who span { color: rgb(255 255 255 / 0.75); }
+
 .dc-btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 52px;
-  padding-inline: 26px;
+  height: 48px;
+  margin-top: clamp(20px, 2vw, 28px);
+  padding-inline: 30px;
   border-radius: 999px;
-  background: hsl(var(--v2-primary));
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
-  transition: background-color 200ms ease-out;
-}
-.dc-btn:hover { background: hsl(var(--v2-primary-hover)); }
-.dc-btn svg { width: 17px; height: 17px; transition: transform 200ms ease-out; }
-.dc-btn:hover svg { transform: translateX(2px); }
-.dc-btn:focus-visible, .dc-alt:focus-visible { outline: 2px solid hsl(var(--v2-primary)); outline-offset: 3px; }
-.dc-alt {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--foreground);
-  text-decoration: underline;
-  text-decoration-color: var(--border);
-  text-underline-offset: 5px;
-  transition: text-decoration-color 200ms ease-out;
-}
-.dc-alt:hover { text-decoration-color: currentColor; }
-
-/* What happens on the call. */
-.dc-call {
-  padding: clamp(22px, 3vw, 32px);
-  border: 1px solid hsl(var(--v2-border));
-  border-radius: 24px;
-  background: hsl(var(--v2-card));
-}
-.dc-call-head { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-foreground); }
-.dc-list { display: grid; gap: 18px; margin-top: 18px; padding: 0; list-style: none; }
-.dc-list li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 14px; }
-.dc-n {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  background: hsl(var(--v2-primary) / 0.1);
+  background: #fff;
   color: hsl(var(--v2-primary));
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 600;
+  transition: background-color 200ms ease-in;
 }
-.dark .dc-n { color: hsl(var(--v2-link)); }
-.dc-list strong { display: block; font-size: 1rem; font-weight: 600; color: var(--foreground); }
-.dc-list li > span:last-child > span { display: block; margin-top: 3px; font-size: 0.9375rem; line-height: 1.55; color: var(--muted-foreground); }
-.dc-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid hsl(var(--v2-border));
-}
-.dc-facts span {
-  padding: 5px 12px;
-  border: 1px solid hsl(var(--v2-border));
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--foreground);
-}
+.dc-btn:hover { background: rgb(255 255 255 / 0.88); transition-timing-function: ease-out; }
+.dc-btn svg { width: 18px; height: 18px; transition: transform 200ms ease-in; }
+.dc-btn:hover svg { transform: translateX(2px); transition-timing-function: ease-out; }
+.dc-btn:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .dc-btn, .dc-btn svg, .dc-alt { transition: none; }
+  .dc-btn, .dc-btn svg { transition: none; }
 }

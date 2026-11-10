@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { JsonLd } from "@/components/shared/json-ld";
 import { ThemeProvider } from "@/components/shared/theme-provider";
+import { BookDemoDialog } from "@/components/book-demo/book-demo-dialog";
 import { SITE_META, SITE_URL } from "@/lib/constants";
 import "./globals.css";
 
@@ -108,6 +109,8 @@ export default function RootLayout({
             Skip to content
           </a>
           {children}
+          {/* One Book a demo dialog for every page; any link to /strategy-call opens it. */}
+          <BookDemoDialog />
         </ThemeProvider>
       </body>
     </html>

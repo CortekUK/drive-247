@@ -24,7 +24,7 @@ import * as React from "react";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import type { Stripe, StripeElementsOptions } from "@stripe/stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
-import { CreditCard, Gift, Loader2, ShieldCheck, TriangleAlert } from "lucide-react";
+import { CreditCard, Loader2, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useTheme } from "next-themes";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -37,6 +37,7 @@ import type {
   PaymentStepProps,
 } from "@/components/onboarding/onboarding-types";
 import { SIGNUP_ERROR_COPY } from "@/components/onboarding/onboarding-types";
+import { isMockSignup, mockMarkPaid } from "@/components/onboarding/mock-signup";
 import type { SignupPlan } from "@/lib/plans";
 import type { PromoOffer } from "@/lib/promo-offer";
 import { readReferralCodeFromDocument } from "@/lib/referral-cookie";
@@ -184,6 +185,28 @@ function getStripeJs(publishableKey: string, attempt: number): Promise<Stripe | 
 
 type StripeJsState = "idle" | "loading" | "ready" | "failed";
 
+/**
+ * Narrow or wide, from the card form's height. The saved-Link view is about
+ * 190px tall; the full card form (number, expiry, CVC, country, terms) is well
+ * over 300px. Two thresholds so a few pixels of jitter never flip it back and
+ * forth.
+ */
+const WIDE_ON_PX = 280;
+const WIDE_OFF_PX = 240;
+
+function useWideFlag(onWideChange?: (wide: boolean) => void) {
+  const [on, setOn] = React.useState(false);
+  const measure = React.useCallback((px: number) => {
+    setOn((was) => (was ? px >= WIDE_OFF_PX : px >= WIDE_ON_PX));
+  }, []);
+  React.useEffect(() => {
+    onWideChange?.(on);
+  }, [on, onWideChange]);
+  // Leaving the step puts the screen back to its narrow width.
+  React.useEffect(() => () => onWideChange?.(false), [onWideChange]);
+  return { on, measure };
+}
+
 export function PaymentStep({
   plan,
   clientSecret,
@@ -203,9 +226,10 @@ export function PaymentStep({
   onApplyPromo,
   ownerName = "",
   companyName = "",
+  onWideChange,
 }: PaymentStepProps) {
+  const wide = useWideFlag(onWideChange);
   const isTrial = intentType === "setup";
-  const chargeDate = formatDay(trialEndsAt);
 
   const timeline = billingTimeline(plan, promo, amountDueCents);
   const { resolvedTheme } = useTheme();
@@ -335,7 +359,17 @@ export function PaymentStep({
 
   const elementsOptions = React.useMemo<StripeElementsOptions | null>(
     () =>
-      clientSecret
+      // Localhost rehearsal: the real card form, in Stripe's deferred mode, with
+      // no intent behind it. Folds away in every build. See mock-signup.ts.
+      clientSecret && isMockSignup()
+        ? {
+            mode: "setup",
+            currency: "usd",
+            paymentMethodTypes: ["card"],
+            appearance,
+            fonts: STRIPE_ELEMENT_FONTS,
+          }
+        : clientSecret
         ? {
             clientSecret,
             appearance,
@@ -380,10 +414,10 @@ export function PaymentStep({
     !error;
 
   return (
-    // Two columns on a laptop: what they are buying on the left, the card on
-    // the right. Stacked, the Stripe form plus the summary was taller than the
-    // card and scrolled; side by side it fits. Phones keep the single column.
-    <div className={cn(SIGNUP_ENTER, "lg:grid lg:grid-cols-2 lg:items-start lg:gap-10")}>
+    // One narrow column while Stripe shows the compact Link view. When the full
+    // card form opens it is too tall for that, so on a laptop the screen goes
+    // two-column: what they are buying on the left, the card on the right.
+    <div className={cn(SIGNUP_ENTER, wide.on && "lg:grid lg:grid-cols-2 lg:items-start lg:gap-10")}>
       <div className="min-w-0">
       <ScreenHead
         title={ownerName.trim() ? `Last step, ${ownerName.trim().split(/\s+/)[0]}` : "Last step"}
@@ -454,22 +488,7 @@ export function PaymentStep({
         </p>
       )}
 
-      {isTrial ? (
-        <div className="mt-3 rounded-xl border border-indigo-600/15 bg-indigo-600/[0.04] p-3.5 text-[13px] leading-relaxed text-foreground/80 dark:border-indigo-400/20 dark:bg-indigo-400/5">
-          <p className="flex items-center gap-1.5 font-medium text-indigo-700 dark:text-indigo-300">
-            <Gift className="h-3.5 w-3.5" aria-hidden="true" />
-            {trialDays}-day free trial — full access, nothing charged today
-          </p>
-          <p className="mt-1">
-            We save your card now. You&apos;ll be charged ${plan.priceUsd}/month
-            {chargeDate ? <> on <strong>{chargeDate}</strong></> : <> when the trial ends</>}{" "}
-            unless you cancel before then from your portal, which shows a countdown.
-            {promo && promo.duration !== "forever" && (
-              <> Your discount applies {promo.durationText} after the trial.</>
-            )}
-          </p>
-        </div>
-      ) : (
+      {isTrial ? null : (
       // What they pay and when, as a short timeline: today, the next charge,
       // and where the price settles once a code runs out.
       <div className="mt-4">
@@ -514,7 +533,7 @@ export function PaymentStep({
 
       </div>
 
-      <div className="mt-4 min-w-0 lg:mt-1">
+      <div className={cn("mt-4 min-w-0", wide.on && "lg:mt-1")}>
       {isConfigError || isUnexplainedGap ? (
         <ConfigurationErrorPanel />
       ) : stripeJs === "failed" ? (
@@ -536,7 +555,13 @@ export function PaymentStep({
           stripe={stripePromise}
           options={elementsOptions ?? { clientSecret }}
         >
-          <PaymentForm busy={busy} onPaid={onPaid} onError={onError} intentType={intentType} />
+          <PaymentForm
+            busy={busy}
+            onPaid={onPaid}
+            onError={onError}
+            intentType={intentType}
+            onFormHeight={wide.measure}
+          />
         </Elements>
       )}
 
@@ -567,15 +592,29 @@ function PaymentForm({
   onPaid,
   onError,
   intentType = "payment",
+  onFormHeight,
 }: {
   busy: boolean;
   onPaid(): void;
   onError(err: OnboardingError): void;
+  /** Reports the card form's rendered height as Stripe swaps Link ↔ card fields. */
+  onFormHeight?(px: number): void;
   /** "setup" = free trial: save the card with confirmSetup, charge nothing. */
   intentType?: "payment" | "setup";
 }) {
   const stripe = useStripe();
   const elements = useElements();
+
+  // Stripe gives no event for "Pay without Link"; the iframe just grows. Its
+  // height is the honest signal for which view is showing.
+  const elementBoxRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const box = elementBoxRef.current;
+    if (!box || !onFormHeight) return;
+    const ro = new ResizeObserver(([entry]) => onFormHeight(entry.contentRect.height));
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [onFormHeight]);
 
   const [submitting, setSubmitting] = React.useState(false);
   const [awaitingBank, setAwaitingBank] = React.useState(false);
@@ -631,6 +670,20 @@ function PaymentForm({
     setNotice(null);
 
     try {
+      if (isMockSignup()) {
+        // Localhost rehearsal: check the card fields like the real confirm
+        // would, then stop. Nothing reaches Stripe beyond the form itself.
+        const { error: fieldError } = await elements.submit();
+        if (fieldError) {
+          setMessage(fieldError.message ?? SIGNUP_ERROR_COPY.CARD_DECLINED);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 1200));
+        mockMarkPaid();
+        onPaid();
+        return;
+      }
+
       if (intentType === "setup") {
         // Free trial. The client secret is the subscription's SetupIntent, so
         // this saves the card (with 3-D Secure if the bank asks) and charges
@@ -736,6 +789,7 @@ function PaymentForm({
         is keyboard-accessible inside its iframe — we must not wrap it in our
         own <Label>, which would point at nothing.
       */}
+      <div ref={elementBoxRef}>
       <PaymentElement
         options={{ layout: "tabs" }}
         onReady={() => setElementReady(true)}
@@ -760,6 +814,7 @@ function PaymentForm({
           if (message) setMessage(null);
         }}
       />
+      </div>
 
       {/*
         A card form that never becomes ready must not read as "still loading"

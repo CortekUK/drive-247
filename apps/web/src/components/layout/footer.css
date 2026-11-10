@@ -1,34 +1,35 @@
 /*
- * Light: the footer sits on the page's own ground (the legal pages', on those), ink text,
- * no edge above it. Dark: near-black, as before. In both, the wordmark is cut out of the
- * brand's pixel texture and runs off the bottom, fading at the sides and the foot.
+ * Always dark, in both themes (Ghulam, 2026-11-10): near-black with white text, on the
+ * landing page and the legal pages alike. Behind everything, slow indigo wisps in water
+ * (footer-water.tsx). The wordmark is solid indigo and runs off the bottom, fading at the
+ * foot.
  */
 /* At least one full screen, so the section above never shows when scrolled to the end. */
 .ft {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  position: relative;
+  isolation: isolate;
   min-height: 100svh;
-  color: var(--foreground);
+  background: #0b0b0e;
+  color: #fff;
 }
-.ft-head { color: var(--foreground); }
-.ft-muted { color: var(--muted-foreground); }
-.ft a:hover { color: var(--foreground); }
+.ft-head { color: #fff; }
+.ft-muted { color: rgb(255 255 255 / 0.7); }
+.ft a:hover { color: #fff; }
 
-.dark .ft { background: #0b0b0e; color: #fff; }
-.dark .ft-head { color: #fff; }
-.dark .ft-muted { color: rgb(255 255 255 / 0.7); }
-.dark .ft a:hover { color: #fff; }
+.ft-water { position: absolute; z-index: -1; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
 .ft-word {
   display: block;
+  fill: #5b54ea;
   width: 100%;
   height: auto;
   margin-top: clamp(24px, 3vw, 44px);
-  -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent), linear-gradient(to right, transparent, #000 9%, #000 91%, transparent);
-  -webkit-mask-composite: source-in;
-  mask-image: linear-gradient(to bottom, #000 62%, transparent), linear-gradient(to right, transparent, #000 9%, #000 91%, transparent);
-  mask-composite: intersect;
+  /* Fades at the foot only; the sides stay solid (Ghulam, 2026-11-10). */
+  -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent);
+  mask-image: linear-gradient(to bottom, #000 62%, transparent);
 }
 /* Finger-sized links below the desktop layout, keeping the same text and left edge. */
 @media (max-width: 1279.98px) {
@@ -44,7 +45,7 @@
 @media (max-width: 639.98px) {
   .ft { padding-bottom: 72px; }
   .ft-word {
-    -webkit-mask-image: linear-gradient(to bottom, #000 80%, rgb(0 0 0 / 0.55)), linear-gradient(to right, transparent, #000 3%, #000 97%, transparent);
-    mask-image: linear-gradient(to bottom, #000 80%, rgb(0 0 0 / 0.55)), linear-gradient(to right, transparent, #000 3%, #000 97%, transparent);
+    -webkit-mask-image: linear-gradient(to bottom, #000 80%, rgb(0 0 0 / 0.55));
+    mask-image: linear-gradient(to bottom, #000 80%, rgb(0 0 0 / 0.55));
   }
 }

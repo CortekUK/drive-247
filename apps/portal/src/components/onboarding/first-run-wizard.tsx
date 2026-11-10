@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { liftArrivalCover } from '@/lib/arrival-cover';
 import { Check } from 'lucide-react';
 import { motion, useReducedMotion, type Transition, type Variants } from 'motion/react';
 
@@ -123,7 +124,7 @@ const OPTION_LABEL_CLASS = 'font-heading text-[17px] leading-snug sm:text-lg';
 const OPTION_ROW_CLASS = 'flex items-center gap-3.5 py-2 pl-1 pr-4 text-left';
 
 export function FirstRunWizard({ suppressed = false }: { suppressed?: boolean }) {
-  const { shouldShow, save } = useFirstRunWizard();
+  const { shouldShow, save, isLoading: wizardLoading } = useFirstRunWizard();
   const reduced = !!useReducedMotion();
   // Yielding hides the screen without unmounting it, so answers and step survive.
   const { show, engaged, engage } = useYieldToSystemAnnouncements(shouldShow && !suppressed);
@@ -180,8 +181,16 @@ export function FirstRunWizard({ suppressed = false }: { suppressed?: boolean })
     (input ?? rootRef.current)?.focus();
   }, [step, show]);
 
+  // The arrival cover (lib/arrival-cover.ts) comes off once this screen is
+  // up, or once we know it will not be (questions already answered).
+  const onScreen = show && total > 0 && !!question;
+  useEffect(() => {
+    // `!show` also covers a paywall or an announcement taking the stage first.
+    if (!wizardLoading && (onScreen || !show)) liftArrivalCover();
+  }, [onScreen, wizardLoading, show]);
+
   // Hooks above this line, always. `shouldShow` flips as the query resolves.
-  if (!show || total === 0 || !question) return null;
+  if (!onScreen) return null;
 
   const isLast = step === total - 1;
   const headingId = `${baseId}-prompt`;

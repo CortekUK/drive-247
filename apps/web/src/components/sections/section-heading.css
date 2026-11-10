@@ -88,3 +88,33 @@
 /* A section head that pairs the heading with a link (blog, stories): link under it, centred. */
 .ct-head:has(.sh) { flex-direction: column; align-items: center; }
 .ct-head:has(.sh) > div { display: contents; }
+/* The blog's head: heading on the left, its link on the right, on one baseline. */
+.ct-head.ct-head-left:has(.sh) { flex-direction: row; align-items: flex-end; }
+.ct-head.ct-head-left:has(.sh) > div { display: block; flex: 1 1 0; min-width: min(100%, 20rem); }
+.ct-head.ct-head-left .sh { max-width: none; margin-bottom: 0; padding-bottom: 0; }
+.ct-head.ct-head-left .ct-all { flex: none; }
+@media (min-width: 640px) { .ct-head.ct-head-left { flex-wrap: nowrap; } }
+
+/* A part under a main heading (Launch and Pricing under "Your business, online today"): one
+   size down from a section's main heading, so the main one leads. */
+.sh-title.sh-part { font-size: clamp(2rem, 3.6vw, 3.5rem); }
+
+/* "Your business, online in minutes" (get-started-intro.tsx): on the page's left edge, as the
+   other main headings, with no room below it before the cards. */
+.gs-intro { width: 100%; padding: clamp(72px, 9vw, 136px) clamp(20px, 4vw, 64px) 0; }
+/* Inside the held Launch screen the screen gives the room above. */
+@media (min-width: 1200px) and (min-height: 640px) {
+  .ls-pin .gs-intro { padding-top: 0; }
+  /* Sized by the screen's height too, so heading and full-size cards fit one screen. */
+  .ls-pin .sh-title.gs-title { font-size: clamp(2.5rem, min(5.6vw, 9.5svh), 8rem); }
+  .ls-pin .sh-sub.gs-sub { font-size: clamp(1rem, min(1.5vw, 2.2svh), 1.4rem); }
+}
+@media (min-width: 1200px) and (min-height: 640px) and (max-height: 700px) { .ls-pin .sh-sub.gs-sub { display: none; } }
+.gs-intro .sh { margin-bottom: 0; }
+/* Set like the calendar's screen (product-track.css .pt-intro-*): big, over a few lines. */
+@media (min-width: 900px) {
+  .gs-intro { padding-left: clamp(56px, 6vw, 120px); padding-right: clamp(96px, 9vw, 180px); }
+  .gs-intro .sh { max-width: 72rem; }
+}
+.sh-title.gs-title { font-size: clamp(3rem, 6.6vw, 8rem); line-height: 1.08; letter-spacing: -0.035em; text-wrap: balance; }
+.sh-sub.gs-sub { max-width: 44rem; margin-top: clamp(14px, 1.4vw, 24px); font-size: clamp(1.125rem, 1.5vw, 1.4rem); line-height: 1.6; }

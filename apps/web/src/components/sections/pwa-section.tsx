@@ -2,11 +2,9 @@
 
 import {
   BatteryFull,
-  Bell,
   Calendar,
   Camera,
   Cloud,
-  Download,
   Mail,
   Map as MapIcon,
   MessageCircle,
@@ -14,10 +12,10 @@ import {
   Phone,
   Settings,
   Signal,
-  Smartphone,
   StickyNote,
   Wifi,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useFadeIn } from "@/hooks/use-fade-in";
 import "./pwa-section.css";
 import { Accent, SectionHeading } from "./section-heading";
@@ -47,12 +45,6 @@ const HOME_APPS = [
   { icon: Settings, name: "Settings" },
 ];
 
-const POINTS = [
-  { icon: Download, title: "Installs in a tap", text: "From the browser: Add to Home Screen on iPhone, Install app on Android. No app store, nothing to download." },
-  { icon: Smartphone, title: "Your name and your icon", text: "Your renters' app carries your business name, icon and colour. Ours stays out of the way." },
-  { icon: Bell, title: "Notifications that matter", text: "A new booking or a message reaches your phone the moment it happens, and renters hear about their trip." },
-  { icon: Phone, title: "Built for the phone first", text: "Full screen with no browser bars, and a tab bar under your thumb on every screen." },
-];
 
 function StatusBar({ light = false }: { light?: boolean }) {
   return (
@@ -67,19 +59,42 @@ function StatusBar({ light = false }: { light?: boolean }) {
   );
 }
 
+/*
+ * Something keeps happening (Ghulam, 2026-11-10): each app's notifications keep arriving, one
+ * after another, sliding down, staying a moment and going; each one also lands as a badge on
+ * that app's icon on the home screen in the middle. The text changes while the banner is out
+ * of sight (at the end of each pass of the animation), so nothing jumps.
+ */
+const OPS_NOTES = [
+  "New booking: Jordan Lee, Hyundai Sonata, Nov 7 – 10.",
+  "Priya Shah paid $612.00 for Nov 14 – 18.",
+  "Marcus Hill signed his agreement.",
+  "Kia Telluride is back. Check it in.",
+];
+const RENTER_NOTES = [
+  "Your agreement is signed. Your car is ready on Friday at 10:00 AM.",
+  "Your lockbox code is 4817. Rear left wheel arch.",
+  "Your return is tomorrow at 10:00 AM.",
+  "Thanks for renting with Northwind. How was your trip?",
+];
+
 function AppPhone({
   src,
   alt,
   app,
-  note,
+  notes,
   delay,
+  onArrive,
 }: {
   src: string;
   alt: string;
   app: { name: string; mark: string };
-  note: string;
+  notes: string[];
   delay: number;
+  onArrive: () => void;
 }) {
+  const [i, setI] = useState(0);
+  const note = notes[i % notes.length];
   return (
     <div className="pw-phone">
       <div className="pw-screen">
@@ -88,8 +103,18 @@ function AppPhone({
         <img src={`${src}.png`} alt={alt} className="pw-shot dark:hidden" loading="lazy" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`${src}-dark.png`} alt={alt} className="pw-shot hidden dark:block" loading="lazy" />
-        <div className="pw-note" style={{ animationDelay: `${delay}ms` }} aria-hidden>
-          <i className="pw-note-icon">{app.mark}</i>
+        <div
+          className="pw-note"
+          style={{ animationDelay: `${delay}ms` }}
+          aria-hidden
+          onAnimationIteration={() => {
+            setI((n) => n + 1);
+            onArrive();
+          }}
+        >
+          {/* The Drive247 mark (Ghulam, 2026-11-10: "use the Drive favicon in the notifications and app icons"). */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="pw-note-icon" src="/apple-touch-icon.png" alt="" />
           <span>
             <span className="pw-note-top">
               <b>{app.name}</b>
@@ -105,20 +130,32 @@ function AppPhone({
 
 export function PwaSection() {
   const { ref, visible } = useFadeIn();
+  // Unread on each app's home-screen icon: one more with every notification that arrives.
+  const [unread, setUnread] = useState({ ops: 1, renter: 1 });
+  // Plays only while on screen: off screen the notifications pause and nothing re-renders.
+  const [live, setLive] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setLive(e.isIntersecting));
+    io.observe(el);
+    return () => io.disconnect();
+  }, [ref]);
   return (
-    <section id="mobile" aria-labelledby="mobile-heading" className="pw-section">
-      <div ref={ref} className={`pw-inner${visible ? " is-in" : ""}`}>
+    // data-line-lane: the page line keeps to the left here, not down between the phones (tour-layout.ts).
+    <section id="mobile" data-line-lane="left" aria-labelledby="mobile-heading" className="pw-section">
+      <div ref={ref} className={`pw-inner${visible ? " is-in" : ""}${live ? " pw-live" : ""}`}>
         <div className="pw-head">
           <SectionHeading
             id="mobile-heading"
             title={
               <>
-                Your business, <Accent>installed on every phone</Accent>
+                <span className="pw-nowrap">Your business,</span> <Accent>installed on every phone</Accent>
               </>
             }
             sub={
               <>
-                Your portal and your renters&apos; portal install like apps, straight from the browser. Full screen, in your brand, with notifications.
+                Your portal and your renters&apos; portal install like apps, straight from the browser. Full screen, in your brand, with notifications. No app store, nothing to download.
               </>
             }
           />
@@ -130,8 +167,9 @@ export function PwaSection() {
               src="/v2/phone-dashboard"
               alt="The Drive247 portal on a phone: today's takings, and Trax listing what needs attention."
               app={{ name: "Northwind Ops", mark: "N" }}
-              note="New booking: Jordan Lee, Hyundai Sonata, Nov 7 – 10."
+              notes={OPS_NOTES}
               delay={500}
+              onArrive={() => setUnread((u) => ({ ...u, ops: u.ops >= 9 ? 1 : u.ops + 1 }))}
             />
             <figcaption>
               <b>Your portal, as an app</b>
@@ -154,13 +192,23 @@ export function PwaSection() {
                     </span>
                   ))}
                   <span className="pw-app is-ours is-ops">
-                    <i>N</i>
+                    <i>
+                      <b key={unread.ops} className="pw-badge">
+                        {unread.ops}
+                      </b>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src="/apple-touch-icon.png" alt="" />
+                    </i>
                     {/* The home-screen name is the short one: the company name (the portal's manifest short_name). */}
                     <small>Northwind</small>
                   </span>
                   <span className="pw-app is-ours is-renter">
                     <i>
-                      <b className="pw-badge">1</b>Y
+                      <b key={unread.renter} className="pw-badge">
+                        {unread.renter}
+                      </b>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src="/apple-touch-icon.png" alt="" />
                     </i>
                     <small>Your Rentals</small>
                   </span>
@@ -192,8 +240,9 @@ export function PwaSection() {
               src="/v2/phone-renter"
               alt="The renter's portal on a phone: their rentals, insurance, agreements and payments."
               app={{ name: "Your Rentals", mark: "Y" }}
-              note="Your agreement is signed. Your car is ready on Friday at 10:00 AM."
-              delay={900}
+              notes={RENTER_NOTES}
+              delay={2600}
+              onArrive={() => setUnread((u) => ({ ...u, renter: u.renter >= 9 ? 1 : u.renter + 1 }))}
             />
             <figcaption>
               <b>Your renters&apos; app, in your brand</b>
@@ -202,15 +251,7 @@ export function PwaSection() {
           </figure>
         </div>
 
-        <ul className="pw-points">
-          {POINTS.map((p) => (
-            <li key={p.title}>
-              <p.icon aria-hidden />
-              <b>{p.title}</b>
-              <p>{p.text}</p>
-            </li>
-          ))}
-        </ul>
+        {/* The four points (POINTS) were here; removed (Ghulam, 2026-11-10). */}
       </div>
     </section>
   );

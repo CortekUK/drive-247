@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { GetStartedHeading } from "./get-started-intro";
 import "./launch-section.css";
-import { Accent, SectionHeading } from "./section-heading";
 
 /*
  * Opening a shop, in four scenes, with no people or car in them. Each sits at the top of
@@ -347,44 +347,51 @@ function useLaunchLine() {
         setLine(null);
         delete section?.dataset.lineIn;
         delete section?.dataset.lineOut;
+        delete section?.dataset.lineOutY;
         return;
       }
       const box = pin.getBoundingClientRect();
-      // The page line (components/tour/page-line.tsx) brings the thread in at the middle of
-      // the screen; from there it turns into the lane beside the heading.
-      const startX = box.width / 2;
       const tiles = [...pin.querySelectorAll(".ls-card")].map((card) => card.getBoundingClientRect());
       const left = tiles[0].left - box.left;
       const y = tiles[0].top + tiles[0].height / 2 - box.top;
       const nodeLeft = left - NODE_R;
       const lane = nodeLeft / 2;
       const turn = Math.min(36, lane);
+      // The page line comes down the left lane from the heading above (get-started-intro.tsx),
+      // so the thread starts there and runs straight down to the first card.
+      const startX = lane;
       const last = tiles[tiles.length - 1];
       const endX = last.left + last.width / 2 - box.left;
       // On behind the last card and down out of the section, to where Trax picks it up.
       const track = trackRef.current!;
-      const bottom = box.height + track.parentElement!.offsetHeight - track.offsetHeight;
       // Where the page line meets this one, in page pixels.
       if (section) {
         section.dataset.lineIn = String(Math.round(box.left + startX));
         section.dataset.lineOut = String(Math.round(box.left + endX));
+        // No line down the right into the pricing: the page line picks up again under it.
+        const next = section.nextElementSibling;
+        if (next?.id === "pricing") section.dataset.lineOutY = String(Math.round(next.getBoundingClientRect().bottom + scrollY));
+        else delete section.dataset.lineOutY;
       }
       setLine({
         w: box.width,
         h: box.height,
-        d: `M${startX} 0C${startX} 84 ${lane} 56 ${lane} 150L${lane} ${y - turn}Q${lane} ${y} ${lane + turn} ${y}L${endX} ${y}L${endX} ${bottom}`,
+        d: `M${startX} 0L${lane} ${y - turn}Q${lane} ${y} ${lane + turn} ${y}L${endX} ${y}`,
         // Each card lights as the tip touches its number.
         enters: tiles.map((tile) => tile.left - box.left - NODE_R),
         endX,
         y,
-        tail: bottom - y,
+        tail: 0,
       });
     };
 
     measure();
     const size = new ResizeObserver(measure);
     size.observe(pin);
-    pin.querySelectorAll(".ls-head, .ls-steps").forEach((el) => size.observe(el));
+    pin.querySelectorAll(".ls-steps").forEach((el) => size.observe(el));
+    // The pricing under it decides where the page line picks up again.
+    const after = trackRef.current?.parentElement?.nextElementSibling;
+    if (after) size.observe(after);
     media.addEventListener("change", measure);
     return () => {
       size.disconnect();
@@ -421,7 +428,10 @@ function useLaunchLine() {
       const top = track.getBoundingClientRect().top;
       // Takes over exactly where the features thread stops: this section's top at 70% of the screen.
       const start = innerHeight * 0.7;
-      const pinned = (track.offsetHeight - pin.offsetHeight) * DRAW_SHARE;
+      // The screen holds while the line crosses the cards; without a hold (a short or
+      // reduced window) it crosses them over a third of a screen of scrolling.
+      const hold = track.offsetHeight - pin.offsetHeight;
+      const pinned = hold > 10 ? hold * DRAW_SHARE : innerHeight * 0.35;
       // Across the cards while the screen holds; then down and out, its tip at 70% of the screen like the rest of the thread.
       const across = -top / pinned;
       const length =
@@ -456,8 +466,9 @@ function useLaunchLine() {
 export function LaunchSection() {
   const { trackRef, pinRef, liveRef, tipRef, line, reached } = useLaunchLine();
 
+  // Named by the heading above it ("Your business, online in minutes", get-started-intro.tsx).
   return (
-    <section id="launch" aria-labelledby="launch-heading" className="ls-section">
+    <section id="launch" aria-labelledby="get-started-title" className="ls-section">
       <div ref={trackRef} className="ls-track">
         <div ref={pinRef} className="ls-pin">
           {line && (
@@ -468,21 +479,7 @@ export function LaunchSection() {
             </svg>
           )}
 
-          <div className="ls-head ls-inner">
-            <SectionHeading
-              id="launch-heading"
-              title={
-                <>
-                  Launch in <Accent>minutes.</Accent>
-                </>
-              }
-              sub={
-                <>
-                  Pick a plan and name your business. Your portal and booking site are built and online in minutes, ready for your cars.
-                </>
-              }
-            />
-          </div>
+          <GetStartedHeading />
 
           <ol className="ls-steps">
             {STEPS.map((step, i) => {

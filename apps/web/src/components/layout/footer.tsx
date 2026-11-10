@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { STORIES } from "@/content/stories";
+import { FooterWater } from "./footer-water";
 import "./footer.css";
 
 /* `/#...` rather than `#...`: the legal pages share this footer. */
@@ -24,10 +25,9 @@ const COLUMNS = [
   {
     title: "Resources",
     links: [
-      { label: "Blog", href: "/blog" },
+      { label: "Blog", href: "/#bl-title" },
       // Only while a story exists: the samples never reach the live site.
-      ...(STORIES.length > 0 ? [{ label: "Customer stories", href: "/customers" }] : []),
-      { label: "FAQ", href: "/#faq" },
+      ...(STORIES.length > 0 ? [{ label: "Customer stories", href: "/#st-title" }] : []),
     ],
   },
 ];
@@ -41,12 +41,13 @@ const LEGAL = [
 export function Footer() {
   return (
     <footer className="ft overflow-hidden">
-      <div className="mx-auto w-full max-w-[1500px] px-5 pt-16 sm:px-10 sm:pt-24">
+      <FooterWater />
+      <div className="ft-top mx-auto w-full max-w-[1500px] px-5 pt-16 sm:px-10 sm:pt-24">
         <div className="grid gap-12 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.5fr)]">
           <div>
             <Link href="/" aria-label="Drive247 home" className="ft-logo inline-block">
-              <Image src="/logo-light.png" alt="Drive247" width={855} height={195} className="h-8 w-auto dark:hidden" />
-              <Image src="/logo-dark.png" alt="Drive247" width={855} height={195} className="hidden h-8 w-auto dark:block" />
+              {/* The footer is dark in both themes, so it always carries the logo made for dark. */}
+              <Image src="/logo-dark.png" alt="Drive247" width={855} height={195} className="h-8 w-auto" />
             </Link>
             <p className="ft-muted mt-5 max-w-sm text-[15px] leading-relaxed">
               The all-in-one platform for independent car rental businesses: bookings, payments, agreements and keys.
@@ -86,14 +87,9 @@ export function Footer() {
         </div>
       </div>
 
-      {/* SVG so `textLength` fits it edge to edge in any font: the legal pages use another. */}
+      {/* SVG so `textLength` fits it edge to edge in any font: the legal pages use another. Solid, in the brand's indigo. */}
       <svg className="ft-word" viewBox="0 -8 1000 186" aria-hidden>
-        <defs>
-          <pattern id="ft-texture" patternUnits="userSpaceOnUse" y="-8" width="1000" height="186">
-            <image href="/v2/footer-texture.webp" width="1000" height="186" preserveAspectRatio="xMidYMid slice" />
-          </pattern>
-        </defs>
-        <text x="4" y="176" textLength="992" lengthAdjust="spacingAndGlyphs" fontSize="240" fontWeight="800" fill="url(#ft-texture)">
+        <text x="4" y="176" textLength="992" lengthAdjust="spacingAndGlyphs" fontSize="240" fontWeight="800">
           DRIVE247
         </text>
       </svg>

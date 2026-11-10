@@ -5,7 +5,6 @@
 .ls-section { --ls-a: hsl(var(--v2-primary)); padding-block: clamp(72px, 9vw, 136px); overflow-x: clip; }
 .dark .ls-section { --ls-a: #a79ff5; }
 .ls-inner { width: min(100%, 1120px); margin-inline: auto; padding-inline: 1.25rem; }
-.ls-head { text-align: center; }
 
 /* The four steps */
 .ls-steps {
@@ -135,17 +134,47 @@
     isolation: isolate;
     display: flex;
     flex-direction: column;
+    /* One full screen that holds while the cards fill: the heading, then the cards, as one
+       block in the middle of the screen. */
     height: 100svh;
-    padding-top: clamp(96px, 13svh, 128px);
+    /* The block sits at the bottom of the held screen, so the pricing follows the cards with
+       almost no gap (the room goes above the heading instead). */
+    justify-content: flex-end;
+    padding-block: clamp(56px, 8svh, 96px) 16px;
   }
   .ls-line { display: block; position: absolute; z-index: -1; top: 0; left: 0; pointer-events: none; overflow: visible; }
   .ls-steps {
-    width: min(100% - 2 * clamp(40px, 4vw, 80px), 1560px);
-    margin-block: auto;
+    /* The same edges as the pricing table under it (max-w-[1360px] px-6 in pricing.tsx), so
+       the four steps sit over the four plans. */
+    width: min(100% - 48px, 1312px);
+    margin-block: 0 auto;
     padding-inline: 0;
     gap: clamp(32px, 3vw, 48px);
   }
   .ls-step-no { top: 50%; left: -18px; translate: 0 -50%; }
+  /*
+   * The cards take the room the heading leaves and never more: on a short window the
+   * drawings scale down inside their cards. Before this the row kept its full height and
+   * ran out of the bottom of the screen, onto the pricing heading underneath.
+   */
+  /* The cards keep their full size and drawings, as before the heading moved in; the
+     heading gives way on a short screen instead (section-heading.css .ls-pin .gs-*). */
+  .ls-steps {
+    flex: none;
+    min-height: 0;
+    /* One row, as tall as the cards want and no taller than the room; the cards stay one height. */
+    grid-template-rows: minmax(0, max-content);
+    align-content: start;
+    margin-block: clamp(16px, 3svh, 40px) 0;
+  }
+  /* The heading's own gap would be taken out of the cards on a short window; the row's margin spaces them instead. */
+  .ls-pin .sh { margin-bottom: 0; }
+  .ls-step { min-height: 0; }
+  .ls-card { min-height: 0; }
+  .ls-tile { flex: none; aspect-ratio: 300 / 212; }
+  .ls-art-base { height: 100%; }
+  .ls-tile svg { height: 100%; }
+  .ls-step-words { flex: none; }
   @media (prefers-reduced-motion: no-preference) {
     .ls-track { height: 250svh; }
     .ls-pin { position: sticky; top: 0; }

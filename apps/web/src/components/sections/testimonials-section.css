@@ -5,6 +5,7 @@
 .ts-section {
   --ts-line: color-mix(in srgb, var(--foreground) 16%, transparent);
   padding-block: clamp(112px, 16svh, 176px) 24px;
+  overflow-x: clip;
 }
 .ts-inner {
   width: min(1200px, 100% - 2 * clamp(16px, 2.5vw, 40px));
@@ -37,20 +38,21 @@
 .ts-frame video { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ts-control {
   position: absolute;
-  left: 16px;
-  bottom: 16px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding-inline: 14px;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
   border-radius: 999px;
-  background: rgb(10 10 20 / 0.66);
+  background: rgb(10 10 20 / 0.5);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   color: #fff;
-  font-size: 0.875rem;
-  font-weight: 500;
+  transition: background-color 200ms ease-out;
 }
-.ts-control svg { width: 15px; height: 15px; }
+.ts-frame:hover .ts-control { background: rgb(10 10 20 / 0.68); }
+.ts-control svg { width: 18px; height: 18px; }
 
 .ts-head { grid-area: head; }
 .ts-title {
@@ -134,31 +136,113 @@
 .ts-link:hover { opacity: 0.7; }
 .ts-link svg { width: 16px; height: 16px; }
 
-/* What operators say */
-.ts-quotes {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 40px clamp(32px, 4vw, 56px);
-  margin-top: clamp(56px, 9svh, 88px);
+/*
+ * Captions on the film, as illustrated type: bold white words that pop in as they are said,
+ * and the key words in bold brand purple. No band, no icons, no tag; a soft
+ * shadow keeps them readable on any frame. Placeholder text for now (testimonials-captions.tsx).
+ */
+.ts-caption {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.18em 0.3em;
+  width: calc(100% - 48px);
+  translate: -50% 0;
+  font-size: clamp(1.15rem, 1.7vw, 1.5rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 2px 12px rgb(10 10 30 / 0.55), 0 1px 2px rgb(10 10 30 / 0.5);
 }
+.tc-word {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(6px) scale(0.85);
+  transition: opacity 160ms ease-out, transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.tc-word.is-said { opacity: 1; transform: none; }
+/* The key words: the full brand purple, on a soft white glow so it stands out on the film. */
+.tc-key {
+  display: contents;
+  color: hsl(var(--v2-primary));
+}
+.tc-key .tc-word {
+  font-weight: 900;
+  text-shadow: 0 0 2px #fff, 0 0 6px rgb(255 255 255 / 0.95), 0 0 14px rgb(255 255 255 / 0.7);
+}
+
+
+/* What operators say: cards on a marquee, full width, drifting left. */
+.ts-quotes {
+  position: relative;
+  margin-top: clamp(56px, 9svh, 88px);
+  /* Out to the screen's edges from the centred column. */
+  margin-inline: calc(50% - 50vw);
+  overflow: hidden;
+}
+.ts-quotes-track {
+  display: flex;
+  gap: 20px;
+  width: max-content;
+  padding-block: 8px 24px;
+  animation: ts-drift 80s linear infinite;
+}
+.ts-quotes:hover .ts-quotes-track { animation-play-state: paused; }
 .ts-quote {
   display: flex;
+  flex: none;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 24px;
+  gap: 14px;
+  width: clamp(320px, 32vw, 480px);
   margin: 0;
-  padding-top: 20px;
-  border-top: 1px solid var(--ts-line);
+  padding: clamp(26px, 2.6vw, 38px);
+  border-radius: 28px;
+  background: hsl(var(--v2-primary));
+  color: #fff;
 }
-.ts-quote p {
-  font-size: clamp(1.125rem, 1.45vw, 1.3125rem);
-  line-height: 1.4;
-  letter-spacing: -0.012em;
-  color: color-mix(in srgb, var(--foreground) 76%, transparent);
+.ts-cursive {
+  font-family: var(--font-cursive), "Times New Roman", serif;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.01em;
 }
-.ts-quote strong { font-weight: 600; color: var(--foreground); }
-.ts-quote footer { font-size: 0.875rem; line-height: 1.5; color: var(--muted-foreground); }
-.ts-quote footer span { display: block; font-weight: 600; color: var(--foreground); }
+.ts-quote-label { font-size: clamp(1.125rem, 1.5vw, 1.375rem); line-height: 1.2; color: #fff; }
+.ts-quote-text {
+  flex: 1;
+  font-size: clamp(1.25rem, 1.7vw, 1.625rem);
+  font-weight: 700;
+  line-height: 1.16;
+  letter-spacing: -0.03em;
+  color: #fff;
+}
+.ts-quote-text .ts-cursive { font-size: 1.07em; }
+.ts-quote figcaption {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 18px;
+  border-top: 1px solid rgb(255 255 255 / 0.3);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: #fff;
+}
+.ts-quote figcaption img {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  object-fit: cover;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.9);
+}
+.ts-quote figcaption strong { display: block; font-weight: 600; color: #fff; }
+@keyframes ts-drift { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
 @media (max-width: 767px) {
   .ts-section { padding-block: 88px 16px; }
@@ -187,4 +271,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .ts-film, .ts-link, .ts-progress span { transition: none; }
+  .ts-quotes-track { animation: none; }
+  .ts-quotes { overflow-x: auto; }
+  .tc-word { transition: none; }
 }

@@ -1,0 +1,117 @@
+/*
+ * Insights → Analytics (insights-gallery.tsx), the portal's layout: the wave and the fleet pulse
+ * stacked on the left, the places map full height on the right. Flat panels, a 1px ring, one
+ * indigo family.
+ */
+.ia { --ia-line: hsl(239 40% 60% / 0.12); --ia-ink: hsl(var(--v2-foreground)); --ia-muted: hsl(var(--v2-muted-foreground)); padding-block: clamp(72px, 9vw, 136px); }
+.ia-window {
+  display: flex;
+  flex-direction: column;
+  width: min(100% - 2 * clamp(20px, 4vw, 80px), 1560px);
+  margin-inline: auto;
+  overflow: hidden;
+  border: 1px solid hsl(var(--v2-border));
+  border-radius: 28px;
+  background:
+    radial-gradient(70rem 50rem at 105% -10%, hsl(239 84% 67% / 0.2), transparent 55%),
+    radial-gradient(60rem 48rem at -8% -6%, hsl(247 92% 60% / 0.16), transparent 52%),
+    radial-gradient(55rem 45rem at 50% 115%, hsl(239 84% 67% / 0.12), transparent 55%),
+    #fff;
+  color: var(--ia-ink);
+}
+
+.ia-bar { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 24px; padding: 24px 28px 0; }
+.ia-page { font-size: 30px; font-weight: 500; letter-spacing: -0.02em; line-height: 1.1; }
+.ia-lede { margin-top: 4px; font-size: 14px; color: var(--ia-muted); }
+.ia-views { display: flex; gap: 4px; padding: 4px; border-radius: 99px; background: hsl(0 0% 100% / 0.7); box-shadow: 0 0 0 1px var(--ia-line); }
+.ia-views span { padding: 7px 14px; border-radius: 99px; font-size: 14px; font-weight: 500; color: #4f44d8; }
+.ia-views .is-on { background: #4f44d8; color: #fff; box-shadow: 0 0 0 2px hsl(239 84% 67% / 0.35); }
+
+.ia-grid { display: grid; flex: 1; min-height: 0; gap: 16px; padding: 20px 28px 28px; }
+@media (min-width: 900px) {
+  .ia-grid { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); grid-template-rows: repeat(2, minmax(0, 1fr)); }
+  .ia-places { grid-column: 2; grid-row: 1 / span 2; }
+}
+
+.ia-panel { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 260px; padding: 20px 24px; border-radius: 26px; background: hsl(0 0% 100% / 0.6); box-shadow: 0 0 0 1px var(--ia-line); }
+@media (min-width: 900px) { .ia-panel { min-height: 0; } }
+.ia-panel header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.ia-panel h3 { font-size: 14px; font-weight: 500; color: var(--ia-muted); }
+.ia-figure { margin-top: 6px; font-size: 28px; font-weight: 500; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.ia-caption { padding-top: 2px; font-size: 12.5px; text-align: right; color: var(--ia-muted); }
+.ia-body { position: relative; display: flex; flex: 1; flex-direction: column; justify-content: flex-end; min-height: 0; margin-top: 12px; }
+
+/* Money wave */
+.ia-wave { display: flex; flex: 1; flex-direction: column; min-height: 120px; }
+.ia-wave-plot { position: relative; flex: 1; min-height: 0; margin-top: 28px; background: repeating-linear-gradient(180deg, transparent 0 calc(33.3% - 1px), hsl(239 40% 60% / 0.1) calc(33.3% - 1px) 33.3%); }
+.ia-wave-plot svg { display: block; width: 100%; height: 100%; }
+.ia-peak { position: absolute; width: 0; height: 0; }
+.ia-peak > i { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 3px solid #fff; border-radius: 50%; background: #4f44d8; box-shadow: 0 0 0 1px hsl(239 84% 67% / 0.3); }
+.ia-peak > b { position: absolute; bottom: 12px; left: 0; translate: -50% 0; font-size: 13px; font-weight: 600; color: #4f44d8; white-space: nowrap; }
+.ia-axis { display: flex; justify-content: space-between; margin-top: 10px; font-size: 12px; color: var(--ia-muted); }
+
+/* Fleet pulse */
+.ia-pulse { display: grid; gap: 8px; }
+.ia-pulse li { display: grid; grid-template-columns: 130px 1fr 40px; align-items: center; gap: 14px; }
+.ia-pulse small { overflow: hidden; font-size: 13px; color: var(--ia-muted); white-space: nowrap; text-overflow: ellipsis; }
+.ia-pulse span { display: grid; grid-template-columns: repeat(30, 1fr); gap: 3px; }
+.ia-pulse span i { height: 16px; border-radius: 4px; background: hsl(239 20% 50% / 0.08); }
+.ia-pulse span i.is-on { background: #4f44d8; }
+.ia-pulse b { font-size: 13px; font-weight: 500; text-align: right; color: var(--ia-muted); font-variant-numeric: tabular-nums; }
+/* Hangs off the right of the "5 of 6 out" figure (placed against the panel, not the body). */
+.ia-panel.is-pulse .ia-body { position: static; }
+.ia-pulse-anchor { position: absolute; top: 66px; left: 168px; width: 0; height: 0; }
+.ia-pulse-anchor .pt-label.is-right { top: 0; left: 0; }
+
+/* Where renters go: a drawn map, Earth (dark) or Map (light). */
+.ia-places { padding: 0; overflow: hidden; }
+.ia-map { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; transition: background-color 300ms ease-out; }
+.ia-land, .ia-routes { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ia-places.is-earth .ia-map {
+  background:
+    radial-gradient(40% 30% at 30% 30%, rgb(70 90 60 / 0.6), transparent 70%),
+    radial-gradient(35% 30% at 75% 70%, rgb(60 80 55 / 0.55), transparent 70%),
+    radial-gradient(1px 1px at 20% 20%, rgb(255 255 255 / 0.1), transparent),
+    linear-gradient(160deg, #3c4a38, #2c3529 60%, #343f31);
+}
+.ia-places.is-map .ia-map { background: #eef0f6; }
+.ia-park { fill: rgb(90 120 70 / 0.5); }
+.is-map .ia-park { fill: #d9ecd6; }
+.ia-road { fill: none; stroke: rgb(200 200 190 / 0.28); stroke-width: 0.9; vector-effect: non-scaling-stroke; }
+.ia-road.is-minor { stroke: rgb(200 200 190 / 0.14); }
+.is-map .ia-road { stroke: #fff; stroke-width: 3; }
+.is-map .ia-road.is-minor { stroke: #fff; stroke-width: 1.5; }
+.ia-river { fill: none; stroke: #2a3f5c; stroke-width: 22; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.ia-river.is-arm { stroke-width: 9; }
+.is-map .ia-river { stroke: #bcd4ef; }
+.ia-routes line { stroke: #6366f1; stroke-width: 2.5; vector-effect: non-scaling-stroke; opacity: 0.9; }
+.ia-pin { position: absolute; width: 0; height: 0; }
+.ia-pin i { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border: 3px solid #fff; border-radius: 50%; background: #4f44d8; box-shadow: 0 0 0 9px hsl(239 84% 67% / 0.28); }
+.ia-pin.is-pickup i { background: #22c55e; }
+.ia-pin.is-hub i { width: 24px; height: 24px; margin: -12px 0 0 -12px; box-shadow: 0 0 0 12px hsl(239 84% 67% / 0.3); }
+.ia-pin small { position: absolute; top: 14px; left: 0; translate: -50% 0; font-size: 12px; font-weight: 600; color: #fff; white-space: nowrap; text-shadow: 0 1px 3px rgb(0 0 0 / 0.7); }
+.is-map .ia-pin small { color: #1e1b4b; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+.ia-map-anchor { position: absolute; top: 20%; left: 33%; width: 0; height: 0; }
+.ia-map-anchor .pt-label.is-down { top: 0; left: 0; }
+
+.ia-map-btn, .ia-zoom button { display: grid; place-items: center; background: #fff; color: #1e1b4b; }
+.ia-map-btn { position: absolute; top: 18px; left: 18px; width: 40px; height: 40px; border-radius: 50%; box-shadow: 0 2px 8px rgb(0 0 0 / 0.2); }
+.ia-map-btn svg, .ia-zoom svg { width: 18px; height: 18px; }
+.ia-mode { position: absolute; top: 18px; left: 50%; translate: -50% 0; display: flex; gap: 2px; padding: 3px; border-radius: 99px; background: hsl(0 0% 100% / 0.9); box-shadow: 0 2px 8px rgb(0 0 0 / 0.2); }
+.ia-mode button { padding: 6px 16px; border-radius: 99px; font-size: 14px; font-weight: 500; color: #4f44d8; cursor: pointer; transition: background-color 200ms ease-out, color 200ms ease-out; }
+.ia-mode button.is-on { background: #4f44d8; color: #fff; }
+.ia-zoom { position: absolute; right: 14px; top: 50%; display: grid; overflow: hidden; border-radius: 4px; box-shadow: 0 2px 8px rgb(0 0 0 / 0.2); }
+.ia-zoom button { width: 40px; height: 40px; cursor: pointer; }
+.ia-zoom button + button { border-top: 1px solid #e5e7eb; }
+
+/* The Google map (insights-map.tsx): over the drawn one, which stays as the fallback. */
+.ia-gmap { position: absolute; inset: 0; border-radius: inherit; opacity: 0; transition: opacity 400ms ease-out; }
+.ia-gmap.is-ready { opacity: 1; }
+.ia-places.has-google .ia-map { visibility: hidden; }
+.ia-places.has-google .ia-map-anchor:not(.is-google) { display: none; }
+.ia-places:not(.has-google) .ia-map-anchor.is-google { display: none; }
+.ia-map-anchor.is-google { position: absolute; z-index: 3; top: 21%; left: 36%; width: 0; height: 0; }
+.ia-map-anchor.is-google .pt-label.is-down { top: 0; left: 0; }
+.ia-gm-label { margin-top: 6px; text-shadow: 0 1px 3px rgb(0 0 0 / 0.8); }
+.ia-gmap.is-light .ia-gm-label { color: #1e1b4b !important; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+.ia-map-btn, .ia-mode, .ia-zoom { z-index: 2; }

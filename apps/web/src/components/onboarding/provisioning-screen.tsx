@@ -1,15 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import {
   Info,
   MessageSquare,
+  Pause,
   Pencil,
+  Play,
   RotateCcw,
+  SkipBack,
+  SkipForward,
+  SlidersHorizontal,
   TriangleAlert,
   X,
 } from "lucide-react";
+
+import { isMockSignup } from "./mock-signup";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -18,7 +25,10 @@ import { cn } from "@/lib/utils";
 import { useOnboarding } from "./onboarding-provider";
 import { TenantIdentityFields } from "./tenant-identity-fields";
 import { BuildArt } from "./signup-art";
-import { LivePreview } from "./live-preview";
+import Image from "next/image";
+
+import { BrowserChrome } from "@/components/sections/portal-glass";
+import "../../../../../shared/portal-v2/tokens.css";
 import { SignupWash, SIGNUP_ENTER, SIGNUP_PRIMARY } from "./signup-ui";
 import {
   type ProvisionMilestone,
@@ -45,8 +55,8 @@ const STEP_LINES: Record<ProvisionMilestone, { title: string; line: string }> = 
     line: "Twice, actually. I like to be thorough.",
   },
   payment_verified: {
-    title: "Counting your dollar",
-    line: "All one of it. Then counting it again, to be safe.",
+    title: "Tucking your card away",
+    line: "Safe and sound. Nothing is charged today.",
   },
   brand_ready: {
     title: "Picking your colours",
@@ -137,12 +147,22 @@ export function ProvisioningScreen() {
   // Steps actually shown, walking towards what the server has done at no more
   // than one per STEP_DWELL_MS. See STEP_DWELL_MS.
   const serverDone = serverSucceeded ? PROVISION_MILESTONES.length : Math.min(completed.length, PROVISION_MILESTONES.length);
-  const [shownDone, setShownDone] = useState(0);
+  // Already finished when the screen appears (a refresh on "You're live."):
+  // go straight there instead of replaying the build.
+  const [shownDone, setShownDone] = useState(() => (serverSucceeded ? PROVISION_MILESTONES.length : 0));
+
+  // Localhost rehearsal only (mock-signup.ts): a player bar to pause on a step,
+  // step through them, and replay the build. The screen may then run ahead of
+  // the fake server, which is harmless; real builds never see any of this.
+  const [rehearsal] = useState(() => isMockSignup());
+  const [paused, setPaused] = useState(false);
+  const stepLimit = rehearsal ? PROVISION_MILESTONES.length : serverDone;
+
   useEffect(() => {
-    if (failed || shownDone >= serverDone) return;
+    if (failed || paused || shownDone >= stepLimit) return;
     const t = window.setTimeout(() => setShownDone((n) => n + 1), STEP_DWELL_MS);
     return () => window.clearTimeout(t);
-  }, [failed, shownDone, serverDone]);
+  }, [failed, paused, shownDone, stepLimit]);
 
   const succeeded = serverSucceeded && shownDone >= PROVISION_MILESTONES.length;
   const running = !succeeded && !failed;
@@ -267,7 +287,7 @@ export function ProvisioningScreen() {
               type="button"
               onClick={requestClose}
               aria-label="Close"
-              className="absolute top-4 right-5 z-10 flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-out hover:bg-zinc-100 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none motion-reduce:transition-none dark:hover:bg-white/10 sm:right-8"
+              className={cn("absolute top-4 right-5 z-10 flex size-9 items-center justify-center rounded-full transition-colors duration-200 ease-out focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none motion-reduce:transition-none sm:right-8", succeeded && result ? "bg-white text-zinc-600 ring-1 ring-zinc-200 hover:text-zinc-900" : "text-muted-foreground hover:bg-zinc-100 hover:text-foreground dark:hover:bg-white/10")}
             >
               <X className="h-4 w-4" />
             </button>
@@ -280,60 +300,20 @@ export function ProvisioningScreen() {
           */}
           <div className={cn("relative my-auto flex w-full max-w-[1120px] flex-col items-center text-center", SIGNUP_ENTER)}>
             {!(succeeded && result) && (
-              <div className="relative h-[220px] w-full max-w-[680px] sm:h-[340px] [@media(max-height:820px)]:h-[260px] [@media(max-height:680px)]:h-[180px]">
+              <div className="relative h-[260px] w-full max-w-[900px] sm:h-[460px] [@media(max-height:900px)]:h-[380px] [@media(max-height:780px)]:h-[300px] [@media(max-height:680px)]:h-[200px]">
                 <BuildArt
                   progress={percent / 100}
                   done={doneCount}
                   company={companyName === "your portal" ? "" : companyName}
                   slug={business.slug}
+                  owner={account?.fullName ?? ""}
                 />
               </div>
             )}
 
-            {succeeded && result ? (
-              /* ── success: two cards, the portal and the booking site ─────── */
-              <div className={cn("w-full", SIGNUP_ENTER)}>
-                {/* asChild so the visible heading IS the accessible name of the
-                    dialog — exactly one Title renders in either branch. */}
-                <DialogPrimitive.Title asChild>
-                  <h2 className="text-center text-[30px] leading-tight font-semibold tracking-[-0.02em] sm:text-[40px]">
-                    You&apos;re live.
-                  </h2>
-                </DialogPrimitive.Title>
-
-                <div className="mt-12 grid gap-12 text-left sm:grid-cols-2 sm:gap-16">
-                  <LiveCard
-                    previewUrl={result.portalUrl}
-                    shot={{ light: "/signup/portal-v2-light.jpg", dark: "/signup/portal-v2-dark.jpg" }}
-                    ctaLabel={`Go to my portal, ${result.portalUrl.replace(/^https?:\/\//, "")}${result.portalSignInUrl === null ? ". Sign in with the email and password you just created." : ""}`}
-                    onOpen={() => window.location.assign(portalHref)}
-                    tilt="left"
-                  />
-                  <LiveCard
-                    previewUrl={result.bookingUrl}
-                    shot={{ light: "/signup/booking-site-v2.jpg", dark: "/signup/booking-site-v2.jpg" }}
-                    ctaLabel={`View my booking site, ${result.bookingUrl.replace(/^https?:\/\//, "")}, opens in a new tab`}
-                    href={result.bookingUrl}
-                    tilt="right"
-                    delayMs={120}
-                  />
-                </div>
-
-                {result.contentSeeded === false && (
-                  <Alert variant="info" className="mt-5 text-left">
-                    <Info />
-                    <AlertDescription className="text-foreground">
-                      Your booking site is live, but some pages still show our default copy. You can
-                      edit every page from Portal → Website.
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </div>
-            ) : (
+            {succeeded && result ? null : (
               /* ── running / failed ────────────────────────────────────────── */
               <div className="w-full">
-                <p className="mt-10 text-sm font-medium text-muted-foreground">Building {companyName}</p>
-
                 {running ? (
                   <>
                     {/* Keyed on the step, so each new one rises in. */}
@@ -341,7 +321,7 @@ export function ProvisioningScreen() {
                       <h1
                         key={activeMilestone ?? "finishing"}
                         aria-live="polite"
-                        className={cn("mt-2.5 text-[30px] leading-tight font-semibold tracking-[-0.02em] text-balance sm:text-[40px]", SIGNUP_ENTER)}
+                        className={cn("mt-10 text-[30px] leading-tight font-semibold tracking-[-0.02em] text-balance sm:text-[40px]", SIGNUP_ENTER)}
                       >
                         {activeMilestone ? STEP_LINES[activeMilestone].title : "Putting the kettle on"}
                       </h1>
@@ -384,7 +364,7 @@ export function ProvisioningScreen() {
                   </>
                 ) : (
                   <DialogPrimitive.Title asChild>
-                    <h1 className="mt-2 text-[30px] leading-tight font-semibold tracking-[-0.02em] text-balance">
+                    <h1 className="mt-10 text-[30px] leading-tight font-semibold tracking-[-0.02em] text-balance">
                       {failed && activeMilestone ? `Stuck on: ${MILESTONE_COPY[activeMilestone].running.toLowerCase()}` : `Building ${companyName}`}
                     </h1>
                   </DialogPrimitive.Title>
@@ -451,6 +431,93 @@ export function ProvisioningScreen() {
               </div>
             )}
           </div>
+          {succeeded && result && (
+            /*
+              YOU'RE LIVE, IN TWO HALVES. The portal on the left (where they
+              run the business), the booking site on the right (where renters
+              book), each with its own heading, preview and way in. Stacked on
+              a phone.
+            */
+            <div className={cn("absolute inset-0 z-[1] overflow-y-auto lg:overflow-hidden", SIGNUP_ENTER)}>
+              <DialogPrimitive.Title asChild>
+                <h2 className="sr-only">
+                  You&apos;re live.
+                </h2>
+              </DialogPrimitive.Title>
+
+              {/* One colour across the whole screen: the indigo accent. */}
+              {/* A soft purple wash: lavender at the top fading to white, with a
+                  brighter glow behind each device. */}
+              <div
+                aria-hidden
+                className="pv2-tokens absolute inset-0"
+                style={{
+                  background:
+                    "radial-gradient(60% 55% at 25% 70%, rgb(165 160 250 / 0.35), transparent 70%), radial-gradient(60% 55% at 75% 70%, rgb(196 181 253 / 0.35), transparent 70%), linear-gradient(180deg, #ede9fe 0%, #f5f3ff 45%, #ffffff 100%)",
+                }}
+              />
+              <div className="relative grid min-h-full grid-cols-1 lg:h-full lg:grid-cols-2">
+                <LiveHalf
+                  your="Your own"
+                  big="portal."
+                  lead="Run your rentals, money, fleet and to-dos from one place."
+                  card={
+                    <LiveDevice
+                      src="/v2/hero/dashboard"
+                      aspect="1440 / 900"
+                      below="/v2/slide-fleet"
+                      belowAspect="3834 / 1150"
+                      phone="/v2/phone-dashboard"
+                      tab="Your portal"
+                      url={result.portalUrl.replace(/^https?:\/\//, "")}
+                      label={`Go to my portal, ${result.portalUrl.replace(/^https?:\/\//, "")}${result.portalSignInUrl === null ? ". Sign in with the email and password you just created." : ""}`}
+                      onOpen={() => window.location.assign(portalHref)}
+                    />
+                  }
+                />
+                <LiveHalf
+                  tone="right"
+                  your="Your own"
+                  big="booking site."
+                  lead="Renters pick their dates, choose a car and pay, under your name."
+                  card={
+                    <LiveDevice
+                      src="/v2/site-main"
+                      aspect="1917 / 992"
+                      below="/v2/hero-booking"
+                      belowAspect="1440 / 740"
+                      phone="/v2/phone-booking-site"
+                      tab={result.companyName || "Your booking site"}
+                      url={result.bookingUrl.replace(/^https?:\/\//, "")}
+                      label={`View my booking site, ${result.bookingUrl.replace(/^https?:\/\//, "")}, opens in a new tab`}
+                      href={result.bookingUrl}
+                    />
+                  }
+                  note={
+                    result.contentSeeded === false
+                      ? "Some pages still show our default copy. You can edit every page from Portal, then Website."
+                      : null
+                  }
+                />
+              </div>
+            </div>
+          )}
+
+          {rehearsal && !failed && (
+            <RehearsalControls
+              step={Math.min(shownDone, total)}
+              total={total}
+              paused={paused}
+              finished={succeeded}
+              onToggle={() => setPaused((p) => !p)}
+              onPrev={() => setShownDone((n) => Math.max(0, Math.min(n, total) - 1))}
+              onNext={() => setShownDone((n) => Math.min(total, n + 1))}
+              onReplay={() => {
+                setShownDone(0);
+                setPaused(false);
+              }}
+            />
+          )}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
@@ -458,39 +525,254 @@ export function ProvisioningScreen() {
 }
 
 /**
- * One of the two "You're live." cards: a real, live preview of the page, its
- * name, and the way in. The whole card is clickable through a stretched link
- * (the button's ::after covers the card), because a frame cannot sit inside a
- * <button> or <a>.
+ * The rehearsal player: previous, pause / play, next, and replay once the build
+ * has finished. Keyboard too: Space pauses, ← and → step, R replays.
+ * Rendered only by the localhost mock signup.
  */
-function LiveCard({
-  previewUrl,
-  ctaLabel,
-  tilt,
-  shot,
+function RehearsalControls({
+  step,
+  total,
+  paused,
+  finished,
+  onToggle,
+  onPrev,
+  onNext,
+  onReplay,
+}: {
+  step: number;
+  total: number;
+  paused: boolean;
+  finished: boolean;
+  onToggle(): void;
+  onPrev(): void;
+  onNext(): void;
+  onReplay(): void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === " " && !finished) {
+        e.preventDefault();
+        onToggle();
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        onPrev();
+      } else if (e.key === "ArrowRight" && !finished) {
+        e.preventDefault();
+        onNext();
+      } else if (e.key.toLowerCase() === "r") {
+        onReplay();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [finished, onToggle, onPrev, onNext, onReplay]);
+
+  const [open, setOpen] = useState(false);
+
+  const icon =
+    "flex size-9 items-center justify-center rounded-full text-zinc-600 transition-colors duration-200 ease-out hover:bg-zinc-100 hover:text-zinc-900 disabled:pointer-events-none disabled:opacity-35 focus-visible:ring-[3px] focus-visible:ring-indigo-500/30 focus-visible:outline-none dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-white";
+
+  if (!open) {
+    // Tucked away: one small button in the corner. Keys still work.
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Open rehearsal controls"
+        title="Rehearsal controls"
+        className={cn(
+          "fixed right-6 bottom-6 z-20 flex size-10 items-center justify-center rounded-full border border-zinc-200 bg-white/90 text-indigo-600 backdrop-blur transition-colors duration-200 ease-out hover:bg-white focus-visible:ring-[3px] focus-visible:ring-indigo-500/30 focus-visible:outline-none dark:border-white/10 dark:bg-[#16161f]/90 dark:text-indigo-400",
+          SIGNUP_ENTER,
+        )}
+      >
+        <SlidersHorizontal className="h-4 w-4" />
+      </button>
+    );
+  }
+
+  return (
+    <div
+      role="toolbar"
+      aria-label="Rehearsal controls"
+      className={cn(
+        "fixed right-6 bottom-6 z-20 flex items-center gap-1 rounded-full border border-zinc-200 bg-white/90 p-1.5 backdrop-blur dark:border-white/10 dark:bg-[#16161f]/90",
+        SIGNUP_ENTER,
+      )}
+    >
+      <button type="button" onClick={onPrev} disabled={step === 0} aria-label="Previous step" title="Previous (←)" className={icon}>
+        <SkipBack className="h-4 w-4" />
+      </button>
+
+      {finished ? (
+        <button
+          type="button"
+          onClick={onReplay}
+          aria-label="Replay the build"
+          title="Replay (R)"
+          className="flex h-9 items-center gap-1.5 rounded-full bg-indigo-600 px-4 text-sm font-medium text-white transition-colors duration-200 ease-out hover:bg-indigo-700 focus-visible:ring-[3px] focus-visible:ring-indigo-500/30 focus-visible:outline-none"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          Replay
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={paused ? "Play" : "Pause"}
+          title={paused ? "Play (Space)" : "Pause (Space)"}
+          className="flex size-10 items-center justify-center rounded-full bg-indigo-600 text-white transition-colors duration-200 ease-out hover:bg-indigo-700 focus-visible:ring-[3px] focus-visible:ring-indigo-500/30 focus-visible:outline-none"
+        >
+          {paused ? <Play className="ml-0.5 h-4 w-4 fill-current" /> : <Pause className="h-4 w-4 fill-current" />}
+        </button>
+      )}
+
+      <button type="button" onClick={onNext} disabled={finished} aria-label="Next step" title="Next (→)" className={icon}>
+        <SkipForward className="h-4 w-4" />
+      </button>
+
+      <span className="mx-1.5 h-5 w-px bg-zinc-200 dark:bg-white/10" aria-hidden />
+      <span className="pr-1 text-xs font-medium text-zinc-500 tabular-nums dark:text-zinc-400">
+        {finished ? "Done" : `${Math.min(step + 1, total)} / ${total}`}
+        {paused && !finished ? " · Paused" : ""}
+      </span>
+      <button type="button" onClick={() => setOpen(false)} aria-label="Hide rehearsal controls" title="Hide" className={icon}>
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * One half of the "You're live." screen: a label, a short heading and line,
+ * the preview, and one button.
+ */
+function LiveHalf({
+  your,
+  big,
+  lead,
+  card,
+  tone = "left",
+  note = null,
+}: {
+  your: string;
+  big: string;
+  lead: string;
+  card: ReactNode;
+  /** Left = soft lavender, right = a slightly deeper light indigo. */
+  tone?: "left" | "right";
+  note?: string | null;
+}) {
+  return (
+    <section
+      className={cn(
+        "pv2-tokens flex min-h-[100dvh] flex-col items-center justify-center gap-[clamp(20px,3dvh,40px)] px-6 py-16 text-center sm:px-8 lg:h-full lg:px-4 lg:min-h-0",
+        "lg:justify-start lg:pt-[max(64px,10dvh)] lg:pb-[max(56px,7dvh)]",
+        "text-[hsl(var(--v2-primary))]",
+      )}
+    >
+      {/* The laptop is about 1.6 times as wide as it is tall; capping its width
+          by the screen height keeps each half exactly one screen tall. */}
+      {/* Title, then one line. On a laptop the right half puts it under its
+          device, so it sits in the white below the diagonal. */}
+      <div>
+        {/* The landing page's section title: one regular-weight line, the key
+            word in the brand colour (product-track.css .pt-intro-title). */}
+        <h3 className="whitespace-nowrap text-[clamp(2rem,min(3.8vw,8dvh),4.75rem)] leading-[1.05] font-bold tracking-[-0.04em]">
+          {your} <span>{big}</span>
+        </h3>
+        <p className={cn("mx-auto mt-3 text-[clamp(1rem,min(1.35vw,2.5dvh),1.4rem)] lg:whitespace-nowrap leading-[1.4] tracking-[-0.012em]", "text-[hsl(var(--v2-primary)/0.7)]")}>{lead}</p>
+      </div>
+      {/* The device takes every pixel left under the title, down to a small gap
+          above the bottom edge. */}
+      <div className="w-full max-w-[900px] px-0 text-left sm:px-2 lg:min-h-0 lg:flex-1">{card}</div>
+      {note && <p className="mt-4 max-w-[360px] text-xs text-[#737373]">{note}</p>}
+    </section>
+  );
+}
+
+/**
+ * One of the two "You're live." screens, in the same frame the landing page
+ * uses: the real screen open in a browser on a tablet, with the phone view
+ * resting on its corner. It builds itself in on arrival (portal-glass.css,
+ * the `is-in` reveal), and the whole device is the way in.
+ */
+function LiveDevice({
+  src,
+  aspect,
+  phone,
+  tab,
+  url,
+  label,
   href,
   onOpen,
-  delayMs = 0,
+  flipped = false,
+  below,
+  belowAspect = "1440 / 740",
 }: {
-  previewUrl: string;
-  ctaLabel: string;
-  tilt?: "left" | "right";
-  shot?: { light: string; dark: string };
+  /** The visible slice of `below`, cropped from its top. */
+  belowAspect?: string;
+  /** A second page shown under the first, as if scrolled. */
+  below?: string;
+  src: string;
+  aspect: string;
+  phone: string;
+  tab: string;
+  url: string;
+  label: string;
   href?: string;
   onOpen?: () => void;
-  delayMs?: number;
+  flipped?: boolean;
 }) {
-  // No label, no button: the laptop is the way in. An invisible link or button
-  // covers it, named for screen readers, with the focus ring drawn round it.
   const cover =
-    "absolute inset-0 z-10 rounded-2xl outline-none focus-visible:ring-[3px] focus-visible:ring-indigo-500/40";
+    "absolute inset-0 z-10 outline-none";
   return (
-    <div className={cn("group relative", SIGNUP_ENTER)} style={{ animationDelay: `${delayMs}ms` }}>
-      <LivePreview url={previewUrl} tilt={tilt} shot={shot} />
+    <div
+      className={cn(
+        "pv2-tokens is-in group relative transition-transform duration-200 ease-out hover:-translate-y-1 motion-reduce:transition-none lg:h-full",
+        flipped ? "is-flipped pl-[9%]" : "pr-[9%]",
+      )}
+      style={{ ["--pg-ease" as string]: "cubic-bezier(0.16, 1, 0.3, 1)" }}
+    >
+      <div className="pg-device lg:h-full">
+        {/* A tablet: the landing page's dark frame with the browser in it. */}
+        <div className="pg-tablet lg:flex lg:h-full lg:flex-col lg:[&_.pg-browser]:flex lg:[&_.pg-browser]:min-h-0 lg:[&_.pg-browser]:flex-1 lg:[&_.pg-browser]:flex-col lg:[&_.pg-screen]:min-h-0 lg:[&_.pg-screen]:flex-1" style={{ padding: "clamp(5px, 0.5vw, 8px)", borderRadius: "clamp(12px, 1.2vw, 18px)" }}>
+          <i className="pg-tablet-camera" aria-hidden style={{ top: "calc(clamp(5px, 0.5vw, 8px) / 2)" }} />
+          {/* Tall enough to reach the bottom of the screen. The page shows from
+              the top at full width; a second page continues under the first,
+              like scrolling down the site. */}
+          <BrowserChrome tab={tab} url={url} screenStyle={{ minHeight: 240 }}>
+            <div className="absolute inset-0 flex flex-col">
+              {[
+                // Alone, the page fills the screen from its top-left corner.
+                { s: src, style: below ? { aspectRatio: aspect } : { flex: 1 }, pos: "left top" },
+                // The page underneath loses its own nav bar (the top 8%), so it
+                // reads as the same site scrolled, not a second header.
+                ...(below ? [{ s: below, style: { aspectRatio: belowAspect }, pos: "center bottom" }] : []),
+              ].map((pg) => (
+                <div key={pg.s} className="relative w-full shrink-0 overflow-hidden" style={pg.style}>
+                  <Image src={`${pg.s}.png`} alt="" fill sizes="45vw" className="dark:hidden" style={{ objectFit: "cover", objectPosition: pg.pos }} />
+                  <Image src={`${pg.s}-dark.png`} alt="" fill sizes="45vw" className="hidden dark:block" style={{ objectFit: "cover", objectPosition: pg.pos }} />
+                </div>
+              ))}
+            </div>
+          </BrowserChrome>
+        </div>
+        {/* The phone view, resting on the tablet's outer bottom corner. */}
+        <div
+          className="pg-phone"
+          style={{ width: "min(21%, 17dvh)", bottom: "-4%", borderRadius: 14, padding: 4, ...(flipped ? { left: "-9%", right: "auto" } : { right: "-9%" }) }}
+        >
+          <div className="pg-phone-screen" style={{ borderRadius: 10 }}>
+            <Image src={`${phone}.png`} alt="" fill sizes="180px" className="dark:hidden" />
+            <Image src={`${phone}-dark.png`} alt="" fill sizes="180px" className="hidden dark:block" />
+          </div>
+        </div>
+      </div>
       {href ? (
-        <a href={href} target="_blank" rel="noopener noreferrer" aria-label={ctaLabel} className={cover} />
+        <a href={href} target="_blank" rel="noopener noreferrer" aria-label={label} className={cover} />
       ) : (
-        <button type="button" onClick={onOpen} aria-label={ctaLabel} className={cover} />
+        <button type="button" onClick={onOpen} aria-label={label} className={cover} />
       )}
     </div>
   );

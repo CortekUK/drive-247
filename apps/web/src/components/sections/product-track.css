@@ -1,0 +1,605 @@
+/*
+ * Calendar → Multi-chat → Insights, pinned and sliding sideways (product-track.tsx).
+ * Everything here is scoped to .pt-panel, so the three sections are unchanged anywhere else.
+ */
+
+/* Only the product: no heading, no sub-line, no tip, no feature points. */
+.pt-panel .sh,
+.pt-panel .mc-head,
+.pt-panel .mc-tip,
+.pt-panel .mc-features,
+.pt-panel .kn-points { display: none; }
+
+/* No section padding of their own: the panel places them. */
+.pt-panel .cs-section,
+.pt-panel #calendar.cs-section,
+.pt-panel .mc-section,
+.pt-panel .kn { padding-block: 0; }
+.pt-panel .mc-window,
+.pt-panel .kn-window { margin-top: 0; }
+.pt-panel .cs-board { margin-top: 0; }
+
+/* One width for all three screens, so the slide reads as one row. */
+.pt-panel #calendar .cs-inner,
+.pt-panel .mc-inner,
+.pt-panel .ct-inner { width: min(100% - 2 * clamp(20px, 3vw, 56px), 1400px); margin-inline: auto; padding-inline: 0; }
+.pt-panel #calendar .cs-tablet { max-width: none; }
+
+/* The first screen: big words, a short line, a big arrow. */
+/*
+ * --pt-left: the margin left of the words, which the invisible guard fills.
+ * --pt-right: the room right of the words and arrow, where the page line runs.
+ */
+.pt-intro {
+  --pt-left: clamp(56px, 6vw, 120px);
+  --pt-right: clamp(96px, 9vw, 180px);
+  --pt-arrow: clamp(140px, 15vw, 280px); /* the arrow's size (its shaft sits at half of it) */
+  --pt-drop: clamp(84px, 8vw, 150px); /* how far the arrow sits below the words' bottom */
+  --pt-sub: clamp(1.125rem, 1.5vw, 1.4rem); /* the sub-line's font size */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+}
+/* The words on the left, the arrow at the end of them on the right, level with the last line. */
+.pt-intro-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  column-gap: clamp(32px, 4vw, 80px);
+  padding: 0 var(--pt-right) 0 var(--pt-left);
+}
+
+/* Wide and tight: the words use the width, with the lines close together. */
+.pt-intro-title {
+  font-size: clamp(3rem, 6.6vw, 8rem);
+  font-weight: 400;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  color: var(--foreground);
+  text-wrap: balance;
+}
+.pt-intro-sub {
+  max-width: 36rem;
+  margin-top: clamp(14px, 1.4vw, 24px);
+  font-size: var(--pt-sub);
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+
+/* Big. The slot keeps its place in the layout; the drawn arrow goes over it. */
+/* Sits a little below the last line of words (Ghulam, 2026-11-10: "a bit more down"). */
+.pt-intro-slot { position: relative; top: var(--pt-drop); }
+/* The words come down with it, so the sub-line's last line sits level with the arrow's lower tip (5/24 of its size above its bottom). */
+.pt-intro-words { position: relative; top: calc(var(--pt-drop) - var(--pt-arrow) * 5 / 24 + 0.5 * var(--pt-sub) - var(--pt-lift)); }
+/* Heading and description lifted together toward the top of the screen; the arrow stays (Ghulam, 2026-11-10). */
+.pt-intro { --pt-lift: clamp(56px, 6vw, 112px); }
+.pt-intro-arrow {
+  display: block;
+  width: var(--pt-arrow);
+  height: auto;
+  color: hsl(var(--v2-primary));
+}
+
+/*
+ * The line falling into the arrow (product-track.tsx draws it as the page scrolls): a faint
+ * outline of the whole path, and the filled path over it, shown through a mask that grows
+ * along the path. Only once the track has taken the line over (.has-line); the plain arrow
+ * steps aside then, keeping its slot.
+ */
+.pt-intro { position: relative; }
+.pt-intro-art { display: none; position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.pt-outer.has-line .pt-intro-art { display: block; }
+.pt-outer.has-line .pt-intro.is-lead .pt-intro-arrow { visibility: hidden; }
+/* The plain arrow (the later text screens): the same thin 1.5px as the page line and the lead arrow, at any size. */
+.pt-intro-arrow * { vector-effect: non-scaling-stroke; stroke-width: 1.5px; }
+.pt-intro-art path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.pt-intro-art .pt-a-bend { fill: currentColor; stroke: none; }
+.pt-intro-art .pt-a-drop { stroke: currentColor; stroke-width: 1.5; }
+.pt-intro-art .pt-a-shaft { stroke: currentColor; stroke-width: var(--pt-w); stroke-linecap: butt; }
+.pt-intro-art .pt-a-head { stroke: currentColor; stroke-width: var(--pt-w); }
+/* The ghost: the line still to come is the page line's own dotted look; the arrow is faint. */
+.pt-art-ghost { color: hsl(var(--v2-primary) / 0.22); }
+/* The whole path still to come is dotted, like the page line ahead of its tip. */
+.pt-intro-art .pt-art-ghost .pt-a-shaft, .pt-intro-art .pt-art-ghost .pt-a-head { stroke-dasharray: 2 7; stroke-linecap: round; }
+.pt-intro-art .pt-art-ghost .pt-a-bend { display: none; }
+.pt-intro-art .pt-art-ghost .pt-a-drop.pg-thread-rest { stroke: hsl(var(--v2-primary) / 0.22); stroke-width: 1.5; stroke-dasharray: 2 7; }
+.pt-intro-art .pt-a-tip { visibility: hidden; }
+.pt-art-live { color: hsl(var(--v2-primary)); }
+.pt-m { fill: none; stroke: #fff; stroke-width: calc(var(--pt-w) + 10px); stroke-linecap: round; stroke-linejoin: round; }
+
+/*
+ * The words play in each time their screen arrives (.is-here, product-track.tsx): the heading
+ * rises out of a soft blur, then the line under it, then the arrow, each a beat after the last.
+ * Only on the pinned track; stacked, the words simply stand.
+ */
+@media (min-width: 1100px) and (min-height: 640px) and (prefers-reduced-motion: no-preference) {
+  .pt-panel .pt-intro-sub,
+  .pt-panel .pt-intro:not(.is-lead) .pt-intro-slot {
+    opacity: 0;
+    translate: 0 28px;
+    filter: blur(6px);
+    transition: opacity 300ms ease-in, translate 300ms ease-in, filter 300ms ease-in;
+  }
+  .pt-panel .pt-intro:not(.is-lead) .pt-intro-slot { translate: -24px 0; }
+  .pt-panel.is-here .pt-intro-sub,
+  .pt-panel.is-here .pt-intro:not(.is-lead) .pt-intro-slot {
+    opacity: 1;
+    translate: 0 0;
+    filter: blur(0);
+    transition: opacity 700ms cubic-bezier(0.16, 1, 0.3, 1), translate 900ms cubic-bezier(0.16, 1, 0.3, 1), filter 700ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  /* The heading types: one character every 22ms, then a caret blinks twice and goes. */
+  .pt-panel .pt-ch { opacity: 0; }
+  .pt-panel.is-here .pt-ch { opacity: 1; transition: opacity 40ms linear calc(40ms + var(--i) * 9ms); }
+  .pt-panel .pt-caret {
+    display: inline-block;
+    width: 0.06em;
+    height: 0.82em;
+    margin-left: 0.04em;
+    vertical-align: -0.04em;
+    background: hsl(var(--v2-primary));
+    opacity: 0;
+  }
+  .pt-panel.is-here .pt-caret { animation: pt-caret 1100ms steps(1, end) calc(80ms + var(--pt-chars) * 9ms) both; }
+  /* The line under it and the arrow come once the heading is typed. */
+  .pt-panel.is-here .pt-intro-sub { transition-delay: calc(180ms + var(--pt-chars, 40) * 9ms); }
+  .pt-panel.is-here .pt-intro:not(.is-lead) .pt-intro-slot { transition-delay: calc(320ms + var(--pt-chars, 40) * 9ms); }
+
+  /* The calendar's labels play in again on each arrival, a beat after the screen lands. */
+  .pt-panel:not(.is-here) #calendar .is-in .cs-note { opacity: 0; transition: opacity 200ms ease-in; }
+  .pt-panel:not(.is-here) #calendar .is-in .cs-note::before { scale: 0 1; transition: scale 200ms ease-in; }
+  .pt-panel.is-here #calendar .is-in .cs-note { opacity: 1; transition: opacity 400ms ease-out 450ms; }
+  .pt-panel.is-here #calendar .is-in .cs-note::before { scale: 1 1; transition: scale 600ms cubic-bezier(0.16, 1, 0.3, 1) 350ms; }
+}
+
+@keyframes pt-caret {
+  0%, 36%, 72% { opacity: 1; }
+  18%, 54%, 100% { opacity: 0; }
+}
+.pt-word { display: inline-block; white-space: nowrap; }
+
+/* The long arrow on the later text screens. */
+.pt-intro-arrow.is-long { width: clamp(220px, 24vw, 440px); }
+/* Its shaft level with the last line of the words, as the first screen's arrow base is. */
+@media (min-width: 1100px) {
+  .pt-intro:not(.is-lead) .pt-intro-slot { top: calc(var(--pt-drop) - var(--pt-arrow) * 5 / 24 - var(--pt-lift) + clamp(220px, 24vw, 440px) * 0.1825); }
+}
+@media (min-width: 1100px) and (min-height: 640px) and (prefers-reduced-motion: no-preference) {
+  /* Its shaft draws out to the head as the arrow comes in. */
+  .pt-panel .pt-long-shaft { transform-box: fill-box; transform-origin: left center; scale: 0 1; }
+  .pt-panel .pt-long-head { opacity: 0; }
+  .pt-panel.is-here .pt-long-shaft { scale: 1 1; transition: scale 700ms cubic-bezier(0.16, 1, 0.3, 1) calc(360ms + var(--pt-chars, 40) * 9ms); }
+  .pt-panel.is-here .pt-long-head { opacity: 1; transition: opacity 250ms ease-out calc(760ms + var(--pt-chars, 40) * 9ms); }
+}
+
+/* Phones and tablets: the arrow under the words. */
+@media (max-width: 1099.98px) {
+  .pt-intro-body { grid-template-columns: minmax(0, 1fr); padding-inline: 20px; }
+  .pt-intro-slot, .pt-intro-words { top: 0; }
+  .pt-intro-arrow { width: 96px; margin-top: 24px; }
+}
+
+/* Stacked (phones, short screens, reduced motion): a screen per block, with breathing room. */
+.pt-panel { padding-block: clamp(40px, 6vw, 80px); }
+
+@media (min-width: 1100px) and (min-height: 640px) and (prefers-reduced-motion: no-preference) {
+  /* The scroll that plays it: a screen's height per screen, plus a little to hold the last. */
+  .pt-outer { height: calc(var(--pt-n) * 130svh + var(--pt-intro, 0px)); }
+  /*
+   * Room above the track for the page line to cross over (Ghulam, 2026-11-10: "match these two
+   * lines"). The features section above ends with its line on the far left (its rail); the
+   * track takes the line in at its arrow, on the right. With no gap between them the line had
+   * no height to turn in, so it jumped. This margin is that height: the page line curves across
+   * in it (tour-layout.ts flush → turn).
+   */
+  .pt-outer { margin-top: clamp(140px, 22svh, 240px); }
+  .pt-pin { position: sticky; top: 0; height: 100svh; overflow: hidden; }
+  .pt-track {
+    display: flex;
+    width: calc(var(--pt-n) * 100%);
+    height: 100%;
+    transform: translateX(calc(var(--pt-x, 0) * -100% / var(--pt-n)));
+    will-change: transform;
+  }
+  /* The text screens' words move and fade on their own during a slide (product-track.tsx render). */
+  .pt-panel .pt-intro { will-change: transform, opacity; }
+  /* Each screen is the whole view, 100vw x 100vh, edge to edge (Ghulam, 2026-11-10). */
+  .pt-panel {
+    flex: 0 0 calc(100% / var(--pt-n));
+    display: flex;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+  }
+
+  /* A flex column from the section down to the screen, so each level fills the one above. */
+  .pt-panel > section,
+  .pt-panel #calendar .cs-inner,
+  .pt-panel .mc-inner,
+  .pt-panel .ct-inner,
+  .pt-panel #calendar .cs-tablet,
+  .pt-panel .cs-window,
+  .pt-panel .mc-window,
+  .pt-panel .kn-window,
+  .pt-panel .pg-browser {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+  }
+  .pt-panel #calendar .cs-inner,
+  .pt-panel .mc-inner,
+  .pt-panel .ct-inner { margin: 0; }
+  .pt-panel .pg-screen { flex: 1; min-height: 0; }
+  .pt-panel .pg-tabs,
+  .pt-panel .pg-address { flex: none; }
+
+  /* No frames: no tablet bezel, no rounded window, no border. The screen meets the view's edges. */
+  .pt-panel #calendar .cs-tablet,
+  .pt-panel #calendar .cs-tablet.is-lit { padding: 0; border-radius: 0; background: none; box-shadow: none; }
+  .pt-panel #calendar .cs-tablet .cs-window,
+  .pt-panel .mc-window,
+  .pt-panel .kn-window,
+  .pt-panel .pg-browser { border: 0; border-radius: 0; }
+
+  /* Calendar: the board fills the screen and its six car rows share the height. */
+  .pt-panel #calendar .cs-window .cs-board {
+    --u: clamp(8px, min(0.95vw, 1.45svh), 14px);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 1.8em 2.4em;
+  }
+  .pt-panel #calendar .cs-grid { flex: 1; min-height: 0; grid-template-rows: auto repeat(6, minmax(0, 1fr)); }
+
+  /*
+   * Calendar, minimal (Ghulam, 2026-11-10: "not in a browser window, very minimal and
+   * sophisticated"): no browser, no toolbar, no stats, no pop-up, no cursor. Just the month
+   * line, the cars and their bookings, drawn straight on the page in hairlines and two tones.
+   */
+  .pt-panel #calendar .cs-top,
+  .pt-panel #calendar .pg-tabs,
+  .pt-panel #calendar .pg-address,
+  .pt-panel #calendar .cs-search,
+  .pt-panel #calendar .cs-seg,
+  .pt-panel #calendar .cs-top u,
+  .pt-panel #calendar .cs-nav,
+  .pt-panel #calendar .cs-title svg,
+  .pt-panel #calendar .cs-stats,
+  .pt-panel #calendar .cs-pop,
+  .pt-panel #calendar .cs-cursor,
+  .pt-panel #calendar .cs-day em,
+  .pt-panel #calendar .cs-avatar,
+  .pt-panel #calendar .cs-car > i { display: none; }
+  .pt-panel #calendar .cs-window,
+  .pt-panel #calendar .pg-browser,
+  .pt-panel #calendar .pg-screen,
+  .pt-panel #calendar .cs-window .cs-board { border: 0; background: transparent; box-shadow: none; }
+  /* Plain like the portal (Ghulam, 2026-11-10): a white page with the portal's #f1f5f9 hairlines, no gradient or grid behind. */
+  /* With the portal's own page wash over the white (portal styles/v2-theme.css .bg-app-gradient), Ghulam, 2026-11-10. */
+  .pt-panel #calendar .cs-window .cs-board {
+    background:
+      radial-gradient(70rem 50rem at 105% -10%, hsl(239 84% 67% / 0.2), transparent 55%),
+      radial-gradient(60rem 48rem at -8% -6%, hsl(247 92% 60% / 0.16), transparent 52%),
+      radial-gradient(55rem 45rem at 50% 115%, hsl(239 84% 67% / 0.12), transparent 55%),
+      linear-gradient(180deg, hsl(239 84% 67% / 0.07) 0%, transparent 45%),
+      #fff;
+  }
+  /* End to end: the rows and hairlines run to both edges of the screen; only the words keep the side margin. */
+  .pt-panel #calendar .cs-window .cs-board { --cs-side: clamp(20px, 2vw, 32px); padding: 0; }
+  .pt-panel #calendar .cs-top { padding-inline: var(--cs-side); }
+  .pt-panel #calendar .cs-grid { grid-template-columns: calc(14em + var(--cs-side)) minmax(0, 1fr); }
+  .pt-panel #calendar .cs-corner,
+  .pt-panel #calendar .cs-car { padding-left: var(--cs-side); }
+  .pt-panel #calendar .cs-now { left: calc(14em + var(--cs-side) + (100% - 14em - var(--cs-side)) / var(--cs-days) * (var(--cs-today) + 0.5)); }
+  .pt-panel #calendar .cs-title b { font-size: 2.6em; font-weight: 400; letter-spacing: -0.03em; }
+  .pt-panel #calendar .cs-grid { margin-top: 0; }
+  .pt-panel #calendar .cs-corner,
+  .pt-panel #calendar .cs-car,
+  .pt-panel #calendar .cs-lane { border-color: #e9edf3; }
+  .pt-panel #calendar .cs-corner { font-weight: 400; }
+  .pt-panel #calendar .cs-lane { background: repeating-linear-gradient(90deg, transparent 0 calc(100% / var(--cs-days) - 1px), #f1f5f9 calc(100% / var(--cs-days) - 1px) calc(100% / var(--cs-days))); }
+  .pt-panel #calendar .cs-day.is-weekend { background: none; }
+  .pt-panel #calendar .cs-day b { font-weight: 400; }
+  .pt-panel #calendar .cs-car b { font-weight: 500; }
+  .pt-panel #calendar .cs-bar { top: 50%; height: 2.6em; padding-inline: 1em; border-radius: 99px; font-weight: 500; }
+  .pt-panel #calendar .cs-bar.is-out,
+  .pt-panel #calendar .cs-bar.is-returning { background: var(--cs-brand); color: #fff; }
+  .pt-panel #calendar .cs-bar.is-booked { background: hsl(var(--v2-primary) / 0.1); box-shadow: none; }
+  .pt-panel #calendar .cs-bar.is-pending { background: rgb(245 158 11 / 0.1); box-shadow: none; }
+  .pt-panel #calendar .cs-bar.is-blocked { background: hsl(var(--v2-foreground) / 0.05); box-shadow: none; }
+  /* The booking the sheet is showing. */
+  .pt-panel #calendar .cs-bar.is-open { box-shadow: inset 0 0 0 1.5px var(--cs-brand); }
+  /* Today's line starts under the date, so it no longer strikes through "Wed". */
+  /*
+   * Labels (Ghulam, 2026-11-10, after a sketch: a thin line from inside the thing, out to a few
+   * words floating in the empty space). No card, no number: just the line and the words.
+   * The line starts inside the booking, near its end where it is empty, and runs down and to the
+   * right; the words sit at its end. Near the right edge it runs down and to the left instead.
+   */
+  .pt-panel #calendar .cs-note {
+    /* Labels have their own colour, apart from the bookings' indigo: the sketch's blue (Ghulam, 2026-11-10). */
+    --cs-label: #475569; /* slate: the sketch blue #3b82f6, then #0f172a, were not it ("too black") */
+    --dx: 4.6em;
+    --dy: 2.05em;
+    position: absolute;
+    z-index: 3; /* over the today line */
+    top: calc(50% + 1.3em); /* from the booking's bottom edge, so the line never crosses its name */
+    left: calc(100% / var(--cs-days) * (var(--cs-from) + var(--cs-span)) - 1.6em);
+    display: block;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    opacity: 0;
+  }
+  /* One thin line, one colour, the same angle for every label. */
+  .pt-panel #calendar .cs-note::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: calc(var(--dx) * 1.0936);
+    border-top: 1px solid color-mix(in srgb, var(--cs-label) 55%, transparent);
+    transform-origin: 0 0;
+    rotate: 24.06deg;
+    scale: 0 1;
+  }
+  /* Near the right edge: out of the booking's left end instead, down and to the left. */
+  .pt-panel #calendar .cs-note.is-left { left: calc(100% / var(--cs-days) * var(--cs-from) + 1.6em); }
+  .pt-panel #calendar .cs-note.is-left::before { rotate: 155.94deg; }
+  /* The words, level with the line's end. */
+  .pt-panel #calendar .cs-note > span {
+    position: absolute;
+    top: var(--dy);
+    left: var(--dx);
+    translate: 0 -50%;
+    /* A small box around the words, in the label's blue (Ghulam, 2026-11-10: "put them in a box"). */
+    padding: 0.55em 1em 0.55em 0.6em;
+    border-radius: 0.7em;
+    background: var(--cs-label);
+    box-shadow: 0 0.5em 1.4em rgb(71 85 105 / 0.14);
+    line-height: 1;
+    white-space: nowrap;
+  }
+  /* The size sits on the words, not their box, so the box is placed in the calendar's own em. */
+  .pt-panel #calendar .cs-note > span { display: flex; align-items: center; gap: 0.7em; }
+  /* The label's number, a small white disc inside the box. */
+  .pt-panel #calendar .cs-note > span > i {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    color: var(--cs-label);
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 700;
+  }
+  .pt-panel #calendar .cs-note > span > b { display: block; font-size: clamp(14px, 1.05vw, 17px); font-weight: 500; color: #fff; }
+  .pt-panel #calendar .cs-note.is-left > span { left: auto; right: var(--dx); }
+  .pt-panel #calendar .cs-free > b { font-size: clamp(14px, 1.05vw, 17px); font-weight: 500; color: var(--cs-brand); }
+  .pt-panel #calendar .cs-free > small { font-size: clamp(12.5px, 0.9vw, 14.5px); color: hsl(var(--v2-foreground) / 0.5); }
+  .pt-panel #calendar .is-in .cs-note { opacity: 1; transition: opacity 300ms ease-out 1200ms; }
+  .pt-panel #calendar .is-in .cs-note::before { scale: 1 1; transition: scale 500ms cubic-bezier(0.16, 1, 0.3, 1) 1200ms; }
+  /* Free days: an empty slot, dashed, the size of a booking, labelled inside. */
+  .pt-panel #calendar .cs-free {
+    position: absolute;
+    top: 50%;
+    left: calc(100% / var(--cs-days) * var(--cs-from) + 0.25em);
+    width: calc(100% / var(--cs-days) * var(--cs-span) - 0.5em);
+    min-height: 4.4em;
+    row-gap: 0.3em;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: center;
+    align-items: center;
+    padding: 0.6em 1.6em;
+    border: 1.5px dashed hsl(var(--v2-primary) / 0.3);
+    border-radius: 99px;
+    background: hsl(0 0% 100% / 0.85);
+    line-height: 1.25;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    translate: 0 -50%;
+  }
+  .pt-panel #calendar .cs-free > b, .pt-panel #calendar .cs-free > small { overflow: hidden; text-overflow: ellipsis; }
+  .pt-panel #calendar .cs-now-label {
+    position: absolute;
+    bottom: 1.2em;
+    left: 0;
+    display: block;
+    padding: 0.25em 0.7em;
+    border-radius: 99px;
+    background: var(--cs-brand);
+    color: #fff;
+    font-size: 0.85em;
+    font-weight: 600;
+    white-space: nowrap;
+    opacity: 0;
+    translate: -50% 0;
+  }
+  .pt-panel #calendar .is-in .cs-free { opacity: 1; transition: opacity 300ms ease-out 1300ms; }
+  .pt-panel #calendar .is-in .cs-now-label { opacity: 1; transition: opacity 300ms ease-out 1300ms; }
+  @media (prefers-reduced-motion: reduce) { .pt-panel #calendar .cs-note, .pt-panel #calendar .cs-free, .pt-panel #calendar .cs-now-label { transition: none; } }
+
+  /*
+   * Multi-chat, with the calendar's vibe (Ghulam, 2026-11-10: "all the improvements and the vibe
+   * we did in the calendar view, in the multi chat as well"): no browser, the portal's page wash
+   * on white, soft lavender hairlines, a quieter renter panel, and numbered labels.
+   */
+  .pt-panel .mc-window .pg-tabs,
+  .pt-panel .mc-window .pg-address { display: none; }
+  .pt-panel .mc-window,
+  .pt-panel .mc-window .pg-browser,
+  .pt-panel .mc-window .pg-screen { border: 0; background: transparent; box-shadow: none; }
+  .pt-panel .mc-app {
+    /* Zoomed out a little (Ghulam, 2026-11-10: "a bit more zoomed in"); percentages are not
+       zoomed, so it still fills the screen. */
+    zoom: 0.86;
+    --mc-line: hsl(239 40% 60% / 0.12);
+    background:
+      radial-gradient(70rem 50rem at 105% -10%, hsl(239 84% 67% / 0.2), transparent 55%),
+      radial-gradient(60rem 48rem at -8% -6%, hsl(247 92% 60% / 0.16), transparent 52%),
+      radial-gradient(55rem 45rem at 50% 115%, hsl(239 84% 67% / 0.12), transparent 55%),
+      linear-gradient(180deg, hsl(239 84% 67% / 0.07) 0%, transparent 45%),
+      #fff;
+  }
+  .pt-panel .mc-rail-list { position: relative; }
+  .pt-panel .mc-rail { position: relative; padding: 32px 18px; border-right-color: var(--mc-line); }
+  .pt-panel .mc-rail-title { font-weight: 500; font-size: 24px; }
+  .pt-panel .mc-row.is-open { background: hsl(239 84% 67% / 0.1); }
+  .pt-panel .mc-convo-head { padding: 22px 32px; border-bottom-color: var(--mc-line); }
+  .pt-panel .mc-convo-head b { font-weight: 500; }
+  /* The thread scrolls inside itself (it was spilling onto the composer); no scrollbar shown. */
+  .pt-panel .mc-thread { padding: 32px; overflow-y: auto; scrollbar-width: none; }
+  .pt-panel .mc-bubble { position: relative; }
+  .pt-panel .mc-msg:not(.is-you) .mc-bubble { border-color: var(--mc-line); background: hsl(0 0% 100% / 0.85); }
+  .pt-panel .mc-call { border-color: hsl(239 84% 67% / 0.3); background: hsl(0 0% 100% / 0.7); }
+  .pt-panel .mc-composer { padding: 0 32px 32px; }
+  .pt-panel .mc-switch { position: relative; background: hsl(239 84% 67% / 0.07); }
+  .pt-panel .mc-box { border-color: hsl(239 84% 67% / 0.22); background: hsl(0 0% 100% / 0.9); }
+  .pt-panel .mc-trax { position: relative; width: fit-content; }
+  .pt-panel .mc-send { background: #4f44d8; }
+  /* The renter, like the booking sheet: left-aligned, no big avatar, no boxes. */
+  .pt-panel .mc-who {
+    justify-items: start;
+    padding: 32px 28px;
+    border-left-color: var(--mc-line);
+    text-align: left;
+    background:
+      radial-gradient(28rem 22rem at 110% -8%, hsl(239 84% 67% / 0.18), transparent 60%),
+      hsl(0 0% 100% / 0.5);
+  }
+  .pt-panel .mc-who .mc-avatar.is-big { display: none; }
+  .pt-panel .mc-who > b { font-size: 22px; font-weight: 500; letter-spacing: -0.02em; }
+  .pt-panel .mc-who dl { border-color: var(--mc-line); }
+  .pt-panel .mc-who dd { font-weight: 500; }
+  .pt-panel .mc-who-title { font-weight: 500; }
+  .pt-panel .mc-rail { overflow: visible; z-index: 2; }
+  /*
+   * Everything fits the screen at any height (Ghulam, 2026-11-10: "not looking good from the
+   * bottom"): the grid is one row the screen's height, and each column scrolls inside itself
+   * instead of pushing the composer off the bottom. No scrollbars shown.
+   */
+  .pt-panel .mc-app { grid-template-rows: minmax(0, 1fr); }
+  .pt-panel .mc-app > * { min-height: 0; }
+  .pt-panel .mc-rail { display: flex; flex-direction: column; }
+  .pt-panel .mc-rail-list { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+  .pt-panel .mc-rail-list > ul { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; mask-image: linear-gradient(180deg, #000 calc(100% - 48px), transparent); }
+  .pt-panel .mc-who { mask-image: linear-gradient(180deg, #000 calc(100% - 48px), transparent); }
+  .pt-panel .mc-who { overflow-y: auto; scrollbar-width: none; gap: 12px; }
+  .pt-panel .mc-past li { border-color: var(--mc-line); }
+  /* Plain numbers in a row, no boxes. */
+  .pt-panel .mc-stats { padding-block: 4px 12px; border-bottom: 1px solid var(--mc-line); }
+  .pt-panel .mc-stats div { padding: 0; border: 0; background: none; }
+  .pt-panel .mc-stats dt { white-space: nowrap; }
+  /* Labels sit over the rows below them, so they need room: the label hangs into the gap. */
+  .pt-panel .mc-rental { margin-bottom: 44px; }
+  /* The broadcast's label hangs below it, in a gap of its own, clear of the thread's labels. */
+  .pt-panel .mc-broadcast { margin-bottom: 52px; }
+  .pt-panel .mc-broadcast > .pt-label.is-down { left: 14px; --dx: 24px; --dy: 26px; }
+  /* The call record sits left in the thread, so its labels have room on the right. */
+  /* The call record sits right in the thread, so its labels have room on the left. */
+  .pt-panel .mc-call-record { align-self: flex-end; width: min(640px, 100% - 290px); } /* room on its left for labels 2 and 3, on any screen */
+  .pt-panel .mcr-label .pt-label.is-left,
+  .pt-panel .mcr-player .pt-label.is-left { right: calc(100% + 28px); }
+  /* A label never takes on the styles of what it sits in. */
+  .pt-panel .pt-label b { text-transform: none; }
+  .pt-panel .pt-label { letter-spacing: normal; text-transform: none; }
+  .pt-panel .mc-rail-list ul { margin-bottom: 0; }
+  .pt-panel .mc-rental > .pt-label.is-down { left: 6px; --dx: 24px; --dy: 22px; } /* a shorter line: the panel is narrow */
+  .pt-panel .mc-rental { position: relative; border-color: var(--mc-line); background: hsl(0 0% 100% / 0.7); }
+
+  /*
+   * Track labels (multichat-section.tsx TrackLabel), the calendar labels' twin: a thin line out of
+   * the thing to a small slate box with a number. "down" hangs below the thing and runs down and
+   * to the right; "right" runs straight out of its right side.
+   */
+  .pt-panel .pt-label {
+    --pt-label: #475569;
+    position: absolute;
+    z-index: 5;
+    display: block;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    opacity: 0;
+  }
+  .pt-panel .pt-label.is-down { top: calc(100% + 6px); left: 40px; --dx: 46px; --dy: 30px; }
+  .pt-panel .pt-label.is-down-left { top: calc(100% + 6px); left: calc(100% - 40px); --dx: 46px; --dy: 30px; }
+  .pt-panel .pt-label.is-down-left::before { width: calc(var(--dx) * 1.2); rotate: 146.9deg; }
+  .pt-panel .pt-label.is-down-left > span { left: auto; right: var(--dx); }
+  .pt-panel .pt-label.is-left { top: 50%; right: calc(100% + 8px); --dx: 44px; --dy: 0px; }
+  .pt-panel .pt-label.is-left::before { left: auto; right: 0; width: var(--dx); }
+  .pt-panel .pt-label.is-left > span { left: auto; right: var(--dx); }
+  .pt-panel .pt-label.is-left::before { transform-origin: 100% 0; }
+  .pt-panel .pt-label.is-right { top: 50%; left: calc(100% + 8px); --dx: 44px; --dy: 0px; }
+  .pt-panel .pt-label::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    border-top: 1px solid color-mix(in srgb, var(--pt-label) 55%, transparent);
+    transform-origin: 0 0;
+    scale: 0 1;
+  }
+  .pt-panel .pt-label.is-down::before { width: calc(var(--dx) * 1.2); rotate: 33.1deg; }
+  .pt-panel .pt-label.is-right::before { width: var(--dx); }
+  .pt-panel .pt-label > span {
+    position: absolute;
+    top: var(--dy);
+    left: var(--dx);
+    translate: 0 -50%;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 13px 7px 8px;
+    border-radius: 10px;
+    background: var(--pt-label);
+    box-shadow: 0 6px 18px rgb(71 85 105 / 0.14);
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .pt-panel .pt-label i {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    color: var(--pt-label);
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 700;
+  }
+  .pt-panel .pt-label b { font-size: clamp(14px, 1.05vw, 17px); font-weight: 500; color: #fff; letter-spacing: normal; }
+  /* They play in a beat after their screen lands, and again each time it comes back. */
+  .pt-panel.is-here .pt-label { opacity: 1; transition: opacity 400ms ease-out 450ms; }
+  .pt-panel.is-here .pt-label::before { scale: 1 1; transition: scale 600ms cubic-bezier(0.16, 1, 0.3, 1) 350ms; }
+  .pt-panel:not(.is-here) .pt-label { transition: opacity 200ms ease-in; }
+
+  /* Insights → Analytics (insights-gallery.tsx): frameless, the whole screen, the same wash. */
+  .pt-panel .ia { padding-block: 0; }
+  .pt-panel .ia-window { flex: 1; width: 100%; border: 0; border-radius: 0; }
+  .pt-panel .ia-bar { padding: 28px 40px 0; }
+  .pt-panel .ia-grid { gap: 16px; padding: 22px 40px 36px; }
+
+  /* The docked booking sheet (calendar-sheet.tsx) takes the right 340px; the calendar fits beside it. */
+  .pt-panel #calendar.has-sheet .cs-grid { margin-right: min(340px, 30%); }
+  .pt-panel #calendar .cs-now { top: 4.6em; width: 1px; opacity: 1; background: rgb(79 68 216 / 0.6); } /* faint by colour, not opacity, so its "Today" chip stays solid */
+  .pt-panel #calendar .cs-now::before { top: -0.4em; left: -0.35em; width: 0.7em; height: 0.7em; }
+  .pt-panel #calendar .cs-car { height: auto; }
+  .pt-panel #calendar .cs-bar { top: 50%; bottom: auto; height: 3em; translate: -14px -50%; }
+  .pt-panel #calendar .is-in .cs-bar { translate: 0 -50%; }
+
+  /* Multi-chat: the app is the whole screen. */
+  .pt-panel .mc-app { height: 100%; }
+
+  /* Insights: the table area takes the rest of the screen. */
+  .pt-panel .kn-scroll { flex: 1; min-height: 0; overflow: auto; scrollbar-width: none; }
+}

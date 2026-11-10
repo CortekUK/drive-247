@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { CalendarDays, Car, Mail, MessageCircle, MessageSquare, Phone, PhoneCall, Send, Sparkles, Users } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { CalendarDays, Mail, MessageCircle, MessageSquare, Phone, PhoneCall, Send, Sparkles, Users } from "lucide-react";
 import { useFadeIn } from "@/hooks/use-fade-in";
 import { BrowserChrome } from "./portal-glass";
+import { CallRecordCard, type CallRecordData } from "./mc-call-record";
+import { TrackLabel } from "./track-label";
 import "./multichat-section.css";
 import { Accent, SectionHeading } from "./section-heading";
 
@@ -31,7 +33,7 @@ const VIA: Record<Channel, string> = { in_app: "In-app", sms: "SMS", email: "Ema
 
 type Item =
   | { kind: "msg"; from: "them" | "you"; ch: Exclude<Channel, "call">; text: string; subject?: string; at: string }
-  | { kind: "call"; minutes: number; summary: string; at: string };
+  | { kind: "call"; minutes: number; summary: string; at: string; record?: CallRecordData };
 
 type Convo = {
   id: string;
@@ -40,6 +42,8 @@ type Convo = {
   email: string;
   usual: Channel;
   rental: { car: string; dates: string; status: string };
+  /** The renter at a glance, for the panel beside the chat. */
+  profile?: { since: string; rentals: number; spent: string; checks: [string, boolean][]; past: [string, string][]; note?: string };
   unread?: number;
   thread: Item[];
   /** What Trax would say next, on each channel. */
@@ -54,12 +58,38 @@ const CONVOS: Convo[] = [
     email: "priya@example.com",
     usual: "sms",
     rental: { car: "Kia Telluride", dates: "Nov 14 – 18", status: "Confirmed" },
+    profile: {
+      since: "Mar 2025",
+      rentals: 4,
+      spent: "$2,310",
+      checks: [["ID verified", true], ["Agreement signed", true], ["Deposit held", true]],
+      past: [["Toyota RAV4", "Sep 2 – 6"], ["Kia Telluride", "Jul 18 – 21"]],
+      note: "Prefers early pickups. Travels with a child seat.",
+    },
     unread: 2,
     thread: [
       { kind: "msg", from: "them", ch: "in_app", text: "Hi! Is the Telluride ready for Friday?", at: "Thu 9:02 AM" },
       { kind: "msg", from: "you", ch: "in_app", text: "It is. I've just sent your agreement to sign.", at: "Thu 9:05 AM" },
       { kind: "msg", from: "you", ch: "email", subject: "Your agreement for Nov 14 – 18", text: "Here's your rental agreement to sign before pickup. It takes a minute on your phone.", at: "Thu 9:06 AM" },
-      { kind: "call", minutes: 2, summary: "Priya confirmed a 10:00 AM pickup and asked to add a child seat.", at: "Thu 2:40 PM" },
+      {
+        kind: "call",
+        minutes: 2,
+        summary: "Priya confirmed a 10:00 AM pickup and asked to add a child seat.",
+        at: "Thu 2:40 PM",
+        record: {
+          summary: "Priya confirmed a 10:00 AM pickup on Friday and asked for a child seat for her son. I added the seat to the booking and told her the lockbox code comes by text that morning.",
+          checkpoints: ["Pickup Fri 10:00 AM confirmed", "Child seat added", "Lockbox code by text"],
+          actions: ["Add a child seat to the booking", "Fit the seat before pickup", "Text Priya the lockbox code Fri 8 AM"],
+          lines: [
+            { who: "you", at: 0, text: "Hi Priya, calling about Friday. Is 10:00 still good for pickup?" },
+            { who: "them", at: 6, text: "Yes, 10 is perfect. Could I add a child seat? My son's coming." },
+            { who: "you", at: 13, text: "Of course. I've added one, and it'll be fitted before you arrive." },
+            { who: "them", at: 21, text: "Great. How do I get the keys?" },
+            { who: "you", at: 25, text: "They're in the lockbox by the door. The code comes by text that morning." },
+            { who: "them", at: 33, text: "Perfect, thank you!" },
+          ],
+        },
+      },
       { kind: "msg", from: "them", ch: "sms", text: "Can I pick up an hour early?", at: "9:14 AM" },
     ],
     reply: {
@@ -76,6 +106,7 @@ const CONVOS: Convo[] = [
     email: "marcus@example.com",
     usual: "email",
     rental: { car: "Tesla Model 3", dates: "Nov 20 – 27", status: "Confirmed" },
+    profile: { since: "Oct 2025", rentals: 1, spent: "$0", checks: [["ID verified", true], ["Agreement signed", true], ["Deposit held", false]], past: [], note: "First rental. Asked about charging." },
     thread: [
       { kind: "msg", from: "you", ch: "email", subject: "Your Tesla booking", text: "You're booked for Nov 20 – 27. Your agreement is attached to sign.", at: "Tue 4:10 PM" },
       { kind: "msg", from: "them", ch: "email", subject: "Re: Your Tesla booking", text: "Thanks, the agreement's signed. Is charging included?", at: "8:51 AM" },
@@ -94,6 +125,7 @@ const CONVOS: Convo[] = [
     email: "elena@example.com",
     usual: "in_app",
     rental: { car: "Hyundai Sonata", dates: "Nov 6 – 9", status: "On rent" },
+    profile: { since: "Jan 2025", rentals: 6, spent: "$1,980", checks: [["ID verified", true], ["Agreement signed", true], ["Deposit held", true]], past: [["Hyundai Sonata", "Oct 1 – 4"], ["Honda Civic", "Aug 9 – 12"]] },
     thread: [{ kind: "msg", from: "them", ch: "in_app", text: "Where do I leave the keys on Sunday?", at: "Yesterday" }],
     reply: {
       chat: "Back in the lockbox by the front door, using the same code. Thanks Elena!",
@@ -109,7 +141,27 @@ const CONVOS: Convo[] = [
     email: "daniel@example.com",
     usual: "call",
     rental: { car: "Ford Explorer", dates: "Nov 20 – 27", status: "Quoted" },
-    thread: [{ kind: "call", minutes: 3, summary: "Daniel wants a minivan or a 7-seater for a family trip. He asked for a quote.", at: "Yesterday" }],
+    profile: { since: "Nov 2025", rentals: 0, spent: "$0", checks: [["ID verified", false], ["Agreement signed", false], ["Deposit held", false]], past: [], note: "Family trip, needs seven seats." },
+    thread: [
+      {
+        kind: "call",
+        minutes: 3,
+        summary: "Daniel wants a minivan or a 7-seater for a family trip. He asked for a quote.",
+        at: "Yesterday",
+        record: {
+          summary: "Daniel needs seven seats for a family trip, Nov 20 to 27, and asked for a quote. The Ford Explorer is free those dates. I said I'd send the quote today.",
+          checkpoints: ["7 seats needed", "Nov 20 – 27", "Explorer is free"],
+          actions: ["Send Daniel a quote for the Explorer", "Hold the Explorer for 24 hours", "Follow up tomorrow if he hasn't booked"],
+          lines: [
+            { who: "them", at: 0, text: "Hi, I need something with seven seats for a family trip." },
+            { who: "you", at: 5, text: "Happy to help. Which dates are you thinking?" },
+            { who: "them", at: 9, text: "The 20th to the 27th of November." },
+            { who: "you", at: 14, text: "The Ford Explorer seats seven and it's free then. I'll send you a quote today." },
+            { who: "them", at: 22, text: "Great, I'll look out for it." },
+          ],
+        },
+      },
+    ],
     reply: {
       chat: "Here's your quote for the Explorer, 7 seats, Nov 20 – 27: $714 all in.",
       subject: "Your quote for Nov 20 – 27",
@@ -117,6 +169,32 @@ const CONVOS: Convo[] = [
       call: "Walked Daniel through the quote. He'll book tonight.",
     },
   },
+  ...(
+    [
+      ["noah", "Noah Bennett", "sms", "Toyota RAV4", "Nov 9 – 11", "On rent", "On my way back, 20 min out.", "Mon"],
+      ["sophia", "Sophia Martinez", "email", "Ford Mustang", "Nov 16 – 19", "Confirmed", "Can I add a second driver?", "Mon"],
+      ["james", "James Carter", "sms", "Jeep Wrangler", "Nov 20 – 22", "Awaiting payment", "Paying tonight, thanks!", "Sun"],
+      ["chloe", "Chloe Adams", "in_app", "Toyota RAV4", "Nov 9 – 12", "On rent", "Is there a phone mount in the car?", "Sun"],
+      ["owen", "Owen Price", "email", "Ford Mustang", "Nov 13 – 14", "Confirmed", "Thanks for the quick reply.", "Sat"],
+      ["mia", "Mia Chen", "in_app", "Kia Telluride", "Nov 13 – 18", "Booked", "See you Friday!", "Sat"],
+    ] as const
+  ).map(
+    ([id, name, ch, car, dates, status, text, at]): Convo => ({
+      id,
+      name,
+      phone: "(555) 010-0100",
+      email: `${id}@example.com`,
+      usual: ch,
+      rental: { car, dates, status },
+      thread: [{ kind: "msg", from: "them", ch, text, at }],
+      reply: {
+        chat: `Thanks ${name.split(" ")[0]}, all noted. Anything else, just message me here.`,
+        subject: `Your ${car}`,
+        email: `Hi ${name.split(" ")[0]}, all noted for your ${car}. Anything else, just reply to this email.`,
+        call: `Caught up with ${name.split(" ")[0]} about the ${car}.`,
+      },
+    }),
+  ),
 ];
 
 const initials = (name: string) =>
@@ -197,6 +275,25 @@ export function MultichatSection() {
               {/* Conversations */}
               <aside className="mc-rail" aria-label="Conversations">
                 <p className="mc-rail-title">Messages</p>
+                <div className="mc-rail-list">
+                {/* Bulk messages: one message to many renters, each landing in their own thread. */}
+                <div className="mc-broadcast">
+                  <span className="mc-avatar is-group">
+                    <Users aria-hidden />
+                  </span>
+                  <span className="mc-row-text">
+                    <span className="mc-row-top">
+                      <b>Everyone out this weekend</b>
+                      <small>Fri</small>
+                    </span>
+                    <span className="mc-row-last">
+                      <span>Sent to 12 renters · 11 read</span>
+                    </span>
+                  </span>
+                  <TrackLabel n={1} way="down">
+                    One message to many renters
+                  </TrackLabel>
+                </div>
                 <ul>
                   {CONVOS.map((c) => {
                     const last = [...c.thread, ...(sent[c.id] ?? [])].slice(-1)[0];
@@ -223,6 +320,7 @@ export function MultichatSection() {
                     );
                   })}
                 </ul>
+                </div>
               </aside>
 
               {/* The conversation */}
@@ -237,7 +335,11 @@ export function MultichatSection() {
 
                 <ol key={open.id} ref={threadEl} className="mc-thread">
                   {thread.map((item, i) =>
-                    item.kind === "call" ? (
+                    item.kind === "call" && item.record ? (
+                      <li key={i} className="mc-call-record">
+                        <CallRecordCard record={item.record} name={open.name} at={item.at} minutes={item.minutes} labels />
+                      </li>
+                    ) : item.kind === "call" ? (
                       <li key={i} className="mc-call">
                         <span className="mc-call-top">
                           <PhoneCall aria-hidden />
@@ -272,6 +374,9 @@ export function MultichatSection() {
                         {c.label}
                       </button>
                     ))}
+                    <TrackLabel n={4} way="right">
+                      Pick the channel for each reply
+                    </TrackLabel>
                   </div>
 
                   {mode === "call" ? (
@@ -280,7 +385,7 @@ export function MultichatSection() {
                         <b>{open.phone}</b>
                         <small>Recorded, with a summary from Trax when you hang up.</small>
                       </span>
-                      <button type="button" className={`mc-send${fresh ? " mc-hint" : ""}`} disabled={!fresh} onClick={send}>
+                      <button type="button" className="mc-send" disabled={!fresh} onClick={send}>
                         <PhoneCall aria-hidden />
                         {fresh ? `Call ${open.name.split(" ")[0]}` : "Called"}
                       </button>
@@ -299,6 +404,9 @@ export function MultichatSection() {
                             <span className="mc-trax">
                               <Sparkles aria-hidden />
                               Trax suggests
+                              <TrackLabel n={5} way="right">
+                                Trax drafts the reply
+                              </TrackLabel>
                             </span>
                             {mode === "email" ? open.reply.email : open.reply.chat}
                           </>
@@ -306,7 +414,7 @@ export function MultichatSection() {
                           `Sent by ${VIA[mode] === "In-app" ? "in-app chat" : VIA[mode]}. Try another channel.`
                         )}
                       </p>
-                      <button type="button" className={`mc-send${fresh ? " mc-hint" : ""}`} disabled={!fresh} onClick={send}>
+                      <button type="button" className="mc-send" disabled={!fresh} onClick={send}>
                         <Send aria-hidden />
                         Send {VIA[mode] === "In-app" ? "" : `by ${VIA[mode]}`}
                       </button>
@@ -337,7 +445,6 @@ export function MultichatSection() {
                 </dl>
                 <p className="mc-who-title">Rental</p>
                 <div className="mc-rental">
-                  <Car aria-hidden />
                   <span>
                     <b>{open.rental.car}</b>
                     <small>
@@ -346,7 +453,55 @@ export function MultichatSection() {
                     </small>
                   </span>
                   <em>{open.rental.status}</em>
+                  <TrackLabel n={6} way="down">
+                    Their booking, alongside
+                  </TrackLabel>
                 </div>
+                {open.profile && (
+                  <>
+                    <dl className="mc-stats">
+                      <div>
+                        <dt>Renter since</dt>
+                        <dd>{open.profile.since}</dd>
+                      </div>
+                      <div>
+                        <dt>Rentals</dt>
+                        <dd>{open.profile.rentals}</dd>
+                      </div>
+                      <div>
+                        <dt>Spent</dt>
+                        <dd>{open.profile.spent}</dd>
+                      </div>
+                    </dl>
+                    <ul className="mc-checks">
+                      {open.profile.checks.map(([label, ok]) => (
+                        <li key={label} className={ok ? "is-ok" : ""}>
+                          <i aria-hidden />
+                          {label}
+                        </li>
+                      ))}
+                    </ul>
+                    {open.profile.past.length > 0 && (
+                      <>
+                        <p className="mc-who-title">Past rentals</p>
+                        <ul className="mc-past">
+                          {open.profile.past.map(([car, dates]) => (
+                            <li key={car + dates}>
+                              <b>{car}</b>
+                              <small>{dates}</small>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                    {open.profile.note && (
+                      <>
+                        <p className="mc-who-title">Note</p>
+                        <p className="mc-note">{open.profile.note}</p>
+                      </>
+                    )}
+                  </>
+                )}
               </aside>
             </div>
           </BrowserChrome>

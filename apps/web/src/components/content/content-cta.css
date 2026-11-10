@@ -1,0 +1,65 @@
+/* The closing panel: solid purple, white type, the offer on the left and three plain reasons on the right. */
+
+.cc {
+  display: grid;
+  gap: clamp(36px, 5vw, 80px);
+  margin-top: clamp(88px, 10vw, 136px);
+  padding: clamp(32px, 5.5vw, 88px);
+  border-radius: clamp(28px, 3vw, 44px);
+  background: hsl(var(--v2-primary));
+  color: #fff;
+}
+@media (min-width: 960px) {
+  .cc { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); align-items: end; }
+}
+
+.cc-title {
+  max-width: 17ch;
+  font-size: clamp(2.25rem, 5vw, 4.5rem);
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+.cc-cursive {
+  font-family: var(--font-cursive), "Times New Roman", serif;
+  font-size: 1.07em;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+}
+.cc-sub { max-width: 34ch; margin-top: clamp(18px, 2vw, 28px); font-size: clamp(1.0625rem, 1.4vw, 1.3125rem); line-height: 1.5; color: rgb(255 255 255 / 0.86); }
+
+.cc-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: clamp(24px, 3vw, 40px); }
+.cc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 56px;
+  padding-inline: 28px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 700;
+  transition: background-color 200ms ease-in, color 200ms ease-in;
+}
+.cc-btn svg { width: 18px; height: 18px; transition: transform 200ms ease-out; }
+.cc-btn-solid { background: #fff; color: hsl(var(--v2-primary)); }
+.cc-btn-solid:hover { background: rgb(255 255 255 / 0.9); transition-timing-function: ease-out; }
+.cc-btn-solid:hover svg { transform: translateX(3px); }
+.cc-btn-line { box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.55); color: #fff; }
+.cc-btn-line:hover { background: rgb(255 255 255 / 0.12); transition-timing-function: ease-out; }
+.cc-btn:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+
+.cc-points { display: grid; padding: 0; list-style: none; }
+.cc-points li { padding-block: clamp(16px, 1.8vw, 24px); border-top: 1px solid rgb(255 255 255 / 0.28); }
+.cc-points li:last-child { padding-bottom: 0; }
+.cc-point-title { font-size: clamp(1.125rem, 1.6vw, 1.4375rem); font-weight: 700; letter-spacing: -0.02em; }
+.cc-point-text { margin-top: 4px; font-size: 15px; line-height: 1.5; color: rgb(255 255 255 / 0.8); }
+
+@media (max-width: 479.98px) {
+  .cc-row { flex-direction: column; align-items: stretch; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-btn, .cc-btn svg { transition: none; }
+}

@@ -309,3 +309,7 @@
   .ct-card, .ct-all, .ct-back, .ct-btn, .ct-more svg { transition: none; }
 }
 .ct-story-lead { margin-top: clamp(40px, 5vw, 64px); }
+
+/* Customer stories sits closer to the testimonials above it (Ghulam, 2026-11-10). */
+.st-section { padding-top: clamp(40px, 5vw, 72px); }
+.st-section .sh { margin-top: 0; }

@@ -2,15 +2,19 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { NUMBERS, PROOF_AS_OF, type ProofNumber } from "@/content/proof";
+import { NUMBERS, type ProofNumber } from "@/content/proof";
 import "@/components/content/content.css";
 import "./numbers-section.css";
-import { Accent, SectionHeading } from "./section-heading";
+import { ArrowIntro } from "./demo-intro";
+import { Accent } from "./section-heading";
+import { NumberGauge } from "./numbers-gauge";
+import { LINE_MEDIA } from "./launch-section";
 
 /*
- * Drive247 in numbers. Every figure is real (see content/proof.ts); the size and the
- * count-up are the emphasis, not the values. The count-up is the section's one
- * animation and runs once, the first time the numbers come into view.
+ * Drive247 in numbers, as a car's instrument cluster: each figure sits under its own
+ * dial, and the needle sweeps up with the count. Every figure is real (see
+ * content/proof.ts); the dials are decoration and carry no scale. The count-up is the
+ * section's one animation and runs once, the first time the numbers come into view.
  */
 
 const FORMAT = new Intl.NumberFormat("en-US");
@@ -49,6 +53,7 @@ function Stat({ stat, run, delay }: { stat: ProofNumber; run: boolean; delay: nu
 
   return (
     <li className="nm-stat">
+      <NumberGauge icon={stat.icon} progress={stat.value ? shown / stat.value : 1} />
       <p className="nm-value">
         <span aria-hidden>
           {stat.prefix && <span className="nm-unit">{stat.prefix}</span>}
@@ -63,9 +68,61 @@ function Stat({ stat, run, delay }: { stat: ProofNumber; run: boolean; delay: nu
   );
 }
 
+/* The words before the numbers, with the page line turning into an arrow at them (demo-intro.tsx). */
+export function NumbersIntro() {
+  return (
+    <ArrowIntro
+      id="numbers-intro"
+      headingId="nm-title"
+      title={
+        <>
+          Real operators run on Drive247. <Accent>Every single day.</Accent>
+        </>
+      }
+      sub="Real bookings, real payments and real renters, from rental businesses already on Drive247."
+    />
+  );
+}
+
 export function NumbersSection() {
   const listRef = useRef<HTMLUListElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
   const [run, setRun] = useState(false);
+
+  // The page line skips the cards: the arrow above ends it, and it starts again from the
+  // middle of the last card's bottom edge (data-line-*, page px; tour-layout.ts).
+  useEffect(() => {
+    const section = sectionRef.current;
+    const list = listRef.current;
+    if (!section || !list) return;
+    const media = matchMedia(LINE_MEDIA);
+    const measure = () => {
+      const last = list.lastElementChild?.getBoundingClientRect();
+      if (!media.matches || !last) {
+        delete section.dataset.lineIn;
+        delete section.dataset.lineOut;
+        delete section.dataset.lineOutY;
+        return;
+      }
+      const x = String(Math.round(last.left + last.width / 2 + scrollX));
+      // In where the arrow above let the line go, so nothing is drawn joining the two.
+      const above = section.previousElementSibling instanceof HTMLElement ? section.previousElementSibling.dataset.lineOut : undefined;
+      section.dataset.lineIn = above ?? x;
+      section.dataset.lineOut = x;
+      section.dataset.lineOutY = String(Math.round(last.bottom + scrollY));
+    };
+    measure();
+    const size = new ResizeObserver(measure);
+    size.observe(list);
+    const marks = new MutationObserver(measure);
+    if (section.previousElementSibling) marks.observe(section.previousElementSibling, { attributes: true, attributeFilter: ["data-line-out"] });
+    media.addEventListener("change", measure);
+    return () => {
+      size.disconnect();
+      marks.disconnect();
+      media.removeEventListener("change", measure);
+    };
+  }, []);
 
   useEffect(() => {
     const el = listRef.current;
@@ -83,29 +140,14 @@ export function NumbersSection() {
   }, []);
 
   return (
-    <section className="nm" aria-labelledby="nm-title">
+    <section ref={sectionRef} className="nm" aria-label="Drive247 in numbers">
       <div className="ct-inner">
-        <SectionHeading
-          id="nm-title"
-          title={
-            <>
-              Real rentals. <Accent>Real money.</Accent>
-            </>
-          }
-          sub={
-            <>
-              What operators have run through Drive247 so far.
-            </>
-          }
-        />
-
         <ul ref={listRef} className="nm-grid">
           {NUMBERS.map((stat, index) => (
             <Stat key={stat.label} stat={stat} run={run} delay={index * STAGGER_MS} />
           ))}
         </ul>
 
-        <p className="nm-note">Live operators only, with test accounts left out. Figures as of {PROOF_AS_OF}.</p>
       </div>
     </section>
   );

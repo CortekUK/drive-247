@@ -60,6 +60,7 @@ import { FeedbackForcePrompt } from "@/components/feedback/feedback-force-prompt
 import { WelcomePackPrompt } from "@/components/welcome/welcome-pack-prompt";
 import { FirstRunWizard } from "@/components/onboarding/first-run-wizard";
 import { FirstRunHandoffGate } from "@/components/onboarding/first-run-handoff-gate";
+import { LightUntilChosen } from "@/components/onboarding/light-until-chosen";
 import { FirstRentalTour } from "@/components/onboarding/first-rental-tour";
 import { usePortalAnnouncements } from "@/hooks/use-portal-announcements";
 import { SystemAnnouncementBanner } from "@/components/announcements/system-announcement-banner";
@@ -1010,6 +1011,7 @@ export default function DashboardLayout({
             stuck: localStorage is per-origin, and the journey returns to a
             different origin than the one /dev was usually opened on. */}
         <FirstRunHandoffGate />
+        {v2Chrome && <LightUntilChosen />}
 
         <FirstRunWizard suppressed={promptsSuppressed} />
 

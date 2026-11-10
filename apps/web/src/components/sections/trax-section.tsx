@@ -312,6 +312,32 @@ export function TraxSection() {
     return () => media.removeEventListener("change", apply);
   }, []);
 
+  // Coming in (Ghulam, 2026-11-10: "a transition, not so sharp"): as the section rises into
+  // view its indigo opens from a rounded card in the middle to the full width, and the words
+  // rise in. --tm-open runs 0 to 1 over the first screen of the section.
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    let frame = 0;
+    const set = () => {
+      frame = 0;
+      const top = el.getBoundingClientRect().top;
+      const open = Math.min(1, Math.max(0, (innerHeight - top) / (innerHeight * 0.85)));
+      el.style.setProperty("--tm-open", open.toFixed(3));
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(set);
+    };
+    set();
+    addEventListener("scroll", onScroll, { passive: true });
+    addEventListener("resize", onScroll);
+    return () => {
+      removeEventListener("scroll", onScroll);
+      removeEventListener("resize", onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+
   // The thread: down beside the words and sliding in under them, on down behind the stages to the
   // top middle of the screen, then out of the bottom. Two parts, as the section holds and the words don't.
   useEffect(() => {
@@ -320,11 +346,17 @@ export function TraxSection() {
     if (!holder || !whole) return;
     const media = matchMedia(LINE_MEDIA);
     const measure = () => {
+      // The words and screen rise in on a translate (--tm-open); measure them where they come to rest,
+      // or the thread is drawn 72px too low and runs across the top of the screen.
+      const rising = holder.querySelector<HTMLElement>(":scope > .tm-section");
+      const was = rising?.style.translate ?? "";
+      if (rising) rising.style.translate = "0 0";
       const screen = panel.current?.getBoundingClientRect();
       const title = whole.querySelector(".tm-title")?.getBoundingClientRect();
       const sub = whole.querySelector(".tm-sub")?.getBoundingClientRect();
       const tail = holder.parentElement?.nextElementSibling as HTMLElement | null;
       if (!media.matches || !screen || !title || !sub) {
+        if (rising) rising.style.translate = was;
         setThread(null);
         delete whole.dataset.lineIn;
         delete whole.dataset.lineOut;
@@ -332,7 +364,9 @@ export function TraxSection() {
       }
       const outer = whole.getBoundingClientRect();
       const box = holder.getBoundingClientRect();
-      const lane = sub.right + 28 - outer.left;
+      if (rising) rising.style.translate = was;
+      // Well clear of both the heading and its line, so the thread never brushes the words (Ghulam, 2026-11-10).
+      const lane = Math.max(title.right, sub.right) + 96 - outer.left;
       // The page line (components/tour/page-line.tsx) brings the thread to this lane and
       // picks it up again under the screen; these tell it where, in page pixels.
       const startX = lane;
@@ -343,9 +377,21 @@ export function TraxSection() {
       const textEnd = sub.bottom - outer.top;
       const pinTop = holder.parentElement!.getBoundingClientRect().top - outer.top;
       const gap = pinTop - textEnd;
+      // The words now ride inside the pinned screen (above the stage), so the thread comes down
+      // beside them inside the pin and turns under them to the screen's top middle.
+      const inPin = holder.contains(whole.querySelector(".tm-title"));
+      const screenTop = screen.top - box.top;
+      const rightX = screen.right - box.left;
+      const plugY = screenTop + 44;
+      const elbow = Math.max(8, Math.min(56, (lane - rightX) / 2));
       setThread({
-        lead: `M${startX} 0C${startX} ${textTop * 0.8} ${lane} ${textTop * 0.3} ${lane} ${textTop}V${textEnd}C${lane} ${textEnd + gap * 0.85} ${midX} ${pinTop - gap * 0.85} ${midX} ${pinTop}`,
-        into: `M${midX} 0V${screen.top - box.top}`,
+        lead: inPin
+          ? `M${startX} 0V${Math.max(1, pinTop)}`
+          : `M${startX} 0C${startX} ${textTop * 0.8} ${lane} ${textTop * 0.3} ${lane} ${textTop}V${textEnd}C${lane} ${textEnd + gap * 0.85} ${midX} ${pinTop - gap * 0.85} ${midX} ${pinTop}`,
+        into: inPin
+          ? // Down past the words, then one rounded elbow into the screen's right side at its header.
+            `M${lane} 0V${plugY - elbow}Q${lane} ${plugY} ${lane - elbow} ${plugY}H${rightX}`
+          : `M${midX} 0V${screenTop}`,
         out: `M${midX} ${screen.bottom - box.top}V${box.height + (tail?.offsetHeight ?? 0)}`,
       });
     };
@@ -438,7 +484,7 @@ export function TraxSection() {
       tip.setAttribute("cx", String(at.x));
       tip.setAttribute("cy", String(at.y));
       // Once the line is out of the bottom, the page line's tip carries on, so this one goes.
-      tip.style.visibility = (outShare > 0 && outShare < 1) || (inShare > 0 && inShare < 1) ? "visible" : "hidden";
+      tip.style.visibility = outShare > 0 && outShare < 1 ? "visible" : "hidden";
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(paint);
@@ -505,24 +551,6 @@ export function TraxSection() {
     const timer = setTimeout(then, wait);
     return () => clearTimeout(timer);
   }, [running, driven, picked, hovered, reduced, q, phase, typed, hit, query]);
-
-  // A question of the visitor's own, from the buttons under the screen.
-  const ask = (next: number) => {
-    pickedRef.current = true;
-    setPicked(true);
-    stageBars.current.forEach((bar) => bar?.style.removeProperty("transform"));
-    setTouched(false);
-    setWheelOn(true);
-    setQ(next);
-    if (reduced) {
-      setPhase("answer");
-      setHit(QUERIES[next].path.length);
-    } else {
-      setPhase("typing");
-      setTyped(0);
-      setHit(0);
-    }
-  };
 
   // Faster while searching, changing the rate of the running roll so it never jumps.
   useEffect(() => {
@@ -641,12 +669,16 @@ export function TraxSection() {
     <section ref={root} id="trax" className="tm-root">
     {thread && (
       <svg className="tm-way" fill="none" aria-hidden>
-        <path className="pg-thread-rest" d={thread.lead} />
-        <path ref={lineLead} className="pg-thread-live" pathLength={1} d={thread.lead} />
-        <circle ref={leadTip} className="pg-thread-tip" r="5" />
+        {/* The line into Trax is not drawn (Ghulam, 2026-11-10): the page line stops above the section and starts again under the screen. */}
+        <path ref={lineLead} className="pg-thread-live tm-unseen" pathLength={1} d={thread.lead} />
+        <circle ref={leadTip} className="pg-thread-tip tm-unseen" r="5" />
       </svg>
     )}
 
+
+    <div ref={track} className="tm-track" data-scroll={driven}>
+    <div ref={pin} className="tm-pin">
+    {/* The words ride in the pinned screen, so heading and stage share one view (Ghulam, 2026-11-10). */}
     <div className="tm-copy">
       <SectionHeading
         titleClassName="tm-title"
@@ -663,26 +695,7 @@ export function TraxSection() {
         }
       />
     </div>
-
-    <div ref={track} className="tm-track" data-scroll={driven}>
-    <div ref={pin} className="tm-pin">
-    <ol className="tm-stages">
-      {STAGES.map((item, i) => {
-        const now = STAGES.findIndex((stage) => stage.phase === phase);
-        return (
-          <li key={item.label} data-state={i < now ? "done" : i === now ? "now" : "next"} aria-current={i === now ? "step" : undefined}>
-            <b
-              aria-hidden
-              ref={(el) => {
-                stageBars.current[i] = el;
-              }}
-            />
-            <i aria-hidden>{i < now ? <Check strokeWidth={3} /> : <item.icon strokeWidth={2} />}</i>
-            <span>{item.label}</span>
-          </li>
-        );
-      })}
-    </ol>
+    {/* The "You ask / I check your records / You get the answer" step bar was here; removed (Ghulam, 2026-11-10). */}
 
     <div ref={section} className="tm-section" data-seen={seen}>
       <div
@@ -876,29 +889,12 @@ export function TraxSection() {
         <div className="tm-col is-right">{RIGHT.map(renderNode)}</div>
       </div>
 
-      {/* The everyday questions: ask any of them and watch Trax work it out. */}
-      <div className="tm-topics" role="group" aria-label="Ask Trax about">
-        <span className="tm-topics-lead">Ask Trax about</span>
-        {QUERIES.map((item, i) => (
-          <button
-            key={item.topic}
-            type="button"
-            className="tm-topic"
-            aria-pressed={i === q}
-            title={item.ask}
-            onClick={() => ask(i)}
-          >
-            <item.icon strokeWidth={2} aria-hidden />
-            {item.topic}
-          </button>
-        ))}
-      </div>
+      {/* The "Ask Trax about" topic bar was here; removed (Ghulam, 2026-11-10). */}
     </div>
 
     {thread && (
       <svg className="tm-way" fill="none" aria-hidden>
-        <path className="pg-thread-rest" d={thread.into} />
-        <path ref={lineIn} className="pg-thread-live" pathLength={1} d={thread.into} />
+        <path ref={lineIn} className="pg-thread-live tm-unseen" pathLength={1} d={thread.into} />
         <path className="pg-thread-rest" d={thread.out} />
         <path ref={lineOut} className="pg-thread-live" pathLength={1} d={thread.out} />
         <circle ref={lineTip} className="pg-thread-tip" r="5" />

@@ -1,0 +1,70 @@
+/* A blog post as a poster: the photograph and the title are one surface; the description sits under it. */
+
+.pp {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  color: var(--foreground);
+  border-radius: 24px;
+}
+.pp:focus-visible { outline: 2px solid hsl(var(--v2-primary)); outline-offset: 6px; }
+
+.pp-poster {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  aspect-ratio: 4 / 3.5;
+  overflow: hidden;
+  border-radius: 24px;
+  background: #14161c;
+  container-type: inline-size;
+}
+
+.pp-photo { object-fit: cover; transition: transform 400ms ease-in; }
+.pp:hover .pp-photo,
+.pp:focus-visible .pp-photo { transform: scale(1.03); transition-timing-function: ease-out; }
+
+/* The photograph darkens toward the bottom so the title reads on any picture. */
+.pp-poster::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(8 10 16 / 0) 38%, rgb(8 10 16 / 0.55) 68%, rgb(8 10 16 / 0.88) 100%);
+  pointer-events: none;
+}
+
+.pp-title {
+  position: relative;
+  z-index: 1;
+  padding: 0 6cqw 6cqw;
+  font-size: clamp(1.1rem, 5cqw, 1.45rem);
+  font-weight: 600;
+  line-height: 1.16;
+  letter-spacing: -0.022em;
+  color: #ffffff;
+  text-wrap: balance;
+}
+
+.pp-under { display: flex; flex-direction: column; gap: 8px; padding-inline: 6px; }
+.pp-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; line-height: 1.4; color: var(--muted-foreground); }
+.pp-meta > * + *::before { content: "·"; margin-right: 10px; }
+.pp-tag { font-weight: 600; color: var(--foreground); }
+.pp-excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  max-width: 46ch;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--muted-foreground);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pp-photo { transition: none; }
+}
+
+/* A story's one figure, at the start of the line under its card. */
+.pp-figure { font-weight: 700; color: var(--foreground); }

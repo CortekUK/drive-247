@@ -11,8 +11,18 @@ import { TOUR, type TourStop } from "./tour-script";
  *
  *   #features    the "Your own" rows' thread (operations-dashboard.tsx), ending on
  *   .rc-track    the rail down the held feature list (rental-cards.tsx)
- *   #trax        and #launch, which say where their line comes in and goes out with
- *                data-line-in / data-line-out (trax-section.tsx, launch-section.tsx)
+ *   #trax        #launch, #demo-intro and #your-site, which say where their line comes in
+ *                and goes out with data-line-in / data-line-out
+ *
+ * A section can also ask the routed line to keep to its left with data-line-lane="left"
+ * (the phones section, so the line does not run down between the phones), or hand it exact
+ * steps with data-line-steps: JSON [{x, y0, y1}] in page px, the line running straight down
+ * each step's lane and turning across the space between steps (the operator wall, where it
+ * runs down the gap between the logo columns nearest the middle).
+ *
+ * And a section can hand the line something to frame: the line comes down onto the top of
+ * the element marked data-line-frame, splits round it in a rounded frame, meets again at the
+ * bottom and carries on (the founder film in the testimonials).
  *
  * Between those, the line is routed here. Each section is cut into bands (runs of content
  * that sit side by side), and in every band the line takes the free lane nearest the middle
@@ -64,7 +74,8 @@ export const TIP_AT = 0.7;
 type Box = { left: number; top: number; right: number; bottom: number };
 /** "free": solid, the line passes behind it. "text" and "box": the line must go round. */
 type Block = Box & { kind: "free" | "text" | "box" };
-type Band = { top: number; bottom: number; blocks: Block[] };
+/** `home`: the lane this band's section asked for (data-line-lane), in place of the middle of the screen. */
+type Band = { top: number; bottom: number; blocks: Block[]; home?: number; lane?: number };
 
 const MERGE_GAP = 24;
 /* The line never comes closer than this to words or cards, and would rather keep 48px away. */
@@ -215,12 +226,15 @@ function bandsOf(blocks: Block[]): Band[] {
  * else the middle hardly matters, so the line stays where it is rather than wander.
  */
 function bandCost(band: Band, width: number, xs: number[]): Float64Array {
-  const home = width / 2;
+  // data-line-steps: this lane and no other.
+  if (band.lane !== undefined) return Float64Array.from(xs, (x) => (Math.abs(x - band.lane!) < 0.5 ? 0 : 1000000));
+  const home = band.home ?? width / 2;
   const blocking = band.blocks.filter((block) => block.kind !== "free");
   const screen = band.blocks.some(
     (block) => block.kind === "free" && block.right - block.left >= width * 0.35 && block.left < home && block.right > home,
   );
-  const pull = screen ? 2 : 0.15;
+  // A section that names its lane (data-line-lane) holds the line to it as firmly as a screen does.
+  const pull = band.home !== undefined || screen ? 2 : 0.15;
   const costs = new Float64Array(xs.length);
   xs.forEach((x, i) => {
     let cost = Math.abs(x - home) * pull + (x < 32 || x > width - 32 ? 120 : 0);
@@ -253,7 +267,7 @@ function planLanes(slots: { band: Band; room: number }[], startX: number, end: {
   const home = width / 2;
   const xs: number[] = [];
   for (let x = home - Math.floor((home - 20) / LANE_STEP) * LANE_STEP; x <= width - 20; x += LANE_STEP) xs.push(x);
-  for (const extra of [startX, end?.x]) if (extra !== undefined && !xs.includes(extra)) xs.push(extra);
+  for (const extra of [startX, end?.x, ...slots.map((slot) => slot.band.lane)]) if (extra !== undefined && !xs.includes(extra)) xs.push(extra);
   xs.sort((a, b) => a - b);
   const n = xs.length;
 
@@ -405,12 +419,44 @@ export function runX(run: LineRun, y: number): number {
   return xs[xs.length - 1];
 }
 
+/*
+ * The frame round an element: two halves of a rounded rectangle from the top middle, one each
+ * way, meeting at the bottom middle. The clip that grows with the scroll draws both at once.
+ * The tip rides the right-hand half.
+ */
+const FRAME_PAD = 14;
+
+function frameRun(el: HTMLElement): LineRun {
+  const box = pageBox(el.getBoundingClientRect());
+  const left = box.left - FRAME_PAD;
+  const right = box.right + FRAME_PAD;
+  const top = box.top - FRAME_PAD;
+  const bottom = box.bottom + FRAME_PAD;
+  const r = Math.min((parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0) + FRAME_PAD, (right - left) / 2, (bottom - top) / 2);
+  const cx = (left + right) / 2;
+  const f = (n: number) => n.toFixed(1);
+  const half = (edge: number, sweep: 0 | 1, inner: number) =>
+    `M${f(cx)} ${f(top)}H${f(inner)}A${f(r)} ${f(r)} 0 0 ${sweep} ${f(edge)} ${f(top + r)}V${f(bottom - r)}A${f(r)} ${f(r)} 0 0 ${sweep} ${f(inner)} ${f(bottom)}H${f(cx)}`;
+  return {
+    d: half(right, 1, right - r) + half(left, 0, left + r),
+    y0: top,
+    y1: bottom,
+    ys: [top, top, top + r, bottom - r, bottom, bottom],
+    xs: [cx, right - r, right, right, right - r, cx],
+    gaps: [],
+  };
+}
+
 /* ---------------------------------------------------------------------------------------- */
 
-type Owned = { inX: number; outX: number };
+/** `outY`: where the line leaves, when not the section's bottom (data-line-out-y, page px). */
+type Owned = { inX: number; outX: number; outY?: number };
 
 function ownedPart(el: HTMLElement): Owned | null {
-  if (el.dataset.lineIn && el.dataset.lineOut) return { inX: Number(el.dataset.lineIn), outX: Number(el.dataset.lineOut) };
+  if (el.dataset.lineIn && el.dataset.lineOut) {
+    const outY = el.dataset.lineOutY ? Number(el.dataset.lineOutY) : undefined;
+    return { inX: Number(el.dataset.lineIn), outX: Number(el.dataset.lineOut), outY };
+  }
   if (el.id === "features") {
     const thread = el.querySelector(".pg-thread");
     if (thread && getComputedStyle(thread).display !== "none") {
@@ -486,7 +532,7 @@ function measureLine(layer: HTMLElement, stops: MeasuredStop[]): LineLayout | nu
   let end: { x: number; y: number } | null = null;
 
   // Draws the run gathered so far, ending into a section that draws its own part, or (last
-  // of all) a little under the last thing on the page, with a dot.
+  // of all) straight down into the footer, where it makes a splash (page-line.tsx).
   const flush = (into: { x: number; y: number } | null) => {
     if (!start) return;
     let y = start.y;
@@ -506,7 +552,8 @@ function measureLine(layer: HTMLElement, stops: MeasuredStop[]): LineLayout | nu
       run.turn(into.x, into.y, { endAtBottom: true });
       runs.push(run.build());
     } else {
-      run.down(run.y + 56);
+      // The line ends by dropping straight into the footer, which opens under <main>.
+      run.down(Math.max(run.y + 56, main.getBoundingClientRect().bottom + scrollY));
       const built = run.build();
       runs.push(built);
       end = { x: runX(built, built.y1), y: built.y1 };
@@ -522,16 +569,53 @@ function measureLine(layer: HTMLElement, stops: MeasuredStop[]): LineLayout | nu
     const owned = ownedPart(section);
 
     if (owned) {
+      // Straight from one section that draws its own part into another: still join them, with a
+      // turn across the room between (product-track.css gives the track that room).
+      if (!start && entry && Math.abs(entry.x - owned.inX) > 1 && top > entry.y) start = { ...entry };
       flush({ x: owned.inX, y: top });
-      entry = { x: owned.outX, y: bottom };
+      entry = { x: owned.outX, y: owned.outY ?? bottom };
+      continue;
+    }
+
+    // Something to frame: down onto its top middle, round it, then on from its bottom middle.
+    const framed = section.querySelector<HTMLElement>("[data-line-frame]");
+    const framedBox = framed?.getBoundingClientRect();
+    if (framed && framedBox && framedBox.width > 0) {
+      if (!start) start = { x: entry?.x ?? width / 2, y: entry?.y ?? top };
+      const frame = frameRun(framed);
+      const cx = (framedBox.left + framedBox.right) / 2;
+      flush({ x: cx, y: frame.y0 });
+      runs.push(frame);
+      start = { x: cx, y: frame.y1 };
+      for (const band of bandsOf(blocksOf(section))) {
+        const floor = bands.length ? bands[bands.length - 1].bottom : start.y;
+        if (band.bottom <= floor) continue;
+        bands.push({ ...band, top: Math.max(band.top, floor) });
+      }
       continue;
     }
 
     if (!start) start = { x: entry?.x ?? width / 2, y: entry?.y ?? top };
+    // data-line-steps: exact lanes, whatever the section holds.
+    if (section.dataset.lineSteps) {
+      let steps: { x: number; y0: number; y1: number }[] = [];
+      try {
+        steps = JSON.parse(section.dataset.lineSteps);
+      } catch {
+        steps = [];
+      }
+      for (const step of steps) {
+        const floor = bands.length ? bands[bands.length - 1].bottom : start.y;
+        if (step.y1 > floor) bands.push({ top: Math.max(step.y0, floor), bottom: step.y1, blocks: [], lane: step.x });
+      }
+      if (steps.length) continue;
+    }
+    // data-line-lane="left": the line keeps to the left of this section, not its middle.
+    const home = section.dataset.lineLane === "left" ? 0 : undefined;
     for (const band of bandsOf(blocksOf(section))) {
       const floor = bands.length ? bands[bands.length - 1].bottom : start.y;
       if (band.bottom <= floor) continue;
-      bands.push(band.top < floor ? { ...band, top: floor } : band);
+      bands.push({ ...band, top: Math.max(band.top, floor), home });
     }
   }
   flush(null);
@@ -540,6 +624,9 @@ function measureLine(layer: HTMLElement, stops: MeasuredStop[]): LineLayout | nu
   for (const stop of stops) {
     const def = TOUR.find((s) => s.id === stop.id);
     if (!def || def.node === false || def.held) continue;
+    // Stops inside the sliding track: the track shows its own screens; no dots on the line's
+    // crossing into it.
+    if (document.querySelector(def.target)?.closest(".pt-outer")) continue;
     const on = runs.find((r) => stop.y >= r.y0 && stop.y <= r.y1 && !r.gaps.some(([a, b]) => stop.y > a && stop.y < b));
     if (on) stop.node = { x: runX(on, stop.y), y: stop.y };
   }

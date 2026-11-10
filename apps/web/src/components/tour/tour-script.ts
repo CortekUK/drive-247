@@ -198,17 +198,12 @@ export const TOUR: TourStop[] = [
     node: false,
   },
 
+  // One section now (your-site.tsx): its setup bar, then the working demo under it.
   {
     id: "templates",
-    label: "Templates",
-    text: "Your booking site starts from a ready-made design. Change the words, photos and colours yourself, then publish when it looks right.",
+    label: "Your site",
+    text: "Type your company's name, then pick a template and a colour. Your site takes them as you go, and I check whether the web address is still free.",
     target: "#templates",
-  },
-  {
-    id: "name",
-    label: "Your name",
-    text: "Type your company's name here. Your site takes it as you type, and I check whether the web address is still free.",
-    target: "section:has(#nb-title)",
   },
   {
     id: "booking-demo",
@@ -325,14 +320,8 @@ export const TOUR: TourStop[] = [
   {
     id: "book-a-demo",
     label: "Book a demo",
-    text: "Not sure yet? Book a free 20-minute call with our founding team. No sales script, and no obligation.",
+    text: "Not sure yet? Bryan, our customer success manager, will walk you through it on a free 20-minute call. No obligation.",
     target: "#book-a-demo",
-  },
-  {
-    id: "faq",
-    label: "FAQs",
-    text: "Still deciding? These are the questions operators ask before they switch.",
-    target: "#faq",
   },
   {
     id: "blog",

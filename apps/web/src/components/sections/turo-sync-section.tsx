@@ -17,6 +17,8 @@ function ChromeMark() {
   );
 }
 import { useReveal } from "./operations-dashboard";
+import { Chapter } from "./turo-story";
+import "./turo-story.css";
 import "./turo-sync-section.css";
 
 /*
@@ -45,6 +47,7 @@ export function TuroSyncSection() {
     <section id="turo-sync" aria-labelledby="turo-sync-heading" className="tx-section">
       <div ref={ref} className={`tx-inner${visible ? " is-in" : ""}`}>
         <div className="tx-copy">
+          <Chapter n={3} title="The first step" align="left" />
           <p className="tx-kicker">
             <span>Turo Sync</span>
             <em>Early access</em>
@@ -152,6 +155,16 @@ export function TuroSyncSection() {
             </span>
           </div>
         </div>
+      </div>
+      {/* The close of the Turo story: one call to action. */}
+      <div className="ts-close">
+        <h3>
+          Keep Turo. <em>Add a business of your own.</em>
+        </h3>
+        <a href="#pricing">
+          Start free trial
+          <ArrowRight strokeWidth={2} />
+        </a>
       </div>
     </section>
   );

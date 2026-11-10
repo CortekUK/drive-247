@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { Globe, RefreshCw, ShieldCheck, UsersRound } from "lucide-react";
 
 import "@/components/content/content.css";
+import { Chapter } from "./turo-story";
 import "./beyond-turo.css";
 import { Accent, SectionHeading } from "./section-heading";
 
@@ -138,6 +139,7 @@ export function BeyondTuro() {
   return (
     <section id="beyond-turo" className="bt" aria-labelledby="bt-title">
       <div className="ct-inner">
+        <Chapter n={2} title="The way out" />
         <SectionHeading
           id="bt-title"
           title={

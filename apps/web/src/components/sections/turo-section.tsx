@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { ChevronsLeftRight } from "lucide-react";
 import { useFadeIn } from "@/hooks/use-fade-in";
 import { SIGNUP_PLANS, smallestPlanFor, type SignupPlan } from "@/lib/plans";
+import { Chapter } from "./turo-story";
 import "./turo-section.css";
 import { Accent, SectionHeading } from "./section-heading";
 
@@ -173,6 +174,7 @@ export function TuroSection({ plans = SIGNUP_PLANS }: { plans?: readonly SignupP
     <section id="turo" aria-labelledby="turo-heading" className="tu-section">
       <div ref={ref} className={`tu-inner ${visible ? "fade-in-visible" : "fade-in-hidden"}`}>
         <div className="tu-head">
+          <Chapter n={1} title="The cut" />
           <SectionHeading
             id="turo-heading"
             title={

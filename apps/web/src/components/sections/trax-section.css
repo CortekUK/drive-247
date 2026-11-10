@@ -746,3 +746,98 @@
 @media (min-width: 1200px) and (min-height: 640px) {
   .tm-copy { padding-top: clamp(96px, 16svh, 176px); padding-bottom: clamp(48px, 8svh, 80px); }
 }
+
+/*
+ * Inverted (Ghulam, 2026-11-10): the whole Trax section on the deep indigo, white on top.
+ * The words go white, the boxes and the Trax screen are solid white cards, and the wheel,
+ * the branches and the page's thread are drawn in white.
+ */
+.tm-root {
+  background:
+    radial-gradient(60% 50% at 50% 55%, rgb(124 116 255 / 0.35), transparent 70%),
+    radial-gradient(50% 40% at 0% 0%, rgb(99 102 241 / 0.4), transparent 70%),
+    radial-gradient(50% 40% at 100% 100%, rgb(76 29 149 / 0.5), transparent 70%),
+    linear-gradient(180deg, #2a20a8 0%, #3a2ed0 45%, #2a1f9e 100%);
+  color: #fff;
+}
+.tm-root .tm-section {
+  --tm-ink: #120e4a;
+  --tm-ink-soft: rgb(18 14 74 / 0.7);
+  --tm-accent: #4f44d8;
+  --tm-wire: rgb(255 255 255 / 0.45);
+  --tm-node: #fff;
+  --tm-node-line: rgb(255 255 255 / 0.9);
+  --tm-node-lift: 0 10px 30px -12px rgb(10 6 60 / 0.5);
+  --tm-shadow: 0 30px 80px -24px rgb(10 6 60 / 0.7);
+  --tm-iris-a: #fff;
+  --tm-iris-b: #c7c2ff;
+}
+.tm-root .tm-copy, .tm-root .sh-title { color: #fff; }
+.tm-root .sh-accent { color: #c7c2ff; }
+.tm-root .sh-sub { color: rgb(255 255 255 / 0.75); }
+.tm-root .tm-wheel { background: #fff; opacity: 0.22; }
+/* A box that is not lit yet stays white, just quieter. */
+.tm-root .tm-node { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.tm-root .tm-node[data-lit="true"] { border-color: #fff; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.35), var(--tm-node-lift); }
+.tm-root .tm-screen-halo { background: linear-gradient(135deg, #fff, #c7c2ff, #fff); }
+/* The page's thread through the section, in white. */
+.tm-root .pg-thread-rest { stroke: rgb(255 255 255 / 0.35); }
+.tm-root .pg-thread-live { stroke: #fff; }
+.tm-root .pg-thread-tip { fill: #fff; stroke: #3a2ed0; }
+/* On the indigo, a quiet box stays white: it dims by its content, not by going see-through. */
+.tm-root .tm-stage[data-phase="typing"] .tm-node,
+.tm-root .tm-stage[data-phase="answer"] .tm-node[data-lit="false"] { opacity: 1; }
+.tm-root .tm-stage[data-phase="typing"] .tm-node > *,
+.tm-root .tm-stage[data-phase="answer"] .tm-node[data-lit="false"] > * { opacity: 0.55; transition: opacity 200ms ease-out; }
+
+/*
+ * One screen (Ghulam, 2026-11-10: "the heading, text and graphics all in 100vh"): the words
+ * sit inside the pinned screen above the stage, and the stage takes the rest of the height.
+ */
+@media (min-width: 1200px) and (min-height: 640px) and (prefers-reduced-motion: no-preference) {
+  .tm-pin { display: flex; flex-direction: column; }
+  .tm-pin > .tm-copy { flex: none; padding: clamp(28px, 5.5svh, 64px) 1rem clamp(4px, 1.5svh, 16px); }
+  .tm-pin > .tm-copy .sh { margin: 0 auto; }
+  .tm-pin > .tm-copy .sh-title { font-size: clamp(2.5rem, min(4.6vw, 8svh), 5rem); }
+  .tm-pin > .tm-copy .sh-sub { max-width: 36rem; margin-inline: auto; margin-top: clamp(8px, 1.4svh, 16px); font-size: clamp(1rem, min(1.35vw, 2.3svh), 1.3rem); text-wrap: balance; }
+  .tm-pin > .tm-section { flex: 1; height: auto; min-height: 0; padding-top: clamp(16px, 3svh, 32px); padding-bottom: clamp(28px, 5svh, 56px); }
+  .tm-art-svg { height: clamp(26px, calc((100svh - 400px) / 4 - 62px), 90px); }
+}
+/* The wheel, brighter on the indigo. */
+.tm-root .tm-wheel { opacity: 0.42; }
+/* Room between the sliding track above and the indigo band (Ghulam, 2026-11-10); the page line crosses in it. */
+.tm-root { margin-top: clamp(200px, 30svh, 320px); }
+
+/*
+ * The way in: the indigo is drawn on a layer behind the section that opens with the scroll
+ * (--tm-open, trax-section.tsx), from a rounded card inset from the sides to the full width;
+ * the words rise in with it. Eased, so it settles rather than stops.
+ */
+.tm-root { --tm-open: 1; --tm-e: calc(1 - (1 - var(--tm-open)) * (1 - var(--tm-open))); isolation: isolate; background: none; }
+.tm-root::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background:
+    radial-gradient(60% 50% at 50% 55%, rgb(124 116 255 / 0.35), transparent 70%),
+    radial-gradient(50% 40% at 0% 0%, rgb(99 102 241 / 0.4), transparent 70%),
+    radial-gradient(50% 40% at 100% 100%, rgb(76 29 149 / 0.5), transparent 70%),
+    linear-gradient(180deg, #2a20a8 0%, #3a2ed0 45%, #2a1f9e 100%);
+  clip-path: inset(0 calc((1 - var(--tm-e)) * 9vw) 0 round calc((1 - var(--tm-e)) * 56px) calc((1 - var(--tm-e)) * 56px) 0 0);
+  will-change: clip-path;
+}
+.tm-root .tm-pin > .tm-copy {
+  opacity: calc(var(--tm-open) * 1.6 - 0.4);
+  translate: 0 calc((1 - var(--tm-e)) * 48px);
+}
+/* The boxes and the screen come up a beat after the words, so none float outside the opening band. */
+.tm-root .tm-pin > .tm-section { opacity: calc(var(--tm-open) * 2.2 - 1.1); translate: 0 calc((1 - var(--tm-e)) * 72px); }
+@media (prefers-reduced-motion: reduce) {
+  .tm-root::before { clip-path: none; }
+  .tm-root .tm-pin > .tm-section { opacity: 1; translate: none; }
+  .tm-root .tm-pin > .tm-copy { opacity: 1; translate: none; }
+}
+
+/* The parts of the thread before the screen stay measured but unseen (trax-section.tsx). */
+.tm-unseen { display: none; }

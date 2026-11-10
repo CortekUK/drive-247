@@ -133,3 +133,7 @@
   .ws-glass .ws-search { margin-inline: 0; }
   .ws-perks { flex-direction: column; gap: 0.5em; }
 }
+
+/* A live drawing's nav, sign-in and buttons are real buttons (the demo). */
+.ws button { cursor: pointer; }
+.ws button.ws-link:hover { color: var(--ws-ink); }

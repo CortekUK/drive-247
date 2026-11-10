@@ -42,6 +42,7 @@ import { useAccountingBanners } from "./sources/accounting-banners";
 import { useDepositHoldBanners } from "./sources/deposit-hold-banners";
 import { useConnectStripeBanner } from "./sources/connect-stripe-banner";
 import { useTrialCountdownBanner } from "./sources/trial-countdown-banner";
+import { useV2 } from "@/lib/v2-context";
 
 export function useAppBanners(): AppBanner[] {
   // Hooks first, unconditionally, in a stable order.
@@ -50,9 +51,12 @@ export function useAppBanners(): AppBanner[] {
   const connectStripe = useConnectStripeBanner();
   const trial = useTrialCountdownBanner();
   const { canView } = useManagerPermissions();
+  // The test-mode / Connect Stripe strip is v1 only (Nov 10 2026): on v2 it
+  // will come back as part of a properly built payments setup.
+  const onV2 = useV2("chrome");
 
   return useMemo(() => {
-    const all: AppBanner[] = [...deposit, ...accounting, ...connectStripe, ...trial];
+    const all: AppBanner[] = [...deposit, ...accounting, ...(onV2 ? [] : connectStripe), ...trial];
 
     return all.filter((b) => (b.requiresTab ? canView(b.requiresTab) : true));
     // `canView` is rebuilt on every render of the permissions hook, so it is
@@ -60,5 +64,5 @@ export function useAppBanners(): AppBanner[] {
     // permission data it closes over is what actually changes, and that
     // re-renders this hook anyway.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deposit, accounting, connectStripe, trial]);
+  }, [deposit, accounting, connectStripe, trial, onV2]);
 }

@@ -1,0 +1,210 @@
+/*
+ * The Turo story: one held, dark screen, five slides as you scroll (turo-story.tsx).
+ * --p (0 to 1) is how far through the hold it is.
+ */
+.tso { --tso-a: #a5a0ff; --tso-red: #fca5a5; position: relative; margin-top: clamp(80px, 10vw, 160px); }
+.tso-track { position: relative; height: 700svh; }
+.tso-stage {
+  --p: 0;
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: #0b0a17;
+  color: #fff;
+  isolation: isolate;
+}
+
+/* A slow indigo glow that gathers as the story goes on; it runs red while the cut comes out. */
+.tso-glow {
+  position: absolute;
+  inset: -20%;
+  z-index: -1;
+  background:
+    radial-gradient(48% 40% at 50% calc(70% - var(--p) * 30%), rgb(79 68 216 / calc(0.2 + var(--p) * 0.35)), transparent 70%),
+    radial-gradient(30% 30% at 20% 20%, rgb(99 102 241 / 0.12), transparent 70%);
+  transform: scale(calc(1 + var(--p) * 0.15));
+}
+.tso-stage[data-slide="1"][data-cut] .tso-glow { background: radial-gradient(46% 38% at 50% 48%, rgb(220 38 38 / 0.22), transparent 70%); }
+
+/* ── Slides ─────────────────────────────────────────────── */
+.tso-slide {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(14px, 2.4svh, 24px);
+  width: min(100%, 1180px);
+  max-height: 100svh;
+  padding: clamp(40px, 9svh, 72px) 24px clamp(80px, 13svh, 108px);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(32px);
+  filter: blur(6px);
+  pointer-events: none;
+  transition: opacity 700ms ease-out, transform 900ms cubic-bezier(0.2, 0.7, 0.2, 1), filter 700ms ease-out;
+}
+.tso-slide.is-on { opacity: 1; transform: none; filter: none; pointer-events: auto; }
+.tso-slide.is-past { transform: translateY(-32px); }
+
+.tso-kicker { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; letter-spacing: 0.26em; text-transform: uppercase; color: var(--tso-a); }
+.tso-kicker em { padding: 3px 10px; border: 1px solid rgb(165 160 255 / 0.5); border-radius: 99px; font-size: 11px; font-style: normal; letter-spacing: 0.06em; text-transform: none; }
+
+.tso-line { font-size: clamp(2rem, min(6.2vw, 11svh), 6rem); font-weight: 400; line-height: 1.08; letter-spacing: -0.035em; text-wrap: balance; }
+.tso-line.is-soft { font-size: clamp(1.6rem, 3.4vw, 3.2rem); color: rgb(255 255 255 / 0.5); }
+
+.tso-title { max-width: 26ch; font-size: clamp(1.6rem, min(4.2vw, 7svh), 3.9rem); font-weight: 400; line-height: 1.1; letter-spacing: -0.03em; text-wrap: balance; }
+.tso-title em { font-style: normal; color: var(--tso-a); }
+.tso-title.is-left { max-width: none; text-align: left; }
+.tso-sub { max-width: 34rem; font-size: clamp(1rem, 1.3vw, 1.2rem); line-height: 1.5; color: rgb(255 255 255 / 0.62); text-align: left; }
+.tso-note { max-width: 46rem; font-size: 13px; line-height: 1.55; color: rgb(255 255 255 / 0.42); text-wrap: pretty; }
+.tso-note a { color: rgb(255 255 255 / 0.7); text-decoration: underline; text-underline-offset: 3px; }
+
+/* Words rise in one after another; later parts of a slide rise in when their step comes. */
+.tso-w { display: inline-block; opacity: 0; transform: translateY(0.4em); transition: opacity 500ms ease-out, transform 700ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+.tso-slide.is-on .tso-w { opacity: 1; transform: none; transition-delay: calc(120ms + var(--i) * 90ms); }
+.tso-later .tso-w { opacity: 0 !important; transform: translateY(0.4em) !important; }
+.tso-later.is-in .tso-w { opacity: 1 !important; transform: none !important; }
+.tso-later { opacity: 0; transform: translateY(14px); transition: opacity 500ms ease-out, transform 700ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+.tso-later.is-in { opacity: 1; transform: none; transition-delay: calc(var(--i, 0) * 110ms); }
+.tso-slide:not(.is-on) .tso-later { transition-delay: 0ms; }
+
+/* ── 2 · The cut ── */
+.tso-vs-col.is-cut-col b.tso-money { font-size: clamp(3rem, min(7.5vw, 16svh), 8rem); font-weight: 300; text-shadow: none; }
+.tso-vs-col.is-cut-col .tso-money.is-cut { color: var(--tso-red); }
+.tso-vs-col.is-cut-col .tso-caption { max-width: 24rem; text-align: left; }
+.tso-caption em { font-style: normal; color: var(--tso-red); }
+.tso-money { font-size: clamp(3.5rem, min(13vw, 22svh), 11rem); font-weight: 400; line-height: 1; letter-spacing: -0.05em; font-variant-numeric: tabular-nums; transition: color 900ms ease-out; }
+.tso-money.is-cut { color: var(--tso-red); }
+.tso-caption { display: grid; max-width: 42rem; font-size: clamp(1.05rem, 1.5vw, 1.35rem); line-height: 1.45; color: rgb(255 255 255 / 0.62); }
+.tso-caption b { font-weight: 500; color: var(--tso-red); }
+.tso-swap { grid-area: 1 / 1; opacity: 0; transform: translateY(10px); transition: opacity 500ms ease-out, transform 600ms ease-out; }
+.tso-swap.is-on { opacity: 1; transform: none; transition-delay: 250ms; }
+.tso-years { display: flex; gap: clamp(10px, 1.4vw, 18px); margin-top: 8px; }
+.tso-years li { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: clamp(130px, 13vw, 180px); padding: 14px 18px; border-radius: 16px; background: rgb(255 255 255 / 0.05); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.09); }
+.tso-years small { font-size: 12px; color: rgb(255 255 255 / 0.5); }
+.tso-years b { font-size: clamp(1.4rem, 2.2vw, 2rem); font-weight: 500; letter-spacing: -0.02em; color: var(--tso-red); font-variant-numeric: tabular-nums; }
+.tso-years span { font-size: 12px; color: rgb(255 255 255 / 0.45); }
+
+/* ── 3 · The difference: two columns, each on one left edge, rows level across. ── */
+.tso-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.tso-vs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: min(100%, 1000px); text-align: left; }
+.tso-vs-col { display: grid; grid-template-rows: auto auto auto; align-content: start; padding-inline: clamp(24px, 4vw, 56px); }
+.tso-vs-col.is-ours { border-left: 1px solid rgb(255 255 255 / 0.14); }
+.tso-vs-col small { font-size: 13px; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: rgb(255 255 255 / 0.45); }
+.tso-vs-col b { margin-block: clamp(8px, 1.5svh, 16px) clamp(20px, 4svh, 40px); font-size: clamp(4rem, min(14vw, 24svh), 13rem); font-weight: 300; line-height: 0.85; letter-spacing: -0.06em; }
+.tso-vs-col.is-turo b { color: transparent; -webkit-text-stroke: 1.5px rgb(252 165 165 / 0.55); }
+.tso-vs-col.is-ours b { color: #fff; text-shadow: 0 0 60px rgb(165 160 255 / 0.7), 0 0 140px rgb(79 68 216 / 0.8); }
+.tso-vs-col ul { display: grid; }
+.tso-vs-col li { padding-block: clamp(10px, 1.8svh, 16px); border-top: 1px solid rgb(255 255 255 / 0.1); font-size: clamp(1rem, min(1.5vw, 2.6svh), 1.3rem); line-height: 1.3; white-space: nowrap; }
+.tso-vs-col.is-turo li { color: rgb(255 255 255 / 0.42); }
+.tso-vs-col.is-ours li { color: #fff; }
+
+/* ── 4 · The way out: the same two columns; one glowing figure, and the line it climbs. ── */
+.tso-vs.is-rise { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); width: min(100%, 1100px); }
+.tso-vs.is-rise .tso-vs-col.is-ours { border-left: 0; }
+.tso-vs-col.is-chart { border-left: 1px solid rgb(255 255 255 / 0.14); }
+.tso-vs.is-rise .tso-vs-col.is-ours b { font-size: clamp(3rem, min(7vw, 15svh), 7.5rem); letter-spacing: -0.05em; }
+.tso-rise-sub { max-width: 24rem; font-size: clamp(1rem, min(1.4vw, 2.6svh), 1.2rem); line-height: 1.5; color: rgb(255 255 255 / 0.55); }
+
+.tso-chart { --c: #a5a0ff; color: var(--c); margin-top: clamp(20px, 4svh, 40px); }
+.tso-chart.is-red { --c: #fca5a5; }
+.tso-chart-plot { position: relative; height: clamp(150px, 30svh, 280px); border-bottom: 1px solid rgb(255 255 255 / 0.14); }
+.tso-chart svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; clip-path: inset(-20% 100% -20% 0); }
+.tso-chart.is-drawn svg { clip-path: inset(-20% -2% -20% 0); transition: clip-path 1600ms cubic-bezier(0.5, 0, 0.2, 1) 300ms; }
+.tso-chart-line { fill: none; stroke: var(--c); stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke; filter: drop-shadow(0 0 8px var(--c)); }
+.tso-chart-area { opacity: 0; transition: opacity 900ms ease-out; }
+.tso-chart.is-drawn .tso-chart-area { opacity: 1; transition-delay: 1200ms; }
+
+.tso-dot { position: absolute; width: 9px; height: 9px; translate: -50% -50%; border-radius: 50%; background: #0b0a17; box-shadow: 0 0 0 1.5px var(--c); opacity: 0; transition: opacity 400ms ease-out; }
+.tso-dot b { position: absolute; bottom: calc(100% + 10px); left: 50%; translate: -50% 0; margin: 0; font-size: clamp(0.85rem, 1.1vw, 1rem); font-weight: 400; line-height: 1.2; letter-spacing: 0; text-shadow: none; color: rgb(255 255 255 / 0.6); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tso-dot.is-top { width: 13px; height: 13px; background: #fff; box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 25%, transparent), 0 0 24px 6px color-mix(in srgb, var(--c) 70%, transparent); }
+.tso-dot.is-top b { font-size: clamp(1.1rem, 1.6vw, 1.5rem); font-weight: 500; color: #fff; }
+.tso-chart.is-drawn .tso-dot { opacity: 1; transition-delay: calc(500ms + var(--i) * 360ms); }
+/* On the staircase the figures sit on the treads, with no dot. */
+.tso-chart.is-steps .tso-dot { width: 0; height: 0; background: none; box-shadow: none; }
+.tso-chart.is-steps .tso-dot b { bottom: 10px; }
+.tso-chart.is-steps .tso-dot.is-top b { text-shadow: 0 0 24px rgb(165 160 255 / 0.9); }
+
+.tso-axis { position: relative; height: 44px; margin-top: 12px; }
+.tso-axis li { position: absolute; top: 0; translate: -50% 0; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0; border: 0; font-size: 13px; color: rgb(255 255 255 / 0.7); white-space: nowrap; }
+.tso-axis li.is-first { translate: -12% 0; align-items: flex-start; }
+.tso-axis li.is-last { translate: -88% 0; align-items: flex-end; }
+.tso-axis small { font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; color: rgb(255 255 255 / 0.38); }
+
+/* ── 5 · The first step: Chrome's mark lit from behind, the name, one line, Safari to come ── */
+.tso-slide.is-finale { gap: clamp(10px, 2svh, 18px); }
+.tso-reveal-logo { position: relative; display: grid; place-items: center; width: clamp(88px, 17svh, 140px); aspect-ratio: 1; margin-block: clamp(10px, 2.5svh, 24px); }
+.tso-reveal-logo::before { content: ""; position: absolute; inset: -70%; border-radius: 50%; background: radial-gradient(closest-side, rgb(255 255 255 / 0.22), rgb(26 115 232 / 0.16) 45%, transparent); }
+.tso-reveal-logo svg { position: relative; width: 100%; height: 100%; filter: drop-shadow(0 20px 40px rgb(0 0 0 / 0.5)); }
+.tso-slide.is-on .tso-reveal-logo svg { animation: tso-arrive 1200ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes tso-arrive { from { transform: scale(0.6) rotate(-90deg); opacity: 0; } }
+.tso-reveal-name { font-size: clamp(3rem, min(8vw, 14svh), 8rem); font-weight: 400; line-height: 1; letter-spacing: -0.045em; }
+.tso-reveal-what { max-width: 34rem; margin-top: clamp(6px, 1.5svh, 14px); font-size: clamp(1.05rem, min(1.5vw, 2.8svh), 1.3rem); line-height: 1.5; color: rgb(255 255 255 / 0.62); text-wrap: balance; }
+.tso-reveal-soon { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; color: rgb(255 255 255 / 0.4); }
+.tso-reveal-soon svg { width: 16px; height: 16px; opacity: 0.7; }
+
+/* ── Where you are ── */
+.tso-progress { position: absolute; bottom: clamp(20px, 4svh, 36px); left: 50%; display: flex; gap: clamp(12px, 2vw, 28px); translate: -50% 0; }
+.tso-progress li { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 11px; letter-spacing: 0.06em; color: rgb(255 255 255 / 0.32); transition: color 400ms ease-out; }
+.tso-progress i { width: 44px; height: 2px; border-radius: 2px; background: rgb(255 255 255 / 0.16); transition: background-color 400ms ease-out; }
+.tso-progress li.is-done i { background: rgb(165 160 255 / 0.5); }
+.tso-progress li.is-on { color: #fff; }
+.tso-progress li.is-on i { background: var(--tso-a); }
+
+.tso-down { position: absolute; bottom: clamp(76px, 12svh, 110px); left: 50%; display: grid; place-items: center; width: 40px; height: 40px; translate: -50% 0; border-radius: 50%; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.2); color: rgb(255 255 255 / 0.7); }
+.tso-down svg { width: 18px; height: 18px; animation: tso-nudge 1.8s ease-in-out infinite; }
+@keyframes tso-nudge { 50% { transform: translateY(4px); } }
+
+/* No white-out and no fade at the end: the dark panel ends on a clean edge. */
+.tso-dawn { display: none; }
+
+/* Short screens: a little tighter. */
+@media (max-height: 760px) {
+  .tso-slide { gap: 12px; }
+  .tso-years li { padding-block: 10px; }
+}
+/* Very short screens: the fine print and the progress labels make room. */
+@media (max-height: 620px) {
+  .tso-note, .tso-progress span { display: none; }
+  .tso-slide { padding-bottom: 56px; }
+}
+
+/* Phones and reduced motion: no hold, the five slides one under another. */
+@media (max-width: 760px), (prefers-reduced-motion: reduce) {
+  .tso-track { height: auto; }
+  .tso-stage { position: relative; height: auto; display: flex; flex-direction: column; gap: 24px; padding-block: 64px; }
+  .tso-slide, .tso-w, .tso-swap, .tso-later, .tso-later .tso-w { opacity: 1 !important; transform: none !important; filter: none; transition: none; }
+  .tso-slide { padding-block: 24px; }
+  .tso-swap { grid-area: auto; }
+  .tso-caption { gap: 8px; }
+  .tso-money.is-cut, .tso-money { color: #fff; }
+  .tso-chart svg { clip-path: none !important; }
+  .tso-chart .tso-dot, .tso-chart .tso-chart-area { opacity: 1; }
+  .tso-chart-area, .tso-dot { opacity: 1; }
+  .tso-progress, .tso-dawn, .tso-down { display: none; }
+}
+@media (max-width: 760px) {
+  .tso-years { flex-direction: column; width: 100%; }
+  .tso-vs { grid-template-columns: 1fr; }
+  .tso-vs-col.is-ours { border-left: 0; margin-top: 32px; }
+  .tso-vs-col li { white-space: normal; }
+  .tso-vs.is-rise { grid-template-columns: 1fr; }
+  .tso-vs-col.is-chart { border-left: 0; margin-top: 32px; }
+  .tso-chart svg { clip-path: none !important; }
+  .tso-chart .tso-dot, .tso-chart .tso-chart-area { opacity: 1; }
+  .tso-chart-area, .tso-dot { opacity: 1; }
+}
+
+/* "Chapter one · The cut": for the separate Turo sections, off the page for now. */
+.ts-chapter { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 0 auto clamp(4px, 1vw, 12px); font-size: 13px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: hsl(var(--v2-primary)); }
+.ts-chapter.is-left { justify-content: flex-start; }
+.ts-chapter i { width: 32px; height: 1.5px; border-radius: 1px; background: hsl(var(--v2-primary) / 0.4); }
+.ts-chapter b { font-weight: 600; color: hsl(var(--v2-foreground)); }
+.ts-chapter + .sh { margin-top: clamp(16px, 2vw, 28px); }
+.ts-close { display: flex; flex-direction: column; align-items: center; gap: 16px; padding-block: clamp(32px, 5vw, 64px) clamp(56px, 8vw, 104px); text-align: center; }
+.ts-close h3 { font-size: clamp(1.75rem, 3.2vw, 2.75rem); font-weight: 400; line-height: 1.15; letter-spacing: -0.025em; color: hsl(var(--v2-foreground)); }
+.ts-close h3 em { font-style: normal; color: hsl(var(--v2-primary)); }
+.ts-close a { display: inline-flex; align-items: center; gap: 8px; height: 48px; padding-inline: 26px; border-radius: 99px; background: #4f44d8; color: #fff; font-weight: 500; }

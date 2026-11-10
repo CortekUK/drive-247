@@ -1,5 +1,5 @@
 /**
- * The numbers and the operator wall on the landing page.
+ * The numbers on the landing page (the operator wall below them shows the logos).
  *
  * EVERY FIGURE HERE IS REAL, measured against production on 2026-11-06 with test
  * tenants (tenant_type = 'test') and the founder's own test signup left out, then
@@ -27,13 +27,16 @@ export interface ProofNumber {
   suffix?: string;
   label: string;
   detail: string;
+  /** The picture in this number's gauge (components/sections/numbers-gauge.tsx). */
+  icon: "money" | "days" | "agreement" | "verified" | "operators";
 }
 
 export const PROOF_AS_OF = "November 2026";
 
 export const NUMBERS: readonly ProofNumber[] = [
-  { value: 180, prefix: "$", suffix: "k+", label: "In rental payments", detail: "Paid by renters and tracked on Drive247." },
-  { value: 4400, suffix: "+", label: "Rental days booked", detail: "Across every operator's fleet." },
-  { value: 1000, suffix: "+", label: "Agreements sent", detail: "For renters to sign from their phone." },
-  { value: 560, suffix: "+", label: "Drivers verified", detail: "Licence and selfie, checked online." },
+  { value: 180, prefix: "$", suffix: "k+", icon: "money", label: "In rental payments", detail: "Paid by renters and tracked on Drive247." },
+  { value: 4400, suffix: "+", icon: "days", label: "Rental days booked", detail: "Across every operator's fleet." },
+  { value: 1000, suffix: "+", icon: "agreement", label: "Agreements sent", detail: "For renters to sign from their phone." },
+  { value: 560, suffix: "+", icon: "verified", label: "Drivers verified", detail: "Licence and selfie, checked online." },
+  { value: 60, suffix: "+", icon: "operators", label: "Rental companies", detail: "Have run their business on Drive247." },
 ];

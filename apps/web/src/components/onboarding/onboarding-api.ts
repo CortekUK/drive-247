@@ -3,6 +3,7 @@
 import type { SignupPlanId } from "@/lib/plans";
 import type { PromoOffer } from "@/lib/promo-offer";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
+import { isMockSignup, mockFunction, MockFunctionError } from "./mock-signup";
 import {
   SIGNUP_ERROR_COPY,
   type OnboardingError,
@@ -362,6 +363,20 @@ function isRetryable(err: OnboardingError): boolean {
 
 async function callFunction<T>(name: string, body: unknown, opts: CallOptions): Promise<T> {
   const run = async (): Promise<T> => {
+    // Localhost rehearsal: answered without touching the server. Folds away in
+    // every build. See mock-signup.ts.
+    if (isMockSignup()) {
+      try {
+        const mocked = await mockFunction(name, body);
+        if (mocked !== undefined) return mocked as T;
+      } catch (e) {
+        if (e instanceof MockFunctionError && isKnownCode(e.code)) {
+          throw new OnboardingApiError(e.code, e.message);
+        }
+        throw e;
+      }
+    }
+
     const attempts = 1 + (opts.retries ?? 0);
     let lastError: OnboardingError | null = null;
     for (let attempt = 0; attempt < attempts; attempt += 1) {

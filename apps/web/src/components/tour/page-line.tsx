@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { runX, TIP_AT, type LineLayout, type MeasuredStop } from "./tour-layout";
 import "@/components/sections/portal-glass.css";
+import { LINE_SPLASH_EVENT } from "@/components/layout/footer-water";
 import "./page-line.css";
 
 /*
@@ -15,7 +16,6 @@ import "./page-line.css";
 export function PageLine({ line, stops }: { line: LineLayout; stops: MeasuredStop[] }) {
   const clipRef = useRef<SVGRectElement>(null);
   const tipRef = useRef<SVGCircleElement>(null);
-  const endRef = useRef<SVGCircleElement>(null);
   const nodeRefs = useRef<(SVGCircleElement | null)[]>([]);
   const nodes = useMemo(() => stops.filter((stop) => stop.node), [stops]);
 
@@ -26,6 +26,8 @@ export function PageLine({ line, stops }: { line: LineLayout; stops: MeasuredSto
     const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     let frame = 0;
+    /** Whether the tip was already in the footer at the last paint: the splash is for the moment it goes in. */
+    let sunk: boolean | null = null;
     const paint = () => {
       frame = 0;
       const at = scrollY + innerHeight * TIP_AT;
@@ -42,7 +44,14 @@ export function PageLine({ line, stops }: { line: LineLayout; stops: MeasuredSto
       }
 
       nodes.forEach((stop, i) => nodeRefs.current[i]?.classList.toggle("is-on", still || at >= stop.node!.y));
-      if (line.end) endRef.current?.classList.toggle("is-on", still || at >= line.end.y);
+      if (line.end) {
+        // The end of the line drops into the footer: tell the water where, once per arrival.
+        const down = at >= line.end.y;
+        if (down && sunk === false && !still) {
+          dispatchEvent(new CustomEvent(LINE_SPLASH_EVENT, { detail: { clientX: line.end.x - scrollX } }));
+        }
+        sunk = down;
+      }
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(paint);
@@ -86,7 +95,6 @@ export function PageLine({ line, stops }: { line: LineLayout; stops: MeasuredSto
             r="5"
           />
         ))}
-        {line.end && <circle ref={endRef} className="pg-thread-stop ln-node ln-end" cx={line.end.x} cy={line.end.y} r="6" />}
         <circle ref={tipRef} className="pg-thread-tip" r="5" style={{ visibility: "hidden" }} />
       </g>
     </svg>

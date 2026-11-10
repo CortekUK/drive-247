@@ -130,6 +130,8 @@ export function OnboardingScreen() {
 
   /** Which page of the create-account form is showing (0 you, 1 password, 2 business). */
   const [accountPage, setAccountPage] = useState(0);
+  /** The payment step's full card form is open (see PaymentStepProps.onWideChange). */
+  const [paymentWide, setPaymentWide] = useState(false);
 
   // Memoised so the step receives a stable identity.
   const clearStepError = useCallback(() => setError(null), [setError]);
@@ -209,6 +211,7 @@ export function OnboardingScreen() {
 
   /** The create-account pages are only in play on the plain create form. */
   const paymentColumns = dialogStep === "payment" && !closeConfirmOpen;
+  const paymentTwoCol = paymentColumns && paymentWide;
   const paging = dialogStep === "account" && step !== "verify" && !state.signInPrompt && accountMode !== "tenant";
   const onBusinessPage = paging && accountPage === ACCOUNT_PAGE_COUNT - 1;
 
@@ -359,9 +362,11 @@ export function OnboardingScreen() {
             </ol>
             <div
               className={cn(
+                // One narrow column on every step. The one exception is the
+                // payment step once Stripe opens the full card form, which is
+                // too tall for it: that goes two-column on a laptop.
                 "relative flex min-h-0 w-full max-w-[480px] flex-col overflow-hidden transition-[max-width] duration-200 ease-out motion-reduce:transition-none",
-                // The payment screen goes two-column on a laptop (see PaymentStep).
-                dialogStep === "payment" && !closeConfirmOpen && "lg:max-w-[920px]",
+                paymentTwoCol && "lg:max-w-[920px]",
                 SIGNUP_CARD,
               )}
             >
@@ -464,18 +469,17 @@ export function OnboardingScreen() {
                           onApplyPromo={applyPromoCode}
                           ownerName={state.account?.fullName ?? ""}
                           companyName={state.business.companyName}
+                          onWideChange={setPaymentWide}
                         />
                       ) : null}
                     </div>
                   )}
 
-                  {/* On the two-column payment screen this is a row of its own:
-                      the Stripe line at the bottom of the left column, and the
-                      notices, errors and Pay button under the card form on the
-                      right. On a phone the Stripe line comes last. */}
-                  <div className={cn(paymentColumns && "flex flex-col lg:grid lg:grid-cols-2 lg:items-end lg:gap-x-10")}>
+                  {/* The Stripe line always sits directly under the Pay button.
+                      Two-column: both live in the right column, under the card form. */}
+                  <div className={cn(paymentColumns && "flex flex-col", paymentTwoCol && "lg:grid lg:grid-cols-2 lg:gap-x-10 lg:[&>*]:col-start-2")}>
                   {paymentColumns && (
-                    <p className="order-last mt-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground lg:order-first lg:mt-0 lg:justify-start lg:leading-none">
+                    <p className="order-last mt-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
                       <Lock className="h-3 w-3 shrink-0" aria-hidden="true" />
                       Payments are processed by Stripe. We never see your card details.
                     </p>

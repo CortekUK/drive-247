@@ -1,23 +1,43 @@
+import { Instrument_Serif } from "next/font/google";
 import { ArrowRight } from "lucide-react";
-import "./content.css";
+import "./content-cta.css";
+
+// The cursive face, loaded here so the panel looks the same on every page that ends with it.
+const cursive = Instrument_Serif({ subsets: ["latin"], weight: "400", style: "italic", variable: "--font-cursive", display: "swap" });
+
+const POINTS = [
+  { title: "No cut of your bookings", text: "You pay your plan and the card processor's standard fees." },
+  { title: "Your own booking site", text: "Renters book and pay on your web address, and their details stay with you." },
+  { title: "Checked before pickup", text: "ID checks, agreements and deposits, the same way every time." },
+] as const;
 
 /** The closing call to action on the blog and customer story pages. */
 export function ContentCta() {
   return (
-    <section className="ct-cta" aria-labelledby="ct-cta-title">
-      <h2 id="ct-cta-title" className="ct-cta-title font-medium tracking-tighter">
-        Run your rental business <span className="ct-brand">on Drive247</span>
-      </h2>
-      <p className="ct-cta-sub">Start a free trial today, or book a demo and we&apos;ll show you around.</p>
-      <div className="ct-cta-row">
-        <a href="/#pricing" className="ct-btn ct-btn-primary">
-          Start free trial
-          <ArrowRight strokeWidth={2} aria-hidden />
-        </a>
-        <a href="/strategy-call" className="ct-btn ct-btn-ghost">
-          Book a demo
-        </a>
+    <section className={`cc ${cursive.variable}`} aria-labelledby="ct-cta-title">
+      <div className="cc-main">
+        <h2 id="ct-cta-title" className="cc-title">
+          Run your rental business <em className="cc-cursive">on Drive247.</em>
+        </h2>
+        <p className="cc-sub">Start a free trial today, or book a demo and we&apos;ll show you around.</p>
+        <div className="cc-row">
+          <a href="/#pricing" className="cc-btn cc-btn-solid">
+            Start free trial
+            <ArrowRight strokeWidth={2} aria-hidden />
+          </a>
+          <a href="/strategy-call" className="cc-btn cc-btn-line">
+            Book a demo
+          </a>
+        </div>
       </div>
+      <ul className="cc-points">
+        {POINTS.map((point) => (
+          <li key={point.title}>
+            <p className="cc-point-title">{point.title}</p>
+            <p className="cc-point-text">{point.text}</p>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

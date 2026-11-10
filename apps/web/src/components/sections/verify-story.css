@@ -1,0 +1,77 @@
+/*
+ * The feature flows (verify-story.tsx): three scenes of real screens, in the page's own browser
+ * window (portal-glass.css) and a phone, each with a line from the person doing that step.
+ * Laid out in % of a 1000 × 700 stage so each scene scales as one picture. The stage is tall
+ * enough for the widest tablet (84%, a portal screen plus its bars and bezel), so nothing spills out.
+ * Motion is the page's: 200ms ease-out, opacity plus a 12px lift.
+ */
+.vs { position: relative; container-type: inline-size; width: 100%; aspect-ratio: 1000 / 700; text-align: left; }
+/* Fits the held screen's height. */
+.rc-stage .vs { width: min(100%, calc((100svh - 120px) * 1000 / 700)); }
+
+.vs-scene { position: absolute; inset: 0; opacity: 0; translate: 0 12px; visibility: hidden; transition: opacity 200ms ease-in, translate 200ms ease-in, visibility 0s linear 200ms; }
+.vs-scene.is-on { opacity: 1; translate: 0 0; visibility: visible; transition: opacity 200ms ease-out, translate 200ms ease-out; }
+
+/* Real screens: named through the panel, to outrank the section's rule for a lone screenshot. */
+.rc-panel .vs img.vs-shot, .rc-stage .rc-panel .vs img.vs-shot {
+  position: static;
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  user-select: none;
+}
+
+/* The browser window. */
+/* The browser sits in the page's tablet (portal-glass.css), shown at once: the scenes do their own motion. */
+.vs .pg-tablet { position: absolute; opacity: 1; translate: none; scale: 1; transition: none; padding: max(7px, 1.15cqw); border-radius: max(14px, 2.2cqw); }
+.vs .pg-tablet-camera { top: max(3.5px, 0.575cqw); }
+.vs-browser { border-radius: 0.9cqw; }
+.vs-favicon { flex: none; display: grid; place-items: center; width: 14px; height: 14px; border-radius: 4px; background: hsl(var(--v2-primary)); color: #fff; font-size: 9px; font-weight: 700; line-height: 1; }
+.vs-tablet.is-left { left: 0; top: 0; width: 84%; }
+/* Tablet to the right, phone over its lower left corner (Ghulam's reference, 2026-11-10). */
+.vs-tablet.is-right { right: 0; top: 0; width: 84%; }
+/* On its own, a touch narrower and centred both ways. */
+.vs .vs-tablet.is-solo { left: 0; right: 0; top: 50%; width: 80%; margin-inline: auto; translate: 0 -50%; }
+
+/* The phone. */
+.vs-phone { position: absolute; margin: 0; }
+/* Squarer corners, in the same proportion as the page's own phone (portal-glass.css .pg-phone). */
+.vs-phone-body { display: block; overflow: hidden; padding: 0.5cqw; border-radius: 2.3cqw; background: #0c0c10; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14), 0 18px 44px rgb(13 8 70 / 0.28); }
+.rc-panel .vs-phone-body img.vs-shot, .rc-stage .rc-panel .vs-phone-body img.vs-shot { border-radius: 1.85cqw; }
+.vs-phone figcaption { margin-top: 1.4cqw; text-align: center; font-size: clamp(12px, 1.6cqw, 15px); font-weight: 600; color: hsl(var(--v2-foreground)); }
+/* The phone rests on the tablet's lower outer corner, as it does in the feature rows above. */
+.vs-phone.is-right { right: 0; bottom: 0; width: 21%; }
+.vs-phone.is-left { left: 0; bottom: 0; width: 21%; }
+
+/* Front, back and selfie, side by side, the middle one a touch higher. */
+.vs-row { position: absolute; left: 0; right: 0; top: 1.5%; display: flex; justify-content: center; gap: 4%; }
+/* As big as the stage's height allows, caption and tilt included. */
+.vs-row .vs-phone { position: relative; width: 27.5%; }
+.vs-row.is-3 .vs-phone:nth-child(1) { rotate: -3deg; translate: 0 3cqw; }
+.vs-row.is-3 .vs-phone:nth-child(3) { rotate: 3deg; translate: 0 3cqw; }
+.vs-row.is-2 .vs-phone:nth-child(1) { rotate: -3deg; }
+.vs-row.is-2 .vs-phone:nth-child(2) { rotate: 3deg; translate: 0 3cqw; }
+.vs-row.is-1 .vs-phone { width: 29%; rotate: -2deg; }
+
+/* A narrow stage (a phone): the window's bars would crowd the screen, so the address bar goes. */
+@container (max-width: 560px) {
+  .vs .pg-address { display: none; }
+  .vs .pg-tabs { height: 26px; }
+  .vs-tablet.is-left, .vs-tablet.is-right { top: 0; width: 88%; }
+  .vs .vs-tablet.is-solo { width: 100%; }
+  .vs-phone.is-left, .vs-phone.is-right { width: 30%; }
+  .vs-row { top: 6%; gap: 3%; }
+  .vs-row .vs-phone { width: 30%; }
+}
+
+/* A container cannot size itself by its own query, so the taller stage keys off the screen. */
+@media (max-width: 600px) { .vs { aspect-ratio: 10 / 9; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .vs-scene, .vs-scene.is-on { transition: none; }
+}

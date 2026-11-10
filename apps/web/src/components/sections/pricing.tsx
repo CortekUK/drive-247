@@ -41,9 +41,9 @@ interface PricingSectionProps {
   /** The contact-only Enterprise card, always last; null when it is switched off. */
   enterprise?: EnterpriseCardData | null;
   /**
-   * The full breakdown under the cards: everything included, what costs extra and who
-   * it's paid to, and a month worked out. The live landing page turns it on; the signup
-   * journey, which only needs the cards, leaves it off.
+   * Four long cards in one container, one per plan, each with its drawing, name and price
+   * on top and the breakdown underneath (components/pricing/pricing-breakdown.tsx). The live landing page turns it
+   * on; the signup journey, which only needs the cards, leaves it off.
    */
   detailed?: boolean;
 }
@@ -93,28 +93,35 @@ export function PricingSection({
     <section
       id="pricing"
       aria-labelledby="pricing-heading"
-      className="bg-muted/50 py-20 sm:py-24"
+      className={`bg-muted/50 ${detailed ? "pb-section pt-2 pb-20 sm:pb-24" : "py-20 sm:py-24"}`}
     >
-      <div className="mx-auto max-w-[1360px] px-4 sm:px-6">
-        <SectionHeading
-          id="pricing-heading"
-          title={
-            <>
-              Simple pricing, <Accent>sized to your fleet</Accent>
-            </>
-          }
-          sub="Pick the plan that fits your fleet today. Every plan includes the whole platform. Your portal and booking site are ready the day you sign up."
-        />
+      <div className={`mx-auto max-w-[1360px] px-4 sm:px-6${detailed ? " pb-inner" : ""}`}>
+        {/* No heading of its own on the landing page: "Your business, online in minutes. With
+            simple pricing." above the Launch cards names it (get-started-intro.tsx). */}
+        {detailed ? (
+          <h2 id="pricing-heading" className="sr-only">
+            Pricing
+          </h2>
+        ) : (
+          <SectionHeading
+            id="pricing-heading"
+            title={
+              <>
+                Simple pricing, <Accent>sized to your fleet</Accent>
+              </>
+            }
+          />
+        )}
 
-        {sharedTrial ? (
+        {sharedTrial && !detailed ? (
           <p className="mt-4 text-center text-sm font-semibold text-indigo-600 dark:text-indigo-400">
             {sharedTrial}-day free trial on every plan. Card required, cancel anytime.
           </p>
         ) : null}
 
         {detailed ? (
-          <div ref={ref} className={`mt-12 ${visible ? "fade-in-visible" : "fade-in-hidden"}`}>
-            <PricingBreakdown plans={catalogue} enterprise={enterprise} offer={offer} onSelect={onSelectPlan} showTrial={sharedTrial === null} />
+          <div ref={ref} className={`pb-body ${visible ? "fade-in-visible" : "fade-in-hidden"}`}>
+            <PricingBreakdown plans={catalogue} enterprise={enterprise} offer={offer} onSelect={onSelectPlan} showTrial />
           </div>
         ) : (
           <>

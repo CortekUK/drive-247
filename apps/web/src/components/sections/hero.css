@@ -266,7 +266,7 @@
 @media (prefers-reduced-motion: reduce) {
   .hg-title, .hg-sub, .hg-proof, .hg-marquee, .hg-track { animation: none; }
 }
-/* All white: the logo's indigo numerals would sink into this lighter ground. */
+/* All white (Ghulam, 2026-11-10): the logo's indigo "247" sinks into the purple ground. */
 .hg-logo img { filter: brightness(0) invert(1); }
 
 

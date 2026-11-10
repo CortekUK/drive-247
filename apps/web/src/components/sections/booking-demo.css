@@ -1,15 +1,10 @@
 /*
- * Experience your own booking website: a working example in a browser window, the renter's
+ * The working demo inside "Your booking site" (your-site.tsx): a browser window, the renter's
  * booking site first, then the operator's portal. Flat, on the page's own ground, in the
  * look of the real booking site (site-v2/book) and the portal's Rentals screen.
  */
-.bd-section { --bd-a: hsl(var(--v2-primary)); --bd-tint: color-mix(in srgb, var(--bd-a) 11%, hsl(var(--v2-card))); padding-block: clamp(72px, 9vw, 136px); }
-.dark .bd-section { --bd-tint: color-mix(in srgb, var(--bd-a) 24%, hsl(var(--v2-card))); }
-.bd-inner { width: min(100% - 2 * clamp(16px, 3vw, 64px), 1240px); margin-inline: auto; }
-
-.bd-head { text-align: center; }
-.bd-title { font-size: clamp(2.25rem, 4.4vw, 4rem); line-height: 1.06; color: var(--foreground); }
-.bd-sub { max-width: 40rem; margin: 14px auto 0; font-size: clamp(1rem, 1.3vw, 1.1875rem); line-height: 1.5; color: var(--muted-foreground); }
+.bd-demo { --bd-a: hsl(var(--v2-primary)); --bd-tint: color-mix(in srgb, var(--bd-a) 11%, hsl(var(--v2-card))); }
+.dark .bd-demo { --bd-tint: color-mix(in srgb, var(--bd-a) 24%, hsl(var(--v2-card))); }
 
 /* The guide above the window: where you are, and what to do next. */
 .bd-guide { display: grid; justify-items: center; gap: 14px; margin-top: clamp(32px, 3.6vw, 48px); }
@@ -72,13 +67,15 @@
 .bd-reset svg { width: 14px; height: 14px; }
 
 /* Which of your three sites the window shows. */
-.bd-views { display: flex; justify-content: center; gap: 4px; width: fit-content; max-width: 100%; margin: clamp(28px, 3.2vw, 40px) auto 0; padding: 4px; border: 1px solid hsl(var(--v2-border)); border-radius: 99px; background: hsl(var(--v2-card)); }
+.bd-views { display: flex; justify-content: center; gap: 4px; width: fit-content; max-width: 100%; margin: 0 auto; padding: 4px; border: 1px solid hsl(var(--v2-border)); border-radius: 99px; background: hsl(var(--v2-card)); }
 .bd-views button { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding-inline: 16px; border-radius: 99px; font-size: 14px; font-weight: 600; color: hsl(var(--v2-muted-foreground)); white-space: nowrap; cursor: pointer; transition: background-color 200ms ease-out, color 200ms ease-out; }
 .bd-views button:hover { color: hsl(var(--v2-foreground)); }
 .bd-views button.is-on { background: var(--bd-a); color: #fff; }
 .bd-views svg { width: 16px; height: 16px; }
 @media (max-width: 559.98px) {
-  .bd-views button { gap: 6px; height: 36px; padding-inline: 10px; font-size: 12.5px; }
+  /* Four tabs do not fit a phone: the strip scrolls sideways instead of being cut off. */
+  .bd-views { justify-content: flex-start; overflow-x: auto; scrollbar-width: none; }
+  .bd-views button { flex: none; gap: 6px; height: 36px; padding-inline: 10px; font-size: 12.5px; }
   .bd-views svg { display: none; }
 }
 .bd-views + .bd-guide { margin-top: 16px; }
@@ -370,7 +367,68 @@
 .bd-rgrid b { overflow: hidden; font-size: 17px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .bd-rgrid span { font-size: 12.5px; color: hsl(var(--v2-muted-foreground)); }
 
+/* ── The journey after the booking: the renter's two jobs, the operator's approval ─────── */
+.bd-rtodo li > span { flex: 1; min-width: 0; }
+.bd-rtodo li { min-height: 32px; }
+.bd-do, .bd-open {
+  flex: none;
+  height: 32px;
+  padding-inline: 14px;
+  border-radius: 99px;
+  background: var(--bd-a);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 200ms ease-out;
+}
+.bd-do:hover, .bd-open:hover { background: color-mix(in srgb, var(--bd-a) 86%, #000); }
+.bd-open { height: 28px; padding-inline: 12px; font-size: 12.5px; }
+.bd-sig { margin-left: 10px; font-family: "Snell Roundhand", "Segoe Script", "Brush Script MT", cursive; font-size: 17px; font-style: italic; color: hsl(var(--v2-foreground)); }
+.bd-spin { animation: bd-spin 900ms linear infinite; }
+@keyframes bd-spin { to { rotate: 360deg; } }
+.bd-rbook-tag.is-ok, .bd-state.is-ok { background: hsl(var(--v2-success) / 0.12); color: hsl(var(--v2-success)); }
+.bd-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  margin-top: 14px;
+  padding-inline: 16px;
+  border: 1px solid color-mix(in srgb, var(--bd-a) 40%, hsl(var(--v2-border)));
+  border-radius: 99px;
+  background: var(--bd-tint);
+  color: var(--bd-a);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  animation: bd-in 200ms ease-out both;
+}
+.dark .bd-next { color: hsl(var(--v2-foreground)); }
+.bd-next svg { width: 15px; height: 15px; }
+
+.bd-table tr.is-link { cursor: pointer; }
+.bd-table .is-ok { color: hsl(var(--v2-success)); font-weight: 600; }
+.bd-backlink { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 14px; font-size: 13px; font-weight: 600; color: hsl(var(--v2-muted-foreground)); cursor: pointer; }
+.bd-backlink:hover { color: hsl(var(--v2-foreground)); }
+.bd-backlink svg { width: 15px; height: 15px; }
+.bd-state { display: inline-flex; margin-left: 8px; padding: 3px 10px; border-radius: 99px; background: hsl(var(--v2-warning) / 0.14); color: hsl(var(--v2-warning)); font-size: 12px; font-weight: 600; letter-spacing: 0; vertical-align: middle; }
+.bd-checks { display: grid; margin-top: 18px; overflow: hidden; border: 1px solid hsl(var(--v2-border)); border-radius: 16px; background: hsl(var(--v2-card)); }
+.bd-checks li { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 12px; padding: 13px 16px; }
+.bd-checks li + li { border-top: 1px solid hsl(var(--v2-border)); }
+.bd-check-dot { grid-row: 1 / span 2; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: hsl(var(--v2-muted)); color: hsl(var(--v2-muted-foreground)); transition: background-color 200ms ease-out, color 200ms ease-out; }
+.bd-check-dot svg { width: 15px; height: 15px; }
+.bd-checks .is-done .bd-check-dot { background: hsl(var(--v2-success)); color: #fff; }
+.bd-checks b { font-size: 14px; font-weight: 600; }
+.bd-checks small { grid-column: 2; font-size: 13px; color: hsl(var(--v2-muted-foreground)); }
+.bd-detail-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-top: 16px; }
+.bd-detail-acts .bd-go { width: auto; padding-inline: 24px; }
+.bd-detail-acts .bd-next { margin-top: 0; height: 44px; }
+.bd-approved { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding-inline: 16px; border-radius: 99px; background: hsl(var(--v2-success) / 0.12); color: hsl(var(--v2-success)); font-size: 14px; font-weight: 600; animation: bd-in 200ms ease-out both; }
+.bd-approved svg { width: 16px; height: 16px; }
+
 @media (prefers-reduced-motion: reduce) {
+  .bd-spin, .bd-next, .bd-approved { animation: none; }
   .bd-rbook, .bd-rempty { animation: none; }
   .bd-hint::after, .bd-stage, .bd-main, .bd-toast, .bd-table tr.is-new { animation: none; }
   .bd-table tr.is-new { background: color-mix(in srgb, var(--bd-a) 6%, transparent); }

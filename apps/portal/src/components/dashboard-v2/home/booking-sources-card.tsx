@@ -73,15 +73,40 @@ function layout(counts: Record<BookingSource, number>): Tile[] {
   return tiles;
 }
 
+/**
+ * No bookings yet: the three places a booking can come from, laid out the way
+ * the split will be (one big tile, two stacked), drawn as quiet outlines with a
+ * line saying what will fill them.
+ */
+function SourcesEmpty() {
+  const ghost = 'absolute flex flex-col justify-between rounded-lg border border-dashed border-[var(--pv-line)] bg-[var(--pv-wash)]/60 p-3';
+  const label = (k: BookingSource) => (
+    <div className="min-w-0">
+      <p className="truncate text-[12.5px] font-semibold leading-tight text-[var(--pv-ink-2)]">{SOURCE[k].label}</p>
+      <p className="mt-0.5 truncate text-[11px] leading-tight text-[var(--pv-ink-3)]">{SOURCE[k].hint}</p>
+    </div>
+  );
+  return (
+    <div className="absolute inset-0">
+      <div className={ghost} style={{ left: 0, top: 0, width: `calc(60% - ${GAP / 2}px)`, height: '100%' }}>
+        {label('website')}
+        <p className="text-[12px] leading-snug text-[var(--pv-ink-3)]">Your first booking will show where it came from.</p>
+      </div>
+      <div className={ghost} style={{ left: `calc(60% + ${GAP / 2}px)`, top: 0, width: `calc(40% - ${GAP / 2}px)`, height: `calc(50% - ${GAP / 2}px)` }}>
+        {label('team')}
+      </div>
+      <div className={ghost} style={{ left: `calc(60% + ${GAP / 2}px)`, top: `calc(50% + ${GAP / 2}px)`, width: `calc(40% - ${GAP / 2}px)`, height: `calc(50% - ${GAP / 2}px)` }}>
+        {label('turo')}
+      </div>
+    </div>
+  );
+}
+
 function Square({ counts }: { counts: Record<BookingSource, number> }) {
   const tiles = layout(counts);
   return (
     <div className="relative aspect-square w-full overflow-hidden rounded-xl">
-      {tiles.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center rounded-xl border border-dashed border-[var(--pv-line)] text-[12px] text-[var(--pv-ink-3)]">
-          No bookings yet
-        </div>
-      )}
+      {tiles.length === 0 && <SourcesEmpty />}
       {tiles.map((t) => {
         const s = SOURCE[t.key];
         // Half the gap on each inner edge (not on the square's own border), so

@@ -165,6 +165,15 @@ async function build(src: string): Promise<string | null> {
     }
   }
   if (maxX < 0) return null;
+
+  // A mark that fills most of its own box is a photo or a solid badge, not a logo:
+  // in one ink it reads as a dark block, so the name is shown instead.
+  let filled = 0;
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) filled += d[(y * W + x) * 4 + 3];
+  }
+  if (filled / 255 / ((maxX - minX + 1) * (maxY - minY + 1)) > 0.55) return null;
+
   ctx.putImageData(pixels, 0, 0);
 
   const trimmed = document.createElement("canvas");

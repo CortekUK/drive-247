@@ -1,12 +1,12 @@
 "use client";
 
 import { CalendarDays, Check, ChevronLeft, ChevronRight, FileSignature, Plus, Search, ShieldCheck, Wallet } from "lucide-react";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { TIP_AT } from "@/components/tour/tour-layout";
 import { useReveal } from "./operations-dashboard";
-import { SectionHeading } from "./section-heading";
-import { TypedText } from "./typed-text";
+import { Accent, SectionHeading } from "./section-heading";
 import { BrowserChrome } from "./portal-glass";
+import { CalendarSheet, type SheetBooking } from "./calendar-sheet";
 import "./calendar-section.css";
 
 /*
@@ -21,15 +21,22 @@ const DAYS = Array.from({ length: 14 }, (_, i) => {
 });
 const TODAY = 2;
 
-type Bar = { from: number; span: number; who: string; state: "out" | "booked" | "pending" | "blocked" | "returning"; open?: boolean };
-const ROWS: { car: string; plate: string; tone: string; bars: Bar[] }[] = [
-  { car: "Kia Telluride", plate: "8XKR214", tone: "#4f44d8", bars: [{ from: 0, span: 3, who: "Noah Bennett", state: "returning" }, { from: 4, span: 5, who: "Mia Chen", state: "booked", open: true }, { from: 10, span: 3, who: "Daniel Okafor", state: "pending" }] },
-  { car: "Tesla Model Y", plate: "7TSL903", tone: "#0e7490", bars: [{ from: 0, span: 6, who: "Liam Foster", state: "out" }, { from: 8, span: 6, who: "Emma Stone", state: "booked" }] },
-  { car: "Ford Mustang", plate: "9FMG551", tone: "#c2410c", bars: [{ from: 1, span: 2, who: "Ava Morgan", state: "out" }, { from: 4, span: 2, who: "Owen Price", state: "booked" }, { from: 7, span: 4, who: "Sophia Martinez", state: "booked" }] },
-  { car: "Jeep Wrangler", plate: "6JPW118", tone: "#15803d", bars: [{ from: 2, span: 7, who: "Priya Nair", state: "booked" }, { from: 11, span: 3, who: "James Carter", state: "pending" }] },
-  { car: "Honda Civic", plate: "5HCV740", tone: "#be185d", bars: [{ from: 5, span: 2, who: "Service", state: "blocked" }, { from: 9, span: 4, who: "Marco Rossi", state: "booked" }] },
-  { car: "Toyota RAV4", plate: "4TRV225", tone: "#a16207", bars: [{ from: 0, span: 4, who: "Chloe Adams", state: "out" }, { from: 6, span: 5, who: "Rosalind Achebe", state: "booked" }] },
+type Bar = { from: number; span: number; who: string; state: "out" | "booked" | "pending" | "blocked" | "returning"; open?: boolean; note?: string };
+/** Free days drawn as an empty slot, with a word on what they are. Shown on the sliding track only. */
+type Free = { from: number; span: number; label: [title: string, line: string] };
+const ROWS: { car: string; plate: string; tone: string; rate?: number; bars: Bar[]; free?: Free }[] = [
+  { car: "Kia Telluride", rate: 89, plate: "8XKR214", tone: "#4f44d8", bars: [{ from: 0, span: 3, who: "Noah Bennett", state: "returning" }, { from: 4, span: 5, who: "Mia Chen", state: "booked", open: true, note: "Click any booking to open it" }, { from: 10, span: 3, who: "Daniel Okafor", state: "pending" }] },
+  { car: "Tesla Model Y", rate: 109, plate: "7TSL903", tone: "#0e7490", bars: [{ from: 0, span: 6, who: "Liam Foster", state: "out", note: "Out with a renter now" }, { from: 8, span: 6, who: "Emma Stone", state: "booked" }] },
+  { car: "Ford Mustang", rate: 129, plate: "9FMG551", tone: "#c2410c", bars: [{ from: 1, span: 2, who: "Ava Morgan", state: "out" }, { from: 4, span: 2, who: "Owen Price", state: "booked" }, { from: 7, span: 4, who: "Sophia Martinez", state: "booked" }], free: { from: 11, span: 3, label: ["Free days", "Open on your site"] } },
+  { car: "Jeep Wrangler", rate: 99, plate: "6JPW118", tone: "#15803d", bars: [{ from: 2, span: 7, who: "Priya Nair", state: "booked" }, { from: 11, span: 3, who: "James Carter", state: "pending", note: "Waiting on payment" }] },
+  { car: "Honda Civic", rate: 59, plate: "5HCV740", tone: "#be185d", bars: [{ from: 5, span: 2, who: "Service", state: "blocked", note: "In service, hidden from your site" }, { from: 9, span: 4, who: "Marco Rossi", state: "booked" }] },
+  { car: "Toyota RAV4", rate: 79, plate: "4TRV225", tone: "#a16207", bars: [{ from: 0, span: 4, who: "Chloe Adams", state: "out" }, { from: 6, span: 5, who: "Rosalind Achebe", state: "booked" }] },
 ];
+
+/** The booking the docked sheet shows until another is clicked. */
+const FIRST: SheetBooking = { who: "Mia Chen", car: "Kia Telluride", plate: "8XKR214", rate: 89, state: "booked", start: DAYS[4], days: 5 };
+/** product-track.tsx MEDIA: where the track slides, and so where the sheet is docked. */
+const DOCK_MEDIA = "(min-width: 1100px) and (min-height: 640px) and (prefers-reduced-motion: no-preference)";
 
 const STATES = [
   ["out", "On rent"],
@@ -70,26 +77,40 @@ export function CalendarSection() {
     };
   }, []);
   const { ref, visible } = useReveal();
+  // A click on any booking opens its sheet (calendar-sheet.tsx).
+  const [sheet, setSheet] = useState<SheetBooking | null>(null);
+  const closeSheet = useCallback(() => setSheet(null), []);
+  // On the wide sliding track the sheet is part of the screen: always open, docked on the
+  // right, and a click on a booking switches it (Ghulam, 2026-11-10: "it should always be like
+  // this"). Anywhere else it opens over the page and closes again.
+  const sectionRef = useRef<HTMLElement>(null);
+  const [docked, setDocked] = useState(false);
+  useEffect(() => {
+    const media = matchMedia(DOCK_MEDIA);
+    const check = () => setDocked(media.matches && !!sectionRef.current?.closest(".pt-panel"));
+    check();
+    media.addEventListener("change", check);
+    return () => media.removeEventListener("change", check);
+  }, []);
+  const shown = sheet ?? (docked ? FIRST : null);
   let step = 0;
+  let label = 0;
 
   return (
-    <section id="calendar" aria-labelledby="calendar-heading" className="cs-section">
+    <section ref={sectionRef} id="calendar" aria-labelledby="calendar-heading" className={`cs-section${docked ? " has-sheet" : ""}`}>
       <div ref={ref} className={`cs-inner${visible ? " is-in" : ""}`}>
         <SectionHeading
           id="calendar-heading"
           title={
-            <TypedText
-              parts={[
-                { text: "See every car, every booking and every return in " },
-                { text: "one\u00a0calendar.", accent: true },
-              ]}
-            />
+            <>
+              See every car, every booking and every return in <Accent>one&nbsp;calendar.</Accent>
+            </>
           }
           subClassName="cs-sub"
           sub="Your whole fleet on one timeline, by car, rental or customer. Spot the free days, see what goes out and comes back, and never double-book a car."
         />
 
-        <div ref={tabletRef} className={`pg-tablet cs-tablet${lit ? " is-lit" : ""}`} aria-hidden>
+        <div ref={tabletRef} className={`pg-tablet cs-tablet${lit ? " is-lit" : ""}`}>
           <i className="pg-tablet-camera" />
         <div className="cs-window">
           <BrowserChrome tab="Calendar · Your portal" url="northwind.portal.drive-247.com/rentals">
@@ -166,19 +187,48 @@ export function CalendarSection() {
                   </span>
                   <span className="cs-lane">
                     {row.bars.map((bar) => (
-                      <i
+                      <button
+                        type="button"
                         key={bar.who}
-                        className={`cs-bar is-${bar.state}${bar.open ? " is-open" : ""}`}
+                        className={`cs-bar is-${bar.state}${(shown ? shown.who === bar.who && shown.car === row.car : bar.open) ? " is-open" : ""}`}
                         style={{ "--cs-from": bar.from, "--cs-span": bar.span, "--cs-at": `${250 + step++ * 70}ms` } as CSSProperties}
+                        aria-label={`${bar.who}, ${row.car}: open`}
+                        onClick={() =>
+                          setSheet({ who: bar.who, car: row.car, plate: row.plate, rate: row.rate ?? 89, state: bar.state, start: DAYS[bar.from], days: bar.span })
+                        }
                       >
                         {bar.state !== "blocked" && <span className="cs-avatar">{bar.who.split(" ").map((p) => p[0]).join("")}</span>}
                         {bar.who}
-                      </i>
+                      </button>
                     ))}
+                    {/* The screen's labels: a word under a booking, and the free days. */}
+                    {row.bars
+                      .filter((bar) => bar.note)
+                      .map((bar) => (
+                        <span
+                          key={`note-${bar.who}`}
+                          className={`cs-note is-${bar.state}${bar.from + bar.span > DAYS.length - 3 ? " is-left" : ""}`}
+                          style={{ "--cs-from": bar.from, "--cs-span": bar.span } as CSSProperties}
+                          aria-hidden
+                        >
+                          <span>
+                            <i>{++label}</i>
+                            <b>{bar.note}</b>
+                          </span>
+                        </span>
+                      ))}
+                    {row.free && (
+                      <span className="cs-free" style={{ "--cs-from": row.free.from, "--cs-span": row.free.span } as CSSProperties} aria-hidden>
+                        <b>{row.free.label[0]}</b>
+                        <small>{row.free.label[1]}</small>
+                      </span>
+                    )}
                   </span>
                 </div>
               ))}
-              <span className="cs-now" />
+              <span className="cs-now">
+                <span className="cs-now-label" aria-hidden>Today</span>
+              </span>
             </div>
 
             {/* One booking, opened */}
@@ -229,12 +279,14 @@ export function CalendarSection() {
                 Checking Mia&apos;s booking
               </span>
             </div>
+            {docked && <CalendarSheet booking={shown} onClose={closeSheet} docked />}
           </div>
           </BrowserChrome>
         </div>
         </div>
 
       </div>
+      {!docked && <CalendarSheet booking={sheet} onClose={closeSheet} />}
     </section>
   );
 }

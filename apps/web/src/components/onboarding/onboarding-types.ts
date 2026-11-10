@@ -465,6 +465,12 @@ export interface AccountStepProps {
 
 export interface PaymentStepProps {
   plan: SignupPlan;
+  /**
+   * True while Stripe shows the full card form (number, expiry, CVC, country),
+   * false for the compact saved-Link view. The screen goes two-column for the
+   * tall form and stays one narrow column otherwise.
+   */
+  onWideChange?(wide: boolean): void;
   clientSecret: string | null;
   publishableKey: string | null;
   mode: "test" | "live" | null;

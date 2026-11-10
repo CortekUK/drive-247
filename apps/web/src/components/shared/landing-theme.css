@@ -61,15 +61,11 @@
   font-family: var(--font-sans);
   color: var(--foreground);
   /*
-   * One ground for the whole page: a light wash of the accent over the hero's grid, in
-   * indigo. It lives here, not on sections, so there is no edge where one section ends.
-   * Only Trax and the dark sections (hero, final CTA) paint a ground of their own.
+   * One ground for the whole page: a light wash of the accent, no grid (Ghulam removed the
+   * squares, 2026-11-10). It lives here, not on sections, so there is no edge where one
+   * section ends. Only Trax and the dark sections (hero, final CTA) paint their own.
    */
   background-color: color-mix(in srgb, hsl(var(--v2-primary)) 7%, var(--background));
-  background-image:
-    linear-gradient(hsl(var(--v2-primary) / 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, hsl(var(--v2-primary) / 0.055) 1px, transparent 1px);
-  background-size: 96px 96px;
   /* Holds the wash below above this background and behind the content. */
   isolation: isolate;
 }
@@ -91,9 +87,6 @@
 
 .dark .lp-v2 {
   background-color: color-mix(in srgb, hsl(var(--v2-primary)) 13%, var(--background));
-  background-image:
-    linear-gradient(rgb(255 255 255 / 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(255 255 255 / 0.03) 1px, transparent 1px);
 }
 
 /* Past the page's edges on overscroll, the same dark as the page itself. */

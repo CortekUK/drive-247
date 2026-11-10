@@ -2,33 +2,27 @@ import { Hero } from "@/components/sections/hero";
 import { OperationsDashboard } from "@/components/sections/operations-dashboard";
 import { RentalCards } from "@/components/sections/rental-cards";
 import { LaunchSection } from "@/components/sections/launch-section";
-import { TuroSection } from "@/components/sections/turo-section";
-import { BeyondTuro } from "@/components/sections/beyond-turo";
+import { TuroStory } from "@/components/sections/turo-story";
 import { CalendarSection } from "@/components/sections/calendar-section";
-import { TemplatesSection } from "@/components/sections/templates-section";
+import { ProductTrack, TrackIntro } from "@/components/sections/product-track";
+import { Accent } from "@/components/sections/section-heading";
 import { TraxSection } from "@/components/sections/trax-section";
-import { BookingDemo } from "@/components/sections/booking-demo";
 import { PwaSection } from "@/components/sections/pwa-section";
-import { TraxWidgetSection } from "@/components/sections/trax-widget-section";
 import { LandingTour } from "@/components/tour/landing-tour";
 import { MultichatSection } from "@/components/sections/multichat-section";
-import { EndToEndSection } from "@/components/sections/end-to-end-section";
-import { KnowNumbers } from "@/components/sections/know-numbers";
+import { InsightsGallery } from "@/components/sections/insights-gallery";
 import { IntegrationsSection } from "@/components/sections/integrations-section";
 import { TestimonialsSection } from "@/components/sections/testimonials-section";
-import { NumbersSection } from "@/components/sections/numbers-section";
+import { NumbersIntro, NumbersSection } from "@/components/sections/numbers-section";
 import { OperatorMap } from "@/components/sections/operator-map";
 import { fetchOperatorMap } from "@/lib/operator-map-server";
 import { StoriesSection } from "@/components/sections/stories-section";
-import { MarketingSection } from "@/components/sections/marketing-section";
-import { LeadsSection } from "@/components/sections/leads-section";
-import { TuroSyncSection } from "@/components/sections/turo-sync-section";
 import { BookDemoSection } from "@/components/sections/book-demo-section";
 import { BlogSection } from "@/components/sections/blog-section";
-import { FAQSection } from "@/components/sections/faq-section";
 import { connection } from "next/server";
 
-import { NameYourBusiness } from "@/components/sections/name-your-business";
+import { YourSite } from "@/components/sections/your-site";
+import { DemoIntro } from "@/components/sections/demo-intro";
 import { PricingSection } from "@/components/sections/pricing";
 import { ReferralBanner } from "@/components/sections/referral-banner";
 import { fetchSignupPlans } from "@/lib/plans-server";
@@ -115,40 +109,59 @@ export default async function Home({
         <OperationsDashboard />
         {/* ID verification, insurance, agreements, payments */}
         <RentalCards />
-        <CalendarSection />
-        <MultichatSection />
-        {/* Insights */}
-        <KnowNumbers />
+        {/* Calendar → Multi-chat → Insights: pinned, sliding sideways, the product only */}
+        <ProductTrack>
+          <TrackIntro />
+          <CalendarSection />
+          <TrackIntro
+            lead={false}
+            title={
+              <>
+                Every renter, every channel. <Accent>One&nbsp;conversation.</Accent>
+              </>
+            }
+            sub="Chat, texts, email and calls with each renter in one thread. Pick the channel for every reply, and see the whole history in one place."
+          />
+          <MultichatSection />
+          <TrackIntro
+            lead={false}
+            title={
+              <>
+                Every car, every dollar. <Accent>Know your&nbsp;numbers.</Accent>
+              </>
+            }
+            sub="See which cars make you money, which ones cost you money, and where your next opportunity is."
+          />
+          <InsightsGallery />
+        </ProductTrack>
         <TraxSection />
-        {/* Templates, then the domain: "What's your rental company called?" */}
-        <TemplatesSection />
-        <NameYourBusiness signup={plans !== null} />
-        {/* The booking demo */}
-        <BookingDemo />
+        {/* Your booking site, one section (Ghulam, 2026-11-10): name, template and colour, then the working demo */}
+        {/* A screen that says the demo is next, the page line ending in an arrow that points down at it */}
+        <DemoIntro />
+        <YourSite signup={plans !== null} />
         {/* Mobile: the portals install like apps */}
         <PwaSection />
         {/* Trax as a desktop and phone widget, which comes with the installed app (coming soon) */}
-        <TraxWidgetSection />
+        {/* TraxWidgetSection removed for now (Ghulam, 2026-11-10); the file stays. */}
         <IntegrationsSection />
         {/* Sales and marketing */}
-        <MarketingSection />
-        <LeadsSection />
-        <EndToEndSection />
-        {/* Turo: what it costs, growing your own brand beside it, then the extension */}
-        <TuroSection plans={plans ?? undefined} />
-        <BeyondTuro />
-        <TuroSyncSection />
+        {/* MarketingSection removed for now (Ghulam, 2026-11-10); the file stays. */}
+        {/* LeadsSection removed for now (Ghulam, 2026-11-10); the file stays. */}
+        {/* EndToEndSection removed for now (Ghulam, 2026-11-10); the file stays. */}
+        {/* The Turo story: five dark slides (the story, the cut, the difference, the way out, the first step).
+            It replaces TuroSection, BeyondTuro and TuroSyncSection on the page (Ghulam, 2026-11-10); their files stay. */}
+        <TuroStory />
         {/* Credibility: numbers, operator logos, testimonials, case studies */}
+        <NumbersIntro />
         <NumbersSection />
         {operators.length > 0 && <OperatorMap initial={operators} />}
         <TestimonialsSection testimonials={testimonials} />
         <StoriesSection />
+        {/* Getting started, one part of the page: the main heading, then the Launch cards (no heading) and Pricing, left-aligned */}
         <LaunchSection />
         {plans && <PricingSection plans={plans} offer={offer} enterprise={enterprise} detailed />}
         {/* Not sure yet? Book a demo */}
         <BookDemoSection />
-        {/* Answers for anyone still unsure (placed by me at Ghulam's request) */}
-        <FAQSection />
         {/* The blog, for anyone who wants to read before deciding; the footer follows */}
         <BlogSection />
         {/* The line down the whole page, and Trax in the corner walking through it. Last, so

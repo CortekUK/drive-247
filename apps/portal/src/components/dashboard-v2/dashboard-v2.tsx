@@ -8,7 +8,6 @@ import { BonzahStatusBanner } from "@/components/dashboard/bonzah-status-banner"
 import { BonzahPendingAlert } from "@/components/dashboard/bonzah-pending-alert";
 import { HomeBands } from "@/components/dashboard-v2/home/home-bands";
 import { WebinarPopup } from "@/components/dashboard-v2/webinar-popup";
-import { OnboardingCallCard } from "@/components/dashboard-v2/onboarding-call-card";
 import { HOME_PALETTE } from "@/components/dashboard-v2/home/ui";
 import { format } from "date-fns";
 
@@ -70,7 +69,6 @@ export function DashboardV2() {
         {/* The free onboarding call, while it is still on offer (renders
             nothing otherwise). Above the bands: it is the first thing a new
             operator should see. */}
-        <OnboardingCallCard />
         <HomeBands />
         {/* Webinar invitation popup — a portal, so it takes no space here. */}
         <WebinarPopup />

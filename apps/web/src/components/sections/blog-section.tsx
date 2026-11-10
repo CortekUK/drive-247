@@ -1,23 +1,24 @@
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 
-import { PostCard } from "@/components/content/post-card";
+import { PostPoster, POSTER_SLUGS } from "@/components/content/post-poster";
 import { ALL_POSTS } from "@/content/posts";
 import "@/components/content/content.css";
 import { Accent, SectionHeading } from "./section-heading";
 
-/* From the blog: the three newest posts, each opening its own page under /blog. */
+const FEATURED = POSTER_SLUGS.flatMap((slug) => ALL_POSTS.filter((post) => post.slug === slug)).slice(0, 3);
+
+/* From the blog: three posts on three different subjects, each opening its own page. */
 export function BlogSection() {
   return (
-    <section className="ct-section" aria-labelledby="bl-title">
+    <section className="ct-section" aria-labelledby="bl-title" data-line-lane="left">
       <div className="ct-inner">
-        <div className="ct-head">
+        <div className="ct-head ct-head-left">
           <div>
             <SectionHeading
               id="bl-title"
+              align="left"
               title={
                 <>
-                  From the <Accent>blog</Accent>
+                  From the <Accent>Blog</Accent>
                 </>
               }
               sub={
@@ -27,14 +28,10 @@ export function BlogSection() {
               }
             />
           </div>
-          <Link href="/blog" className="ct-all">
-            All posts
-            <ArrowRight strokeWidth={2} aria-hidden />
-          </Link>
         </div>
         <div className="ct-grid">
-          {ALL_POSTS.slice(0, 3).map((post) => (
-            <PostCard key={post.slug} post={post} />
+          {FEATURED.map((post) => (
+            <PostPoster key={post.slug} post={post} />
           ))}
         </div>
       </div>

@@ -2,6 +2,8 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import { createMockAuth, isMockSignup } from "@/components/onboarding/mock-signup";
+
 let _client: SupabaseClient | null = null;
 
 /**
@@ -32,7 +34,29 @@ let _client: SupabaseClient | null = null;
  * `localStorage`, so it must only ever be reached from an event handler or an
  * effect, never during render or SSR.
  */
+let _mocked: SupabaseClient | null = null;
+
+/**
+ * The same client with Auth answered locally, for the localhost signup
+ * rehearsal (components/onboarding/mock-signup.ts). Table reads stay real.
+ * `isMockSignup()` is false in every build, so this never applies there.
+ */
 export function getBrowserSupabase(): SupabaseClient {
+  const real = getRealBrowserSupabase();
+  if (!isMockSignup()) return real;
+  if (!_mocked) {
+    const auth = createMockAuth(real.auth);
+    _mocked = new Proxy(real, {
+      get(target, prop, receiver) {
+        if (prop === "auth") return auth;
+        return Reflect.get(target, prop, receiver);
+      },
+    }) as SupabaseClient;
+  }
+  return _mocked;
+}
+
+function getRealBrowserSupabase(): SupabaseClient {
   if (_client) return _client;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

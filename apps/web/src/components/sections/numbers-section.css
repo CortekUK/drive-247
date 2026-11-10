@@ -1,17 +1,67 @@
-/* Drive247 in numbers: four big figures on the page's own ground, hairlines above each. */
-.nm { padding-block: clamp(96px, 11vw, 160px) clamp(40px, 5vw, 72px); }
+/*
+ * Drive247 in numbers: an instrument cluster. Each figure has its own dial on a soft
+ * glass card; the dials are drawn in thin light lines with the brand as the one accent.
+ */
+/* Straight on from the arrow above (NumbersIntro), with no gap of its own. */
+.nm { padding-block: 0 32px; }
+/* Where the page line shows, it needs room here to turn into the logo wall's gap. */
+@media (min-width: 1200px) and (min-height: 640px) { .nm { padding-bottom: 96px; } }
 .nm-grid {
   display: grid;
-  gap: 40px 32px;
-  margin-top: clamp(40px, 5vw, 72px);
+  gap: 16px;
+  margin-top: 8px;
   padding: 0;
   list-style: none;
 }
-@media (min-width: 560px) { .nm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (min-width: 1000px) { .nm-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px; } }
-.nm-stat { min-width: 0; padding-top: 24px; border-top: 1px solid var(--border); }
+@media (min-width: 560px) {
+  .nm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nm-stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+@media (min-width: 1000px) {
+  .nm-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
+  .nm-stat:last-child:nth-child(odd) { grid-column: auto; }
+}
+
+.nm-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  padding: 22px 18px 26px;
+  border: 1px solid color-mix(in srgb, hsl(var(--v2-primary)) 12%, transparent);
+  border-radius: 24px;
+  background: color-mix(in srgb, hsl(var(--v2-card)) 55%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  text-align: center;
+}
+
+/* The dial. */
+.nm-gauge { display: block; width: 100%; max-width: 190px; height: auto; overflow: visible; }
+.nm-gauge-face {
+  fill: color-mix(in srgb, hsl(var(--v2-primary)) 4%, hsl(var(--v2-card)));
+  stroke: #dedeea;
+  stroke-width: 1.25;
+  filter: drop-shadow(0 10px 18px rgb(79 70 229 / 0.1));
+}
+.nm-gauge-track { fill: none; stroke: color-mix(in srgb, hsl(var(--v2-primary)) 10%, transparent); stroke-width: 5; stroke-linecap: round; }
+.nm-gauge-fill { fill: none; stroke: hsl(var(--v2-primary)); stroke-width: 5; stroke-linecap: round; }
+.nm-gauge-tick { stroke: #c5c5d6; stroke-width: 1.25; stroke-linecap: round; }
+.nm-gauge-tick.is-major { stroke: #4b4b66; stroke-width: 1.6; }
+.nm-gauge-tick.is-red { stroke: #e11d48; opacity: 0.75; }
+.nm-gauge-needle { fill: #4b4b66; }
+.nm-gauge-hub { fill: hsl(var(--v2-card)); stroke: #4b4b66; stroke-width: 1.5; }
+.nm-gauge-hub-dot { fill: hsl(var(--v2-primary)); }
+.nm-gauge-icon { fill: none; stroke: #4b4b66; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+
+.dark .nm-gauge-face { stroke: color-mix(in srgb, var(--foreground) 14%, transparent); filter: none; }
+.dark .nm-gauge-tick { stroke: color-mix(in srgb, var(--foreground) 25%, transparent); }
+.dark .nm-gauge-tick.is-major, .dark .nm-gauge-icon, .dark .nm-gauge-hub { stroke: color-mix(in srgb, var(--foreground) 70%, transparent); }
+.dark .nm-gauge-needle { fill: color-mix(in srgb, var(--foreground) 80%, transparent); }
+
 .nm-value {
-  font-size: clamp(3rem, 5.2vw, 5.75rem);
+  margin-top: 14px;
+  font-size: clamp(2.25rem, 3vw, 3rem);
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.05em;
@@ -21,6 +71,6 @@
 }
 .nm-unit { color: hsl(var(--v2-primary)); }
 .dark .nm-unit { color: hsl(var(--v2-link)); }
-.nm-label { margin-top: 20px; font-size: 1.0625rem; font-weight: 600; color: var(--foreground); }
-.nm-detail { margin-top: 6px; font-size: 0.9375rem; line-height: 1.5; color: var(--muted-foreground); }
-.nm-note { margin-top: clamp(28px, 3.5vw, 44px); font-size: 13px; color: var(--muted-foreground); }
+.nm-label { margin-top: 12px; font-size: 1rem; font-weight: 600; color: var(--foreground); }
+.nm-detail { margin-top: 4px; font-size: 0.875rem; line-height: 1.45; color: var(--muted-foreground); }
+
