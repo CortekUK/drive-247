@@ -14,7 +14,8 @@
  * table mounts it with its sentinel.
  */
 
-import { format } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
+import { useTenant } from "@/contexts/TenantContext";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   LIST_CLASSES,
@@ -56,6 +57,35 @@ export function auditActionToneV2(action: string): ListTone {
   return "muted";
 }
 
+/**
+ * The details column as a person would say it: "Section: general",
+ * "Email: x · Role: viewer". The log stores a small JSON object per entry;
+ * the raw text was shown before (QA B9.5, 2026-11-11). Nested values and
+ * ids are left to the tooltip, which still carries the whole object.
+ */
+export function describeDetails(details: Record<string, unknown> | null | undefined): string {
+  if (!details || typeof details !== "object") return "";
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(details)) {
+    // A settings save records { changes: { field: { from, to } } } (QA B9.2):
+    // each one reads "Minimum rental age: 18 → 21".
+    if (key === "changes" && value && typeof value === "object") {
+      for (const [field, change] of Object.entries(value as Record<string, unknown>)) {
+        const c = change as { from?: unknown; to?: unknown } | null;
+        if (!c || typeof c !== "object") continue;
+        const label = field.replace(/_/g, " ").replace(/^\w/, (ch) => ch.toUpperCase());
+        parts.push(`${label}: ${c.from ?? "—"} → ${c.to ?? "—"}`);
+      }
+      continue;
+    }
+    if (value === null || value === undefined || value === "" || typeof value === "object") continue;
+    if (/(^|_)id$|^entity_ref$/.test(key)) continue;
+    const label = key.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+    parts.push(`${label}: ${String(value)}`);
+  }
+  return parts.join(" · ");
+}
+
 export function AuditLogsTableV2({
   logs,
   resetKey,
@@ -79,6 +109,11 @@ export function AuditLogsTableV2({
   // shown". With the count it reads "Showing the first 1000 of N log entries".
   // Until the count lands, or if it fails, it says what the rows are: the most
   // recent entries, without claiming a total it does not have.
+  // Times are shown on the operator's clock, with its zone, like the rest of
+  // the portal: a log read from another country showed that reader's local
+  // time with no zone at all (QA B9.4, 2026-11-11).
+  const { tenant } = useTenant();
+  const timeZone = tenant?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const capped = logs.length >= AUDIT_LOGS_V2_LIMIT;
   const countKnown = capped && typeof serverCount === "number";
   const serverTotal = countKnown && serverCount > logs.length ? serverCount : undefined;
@@ -108,9 +143,9 @@ export function AuditLogsTableV2({
               <ListRow key={log.id}>
                 <ListCell className="whitespace-nowrap tabular-nums">
                   <span className={LIST_CLASSES.identifier}>
-                    {format(new Date(log.created_at), "MMM dd, yyyy")}
+                    {formatInTimeZone(new Date(log.created_at), timeZone, "MMM dd, yyyy")}
                   </span>{" "}
-                  <span className="text-muted-foreground">{format(new Date(log.created_at), "HH:mm:ss")}</span>
+                  <span className="text-muted-foreground">{formatInTimeZone(new Date(log.created_at), timeZone, "HH:mm:ss zzz")}</span>
                 </ListCell>
                 <ListCell className="whitespace-nowrap">
                   <span title={actionLabel}>
@@ -158,13 +193,7 @@ export function AuditLogsTableV2({
                             )}
                           {!log.details?.reason &&
                             !log.details?.previous_status && (
-                              <span>
-                                {JSON.stringify(log.details).substring(
-                                  0,
-                                  50
-                                )}
-                                ...
-                              </span>
+                              <span>{describeDetails(log.details) || "—"}</span>
                             )}
                         </div>
                       </TooltipTrigger>

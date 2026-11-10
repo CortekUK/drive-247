@@ -897,6 +897,20 @@ const Settings = () => {
     updateSettings: updateRentalSettings,
     isUpdating: isUpdatingRentalSettings
   } = useRentalSettings();
+  /**
+   * v2: one audit entry per settings save, naming the section and each field
+   * that changed (from → to). The v2 pages saved through makeBusinessSave
+   * without writing to the log at all (QA B9.2, 2026-11-11).
+   */
+  const logSettingsSave = useCallback((section: string) => (values: Record<string, unknown>) => {
+    const saved = (rentalSettings ?? {}) as Record<string, unknown>;
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const [key, value] of Object.entries(values)) {
+      const prev = saved[key];
+      if (JSON.stringify(prev ?? null) !== JSON.stringify(value ?? null)) changes[key] = { from: prev ?? null, to: value ?? null };
+    }
+    logAction({ action: "settings_updated", entityType: "settings", entityId: tenant?.id || "unknown", details: { section, changes } });
+  }, [rentalSettings, logAction, tenant?.id]);
   // v2: the spinner on a settings page's "Try again" (see resolveSettingsPageData).
   const v2SettingsFetching =
     useIsFetching({ predicate: (q) => q.queryKey[0] === 'org-settings' || q.queryKey[0] === 'rental-settings' }) > 0;
@@ -3208,7 +3222,7 @@ const Settings = () => {
                       setForm={setRentalForm}
                       saved={rentalSettings}
                       canEdit={canEditSettings('requirements')}
-                      onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+                      onSave={makeBusinessSave(updateRentalSettings, refetchTenant, logSettingsSave("general"))}
                       registerSave={registerV2SectionSave}
                       idWaiver={{
                         enabled: idWaiverEnabled,
@@ -3268,7 +3282,7 @@ const Settings = () => {
                 setForm={setRentalForm}
                 saved={rentalSettings}
                 canEdit={canEditSettings('duration')}
-                onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+                onSave={makeBusinessSave(updateRentalSettings, refetchTenant, logSettingsSave("booking-rules"))}
                 registerSave={registerV2SectionSave}
               />
             </BusinessRentalGate>
@@ -3282,7 +3296,7 @@ const Settings = () => {
                 setForm={setRentalForm}
                 saved={rentalSettings}
                 canEdit={canEditSettings('lockbox')}
-                onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+                onSave={makeBusinessSave(updateRentalSettings, refetchTenant, logSettingsSave("lockbox"))}
                 registerSave={registerV2SectionSave}
                 vehiclesHref="/vehicles"
                 templatesHref={V2_LOCKBOX_MESSAGES_HREF}
@@ -3768,7 +3782,7 @@ const Settings = () => {
                   setForm={setRentalForm}
                   saved={rentalSettings}
                   canEdit={canEditTemplates}
-                  onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+                  onSave={makeBusinessSave(updateRentalSettings, refetchTenant, logSettingsSave("return-reminders"))}
                   registerSave={registerV2SectionSave}
                   smsReady={!!tenant?.integration_twilio_sms}
                   emailTemplateHref="/settings/email-templates/rental_reminder"

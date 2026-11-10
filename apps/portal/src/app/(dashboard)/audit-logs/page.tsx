@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { format } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -172,7 +173,8 @@ const AuditLogs = () => {
     }
     const headers = ["Date & Time", "Action", "Entity Type", "Entity Name", "Details", "Performed By"];
     const rows = visibleLogs.map((log) => [
-      format(new Date(log.created_at), "yyyy-MM-dd HH:mm:ss"),
+      // the operator's clock, with its zone, as on screen (QA B9.4)
+      formatInTimeZone(new Date(log.created_at), tenant?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, "yyyy-MM-dd HH:mm:ss zzz"),
       formatActionName(log.action),
       log.entity_type || "",
       log.details?.customer_name || "",
