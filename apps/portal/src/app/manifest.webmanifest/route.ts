@@ -12,6 +12,7 @@
 
 import { headers } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
+import { portalAppName, portalAppShortName, pwaIconPath, pwaIconVersion } from '@/lib/pwa-manifest';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,10 +40,14 @@ const PLATFORM_ICONS: ManifestIcon[] = [
  * letter of their name on their brand colour when they have none. Until this
  * the manifest said "Acme Ops" over Drive247's icon for every operator.
  */
-const TENANT_ICONS: ManifestIcon[] = [
-  { src: '/pwa-icon/192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-  { src: '/pwa-icon/512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-  { src: '/pwa-icon/512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+/**
+ * Versioned per tenant (lib/pwa-manifest): the route caches for a day at the
+ * CDN, so a changed icon must be a changed URL to reach a reopened app.
+ */
+const tenantIcons = (version: string): ManifestIcon[] => [
+  { src: pwaIconPath('192.png', version), sizes: '192x192', type: 'image/png', purpose: 'any' },
+  { src: pwaIconPath('512.png', version), sizes: '512x512', type: 'image/png', purpose: 'any' },
+  { src: pwaIconPath('512-maskable.png', version), sizes: '512x512', type: 'image/png', purpose: 'maskable' },
 ];
 
 export async function GET() {
@@ -62,22 +67,23 @@ export async function GET() {
       );
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('company_name, primary_color')
+        .select('app_name, company_name, primary_color, favicon_url')
         .eq('slug', tenantSlug)
         .maybeSingle();
 
-      if (tenant?.company_name) {
-        name = `${tenant.company_name} Ops`;
+      // The portal name (Settings → Branding) when the tenant set one, else
+      // the company name — the same rule the icon's initial follows.
+      const appName = portalAppName(tenant?.app_name, tenant?.company_name);
+      if (tenant && appName) {
+        name = appName;
         // iOS clips the Home Screen label around 12 characters.
-        shortName = tenant.company_name.length > 12
-          ? tenant.company_name.slice(0, 12).trim()
-          : tenant.company_name;
+        shortName = portalAppShortName(tenant.app_name, tenant.company_name) ?? shortName;
         // The installed app's title bar and splash take the operator's brand
         // colour, as the v2 portal itself does.
         if (tenant.primary_color && /^#[0-9a-f]{6}$/i.test(tenant.primary_color)) {
           themeColor = tenant.primary_color;
         }
-        icons = TENANT_ICONS;
+        icons = tenantIcons(pwaIconVersion([tenant.favicon_url, tenant.primary_color, tenant.app_name || tenant.company_name]));
       }
     }
   } catch (error) {
