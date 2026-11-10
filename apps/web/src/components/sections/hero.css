@@ -272,3 +272,63 @@
 
 /* Who it is for, named plainly in the first lines anyone reads. */
 .hg-who { font-weight: 600; color: #fff; }
+
+/*
+ * ---------------------------------------------------------------------------
+ * Phones (Ghulam's brief, 2026-11: the phone must be 9.5/10). The desktop and
+ * tablet hero above is untouched; everything below applies under 768px only.
+ *
+ * - The hero no longer stretches to the full screen. The screens strip gets a fixed
+ *   height, so a tile is a readable size and a bit of the next one always shows,
+ *   instead of one cropped screen as wide as the phone.
+ * - Wide screens are capped at ~70% of the width and read from their top-left
+ *   corner, where their titles are.
+ * - The two first steps move from the cramped top row into the hero, full size.
+ * ---------------------------------------------------------------------------
+ */
+.hg-cta { display: none; }
+@media (max-width: 767px) {
+  .hg-hero { height: auto; min-height: 0; padding-top: 92px; }
+  .hg-nav { display: none; }
+  .hg-title { font-size: clamp(2.25rem, 10.4vw, 3rem); }
+  .hg-sub { margin-top: 14px; font-size: 1rem; max-width: 22rem; }
+  .hg-proof { margin-top: 18px; }
+
+  .hg-cta {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    max-width: 24rem;
+    margin: 22px auto 0;
+    animation: hg-rise 200ms ease-out 240ms both;
+  }
+  .hg-cta a {
+    flex: 1 1 0;
+    height: 50px;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .hg-cta-main { flex-grow: 1.35 !important; }
+  .hg-cta-main svg { width: 16px; height: 16px; }
+
+  /* Whole cards on phones: rounded all round with room under them, so the strip never
+     reads as cut off at the hero's bottom edge (the desktop tiles bleed off on purpose). */
+  .hg-marquee { flex: none; height: 324px; margin-top: 32px; padding-bottom: 24px; -webkit-mask-image: none; mask-image: none; }
+  .hg-col { aspect-ratio: auto !important; height: 100%; width: min(calc(var(--a) * 312px), 72vw); }
+  .hg-set { gap: 12px; padding-right: 12px; }
+  .hg-tile { padding-bottom: 3px; border-bottom: 1px solid rgb(255 255 255 / 0.4); border-radius: 14px; }
+  .hg-shot { border-radius: 11px; }
+  .hg-shot img { object-position: left top; }
+  /* The strip keeps moving, a little quicker than on desktop: the tiles are smaller. */
+  .hg-track { animation-duration: 60s; }
+}
+@media (max-width: 359px) {
+  .hg-cta { flex-direction: column; }
+  .hg-cta a { flex: none; height: 46px; }
+  .hg-marquee { height: 284px; }
+  .hg-col { width: min(calc(var(--a) * 272px), 74vw); }
+}
+@media (max-width: 767px) and (prefers-reduced-motion: reduce) {
+  .hg-cta { animation: none; }
+}

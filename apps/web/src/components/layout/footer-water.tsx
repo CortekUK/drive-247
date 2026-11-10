@@ -17,11 +17,23 @@ import { useEffect, useRef } from "react";
  * line sends LINE_SPLASH_EVENT, and the water bursts open from that point for a few
  * seconds: a pool of wisps racing outwards with a shock ring on its edge, then fading.
  * With reduced motion the wisps hold still and only the
- * pool moves. On touch, or without WebGL, the footer keeps its plain dark ground.
+ * pool moves. Without WebGL the footer keeps its plain dark ground.
+ *
+ * PHONES AND OTHER SCREENS WITH NO PAGE LINE (LINE_MEDIA in sections/launch-section.tsx):
+ * nothing drops in from above, so the footer makes its own splash. As it comes up the
+ * screen the water bursts open from the middle of its top edge, as if the page had dropped
+ * into it, once per arrival (it can happen again after the footer has gone back off the
+ * bottom). And with no pointer to follow, a tap makes a smaller ripple where the finger
+ * lands; it never takes the scroll.
  */
 
 /** Sent on `window` by the page line when its tip drops into the footer: detail `{ clientX }`. */
 export const LINE_SPLASH_EVENT = "drive247:line-splash";
+
+/** Where the page line runs; the same query as LINE_MEDIA in sections/launch-section.tsx (kept here so the legal pages' footer does not pull that section in). */
+const LINE_MEDIA = "(min-width: 1200px) and (min-height: 640px)";
+/** The splash a tap makes, in CSS pixels: smaller than the line's drop. */
+const TAP_RADIUS = 420;
 
 const VERT = `attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }`;
 
@@ -150,7 +162,7 @@ export function FooterWater() {
     const target = { x: 0, y: 0 }; // where the pointer is, in canvas pixels from the bottom left
     const spot = { x: 0, y: 0 }; // where the pool is, trailing it
     /** The page line's drop into the water: where it hit, and when. */
-    let splash: { x: number; y: number; at: number } | null = null;
+    let splash: { x: number; y: number; at: number; radius: number; ms: number } | null = null;
     const SPLASH_MS = 4200;
     const SPLASH_RADIUS = 760; // how far the burst reaches, in CSS pixels
 
@@ -161,11 +173,11 @@ export function FooterWater() {
       gl.uniform2f(uMouse, spot.x, spot.y);
       gl.uniform1f(uRadius, RADIUS * SCALE);
       gl.uniform1f(uOn, on);
-      const age = splash ? (now - splash.at) / SPLASH_MS : 1;
+      const age = splash ? (now - splash.at) / splash.ms : 1;
       if (splash && age < 1) {
         gl.uniform2f(uSplash, splash.x, splash.y);
         // Out fast, then slowing, as a shock does in water.
-        gl.uniform1f(uSplashR, SPLASH_RADIUS * SCALE * (1 - Math.exp(-age * 5.5)) + 1);
+        gl.uniform1f(uSplashR, splash.radius * SCALE * (1 - Math.exp(-age * 5.5)) + 1);
         // Full at once, then a long fade.
         gl.uniform1f(uSplashOn, Math.min(1, age * 30) * Math.pow(1 - age, 1.15));
       } else {
@@ -222,12 +234,53 @@ export function FooterWater() {
       if (still) return;
       const box = canvas.getBoundingClientRect();
       const clientX = (event as CustomEvent<{ clientX: number }>).detail?.clientX ?? box.left + box.width / 2;
-      splash = { x: (clientX - box.left) * SCALE, y: canvas.height, at: performance.now() };
+      splash = { x: (clientX - box.left) * SCALE, y: canvas.height, at: performance.now(), radius: SPLASH_RADIUS, ms: SPLASH_MS };
       wake();
     };
     addEventListener(LINE_SPLASH_EVENT, onSplash);
     host.addEventListener("pointermove", move);
     host.addEventListener("pointerleave", leave);
+
+    // No page line on this screen: the footer splashes by itself as it arrives.
+    const lineMedia = matchMedia(LINE_MEDIA);
+    let arrived = false;
+    let arrival: IntersectionObserver | null = null;
+    if (!still && typeof IntersectionObserver !== "undefined") {
+      arrival = new IntersectionObserver(
+        ([entry]) => {
+          if (lineMedia.matches) return;
+          const box = entry.boundingClientRect;
+          if (entry.isIntersecting && !arrived) {
+            arrived = true;
+            // Wide enough to fill a phone's footer from the top edge down.
+            const radius = Math.max(SPLASH_RADIUS, box.height * 1.05);
+            splash = { x: canvas.width / 2, y: canvas.height, at: performance.now(), radius, ms: SPLASH_MS };
+            wake();
+          } else if (!entry.isIntersecting && box.top > 0) {
+            // Gone back off the bottom: the next arrival splashes again.
+            arrived = false;
+          }
+        },
+        // When the footer's top edge is about a third of the way up the screen.
+        { rootMargin: "0px 0px -30% 0px" },
+      );
+      arrival.observe(host);
+    }
+
+    // Touch: a ripple where the finger lands. Passive, so the page still scrolls.
+    const tap = (e: PointerEvent) => {
+      if (e.pointerType === "mouse" || still) return;
+      const box = canvas.getBoundingClientRect();
+      splash = {
+        x: (e.clientX - box.left) * SCALE,
+        y: (box.bottom - e.clientY) * SCALE,
+        at: performance.now(),
+        radius: TAP_RADIUS,
+        ms: 2600,
+      };
+      wake();
+    };
+    host.addEventListener("pointerdown", tap, { passive: true });
 
     const size = new ResizeObserver(() => {
       const w = Math.max(1, Math.round(canvas.clientWidth * SCALE));
@@ -246,6 +299,8 @@ export function FooterWater() {
       removeEventListener(LINE_SPLASH_EVENT, onSplash);
       host.removeEventListener("pointermove", move);
       host.removeEventListener("pointerleave", leave);
+      host.removeEventListener("pointerdown", tap);
+      arrival?.disconnect();
     };
   }, []);
 

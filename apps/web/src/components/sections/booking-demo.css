@@ -143,6 +143,8 @@
 .bd-site-steps li.is-now > span, .bd-site-steps li.is-done > span { background: var(--bd-a); }
 .bd-site-steps b { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: hsl(var(--v2-muted)); font-size: 11px; }
 .bd-site-steps b svg { width: 12px; height: 12px; }
+.bd-step { display: contents; font-style: normal; }
+.bd-step em { font-style: normal; }
 .bd-site-steps .is-now, .bd-site-steps .is-done { color: hsl(var(--v2-foreground)); }
 .bd-site-steps .is-now { color: var(--bd-a); }
 .bd-site-steps .is-now b, .bd-site-steps .is-done b { background: var(--bd-a); color: #fff; }
@@ -432,4 +434,124 @@
   .bd-rbook, .bd-rempty { animation: none; }
   .bd-hint::after, .bd-stage, .bd-main, .bd-toast, .bd-table tr.is-new { animation: none; }
   .bd-table tr.is-new { background: color-mix(in srgb, var(--bd-a) 6%, transparent); }
+}
+
+/*
+ * ── On a phone ──────────────────────────────────────────────────────────────
+ * Keep in step with PHONE in booking-demo.tsx. The visitor is on a phone, so the demo is one:
+ * the window becomes a handset with its own status bar, a fixed height that scrolls inside,
+ * sized so the tabs, the tip and the whole handset fit one screen together. The page no longer
+ * jumps by a thousand pixels when the screen inside changes, and the next button (See cars,
+ * Continue, Pay) rides along the bottom of the handset instead of hiding under the calendar.
+ * Nothing here applies above 760px.
+ */
+.bd-view-short, .bd-phonebar { display: none; }
+@media (max-width: 759.98px) {
+  /* The four screens, two by two: every one in view, nothing cut off at the edge. */
+  .bd-views { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; overflow: visible; border-radius: 20px; }
+  .bd-views button { justify-content: center; gap: 6px; height: 40px; padding-inline: 8px; border-radius: 16px; font-size: 13px; }
+  .bd-views svg { display: block; flex: none; width: 15px; height: 15px; }
+  .bd-view-long { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .bd-view-short { display: inline; overflow: hidden; text-overflow: ellipsis; }
+
+  .bd-views + .bd-guide { margin-top: 12px; gap: 10px; }
+  .bd-tipline { min-height: 0; gap: 4px 10px; }
+  .bd-tip { font-size: 13.5px; line-height: 1.45; text-wrap: pretty; }
+  .bd-reset { height: 28px; font-size: 12.5px; }
+
+  /* The handset. */
+  .bd-window {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: min(100%, 420px);
+    height: clamp(440px, calc(100svh - 236px), 760px);
+    margin: 14px auto 0;
+    padding: 7px;
+    border: 0;
+    border-radius: 42px;
+    background: #0c0c10;
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1), 0 24px 48px -20px rgb(30 20 90 / 0.45);
+  }
+  .bd-window .pg-browser { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; border-radius: 35px; background: hsl(var(--v2-card)); }
+  /* A phone browser: no tab strip, just the address. */
+  .bd-window .pg-tabs { display: none; }
+  .bd-window .pg-address { flex: none; height: 80px; padding: 38px 12px 6px; gap: 10px; }
+  .bd-window .pg-address > svg, .bd-window .pg-address > button svg { width: 14px; height: 14px; }
+  /* The site's header in a phone's width: the name on one line, Dashboard as its icon. */
+  .bd-window .bd-site-bar { gap: 8px; padding-inline: 12px; }
+  .bd-window .bd-brand { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .bd-window .bd-brand i { flex: none; }
+  .bd-window .dp-acts { flex: none; gap: 6px; }
+  .bd-window .dp-signin { width: 32px; padding: 0; justify-content: center; font-size: 0; gap: 0; }
+  .bd-window .dp-signin svg { width: 15px; height: 15px; }
+  .bd-window .bd-site-cta { white-space: nowrap; padding-inline: 12px; }
+  .bd-window .pg-screen,
+  .bd-window.is-home .pg-screen {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .bd-window .pg-screen::-webkit-scrollbar { display: none; }
+  /* The phone's status bar, with the island between the time and the signal. */
+  .bd-phonebar {
+    position: absolute;
+    z-index: 3;
+    top: 7px;
+    inset-inline: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 34px;
+    padding: 2px 26px 0 30px;
+    border-radius: 35px 35px 0 0;
+    font-size: 12.5px;
+    color: hsl(var(--v2-foreground));
+    pointer-events: none;
+  }
+  .bd-phonebar b { font-weight: 600; }
+  .bd-phonebar i { position: absolute; top: 8px; left: 50%; width: 92px; height: 24px; translate: -50% 0; border-radius: 99px; background: #0c0c10; }
+  .bd-phonebar span { display: inline-flex; gap: 4px; }
+  .bd-phonebar svg { width: 13px; height: 13px; }
+
+  /* The renter's next step rides along the foot of the handset: the total and the button, one row. */
+  .bd-site .bd-trip {
+    position: sticky;
+    z-index: 2;
+    bottom: 8px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    border-color: color-mix(in srgb, var(--bd-a) 30%, hsl(var(--v2-border)));
+    border-radius: 18px;
+    box-shadow: 0 10px 28px -10px rgb(20 16 60 / 0.35);
+  }
+  .bd-site .bd-trip-title, .bd-site .bd-trip-when { display: none; }
+  .bd-site .bd-trip-car, .bd-site .bd-trip-total { min-height: 0; padding: 10px 12px; border-top: 0; background: none; }
+  .bd-site .bd-trip:has(.bd-trip-total) .bd-trip-car { display: none; }
+  .bd-site .bd-trip-empty { padding: 0; border: 0; font-size: 12.5px; line-height: 1.35; }
+  .bd-site .bd-trip-empty svg { display: none; }
+  .bd-site .bd-trip-total { flex-direction: column; align-items: flex-start; gap: 0; font-size: 11.5px; }
+  .bd-site .bd-trip-total strong { font-size: 19px; }
+  .bd-site .bd-trip-action { padding: 8px 8px 8px 0; border-top: 0; }
+  .bd-site .bd-go { width: auto; height: 40px; padding-inline: 18px; white-space: nowrap; }
+  /* The calendar is the thumb's target here: taller days. */
+  .bd-cal-grid button { height: 44px; }
+  .bd-stage { padding-inline: 12px; }
+
+  /* The admin portal's table: only the columns that say who, what and when. */
+  .bd-table { font-size: 12.5px; }
+  .bd-table th, .bd-table td { padding: 11px 10px; }
+
+  /* The booking steps as the real page shows them on a phone (site-v2 book): the step you are on
+     is a tinted pill with its name, the others just their numbers. */
+  .bd-window .bd-site-steps { gap: 6px; }
+  .bd-window .bd-site-steps li { gap: 6px; }
+  .bd-window .bd-site-steps li > span { width: 14px; }
+  .bd-window .bd-site-steps li:not(.is-now) em { display: none; }
+  .bd-window .bd-site-steps li.is-now .bd-step { display: inline-flex; align-items: center; gap: 7px; padding: 3px 12px 3px 3px; border-radius: 99px; background: color-mix(in srgb, var(--bd-a) 12%, transparent); }
 }

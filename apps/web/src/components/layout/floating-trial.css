@@ -46,3 +46,7 @@
 @media (prefers-reduced-motion: reduce) {
   .fcta, .fcta.is-shown, .fcta .fcta-btn { transition: none; }
 }
+/* Phones only, when the landing page asks for that (header.tsx). */
+@media (min-width: 768px) {
+  .fcta.is-mobile-only { display: none; }
+}

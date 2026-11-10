@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -142,9 +142,60 @@ export function PricingBreakdown({
   const press = (id: SignupPlanId) => (onSelect ? onSelect(id) : onboarding?.open(id));
   const cols = plans.length + (enterprise ? 1 : 0);
 
+  /*
+   * Phones: the cards sit side by side in a swipe (pricing-breakdown.css), with a row of plan
+   * names above them. The name of the card in view is lit; pressing a name brings its card in.
+   * On wider screens the switcher is hidden and the grid never scrolls, so none of this runs.
+   */
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(0);
+  const names = [...plans.map((p, i) => ({ id: p.id, nick: LOOKS[Math.min(i, LOOKS.length - 1)].nick, price: offer ? usd(discountedPrice(p.priceUsd, offer)) : formatPlanPriceUsd(p) })), ...(enterprise ? [{ id: "enterprise", nick: ENTERPRISE_LOOK.nick, price: enterprise.priceLabel }] : [])];
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    let frame = 0;
+    const read = () => {
+      frame = 0;
+      const cards = [...grid.children] as HTMLElement[];
+      if (cards.length < 2 || grid.scrollWidth <= grid.clientWidth) return;
+      const left = grid.scrollLeft;
+      let best = 0;
+      cards.forEach((card, i) => {
+        if (Math.abs(card.offsetLeft - grid.offsetLeft - left) < Math.abs(cards[best].offsetLeft - grid.offsetLeft - left)) best = i;
+      });
+      setInView(best);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(read);
+    };
+    grid.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      grid.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+  const bringIn = (i: number) => {
+    const grid = gridRef.current;
+    const card = grid?.children[i] as HTMLElement | undefined;
+    if (!grid || !card) return;
+    const pad = parseFloat(getComputedStyle(grid).scrollPaddingLeft) || 0;
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    grid.scrollTo({ left: card.offsetLeft - grid.offsetLeft - pad, behavior: reduce ? "auto" : "smooth" });
+  };
+
   return (
     <div className="pb">
-      <div className="pb-grid" style={{ "--pb-cols": cols, "--pb-rows": ROWS.length } as CSSProperties}>
+      {cols > 1 && (
+        <div className="pb-switch" aria-label="Plans">
+          {names.map((n, i) => (
+            <button key={n.id} type="button" aria-current={i === inView || undefined} onClick={() => bringIn(i)}>
+              <b>{n.nick.replace(/^The /, "")}</b>
+              <span>{n.price}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div ref={gridRef} className="pb-grid" style={{ "--pb-cols": cols, "--pb-rows": ROWS.length } as CSSProperties}>
         {plans.map((p, i) => {
           const trialDays = p.trialDays ?? 0;
           return (

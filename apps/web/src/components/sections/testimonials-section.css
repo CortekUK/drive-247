@@ -245,7 +245,9 @@
 @keyframes ts-drift { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
 @media (max-width: 767px) {
-  .ts-section { padding-block: 88px 16px; }
+  .ts-section { padding-block: 56px 0; }
+  /* The quote cards follow the film list closely on a phone (user, 2026-11-10). */
+  .ts-quotes { margin-top: 36px; }
   .ts-feature {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: none;

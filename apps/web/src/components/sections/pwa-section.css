@@ -292,3 +292,58 @@ img.pw-note-icon { object-fit: cover; padding: 0; background: #fff; box-shadow: 
 
 /* More room above the phones section (Ghulam, 2026-11-10). */
 .pw-section { margin-top: clamp(120px, 18svh, 240px); }
+
+/*
+ * ── On a phone ──────────────────────────────────────────────────────────────
+ * Keep in step with PHONE in pwa-section.tsx. Two apps squeezed side by side were too small
+ * to read, and the home screen was left out. Here all three are a row to swipe, the way a
+ * phone's own screens are: one phone near full size in the middle, its neighbours peeking in
+ * at the edges, snapping into place, with dots under them. It opens on the home screen, where
+ * the badges count up as each app's notification arrives.
+ */
+.pw-dots { display: none; }
+@media (max-width: 759.98px) {
+  /* Close under the demo's Start free trial button (user, 2026-11-10: too much space). */
+  .pw-section { margin-top: 0; padding-block: 8px 40px; }
+  .pw-head .sh-title { text-wrap: balance; }
+  .pw-stage {
+    display: flex;
+    gap: 14px;
+    max-width: none;
+    margin: 32px calc(-1 * clamp(16px, 3vw, 64px)) 0;
+    /* The page's gutter, not a wide centring pad: the first phone sits at the left margin
+       (user, 2026-11-10: too much space left of the first phone). */
+    padding: 8px 20px 4px;
+    scroll-padding-inline: 20px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .pw-stage::-webkit-scrollbar { display: none; }
+  .pw-col, .pw-col.is-home { display: grid; flex: none; width: 66vw; max-width: 290px; scroll-snap-align: center; gap: 14px; transition: opacity 300ms ease-out, scale 300ms ease-out; }
+  .pw-col.is-ops, .pw-col.is-renter { margin-top: 0; }
+  .pw-col:first-child { scroll-snap-align: start; }
+  .pw-col:last-child { scroll-snap-align: end; }
+  .pw-phone, .pw-phone.is-home { width: 100%; padding: 6px; border-radius: 40px; }
+  .pw-screen { border-radius: 34px; }
+  /* Full-size phones again: the same status bar and notification as on a wide screen. */
+  .pw-status { height: 32px; padding-inline: 22px; font-size: 11.5px; }
+  .pw-status svg { width: 12px; height: 12px; }
+  .pw-shot { top: 32px; height: calc(100% - 32px); }
+  .pw-note { top: 36px; inset-inline: 6px; padding: 9px 10px; gap: 9px; border-radius: 18px; font-size: 11.5px; }
+  .pw-note-icon { width: 30px; height: 30px; border-radius: 8px; }
+  .pw-col figcaption b { font-size: 15px; }
+  .pw-col figcaption span { font-size: 13.5px; }
+
+  .pw-dots { display: flex; justify-content: center; gap: 8px; margin-top: 18px; }
+  .pw-dots button { width: 8px; height: 8px; padding: 0; border-radius: 99px; background: hsl(var(--v2-primary) / 0.25); cursor: pointer; transition: width 300ms ease-out, background-color 300ms ease-out; }
+  .pw-dots button.is-on { width: 24px; background: hsl(var(--v2-primary)); }
+  /* A bigger target than the dot itself. */
+  .pw-dots button { position: relative; }
+  .pw-dots button::after { content: ""; position: absolute; inset: -12px -6px; }
+}
+@media (max-width: 759.98px) and (prefers-reduced-motion: reduce) {
+  .pw-col, .pw-dots button { transition: none; }
+}

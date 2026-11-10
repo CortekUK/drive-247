@@ -196,9 +196,56 @@
 }
 @media (max-width: 639.98px) {
   /* One scene to a row: at half a phone's width the words in the drawings are too small to read. */
-  .ls-steps { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+  .ls-steps { grid-template-columns: minmax(0, 1fr); gap: 20px; margin-top: 36px; }
+  /*
+   * The steps as a timeline: the numbers on a rail down the left, each card beside its number.
+   * The rail fills down to each card as it lights (one at a time, as each scrolls in), which is
+   * the desktop line crossing the cards, turned on its side.
+   */
+  .ls-step { padding-left: 50px; }
+  .ls-step-no { top: 0; left: 0; }
+  .ls-step::before {
+    content: "";
+    position: absolute;
+    top: 40px;
+    bottom: -16px;
+    left: 17px;
+    width: 2px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--foreground) 14%, transparent);
+  }
+  .ls-step::after {
+    content: "";
+    position: absolute;
+    top: 40px;
+    bottom: -16px;
+    left: 17px;
+    width: 2px;
+    border-radius: 2px;
+    background: hsl(var(--v2-primary));
+    transform: scaleY(0);
+    transform-origin: top;
+    transition: transform 700ms ease-out 200ms;
+  }
+  .ls-step.is-lit::after { transform: scaleY(1); }
+  .ls-step:last-child::before, .ls-step:last-child::after { display: none; }
+  .ls-card { padding: 14px; border-radius: 20px; }
+  .ls-step-words { margin-top: 12px; }
+  .ls-step-words b { font-size: 16px; }
+  /* Each card lights on its own as it scrolls in, so no waiting on the ones before it. */
+  .ls-step:nth-child(n) { --ls-wait: 0ms; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .ls-step::after { transition: none; }
   .ls-step-no, .ls-card, .ls-card::before, .ls-art-lit, .ls-step-words, .is-lit .ls-art-lit, .is-lit > .ls-card::before, .is-lit .ls-step-words, .is-lit .ls-art-lit .ls-lights { transition: none; }
   .is-lit .ls-art-lit .ls-swing { animation: none; }
+}
+
+/* Phones: the heading over the steps a size down, so each line holds whole phrases, and no second gap above it. */
+@media (max-width: 639.98px) {
+  /* Tight under customer stories (user, 2026-11-10: too much space between sections). */
+  .ls-section { padding-top: 24px; padding-bottom: 24px; }
+  .ls-section .gs-intro { padding-top: 0; }
+  .ls-section .sh-title.gs-title { font-size: clamp(2.25rem, 10.5vw, 2.75rem); line-height: 1.06; }
+  .ls-section .sh-sub.gs-sub { font-size: 1rem; line-height: 1.55; }
 }

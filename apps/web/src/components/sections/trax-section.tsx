@@ -232,6 +232,16 @@ const LINE_OUT_START = 0.9;
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
+/*
+ * Phones and tablets (Ghulam's brief, 2026-11-10: the tracks lighting up as you scroll must
+ * come across on a phone, so the visitor sees Trax reach into every part of the business).
+ * Below the desktop layout the stage (boxes above, Trax in the middle, boxes below) is sized to
+ * exactly one screen and pinned, and the same scroll script plays: the question types, the
+ * branches light one by one out to the boxes, the answer arrives. The words above it scroll
+ * away first. Too short a screen to hold the stage, or reduced motion: it loops on its timers.
+ */
+const PHONE_PIN = "(max-width: 1099.98px) and (min-height: 560px) and (prefers-reduced-motion: no-preference)";
+
 export function TraxSection() {
   const section = useRef<HTMLDivElement>(null);
   const stage = useRef<HTMLDivElement>(null);
@@ -297,7 +307,7 @@ export function TraxSection() {
   const started = useRef(false);
 
   useEffect(() => {
-    const media = matchMedia(`${LINE_MEDIA} and (prefers-reduced-motion: no-preference)`);
+    const media = matchMedia(`${LINE_MEDIA} and (prefers-reduced-motion: no-preference), ${PHONE_PIN}`);
     const apply = () => {
       setScrolled(media.matches);
       if (!media.matches) return;
@@ -416,6 +426,7 @@ export function TraxSection() {
     const tip = lineTip.current;
 
     if (!scrolled) {
+      pin.current?.style.removeProperty("top");
       if (lead) lead.style.strokeDashoffset = "0";
       if (leadDot) leadDot.style.visibility = "hidden";
       if (into) into.style.strokeDashoffset = "0";
@@ -436,7 +447,12 @@ export function TraxSection() {
       const holder = pin.current;
       if (!rail || !holder) return;
       const top = rail.getBoundingClientRect().top;
-      const p = clamp01(-top / (rail.offsetHeight - holder.offsetHeight));
+      // On a phone the pin is the words plus one screen: it sticks once the words have
+      // scrolled off, its top that far above the screen's (desktop: exactly one screen, 0).
+      const over = Math.max(0, holder.offsetHeight - innerHeight);
+      const stick = `${-over}px`;
+      if (holder.style.top !== stick) holder.style.top = over ? stick : "";
+      const p = clamp01((-top - over) / (rail.offsetHeight - holder.offsetHeight));
 
       // A question the visitor asked themselves plays on its own; the scroll still draws the thread.
       if (!pickedRef.current) {
@@ -901,6 +917,8 @@ export function TraxSection() {
       </svg>
     )}
     </div>
+    {/* Phones: the scrolling the pinned stage plays over (trax-section.css). */}
+    <div className="tm-run" aria-hidden />
     </div>
     <div className="tm-tail" aria-hidden />
     </section>

@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
-import { Check } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
+import type { CSSProperties } from "react";
 import { HeroTitle } from "./hero-motion";
 import "./hero.css";
 
@@ -81,6 +82,20 @@ export function Hero({ trialDays = 0 }: { trialDays?: number }) {
             </li>
           ))}
         </ul>
+
+        {/* Phones only: the two first steps, big enough to thumb, where the eye already is.
+            The top-row buttons hide at this width, so these are the same two, not extra ones. */}
+        <div className="hg-cta">
+          <Button asChild className="hg-primary hg-cta-main">
+            <a href="#pricing">
+              Start free trial
+              <ArrowRight aria-hidden />
+            </a>
+          </Button>
+          <Button asChild className="hg-ghost hg-cta-alt">
+            <a href="/strategy-call">Book a demo</a>
+          </Button>
+        </div>
       </div>
 
       {/* Real screens, edge to edge. The set is doubled so the loop has no seam. */}
@@ -91,7 +106,12 @@ export function Hero({ trialDays = 0 }: { trialDays?: number }) {
               {SCREENS.map((screen) => {
                 const sizes = `${Math.ceil(70 * screen.aspect)}vh`;
                 return (
-                  <div key={screen.label} className="hg-col" style={{ aspectRatio: screen.aspect }}>
+                  <div
+                    key={screen.label}
+                    className="hg-col"
+                    // `--a` lets a phone cap the width of the wide screens (hero.css).
+                    style={{ aspectRatio: screen.aspect, "--a": screen.aspect } as CSSProperties}
+                  >
                     <div className="hg-tile">
                       <div className="hg-shot">
                         <Image src={screen.light} alt="" fill sizes={sizes} className="dark:hidden" />

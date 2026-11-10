@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { FlowStory, type FlowTone } from "./verify-story";
 import "./rental-cards.css";
 
@@ -91,6 +91,59 @@ const pointOf = (_feature: number, step: number) => step;
 
 /* Keep in step with the media query in the CSS. */
 const HOLD = "(min-width: 1000px) and (min-height: 640px) and (prefers-reduced-motion: no-preference)";
+/*
+ * Phones: each feature's screen sticks at the top of the screen while its steps scroll up
+ * under it, and the step crossing just below the screen is the one the screen shows. The
+ * held layout above, translated to one column. Keep in step with rental-cards.css.
+ */
+const PHONE = "(max-width: 767.98px)";
+
+/* On a phone, which step of each feature has scrolled up to its screen; null elsewhere. */
+function usePhoneSteps(listRef: RefObject<HTMLOListElement | null>, count: number) {
+  const [steps, setSteps] = useState<number[] | null>(null);
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const phone = matchMedia(PHONE);
+    let frame = 0;
+    const paint = () => {
+      frame = 0;
+      if (!phone.matches) {
+        setSteps(null);
+        return;
+      }
+      const next = Array.from(list.children).slice(0, count).map((item) => {
+        const screen = item.querySelector<HTMLElement>(".rc-inline");
+        const rows = Array.from(item.querySelectorAll<HTMLElement>(".rc-step"));
+        if (!screen || !rows.length) return 0;
+        // The line a step crosses to become the one on screen: a little under the stuck screen.
+        const line = screen.getBoundingClientRect().bottom + 56;
+        let on = 0;
+        rows.forEach((row, i) => {
+          if (row.getBoundingClientRect().top < line) on = i;
+        });
+        return on;
+      });
+      setSteps((prev) => (prev && prev.length === next.length && prev.every((v, i) => v === next[i]) ? prev : next));
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(paint);
+    };
+    paint();
+    addEventListener("scroll", onScroll, { passive: true });
+    addEventListener("resize", onScroll);
+    phone.addEventListener("change", onScroll);
+    return () => {
+      removeEventListener("scroll", onScroll);
+      removeEventListener("resize", onScroll);
+      phone.removeEventListener("change", onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, [listRef, count]);
+
+  return steps;
+}
 
 function useActiveFeature(count: number) {
   const trackRef = useRef<HTMLElement>(null);
@@ -219,6 +272,7 @@ function Graphic({ feature, active, step }: { feature: (typeof FEATURES)[number]
 
 export function RentalCards() {
   const { trackRef, pinRef, listRef, liveRef, branchRef, active, step, goTo } = useActiveFeature(FEATURES.length);
+  const phoneSteps = usePhoneSteps(listRef, FEATURES.length);
 
   return (
     <section ref={trackRef} aria-label="Everything around each rental" className="rc-track">
@@ -228,7 +282,10 @@ export function RentalCards() {
           <i ref={branchRef} className="rc-branch" />
         </span>
         <ol ref={listRef} className="rc-list">
-          {FEATURES.map((feature, i) => (
+          {FEATURES.map((feature, i) => {
+            // The step lit in the list: the held screen's on desktop, the scrolled-to one on a phone.
+            const lit = phoneSteps ? phoneSteps[i] : i === active ? pointOf(i, step) : -1;
+            return (
             <li key={feature.tone} className={i === active ? "is-active" : ""}>
               <button type="button" aria-current={i === active} onClick={() => goTo(i)}>
                 <h2>{feature.title}</h2>
@@ -246,8 +303,8 @@ export function RentalCards() {
                       <li
                         key={pointTitle(point)}
                         className="rc-step"
-                        data-on={i === active && p === pointOf(i, step) ? "" : undefined}
-                        data-done={i === active && p < pointOf(i, step) ? "" : undefined}
+                        data-on={p === lit ? "" : undefined}
+                        data-done={p < lit ? "" : undefined}
                       >
                         <span className="rc-step-n" aria-hidden>
                           {p + 1}
@@ -271,10 +328,11 @@ export function RentalCards() {
               </div>
               {/* Where the screen sits when the section does not hold still. */}
               <div className={`rc-panel rc-inline is-${feature.tone}`}>
-                <Graphic feature={feature} active />
+                <Graphic feature={feature} active step={phoneSteps ? phoneSteps[i] : undefined} />
               </div>
             </li>
-          ))}
+            );
+          })}
         </ol>
 
         <div className="rc-stage">

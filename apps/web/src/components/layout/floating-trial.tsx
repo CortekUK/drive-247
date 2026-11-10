@@ -14,18 +14,23 @@ import "./floating-trial.css";
  * already offers the same step. Like the old header button it becomes "Dashboard" for
  * an operator who is already signed in on drive-247.com.
  */
-const COVERED_BY = ["#pricing", "#nb-title", "footer"];
+/*
+ * "#your-site": the demo has its own Start free trial button under the phone, and the pill
+ * sat on top of it. "footer.ft": the site footer by its class, since the demo's mock sites
+ * draw <footer> elements of their own, and a bare "footer" matched the first of those.
+ */
+const COVERED_BY = ["#pricing", "#nb-title", "#your-site", "footer.ft"];
 
-export function FloatingTrial() {
+export function FloatingTrial({ mobileOnly = false }: { mobileOnly?: boolean }) {
   const [pastHero, setPastHero] = useState(false);
   const [covered, setCovered] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setPastHero(window.scrollY > 80);
+    const onScroll = () => setPastHero(window.scrollY > (mobileOnly ? 520 : 80));
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [mobileOnly]);
 
   useEffect(() => {
     const targets = COVERED_BY.map((selector) => {
@@ -55,7 +60,7 @@ export function FloatingTrial() {
   const shown = pastHero && !covered;
 
   return (
-    <div className={`fcta${shown ? " is-shown" : ""}`} aria-hidden={!shown || undefined} inert={!shown || undefined}>
+    <div className={`fcta${mobileOnly ? " is-mobile-only" : ""}${shown ? " is-shown" : ""}`} aria-hidden={!shown || undefined} inert={!shown || undefined}>
       <HeaderCta label="Start free trial" href="#pricing" className="fcta-btn" />
     </div>
   );

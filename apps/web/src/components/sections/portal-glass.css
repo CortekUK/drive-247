@@ -301,3 +301,76 @@
   background: #34343c;
   translate: -50% -50%;
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * Phones: the left/right rows, translated. On desktop the headline sits beside its
+ * screen; here it sits right on top of it, so "Your own domain." and the domain on
+ * screen arrive together, and the reading follows. The window sweeps in from its
+ * own side of the screen (the row clips it), the phone lands on its corner bigger
+ * than before, and the points tick in one by one. Under 640px only.
+ * ---------------------------------------------------------------------------
+ */
+@media (max-width: 639.98px) {
+  .pg-area { padding-block: 48px 40px; }
+  /* Tight between rows (user, 2026-11-10: too much space between sections). */
+  .pg-rows { gap: 64px; }
+  .pg-row { gap: 0; --pg-from: 70vw; }
+  .pg-row.is-flipped { --pg-from: -70vw; }
+  .pg-copy { display: contents; }
+  .pg-title { order: 0; }
+  .pg-device { order: 1; margin: 26px 10px 0 2px; }
+  .is-flipped .pg-device { margin: 26px 2px 0 10px; }
+  .pg-lead { order: 2; margin-top: 44px; }
+  .pg-body { order: 3; }
+  .pg-points { order: 4; }
+
+  .pg-title span { font-size: 1.25rem; }
+  .pg-title strong { font-size: clamp(2.5rem, 12.5vw, 3.25rem); }
+  .pg-lead { font-size: 1.125rem; }
+
+  .pg-phone { width: 31%; right: -10px; bottom: -26px; }
+  .is-flipped .pg-phone { right: auto; left: -10px; }
+
+  /* The window lands a beat after the headline, the reading after the window. */
+  .is-in .pg-tablet { --pg-at: 160ms; }
+  .is-in .pg-copy > .pg-lead { --pg-at: 520ms; }
+  .is-in .pg-copy > .pg-body { --pg-at: 600ms; }
+  .is-in .pg-copy > .pg-points { --pg-at: 680ms; }
+
+  /* The points tick in one after another, each with its bullet drawn. */
+  .pg-points > div { position: relative; padding-left: 22px; opacity: 0; translate: -14px 0; }
+  .pg-points > div::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 19px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: hsl(var(--v2-primary));
+    scale: 0;
+  }
+  .is-in .pg-points > div { opacity: 1; translate: 0 0; transition: opacity 500ms ease-out var(--pg-pt), translate 700ms var(--pg-ease) var(--pg-pt); }
+  .is-in .pg-points > div::before { scale: 1; transition: scale 400ms var(--pg-ease) calc(var(--pg-pt) + 150ms); }
+  .pg-points > div:nth-child(1) { --pg-pt: 820ms; }
+  .pg-points > div:nth-child(2) { --pg-pt: 960ms; }
+  .pg-points > div:nth-child(3) { --pg-pt: 1100ms; }
+}
+/*
+ * And as the row scrolls through, the phone drifts up against the window: a little
+ * depth, tied to the scroll, where the browser can (progressive; `transform` only, so
+ * it never fights the build-in, which uses `translate`).
+ */
+@supports (animation-timeline: view()) {
+  @media (max-width: 639.98px) and (prefers-reduced-motion: no-preference) {
+    .pg-phone { animation: pg-drift linear both; animation-timeline: view(); animation-range: entry 20% exit 80%; }
+  }
+}
+@keyframes pg-drift {
+  from { transform: translateY(26px); }
+  to { transform: translateY(-34px); }
+}
+@media (max-width: 639.98px) and (prefers-reduced-motion: reduce) {
+  .pg-points > div, .pg-points > div::before { opacity: 1; translate: none; scale: 1; transition: none !important; }
+}

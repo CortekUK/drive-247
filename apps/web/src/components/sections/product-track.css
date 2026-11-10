@@ -603,3 +603,126 @@
   /* Insights: the table area takes the rest of the screen. */
   .pt-panel .kn-scroll { flex: 1; min-height: 0; overflow: auto; scrollbar-width: none; }
 }
+
+/*
+ * ─── Phones and tablets: the track as a vertical flow (product-track.tsx FLOW_MEDIA) ───
+ * The rail pinned at the top, screens sliding in from the right, the headings typing.
+ * Everything below is either mobile-only by media query or keyed on .is-flow, which the
+ * script only sets below the pinned breakpoint, so the desktop track is untouched.
+ */
+.pt-rail { display: none; }
+@media (max-width: 1099.98px), (max-height: 639.98px) {
+  /* Sideways motion must never widen the page. */
+  .pt-outer { overflow-x: clip; }
+  .pt-panel { padding-block: clamp(28px, 7vw, 56px); }
+
+  /* The rail: sticky for the whole track, zero height so it costs no layout. */
+  .pt-rail {
+    display: block;
+    position: sticky;
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    z-index: 30;
+    height: 0;
+    pointer-events: none;
+  }
+  .pt-rail-pill {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(var(--pt-stops), minmax(0, 1fr));
+    width: min(100% - 32px, 360px);
+    margin-inline: auto;
+    padding: 4px;
+    border-radius: 99px;
+    background: hsl(0 0% 100% / 0.78);
+    -webkit-backdrop-filter: blur(14px) saturate(1.4);
+    backdrop-filter: blur(14px) saturate(1.4);
+    box-shadow: 0 0 0 1px hsl(239 40% 60% / 0.16), 0 8px 24px hsl(239 60% 30% / 0.12);
+    opacity: 0;
+    translate: 0 -12px;
+    transition: opacity 250ms ease-out, translate 350ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .pt-rail.is-on .pt-rail-pill { opacity: 1; translate: 0 0; pointer-events: auto; }
+  .dark .pt-rail-pill { background: hsl(240 10% 10% / 0.72); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1), 0 8px 24px rgb(0 0 0 / 0.4); }
+  .pt-rail-thumb {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    width: calc((100% - 8px) / var(--pt-stops));
+    border-radius: 99px;
+    background: hsl(var(--v2-primary));
+    box-shadow: 0 4px 12px hsl(var(--v2-primary) / 0.35);
+    will-change: transform;
+  }
+  .pt-rail-item {
+    position: relative;
+    z-index: 1;
+    padding: 9px 4px;
+    border-radius: 99px;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1;
+    color: hsl(var(--v2-foreground) / 0.62);
+    transition: color 250ms ease-out;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .pt-rail-item.is-on { color: #fff; }
+
+  /* The text screens: words sized to the phone, never cut at the edge. */
+  .pt-intro { --pt-lift: 0px; min-height: 0; }
+  .pt-intro-body { padding-inline: 20px; }
+  .pt-intro-title { font-size: clamp(2.15rem, 10.4vw, 3.6rem); line-height: 1.04; letter-spacing: -0.03em; }
+  .pt-intro-sub { font-size: clamp(1rem, 4.2vw, 1.15rem); }
+  /* No arrows on phones: the rail at the top already says which way the screens go, and
+     the arrows cost a third of a screen each (user, 2026-11-10). */
+  .pt-intro-slot { display: none; }
+  /* The products keep their desktop section padding (72-176px) off the track; inside it the
+     panel's own padding is the only gap (user, 2026-11-10: too much space). */
+  .pt-panel .cs-section, .pt-panel .mc-section, .pt-panel .ia { padding-block: 0; }
+
+  /* Multi-chat: the window is one screen tall under the rail, never longer than the phone;
+     the thread scrolls inside it, as in the real app. */
+  .pt-panel .mc-app { height: clamp(440px, calc(100svh - 190px), 720px); min-height: 0; }
+  .pt-outer.is-flow .pt-panel { will-change: transform, opacity; }
+
+  /* The calendar's board is panned by the scroll: no snap, no visible bar, a fade at the edges. */
+  .pt-panel #calendar .cs-board { scrollbar-width: none; overscroll-behavior-x: contain; }
+  .pt-panel #calendar .cs-board::-webkit-scrollbar { display: none; }
+
+  /* Multi-chat: the call record keeps its player and summary; the long lists stay on desktop. */
+  .pt-panel .mcr-cols,
+  .pt-panel .mcr-lines,
+  .pt-panel .mcr-more,
+  .pt-panel .mcr-cols ~ .mcr-label { display: none; }
+}
+
+/* The words type in on each arrival, as on the desktop track. */
+@media (max-width: 1099.98px) and (prefers-reduced-motion: no-preference), (max-height: 639.98px) and (prefers-reduced-motion: no-preference) {
+  .pt-outer.is-flow .pt-ch { opacity: 0; }
+  .pt-outer.is-flow .is-here .pt-ch { opacity: 1; transition: opacity 40ms linear calc(40ms + var(--i) * 12ms); }
+  .pt-outer.is-flow .pt-caret {
+    display: inline-block;
+    width: 0.06em;
+    height: 0.82em;
+    margin-left: 0.04em;
+    vertical-align: -0.04em;
+    background: hsl(var(--v2-primary));
+    opacity: 0;
+  }
+  .pt-outer.is-flow .is-here .pt-caret { animation: pt-caret 1100ms steps(1, end) calc(80ms + var(--pt-chars) * 12ms) both; }
+  .pt-outer.is-flow .pt-intro-sub,
+  .pt-outer.is-flow .pt-intro-slot { opacity: 0; translate: 0 18px; transition: opacity 250ms ease-in, translate 250ms ease-in; }
+  .pt-outer.is-flow .is-here .pt-intro-sub,
+  .pt-outer.is-flow .is-here .pt-intro-slot {
+    opacity: 1;
+    translate: 0 0;
+    transition: opacity 600ms cubic-bezier(0.16, 1, 0.3, 1), translate 800ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .pt-outer.is-flow .is-here .pt-intro-sub { transition-delay: calc(120ms + var(--pt-chars, 40) * 12ms); }
+  .pt-outer.is-flow .is-here .pt-intro-slot { transition-delay: calc(260ms + var(--pt-chars, 40) * 12ms); }
+  /* The arrow draws out to its head, pointing the way the screens come from. */
+  .pt-outer.is-flow .pt-long-shaft { transform-box: fill-box; transform-origin: left center; scale: 0 1; }
+  .pt-outer.is-flow .pt-long-head { opacity: 0; }
+  .pt-outer.is-flow .is-here .pt-long-shaft { scale: 1 1; transition: scale 700ms cubic-bezier(0.16, 1, 0.3, 1) calc(300ms + var(--pt-chars, 40) * 12ms); }
+  .pt-outer.is-flow .is-here .pt-long-head { opacity: 1; transition: opacity 250ms ease-out calc(700ms + var(--pt-chars, 40) * 12ms); }
+}

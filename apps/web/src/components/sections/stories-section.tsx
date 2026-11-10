@@ -37,6 +37,10 @@ export function StoriesSection() {
             <StoryPoster key={story.slug} story={story} />
           ))}
         </div>
+        {/* Phones only: how far along the swipe you are (content.css). */}
+        <div className="st-rail" aria-hidden>
+          <i />
+        </div>
       </div>
     </section>
   );

@@ -38,14 +38,29 @@
   .ft-list > li { margin-block: 0; }
   .ft-link { display: flex; align-items: center; width: fit-content; min-width: 44px; min-height: 44px; }
   .ft-legal, .ft-legal > span { display: inline-flex; align-items: center; }
+  /* Keep the spaces either side of each dot (a flex item drops them otherwise). */
+  .ft-legal > span { white-space: pre; }
   .ft-legal a { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
 }
 /* The wordmark is small on a phone: fade it less so every letter stays readable, and
    lift it clear of the floating theme button in the corner. */
 @media (max-width: 639.98px) {
   .ft { padding-bottom: 72px; }
+  /* Inside the page's side gutter, so the last letter is never cut by the screen's edge. */
+  .ft-word { width: calc(100% - 40px); margin-inline: auto; }
   .ft-word {
     -webkit-mask-image: linear-gradient(to bottom, #000 80%, rgb(0 0 0 / 0.55));
     mask-image: linear-gradient(to bottom, #000 80%, rgb(0 0 0 / 0.55));
   }
+}
+
+/*
+ * The landing page ends on the dark footer. Scrolling past the end (a phone's or a
+ * trackpad's bounce) showed the white page behind it as a bar under the footer
+ * (user, 2026-11-11). The canvas behind the page is the footer's colour there, and the
+ * bounce itself is off where the browser allows it.
+ */
+html:has(.lp-v2) {
+  background-color: #0b0b0e;
+  overscroll-behavior-y: none;
 }

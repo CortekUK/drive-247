@@ -167,3 +167,31 @@ button.np-request { cursor: pointer; }
 
 /* Inside the v2 shell, a page body takes the shell's padding, not its own. */
 .np .bd-main { padding: 0; margin-top: 18px; }
+
+/*
+ * On a phone (the demo's handset): the dashboard opens on the iOS large title, the date over
+ * "Home" (apps/portal dashboard-v2.tsx), and the revenue chart and its feature card become a
+ * swiped pair, each nearly screen-wide with the next peeking in (dashboard-v2/home/
+ * phone-carousel.tsx PHONE_CAROUSEL). Nothing here applies above 760px.
+ */
+.np-phone-title { display: none; }
+@media (max-width: 759.98px) {
+  .bd-window .np-phone-title { display: block; padding: 4px 4px 0; }
+  .np-phone-title small { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: hsl(var(--v2-muted-foreground)); }
+  .np-phone-title h3 { margin-top: 2px; font-size: 34px; font-weight: 700; line-height: 1.1; letter-spacing: -0.03em; }
+  .bd-window .np-hero.is-dash {
+    display: flex;
+    gap: 12px;
+    margin-inline: -14px;
+    padding: 2px 14px 4px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 14px;
+    scrollbar-width: none;
+  }
+  .bd-window .np-hero.is-dash::-webkit-scrollbar { display: none; }
+  .bd-window .np-hero.is-dash > * { flex: 0 0 86%; scroll-snap-align: center; }
+  .bd-window .np-hero.is-dash .np-chart { padding: 16px 18px 12px; border: 1px solid hsl(var(--v2-border)); border-radius: 22px; background: hsl(var(--v2-card)); }
+  .bd-window .np-hero.is-dash .np-side-card { display: flex; background: color-mix(in srgb, var(--bd-a) 8%, hsl(var(--v2-card))); }
+  .bd-window .np-head { flex-wrap: wrap; }
+}

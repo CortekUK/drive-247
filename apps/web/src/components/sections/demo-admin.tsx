@@ -15,6 +15,8 @@ import {
   Gauge,
   Gift,
   KeyRound,
+  LayoutGrid,
+  Car,
   LifeBuoy,
   MessageCircle,
   MessageSquare,
@@ -29,7 +31,7 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import type { AdminPage, DemoCar } from "./demo-pages";
+import { PhoneTabBar, type AdminPage, type DemoCar } from "./demo-pages";
 import "./demo-admin.css";
 
 /*
@@ -70,6 +72,14 @@ const GROUPS: { label?: string; items: NavItem[] }[] = [
       { id: null, label: "Support", icon: MessageSquare },
     ],
   },
+];
+
+/* The operator's phone tab bar, in its order (apps/portal mobile-tab-bar.tsx): Home, Rentals, Vehicles, Customers, then More. */
+const PHONE_TABS: { id: AdminPage; label: string; icon: typeof Gauge }[] = [
+  { id: "dashboard", label: "Home", icon: LayoutGrid },
+  { id: "rentals", label: "Rentals", icon: FileText },
+  { id: "vehicles", label: "Vehicles", icon: Car },
+  { id: "customers", label: "Customers", icon: Users },
 ];
 
 const SCOPE: Record<AdminPage, { label: string; placeholder: string } | null> = {
@@ -151,6 +161,10 @@ export function AdminShell({
 
       <div className="cp-main">
         <header className="cp-top">
+          {/* A phone: the search is a round button (top-bar-v2.tsx). */}
+          <span className="cp-search-round" aria-hidden>
+            <Search />
+          </span>
           <span className="cp-search np-search" aria-hidden>
             <Search />
             {scope && (
@@ -189,6 +203,7 @@ export function AdminShell({
           </span>
         </header>
         {children}
+        <PhoneTabBar tabs={PHONE_TABS} on={page} onTab={onPage} />
       </div>
     </div>
   );
@@ -287,6 +302,14 @@ export function AdminHero({
   );
 }
 
+const WEEKDAY = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTH = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+/* `EEEE d MMMM`, as dashboard-v2 writes it. The dashboard only draws after the visitor opens it, in the browser. */
+function phoneDate() {
+  const d = new Date();
+  return `${WEEKDAY[d.getDay()]} ${d.getDate()} ${MONTH[d.getMonth()]}`;
+}
+
 /* ── Dashboard ──────────────────────────────────────────────────────────────────────── */
 
 const REQUESTS = [
@@ -308,6 +331,11 @@ export function AdminDashboard({
   const waiting = fresh && !approved;
   return (
     <div className="cp-page">
+      {/* A phone: the iOS large title, the date over "Home" (dashboard-v2.tsx). */}
+      <header className="np-phone-title">
+        <small>{phoneDate()}</small>
+        <h3>Home</h3>
+      </header>
       <div className="np-hero is-dash">
         <div className="np-chart">
           <div className="np-value is-big">

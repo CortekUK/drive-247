@@ -172,30 +172,80 @@
   .tso-slide { padding-bottom: 56px; }
 }
 
-/* Phones and reduced motion: no hold, the five slides one under another. */
-@media (max-width: 760px), (prefers-reduced-motion: reduce) {
+/* Tablets: the chart is narrow enough that axis names run into each other; each wraps in its own quarter. */
+@media (max-width: 1099.98px) {
+  .tso-axis { height: 58px; }
+  .tso-axis li { width: 22%; line-height: 1.25; text-align: center; white-space: normal; }
+  .tso-axis li.is-first { text-align: left; }
+  .tso-axis li.is-last { text-align: right; }
+}
+
+/*
+ * Phones: the same held screen and the same five slides, set for a narrow screen. The story
+ * still plays as you scroll (the cut drains, the charts draw, the 30% and 0% face off side by
+ * side); it only takes a little less scrolling, and every slide fits one phone screen.
+ */
+@media (max-width: 760px) {
+  .tso-track { height: 560svh; }
+  .tso-slide { gap: 14px; padding: 56px 20px 84px; }
+  .tso-kicker { font-size: 11px; letter-spacing: 0.22em; }
+  .tso-line { font-size: clamp(2.2rem, min(11vw, 7svh), 3.2rem); line-height: 1.06; }
+  .tso-line.is-soft { font-size: clamp(1.35rem, 6vw, 1.75rem); line-height: 1.25; }
+
+  /* 2 and 4: the figure, then its chart under it, one column on the page's left edge. */
+  .tso-vs, .tso-vs.is-rise { width: 100%; grid-template-columns: minmax(0, 1fr); }
+  .tso-vs.is-rise .tso-vs-col { padding-inline: 0; }
+  .tso-vs-col > small { font-size: 11px; letter-spacing: 0.16em; }
+  .tso-vs-col.is-cut-col b.tso-money { margin-block: 6px 12px; font-size: clamp(3.4rem, min(18vw, 11svh), 4.6rem); }
+  .tso-vs-col.is-cut-col .tso-caption { max-width: none; font-size: 1rem; }
+  .tso-vs.is-rise .tso-vs-col.is-ours b { margin-block: 6px 12px; font-size: clamp(3.2rem, min(17vw, 11svh), 4.4rem); }
+  .tso-rise-sub { max-width: none; font-size: 1rem; }
+  .tso-vs-col.is-chart { margin-top: clamp(14px, 3svh, 28px); padding-top: clamp(14px, 3svh, 24px); border-left: 0; border-top: 1px solid rgb(255 255 255 / 0.12); }
+  .tso-chart { margin-top: clamp(16px, 3svh, 24px); }
+  .tso-chart-plot { height: clamp(110px, 21svh, 190px); }
+  .tso-dot b { bottom: calc(100% + 6px); font-size: 0.78rem; }
+  .tso-dot.is-top b { font-size: 1.05rem; }
+  .tso-chart.is-steps .tso-dot b { bottom: 6px; }
+  /* Axis names wrap inside their own quarter instead of running into the next one. */
+  .tso-axis { height: 62px; margin-top: 10px; }
+  .tso-axis li { width: 21%; font-size: 11.5px; line-height: 1.2; text-align: center; white-space: normal; }
+  .tso-axis li.is-first { text-align: left; }
+  .tso-axis li.is-last { text-align: right; }
+  .tso-axis small { font-size: 10.5px; }
+
+  /* 3: the 30% and the 0% stay side by side, face to face. */
+  .tso-vs:not(.is-rise) .tso-vs-col { padding-inline: 14px; }
+  .tso-vs:not(.is-rise) .tso-vs-col.is-turo { padding-left: 0; }
+  .tso-vs:not(.is-rise) .tso-vs-col.is-ours { padding-right: 0; }
+  .tso-vs:not(.is-rise) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tso-vs-col > b { margin-block: 8px 20px; font-size: clamp(3.4rem, min(19vw, 12svh), 5rem); }
+  .tso-vs-col.is-turo > b { -webkit-text-stroke-width: 1.2px; }
+  .tso-vs-col li { padding-block: 12px; font-size: 15px; white-space: normal; }
+
+  /* 5 */
+  .tso-reveal-logo { width: clamp(72px, 13svh, 104px); }
+  .tso-reveal-name { font-size: clamp(3rem, 15vw, 4.2rem); }
+  .tso-reveal-what { font-size: 1rem; }
+
+  /* Where you are: the five bars only. */
+  .tso-progress { gap: 8px; bottom: clamp(20px, 4svh, 32px); }
+  .tso-progress span { display: none; }
+  .tso-progress i { width: 28px; }
+  .tso-down { bottom: clamp(48px, 9svh, 76px); }
+}
+
+/* Reduced motion: no hold, the five slides one under another. */
+@media (prefers-reduced-motion: reduce) {
   .tso-track { height: auto; }
   .tso-stage { position: relative; height: auto; display: flex; flex-direction: column; gap: 24px; padding-block: 64px; }
   .tso-slide, .tso-w, .tso-swap, .tso-later, .tso-later .tso-w { opacity: 1 !important; transform: none !important; filter: none; transition: none; }
-  .tso-slide { padding-block: 24px; }
+  .tso-slide { max-height: none; padding-block: 24px; }
   .tso-swap { grid-area: auto; }
   .tso-caption { gap: 8px; }
   .tso-money.is-cut, .tso-money { color: #fff; }
   .tso-chart svg { clip-path: none !important; }
   .tso-chart .tso-dot, .tso-chart .tso-chart-area { opacity: 1; }
-  .tso-chart-area, .tso-dot { opacity: 1; }
   .tso-progress, .tso-dawn, .tso-down { display: none; }
-}
-@media (max-width: 760px) {
-  .tso-years { flex-direction: column; width: 100%; }
-  .tso-vs { grid-template-columns: 1fr; }
-  .tso-vs-col.is-ours { border-left: 0; margin-top: 32px; }
-  .tso-vs-col li { white-space: normal; }
-  .tso-vs.is-rise { grid-template-columns: 1fr; }
-  .tso-vs-col.is-chart { border-left: 0; margin-top: 32px; }
-  .tso-chart svg { clip-path: none !important; }
-  .tso-chart .tso-dot, .tso-chart .tso-chart-area { opacity: 1; }
-  .tso-chart-area, .tso-dot { opacity: 1; }
 }
 
 /* "Chapter one · The cut": for the separate Turo sections, off the page for now. */

@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Menu, X } from "lucide-react";
 import { HeaderCta } from "./header-cta";
+import { FloatingTrial } from "./floating-trial";
 
 const PILL_LINKS = [
   { label: "Features", href: "#features" },
@@ -75,9 +76,11 @@ export function Header({
         {/* The pill's place in the flow, kept: the hero is drawn 4rem up into it
             (.hg-hero margin-top), so without this the hero would lose its top. */}
         <div aria-hidden className="h-16" />
-        {/* The floating "Start free trial" button, off for now (Ghulam, 2026-11-10).
-            To bring it back, import FloatingTrial from "./floating-trial" and put
-            <FloatingTrial /> here again. */}
+        {/* The floating "Start free trial" button, off on desktop for now (Ghulam, 2026-11-10).
+            Phones keep it (responsive pass, 2026-11): with no nav once the hero has gone,
+            it is the only way to start a trial without scrolling to Pricing.
+            For desktop too, drop `mobileOnly`. */}
+        <FloatingTrial mobileOnly />
       </>
     );
   }

@@ -18,11 +18,12 @@ export const metadata: Metadata = {
   robots: { index: false },
 };
 
+/* Sections the landing page actually has (the old #x-… anchors were landing-v4's and led nowhere). */
 const LINKS = [
-  { href: "/#x-showcase", label: "The portal" },
-  { href: "/#how-it-works", label: "How it works" },
-  { href: "/#x-pricing", label: "Pricing" },
-  { href: "/#x-faq", label: "FAQ" },
+  { href: "/#features", label: "Features" },
+  { href: "/#trax", label: "Trax" },
+  { href: "/#pricing", label: "Pricing" },
+  { href: "/#bl-title", label: "Blog" },
 ];
 
 /** A steering wheel, drawn as the "0" of 404. */

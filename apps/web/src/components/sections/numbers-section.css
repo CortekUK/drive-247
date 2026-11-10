@@ -74,3 +74,30 @@
 .nm-label { margin-top: 12px; font-size: 1rem; font-weight: 600; color: var(--foreground); }
 .nm-detail { margin-top: 4px; font-size: 0.875rem; line-height: 1.45; color: var(--muted-foreground); }
 
+
+/*
+ * Phones: the cluster in two columns, so all five dials read in about one screen instead of
+ * one dial a screen. The odd one out spans the row on its side, its dial beside its figure.
+ */
+@media (max-width: 559.98px) {
+  .nm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .nm-stat { padding: 14px 10px 16px; border-radius: 20px; }
+  .nm-gauge { max-width: 116px; }
+  .nm-value { margin-top: 8px; font-size: clamp(1.6rem, 8vw, 2rem); }
+  .nm-label { margin-top: 8px; font-size: 0.875rem; line-height: 1.3; }
+  .nm-detail { font-size: 0.75rem; line-height: 1.4; }
+  .nm-stat:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 104px minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    column-gap: 16px;
+    align-items: center;
+    align-content: center;
+    padding: 14px 18px;
+    text-align: left;
+  }
+  .nm-stat:last-child:nth-child(odd) .nm-gauge { grid-row: 1 / 4; max-width: 104px; }
+  .nm-stat:last-child:nth-child(odd) .nm-value { margin-top: 0; }
+  .nm-stat:last-child:nth-child(odd) .nm-label { margin-top: 6px; }
+}

@@ -15,7 +15,7 @@ import {
   StickyNote,
   Wifi,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFadeIn } from "@/hooks/use-fade-in";
 import "./pwa-section.css";
 import { Accent, SectionHeading } from "./section-heading";
@@ -33,6 +33,9 @@ import { Accent, SectionHeading } from "./section-heading";
  * The two app screens are the real ones (public/v2/phone-dashboard, phone-renter). The
  * notifications are examples.
  */
+
+/* Keep in step with the "On a phone" media query in pwa-section.css. */
+const PHONE = "(max-width: 759.98px)";
 
 const HOME_APPS = [
   { icon: Calendar, name: "Calendar" },
@@ -141,6 +144,55 @@ export function PwaSection() {
     io.observe(el);
     return () => io.disconnect();
   }, [ref]);
+
+  /*
+   * On a phone the three phones are a row to swipe through, one full size at a time with its
+   * neighbours peeking in (pwa-section.css, "On a phone"). It opens on the home screen in the
+   * middle, and the dots under it follow the swipe and jump to a phone when tapped.
+   */
+  const stage = useRef<HTMLDivElement>(null);
+  const [shown, setShown] = useState(1);
+  useEffect(() => {
+    const row = stage.current;
+    if (!row) return;
+    const phone = window.matchMedia(PHONE);
+    const centre = (i: number, smooth = false) => {
+      const col = row.children[i] as HTMLElement | undefined;
+      if (!col) return;
+      row.scrollTo({ left: col.offsetLeft - (row.clientWidth - col.offsetWidth) / 2, behavior: smooth ? "smooth" : "auto" });
+    };
+    const start = () => {
+      if (phone.matches) centre(1);
+    };
+    start();
+    let frame = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const mid = row.scrollLeft + row.clientWidth / 2;
+        let best = 0;
+        let bestGap = Infinity;
+        Array.from(row.children).forEach((c, i) => {
+          const el = c as HTMLElement;
+          const gap = Math.abs(el.offsetLeft + el.offsetWidth / 2 - mid);
+          if (gap < bestGap) {
+            bestGap = gap;
+            best = i;
+          }
+        });
+        setShown(best);
+      });
+    };
+    row.addEventListener("scroll", onScroll, { passive: true });
+    phone.addEventListener("change", start);
+    goTo.current = (i: number) => centre(i, !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    return () => {
+      row.removeEventListener("scroll", onScroll);
+      phone.removeEventListener("change", start);
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+  const goTo = useRef<(i: number) => void>(() => {});
   return (
     // data-line-lane: the page line keeps to the left here, not down between the phones (tour-layout.ts).
     <section id="mobile" data-line-lane="left" aria-labelledby="mobile-heading" className="pw-section">
@@ -161,7 +213,7 @@ export function PwaSection() {
           />
         </div>
 
-        <div className="pw-stage">
+        <div ref={stage} className="pw-stage">
           <figure className="pw-col is-ops">
             <AppPhone
               src="/v2/phone-dashboard"
@@ -249,6 +301,13 @@ export function PwaSection() {
               <span>Their bookings, insurance, agreements and payments, a tap away.</span>
             </figcaption>
           </figure>
+        </div>
+
+        {/* On a phone: which of the three is in view, and a tap to the others. */}
+        <div className="pw-dots" role="group" aria-label="Phones">
+          {["Your portal", "Home screen", "Your renters' app"].map((label, i) => (
+            <button key={label} type="button" aria-label={label} aria-pressed={shown === i} className={shown === i ? "is-on" : undefined} onClick={() => goTo.current(i)} />
+          ))}
         </div>
 
         {/* The four points (POINTS) were here; removed (Ghulam, 2026-11-10). */}

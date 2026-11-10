@@ -109,29 +109,133 @@
 .ws-perks span { display: flex; align-items: center; gap: 0.45em; }
 .ws-perks svg { color: var(--ws-a); }
 
-/* Narrow frames (a phone): the page as a phone shows it, stacked. */
+/* Phone-only parts: hidden in a wide frame. */
+.ws-burger, .ws-n, .ws-nd, .ws-cars, .ws-choose { display: none; }
+
+/*
+ * Narrow frames (the demo's handset): the page as a phone shows it, copied from the real phone
+ * layouts. Classic is site-v2 below `lg`/`sm` (site-v2/home.tsx SiteV2Hero and TripSearch,
+ * sections/hero-collage.tsx, sections/home-fleet.tsx, site-shell.tsx's bar); Glass is
+ * template 2 on a phone (template-2/shell.tsx, hero.tsx, fleet.tsx). 1em is 13px at 390px, so
+ * the real pixel sizes carry over as px / 13.
+ */
 @container (max-width: 560px) {
-  .ws { font-size: 3.4cqw; }
-  .ws-links, .ws-signin, .ws-opt { display: none; }
-  .ws-classic { padding: 1.2em 1.2em 1.8em; }
-  .ws-c-hero { grid-template-columns: 1fr; padding-block: 2em 1.6em; }
-  .ws-c-title { font-size: 2.9em; }
-  .ws-c-sub { font-size: 1.05em; }
-  .ws-c-art { display: none; }
-  .ws-search { flex-direction: column; align-items: stretch; gap: 0; padding: 0.6em; border-radius: 1.4em; }
-  .ws-search > span { padding: 0.7em 0.6em; }
-  .ws-search > span + span { padding-left: 0.6em; border-left: 0; border-top: 1px solid rgb(12 10 30 / 0.1); }
-  .ws-btn.is-find { margin-top: 0.4em; padding-block: 0.8em; }
-  .ws-glass { padding: 0.8em 0.8em 1.4em; }
-  .ws-sheet { margin: 1em 0 0; padding: 1.8em 1em 1.4em; border-radius: 1.8em; }
-  .ws-g-title { font-size: 2.3em; }
-  .ws-g-sub { font-size: 1em; }
-  .ws-show { height: 13em; }
-  .ws-model { font-size: 5em; }
-  .ws-show img { margin-top: 5em; max-width: 86%; }
-  .ws-arrow { display: none; }
-  .ws-glass .ws-search { margin-inline: 0; }
-  .ws-perks { flex-direction: column; gap: 0.5em; }
+  .ws { font-size: 3.33cqw; }
+  .ws-links, .ws-signin { display: none; }
+
+  /* The bar: the logo, Book a car, and the round menu button (site-shell.tsx, BURGER). */
+  .ws-nav { gap: 0.6em; height: 4.6em; padding-inline: 1.25em; }
+  .ws-brand { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 1.35em; }
+  .ws-acts { margin-left: auto; }
+  .ws-acts .ws-btn { height: 2.77em; padding: 0 1.1em; font-size: 1.04em; }
+  .ws-burger { display: grid; place-items: center; flex: none; width: 3.4em; height: 3.4em; border: 1px solid rgb(12 10 30 / 0.1); border-radius: 50%; background: #fff; color: var(--ws-ink); box-shadow: 0 0.2em 0.6em -0.3em rgb(12 10 30 / 0.2); }
+  .ws-burger svg { width: 1.55em; height: 1.55em; }
+
+  /* ── Classic ── */
+  .ws-classic { padding: 0 0 2.4em; }
+  .ws-c-hero { grid-template-columns: 1fr; gap: 0; padding: 1.85em 1.25em 0; text-align: center; }
+  .ws-c-copy { max-width: 26em; margin-inline: auto; }
+  .ws-c-title { font-size: 3.08em; line-height: 1.02; letter-spacing: -0.05em; text-wrap: balance; }
+  .ws-c-sub { max-width: 23em; margin: 1.15em auto 0; font-size: 1.23em; text-wrap: balance; }
+  .ws-c-btns { display: none; }
+  /* The picture under the words: the tinted grid, the phone over it, the three numbered chips. */
+  .ws-c-art { display: block; min-height: 19.5em; margin: 3.4em 2.4em 0; border-radius: 1.9em; }
+  .ws-c-phone { top: -2.2em; width: 10.4em; padding: 0.7em 0.7em 0.85em; border-width: 0.3em; border-radius: 1.6em; }
+  .ws-c-phone > b { font-size: 1.05em; }
+  .ws-c-phone .ws-btn.is-full { padding-block: 0.55em; font-size: 0.85em; }
+  .ws-chip { padding: 0.55em 0.8em; border-radius: 0.75em; font-size: 0.8em; }
+  .ws-chip.is-1 { top: 3.6em; left: -1.9em; }
+  .ws-chip.is-2 { top: auto; right: auto; bottom: 2.4em; left: -1.9em; }
+  .ws-chip.is-3 { bottom: -1.2em; right: 0.4em; }
+  .ws-n { position: absolute; top: -0.75em; left: -0.75em; display: grid; place-items: center; width: 1.7em; height: 1.7em; border: 2px solid #fff; border-radius: 50%; background: #0c0a1e; color: #fff; font-size: 0.85em; font-style: normal; font-weight: 700; }
+  .ws-c-phone > .ws-n { top: -1em; left: -1em; font-size: 0.9em; }
+
+  /* The search: the places side by side, the dates side by side, Find a car full width. */
+  .ws-search { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; margin: 2.6em 1.25em 0; padding: 0.6em; border: 1px solid rgb(12 10 30 / 0.08); border-radius: 2em; box-shadow: 0 1.8em 4.6em -2.2em color-mix(in srgb, var(--ws-a) 60%, rgb(40 30 100 / 0.4)); }
+  .ws-search > span { display: block; padding: 0.85em 0.95em; font-size: 1.15em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ws-search > span svg { display: none; }
+  .ws-search > span + span { padding-left: 0.95em; border-left: 0; }
+  .ws-search > span:nth-child(even) { border-left: 1px solid rgb(12 10 30 / 0.1); }
+  .ws-search > span:nth-child(n + 3) { border-top: 1px solid rgb(12 10 30 / 0.1); }
+  .ws-search small { display: block; margin-bottom: 0.2em; font-size: 0.83em; font-weight: 600; }
+  .ws-nd { display: inline; font-style: normal; }
+  .ws-glass .ws-nd { display: none; }
+  .ws-opt { display: block; }
+  .ws-btn.is-find { grid-column: 1 / -1; height: 4em; margin-top: 0.6em; padding-block: 0; font-size: 1.15em; }
+
+  /* "Ready to drive": the cars, swiped (sections/home-fleet.tsx). */
+  .ws-cars { display: block; padding: 4em 0 0; }
+  .ws-cars-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1em; padding-inline: 1.25em; }
+  .ws-cars-head > span { display: grid; min-width: 0; }
+  .ws-cars-head b { font-size: 2.46em; font-weight: 800; line-height: 1.05; letter-spacing: -0.045em; }
+  .ws-cars-head small { margin-top: 0.4em; font-size: 1.15em; line-height: 1.45; color: var(--ws-mute); }
+  .ws-see { display: inline-flex; align-items: center; gap: 0.35em; flex: none; font-size: 1.08em; font-weight: 600; color: var(--ws-ink); white-space: nowrap; }
+  .ws-see svg { width: 1em; height: 1em; }
+  .ws-cars-row { display: flex; gap: 1.2em; margin-top: 2em; padding: 0 1.25em 0.4em; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 1.25em; scrollbar-width: none; }
+  .ws-cars-row::-webkit-scrollbar { display: none; }
+  .ws-car { display: flex; flex: 0 0 82%; flex-direction: column; overflow: hidden; border: 1px solid rgb(12 10 30 / 0.08); border-radius: 1.25em; background: #fff; scroll-snap-align: start; }
+  .ws-car.is-note { gap: 0.5em; padding: 1.2em; border: 0; background: var(--ws-tint); }
+  .ws-note-art { display: grid; place-items: center; height: 9em; margin-bottom: 1em; border-radius: 0.95em; background: #fff; color: var(--ws-a); }
+  .ws-note-art svg { width: 3.6em; height: 3.6em; stroke-width: 1.4; }
+  .ws-car.is-note > b { font-size: 1.54em; font-weight: 700; letter-spacing: -0.02em; }
+  .ws-car.is-note > small { font-size: 1.08em; line-height: 1.55; color: var(--ws-mute); }
+  .ws-car.is-note .ws-see { margin-top: auto; padding-top: 0.8em; }
+  .ws-car-photo { display: grid; place-items: center; aspect-ratio: 4 / 3; background: color-mix(in srgb, var(--ws-a) 6%, #fff); }
+  .ws-car-photo { overflow: hidden; }
+  .ws-car-photo img { width: 100%; height: 100%; object-fit: cover; }
+  .ws-car-body { display: flex; flex: 1; flex-direction: column; padding: 1.5em; }
+  .ws-car-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1em; }
+  .ws-car-top > span:first-child { display: grid; min-width: 0; }
+  .ws-car-top b { overflow: hidden; font-size: 1.38em; font-weight: 700; letter-spacing: -0.02em; text-overflow: ellipsis; white-space: nowrap; }
+  .ws-car-top small { margin-top: 0.3em; font-size: 1em; color: var(--ws-mute); }
+  .ws-car-rate { display: grid; flex: none; justify-items: end; line-height: 1; }
+  .ws-car-rate b { font-size: 1.7em; font-weight: 800; letter-spacing: -0.02em; }
+  .ws-car-rate small { margin-top: 0.3em; font-size: 0.96em; color: var(--ws-mute); }
+  .ws-car-specs { display: flex; flex-wrap: wrap; gap: 0.5em 1.25em; margin-top: 1.2em; font-size: 1em; }
+  .ws-car-specs span { display: inline-flex; align-items: center; gap: 0.4em; }
+  .ws-car-specs svg { width: 1.2em; height: 1.2em; color: var(--ws-mute); }
+  .ws-car-book { display: grid; place-items: center; height: 3.4em; margin-top: 1.5em; border: 1px solid rgb(12 10 30 / 0.12); border-radius: 99px; font-size: 1.08em; font-weight: 600; }
+
+  /* ── Glass ── */
+  .ws-glass { padding: 0.9em 0.9em 1.4em; }
+  /* Template 2's bar on a phone: the logo and the menu button on one frosted pill. */
+  .ws-glass .ws-nav { height: auto; padding: 0.45em 0.45em 0.45em 1.2em; }
+  .ws-glass .ws-acts { display: none; }
+  .ws-glass .ws-burger { margin-left: auto; }
+  .ws-sheet { margin: 1em 0 0; padding: 2.1em 1.15em 1.4em; border-radius: 2em; }
+  .ws-g-title { font-size: 2.3em; text-wrap: balance; }
+  .ws-g-sub { font-size: 1.08em; text-wrap: balance; }
+  .ws-show { height: 15em; margin-top: 0.8em; }
+  .ws-model { font-size: 4.6em; }
+  .ws-show img { max-width: 92%; margin-top: 3.6em; }
+  /* The arrows sit either side of the dots, under the car. */
+  .ws-arrow { display: grid; top: auto; bottom: -3.55em; width: 2.9em; height: 2.9em; border: 1px solid rgb(255 255 255 / 0.8); }
+  .ws-arrow.is-left { left: calc(50% - 6.6em); }
+  .ws-arrow.is-right { right: calc(50% - 6.6em); }
+  .ws-dots { margin-top: 1.5em; margin-bottom: 0.5em; }
+  .ws-toggle { align-self: stretch; margin-top: 1.9em; }
+  .ws-toggle > * { flex: 1; padding-inline: 0.6em; text-align: center; white-space: nowrap; }
+  .ws-glass .ws-search { margin: 0.9em 0 0; padding: 0.5em; border-radius: 1.6em; box-shadow: none; }
+  .ws-glass .ws-search > span:first-child { display: grid; grid-column: 1 / -1; grid-template-columns: auto 1fr; column-gap: 0.85em; align-items: center; }
+  .ws-glass .ws-search > span:first-child svg { display: block; grid-row: span 2; width: 2.5em; height: 2.5em; padding: 0.55em; }
+  .ws-glass .ws-search > span:nth-child(2) { border-left: 0; }
+  .ws-glass .ws-search > span:nth-child(3) { border-left: 1px solid rgb(12 10 30 / 0.12); border-top: 1px solid rgb(12 10 30 / 0.12); }
+  .ws-glass .ws-search > span:nth-child(2) { border-top: 1px solid rgb(12 10 30 / 0.12); }
+  .ws-perks { flex-wrap: wrap; justify-content: center; gap: 0.6em 1.3em; margin-top: 1.4em; font-size: 1.05em; }
+
+  /* "Choose your car.": its own pane, a row per car (template-2/fleet.tsx). */
+  .ws-choose { display: flex; flex-direction: column; align-items: center; margin-top: 1.4em; padding: 2.3em 1.15em 1.2em; border-radius: 2em; text-align: center; }
+  .ws-choose-title { font-size: 2.3em; font-weight: 800; line-height: 1; letter-spacing: -0.05em; }
+  .ws-choose > small { max-width: 22em; margin-top: 0.8em; font-size: 1.1em; line-height: 1.5; color: rgb(12 10 30 / 0.6); }
+  .ws-choose > .ws-see { margin-top: 1.1em; color: var(--ws-a); }
+  .ws-choose-list { display: grid; gap: 0.7em; align-self: stretch; margin-top: 1.6em; }
+  .ws-choose-row { display: flex; align-items: center; gap: 0.9em; padding: 0.55em 1em 0.55em 0.55em; border-radius: 1.2em; text-align: left; }
+  .ws-choose-thumb { flex: none; width: 4.6em; height: 3.5em; overflow: hidden; border-radius: 0.8em; background: color-mix(in srgb, var(--ws-a) 22%, #fff); }
+  .ws-choose-thumb img { width: 100%; height: 100%; object-fit: contain; }
+  .ws-choose-name { display: grid; flex: 1; min-width: 0; }
+  .ws-choose-name b { overflow: hidden; font-size: 1.15em; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+  .ws-choose-name small { font-size: 0.95em; color: rgb(12 10 30 / 0.6); }
+  .ws-choose-row .ws-car-rate b { font-size: 1.25em; }
 }
 
 /* A live drawing's nav, sign-in and buttons are real buttons (the demo). */
