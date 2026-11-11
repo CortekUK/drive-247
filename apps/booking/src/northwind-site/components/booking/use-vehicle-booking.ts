@@ -62,6 +62,8 @@ import {
   todayIso,
 } from "./time-utils";
 import { firstLegalPickup, firstLegalReturn } from "./trip-window";
+import { calendarDaysBetween } from "./promo-rules";
+import { useDurationDiscount } from "./use-duration-discount";
 import { usePromoCode } from "./use-promo-code";
 import { validateBooking, type BookingField } from "./validation";
 
@@ -582,6 +584,12 @@ export function useVehicleBooking(vehicleId: string) {
   );
 
   const promo = usePromoCode();
+  // The automatic long-rental discount. A code the customer typed replaces it.
+  const durationDiscount = useDurationDiscount(
+    calendarDaysBetween(form.pickupDate ?? "", form.dropoffDate ?? ""),
+    promo.promo === null,
+  );
+  const appliedPromo = promo.promo ?? durationDiscount.promo;
 
   const { quote, isLoading: quoteLoading, pricingRulesDegraded } = useBookingQuote({
     vehicle: quoteVehicle,
@@ -589,7 +597,7 @@ export function useVehicleBooking(vehicleId: string) {
     dropoffDate: quoteEnd,
     extras: quoteExtras,
     selectedExtras: billableExtras,
-    promo: promo.promo,
+    promo: appliedPromo,
     installmentPlanSelected: form.wantsInstallments,
     pickupDelivery,
     returnDelivery,
@@ -1009,7 +1017,7 @@ export function useVehicleBooking(vehicleId: string) {
         selectedExtras: billableExtras,
         addUnlimitedMileage: form.addUnlimitedMileage,
         wantsInstallments: form.wantsInstallments,
-        promoCode: promo.promo?.code ?? null,
+        promoCode: appliedPromo?.code ?? null,
       },
       consent: {
         agreeTerms: form.agreeTerms,
@@ -1032,7 +1040,7 @@ export function useVehicleBooking(vehicleId: string) {
     mode,
     bookingLegs,
     billableExtras,
-    promo.promo,
+    appliedPromo,
   ]);
 
   /**
@@ -1071,6 +1079,7 @@ export function useVehicleBooking(vehicleId: string) {
       selectedExtras: billableExtras,
       pickupLocation: bookingLegs.pickup,
       returnLocation: bookingLegs.return,
+      promoCode: quote.promoDiscount > 0 ? (appliedPromo?.code ?? null) : null,
     });
 
     // null means a write was already in flight and this click was swallowed.
@@ -1176,6 +1185,7 @@ export function useVehicleBooking(vehicleId: string) {
     quote,
     quoteLoading,
     collectPaymentUpfront: rules.collectPaymentUpfront,
+    // null labels the line "Long-rental discount" (the automatic one).
     promoCode: promo.promo?.code ?? null,
     pricingRulesDegraded,
     vehicleIsPaused: vehicle?.isPaused ?? false,
@@ -1194,6 +1204,7 @@ export function useVehicleBooking(vehicleId: string) {
     areaFeeHint,
     areaFeePending,
     promo,
+    durationDiscount,
     rentalDays: validation.rentalDays,
   };
 

@@ -77,7 +77,7 @@ export function PriceSummary({
         ) : null}
 
         {quote.promoDiscount > 0 ? (
-          <Row label={promoCode ? `Discount (${promoCode})` : "Discount"} tone="positive">
+          <Row label={promoCode ? `Discount (${promoCode})` : "Long-rental discount"} tone="positive">
             −{formatCurrency(quote.promoDiscount)}
           </Row>
         ) : null}

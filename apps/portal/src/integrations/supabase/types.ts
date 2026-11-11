@@ -11684,6 +11684,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           expires_at: string
+          is_active: boolean
           id: string
           max_users: number
           min_duration_days: number | null
@@ -11698,6 +11699,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           expires_at: string
+          is_active?: boolean
           id?: string
           max_users?: number
           min_duration_days?: number | null
@@ -11712,6 +11714,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           expires_at?: string
+          is_active?: boolean
           id?: string
           max_users?: number
           min_duration_days?: number | null
