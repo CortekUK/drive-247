@@ -384,6 +384,9 @@ function getDayRate(
   };
 }
 
+/** Rentals this many days or longer pay no weekend/holiday surcharge when the caller opts in. */
+export const SURCHARGE_MAX_DAYS = 7;
+
 /**
  * Calculate the full rental price with dynamic pricing support.
  *
@@ -414,7 +417,13 @@ export function calculateRentalPriceBreakdown(
   stackSurcharges: boolean = false,
   // Turo-style per-day manual prices for this vehicle. A price set for a given
   // calendar day overrides the tier rate AND all surcharges for that day.
-  dailyPrices?: VehicleDailyPrice[]
+  dailyPrices?: VehicleDailyPrice[],
+  // When true, weekend and holiday surcharges (and the per-car weekend/holiday
+  // overrides) apply only to rentals shorter than SURCHARGE_MAX_DAYS; a rental
+  // of 7 days or more pays its weekly/monthly price as it stands. The v2
+  // (Northwind) quote and portal screens pass true (Ghulam, QA P5, 2026-11-11);
+  // every other caller keeps the old all-lengths behaviour.
+  surchargesUnder7DaysOnly: boolean = false
 ): RentalPriceResult {
   const pickup = parseDateString(pickupDate);
   const dropoff = parseDateString(dropoffDate);
@@ -429,9 +438,10 @@ export function calculateRentalPriceBreakdown(
   const monthlyRent = rates.monthly_rent || 0;
 
   // Blanking the surcharge inputs makes every day resolve to the plain tier rate.
-  const effectiveWeekendConfig = skipSurcharges ? null : (weekendConfig || null);
-  const safeHolidays = skipSurcharges ? [] : (holidays || []);
-  const safeOverrides = skipSurcharges ? [] : (overrides || []);
+  const noSurcharges = skipSurcharges || (surchargesUnder7DaysOnly && rentalDays >= SURCHARGE_MAX_DAYS);
+  const effectiveWeekendConfig = noSurcharges ? null : (weekendConfig || null);
+  const safeHolidays = noSurcharges ? [] : (holidays || []);
+  const safeOverrides = noSurcharges ? [] : (overrides || []);
 
   // Stacking can be turned on either explicitly (param) or via the tenant's
   // weekend config (stack_surcharges) so callers that already pass weekendConfig

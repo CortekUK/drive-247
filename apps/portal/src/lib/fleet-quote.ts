@@ -75,6 +75,8 @@ export interface FleetQuoteConfig {
   securityDepositEnabled?: boolean | null;
   depositMode?: string | null;
   globalSecurityDeposit?: number | string | null;
+  /** v2: weekend/holiday surcharges only on quotes under 7 days (QA P5). */
+  surchargesUnder7DaysOnly?: boolean;
 }
 
 export interface FleetQuoteLine {
@@ -415,6 +417,7 @@ export function buildFleetQuote(
       false,
       Boolean(config.weekendConfig?.stack_surcharges),
       vehicleDailyPrices,
+      config.surchargesUnder7DaysOnly === true,
     );
 
     if (!Number.isFinite(breakdown.rentalPrice) || breakdown.rentalPrice <= 0) {

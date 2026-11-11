@@ -547,6 +547,7 @@ export function computeQuote(input: QuoteInput): QuoteResult {
     false, // skipSurcharges — customer-facing quotes always honour surcharges
     false, // stackSurcharges — resolved from the weekend config, as v1 does
     input.dailyPrices,
+    true, // weekend/holiday surcharges only under 7 days (QA P5, 2026-11-11)
   );
 
   const rentalDays = priced.rentalDays;

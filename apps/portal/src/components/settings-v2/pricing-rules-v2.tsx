@@ -21,8 +21,9 @@
  * does; the dialog now warns when that clears a holiday's vehicle exclusions.
  *
  * The copy says what the pricing engine does (`lib/calculate-rental-price.ts`,
- * the same file in booking): surcharges apply to every booking that includes
- * the day, weekly and monthly ones too (on their per-day price); and when a
+ * the same file in booking): on v2, surcharges apply only to bookings under 7
+ * days (`surchargesUnder7DaysOnly`; QA P5, 2026-11-11), so a weekly or monthly
+ * booking pays its own price as it stands; and when a
  * holiday falls on a weekend day, only the holiday's surcharge applies unless
  * `stack_surcharges` is on, which adds the two together. It is NOT "the higher
  * one": a 5% holiday on a 10% weekend day charges 5% with stacking off.
@@ -365,7 +366,7 @@ function WeekendPricingSection({
       <SectionHeader
         id="v2-weekend-pricing"
         title="Weekend pricing"
-        description="Charge more on the days you pick. It applies to every booking that includes them, weekly and monthly ones too."
+        description="Charge more on the days you pick, on bookings under 7 days. Weekly and monthly bookings keep their own price."
       />
       <ReadGate read={read} thing="weekend pricing" rows={3}>
         <SettingsReadOnlyFieldset readOnly={!canEdit}>
@@ -573,7 +574,7 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
       <SectionHeader
         id="v2-holiday-pricing"
         title="Holiday pricing"
-        description="Charge more on date ranges such as Christmas. It applies to every booking that includes those dates."
+        description="Charge more on date ranges such as Christmas, on bookings under 7 days that include those dates. Weekly and monthly bookings keep their own price."
         action={
           // One place to add a holiday, with or without rows, once the list has
           // loaded (never over a skeleton or a failed read).
@@ -690,7 +691,7 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
           <DialogHeader>
             <DialogTitle>{editing ? "Edit holiday" : "Add holiday"}</DialogTitle>
             <DialogDescription>
-              Added to the day&apos;s price on these dates, for every booking that includes them.
+              Added to the day&apos;s price on these dates, for bookings under 7 days that include them.
             </DialogDescription>
           </DialogHeader>
           <form

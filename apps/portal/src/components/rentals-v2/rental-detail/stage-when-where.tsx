@@ -209,7 +209,8 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
       mtd,
       rental.auto_extend_enabled === true,
       false,
-      dayPrices as never
+      dayPrices as never,
+      true // v2: weekend/holiday surcharges only under 7 days (QA P5)
     );
     const price = Math.round(breakdown.rentalPrice * 100) / 100;
     const discounted = price - (Number(rental.discount_applied) || 0);
