@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { isRentalClosedForInsurance } from '@/lib/bonzah-rental-closed';
 import { useTenant } from '@/contexts/TenantContext';
 import { ShieldAlert, ArrowRight, ExternalLink, RefreshCw, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -21,11 +22,13 @@ export function BonzahPendingAlert() {
       if (!tenant?.id) throw new Error('No tenant');
       const { data, error } = await supabase
         .from('bonzah_insurance_policies')
-        .select('id, rental_id, premium_amount, status')
+        .select('id, rental_id, premium_amount, status, rental:rentals!bonzah_insurance_policies_rental_id_fkey(status, approval_status)')
         .eq('tenant_id', tenant.id)
         .eq('status', 'insufficient_balance');
       if (error) throw error;
-      return data || [];
+      // Never offer "retry all" for a rental that was cancelled: retrying would
+      // buy cover for a car that never goes out (the server refuses it too).
+      return (data || []).filter((p: any) => !isRentalClosedForInsurance(p.rental));
     },
     enabled: !!tenant?.id,
   });

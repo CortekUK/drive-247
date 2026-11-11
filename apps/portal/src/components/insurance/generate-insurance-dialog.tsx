@@ -50,6 +50,7 @@ export function GenerateInsuranceDialog({
             id: selectedRental.id,
             start_date: selectedRental.start_date,
             end_date: selectedRental.end_date,
+            status: selectedRental.status,
             customer_id: selectedRental.customer_id,
             customers: {
               id: selectedRental.customers.id,

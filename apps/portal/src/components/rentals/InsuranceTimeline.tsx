@@ -28,6 +28,8 @@ import { formatCurrency } from '@/lib/formatters';
 import { getActiveCoverageLabels } from '@/lib/coverage-labels';
 import { bonzahCanInsureThrough } from '@/lib/bonzah-dates';
 import { resolveCoverageGap, describeCoverageGap } from '@/lib/bonzah-coverage-gap';
+import { isRentalClosedForInsurance, RENTAL_CLOSED_INSURANCE_NOTE } from '@/lib/bonzah-rental-closed';
+import { functionErrorMessage } from '@/lib/function-error';
 import type { InsurancePolicy } from '@/hooks/use-rental-insurance-policies';
 
 interface InsuranceTimelineProps {
@@ -161,7 +163,10 @@ function InsuranceTimelineItem({
         toast({ title: 'Policy Issued', description: `Bonzah policy ${data?.policy_no || ''} has been issued successfully.` });
       }
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message || 'Failed to issue policy', variant: 'destructive' });
+      const description = await functionErrorMessage(err, 'Failed to issue policy');
+      toast({ title: 'Policy not issued', description, variant: 'destructive' });
+      // The server may have closed a stale quote (e.g. the rental was cancelled).
+      queryClient.invalidateQueries({ queryKey: ['rental-insurance-policies', rentalId] });
     } finally {
       setIssuingPolicy(false);
     }
@@ -337,7 +342,7 @@ export function InsuranceTimeline({
   canEdit,
   tenantId,
   isBonzahConnected,
-  canSellBonzah,
+  canSellBonzah: canSellBonzahProp,
   bonzahCdBalance,
   onBuyInsurance,
   extensions,
@@ -346,6 +351,11 @@ export function InsuranceTimeline({
   onUploadExtensionInsuranceFor,
 }: InsuranceTimelineProps) {
   const bonzahMode = (rental as any)?.tenants?.bonzah_mode || 'test';
+  // A cancelled/rejected rental can never use cover. Every "Buy", "Complete"
+  // and "Retry" below reads canSellBonzah, so closing it here closes them all;
+  // viewing, refreshing and downloading issued policies stay available.
+  const rentalClosed = isRentalClosedForInsurance(rental);
+  const canSellBonzah = canSellBonzahProp && !rentalClosed;
   const portalUrl = bonzahMode === 'live' ? 'https://bonzah.insillion.com/bb1/' : 'https://bonzah.sb.insillion.com/bb1/';
   const hasOriginal = policies.some((p) => p.policy_type === 'original');
   const hasInsufficientBalance = policies.some((p) => p.status === 'insufficient_balance');
@@ -389,6 +399,11 @@ export function InsuranceTimeline({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {rentalClosed && canEdit && (
+          <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            {RENTAL_CLOSED_INSURANCE_NOTE}
+          </p>
+        )}
         {/* Placed above the policy list: the list is what makes the gap
             invisible, so the correction has to be read first. */}
         {coverageGap && (

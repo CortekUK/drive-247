@@ -361,6 +361,9 @@ export default function RejectionDialog({
       }
 
       toast({ title: "Booking Rejected", description });
+      if (data?.policyCancellationWarning) {
+        toast({ title: "Insurance still active at Bonzah", description: data.policyCancellationWarning, variant: "destructive" });
+      }
 
       logAction({ action: "rental_cancelled", entityType: "rental", entityId: rental.id, details: { reason: rejectionReason, operation: "rejected" } });
 
@@ -375,6 +378,7 @@ export default function RejectionDialog({
       queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
       queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
       queryClient.invalidateQueries({ queryKey: ['installment-plan'] });
+      queryClient.invalidateQueries({ queryKey: ['rental-insurance-policies', rental.id] });
       queryClient.invalidateQueries({ queryKey: ['rental-installment-refund-info'] });
 
       handleClose();

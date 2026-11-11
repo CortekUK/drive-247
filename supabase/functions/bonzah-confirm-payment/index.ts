@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import { bonzahFetchWithCredentials, getTenantBonzahCredentials, getBonzahTokenForCredentials, getBonzahApiUrl, formatDateForBonzah, normalizeZipForBonzah, resolveBonzahWindow, isBonzahStartDateError, type TenantBonzahCredentials } from '../_shared/bonzah-client.ts'
 import { corsHeaders, handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import { sendResendEmail, getTenantBranding, wrapWithBrandedTemplate } from '../_shared/resend-service.ts'
+import { isRentalClosedForInsurance } from '../_shared/bonzah-rental-cancellation.ts'
 
 // Bonzah Auto Rental Insurance product ID
 const PRODUCT_ID = 'M000000000006'
@@ -524,6 +525,40 @@ serve(async (req) => {
       if (!chainError && chainPolicies && chainPolicies.length > 1) {
         policiesToConfirm = chainPolicies
         console.log(`[Bonzah Payment] Found chain with ${chainPolicies.length} policies (chain_id: ${policyRecord.chain_id})`)
+      }
+    }
+
+    // Never spend the operator's Bonzah balance on a rental that has ended
+    // without the car going out. Every caller (portal Retry/Complete, retry-all,
+    // booking success pages, Stripe webhooks) comes through here, so this is the
+    // one place the rule cannot be bypassed. R-57f385 (Moore Luxe, 2026-11-11)
+    // was rejected, then a Retry tap 12 minutes later issued a live policy.
+    if (policyRecord.rental_id) {
+      const { data: rentalState } = await supabase
+        .from('rentals')
+        .select('status, approval_status, rental_number')
+        .eq('id', policyRecord.rental_id)
+        .maybeSingle()
+
+      if (isRentalClosedForInsurance(rentalState)) {
+        const unissued = policiesToConfirm.filter((p: any) => p.status !== 'active' && p.status !== 'cancelled')
+        for (const p of unissued) {
+          await supabase
+            .from('bonzah_insurance_policies')
+            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+            .eq('id', p.id)
+            .eq('status', p.status)
+        }
+        console.warn(
+          `[Bonzah Payment] Refused: rental ${rentalState?.rental_number ?? policyRecord.rental_id} is cancelled. ` +
+          `${unissued.length} unissued policy row(s) marked cancelled; nothing charged.`
+        )
+        return jsonResponse({
+          success: false,
+          code: 'rental_cancelled',
+          // `error` is the sentence the portal toasts (functionErrorMessage reads it first).
+          error: 'This rental is cancelled, so no insurance was bought and nothing was charged.',
+        }, 409)
       }
     }
 
