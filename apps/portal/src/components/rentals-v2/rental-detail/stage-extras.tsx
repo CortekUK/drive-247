@@ -90,6 +90,7 @@ import {
 import { Button } from "@/components/ui-v2/button";
 import type { StageProps } from "./stages";
 import { insetCls, listCls, Panel, Pill, StageAction, Surface } from "./_kit";
+import { priceCatalogueForCar, type CatalogueExtraRow, type PricedCatalogueExtra } from "./extras-catalogue-price";
 
 /* ══════════════════════════════════════════════════════════════════════════
    Add-ons
@@ -216,30 +217,22 @@ function signPill(status: RentalAdditionalDriver["signing_status"]) {
    The stage
    ══════════════════════════════════════════════════════════════════════════ */
 
-/** The tenant's own extras catalogue — what can be put on a rental. */
-type CatalogueExtra = {
-  id: string;
-  name: string;
-  description: string | null;
-  price: number;
-  billing_type: "per_trip" | "per_day" | null;
-  max_quantity: number | null;
-  image_urls: string[] | null;
-};
+type CatalogueExtra = PricedCatalogueExtra;
+type CatalogueRow = CatalogueExtraRow;
 
-function useExtrasCatalogue() {
+function useExtrasCatalogue(vehicleId: string | null) {
   const { tenant } = useTenant();
   return useQuery({
-    queryKey: ["rental-extras-catalogue-v2", tenant?.id],
+    queryKey: ["rental-extras-catalogue-v2", tenant?.id, vehicleId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("rental_extras")
-        .select("id, name, description, price, billing_type, max_quantity, image_urls")
+        .select("id, name, description, price, pricing_type, billing_type, max_quantity, image_urls, rental_extras_vehicle_pricing(vehicle_id, price)")
         .eq("tenant_id", tenant!.id)
         .eq("is_active", true)
         .order("sort_order", { ascending: true });
       if (error) throw error;
-      return (data ?? []) as CatalogueExtra[];
+      return priceCatalogueForCar((data ?? []) as unknown as CatalogueRow[], vehicleId);
     },
     enabled: !!tenant?.id,
   });
@@ -273,7 +266,7 @@ export function StageExtras({ detail }: StageProps) {
   const rental = detail.rental;
   const { data: selections, isLoading: extrasLoading } = useRentalExtraSelections(rental.id);
   const { data: drivers, isLoading: driversLoading } = useRentalAdditionalDrivers(rental.id);
-  const { data: catalogue } = useExtrasCatalogue();
+  const { data: catalogue } = useExtrasCatalogue(rental.vehicle_id ?? null);
   const editable = useExtrasEditable(rental.id);
   const canEdit = editable.data?.ok === true;
 

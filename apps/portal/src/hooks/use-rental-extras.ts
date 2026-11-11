@@ -5,7 +5,17 @@ import { toast } from '@/hooks/use-toast';
 import { useV2 } from '@/lib/v2-context';
 
 /** v2: the update reached the extra but not its per-vehicle prices. */
-export const VEHICLE_PRICES_NOT_SAVED = "The extra was saved, but its vehicle prices couldn't be updated. Try saving again.";
+/**
+ * True when a delete failed because the extra is on bookings: the
+ * `rental_extras_selections_extra_id_fkey` foreign key (Postgres 23503) keeps
+ * every booking's selection, so trying again can never succeed.
+ */
+export function isExtraInUseError(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null;
+  return !!e && (e.code === '23503' || /rental_extras_selections_extra_id_fkey/.test(e.message ?? ''));
+}
+
+export const VEHICLE_PRICES_NOT_SAVED ="The extra was saved, but its vehicle prices couldn't be updated. Try saving again.";
 
 export interface VehiclePricing {
   id: string;
@@ -325,6 +335,10 @@ export const useRentalExtras = () => {
       });
     },
     onError: (error: Error) => {
+      // v2: an extra that is on bookings cannot be deleted (the database keeps
+      // their selections). The delete dialog says so in words and offers to
+      // deactivate it, so no raw constraint message here.
+      if (strictVehiclePricing && isExtraInUseError(error)) return;
       toast({
         title: 'Error',
         description: `Failed to delete extra: ${error.message}`,
