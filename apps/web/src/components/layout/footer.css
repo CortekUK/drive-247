@@ -42,16 +42,19 @@
   .ft-legal > span { white-space: pre; }
   .ft-legal a { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
 }
-/* The wordmark is small on a phone: fade it less so every letter stays readable, and
-   lift it clear of the floating theme button in the corner. */
+/* Phones (user, 2026-11-11): no big DRIVE247 wordmark, and the footer drawn tighter. The
+   links keep a 36px tap height; the gaps between the columns and rows come down. */
 @media (max-width: 639.98px) {
   .ft { padding-bottom: 72px; }
-  /* Inside the page's side gutter, so the last letter is never cut by the screen's edge. */
-  .ft-word { width: calc(100% - 40px); margin-inline: auto; }
-  .ft-word {
-    -webkit-mask-image: linear-gradient(to bottom, #000 80%, rgb(0 0 0 / 0.55));
-    mask-image: linear-gradient(to bottom, #000 80%, rgb(0 0 0 / 0.55));
-  }
+  .ft-word { display: none; }
+  /* Without the wordmark there is nothing to fill a full screen: end with the content. */
+  .ft { min-height: 0; padding-bottom: 88px; }
+  .ft-top { padding-top: 48px; }
+  .ft-top > .grid { row-gap: 32px; }
+  .ft-top > .grid .grid { row-gap: 28px; }
+  .ft-list { margin-top: 4px; }
+  .ft-link { min-height: 36px; }
+  .ft-top > div:last-child { margin-top: 36px; row-gap: 4px; }
 }
 
 /*

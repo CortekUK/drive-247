@@ -63,3 +63,8 @@
 @media (prefers-reduced-motion: reduce) {
   .cc-btn, .cc-btn svg { transition: none; }
 }
+
+/* Phones: closer to the cards above it, and a little less padding (user, 2026-11-11). */
+@media (max-width: 639.98px) {
+  .cc { margin-top: 40px; padding: 28px 22px; border-radius: 24px; }
+}

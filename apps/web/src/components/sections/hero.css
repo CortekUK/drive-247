@@ -291,7 +291,11 @@
   .hg-hero { height: auto; min-height: 0; padding-top: 92px; }
   .hg-nav { display: none; }
   .hg-title { font-size: clamp(2.25rem, 10.4vw, 3rem); }
-  .hg-sub { margin-top: 14px; font-size: 1rem; max-width: 22rem; }
+  /* Wraps like the Trax line (user, 2026-11-11): full lines narrowing to a short last one. */
+  /* A pyramid, like the Trax line (user, 2026-11-11): one line per span, each shorter than the
+     one above. Measured at 16px: 282 / 250 / 164 / 111px, so it fits a 320px phone. */
+  .hg-sub { margin-top: 14px; font-size: 1rem; max-width: 100%; }
+  .hg-line { display: block; white-space: nowrap; }
   .hg-proof { margin-top: 18px; }
 
   .hg-cta {

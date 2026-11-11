@@ -34,7 +34,8 @@
 }
 @media (prefers-reduced-motion: reduce) { .di-arrow { animation: none; } }
 
-/* Phones: no arrow above "Name it. Style it. Try it." (user, 2026-11-10). */
+/* Phones: none of these arrows, above the demo or under "Real operators run on Drive247"
+   (user, 2026-11-10 and 2026-11-11). */
 @media (max-width: 767.98px) {
-  #demo-intro .di-arrow { display: none; }
+  .di-arrow { display: none; }
 }

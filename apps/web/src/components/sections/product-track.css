@@ -689,6 +689,201 @@
   .pt-panel #calendar .cs-board { scrollbar-width: none; overscroll-behavior-x: contain; }
   .pt-panel #calendar .cs-board::-webkit-scrollbar { display: none; }
 
+  /* The calendar's minimal look and its labels, the same screen as desktop (Ghulam, 2026-11-11:
+     "isn't same as the desktop calendar, with labels"). A copy of the desktop rules above. */
+  /*
+   * Calendar, minimal (Ghulam, 2026-11-10: "not in a browser window, very minimal and
+   * sophisticated"): no browser, no toolbar, no stats, no pop-up, no cursor. Just the month
+   * line, the cars and their bookings, drawn straight on the page in hairlines and two tones.
+   */
+  .pt-panel #calendar .cs-top,
+  .pt-panel #calendar .pg-tabs,
+  .pt-panel #calendar .pg-address,
+  .pt-panel #calendar .cs-search,
+  .pt-panel #calendar .cs-seg,
+  .pt-panel #calendar .cs-top u,
+  .pt-panel #calendar .cs-nav,
+  .pt-panel #calendar .cs-title svg,
+  .pt-panel #calendar .cs-stats,
+  .pt-panel #calendar .cs-pop,
+  .pt-panel #calendar .cs-cursor,
+  .pt-panel #calendar .cs-day em,
+  .pt-panel #calendar .cs-avatar,
+  .pt-panel #calendar .cs-car > i { display: none; }
+  .pt-panel #calendar .cs-window,
+  .pt-panel #calendar .pg-browser,
+  .pt-panel #calendar .pg-screen,
+  .pt-panel #calendar .cs-window .cs-board { border: 0; background: transparent; box-shadow: none; }
+  /* Plain like the portal (Ghulam, 2026-11-10): a white page with the portal's #f1f5f9 hairlines, no gradient or grid behind. */
+  /* With the portal's own page wash over the white (portal styles/v2-theme.css .bg-app-gradient), Ghulam, 2026-11-10. */
+  .pt-panel #calendar .cs-window .cs-board {
+    background:
+      radial-gradient(70rem 50rem at 105% -10%, hsl(239 84% 67% / 0.2), transparent 55%),
+      radial-gradient(60rem 48rem at -8% -6%, hsl(247 92% 60% / 0.16), transparent 52%),
+      radial-gradient(55rem 45rem at 50% 115%, hsl(239 84% 67% / 0.12), transparent 55%),
+      linear-gradient(180deg, hsl(239 84% 67% / 0.07) 0%, transparent 45%),
+      #fff;
+  }
+  /* End to end: the rows and hairlines run to both edges of the screen; only the words keep the side margin. */
+  .pt-panel #calendar .cs-window .cs-board { --cs-side: clamp(20px, 2vw, 32px); padding: 0; }
+  .pt-panel #calendar .cs-top { padding-inline: var(--cs-side); }
+  .pt-panel #calendar .cs-grid { grid-template-columns: calc(14em + var(--cs-side)) minmax(0, 1fr); }
+  .pt-panel #calendar .cs-corner,
+  .pt-panel #calendar .cs-car { padding-left: var(--cs-side); }
+  .pt-panel #calendar .cs-now { left: calc(14em + var(--cs-side) + (100% - 14em - var(--cs-side)) / var(--cs-days) * (var(--cs-today) + 0.5)); }
+  .pt-panel #calendar .cs-title b { font-size: 2.6em; font-weight: 400; letter-spacing: -0.03em; }
+  .pt-panel #calendar .cs-grid { margin-top: 0; }
+  .pt-panel #calendar .cs-corner,
+  .pt-panel #calendar .cs-car,
+  .pt-panel #calendar .cs-lane { border-color: #e9edf3; }
+  .pt-panel #calendar .cs-corner { font-weight: 400; }
+  .pt-panel #calendar .cs-lane { background: repeating-linear-gradient(90deg, transparent 0 calc(100% / var(--cs-days) - 1px), #f1f5f9 calc(100% / var(--cs-days) - 1px) calc(100% / var(--cs-days))); }
+  .pt-panel #calendar .cs-day.is-weekend { background: none; }
+  .pt-panel #calendar .cs-day b { font-weight: 400; }
+  .pt-panel #calendar .cs-car b { font-weight: 500; }
+  .pt-panel #calendar .cs-bar { top: 50%; height: 2.6em; padding-inline: 1em; border-radius: 99px; font-weight: 500; }
+  .pt-panel #calendar .cs-bar.is-out,
+  .pt-panel #calendar .cs-bar.is-returning { background: var(--cs-brand); color: #fff; }
+  .pt-panel #calendar .cs-bar.is-booked { background: hsl(var(--v2-primary) / 0.1); box-shadow: none; }
+  .pt-panel #calendar .cs-bar.is-pending { background: rgb(245 158 11 / 0.1); box-shadow: none; }
+  .pt-panel #calendar .cs-bar.is-blocked { background: hsl(var(--v2-foreground) / 0.05); box-shadow: none; }
+  /* The booking the sheet is showing. */
+  .pt-panel #calendar .cs-bar.is-open { box-shadow: inset 0 0 0 1.5px var(--cs-brand); }
+  /* Today's line starts under the date, so it no longer strikes through "Wed". */
+  /*
+   * Labels (Ghulam, 2026-11-10, after a sketch: a thin line from inside the thing, out to a few
+   * words floating in the empty space). No card, no number: just the line and the words.
+   * The line starts inside the booking, near its end where it is empty, and runs down and to the
+   * right; the words sit at its end. Near the right edge it runs down and to the left instead.
+   */
+  .pt-panel #calendar .cs-note {
+    /* Labels have their own colour, apart from the bookings' indigo: the sketch's blue (Ghulam, 2026-11-10). */
+    --cs-label: #475569; /* slate: the sketch blue #3b82f6, then #0f172a, were not it ("too black") */
+    --dx: 4.6em;
+    --dy: 2.05em;
+    position: absolute;
+    z-index: 3; /* over the today line */
+    top: calc(50% + 1.3em); /* from the booking's bottom edge, so the line never crosses its name */
+    left: calc(100% / var(--cs-days) * (var(--cs-from) + var(--cs-span)) - 1.6em);
+    display: block;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    opacity: 0;
+  }
+  /* One thin line, one colour, the same angle for every label. */
+  .pt-panel #calendar .cs-note::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: calc(var(--dx) * 1.0936);
+    border-top: 1px solid color-mix(in srgb, var(--cs-label) 55%, transparent);
+    transform-origin: 0 0;
+    rotate: 24.06deg;
+    scale: 0 1;
+  }
+  /* Near the right edge: out of the booking's left end instead, down and to the left. */
+  .pt-panel #calendar .cs-note.is-left { left: calc(100% / var(--cs-days) * var(--cs-from) + 1.6em); }
+  .pt-panel #calendar .cs-note.is-left::before { rotate: 155.94deg; }
+  /* The words, level with the line's end. */
+  .pt-panel #calendar .cs-note > span {
+    position: absolute;
+    top: var(--dy);
+    left: var(--dx);
+    translate: 0 -50%;
+    /* A small box around the words, in the label's blue (Ghulam, 2026-11-10: "put them in a box"). */
+    padding: 0.55em 1em 0.55em 0.6em;
+    border-radius: 0.7em;
+    background: var(--cs-label);
+    box-shadow: 0 0.5em 1.4em rgb(71 85 105 / 0.14);
+    line-height: 1;
+    white-space: nowrap;
+  }
+  /* The size sits on the words, not their box, so the box is placed in the calendar's own em. */
+  .pt-panel #calendar .cs-note > span { display: flex; align-items: center; gap: 0.7em; }
+  /* The label's number, a small white disc inside the box. */
+  .pt-panel #calendar .cs-note > span > i {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    color: var(--cs-label);
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 700;
+  }
+  .pt-panel #calendar .cs-note > span > b { display: block; font-size: clamp(14px, 1.05vw, 17px); font-weight: 500; color: #fff; }
+  .pt-panel #calendar .cs-note.is-left > span { left: auto; right: var(--dx); }
+  .pt-panel #calendar .cs-free > b { font-size: clamp(14px, 1.05vw, 17px); font-weight: 500; color: var(--cs-brand); }
+  .pt-panel #calendar .cs-free > small { font-size: clamp(12.5px, 0.9vw, 14.5px); color: hsl(var(--v2-foreground) / 0.5); }
+  .pt-panel #calendar .is-in .cs-note { opacity: 1; transition: opacity 300ms ease-out 1200ms; }
+  .pt-panel #calendar .is-in .cs-note::before { scale: 1 1; transition: scale 500ms cubic-bezier(0.16, 1, 0.3, 1) 1200ms; }
+  /* Free days: an empty slot, dashed, the size of a booking, labelled inside. */
+  .pt-panel #calendar .cs-free {
+    position: absolute;
+    top: 50%;
+    left: calc(100% / var(--cs-days) * var(--cs-from) + 0.25em);
+    width: calc(100% / var(--cs-days) * var(--cs-span) - 0.5em);
+    min-height: 4.4em;
+    row-gap: 0.3em;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: center;
+    align-items: center;
+    padding: 0.6em 1.6em;
+    border: 1.5px dashed hsl(var(--v2-primary) / 0.3);
+    border-radius: 99px;
+    background: hsl(0 0% 100% / 0.85);
+    line-height: 1.25;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    translate: 0 -50%;
+  }
+  .pt-panel #calendar .cs-free > b, .pt-panel #calendar .cs-free > small { overflow: hidden; text-overflow: ellipsis; }
+  .pt-panel #calendar .cs-now-label {
+    position: absolute;
+    bottom: 1.2em;
+    left: 0;
+    display: block;
+    padding: 0.25em 0.7em;
+    border-radius: 99px;
+    background: var(--cs-brand);
+    color: #fff;
+    font-size: 0.85em;
+    font-weight: 600;
+    white-space: nowrap;
+    opacity: 0;
+    translate: -50% 0;
+  }
+  .pt-panel #calendar .is-in .cs-free { opacity: 1; transition: opacity 300ms ease-out 1300ms; }
+  .pt-panel #calendar .is-in .cs-now-label { opacity: 1; transition: opacity 300ms ease-out 1300ms; }
+  @media (prefers-reduced-motion: reduce) { .pt-panel #calendar .cs-note, .pt-panel #calendar .cs-free, .pt-panel #calendar .cs-now-label { transition: none; } }
+  /* As on desktop: rows tall enough for the labels between them, the cars pinned at the left
+     while the days pan under them, so a name is never cut at the edge. */
+  .pt-panel #calendar .cs-window .cs-board { --u: clamp(9px, 2.4vw, 11px); padding-block: 0; }
+  /* No padding above or below the grid, so the white car column runs the full height of the
+     screen (user, 2026-11-11); the corner cell carries the top spacing instead. */
+  .pt-panel #calendar .cs-corner { padding-top: 2em; }
+  .pt-panel #calendar .cs-days { padding-top: 1.2em; }
+  .pt-panel #calendar .cs-grid { grid-auto-rows: 7.6em; grid-template-rows: auto; }
+  .pt-panel #calendar .cs-car { height: auto; }
+  .pt-panel #calendar .cs-window .cs-board { --cs-side: 14px; }
+  .pt-panel #calendar .cs-grid { grid-template-columns: calc(9.5em + var(--cs-side)) minmax(0, 1fr); }
+  .pt-panel #calendar .cs-now { left: calc(9.5em + var(--cs-side) + (100% - 9.5em - var(--cs-side)) / var(--cs-days) * (var(--cs-today) + 0.5)); }
+  .pt-panel #calendar .cs-corner,
+  .pt-panel #calendar .cs-car { position: sticky; left: 0; z-index: 5; background: #fff; box-shadow: 1px 0 0 #e9edf3; }
+  .pt-panel #calendar .cs-car b { font-size: 1.15em; }
+  /* The labels' words, sized to the phone's calendar rather than desktop's. */
+  .pt-panel #calendar .cs-note > span { padding: 0.5em 0.9em 0.5em 0.5em; }
+  .pt-panel #calendar .cs-note > span > i { width: 16px; height: 16px; font-size: 9.5px; }
+  .pt-panel #calendar .cs-note > span > b { font-size: 12.5px; }
+  .pt-panel #calendar .cs-free > b { font-size: 13px; }
+  .pt-panel #calendar .cs-free > small { font-size: 11.5px; }
+
   /* Multi-chat: the call record keeps its player and summary; the long lists stay on desktop. */
   .pt-panel .mcr-cols,
   .pt-panel .mcr-lines,

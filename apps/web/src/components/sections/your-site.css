@@ -293,7 +293,8 @@
 @media (max-width: 759.98px) {
   .ys { padding-block: 48px 64px; }
   .ys-inner { gap: 20px; }
-  .ys-title { font-size: clamp(2rem, 9.4vw, 2.6rem); }
+  /* No "Name it. Style it. Try it." here either (user, 2026-11-11); kept for screen readers, as on desktop. */
+  .ys-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .ys-side { padding: 16px; border-radius: 22px; }
   .ys-bar { border-bottom: 0; }
   .ys-set { padding-block: 14px; }
@@ -314,5 +315,6 @@
 
   .ys-close-end { order: 3; display: grid; justify-items: center; gap: 12px; margin-top: 8px; text-align: center; }
   .ys-close-end .ys-go { width: 100%; height: 52px; font-size: 16px; }
-  .ys-close-end .ys-close-line { font-size: 14px; }
+  /* Just the button: no "Like it? It goes live at …" line (user, 2026-11-11). */
+  .ys-close-end .ys-close-line { display: none; }
 }

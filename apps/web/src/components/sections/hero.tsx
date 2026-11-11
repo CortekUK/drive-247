@@ -71,7 +71,11 @@ export function Hero({ trialDays = 0 }: { trialDays?: number }) {
         <HeroTitle />
 
         <p className="hg-sub text-base leading-relaxed text-white/85 sm:text-lg">
-          For <b className="hg-who">independent car rental operators</b>. Bookings, payments, agreements, your website and Trax, all in one place.
+          {/* Spans so phones can stack it as a pyramid, each line shorter (hero.css .hg-line). */}
+          <span className="hg-line">For <b className="hg-who">independent car rental operators</b>.</span>{" "}
+          <span className="hg-line">Bookings, payments, agreements,</span>{" "}
+          <span className="hg-line">your website and Trax,</span>{" "}
+          <span className="hg-line">all in one place.</span>
         </p>
 
         <ul className="hg-proof" aria-label="What you get">

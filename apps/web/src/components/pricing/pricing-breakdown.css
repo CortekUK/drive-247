@@ -158,59 +158,12 @@
  * picks a card and shows which one is in view. Cards and lines are a little tighter.
  */
 @media (max-width: 639.98px) {
-  .pb-switch {
-    position: sticky;
-    top: 8px;
-    z-index: 3;
-    display: flex;
-    gap: 4px;
-    padding: 4px;
-    overflow-x: auto;
-    border: 1px solid var(--pb-line);
-    border-radius: 16px;
-    background: color-mix(in srgb, hsl(var(--v2-card)) 88%, transparent);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
-    scrollbar-width: none;
-  }
-  .pb-switch::-webkit-scrollbar { display: none; }
-  .pb-switch button {
-    flex: 1 0 auto;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1px;
-    min-height: 44px;
-    padding: 6px 10px;
-    border-radius: 12px;
-    font-size: 13px;
-    line-height: 1.2;
-    color: hsl(var(--v2-muted-foreground));
-    transition: background-color 200ms ease-out, color 200ms ease-out;
-  }
-  .pb-switch button b { font-weight: 600; color: hsl(var(--v2-foreground)); transition: color 200ms ease-out; }
-  .pb-switch button span { font-size: 11.5px; font-variant-numeric: tabular-nums; }
-  .pb-switch button[aria-current] { background: hsl(var(--v2-foreground)); color: hsl(var(--v2-background) / 0.7); }
-  .pb-switch button[aria-current] b { color: hsl(var(--v2-background)); }
-
-  .pb-grid {
-    grid-template-columns: none;
-    grid-auto-flow: column;
-    grid-auto-columns: 86%;
-    gap: 10px;
-    align-items: start;
-    margin-inline: -16px;
-    padding: 2px 16px 6px;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scroll-snap-type: x mandatory;
-    scroll-padding-inline: 16px;
-    scrollbar-width: none;
-  }
-  .pb-grid::-webkit-scrollbar { display: none; }
-  .pb-col { scroll-snap-align: start; }
-  /* Inside a sideways scroller nothing can pin to the screen, and the switcher names the plan anyway. */
-  .pb-stick { position: static; padding: 20px 20px 14px; }
+  /* Stacked, one card under another, with the top of each card (name, price, button) pinned
+     to the screen while its breakdown scrolls under it, as on desktop. No plan switcher above
+     (user, 2026-11-11): a sideways swipe can't pin anything, so the cards no longer swipe. */
+  .pb-switch { display: none; }
+  .pb-grid { gap: 14px; }
+  .pb-stick { padding: 20px 20px 14px; }
   .pb-tag { top: 16px; right: 16px; }
   .pb-nick { margin-top: 0; font-size: 22px; }
   .pb-price strong { font-size: 36px; }
