@@ -284,6 +284,7 @@ export function depositAmountIssue(form: DepositFormFields, currencyCode: string
   if (amount < 0) {
     return {
       tone: "danger",
+      blocksSave: true,
       message: `The amount is ${formatCurrency(amount, currencyCode)}. A deposit can't be negative. Enter 0 or more.`,
     };
   }

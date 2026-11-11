@@ -123,7 +123,7 @@ export function PriceSummary({
         ) : null}
 
         {quote.depositIsCharged && quote.chargedSecurityDeposit > 0 ? (
-          <Row label="Security deposit" caption="Refundable">
+          <Row label="Security deposit" caption="Charged now, refunded after you return the car">
             {formatCurrency(quote.chargedSecurityDeposit)}
           </Row>
         ) : null}
@@ -148,8 +148,8 @@ export function PriceSummary({
 
         {!quote.depositIsCharged && quote.depositHeldAmount > 0 ? (
           <Note>
-            A refundable {formatCurrency(quote.depositHeldAmount)} security deposit is held on your card. It is
-            not charged.
+            A refundable {formatCurrency(quote.depositHeldAmount)} security deposit is held on your card at
+            pickup. It is not charged, and the hold is released after you return the car.
           </Note>
         ) : null}
       </div>

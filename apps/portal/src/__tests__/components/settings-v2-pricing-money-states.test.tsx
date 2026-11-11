@@ -887,6 +887,9 @@ describe("negative stored values say what the field shows", () => {
       "The amount is -£250.00. A deposit can't be negative. Enter 0 or more.",
     );
     expect(depositAmountIssue({ ...form, security_deposit_enabled: false }, "USD")).toBeNull();
+    // A negative deposit holds Save back (P2.4: a typed -50 used to save as 50).
+    expect(depositAmountIssue(form, "USD")?.blocksSave).toBe(true);
+    expect(depositAmountIssue({ ...form, global_deposit_amount: 200 }, "USD")).toBeNull();
   });
 
   it("Tax and fees renders the negative lines, with the payload untouched", () => {

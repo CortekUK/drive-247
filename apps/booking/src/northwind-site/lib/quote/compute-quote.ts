@@ -232,19 +232,33 @@ function computeServiceFee(tenant: QuoteTenantConfig, discountedVehicleTotal: nu
 }
 
 /**
- * The deposit figure, whether or not it is billed.
+ * The deposit figure, whether or not it is billed, and whether it is the car's
+ * own figure.
  *
  * Order matters: the master switch wins over everything, and the per-vehicle
  * amount is consulted ONLY on the hold path. Charged deposits are a single
  * global amount by design — per-vehicle charged deposits were dropped
  * deliberately, so that column must not be read on the charged path.
+ *
+ * A car with NO deposit of its own (NULL) uses the tenant amount, which is
+ * what the portal tells the operator ("Cars without one use the amount
+ * below") and what the hold-placing edge functions do. An explicit 0 on the
+ * car means "no deposit for this car" and is kept.
  */
-function computeSecurityDeposit(tenant: QuoteTenantConfig, vehicle: QuoteVehicle): number {
-  if (tenant.security_deposit_enabled === false) return 0;
-  if (tenant.deposit_charge_enabled !== true && tenant.deposit_mode === 'per_vehicle') {
-    return num(vehicle.security_deposit);
+function computeSecurityDeposit(
+  tenant: QuoteTenantConfig,
+  vehicle: QuoteVehicle,
+): { amount: number; fromVehicle: boolean } {
+  if (tenant.security_deposit_enabled === false) return { amount: 0, fromVehicle: false };
+  if (
+    tenant.deposit_charge_enabled !== true &&
+    tenant.deposit_mode === 'per_vehicle' &&
+    vehicle.security_deposit !== null &&
+    vehicle.security_deposit !== undefined
+  ) {
+    return { amount: num(vehicle.security_deposit), fromVehicle: true };
   }
-  return num(tenant.global_deposit_amount);
+  return { amount: num(tenant.global_deposit_amount), fromVehicle: false };
 }
 
 /**
@@ -457,6 +471,7 @@ export const EMPTY_QUOTE: QuoteResult = {
   depositIsCharged: false,
   chargedSecurityDeposit: 0,
   depositHeldAmount: 0,
+  depositFromVehicle: false,
   grandTotal: 0,
   grandTotalCents: 0,
   payableNow: 0,
@@ -551,7 +566,8 @@ export function computeQuote(input: QuoteInput): QuoteResult {
   const unlimitedMileage = computeUnlimitedMileage(vehicle, pricingTier, input.addUnlimitedMileage);
 
   // ── 8. Security deposit ───────────────────────────────────────────────────
-  const securityDeposit = computeSecurityDeposit(tenant, vehicle);
+  const deposit = computeSecurityDeposit(tenant, vehicle);
+  const securityDeposit = deposit.amount;
   const depositIsCharged = tenant.deposit_charge_enabled === true;
   const chargedSecurityDeposit = depositIsCharged ? securityDeposit : 0;
   const depositHeldAmount = depositIsCharged ? 0 : securityDeposit;
@@ -612,6 +628,7 @@ export function computeQuote(input: QuoteInput): QuoteResult {
     depositIsCharged,
     chargedSecurityDeposit,
     depositHeldAmount,
+    depositFromVehicle: deposit.fromVehicle,
 
     grandTotal,
     grandTotalCents: Math.round(grandTotal * 100),

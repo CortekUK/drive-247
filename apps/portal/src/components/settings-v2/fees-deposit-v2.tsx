@@ -320,6 +320,7 @@ export function DepositSettingsV2({
     liveHoldCount,
   });
   const payload = depositPayload(form);
+  const blocked = hasBlockingIssue([amountIssue]);
 
   const discard = () => {
     if (saved) setForm((prev) => ({ ...prev, ...savedDepositValues(saved) }));
@@ -330,7 +331,10 @@ export function DepositSettingsV2({
     isDirty: dirty,
     registerSave,
     signature: JSON.stringify(payload),
-    run: () => onSave(payload),
+    run: async () => {
+      if (blocked) throw new Error(BLOCKED_SAVE_MESSAGE);
+      await onSave(payload);
+    },
     discard,
   });
 
@@ -351,7 +355,7 @@ export function DepositSettingsV2({
       )}
       <SettingsReadOnlyFieldset readOnly={!canEdit}>
         <SettingsRowAlignProvider align="end">
-          <SettingsPanel footer={canEdit ? <SaveFooter save={save} disabled={!dirty} onDiscard={discard} /> : undefined}>
+          <SettingsPanel footer={canEdit ? <SaveFooter save={save} disabled={!dirty || blocked} onDiscard={discard} /> : undefined}>
             <SettingsRow
               label="Deposit on online bookings"
               description="When off, customers booking online are not asked for one. You can still take a deposit on a rental you create."
@@ -422,19 +426,16 @@ export function DepositSettingsV2({
                       inputMode="decimal"
                       value={form.global_deposit_amount ?? ""}
                       onChange={(e) => {
-                        const rawValue = e.target.value.replace(/[^0-9.]/g, "");
-                        if (rawValue === "" || rawValue === ".") {
-                          setForm((prev) => ({ ...prev, global_deposit_amount: rawValue }));
-                        } else {
-                          setForm((prev) => ({ ...prev, global_deposit_amount: Math.max(0, parseFloat(rawValue) || 0) }));
-                        }
+                        const rawValue = typedAmount(e.target.value);
+                        setForm((prev) => ({ ...prev, global_deposit_amount: rawValue }));
                       }}
                       onBlur={(e) => {
                         const value = parseFloat(e.target.value);
-                        setForm((prev) => ({ ...prev, global_deposit_amount: isNaN(value) ? 0 : Math.max(0, value) }));
+                        setForm((prev) => ({ ...prev, global_deposit_amount: isNaN(value) ? 0 : value }));
                       }}
                       className={cn("w-32 tabular-nums", prefixPadding(symbol))}
                       aria-label={`Deposit amount in ${currencyCode}`}
+                      aria-invalid={amountIssue?.blocksSave || undefined}
                     />
                   </div>
                 </SettingsRow>

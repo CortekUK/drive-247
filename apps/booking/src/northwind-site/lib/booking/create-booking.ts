@@ -387,6 +387,11 @@ export async function createBooking(
     sms_consent: form.smsConsent,
     sms_consent_at: smsConsentAt,
     tenant_id: tenantId,
+    // A per-car deposit is written on the rental so the hold placed at pickup
+    // is the amount the customer was shown. `resolveDepositAmount` (edge) reads
+    // an override first, including an explicit 0; without it a tenant outside
+    // PER_VEHICLE_DEPOSIT_TENANT_IDS would be held the tenant amount instead.
+    ...(quote.depositFromVehicle ? { deposit_amount_override: quote.depositHeldAmount } : {}),
   } as const;
 
   /* ── 4. Reuse an unpaid draft, or replace it ───────────────────────────── */
