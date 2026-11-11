@@ -86,6 +86,28 @@ function prefixPadding(symbol: string) {
   return symbol.length > 1 ? "pl-12" : "pl-7";
 }
 
+/**
+ * What a rate or amount box keeps while it is being typed in: digits, one
+ * decimal point with up to two places, and a leading minus. Kept as a string
+ * so "2." survives the next keystroke (parsing it to 2 on every change turned
+ * a typed 2.5 into 25). The minus and anything over 100 are kept on purpose:
+ * the row's issue line names the wrong value and holds Save back, instead of
+ * the box quietly showing 5 for a typed -5 or 100 for a typed 150.
+ */
+function typedAmount(typed: string): string {
+  const negative = typed.trimStart().startsWith("-");
+  let raw = typed.replace(/[^0-9.]/g, "");
+  const firstDot = raw.indexOf(".");
+  if (firstDot !== -1) {
+    raw = raw.slice(0, firstDot + 1) + raw.slice(firstDot + 1).replace(/\./g, "");
+  }
+  const [whole, decimals] = raw.split(".");
+  if (decimals !== undefined) {
+    raw = `${whole}.${decimals.slice(0, 2)}`;
+  }
+  return negative ? `-${raw}` : raw;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Tax and fees                                                                */
 /* -------------------------------------------------------------------------- */
@@ -146,27 +168,16 @@ export function FeesSettingsV2({ form, setForm, saved, read, canEdit, currencyCo
                       inputMode="decimal"
                       value={form.tax_percentage ?? ""}
                       onChange={(e) => {
-                        let rawValue = e.target.value.replace(/[^0-9.]/g, "");
-                        const firstDot = rawValue.indexOf(".");
-                        if (firstDot !== -1) {
-                          rawValue = rawValue.slice(0, firstDot + 1) + rawValue.slice(firstDot + 1).replace(/\./g, "");
-                        }
-                        const [whole, decimals] = rawValue.split(".");
-                        if (decimals !== undefined) {
-                          rawValue = `${whole}.${decimals.slice(0, 2)}`;
-                        }
-                        const numValue = parseFloat(rawValue);
-                        if (!isNaN(numValue) && numValue > 100) {
-                          rawValue = "100";
-                        }
+                        const rawValue = typedAmount(e.target.value);
                         setForm((prev) => ({ ...prev, tax_percentage: rawValue }));
                       }}
                       onBlur={(e) => {
                         const value = parseFloat(e.target.value);
-                        setForm((prev) => ({ ...prev, tax_percentage: isNaN(value) ? 0 : Math.max(0, Math.min(100, value)) }));
+                        setForm((prev) => ({ ...prev, tax_percentage: isNaN(value) ? 0 : value }));
                       }}
                       className="w-20 tabular-nums"
                       aria-label="Tax rate"
+                      aria-invalid={tax?.blocksSave || undefined}
                     />
                     <Unit>%</Unit>
                   </UnitGroup>
@@ -224,18 +235,12 @@ export function FeesSettingsV2({ form, setForm, saved, read, canEdit, currencyCo
                         inputMode="decimal"
                         value={form.service_fee_value ?? ""}
                         onChange={(e) => {
-                          const rawValue = e.target.value.replace(/[^0-9.]/g, "");
-                          if (rawValue === "" || rawValue === ".") {
-                            setForm((prev) => ({ ...prev, service_fee_value: rawValue, service_fee_amount: rawValue }));
-                          } else {
-                            let value = parseFloat(rawValue) || 0;
-                            if (form.service_fee_type === "percentage" && value > 100) value = 100;
-                            setForm((prev) => ({ ...prev, service_fee_value: Math.max(0, value), service_fee_amount: Math.max(0, value) }));
-                          }
+                          const rawValue = typedAmount(e.target.value);
+                          setForm((prev) => ({ ...prev, service_fee_value: rawValue, service_fee_amount: rawValue }));
                         }}
                         onBlur={(e) => {
                           const value = parseFloat(e.target.value);
-                          const finalValue = isNaN(value) ? 0 : Math.max(0, value);
+                          const finalValue = isNaN(value) ? 0 : value;
                           setForm((prev) => ({ ...prev, service_fee_value: finalValue, service_fee_amount: finalValue }));
                         }}
                         className={cn("w-28 tabular-nums", isPercent ? "pr-7" : prefixPadding(symbol))}

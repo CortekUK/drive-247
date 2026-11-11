@@ -17,7 +17,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -225,8 +225,13 @@ describe("pricing-money-logic", () => {
     });
   });
 
-  it("tax: off says nothing, 0% and 100% warn, 8% is fine", () => {
+  it("tax: off says nothing, 0% and 100% warn, over 100 holds Save back, 8% is fine", () => {
     expect(taxIssue({ tax_enabled: false, tax_percentage: 0 })).toBeNull();
+    const over = taxIssue({ tax_enabled: true, tax_percentage: 150 });
+    expect(over?.tone).toBe("danger");
+    expect(over?.blocksSave).toBe(true);
+    expect(over?.message).toBe("The rate is 150%. A tax rate can't be more than 100%. Enter 100 or less.");
+    expect(taxIssue({ tax_enabled: true, tax_percentage: "100.5" })?.blocksSave).toBe(true);
     expect(taxIssue({ tax_enabled: true, tax_percentage: 0 })?.message).toBe(
       "Tax is on but the rate is 0%, so no tax will be added.",
     );
@@ -472,6 +477,47 @@ describe("FeesSettingsV2", () => {
       />,
     );
     expect(text()).toContain("250% is more than the whole rental");
+    expect(button("Save").disabled).toBe(true);
+  });
+
+  it("a tax rate over 100 holds Save back and says why", () => {
+    render(<FeesSettingsV2 {...(props({ form: { ...form, tax_percentage: 150 } }) as any)} />);
+    expect(text()).toContain("The rate is 150%. A tax rate can't be more than 100%. Enter 100 or less.");
+    expect(container.querySelector('input[aria-label="Tax rate"]')!.getAttribute("aria-invalid")).toBe("true");
+    expect(button("Save").disabled).toBe(true);
+  });
+
+  it("typing keeps what was typed: 150 and -5 are refused, not cut to 100 or 5; 2.5 keeps its point", () => {
+    function Harness() {
+      const [state, setState] = useState({ ...form, service_fee_enabled: true, service_fee_type: "percentage" as const });
+      return <FeesSettingsV2 {...(props({ form: state, setForm: setState }) as any)} />;
+    }
+    render(<Harness />);
+    const rate = container.querySelector<HTMLInputElement>('input[aria-label="Tax rate"]')!;
+    typeInto(rate, "150");
+    expect(rate.value).toBe("150");
+    expect(text()).toContain("A tax rate can't be more than 100%.");
+    expect(button("Save").disabled).toBe(true);
+    typeInto(rate, "-5");
+    expect(rate.value).toBe("-5");
+    expect(text()).toContain("A tax rate can't be negative.");
+    expect(button("Save").disabled).toBe(true);
+    typeInto(rate, "8");
+    expect(text()).not.toContain("can't be");
+
+    const fee = container.querySelector<HTMLInputElement>('input[aria-label="Service fee percentage"]')!;
+    typeInto(fee, "2.");
+    expect(fee.value).toBe("2.");
+    typeInto(fee, "2.5");
+    expect(fee.value).toBe("2.5");
+    expect(button("Save").disabled).toBe(false);
+    typeInto(fee, "250");
+    expect(fee.value).toBe("250");
+    expect(text()).toContain("250% is more than the whole rental");
+    expect(button("Save").disabled).toBe(true);
+    typeInto(fee, "-10");
+    expect(fee.value).toBe("-10");
+    expect(text()).toContain("A service fee can't be negative.");
     expect(button("Save").disabled).toBe(true);
   });
 
@@ -812,11 +858,11 @@ describe("inside the page's one save bar", () => {
 /* -------------------------------------------------------------------------- */
 
 describe("negative stored values say what the field shows", () => {
-  it("tax -5%: its own line (not 'the rate is 0%'), and it does not hold Save back", () => {
+  it("tax -5%: its own line (not 'the rate is 0%'), and it holds Save back", () => {
     const issue = taxIssue({ tax_enabled: true, tax_percentage: -5 });
     expect(issue?.message).toBe("The rate is -5%. A tax rate can't be negative. Enter 0 or more.");
     expect(issue?.tone).toBe("danger");
-    expect(issue?.blocksSave).toBeUndefined();
+    expect(issue?.blocksSave).toBe(true);
     // Off still says nothing, whatever is stored.
     expect(taxIssue({ tax_enabled: false, tax_percentage: -5 })).toBeNull();
   });
@@ -831,7 +877,7 @@ describe("negative stored values say what the field shows", () => {
     expect(serviceFeeIssue({ service_fee_enabled: true, service_fee_type: "fixed_amount", service_fee_value: "-10" })?.message).toBe(
       "The fee is -10. A service fee can't be negative. Enter 0 or more.",
     );
-    expect(serviceFeeIssue({ service_fee_enabled: true, service_fee_type: "fixed_amount", service_fee_value: -10 })?.blocksSave).toBeUndefined();
+    expect(serviceFeeIssue({ service_fee_enabled: true, service_fee_type: "fixed_amount", service_fee_value: -10 })?.blocksSave).toBe(true);
   });
 
   it("deposit -250: formatted in the tenant currency (not 'The amount is $0.00')", () => {

@@ -134,10 +134,13 @@ export function feesPayload(form: FeesFormFields) {
 export function taxIssue(form: Pick<FeesFormFields, "tax_enabled" | "tax_percentage">): FieldIssue | null {
   if (!form.tax_enabled) return null;
   const rate = toFiniteNumber(form.tax_percentage);
-  // A negative rate can only come from the saved row (typing strips "-"), and
-  // folding it into the 0% line contradicted the field beside it.
+  // The box keeps what was typed (a minus, 150), so the wrong value is named
+  // here and holds Save back, rather than being cut to 0 or 100 without a word.
   if (rate !== null && rate < 0) {
-    return { tone: "danger", message: `The rate is ${plain(rate)}%. A tax rate can't be negative. Enter 0 or more.` };
+    return { tone: "danger", blocksSave: true, message: `The rate is ${plain(rate)}%. A tax rate can't be negative. Enter 0 or more.` };
+  }
+  if (rate !== null && rate > 100) {
+    return { tone: "danger", blocksSave: true, message: `The rate is ${plain(rate)}%. A tax rate can't be more than 100%. Enter 100 or less.` };
   }
   if (rate === null || rate <= 0) {
     return { tone: "warning", message: "Tax is on but the rate is 0%, so no tax will be added." };
@@ -156,7 +159,8 @@ export function serviceFeeIssue(
   if (!form.service_fee_enabled) return null;
   const value = toFiniteNumber(form.service_fee_value);
   // Switching Fixed amount -> Percentage keeps the number, so a 250 fee would
-  // otherwise save as 250% of the rental. Typing already caps percentages at 100.
+  // otherwise save as 250% of the rental; typing 250 into a percentage is the
+  // same case, named here rather than cut to 100 without a word.
   if (form.service_fee_type === "percentage" && value !== null && value > 100) {
     return {
       tone: "danger",
@@ -171,7 +175,7 @@ export function serviceFeeIssue(
         : currencyCode
           ? formatCurrency(value, currencyCode)
           : plain(value);
-    return { tone: "danger", message: `The fee is ${shown}. A service fee can't be negative. Enter 0 or more.` };
+    return { tone: "danger", blocksSave: true, message: `The fee is ${shown}. A service fee can't be negative. Enter 0 or more.` };
   }
   if (value === null || value <= 0) {
     return { tone: "warning", message: "The service fee is on but set to 0, so nothing will be added." };
