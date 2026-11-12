@@ -68,3 +68,20 @@
 
 /* A story's one figure, at the start of the line under its card. */
 .pp-figure { font-weight: 700; color: var(--foreground); }
+
+/*
+ * Phones (Ghulam, 2026-11-11: "we don't know which is the caption of which pic"): stacked one
+ * under another, a caption sat as close to the next photo as to its own. Each post is now one
+ * card, the photo and its caption inside the same white box, with clear space between cards.
+ */
+@media (max-width: 639.98px) {
+  .pp {
+    gap: 0;
+    padding: 6px;
+    border: 1px solid hsl(var(--v2-border));
+    background: hsl(var(--v2-card));
+  }
+  .pp-poster { border-radius: 18px; }
+  .pp-under { gap: 6px; padding: 14px 12px 12px; }
+  .pp-excerpt { font-size: 14.5px; }
+}

@@ -94,7 +94,22 @@ async function readOperators(): Promise<MapOperator[]> {
 
 const readCached = unstable_cache(readOperators, ["operator-map-v3"], { revalidate: 60 });
 
+let warnedNoKey = false;
+
 export async function fetchOperatorMap(): Promise<MapOperator[]> {
+  /*
+   * No service-role key is a setup state (every local checkout: .env.local carries only
+   * the public keys), not a failure. Say so once, quietly, and hide the section. Logging it
+   * as an error on every request put a permanent issue in the Next.js dev overlay.
+   * A real read failure with the key set is still an error below.
+   */
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    if (!warnedNoKey) {
+      warnedNoKey = true;
+      console.warn("[operator-map] SUPABASE_SERVICE_ROLE_KEY is not set; the operator logo wall is hidden.");
+    }
+    return [];
+  }
   try {
     return await readCached();
   } catch (error) {

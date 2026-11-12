@@ -408,7 +408,7 @@ export function YourSite({ signup }: { signup: boolean }) {
             </div>
           </div>
 
-          {/* The way in. */}
+          {/* The way in. On a phone it waits until after the demo (ys-close-end below). */}
           <div className="ys-close">
             <button type="button" className="ys-go" onClick={() => start()}>
               {signup ? "Start free trial" : "Book a demo"}
@@ -418,6 +418,20 @@ export function YourSite({ signup }: { signup: boolean }) {
               Goes live at <b>{address}</b>
             </p>
           </div>
+        </div>
+
+        {/*
+          On a phone only: the way in comes after the demo, once the visitor has played with it,
+          rather than between the setup and the site it sets up.
+        */}
+        <div className="ys-close ys-close-end">
+          <p className="ys-close-line">
+            Like it? It goes live at <b>{address}</b>
+          </p>
+          <button type="button" className="ys-go" onClick={() => start()}>
+            {signup ? "Start free trial" : "Book a demo"}
+            <ArrowRight strokeWidth={2} aria-hidden />
+          </button>
         </div>
       </div>
     </section>

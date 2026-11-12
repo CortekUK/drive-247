@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useSitePreview } from "@/lib/site-preview";
 import { SiteHome } from "./site-home";
-import { ArrowLeft, ArrowRight, CalendarCheck, Car, Check, CreditCard, FileSignature, FileText, Globe, KeyRound, LayoutDashboard, Loader2, Lock, MessageCircle, RotateCcw, ShieldCheck, Sparkles, UserRound, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarCheck, Car, Check, CreditCard, FileSignature, FileText, Globe, KeyRound, LayoutDashboard, Loader2, Lock, MessageCircle, RotateCcw, ShieldCheck, Signal, Sparkles, UserRound, Users, Wifi, BatteryFull } from "lucide-react";
 import { BrowserChrome } from "./portal-glass";
 import { AdminCustomers, AdminDashboard, AdminRentalsTop, AdminShell, AdminVehicles } from "./demo-admin";
-import { ADMIN_NAV, RENTER_NAV, RenterPortalV2, SITE_NAV, SiteFooter, SiteHeader, SitePageBody, type AdminPage, type RenterPage, type SitePage } from "./demo-pages";
+import { ADMIN_NAV, PhoneMenu, RENTER_NAV, RenterPortalV2, SITE_NAV, SiteFooter, SiteHeader, SitePageBody, type AdminPage, type RenterPage, type SitePage } from "./demo-pages";
 import "./booking-demo.css";
 
 /*
@@ -34,11 +34,12 @@ export type DemoView = "home" | "site" | "renter" | "portal";
 type View = DemoView;
 
 /* The four screens of the demo. `about` is the line on its card in your-site.tsx. */
-export const DEMO_VIEWS: { id: View; label: string; about: string; icon: typeof Globe }[] = [
-  { id: "home", label: "Your booking site", about: "Your home page", icon: Globe },
-  { id: "site", label: "Your booking widget", about: "Book a car as a renter", icon: CalendarCheck },
-  { id: "renter", label: "Your customer's portal", about: "What your renter sees", icon: UserRound },
-  { id: "portal", label: "Your admin portal", about: "Where the booking lands", icon: LayoutDashboard },
+/* `short` is the tab's name on a phone, where the four tabs sit two by two. */
+export const DEMO_VIEWS: { id: View; label: string; short: string; about: string; icon: typeof Globe }[] = [
+  { id: "home", label: "Your booking site", short: "Booking site", about: "Your home page", icon: Globe },
+  { id: "site", label: "Your booking widget", short: "Booking widget", about: "Book a car as a renter", icon: CalendarCheck },
+  { id: "renter", label: "Your customer's portal", short: "Customer portal", about: "What your renter sees", icon: UserRound },
+  { id: "portal", label: "Your admin portal", short: "Admin portal", about: "Where the booking lands", icon: LayoutDashboard },
 ];
 const VIEWS = DEMO_VIEWS;
 
@@ -60,6 +61,9 @@ const EARLIER = [
   { ref: "R-bf3260", name: "Daniel Okafor", car: "Ford Explorer", from: -1, to: 6, status: "Active" },
   { ref: "R-9b4eed", name: "Ava Morgan", car: "Tesla Model 3", from: -34, to: -30, status: "Completed" },
 ] as const;
+
+/* Keep in step with the "On a phone" media query in booking-demo.css. */
+const PHONE = "(max-width: 759.98px)";
 
 const STEPS = ["Choose dates", "Pick a car", "Check out", "See it in your admin portal"];
 const SITE_STEPS = ["Trip details", "Your car", "Checkout"];
@@ -123,6 +127,10 @@ export function BookingDemoStage({
   const [renterPage, setRenterPage] = useState<RenterPage>("rentals");
   const [adminPage, setAdminPage] = useState<AdminPage>("rentals");
   const brand = { name: site.name, initial: site.initial, slug: site.slug };
+  /* The site's menu on a phone (PhoneMenu): the pages move into it there, as on the real site. */
+  // Remembers the screen it was opened on, so moving to another screen closes it.
+  const [menuOn, setMenuOn] = useState<View | null>(null);
+  const openMenu = () => setMenuOn(view);
   const goSite = (page: SitePage) => {
     setSitePage(page);
     setView("home");
@@ -295,6 +303,17 @@ export function BookingDemoStage({
   const portal = view === "portal";
   const hint = (on: boolean) => (on ? " bd-hint" : "");
 
+  /*
+   * On a phone the window is a phone of its own, a fixed height that scrolls inside
+   * (booking-demo.css, "On a phone"). Moving to another screen or step starts it at the top,
+   * as a real page would, rather than leaving the visitor halfway down the last one.
+   */
+  const windowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!window.matchMedia(PHONE).matches) return;
+    windowRef.current?.querySelector(".pg-screen")?.scrollTo({ top: 0 });
+  }, [view, stage, sitePage, renterPage, adminPage, opened]);
+
   return (
     <div id="booking-demo" className="bd-demo" style={{ "--bd-a": site.colour.hex } as CSSProperties}>
         <div className="bd-views" role="tablist" aria-label="Your sites">
@@ -311,7 +330,10 @@ export function BookingDemoStage({
               }}
             >
               <v.icon aria-hidden />
-              {v.label}
+              <span className="bd-view-long">{v.label}</span>
+              <span className="bd-view-short" aria-hidden>
+                {v.short}
+              </span>
             </button>
           ))}
         </div>
@@ -343,7 +365,17 @@ export function BookingDemoStage({
           </div>
         </div>
 
-        <div className={`bd-window${view === "home" ? " is-home" : ""}`}>
+        <div ref={windowRef} className={`bd-window${view === "home" ? " is-home" : ""}`}>
+          {/* A phone's status bar and island, drawn only on a phone (booking-demo.css). */}
+          <span className="bd-phonebar" aria-hidden>
+            <b>9:41</b>
+            <i />
+            <span>
+              <Signal />
+              <Wifi />
+              <BatteryFull />
+            </span>
+          </span>
           <BrowserChrome
             nav={{ back: canBack ? () => travel(-1) : undefined, forward: canForward ? () => travel(1) : undefined }}
             tab={
@@ -377,14 +409,16 @@ export function BookingDemoStage({
                   onBook={() => setView("site")}
                   onNav={goSite}
                   onSignIn={goRenter}
+                  onMenu={openMenu}
+                  cars={CARS}
                 />
-                <SiteFooter brand={brand} onNav={goSite} onSignIn={goRenter} onAdmin={goAdmin} />
+                <SiteFooter brand={brand} onNav={goSite} onSignIn={goRenter} onAdmin={goAdmin} onBook={() => setView("site")} glass={site.template === "glass"} cars={CARS} />
               </div>
             ) : view === "home" ? (
               <div className={`bd-site${site.template === "glass" ? " is-glass" : ""}`}>
-                <SiteHeader brand={brand} page={sitePage} onNav={goSite} onSignIn={goRenter} onBook={() => setView("site")} />
+                <SiteHeader brand={brand} page={sitePage} onNav={goSite} onSignIn={goRenter} onBook={() => setView("site")} onMenu={openMenu} />
                 <SitePageBody key={sitePage} page={sitePage as Exclude<SitePage, "home">} brand={brand} cars={CARS} onBook={() => setView("site")} />
-                <SiteFooter brand={brand} onNav={goSite} onSignIn={goRenter} onAdmin={goAdmin} />
+                <SiteFooter brand={brand} onNav={goSite} onSignIn={goRenter} onAdmin={goAdmin} onBook={() => setView("site")} glass={site.template === "glass"} cars={CARS} />
               </div>
             ) : view === "renter" ? (
               <RenterPortalV2
@@ -444,7 +478,7 @@ export function BookingDemoStage({
               />
             ) : (
               <div className={`bd-site${site.template === "glass" ? " is-glass" : ""}`}>
-                <SiteHeader brand={brand} page={null} onNav={goSite} onSignIn={goRenter} onBook={() => setView("site")} />
+                <SiteHeader brand={brand} page={null} onNav={goSite} onSignIn={goRenter} onBook={() => setView("site")} onMenu={openMenu} />
 
                 <ol className="bd-site-steps" aria-label="Booking steps">
                   {SITE_STEPS.map((label, i) => {
@@ -452,8 +486,11 @@ export function BookingDemoStage({
                     return (
                       <li key={label} className={i < at ? "is-done" : i === at ? "is-now" : undefined}>
                         {i > 0 && <span aria-hidden />}
-                        <b>{i < at ? <Check strokeWidth={3} aria-hidden /> : i + 1}</b>
-                        {label}
+                        {/* One box for the number and the name: on a phone the current step is a pill. */}
+                        <i className="bd-step">
+                          <b>{i < at ? <Check strokeWidth={3} aria-hidden /> : i + 1}</b>
+                          <em>{label}</em>
+                        </i>
                       </li>
                     );
                   })}
@@ -620,6 +657,17 @@ export function BookingDemoStage({
               </div>
             )}
           </BrowserChrome>
+          {(view === "home" || view === "site") && (
+            <PhoneMenu
+              brand={brand}
+              open={menuOn === view}
+              page={view === "home" ? sitePage : null}
+              onClose={() => setMenuOn(null)}
+              onNav={goSite}
+              onSignIn={goRenter}
+              onBook={() => setView("site")}
+            />
+          )}
         </div>
     </div>
   );

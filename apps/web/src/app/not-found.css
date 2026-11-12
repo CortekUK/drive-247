@@ -37,4 +37,7 @@
   .nf-ctas { width: 100%; flex-direction: column; }
   .nf-ctas .l4-btn { width: 100%; }
   .nf-art { width: 60vw; height: auto; opacity: 0.7; }
+  /* Four links as an even 2 × 2 of thumb-sized pills, not a ragged wrap. */
+  .nf-links { display: grid; grid-template-columns: 1fr 1fr; width: 100%; gap: 8px; }
+  .nf-links a { display: flex; align-items: center; justify-content: center; min-height: 44px; }
 }

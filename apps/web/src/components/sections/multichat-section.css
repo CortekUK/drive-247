@@ -113,6 +113,7 @@
 .mc-composer { padding: 0 28px 28px; }
 .mc-switch { display: flex; gap: 4px; width: fit-content; max-width: 100%; padding: 4px; border-radius: 99px; background: hsl(var(--v2-muted)); }
 .mc-switch button {
+  -webkit-tap-highlight-color: transparent;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -213,7 +214,10 @@
   .mc-convo-head { padding: 14px 18px; }
   .mc-thread { gap: 14px; padding: 18px; }
   .mc-composer { padding: 0 16px 16px; }
-  .mc-switch { overflow-x: auto; }
+  /* Scrolls sideways if it must, but never shows a bar: on hover Chrome drew its grey
+     scrollbar under the four channels. */
+  .mc-switch { overflow-x: auto; scrollbar-width: none; }
+  .mc-switch::-webkit-scrollbar { display: none; }
   .mc-switch button { padding-inline: 10px; font-size: 12.5px; }
   .mc-callbox { grid-template-columns: minmax(0, 1fr); }
 }

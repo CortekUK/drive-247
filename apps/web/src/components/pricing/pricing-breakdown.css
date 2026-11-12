@@ -148,3 +148,28 @@
 @media (prefers-reduced-motion: reduce) {
   .pb-row, .pb-col [data-slot="button"].pb-btn { transition: none; }
 }
+
+/* The plan switcher over the swipe: phones only. */
+.pb-switch { display: none; }
+
+/*
+ * Phones: the plans side by side in a swipe, one card at a time with the next peeking in,
+ * instead of four full-length cards stacked one under another. A row of plan names above
+ * picks a card and shows which one is in view. Cards and lines are a little tighter.
+ */
+@media (max-width: 639.98px) {
+  /* Stacked, one card under another, with the top of each card (name, price, button) pinned
+     to the screen while its breakdown scrolls under it, as on desktop. No plan switcher above
+     (user, 2026-11-11): a sideways swipe can't pin anything, so the cards no longer swipe. */
+  .pb-switch { display: none; }
+  .pb-grid { gap: 14px; }
+  .pb-stick { padding: 20px 20px 14px; }
+  .pb-tag { top: 16px; right: 16px; }
+  .pb-nick { margin-top: 0; font-size: 22px; }
+  .pb-price strong { font-size: 36px; }
+  .pb-tagline { padding: 0 20px 16px; font-size: 14px; }
+  .pb-row { min-height: 46px; padding: 8px 20px; gap: 12px; font-size: 14px; }
+  .pb-row svg { width: 17px; height: 17px; }
+  .pb-chip { font-size: 12px; padding: 2px 9px; }
+  .pb-foot { font-size: 13.5px; }
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ArrowLeft, ArrowRight, BadgeCheck, Bell, CalendarDays, Car, Check, CreditCard, ExternalLink, FileSignature, KeyRound, LayoutDashboard, Loader2, Mail, MapPin, MessageCircle, Phone, Plus, Search, Settings, ShieldCheck, Sparkles, Star, Tag, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, Bell, CalendarDays, Car, Check, CreditCard, Ellipsis, ExternalLink, FileSignature, KeyRound, LayoutDashboard, Loader2, Mail, MapPin, Menu, MessageCircle, Phone, Plus, Search, Settings, ShieldCheck, Sparkles, Star, Tag, Users, X, Youtube, Instagram, Facebook, Twitter, Linkedin } from "lucide-react";
 import "./demo-pages.css";
 
 /*
@@ -57,6 +57,7 @@ export function SiteHeader({
   onNav,
   onSignIn,
   onBook,
+  onMenu,
 }: {
   brand: Brand;
   /** The page showing, or null inside the booking widget. */
@@ -64,6 +65,8 @@ export function SiteHeader({
   onNav: (page: SitePage) => void;
   onSignIn: () => void;
   onBook: () => void;
+  /** On a phone the pages move into a menu (PhoneMenu), opened from the round button. */
+  onMenu?: () => void;
 }) {
   return (
     <header className="bd-site-bar">
@@ -88,13 +91,38 @@ export function SiteHeader({
           Book a car
         </button>
       </span>
+      {onMenu && (
+        <button type="button" className="dp-burger" onClick={onMenu} aria-label="Open menu">
+          <Menu aria-hidden />
+        </button>
+      )}
     </header>
   );
 }
 
 /* The foot of every page of the site: its pages again, and the way in to the admin portal. */
-export function SiteFooter({ brand, onNav, onSignIn, onAdmin }: { brand: Brand; onNav: (page: SitePage) => void; onSignIn: () => void; onAdmin: () => void }) {
+export function SiteFooter({
+  brand,
+  onNav,
+  onSignIn,
+  onAdmin,
+  onBook,
+  glass = false,
+  cars = [],
+}: {
+  brand: Brand;
+  onNav: (page: SitePage) => void;
+  onSignIn: () => void;
+  onAdmin: () => void;
+  /** For the phone footer's "Book a car". */
+  onBook?: () => void;
+  /** The Glass template's footer on a phone: a frosted card, not the deep slab. */
+  glass?: boolean;
+  cars?: readonly DemoCar[];
+}) {
   return (
+    <>
+    <PhoneFooter brand={brand} onNav={onNav} onSignIn={onSignIn} onAdmin={onAdmin} onBook={onBook ?? (() => onNav("fleet"))} glass={glass} cars={cars} />
     <footer className="dp-foot">
       <div>
         <b className="bd-brand">
@@ -124,6 +152,227 @@ export function SiteFooter({ brand, onNav, onSignIn, onAdmin }: { brand: Brand; 
         © {brand.name} · {brand.slug}.drive-247.com
       </p>
     </footer>
+    </>
+  );
+}
+
+/*
+ * The site's footer as a phone shows it, shown only inside the demo's handset (booking-demo.css,
+ * "On a phone"). Classic follows site-v2's footer (apps/booking/src/northwind-site/site-v2/
+ * site-footer.tsx): a deep slab of the operator's colour (--nw-foot, styles/site.css: their
+ * colour 36% into #0b0a16), the name, the line, a white Book a car, then Company · Services ·
+ * Legal · Our cars two by two, Contact us, and the copyright over the social icons. Glass follows
+ * template 2's footer (template-2/footer.tsx): the same parts on a frosted card. The two portals
+ * the demo needs to reach sit with Company, where a renter looks for their account.
+ */
+function PhoneFooter({
+  brand,
+  onNav,
+  onSignIn,
+  onAdmin,
+  onBook,
+  glass,
+  cars,
+}: {
+  brand: Brand;
+  onNav: (page: SitePage) => void;
+  onSignIn: () => void;
+  onAdmin: () => void;
+  onBook: () => void;
+  glass: boolean;
+  cars: readonly DemoCar[];
+}) {
+  const year = 2026;
+  const col = (heading: string, items: { label: string; go?: () => void; admin?: boolean }[]) => (
+    <div className="dp-mf-col">
+      <b>{heading}</b>
+      {items.map((item) =>
+        item.go ? (
+          <button key={item.label} type="button" className={item.admin ? "dp-admin" : undefined} onClick={item.go}>
+            {item.label}
+          </button>
+        ) : (
+          <span key={item.label}>{item.label}</span>
+        ),
+      )}
+    </div>
+  );
+  return (
+    <footer className={`dp-mfoot${glass ? " is-glass" : ""}`}>
+      <div className="dp-mf-in">
+        <div className="dp-mf-lead">
+          {glass ? (
+            <b className="bd-brand">
+              <i aria-hidden>{brand.initial}</i>
+              {brand.name}
+            </b>
+          ) : (
+            <b className="dp-mf-name">{brand.name}</b>
+          )}
+          <p>{glass ? "Book your car online, day or night. It is ready when you arrive." : "Book your car online, day or night. We'll have it ready for you."}</p>
+          <button type="button" className="dp-mf-book" onClick={onBook}>
+            Book a car
+            {glass && <ArrowUpRight aria-hidden />}
+          </button>
+        </div>
+        <div className="dp-mf-grid">
+          {col("Company", [
+            { label: "About us", go: () => onNav("about") },
+            { label: "Contact us", go: () => onNav("contact") },
+            { label: "Customer portal", go: onSignIn },
+            { label: "Rental admin portal", go: onAdmin, admin: true },
+          ])}
+          {col("Services", [
+            { label: "Fleet and Pricing", go: () => onNav("fleet") },
+            { label: "Book a Vehicle", go: onBook },
+            { label: "Promotions", go: () => onNav("promotions") },
+          ])}
+          {col("Legal", [{ label: "Privacy Policy" }, { label: "Terms & Conditions" }])}
+          {col(
+            "Our cars",
+            cars.map((car) => ({ label: car.name, go: () => onNav("fleet") })),
+          )}
+        </div>
+        <div className="dp-mf-col dp-mf-contact">
+          <b>Contact us</b>
+          <span>
+            <Mail aria-hidden />
+            hello@{brand.slug}.com
+          </span>
+          <span>
+            <Phone aria-hidden />
+            (555) 000-1234
+          </span>
+          <span>
+            <MapPin aria-hidden />
+            100 Market St, Springfield
+          </span>
+        </div>
+        <div className="dp-mf-end">
+          <small>
+            © {year} {brand.name}. All rights reserved.
+          </small>
+          <span className="dp-mf-social" aria-hidden>
+            <Youtube />
+            <Instagram />
+            <Facebook />
+            <Twitter />
+            <Linkedin />
+          </span>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+/*
+ * The site's menu on a phone, as site-v2 draws it (site-shell.tsx MenuSheet, the same sheet
+ * template 2 uses): the logo and a close button along the top, the pages centred one per row
+ * with a hairline between, and Sign in · Book a car at the foot. In the demo it covers the
+ * handset's page, under the address bar (booking-demo.css).
+ */
+export function PhoneMenu({
+  brand,
+  open,
+  page,
+  onClose,
+  onNav,
+  onSignIn,
+  onBook,
+}: {
+  brand: Brand;
+  open: boolean;
+  page: SitePage | null;
+  onClose: () => void;
+  onNav: (page: SitePage) => void;
+  onSignIn: () => void;
+  onBook: () => void;
+}) {
+  const tab = open ? 0 : -1;
+  return (
+    <div className={`dp-menu${open ? " is-open" : ""}`} role="dialog" aria-label="Menu" aria-hidden={!open}>
+      <div className="dp-menu-top">
+        <b className="bd-brand">
+          <i aria-hidden>{brand.initial}</i>
+          {brand.name}
+        </b>
+        <button type="button" className="dp-burger" onClick={onClose} aria-label="Close menu" tabIndex={tab}>
+          <X aria-hidden />
+        </button>
+      </div>
+      <nav className="dp-menu-links" aria-label="Pages">
+        {SITE_NAV.map((item, i) => (
+          <button
+            key={item.id}
+            type="button"
+            tabIndex={tab}
+            aria-current={page === item.id ? "page" : undefined}
+            style={{ animationDelay: `${50 + i * 40}ms` }}
+            onClick={() => {
+              onClose();
+              onNav(item.id);
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+      <div className="dp-menu-foot">
+        <button
+          type="button"
+          className="dp-menu-out"
+          tabIndex={tab}
+          onClick={() => {
+            onClose();
+            onSignIn();
+          }}
+        >
+          Your account
+        </button>
+        <button
+          type="button"
+          className="dp-menu-book"
+          tabIndex={tab}
+          onClick={() => {
+            onClose();
+            onBook();
+          }}
+        >
+          Book a car
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/*
+ * The phone tab bar both portals carry below `md` (the operator's: apps/portal/src/components/
+ * shared/layout/mobile-tab-bar.tsx; the renter's: apps/booking/src/northwind-site/portal-v2/
+ * mobile-tab-bar.tsx): flat along the bottom edge, a hairline on top, up to four tabs then More,
+ * the tab you are on marked by colour and weight alone. Drawn only inside the handset.
+ */
+export function PhoneTabBar<T extends string>({
+  tabs,
+  on,
+  onTab,
+}: {
+  tabs: { id: T; label: string; icon: typeof Car }[];
+  on: T | null;
+  onTab: (id: T) => void;
+}) {
+  return (
+    <nav className="cp-tabbar" aria-label="Portal">
+      {tabs.map((tab) => (
+        <button key={tab.id} type="button" aria-current={on === tab.id ? "page" : undefined} className={on === tab.id ? "is-on" : undefined} onClick={() => onTab(tab.id)}>
+          <tab.icon aria-hidden />
+          {tab.label}
+        </button>
+      ))}
+      <span className={`cp-tabbar-more${on === null ? " is-on" : ""}`} aria-hidden>
+        <Ellipsis />
+        More
+      </span>
+    </nav>
   );
 }
 
@@ -392,6 +641,10 @@ export function RenterPortalV2({
 
       <div className="cp-main">
         <header className="cp-top">
+          {/* A phone: the search is a round button (portal-v2 shell.tsx TopBar). */}
+          <span className="cp-search-round" aria-hidden>
+            <Search />
+          </span>
           <span className="cp-search" aria-hidden>
             <Search />
             {page !== "rental" && (
@@ -403,6 +656,7 @@ export function RenterPortalV2({
             <kbd>⌘K</kbd>
           </span>
           <span className="cp-tools" aria-hidden>
+            <Phone className="cp-tel" />
             <span className="cp-help">
               <i>
                 <Sparkles />
@@ -419,10 +673,23 @@ export function RenterPortalV2({
             <div className="cp-head">
               <div>
                 <h3>Rentals</h3>
-                <p>Manage your rentals, from upcoming to completed.</p>
+                <p>
+                  <span className="cp-long">Manage your rentals, from upcoming to completed.</span>
+                  <span className="cp-short">Manage your rentals.</span>
+                </p>
               </div>
-              <span className="cp-btn" aria-hidden>
+              <span className="cp-btn cp-long" aria-hidden>
                 Calendar view
+              </span>
+              {/* A phone: the calendar as an icon beside Book a car (portal-v2 rentals/page.tsx). */}
+              <span className="cp-phone-acts">
+                <span className="cp-round" aria-hidden>
+                  <CalendarDays />
+                </span>
+                <button type="button" className="cp-btn" onClick={onBook}>
+                  <Plus aria-hidden />
+                  Book a car
+                </button>
               </span>
             </div>
             <div className="cp-card cp-table-wrap">
@@ -772,6 +1039,7 @@ export function RenterPortalV2({
             <p className="cp-count">All {PAST_RENTALS.length + (booking ? 1 : 0)} invoices shown</p>
           </div>
         )}
+        <PhoneTabBar tabs={RENTER_NAV} on={section} onTab={onPage} />
       </div>
     </div>
   );

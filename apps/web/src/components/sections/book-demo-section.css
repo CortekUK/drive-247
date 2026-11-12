@@ -83,6 +83,12 @@
 .dc .pg-thread-rest { stroke: rgb(255 255 255 / 0.4); }
 .dc .pg-thread-tip { fill: #fff; stroke: hsl(var(--v2-primary)); }
 
+/* Phones: the pen writes on its own, then lifts. The loops between the lines fade once the
+   sentence is down, leaving only the words; the tip glows softly while it writes. */
+.dc.is-solo .dc-live { transition: opacity 700ms ease-out 250ms; }
+.dc.is-solo.is-written .dc-live { opacity: 0; }
+.dc.is-solo .pg-thread-tip { filter: drop-shadow(0 0 6px rgb(255 255 255 / 0.9)); }
+
 .dc-who { display: grid; gap: 2px; margin-top: clamp(12px, 1.4vw, 18px); font-size: 15px; }
 .dc-who b { font-weight: 600; color: #fff; }
 .dc-who span { color: rgb(255 255 255 / 0.75); }
@@ -105,6 +111,15 @@
 .dc-btn svg { width: 18px; height: 18px; transition: transform 200ms ease-in; }
 .dc-btn:hover svg { transform: translateX(2px); transition-timing-function: ease-out; }
 .dc-btn:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+
+/* Phones: the card fills the screen width with room to breathe, a slightly larger hand so
+   four short lines read comfortably, and a full-width, thumb-sized button. */
+@media (max-width: 639.98px) {
+  .dc { padding: 48px 20px 44px; }
+  .dc-text { font-size: clamp(1.7rem, 7.6vw, 2rem); line-height: 1.26; }
+  .dc-photo { width: 88px; }
+  .dc-btn { width: 100%; max-width: 340px; justify-content: center; height: 52px; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .dc-btn, .dc-btn svg { transition: none; }

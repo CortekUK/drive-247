@@ -97,18 +97,21 @@ export function InsightsMap({ places, earth, zoom, onFail }: { places: MapPlace[
         places.forEach((p) => bounds.extend(p));
         map.fitBounds(bounds, 28);
         const max = Math.max(...places.map((p) => p.n));
+        // On a phone the map is a few hundred pixels wide: smaller nodes and labels, so the
+        // places close together do not pile their names on each other.
+        const small = (box.current.clientWidth || 999) < 520;
         const hub = places.reduce((a, b) => (b.n > a.n ? b : a));
         for (const p of places) {
           if (p !== hub)
             new g.Polyline({ map, path: [hub, p], strokeColor: "#6366f1", strokeOpacity: 0.55 + (p.n / max) * 0.4, strokeWeight: 1.5 + (p.n / max) * 3, clickable: false, zIndex: 1 });
-          const size = Math.round(34 + (p.n / max) * 30);
+          const size = small ? Math.round(20 + (p.n / max) * 16) : Math.round(34 + (p.n / max) * 30);
           new g.Marker({
             map,
             position: p,
             clickable: false,
             zIndex: 2,
             icon: { url: node(size, p === hub, !!p.live), scaledSize: new g.Size(size, size), anchor: new g.Point(size / 2, size / 2), labelOrigin: new g.Point(size / 2, size + 4) },
-            label: { text: `${p.label} · ${p.n}`, color: "#ffffff", fontSize: "12px", fontWeight: "600", className: "ia-gm-label" },
+            label: { text: `${p.label} · ${p.n}`, color: "#ffffff", fontSize: small ? "10.5px" : "12px", fontWeight: "600", className: "ia-gm-label" },
           });
         }
         mapRef.current = map;

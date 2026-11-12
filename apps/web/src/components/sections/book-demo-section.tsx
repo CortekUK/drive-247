@@ -25,8 +25,14 @@ import "./book-demo-section.css";
  *
  * It is the line's arrival that starts the writing, not the amount scrolled, and it writes
  * quickly at a hand's own pace, so it reads as writing however the page is being moved.
- * Scrolling back above the first word takes the sentence back. Where the page has no line
- * (phones, short screens) or the visitor asked for less motion, the quote is simply there.
+ * Scrolling back above the first word takes the sentence back. Where the visitor asked for
+ * less motion, the quote is simply there.
+ *
+ * PHONES AND SMALL SCREENS (no page line, see LINE_MEDIA): the same pen, on its own. When
+ * the card is well up the screen the pen writes the sentence line by line, looping round
+ * under each line to the next exactly as on desktop, then lifts: the loops fade and the
+ * words stay. It writes once; it only writes again after the card has left by the bottom
+ * of the screen (scrolled back up past it), so reading never fights it.
  *
  * (A plain bold version with the picture on the right was tried the same day and reverted:
  * "previous was better".)
@@ -57,6 +63,10 @@ const PEN_SPEED = 1900;
 const JOIN_MS = 300;
 /** How wide the line's turn into the first stroke is. */
 const TURN = 26;
+/** Phones: a little slower than desktop, so a short line still reads as being written. */
+const PEN_SPEED_SOLO = 1150;
+/** Phones: the pen starts once the card's top is this far up the screen. */
+const SOLO_START = 0.72;
 
 type Row = { left: number; width: number; y: number };
 type Art = {
@@ -69,6 +79,8 @@ type Art = {
   /** The same line carried from the end of each written line round to the start of the next. */
   joins: string[];
   rows: Row[];
+  /** No page line on this screen: the pen writes on its own when the card is in view. */
+  solo: boolean;
   /** The heights (in the section) where the writing starts and where it is finished. */
   y0: number;
   y1: number;
@@ -143,10 +155,13 @@ export function BookDemoSection() {
 
     const measure = () => {
       const rows = rowRefs.current.slice(0, lines.length);
-      if (!media.matches || rows.length === 0 || rows.some((row) => !row)) {
-        setArt(null);
+      const solo = !media.matches;
+      if (solo) {
         delete el.dataset.lineIn;
         delete el.dataset.lineOut;
+      }
+      if (rows.length === 0 || rows.some((row) => !row)) {
+        setArt(null);
         return;
       }
       const box = el.getBoundingClientRect();
@@ -188,9 +203,13 @@ export function BookDemoSection() {
       const who = whoRef.current?.getBoundingClientRect();
       // The line starts to leave as the tip reaches the foot of his name, with room left for it to go.
       const y1 = Math.min(h - 80, Math.max(last.y + 40, who ? who.bottom - box.top : last.y + 120));
-      el.dataset.lineIn = String(Math.round(box.left + inX));
-      el.dataset.lineOut = String(Math.round(box.left + outX));
-      setArt({ w, h, into, out, joins, rows: measured, y0: first.y, y1 });
+      if (!solo) {
+        el.dataset.lineIn = String(Math.round(box.left + inX));
+        el.dataset.lineOut = String(Math.round(box.left + outX));
+      }
+      const next: Art = { w, h, into: solo ? "" : into, out: solo ? "" : out, joins, rows: measured, solo, y0: first.y, y1 };
+      // A phone's address bar showing or hiding fires resize with nothing here changed: keep the art, and the pen where it is.
+      setArt((prev) => (prev && JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
     };
 
     measure();
@@ -214,10 +233,12 @@ export function BookDemoSection() {
     const el = root.current;
     const into = intoRef.current;
     const out = outRef.current;
-    if (!el || !into || !out || !art) return;
+    if (!el || !art || (!art.solo && (!into || !out))) return;
+    const solo = art.solo;
     const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const intoLength = into.getTotalLength();
-    const outLength = out.getTotalLength();
+    const intoLength = into?.getTotalLength() ?? 0;
+    const outLength = out?.getTotalLength() ?? 0;
+    const speed = solo ? PEN_SPEED_SOLO : PEN_SPEED;
     const inkTotal = art.rows.reduce((sum, row) => sum + row.width, 0);
     const rows = rowRefs.current.slice(0, art.rows.length);
     const joinPaths = joinRefs.current.slice(0, art.joins.length);
@@ -250,14 +271,15 @@ export function BookDemoSection() {
       const dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
       last = now;
 
-      const target = still ? BIG : innerHeight * TIP - el.getBoundingClientRect().top;
+      const top = el.getBoundingClientRect().top;
+      const target = still ? BIG : innerHeight * TIP - top;
       // First paint lands where the scroll already is; after that the tip follows it.
       const first = Number.isNaN(shown);
       shown = first || still ? target : shown + (target - shown) * 0.16;
       if (Math.abs(target - shown) < 0.5) shown = target;
       const y = shown;
 
-      reveal(into, y <= 0 ? 0 : y >= art.y0 ? intoLength : lengthAtY(into, intoLength, y));
+      if (into) reveal(into, y <= 0 ? 0 : y >= art.y0 ? intoLength : lengthAtY(into, intoLength, y));
 
       /*
        * The writing. The moment the line reaches the first word it writes the whole sentence
@@ -265,15 +287,25 @@ export function BookDemoSection() {
        * above the first word and it is taken back. Arriving with the section already passed
        * (a reload, a jump link), the sentence is simply there.
        */
-      const writing = y >= art.y0;
-      if (still || (first && writing)) {
+      let writing = y >= art.y0;
+      if (solo) {
+        // On its own the pen starts when the card is well up the screen, and once it has started
+        // it finishes and stays; the sentence is only taken back when the card has gone off the bottom.
+        const offBelow = top > innerHeight;
+        writing = ink > 0 ? !offBelow : top < innerHeight * SOLO_START && el.getBoundingClientRect().bottom > 0;
+        // Arriving with the card already scrolled past (a reload, a jump link): the sentence is simply there.
+        if (first && top + art.h < innerHeight * 0.4) {
+          ink = inkTotal;
+        }
+      }
+      if (still || (!solo && first && writing)) {
         ink = writing ? inkTotal : 0;
       } else if (writing && ink < inkTotal) {
         if (joining && now - joining.from >= JOIN_MS) joining = null;
         if (!joining) {
           const at = where(ink);
           // A hand is never even: it runs on through a word and slows into the next stroke.
-          const pace = PEN_SPEED * (0.78 + 0.3 * Math.sin(at.along / 46));
+          const pace = speed * (0.78 + 0.3 * Math.sin(at.along / 46));
           const end = lineEnds[at.row];
           const next = Math.min(inkTotal, ink + pace * dt);
           // Finishing a line, the line runs round to the start of the next before it writes on.
@@ -286,7 +318,8 @@ export function BookDemoSection() {
         }
       } else if (!writing && ink > 0) {
         joining = null;
-        ink = Math.max(0, ink - PEN_SPEED * 5 * dt);
+        // Taken back: at once on its own (it is off screen), quickly under the page line.
+        ink = solo ? 0 : Math.max(0, ink - speed * 5 * dt);
       }
 
       // The joins: drawn as the line runs along them, whole once the next line is under way.
@@ -320,18 +353,22 @@ export function BookDemoSection() {
         }
       });
       const written = ink >= inkTotal;
+      // On its own the pen lifts when it is done, and the loops between the lines fade.
+      if (solo) el.classList.toggle("is-written", written && !still);
 
       // The line leaves only once the sentence is down.
       const leaving = written ? clamp((y - art.y1) / (art.h - art.y1)) : 0;
-      reveal(out, leaving * outLength);
+      if (out) reveal(out, leaving * outLength);
 
       const tip = tipRef.current;
       if (tip) {
         let at: { x: number; y: number } | null = null;
-        if (!still && y > 0 && y < art.h) {
+        if (solo) {
+          if (!still && ink > 0 && !written) at = onJoin ?? pen;
+        } else if (!still && into && y > 0 && y < art.h) {
           if (ink <= 0) at = into.getPointAtLength(lengthAtY(into, intoLength, Math.min(y, art.y0)));
           else if (!written) at = onJoin ?? pen;
-          else at = out.getPointAtLength(leaving * outLength);
+          else if (out) at = out.getPointAtLength(leaving * outLength);
         }
         if (at) {
           tip.setAttribute("cx", String(at.x));
@@ -343,7 +380,7 @@ export function BookDemoSection() {
       }
 
       // Keep going while the tip is still catching the scroll up, or the pen is still moving.
-      const moving = shown !== target || joining !== null || (writing ? !written : ink > 0);
+      const moving = (!solo && shown !== target) || joining !== null || (writing ? !written : ink > 0);
       if (moving && !still) frame = requestAnimationFrame(paint);
       else last = 0;
     };
@@ -357,6 +394,7 @@ export function BookDemoSection() {
       removeEventListener("scroll", onScroll);
       removeEventListener("resize", onScroll);
       cancelAnimationFrame(frame);
+      el.classList.remove("is-written");
       // Without the line the quote is simply there.
       rows.forEach((node) => {
         if (!node) return;
@@ -368,17 +406,22 @@ export function BookDemoSection() {
   }, [art]);
 
   return (
-    <section ref={root} id="book-a-demo" className={`dc ${script.variable}${art ? " has-line" : ""}`} aria-labelledby="dc-title">
+    <section
+      ref={root}
+      id="book-a-demo"
+      className={`dc ${script.variable}${art ? " has-line" : ""}${art?.solo ? " is-solo" : ""}`}
+      aria-labelledby="dc-title"
+    >
       <h2 id="dc-title" className="sr-only">
         Book a demo with Bryan
       </h2>
 
       {art && (
         <svg className="dc-art" width={art.w} height={art.h} viewBox={`0 0 ${art.w} ${art.h}`} fill="none" aria-hidden focusable="false">
-          {/* The line still to come: the page line's own dotted look. */}
-          <path className="pg-thread-rest" d={art.into} />
-          <path className="pg-thread-rest" d={art.out} />
-          <path ref={intoRef} className="dc-live" d={art.into} />
+          {/* The line still to come: the page line's own dotted look. Phones have no page line to come in on. */}
+          {!art.solo && <path className="pg-thread-rest" d={art.into} />}
+          {!art.solo && <path className="pg-thread-rest" d={art.out} />}
+          {!art.solo && <path ref={intoRef} className="dc-live" d={art.into} />}
           {art.joins.map((d, i) => (
             <path
               key={i}
@@ -389,7 +432,7 @@ export function BookDemoSection() {
               d={d}
             />
           ))}
-          <path ref={outRef} className="dc-live" d={art.out} />
+          {!art.solo && <path ref={outRef} className="dc-live" d={art.out} />}
           <circle ref={tipRef} className="pg-thread-tip" r="5" style={{ visibility: "hidden" }} />
         </svg>
       )}

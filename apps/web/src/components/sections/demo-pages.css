@@ -269,3 +269,160 @@ button.cp-btn:hover { background: color-mix(in srgb, var(--bd-a) 86%, #000); }
 .pg-address > button svg { width: 15px; height: 15px; }
 .pg-address > button:hover:not(:disabled) { background: hsl(var(--v2-foreground) / 0.08); }
 .pg-address > button:disabled { opacity: 0.35; cursor: default; }
+
+/*
+ * ── On a phone (the demo's handset, booking-demo.css "On a phone") ──────────────────────────
+ * Each screen as the real product draws it below `md`/`sm`, not a desktop squeezed:
+ *   the site's bar and menu   site-v2 site-shell.tsx (the round menu button, MenuSheet)
+ *   the site's footer         site-v2 site-footer.tsx (the deep slab), template-2/footer.tsx
+ *   both portals              the round search button and the icon row (portal-v2 shell.tsx
+ *                             TopBar; apps/portal top-bar-v2.tsx), the page header with its
+ *                             actions on the title row (portal-v2 primitives.tsx PageHeader),
+ *                             and the tab bar along the bottom (both mobile-tab-bar.tsx).
+ * Nothing here applies above 760px.
+ */
+.dp-burger, .dp-menu, .dp-mfoot, .cp-search-round, .cp-tel, .cp-short, .cp-phone-acts, .cp-tabbar { display: none; }
+@media (max-width: 759.98px) {
+  /* The site's bar: the name, Book a car, the round menu button. */
+  .bd-window .bd-site-bar { height: 60px; padding-block: 0; }
+  .bd-window .dp-signin { display: none; }
+  .bd-window .bd-site-cta { height: 36px; padding-inline: 14px; font-size: 13.5px; }
+  /* Template 2's bar on a phone carries the logo and the menu button only (template-2/shell.tsx). */
+  .bd-window .bd-site.is-glass .bd-site-cta { display: none; }
+  .bd-window .bd-site.is-glass .dp-acts { display: none; }
+  .bd-window .bd-site.is-glass .dp-burger { margin-left: auto; }
+  .bd-window .dp-burger { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border: 1px solid hsl(var(--v2-border)); border-radius: 50%; background: hsl(var(--v2-card)); color: hsl(var(--v2-foreground)); cursor: pointer; }
+  .bd-window .dp-burger svg { width: 19px; height: 19px; }
+
+  /* The menu: over the handset's page, under the address bar. */
+  .bd-window .dp-menu {
+    position: absolute;
+    z-index: 4;
+    top: 87px;
+    inset-inline: 7px;
+    bottom: 7px;
+    display: flex;
+    flex-direction: column;
+    border-radius: 0 0 35px 35px;
+    background: hsl(var(--v2-card));
+    color: hsl(var(--v2-foreground));
+    opacity: 0;
+    visibility: hidden;
+    translate: 0 -12px;
+    transition: opacity 200ms ease-in, translate 200ms ease-in, visibility 0s linear 200ms;
+  }
+  .bd-window .dp-menu.is-open { opacity: 1; visibility: visible; translate: 0 0; transition: opacity 200ms ease-out, translate 200ms ease-out; }
+  .dp-menu-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 60px; padding-inline: 16px; border-bottom: 1px solid hsl(var(--v2-border)); }
+  .dp-menu-links { display: flex; flex: 1; flex-direction: column; min-height: 0; padding: 8px 16px; overflow-y: auto; }
+  .dp-menu-links button { padding-block: 17px; border-bottom: 1px solid hsl(var(--v2-border)); font-size: 18px; font-weight: 600; letter-spacing: -0.01em; text-align: center; cursor: pointer; }
+  .dp-menu-links button[aria-current="page"] { color: var(--bd-a); }
+  .dp-menu.is-open .dp-menu-links button { animation: dp-menu-in 260ms ease-out both; }
+  @keyframes dp-menu-in { from { opacity: 0; translate: 0 6px; } }
+  .dp-menu-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px 16px 22px; }
+  .dp-menu-foot button { height: 46px; border-radius: 99px; font-size: 14.5px; font-weight: 600; cursor: pointer; }
+  .dp-menu-out { border: 1px solid hsl(var(--v2-border)); background: hsl(var(--v2-card)); }
+  .dp-menu-book { background: var(--bd-a); color: #fff; }
+
+  /* The footer: the phone's own, not the wide one. */
+  .bd-window .dp-foot { display: none; }
+  .bd-window .dp-mfoot { display: block; margin-top: auto; padding: 44px 20px 26px; background: color-mix(in oklab, var(--bd-a) 36%, #0b0a16); color: #fff; font-size: 14px; }
+  .dp-mf-lead { display: grid; justify-items: start; gap: 14px; }
+  .dp-mf-name { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+  .dp-mf-lead p { max-width: 280px; line-height: 1.6; color: rgb(255 255 255 / 0.65); }
+  .dp-mf-book { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding-inline: 20px; border-radius: 99px; background: #fff; color: color-mix(in oklab, var(--bd-a) 36%, #0b0a16); font-size: 14px; font-weight: 600; cursor: pointer; }
+  .dp-mf-book svg { width: 15px; height: 15px; }
+  .dp-mf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 36px 20px; margin-top: 40px; }
+  .dp-mf-col { display: grid; align-content: start; justify-items: start; gap: 10px; min-width: 0; }
+  .dp-mf-col b { margin-bottom: 2px; font-size: 15px; font-weight: 600; }
+  .dp-mf-col button, .dp-mf-col span { max-width: 100%; color: rgb(255 255 255 / 0.65); line-height: 1.4; text-align: left; overflow-wrap: anywhere; }
+  .dp-mf-col button { cursor: pointer; }
+  .dp-mf-col button:hover { color: #fff; }
+  .dp-mfoot .dp-admin { font-weight: 600; color: #fff; }
+  .dp-mf-contact { margin-top: 36px; }
+  .dp-mf-contact span { display: inline-flex; align-items: center; gap: 8px; }
+  .dp-mf-contact svg { flex: none; width: 14px; height: 14px; }
+  .dp-mf-end { display: grid; justify-items: center; gap: 16px; margin-top: 40px; padding-top: 24px; border-top: 1px solid rgb(255 255 255 / 0.1); }
+  .dp-mf-end small { font-size: 13px; color: rgb(255 255 255 / 0.55); }
+  .dp-mf-social { display: flex; gap: 22px; color: rgb(255 255 255 / 0.65); }
+  .dp-mf-social svg { width: 16px; height: 16px; }
+  /* Glass: the same parts on a frosted card (template-2/footer.tsx). */
+  .bd-window .dp-mfoot.is-glass { margin: 16px 12px 14px; padding: 30px 20px 22px; border: 1px solid rgb(255 255 255 / 0.75); border-radius: 26px; background: color-mix(in oklab, var(--bd-a) 6%, rgb(255 255 255 / 0.62)); -webkit-backdrop-filter: blur(20px) saturate(140%); backdrop-filter: blur(20px) saturate(140%); color: #0c0a1e; box-shadow: 0 20px 40px -26px color-mix(in oklab, var(--bd-a) 50%, rgb(10 10 30 / 0.5)); }
+  .dp-mfoot.is-glass .dp-mf-lead p, .dp-mfoot.is-glass .dp-mf-col button, .dp-mfoot.is-glass .dp-mf-col span, .dp-mfoot.is-glass .dp-mf-social { color: rgb(12 10 30 / 0.62); }
+  .dp-mfoot.is-glass .dp-mf-col button:hover, .dp-mfoot.is-glass .dp-admin { color: var(--bd-a); }
+  .dp-mfoot.is-glass .dp-mf-book { background: var(--bd-a); color: #fff; box-shadow: 0 10px 20px -10px var(--bd-a); }
+  .dp-mfoot.is-glass .dp-mf-end { border-color: rgb(12 10 30 / 0.1); }
+  .dp-mfoot.is-glass .dp-mf-end small { color: rgb(12 10 30 / 0.55); }
+  /* The glass home's footer sits on the template's backdrop, as on the real page. */
+  .bd-window .dp-home:has(.ws-glass) { background: color-mix(in srgb, var(--bd-a) 22%, #b4bdd6); }
+
+  /* ── Both portals ── */
+  .bd-window .cp-main { display: flex; flex-direction: column; padding-bottom: 0; }
+  .bd-window .cp-top { gap: 8px; min-height: 48px; }
+  .bd-window .cp-search { display: none; }
+  .bd-window .cp-search-round { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border: 1px solid color-mix(in srgb, var(--bd-a) 25%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--bd-a) 7%, transparent); color: var(--bd-a); }
+  .bd-window .cp-search-round svg { width: 16px; height: 16px; }
+  .bd-window .cp-tools { gap: 2px; margin-left: auto; }
+  .bd-window .cp-tools > svg, .bd-window .cp-tools > span:not(.cp-help) { box-sizing: content-box; padding: 8px; }
+  .bd-window .cp-tools > svg { width: 16px; height: 16px; }
+  .bd-window .cp-help { padding: 0 8px 0 4px; font-size: 13px; }
+  .bd-window .cp-tel { display: block; }
+  /* The operator's helpline is its icon on a phone (helpline-link.tsx). */
+  .bd-window .np-phone { display: inline-flex; gap: 0; font-size: 0; }
+  .bd-window .np-phone svg { width: 16px; height: 16px; }
+
+  /* The page header: the actions on the title's row, the description shortened. */
+  .bd-window .cp-head { align-items: center; gap: 12px; }
+  .bd-window .cp-head h3 { font-size: 24px; font-weight: 700; }
+  .bd-window .cp-head p { font-size: 14px; }
+  .bd-window .cp-long { display: none; }
+  .bd-window .cp-short { display: inline; }
+  .bd-window .cp-phone-acts { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+  .cp-round { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid color-mix(in srgb, var(--bd-a) 30%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--bd-a) 5%, transparent); color: var(--bd-a); }
+  .cp-round svg { width: 14px; height: 14px; }
+  .bd-window .cp-phone-acts .cp-btn { height: 34px; padding-inline: 12px 14px; }
+
+  /* The tab bar: flat along the foot of the screen, four places then More. */
+  .bd-window .cp-tabbar {
+    position: sticky;
+    z-index: 3;
+    bottom: 0;
+    display: flex;
+    align-items: stretch;
+    height: 60px;
+    margin: auto calc(-1 * clamp(14px, 2vw, 24px)) 0;
+    padding: 0 4px 4px;
+    border-top: 1px solid hsl(var(--v2-border));
+    background: hsl(var(--v2-card));
+  }
+  .bd-window .cp-page { margin-bottom: 20px; }
+  .cp-tabbar > * { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-width: 0; font-size: 11px; font-weight: 500; line-height: 1; color: hsl(var(--v2-muted-foreground)); cursor: pointer; transition: color 200ms ease-out, transform 200ms ease-out; }
+  .cp-tabbar > button:active { transform: scale(0.94); }
+  .cp-tabbar svg { width: 20px; height: 20px; stroke-width: 1.75; }
+  .cp-tabbar .is-on { font-weight: 600; color: var(--bd-a); }
+  .cp-tabbar .is-on svg { stroke-width: 2.4; }
+  .cp-tabbar-more { cursor: default; }
+}
+
+/*
+ * Glass, wide screens: the footer is a frosted card on the glass backdrop, as in the real
+ * Template 2 (apps/booking northwind-site/template-2/footer.tsx), not the plain white
+ * slab, which ended the Glass site on a white page (user, 2026-11-11). Phones have their
+ * own glass footer (.dp-mfoot.is-glass above).
+ */
+.bd-site.is-glass .dp-foot,
+.dp-home:has(.ws-glass) .dp-foot {
+  margin: 0 clamp(10px, 2vw, 28px) clamp(14px, 2vw, 28px);
+  border: 1px solid rgb(255 255 255 / 0.7);
+  border-radius: 28px;
+  background: color-mix(in oklab, var(--bd-a) 6%, rgb(255 255 255 / 0.62));
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+  color: #0c0a1e;
+}
+.bd-site.is-glass .dp-foot p, .bd-site.is-glass .dp-foot nav b,
+.dp-home:has(.ws-glass) .dp-foot p, .dp-home:has(.ws-glass) .dp-foot nav b { color: rgb(12 10 30 / 0.62); }
+.bd-site.is-glass .dp-foot nav button, .dp-home:has(.ws-glass) .dp-foot nav button { color: #0c0a1e; }
+.bd-site.is-glass .dp-foot .dp-admin, .dp-home:has(.ws-glass) .dp-foot .dp-admin { color: var(--bd-a); }
+.bd-site.is-glass .dp-foot-line, .dp-home:has(.ws-glass) .dp-foot-line { border-top-color: rgb(12 10 30 / 0.1); }
+/* The Glass home: the glass ground carries on under the footer card to the very end. */
+.dp-home:has(.ws-glass) { background: color-mix(in srgb, var(--bd-a) 30%, #9aa6c4); }

@@ -108,3 +108,8 @@
 @media (prefers-reduced-motion: reduce) {
   .om-track, .om-logo, .om-word { animation: none; }
 }
+
+/* Phones: three columns already (operator-map.tsx); a shorter wall, so it reads as a wall of logos, not a screen to scroll through. */
+@media (max-width: 560px) {
+  .om { height: 72svh; min-height: 480px; padding-inline: 16px; }
+}

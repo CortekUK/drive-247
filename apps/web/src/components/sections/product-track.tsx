@@ -220,10 +220,159 @@ function reveal(path: SVGPathElement | undefined, length: number) {
   path.style.visibility = length > 0 ? "visible" : "hidden";
 }
 
-export function ProductTrack({ children }: { children: ReactNode }) {
+/*
+ * Phones and tablets (Ghulam's brief, 2026-11-10: "the horizontal scroll needs a clever
+ * solution for mobile, users scroll vertically"). Pinning six full screens sideways does not
+ * fit a phone: each product is taller than the screen. So the page scrolls down as usual and
+ * the sideways motion is carried three ways, all driven by the vertical scroll:
+ *
+ *  - a small rail pinned at the top (Calendar · Messages · Insights) whose thumb slides
+ *    sideways from stop to stop as each product arrives, so the visitor always knows where
+ *    they are on the track and can tap to jump;
+ *  - every screen slides in from the right as it comes up (the track still "moves left"), and
+ *    the text screens slide on out to the left as they leave;
+ *  - the calendar's own board, wider than the phone, pans sideways with the scroll, the
+ *    desktop slide in miniature. A touch on the board hands it to the thumb.
+ *
+ * The headings type themselves as on desktop. Reduced motion: none of it, just the stack.
+ */
+const FLOW_MEDIA = "((max-width: 1099.98px) or (max-height: 639.98px)) and (prefers-reduced-motion: no-preference)";
+const STOPS = ["Calendar", "Messages", "Insights"];
+
+export function ProductTrack({ children, stops = STOPS }: { children: ReactNode; stops?: string[] }) {
   const outer = useRef<HTMLDivElement>(null);
   const panels = Children.toArray(children);
   const steps = panels.length - 1;
+
+  useEffect(() => {
+    const el = outer.current;
+    if (!el) return;
+    const media = matchMedia(FLOW_MEDIA);
+    let frame = 0;
+    let io: IntersectionObserver | null = null;
+    let gone: IntersectionObserver | null = null;
+    let calendarTaken = false;
+    const panelEls = Array.from(el.querySelectorAll<HTMLElement>(".pt-panel"));
+    const rail = el.querySelector<HTMLElement>(".pt-rail");
+    const thumb = el.querySelector<HTMLElement>(".pt-rail-thumb");
+    const railItems = Array.from(el.querySelectorAll<HTMLElement>(".pt-rail-item"));
+    const board = el.querySelector<HTMLElement>("#calendar .cs-board");
+    const calendarPanel = board?.closest<HTMLElement>(".pt-panel") ?? null;
+    // Where each stop starts: the text screen before each product.
+    const starts = panelEls.filter((p) => p.querySelector(".pt-intro"));
+    const isIntro = (p: HTMLElement) => starts.includes(p);
+
+    const smooth = (u: number) => u * u * (3 - 2 * u);
+    const update = () => {
+      frame = 0;
+      const vh = innerHeight;
+      const vw = innerWidth;
+      for (const panel of panelEls) {
+        const r = panel.getBoundingClientRect();
+        if (r.bottom < -vh || r.top > vh * 2) continue;
+        const enter = smooth(clamp((vh * 0.98 - r.top) / (vh * 0.5)));
+        let dx = (1 - enter) * (isIntro(panel) ? 0.34 : 0.18) * vw;
+        let fade = 0.15 + 0.85 * enter;
+        if (isIntro(panel)) {
+          const leave = smooth(clamp((vh * 0.3 - r.bottom) / (vh * 0.35)));
+          dx -= leave * 0.26 * vw;
+          fade *= 1 - leave * 0.75;
+        }
+        panel.style.transform = dx ? `translate3d(${dx.toFixed(1)}px,0,0)` : "";
+        panel.style.opacity = fade < 0.999 ? fade.toFixed(3) : "";
+      }
+
+      // The calendar pans sideways as it rises through the screen.
+      if (board && calendarPanel && !calendarTaken) {
+        const r = calendarPanel.getBoundingClientRect();
+        const room = board.scrollWidth - board.clientWidth;
+        if (room > 0) board.scrollLeft = smooth(clamp((vh * 0.75 - r.top) / (vh * 0.75))) * room;
+      }
+
+      // The rail: on while the track is on screen, its thumb sliding from stop to stop.
+      if (rail && thumb && starts.length) {
+        const mid = vh * 0.5;
+        const tops = starts.map((p) => p.getBoundingClientRect().top);
+        const end = el.getBoundingClientRect().bottom;
+        const on = tops[0] < vh * 0.4 && end > vh * 0.45;
+        rail.classList.toggle("is-on", on);
+        let f = 0;
+        for (let k = 0; k < tops.length - 1; k += 1) {
+          // Moves over the last stretch before the next stop's screen reaches mid-screen.
+          f += smooth(clamp((mid + vh * 0.55 - tops[k + 1]) / (vh * 0.55)));
+        }
+        thumb.style.transform = `translate3d(${(f * 100).toFixed(2)}%,0,0)`;
+        const at = Math.round(f);
+        railItems.forEach((item, i) => item.classList.toggle("is-on", i === at));
+      }
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    const take = () => {
+      calendarTaken = true;
+    };
+
+    const start = () => {
+      el.classList.add("is-flow");
+      // Each screen's words play in once it is well in view, and reset only once it has left
+      // the screen entirely, so they never vanish while still being read; they play again
+      // when it comes back.
+      io = new IntersectionObserver(
+        (entries) => entries.forEach((e) => e.isIntersecting && e.target.classList.add("is-here")),
+        { rootMargin: "-25% 0px -25% 0px" },
+      );
+      gone = new IntersectionObserver((entries) => entries.forEach((e) => !e.isIntersecting && e.target.classList.remove("is-here")));
+      panelEls.forEach((p) => {
+        io!.observe(p);
+        gone!.observe(p);
+      });
+      addEventListener("scroll", onScroll, { passive: true });
+      addEventListener("resize", onScroll);
+      board?.addEventListener("pointerdown", take);
+      board?.addEventListener("touchstart", take, { passive: true });
+      update();
+    };
+    const stop = () => {
+      el.classList.remove("is-flow");
+      io?.disconnect();
+      gone?.disconnect();
+      io = gone = null;
+      removeEventListener("scroll", onScroll);
+      removeEventListener("resize", onScroll);
+      board?.removeEventListener("pointerdown", take);
+      board?.removeEventListener("touchstart", take);
+      cancelAnimationFrame(frame);
+      frame = 0;
+      rail?.classList.remove("is-on");
+      panelEls.forEach((p) => {
+        p.style.removeProperty("transform");
+        p.style.removeProperty("opacity");
+        p.classList.remove("is-here");
+      });
+    };
+    const sync = () => (media.matches ? start() : stop());
+    sync();
+    const onChange = () => {
+      stop();
+      sync();
+    };
+    media.addEventListener("change", onChange);
+    return () => {
+      media.removeEventListener("change", onChange);
+      stop();
+    };
+  }, []);
+
+  const jump = (i: number) => {
+    const intros = Array.from(outer.current?.querySelectorAll<HTMLElement>(".pt-panel") ?? []).filter((p) => p.querySelector(".pt-intro"));
+    const to = intros[i];
+    if (!to) return;
+    // The product itself, just under the rail: skip past its text screen.
+    const product = to.nextElementSibling as HTMLElement | null;
+    const y = (product ?? to).getBoundingClientRect().top + scrollY - 64;
+    scrollTo({ top: y, behavior: "smooth" });
+  };
 
   useEffect(() => {
     const el = outer.current;
@@ -378,8 +527,11 @@ export function ProductTrack({ children }: { children: ReactNode }) {
       loop = 0;
       x = v = target = 0;
       track?.style.removeProperty("transform");
+      // Clears .is-here only if the pin set it. Below the pin the phone flow (FLOW_MEDIA)
+      // owns .is-here, and this runs on every scroll there, so clearing it unconditionally
+      // wiped every heading the moment it typed in.
+      if (here !== -1) panelEls.forEach((panel) => panel.classList.remove("is-here"));
       here = -1;
-      panelEls.forEach((panel) => panel.classList.remove("is-here"));
       for (const { node } of intros) {
         node.style.removeProperty("transform");
         node.style.removeProperty("opacity");
@@ -445,6 +597,17 @@ export function ProductTrack({ children }: { children: ReactNode }) {
 
   return (
     <div ref={outer} className="pt-outer" style={{ "--pt-n": panels.length } as CSSProperties}>
+      {/* Phones only (product-track.css): where you are on the track, pinned at the top. */}
+      <div className="pt-rail" style={{ "--pt-stops": stops.length } as CSSProperties}>
+        <nav className="pt-rail-pill" aria-label="On this part of the page">
+          <span className="pt-rail-thumb" aria-hidden />
+          {stops.map((stop, i) => (
+            <button key={stop} type="button" className="pt-rail-item" onClick={() => jump(i)}>
+              {stop}
+            </button>
+          ))}
+        </nav>
+      </div>
       <div className="pt-pin">
         <div className="pt-track">
           {panels.map((panel, i) => (

@@ -841,3 +841,65 @@
 
 /* The parts of the thread before the screen stay measured but unseen (trax-section.tsx). */
 .tm-unseen { display: none; }
+
+/*
+ * ─── Phones and tablets (trax-section.tsx PHONE_PIN) ───
+ * The stage is one screen tall and pinned while the scroll plays the question through it.
+ * The words ride above in the same pin and scroll away first (its top is set negative in JS).
+ */
+.tm-run { display: none; }
+@media (max-width: 1199.98px) {
+  /* The desktop's room for the page line to cross; a phone has no line. */
+  .tm-root { margin-top: clamp(40px, 9vw, 96px); }
+  .tm-copy { padding-top: clamp(64px, 16vw, 112px); }
+  /* The wheel, big enough that its rim and spokes show round the screen. */
+  .tm-root .tm-wheel { width: max(900px, 230vw); height: max(900px, 230vw); opacity: 0.5; }
+}
+@media (max-width: 1099.98px) and (min-height: 560px) and (prefers-reduced-motion: no-preference) {
+  .tm-run { display: block; height: 240svh; }
+  .tm-pin { position: sticky; }
+  .tm-pin > .tm-section {
+    display: flex;
+    flex-direction: column;
+    height: 100svh;
+    min-height: 0;
+    /* The bottom clears the floating "Start free trial" pill, so the last boxes stay in view. */
+    padding: clamp(14px, 3svh, 28px) 0 78px;
+  }
+  .tm-stage {
+    flex: 1;
+    min-height: 0;
+    margin-top: 0;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    /* Wide enough gaps that the branches show as they light, box by box. */
+    row-gap: clamp(30px, 5.5svh, 56px);
+    align-content: stretch;
+  }
+  .tm-wire { stroke-width: 2; }
+  .tm-wire-lit { stroke-width: 3.5; }
+  .tm-wire-flow { stroke-width: 5; }
+  .tm-screen, .tm-root .tm-screen { align-self: stretch; height: auto; min-height: 0; max-height: none; }
+  /* The script draws each branch, so the stage is there to be drawn on from the start. */
+  .tm-section[data-seen="false"] .tm-stage { opacity: 1; }
+  .tm-section[data-seen="true"] .tm-stage { animation: none; }
+  /* A short phone: the record check gives way to the answer. */
+  .tm-msg .tm-evidence { display: none; }
+}
+@media (max-width: 1099.98px) and (min-height: 560px) and (max-height: 760px) and (prefers-reduced-motion: no-preference) {
+  .tm-art-svg { height: 34px; }
+  .tm-suggest { display: none; }
+}
+/* A narrow phone keeps four boxes to a row while pinned, so the screen keeps its height. */
+@media (max-width: 379px) and (min-height: 560px) and (prefers-reduced-motion: no-preference) {
+  .tm-stage { row-gap: clamp(26px, 4.5svh, 44px); }
+  .tm-col, .tm-col.is-left, .tm-col.is-right { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .tm-node-text b { font-size: 10.5px; letter-spacing: -0.01em; }
+  .tm-art-svg { height: 30px; }
+}
+
+/* Phones: Trax follows the insights screen closely, its words near the top of the purple
+   (user, 2026-11-10: too much space before "I'm Trax"). */
+@media (max-width: 767.98px) {
+  .tm-root { margin-top: 16px; }
+  .tm-root .tm-copy { padding-top: 40px; }
+}

@@ -45,7 +45,10 @@ const TICK_MARKS = Array.from({ length: TICKS + 1 }, (_, index) => {
   const angle = START + SWEEP * share;
   const [x1, y1] = point(angle, R - 9);
   const [x2, y2] = point(angle, R - (major ? 19 : 14));
-  return { x1, y1, x2, y2, major, red: share >= REDLINE_FROM };
+  // Rounded: Node and the browser can differ in the last digits of sin/cos, and the raw
+  // floats then failed hydration (a server/client attribute mismatch on every tick).
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  return { x1: r2(x1), y1: r2(y1), x2: r2(x2), y2: r2(y2), major, red: share >= REDLINE_FROM };
 });
 
 /** The line pictures, each drawn in a 24×24 box. */

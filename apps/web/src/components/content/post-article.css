@@ -177,3 +177,48 @@
 
 /* A story's headline is a full sentence, so it runs a little smaller and wider than a post's. */
 .ar-title.ar-title-story { max-width: 20ch; font-size: clamp(2.4rem, 6.2vw, 5.75rem); }
+
+/*
+ * Phones (Ghulam, 2026-11-11, the blog and customer-story pages were not right on a phone).
+ * The desktop rhythm (56-136px between blocks) left screen-tall gaps on a phone; it is
+ * roughly halved here. The purple band, edge to edge on desktop, becomes a rounded card
+ * inside the page's margins like the callout and the compare cards, so the page keeps one
+ * left edge.
+ */
+@media (max-width: 639.98px) {
+  .ar { padding-bottom: 56px; }
+  .ar-top { padding-block: 16px; }
+  .ar-hero { padding-top: 12px; }
+  .ar-title { font-size: clamp(2.1rem, 10vw, 2.6rem); }
+  .ar-open { gap: 24px; margin-top: 20px; }
+  .ar-lead { font-size: 1.0625rem; }
+  .ar-by { margin-top: 12px; }
+  .ar-photo { border-radius: 20px; }
+
+  .ar-body { margin-top: 40px; }
+  .ar-body > * + * { margin-top: 18px; }
+  .ar-body > .ar-h2 { margin-top: 48px; font-size: clamp(1.75rem, 8vw, 2.1rem); }
+  .ar-body > .ar-big { margin-block: 40px 28px; font-size: clamp(1.75rem, 8.4vw, 2.2rem); }
+  .ar-body > .ar-stats { gap: 18px; margin-top: 24px; }
+  .ar-stats li { gap: 6px; padding-top: 14px; }
+  .ar-body > .ar-chart { margin-top: 32px; }
+  .ar-body > .ar-side { gap: 20px; margin-top: 40px; }
+  .ar-side-photo { border-radius: 20px; }
+  .ar-body > .ar-compare { margin-top: 24px; gap: 12px; }
+  .ar-side-col { padding: 22px 20px; border-radius: 22px; }
+  .ar-side-col ul { gap: 12px; margin-top: 16px; }
+  .ar-body > .ar-steps { margin-top: 20px; }
+  .ar-steps li { grid-template-columns: 36px minmax(0, 1fr); column-gap: 12px; padding-block: 18px; }
+  .ar-step-n { font-size: 1.75rem; }
+  .ar-body > .ar-quote { margin-block: 40px; }
+  .ar-body > .ar-callout { margin-top: 40px; padding: 24px 22px; border-radius: 24px; }
+  .ar-callout-text { font-size: clamp(1.4rem, 6.4vw, 1.75rem); }
+
+  .ar-body > .ar-band { margin: 40px 0; padding: 28px 22px; border-radius: 24px; }
+  .ar-band-in { width: 100%; gap: 14px; }
+  .ar-band-text { font-size: clamp(1.9rem, 9vw, 2.4rem); }
+  .ar-band-sub { font-size: 1rem; }
+
+  .ar-after { margin-top: 56px; }
+  .ar-after-grid { gap: 16px; margin-top: 20px; }
+}

@@ -115,3 +115,28 @@
 .ia-gm-label { margin-top: 6px; text-shadow: 0 1px 3px rgb(0 0 0 / 0.8); }
 .ia-gmap.is-light .ia-gm-label { color: #1e1b4b !important; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
 .ia-map-btn, .ia-mode, .ia-zoom { z-index: 2; }
+
+/* Phones: the tabs scroll sideways instead of being cut, the month axis thins out, the fleet
+   pulse keeps its 30 day-bars visible, and the map gets the height to spread its places. */
+@media (max-width: 599.98px) {
+  .ia-bar { padding: 20px 18px 0; }
+  .ia-page { font-size: 26px; }
+  .ia-views { max-width: 100%; overflow-x: auto; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+  .ia-views::-webkit-scrollbar { display: none; }
+  .ia-views span { flex: none; padding: 7px 12px; font-size: 13px; }
+  .ia-grid { gap: 12px; padding: 16px 12px 14px; }
+  .ia-panel { padding: 18px 16px; border-radius: 22px; }
+  .ia-caption { max-width: 9.5rem; font-size: 11.5px; }
+  .ia-figure { font-size: 26px; }
+  .ia-axis { font-size: 10.5px; }
+  .ia-axis span:nth-child(even) { display: none; }
+  .ia-pulse li { grid-template-columns: 84px minmax(0, 1fr) 30px; gap: 8px; }
+  .ia-pulse small { font-size: 12px; }
+  .ia-pulse span { gap: 1.5px; }
+  .ia-pulse span i { height: 14px; border-radius: 2px; }
+  .ia-pulse b { font-size: 12px; }
+  .ia-places { min-height: 380px; }
+  .ia-mode button { padding: 5px 13px; font-size: 13px; }
+  .ia-map-btn { top: 14px; left: 14px; width: 36px; height: 36px; }
+  .ia-zoom button { width: 36px; height: 36px; }
+}

@@ -313,3 +313,38 @@
 /* Customer stories sits closer to the testimonials above it (Ghulam, 2026-11-10). */
 .st-section { padding-top: clamp(40px, 5vw, 72px); }
 .st-section .sh { margin-top: 0; }
+
+/*
+ * Phones: the stories side by side in a swipe, the next one peeking in from the right, so the
+ * three of them take one screen instead of three. A thin rail under them fills as you swipe
+ * (where the browser can tie it to the scroll; elsewhere it is not shown).
+ */
+.st-rail { display: none; }
+@media (max-width: 639.98px) {
+  .st-section { timeline-scope: --st-swipe; padding-top: 24px; padding-bottom: 8px; }
+  .st-section .ct-grid {
+    grid-auto-flow: column;
+    grid-auto-columns: 84%;
+    gap: 12px;
+    margin-inline: -20px;
+    padding: 4px 20px 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 20px;
+    scrollbar-width: none;
+    scroll-timeline: --st-swipe x;
+  }
+  .st-section .ct-grid::-webkit-scrollbar { display: none; }
+  .st-section .ct-grid > * { scroll-snap-align: start; }
+  @supports (animation-timeline: scroll()) {
+    .st-rail { display: block; height: 3px; margin: 14px auto 0; width: 96px; overflow: hidden; border-radius: 3px; background: color-mix(in srgb, hsl(var(--v2-primary)) 16%, transparent); }
+    .st-rail i { display: block; height: 100%; border-radius: inherit; background: hsl(var(--v2-primary)); transform-origin: left; animation: st-rail linear both; animation-timeline: --st-swipe; }
+  }
+}
+@keyframes st-rail { from { transform: scaleX(0.34); } to { transform: scaleX(1); } }
+
+/* The blog on the landing page, on a phone: no tall gap after the Book a demo card. */
+@media (max-width: 639.98px) {
+  .bl-section { padding-block: 40px 64px; }
+}
