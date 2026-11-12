@@ -6,6 +6,7 @@ import {
   type StripeMode,
 } from "../_shared/stripe-client.ts";
 import { tryProviderRefund } from "../_shared/payments/refund.ts";
+import { cancelBonzahPoliciesForRental, bonzahCancellationWarning } from "../_shared/bonzah-rental-cancellation.ts";
 
 interface RejectRentalRequest {
   rentalId: string;
@@ -389,6 +390,23 @@ Deno.serve(async (req) => {
       console.error("Error updating rental:", rentalUpdateError);
     }
 
+    // 6a. Close the rental's Bonzah insurance. A rejected booking never goes out,
+    // so an issued policy is cancelled at Bonzah and an unpaid quote is marked
+    // cancelled here. Before this, rejection left the quote retryable, and a tap
+    // on "Retry" afterwards bought a live policy for a car that never left
+    // (R-57f385, Moore Luxe, 2026-11-11). Runs after the status change above so
+    // bonzah-confirm-payment already refuses this rental while we work.
+    let bonzahCancel: Awaited<ReturnType<typeof cancelBonzahPoliciesForRental>> | null = null;
+    try {
+      bonzahCancel = await cancelBonzahPoliciesForRental(supabase, {
+        rentalId,
+        tenantId,
+        reason: reason || "Booking rejected",
+      });
+    } catch (bonzahErr) {
+      console.error("Bonzah policy cancellation failed (non-fatal):", bonzahErr);
+    }
+
     // 6b. Void the rental's synced Xero / Zoho invoices (Sprint 6 patch).
     // Fire-and-forget — if it fails, the operator can manually void in the
     // sync log later. We don't want a Xero hiccup to block the cancel.
@@ -450,6 +468,9 @@ Deno.serve(async (req) => {
       totalRefunded,
       manualRefundsRequired: manualCount,
       results: refundResults,
+      cancelledPolicies: bonzahCancel?.cancelled.length ?? 0,
+      policyCancellationFailures: bonzahCancel?.failures ?? [],
+      policyCancellationWarning: bonzahCancel ? (bonzahCancellationWarning(bonzahCancel) ?? undefined) : undefined,
     });
   } catch (error: any) {
     console.error("Reject rental error:", error);

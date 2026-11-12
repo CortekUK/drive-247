@@ -85,6 +85,7 @@ import { BuyInsuranceDialog } from "@/components/rentals/buy-insurance-dialog";
 import type { StageProps } from "./stages";
 import { SHOW_MULTI_PERIOD } from "./multi-period";
 import { BonzahCoverCard } from "./bonzah-cover-card";
+import { isRentalClosedForInsurance, RENTAL_CLOSED_INSURANCE_NOTE } from "@/lib/bonzah-rental-closed";
 import {
   fmtDate,
   fmtDateTime,
@@ -290,9 +291,20 @@ export function StageInsurance({ detail, onStage, refetch }: StageProps) {
   // Bonzah: never after the start day, and at least 30 minutes before pickup so
   // the policy is in force before the car leaves.
   const originalBlockedReason = bonzahOriginalBlockedReason(rental.start_date, (rental as any).pickup_time, tenant?.timezone);
-  const canBuy = sellable && isEligible && hasInsurableDays && !originalBlockedReason && !!vehicle && !!detail.customer;
+  // A cancelled/rejected rental never goes out: no cover may be sold for it.
+  const rentalClosed = isRentalClosedForInsurance(rental);
+  const canBuy = !rentalClosed && sellable && isEligible && hasInsurableDays && !originalBlockedReason && !!vehicle && !!detail.customer;
+  const openBuy = () => {
+    if (rentalClosed) {
+      toast({ title: "Cover not available", description: RENTAL_CLOSED_INSURANCE_NOTE });
+      return;
+    }
+    setBuyOpen(true);
+  };
 
-  const blockedReason = !isBonzahConnected
+  const blockedReason = rentalClosed
+    ? RENTAL_CLOSED_INSURANCE_NOTE
+    : !isBonzahConnected
     ? "Bonzah is not connected for this account. Connect it in Settings → Integrations."
     : !isBonzahSellable(tenant)
       ? (bonzahBlockedReason(tenant) ?? null)
@@ -377,7 +389,7 @@ export function StageInsurance({ detail, onStage, refetch }: StageProps) {
         <StageAction
           icon={ShieldCheck}
           label={buyLabel}
-          onClick={() => setBuyOpen(true)}
+          onClick={openBuy}
           disabledReason={canBuy && !eligibilityLoading ? null : (blockedReason ?? "Checking whether Bonzah can cover this car…")}
         />
       }
@@ -386,7 +398,7 @@ export function StageInsurance({ detail, onStage, refetch }: StageProps) {
           covered, as two full-width cards sharing the pane's height. */}
       <div className="flex h-full min-h-0 flex-col gap-4">
         {/* ── out of date ─────────────────────────────────────────────────── */}
-        {showBanner && (
+        {showBanner && !rentalClosed && (
           <div className="shrink-0">
             <OutOfDateBanner
               title={
@@ -401,7 +413,7 @@ export function StageInsurance({ detail, onStage, refetch }: StageProps) {
               }
               drift={drift}
               primaryLabel="Re-quote and replace"
-              onPrimary={() => setBuyOpen(true)}
+              onPrimary={openBuy}
               secondaryLabel="Keep the current policy"
               onSecondary={acknowledge}
             />
@@ -422,7 +434,7 @@ export function StageInsurance({ detail, onStage, refetch }: StageProps) {
           emptyNote={current ? null : (recordedDecision ?? null)}
           statusChip={current ? <StatusChip status={current.status} /> : <StatusChip status="active" />}
           gapDays={gapDays}
-          onRequote={() => setBuyOpen(true)}
+          onRequote={openBuy}
         />
 
         {/* ── the customer's own policy, checked by Trax ──────────────────── */}

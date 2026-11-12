@@ -124,6 +124,17 @@ export const useCancelRental = () => {
         title: "Cancellation Complete",
         description: successMessage,
       });
+
+      // Bonzah refused to cancel an issued policy: it is still live and still
+      // paid for, so say so instead of letting "cancelled" imply it is gone.
+      if ((data as any).policyCancellationWarning) {
+        toast({
+          title: "Insurance still active at Bonzah",
+          description: (data as any).policyCancellationWarning,
+          variant: "destructive",
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ["rental-insurance-policies", params.rentalId] });
     },
     onError: (error: Error) => {
       toast({

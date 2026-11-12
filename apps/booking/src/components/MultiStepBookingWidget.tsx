@@ -693,7 +693,18 @@ const MultiStepBookingWidget = ({
   // The verification session ID remains valid
 
   // Scroll to step container when step changes
+  const lastScrolledStepRef = useRef<number | null>(null);
   useEffect(() => {
+    // Only when the step CHANGES, never on the first render. This effect also
+    // ran on mount, so every visitor to a legacy home page was jumped straight
+    // down to this widget instead of seeing the hero at the top (Posh2Lux,
+    // Nov 2026). The step restored from localStorage is already in place on the
+    // first render, so remembering it here does not swallow a real change.
+    if (lastScrolledStepRef.current === null || lastScrolledStepRef.current === currentStep) {
+      lastScrolledStepRef.current = currentStep;
+      return;
+    }
+    lastScrolledStepRef.current = currentStep;
     // The custom site's booking page is only the booking: its top holds the
     // step bar, which scrolling to the container would tuck under the header.
     if (isCustomSite) {

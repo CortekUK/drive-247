@@ -31,6 +31,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { resolveAgreementTimeZone } from "@/lib/agreement-datetime";
 import { isBonzahSellable, bonzahBlockedReason } from "@/lib/bonzah";
+import { isRentalClosedForInsurance } from "@/lib/bonzah-rental-closed";
 import { useRentalCreationGate } from "@/hooks/use-rental-creation-gate";
 import { ConnectStripeRequiredDialog } from "@/components/rentals/connect-stripe-required-dialog";
 // integration_bonzah controls Bonzah-specific features only; insurance document upload is always available
@@ -718,6 +719,9 @@ const RentalDetail = () => {
       return isPending ? 5000 : false;
     },
   });
+  // A cancelled/rejected rental never goes out, so nothing on this page may sell
+  // it Bonzah cover (see lib/bonzah-rental-closed.ts; the server refuses too).
+  const rentalClosedForInsurance = isRentalClosedForInsurance(rental);
 
   // Check Bonzah vehicle eligibility (only queries when rental + Bonzah integration exist)
   const { isEligible: isBonzahEligible, isLoading: isBonzahEligibilityLoading } = useBonzahVehicleEligibility({
@@ -6204,7 +6208,7 @@ const RentalDetail = () => {
           </CardHeader>
         <CardContent className="space-y-4">
           {/* Bonzah Insurance CTA - Show when no Bonzah policy exists */}
-          {canEdit('rentals') && !bonzahPolicy && (
+          {canEdit('rentals') && !bonzahPolicy && !rentalClosedForInsurance && (
             <div
               className={`relative overflow-hidden rounded-lg border border-[#CC004A]/20 bg-gradient-to-r from-[#CC004A]/5 via-[#CC004A]/10 to-[#CC004A]/5 dark:from-[#CC004A]/10 dark:via-[#CC004A]/15 dark:to-[#CC004A]/10 p-4 transition-all ${bonzahCanSell && isBonzahEligible && bonzahCanAddOriginal ? 'cursor-pointer hover:border-[#CC004A]/40 group' : 'opacity-60'}`}
               onClick={() => { if (bonzahCanSell && isBonzahEligible && bonzahCanAddOriginal) { setBuyInsuranceMode('original'); setShowBuyInsurance(true); } }}
@@ -6782,7 +6786,7 @@ const RentalDetail = () => {
                     </a>
                   </Button>
                 )}
-                {bonzahCanSell && (
+                {bonzahCanSell && !rentalClosedForInsurance && (
                   isBonzahEligible ? (
                     <Button
                       size="sm"

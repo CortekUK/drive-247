@@ -91,9 +91,12 @@ export function RentalPicker({
   });
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return rentals;
+    // A cancelled rental can never use cover; offering it here is how a policy
+    // gets bought for a car that never leaves (see lib/bonzah-rental-closed.ts).
+    const pool = mode === "insurance" ? rentals.filter((r) => r.status !== "Cancelled") : rentals;
+    if (!search.trim()) return pool;
     const q = search.toLowerCase();
-    return rentals.filter((r) => {
+    return pool.filter((r) => {
       const customerName = r.customers.name?.toLowerCase() || "";
       const reg = r.vehicles.reg?.toLowerCase() || "";
       const make = r.vehicles.make?.toLowerCase() || "";
@@ -105,7 +108,7 @@ export function RentalPicker({
         model.includes(q)
       );
     });
-  }, [rentals, search]);
+  }, [rentals, search, mode]);
 
   const handleSelect = (rental: PickerRental) => {
     setSearch("");

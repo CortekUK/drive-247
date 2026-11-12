@@ -24,6 +24,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
+import { isRentalClosedForInsurance, RENTAL_CLOSED_INSURANCE_NOTE } from '@/lib/bonzah-rental-closed';
 
 interface BuyInsuranceDialogProps {
   open: boolean;
@@ -34,6 +35,9 @@ interface BuyInsuranceDialogProps {
     end_date: string | null;
     /** HH:MM[:SS] in the tenant's timezone; enables the 30-minute-before-pickup check. */
     pickup_time?: string | null;
+    /** Used to refuse a sale on a cancelled/rejected rental. */
+    status?: string | null;
+    approval_status?: string | null;
     customer_id?: string;
     customers: { id: string; name: string; email?: string; phone?: string | null };
     vehicles: { id: string; reg: string; make: string; model: string };
@@ -67,6 +71,9 @@ export function BuyInsuranceDialog({
   onUploadOwnPolicy,
 }: BuyInsuranceDialogProps) {
   const isExtension = mode === 'extension';
+  // Last line of defence in the portal: whichever screen opened this dialog,
+  // a cancelled rental gets an explanation, never a quote.
+  const rentalClosed = isRentalClosedForInsurance(rental);
   const { tenant } = useTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -167,6 +174,10 @@ export function BuyInsuranceDialog({
   };
 
   const handlePurchase = async (forceDuplicate = false) => {
+    if (rentalClosed) {
+      toast({ title: 'Insurance not bought', description: RENTAL_CLOSED_INSURANCE_NOTE, variant: 'destructive' });
+      return;
+    }
     if (!tenant?.id || !rental.customers?.id) return;
     if (!canBuyBonzah) return; // zero-night window or Bonzah's never-after-start rule
 
@@ -326,7 +337,13 @@ export function BuyInsuranceDialog({
             || confirmError.message?.toLowerCase().includes('insufficient')
             || confirmError.message?.toLowerCase().includes('balance');
 
-          if (isInsufficientBalance) {
+          if (errorBody?.code === 'rental_cancelled') {
+            toast({
+              title: 'Insurance not bought',
+              description: errorBody?.error || RENTAL_CLOSED_INSURANCE_NOTE,
+              variant: 'destructive',
+            });
+          } else if (isInsufficientBalance) {
             const mode = errorBody?.bonzah_mode || tenant?.bonzah_mode || 'test';
             const guidance = mode === 'live'
               ? 'Your Bonzah available balance is too low. Top up your Bonzah account and retry from the rental page.'
@@ -462,7 +479,14 @@ export function BuyInsuranceDialog({
 
         {step === 1 && (
           <div className="space-y-4">
-            {isBonzahEligibilityLoading ? (
+            {rentalClosed ? (
+              <div className="rounded-lg border border-border bg-muted/40 p-5 space-y-3">
+                <p className="text-sm">{RENTAL_CLOSED_INSURANCE_NOTE}</p>
+                <div className="flex justify-end">
+                  <Button variant="outline" onClick={handleClose}>Close</Button>
+                </div>
+              </div>
+            ) : isBonzahEligibilityLoading ? (
               <div className="flex flex-col items-center justify-center py-8 space-y-3">
                 <Loader2 className="w-6 h-6 animate-spin text-[#CC004A]" />
                 <p className="text-sm text-muted-foreground">Checking insurance eligibility...</p>
