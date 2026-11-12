@@ -122,6 +122,8 @@ const SKELETON_RECORD: CustomerRecord = (() => {
       vehicle: null,
       from: null,
       until: null,
+      provider: null,
+      policyNumber: null,
       verified: true,
       uploadedAt: d.date(),
       fileUrl: null,
@@ -325,8 +327,10 @@ export function CustomerDetailV2() {
 
         {/* One stretched grid cell, so the AutoSkeleton wrapper hands the
             panel the full height its own scroll container needs. */}
-        <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)]">
-          <AutoSkeleton loading={isLoading} className="h-full min-h-0">
+        {/* `grid-cols-[minmax(0,1fr)]`: an implicit `auto` column grows to the
+            panel's min-content, which ran the section off a phone screen. */}
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]">
+          <AutoSkeleton loading={isLoading} className="h-full min-h-0 min-w-0">
           {View ? (
             <View {...props} />
           ) : (

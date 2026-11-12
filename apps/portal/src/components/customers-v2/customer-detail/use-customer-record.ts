@@ -408,6 +408,8 @@ export function useCustomerRecord(id: string) {
       vehicle: d.vehicles ? `${d.vehicles.make} ${d.vehicles.model} · ${d.vehicles.reg}` : null,
       from: d.start_date ?? d.policy_start_date ?? null,
       until: d.end_date ?? d.policy_end_date ?? null,
+      provider: s(d.insurance_provider) || null,
+      policyNumber: s(d.policy_number) || null,
       verified: !!d.verified,
       uploadedAt: d.created_at,
       fileUrl: d.file_url ?? null,

@@ -16,6 +16,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui-v2/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui-v2/alert-dialog";
 import { useCustomerDocuments, useDeleteCustomerDocument, useDownloadDocument } from "@/hooks/use-customer-documents";
 import AddCustomerDocumentDialog from "@/components/customers/add-customer-document-dialog";
 import { EmptyHint, Panel, Pill, Section, Stat, Thumb, expiryOf, fmtDate, listCls } from "./kit";
@@ -64,6 +74,8 @@ export function SectionDocuments({ c, onJump, canEdit }: SectionProps) {
   const deleteDoc = useDeleteCustomerDocument();
   const download = useDownloadDocument();
   const accept = useAcceptDocument(c.id);
+  // Removing a file also removes it from the customer's own portal, so ask first.
+  const [pendingRemove, setPendingRemove] = useState<{ id: string; name: string } | null>(null);
 
   const expiring = c.docs.filter((d) => expiryOf(d.until).state === "soon").length;
   const expired = c.docs.filter((d) => expiryOf(d.until).state === "expired").length;
@@ -149,19 +161,37 @@ export function SectionDocuments({ c, onJump, canEdit }: SectionProps) {
               const exp = expiryOf(d.until);
               return (
                 <div key={d.id} className={cn(listCls, "divide-y-0")}>
-                  <div className="flex items-start gap-4 px-5 py-4">
+                  {/* Wraps on a phone: the buttons drop under the details instead of
+                      squeezing them to nothing. */}
+                  <div className="flex flex-wrap items-start gap-4 px-5 py-4">
                     <Thumb className="h-12 w-16 shrink-0" filled />
 
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-[10rem] flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="truncate text-sm font-medium">{d.name}</p>
-                        {d.verified && (
+                        {d.verified ? (
                           <Pill tone="success">
                             <Check className="size-3" />
                             Verified
                           </Pill>
+                        ) : (
+                          <Pill tone="neutral">Awaiting review</Pill>
                         )}
                       </div>
+                      {/* The policy as filed — the same facts the Insurances page lists. */}
+                      {(d.provider || d.policyNumber || d.from || d.until) && (
+                        <p className="mt-1 text-xs text-foreground">
+                          {[
+                            d.provider,
+                            d.policyNumber,
+                            d.from || d.until
+                              ? `${d.from ? fmtDate(d.from) : "…"} – ${d.until ? fmtDate(d.until) : "…"}`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      )}
                       <p className="mt-1 text-xs text-muted-foreground">
                         {d.type}
                         {d.vehicle && ` · ${d.vehicle}`} · added {fmtDate(d.uploadedAt)}
@@ -179,7 +209,7 @@ export function SectionDocuments({ c, onJump, canEdit }: SectionProps) {
                       </div>
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-1.5">
+                    <div className="flex shrink-0 items-center gap-1.5 max-sm:w-full max-sm:justify-end">
                       {/* A file the scanner cleared still waits for a person; this
                           is how staff sign it off so the customer sees Verified. */}
                       {canEdit && !d.verified && d.scan.status === "passed" && (
@@ -219,7 +249,7 @@ export function SectionDocuments({ c, onJump, canEdit }: SectionProps) {
                             variant="ghost"
                             size="icon-sm"
                             aria-label={`Remove ${d.name}`}
-                            onClick={() => deleteDoc.mutate(d.id)}
+                            onClick={() => setPendingRemove({ id: d.id, name: d.name })}
                             className="text-muted-foreground hover:text-destructive"
                           >
                             <Trash2 className="size-3.5" />
@@ -267,6 +297,35 @@ export function SectionDocuments({ c, onJump, canEdit }: SectionProps) {
         customerId={c.id}
         documentId={editingId}
       />
+      <AlertDialog
+        open={pendingRemove !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteDoc.isPending) setPendingRemove(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {pendingRemove?.name ?? "this document"}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The file is deleted for good, and the customer no longer sees it in their portal.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteDoc.isPending}>Keep it</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleteDoc.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!pendingRemove) return;
+                deleteDoc.mutate(pendingRemove.id, { onSettled: () => setPendingRemove(null) });
+              }}
+            >
+              {deleteDoc.isPending ? "Removing…" : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Panel>
   );
 }
