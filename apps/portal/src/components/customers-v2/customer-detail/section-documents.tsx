@@ -51,7 +51,7 @@ function useAcceptDocument(customerId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customer-documents"] });
-      toast({ title: "Document accepted", description: "Marked verified against the scanner's objection." });
+      toast({ title: "Document verified", description: "The customer now sees it as Verified." });
     },
     onError: (e: any) => toast({ title: "Could not accept it", description: e.message, variant: "destructive" }),
   });
@@ -180,6 +180,14 @@ export function SectionDocuments({ c, onJump, canEdit }: SectionProps) {
                     </div>
 
                     <div className="flex shrink-0 items-center gap-1.5">
+                      {/* A file the scanner cleared still waits for a person; this
+                          is how staff sign it off so the customer sees Verified. */}
+                      {canEdit && !d.verified && d.scan.status === "passed" && (
+                        <Button size="sm" onClick={() => accept.mutate(d.id)} disabled={accept.isPending}>
+                          <ShieldCheck className="size-3.5" />
+                          Mark verified
+                        </Button>
+                      )}
                       {d.fileUrl && (
                         <Button
                           variant="outline"
