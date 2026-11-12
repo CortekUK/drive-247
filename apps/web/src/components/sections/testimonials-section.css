@@ -277,3 +277,118 @@
   .ts-quotes { overflow-x: auto; }
   .tc-word { transition: none; }
 }
+
+/*
+ * Smaller (boss, 2026-11-12, desktop and phones): the film was far larger than it needed to
+ * be. It is now a small player beside the words, in the same 720:880 shape (pinned to the
+ * top of its cell so the grid never stretches it out of shape), and the section is tighter.
+ * George's name and role sit in their own cell above the list of films.
+ */
+.ts-section { padding-block: clamp(72px, 10svh, 120px) 16px; }
+.ts-feature {
+  grid-template-columns: clamp(240px, 24vw, 340px) minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas: "frame head" "frame who" "frame films";
+  column-gap: clamp(32px, 5vw, 72px);
+}
+/* Level with the foot of the words beside it: the page line leaves the frame from its bottom
+   edge, and a frame ending mid-list sent the line across the film titles. */
+.ts-frame { align-self: end; max-height: none; border-radius: 22px; }
+.ts-caption { font-size: clamp(0.95rem, 1.2vw, 1.15rem); bottom: 18px; width: calc(100% - 28px); }
+.ts-who { grid-area: who; margin-top: clamp(20px, 3svh, 32px); }
+.ts-who .ts-label { padding-bottom: 0; font-size: 0.9375rem; color: var(--foreground); }
+.ts-role { margin-top: 2px; font-size: 0.875rem; color: var(--muted-foreground); }
+.ts-films { align-self: start; margin-top: 14px; }
+.ts-film { padding-block: clamp(10px, 1.6svh, 14px); }
+.ts-film-title { font-size: clamp(1.0625rem, 1.3vw, 1.1875rem); }
+.ts-quotes { margin-top: clamp(40px, 6svh, 64px); }
+
+@media (max-width: 767px) {
+  .ts-section { padding-block: 40px 0; }
+  /* The film beside George's name, small, then the list full width under both. */
+  .ts-feature {
+    grid-template-columns: 112px minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas: "head head" "frame who" "films films";
+    column-gap: 16px;
+  }
+  .ts-frame { align-self: start; margin-top: 20px; border-radius: 14px; }
+  .ts-who { align-self: center; margin-top: 20px; }
+  .ts-who .ts-label { font-size: 0.9375rem; line-height: 1.35; }
+  /* Too small a picture for words over it; the list says what each film is. */
+  .ts-caption { display: none; }
+  .ts-control { top: 8px; right: 8px; width: 30px; height: 30px; }
+  .ts-control svg { width: 14px; height: 14px; }
+  .ts-films { margin-top: 16px; }
+  .ts-film { padding-block: 11px; }
+  .ts-film-title { font-size: 1rem; }
+  .ts-quotes { margin-top: 28px; }
+  .ts-title { font-size: clamp(2rem, 9vw, 2.5rem); }
+  .ts-sub { margin-top: 6px; font-size: 1rem; }
+}
+@media (max-width: 767px) and (orientation: landscape) {
+  .ts-frame { width: 100%; height: auto; }
+}
+
+
+/*
+ * Phones, George's film as a wide player (user, 2026-11-12: "is there any other way to put
+ * this?", chose the wide player). Full width in a shorter 4:3 crop that keeps his face, his
+ * name and role set over its foot on a soft dark fade, the sound button in its corner; the
+ * list of films under it. His name shares the film's grid cell, so it needs no new markup.
+ */
+@media (max-width: 767px) {
+  .ts-feature {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "head" "frame" "films";
+  }
+  .ts-frame {
+    align-self: stretch;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    margin-top: 20px;
+    border-radius: 18px;
+  }
+  .ts-frame video { object-position: 50% 22%; }
+  .ts-frame::after {
+    content: "";
+    position: absolute;
+    inset: 45% 0 0;
+    background: linear-gradient(to bottom, transparent, rgb(8 8 18 / 0.72));
+    pointer-events: none;
+  }
+  .ts-who {
+    grid-area: frame;
+    align-self: end;
+    position: relative;
+    z-index: 1;
+    margin: 0;
+    padding: 0 16px 14px;
+    pointer-events: none;
+  }
+  .ts-who .ts-label { max-width: 26ch; font-size: 0.9375rem; font-weight: 600; line-height: 1.3; color: #fff; }
+  .ts-who .ts-role { margin-top: 2px; font-size: 0.8125rem; color: rgb(255 255 255 / 0.78); }
+  .ts-control { top: 12px; right: 12px; width: 34px; height: 34px; }
+  .ts-control svg { width: 16px; height: 16px; }
+  .ts-films { margin-top: 10px; }
+}
+@media (max-width: 767px) and (orientation: landscape) {
+  .ts-frame { aspect-ratio: 16 / 9; height: auto; }
+}
+
+/*
+ * Phones, the operator quotes shorter (boss, 2026-11-12: "shorten this up, the end looks too
+ * big"). Each card is only as tall as its own words, so no empty band above the name; the name
+ * line is a size down, with a smaller photo and the role on one line.
+ */
+@media (max-width: 767px) {
+  /* All cards one height (user, 2026-11-12); the quotes are short now, so the name line sits close under each. */
+  .ts-quotes-track { align-items: stretch; gap: 12px; padding-block: 4px 4px; }
+  .ts-quote { gap: 10px; width: min(280px, 78vw); padding: 20px; border-radius: 22px; }
+  .ts-quote-label { font-size: 1rem; }
+  .ts-quote-text { flex: 1; font-size: 1.0625rem; line-height: 1.2; }
+  .ts-quote figcaption { gap: 10px; margin-top: 2px; padding-top: 12px; font-size: 0.75rem; line-height: 1.35; }
+  .ts-quote figcaption img { width: 30px; height: 30px; box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.9); }
+  .ts-quote figcaption span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: rgb(255 255 255 / 0.8); }
+  .ts-quote figcaption strong { font-size: 0.8125rem; }
+}

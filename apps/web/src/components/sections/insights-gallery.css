@@ -140,3 +140,77 @@
   .ia-map-btn { top: 14px; left: 14px; width: 36px; height: 36px; }
   .ia-zoom button { width: 36px; height: 36px; }
 }
+
+/* The count inside the dot is for phones only (below); desktop reads "Name · n". */
+.ia-pin-n { display: none; }
+
+/*
+ * Phones (user, 2026-11-12: "this looks messy, make it better for phone"). At this size the
+ * map is a thumbnail, so it says one thing clearly: where renters went and how often. Each
+ * dot carries its count, each name sits on a small label on the side clear of its neighbours,
+ * the halos and lines come down a size, and the chrome goes: no expand button, no zoom (the
+ * page scrolls over the map here), just a small Earth / Map switch in the corner.
+ */
+@media (max-width: 767.98px) {
+  .pt-panel .ia-places { min-height: 230px; }
+  .ia-map-btn.is-expand, .ia-zoom { display: none; }
+  .ia-mode { top: 10px; right: 10px; left: auto; translate: none; padding: 2px; }
+  .ia-mode button { padding: 3px 10px; font-size: 11.5px; }
+
+  .ia-routes line { stroke-width: 1.5; opacity: 0.55; }
+  .ia-pin i {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border-width: 2px;
+    box-shadow: 0 0 0 4px hsl(239 84% 67% / 0.22), 0 1px 3px rgb(0 0 0 / 0.25);
+  }
+  .ia-pin.is-hub i { width: 26px; height: 26px; margin: -13px 0 0 -13px; box-shadow: 0 0 0 6px hsl(239 84% 67% / 0.25), 0 1px 3px rgb(0 0 0 / 0.25); }
+  .ia-pin-n { display: block; font-size: 9.5px; font-style: normal; font-weight: 700; line-height: 1; color: #fff; font-variant-numeric: tabular-nums; }
+  .ia-pin.is-hub[data-side="left"] small { right: 19px; }
+  .ia-pin.is-hub .ia-pin-n { font-size: 11px; }
+  .ia-pin-count { display: none; }
+
+  .ia-pin small {
+    top: 0;
+    translate: 0 -50%;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: 10.5px;
+    font-weight: 600;
+    line-height: 1.3;
+    text-shadow: none;
+    color: #fff;
+    background: rgb(15 14 40 / 0.62);
+  }
+  .is-map .ia-pin small { color: #1e1b4b; text-shadow: none; background: rgb(255 255 255 / 0.9); box-shadow: 0 1px 2px rgb(30 27 75 / 0.15); }
+  .ia-pin[data-side="right"] small { left: 15px; }
+  .ia-pin[data-side="left"] small { left: auto; right: 15px; }
+  .ia-pin[data-side="below"] small { top: 19px; left: 0; translate: -50% 0; }
+}
+
+/*
+ * Phones, inside the product track (user, 2026-11-12: "didn't like this sharp colour line,
+ * add a gradient shift"): the Insights window has no hairline and no hard top edge. Its own
+ * wash moves to a layer behind the content that fades in from the page over its first 72px
+ * and back out over its last 48px, so the page runs into the window without a seam.
+ */
+@media (max-width: 767.98px) {
+  .pt-panel #know-your-numbers .ia-window { position: relative; isolation: isolate; border-block: 0; background: none; }
+  .pt-panel #know-your-numbers .ia-window::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(70rem 50rem at 105% -10%, hsl(239 84% 67% / 0.2), transparent 55%),
+      radial-gradient(60rem 48rem at -8% -6%, hsl(247 92% 60% / 0.16), transparent 52%),
+      radial-gradient(55rem 45rem at 50% 115%, hsl(239 84% 67% / 0.12), transparent 55%),
+      #fff;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 72px, #000 calc(100% - 48px), transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 72px, #000 calc(100% - 48px), transparent);
+  }
+}

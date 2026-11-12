@@ -19,7 +19,14 @@ export function StoryPoster({ story }: { story: StoryWithMeta }) {
           className="pp-photo"
           style={{ objectPosition: story.photo.focus }}
         />
-        <h3 className="pp-title">{story.headline}</h3>
+        {/* Phones only (post-poster.css): who it is about, at the top of the photo. */}
+        <span className="pp-chip">{story.operator}</span>
+        <div className="pp-foot">
+          <h3 className="pp-title">{story.headline}</h3>
+          <span className="pp-in">
+            <strong>{story.highlight.value}</strong> {story.highlight.label}
+          </span>
+        </div>
       </div>
       <div className="pp-under">
         <p className="pp-meta">

@@ -48,7 +48,7 @@ export function TypedText({ parts }: { parts: Part[] }) {
           }
         }, STEP_MS);
       },
-      { threshold: 0.6 },
+      { threshold: matchMedia("(max-width: 767.98px)").matches ? 0.2 : 0.6 },
     );
     observer.observe(el);
     return () => {

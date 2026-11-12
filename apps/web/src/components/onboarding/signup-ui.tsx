@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 
 /** Inputs on these screens: taller, rounder and larger type than the site default. */
 export const SIGNUP_INPUT =
-  "h-11 rounded-xl border-zinc-200 bg-white px-4 text-[15px] shadow-none md:text-[15px] dark:border-white/10 dark:bg-white/[0.03] focus-visible:border-indigo-500 focus-visible:ring-indigo-500/20 dark:focus-visible:border-indigo-400";
+  "h-11 rounded-xl border-zinc-200 bg-white px-4 text-[15px] shadow-none md:text-[15px] max-sm:text-base dark:border-white/10 dark:bg-white/[0.03] focus-visible:border-indigo-500 focus-visible:ring-indigo-500/20 dark:focus-visible:border-indigo-400";
 
 /** The one primary action per screen. */
 export const SIGNUP_PRIMARY =
@@ -22,6 +22,14 @@ export const SIGNUP_PRIMARY =
 /** Quiet text actions (Back, Resend, Use a different email…). */
 export const SIGNUP_QUIET =
   "text-sm font-medium text-muted-foreground transition-colors duration-200 ease-out hover:text-foreground disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none";
+
+/**
+ * Phones: widens a small text action's tap area to about 44px without moving
+ * anything (an invisible box around it), so "Back", "Resend code" and friends
+ * are easy to hit with a thumb. Desktop is untouched.
+ */
+export const SIGNUP_HIT =
+  "relative max-sm:after:absolute max-sm:after:-inset-x-2 max-sm:after:-inset-y-3 max-sm:after:content-['']";
 
 /** Field labels. */
 export const SIGNUP_LABEL = "text-[13px] font-medium text-foreground/80";

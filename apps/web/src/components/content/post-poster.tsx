@@ -46,7 +46,12 @@ export function PostPoster({ post }: { post: PostWithMeta }) {
           className="pp-photo"
           style={{ objectPosition: poster.focus }}
         />
-        <h3 className="pp-title">{post.title}</h3>
+        {/* Phones only (post-poster.css): what the post is, at the top of the photo. */}
+        <span className="pp-chip">{post.category}</span>
+        <div className="pp-foot">
+          <h3 className="pp-title">{post.title}</h3>
+          <span className="pp-in">{post.readMinutes} min read</span>
+        </div>
       </div>
       <div className="pp-under">
         <p className="pp-meta">

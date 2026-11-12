@@ -249,6 +249,14 @@
   .hg-logo { flex: none; display: flex; align-items: center; min-height: 44px; }
   .hg-nav a { height: 44px; }
 }
+/* Phones: smaller top buttons (boss, 2026-11-12). The invisible ::before keeps
+   the tap area at 44px tall while the pill itself is 34px. */
+@media (max-width: 767px) {
+  /* Logo hard left, the two buttons small and hard right (user, 2026-11-12). */
+  .hg-nav { gap: 6px; margin-left: auto; }
+  .hg-nav a { position: relative; height: 30px; padding-inline: 10px; font-size: 11.5px; border-radius: 999px; }
+  .hg-nav a::before { content: ""; position: absolute; inset: -7px 0; }
+}
 /* The narrowest phones: the logo and both buttons only just share one row. */
 @media (max-width: 359px) {
   .hg-top { padding-inline: 12px; }
@@ -283,13 +291,13 @@
  *   instead of one cropped screen as wide as the phone.
  * - Wide screens are capped at ~70% of the width and read from their top-left
  *   corner, where their titles are.
- * - The two first steps move from the cramped top row into the hero, full size.
+ * - The two first steps stay in the top row beside the logo (reverted 2026-11-12).
  * ---------------------------------------------------------------------------
  */
-.hg-cta { display: none; }
 @media (max-width: 767px) {
-  .hg-hero { height: auto; min-height: 0; padding-top: 92px; }
-  .hg-nav { display: none; }
+  /* The first steps are back in the top row beside the logo (Ghulam, 2026-11-12: "revert the
+     buttons to the previous formation", higher up), and the words sit higher with them. */
+  .hg-hero { height: auto; min-height: 0; padding-top: 80px; }
   .hg-title { font-size: clamp(2.25rem, 10.4vw, 3rem); }
   /* Wraps like the Trax line (user, 2026-11-11): full lines narrowing to a short last one. */
   /* A pyramid, like the Trax line (user, 2026-11-11): one line per span, each shorter than the
@@ -297,24 +305,6 @@
   .hg-sub { margin-top: 14px; font-size: 1rem; max-width: 100%; }
   .hg-line { display: block; white-space: nowrap; }
   .hg-proof { margin-top: 18px; }
-
-  .hg-cta {
-    display: flex;
-    gap: 10px;
-    width: 100%;
-    max-width: 24rem;
-    margin: 22px auto 0;
-    animation: hg-rise 200ms ease-out 240ms both;
-  }
-  .hg-cta a {
-    flex: 1 1 0;
-    height: 50px;
-    border-radius: 999px;
-    font-size: 15px;
-    font-weight: 600;
-  }
-  .hg-cta-main { flex-grow: 1.35 !important; }
-  .hg-cta-main svg { width: 16px; height: 16px; }
 
   /* Whole cards on phones: rounded all round with room under them, so the strip never
      reads as cut off at the hero's bottom edge (the desktop tiles bleed off on purpose). */
@@ -328,11 +318,24 @@
   .hg-track { animation-duration: 60s; }
 }
 @media (max-width: 359px) {
-  .hg-cta { flex-direction: column; }
-  .hg-cta a { flex: none; height: 46px; }
   .hg-marquee { height: 284px; }
   .hg-col { width: min(calc(var(--a) * 272px), 74vw); }
 }
-@media (max-width: 767px) and (prefers-reduced-motion: reduce) {
-  .hg-cta { animation: none; }
+
+/* Phones: the hero fills the whole first screen and the screens strip runs off the
+   bottom edge, the same as desktop (user, 2026-11-12: "show these all the way down
+   like we do in desktop"). Overrides the fixed-height, rounded-all-round cards above. */
+@media (max-width: 767px) {
+  .hg-hero { height: 100svh; min-height: 600px; }
+  .hg-marquee {
+    flex: 1 1 0;
+    height: auto;
+    min-height: 240px;
+    padding-bottom: 0;
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent);
+  }
+  .hg-col { height: calc(100% + 12px); }
+  .hg-tile { padding-bottom: 0; border-bottom: 0; border-radius: 14px 14px 0 0; }
+  .hg-shot { border-radius: 11px 11px 0 0; }
 }

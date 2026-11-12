@@ -15,7 +15,20 @@
 
 import { TESTIMONIALS } from "@/lib/constants";
 
-const FETCH_TIMEOUT_MS = 1500;
+// The page waits this long for the quotes. 1.5s timed out often from a dev machine.
+const FETCH_TIMEOUT_MS = 4000;
+
+/*
+ * The last quotes read, kept for this server process: a slow or failed read shows them
+ * rather than jumping back to the built-in ones. A failure is a quiet one-line warning,
+ * not an error: it is handled, and a logged error became a permanent issue in the Next.js
+ * dev overlay (with the whole DOMException printed under it).
+ */
+let lastGood: Testimonial[] | null = null;
+const fallBack = (why: string) => {
+  console.warn(`[testimonials] ${why}; showing ${lastGood ? "the last quotes read" : "the built-in quotes"}.`);
+  return lastGood ?? FALLBACK_TESTIMONIALS;
+};
 
 export interface Testimonial {
   id: string;
@@ -55,6 +68,67 @@ function splitQuote(quote: string, highlight: string | null) {
   return { before: quote.slice(0, at), bold: h, after: quote.slice(at + h.length) };
 }
 
+/*
+ * Text saved through a mis-set encoding comes back with UTF-8 read as Windows-1252
+ * ("Setup was painless â€” we were live"). Put the usual punctuation back.
+ */
+const MOJIBAKE: [RegExp, string][] = [
+  [/â€”/g, "—"],
+  [/â€“/g, "–"],
+  [/â€™/g, "’"],
+  [/â€˜/g, "‘"],
+  [/â€œ/g, "“"],
+  [/â€[\u009d�"]/g, "”"],
+  [/â€¦/g, "…"],
+  [/Â(?=\s)/g, ""],
+];
+const repair = (text: string) => MOJIBAKE.reduce((t, [bad, good]) => t.replace(bad, good), text);
+
+/*
+ * Every quote kept short (user, 2026-11-12: "testimonials are this much, don't write large
+ * ones"): no more than about the Miami quote's length. The highlighted words always stay,
+ * with the rest of their sentence; whole sentences either side are added back, nearest
+ * first, while they fit.
+ */
+const QUOTE_MAX = 140;
+const sentences = (text: string) => text.split(/(?<=[.!?])\s+/).filter(Boolean);
+export function shortenQuote(q: { before: string; bold: string; after: string }) {
+  const total = q.before + q.bold + q.after;
+  if (total.length <= QUOTE_MAX) return q;
+  if (!q.bold) {
+    const parts = sentences(q.before.trim());
+    let kept = parts[0] ?? q.before;
+    for (const s of parts.slice(1)) {
+      if ((kept + " " + s).length > QUOTE_MAX) break;
+      kept += " " + s;
+    }
+    return { before: kept, bold: "", after: "" };
+  }
+  // The highlight's own sentence: the unfinished tail of what comes before it and the
+  // unfinished head of what follows.
+  const beforeParts = sentences(q.before);
+  const afterParts = sentences(q.after.trimStart());
+  const lead = /[.!?]\s*$/.test(q.before) || !q.before.trim() ? "" : beforeParts.pop() ?? "";
+  const tail = /^[.!?]/.test(q.after.trimStart()) || /[.!?]\s*$/.test(q.bold) ? "" : afterParts.shift() ?? "";
+  let before = lead ? lead + (q.before.endsWith(" ") ? " " : "") : "";
+  let after = tail ? (q.after.startsWith(" ") ? " " : "") + tail : "";
+  const size = () => (before + q.bold + after).length;
+  while (afterParts.length || beforeParts.length) {
+    const next = afterParts[0];
+    if (next && size() + next.length + 1 <= QUOTE_MAX) {
+      after += " " + afterParts.shift();
+      continue;
+    }
+    const prev = beforeParts[beforeParts.length - 1];
+    if (prev && size() + prev.length + 1 <= QUOTE_MAX) {
+      before = beforeParts.pop() + " " + before;
+      continue;
+    }
+    break;
+  }
+  return { before, bold: q.bold, after };
+}
+
 function fromRow(r: Row): Testimonial {
   return {
     id: r.id,
@@ -64,11 +138,11 @@ function fromRow(r: Row): Testimonial {
     fleetSize: r.fleet_size ? `${r.fleet_size}-vehicle fleet` : null,
     location: r.location,
     stars: Math.min(5, Math.max(1, r.rating)),
-    ...splitQuote(r.quote, r.highlight),
+    ...shortenQuote(splitQuote(repair(r.quote), r.highlight ? repair(r.highlight) : null)),
   };
 }
 
-export const FALLBACK_TESTIMONIALS: Testimonial[] = TESTIMONIALS.map((t) => ({ id: t.name, ...t }));
+export const FALLBACK_TESTIMONIALS: Testimonial[] = TESTIMONIALS.map((t) => ({ id: t.name, ...t, ...shortenQuote(t) }));
 
 export async function fetchTestimonials(): Promise<Testimonial[]> {
   const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -86,14 +160,13 @@ export async function fetchTestimonials(): Promise<Testimonial[]> {
         cache: "no-store",
       },
     );
-    if (!res.ok) {
-      console.error(`[testimonials] read failed (HTTP ${res.status}) — showing the built-in quotes.`);
-      return FALLBACK_TESTIMONIALS;
-    }
+    if (!res.ok) return fallBack(`read failed (HTTP ${res.status})`);
     const rows = (await res.json()) as Row[];
-    return Array.isArray(rows) ? rows.map(fromRow) : FALLBACK_TESTIMONIALS;
+    if (!Array.isArray(rows)) return fallBack("read returned no list");
+    lastGood = rows.map(fromRow);
+    return lastGood;
   } catch (error) {
-    console.error("[testimonials] read failed — showing the built-in quotes.", error);
-    return FALLBACK_TESTIMONIALS;
+    const why = error instanceof Error && error.name === "TimeoutError" ? `read took over ${FETCH_TIMEOUT_MS / 1000}s` : `read failed (${error instanceof Error ? error.message : String(error)})`;
+    return fallBack(why);
   }
 }

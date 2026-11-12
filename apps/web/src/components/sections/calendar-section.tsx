@@ -7,6 +7,7 @@ import { useReveal } from "./operations-dashboard";
 import { Accent, SectionHeading } from "./section-heading";
 import { BrowserChrome } from "./portal-glass";
 import { CalendarSheet, type SheetBooking } from "./calendar-sheet";
+import { CalloutBand, CalloutLeaders, type Callout } from "./calendar-callouts";
 import "./calendar-section.css";
 
 /*
@@ -32,6 +33,14 @@ const ROWS: { car: string; plate: string; tone: string; rate?: number; bars: Bar
   { car: "Honda Civic", rate: 59, plate: "5HCV740", tone: "#be185d", bars: [{ from: 5, span: 2, who: "Service", state: "blocked", note: "In service, hidden from your site" }, { from: 9, span: 4, who: "Marco Rossi", state: "booked" }] },
   { car: "Toyota RAV4", rate: 79, plate: "4TRV225", tone: "#a16207", bars: [{ from: 0, span: 4, who: "Chloe Adams", state: "out" }, { from: 6, span: 5, who: "Rosalind Achebe", state: "booked" }] },
 ];
+
+/* The labels, numbered in reading order (car by car), as the screen numbers them. On a phone
+   the first two sit above the calendar and the rest below it (calendar-callouts.tsx). */
+const CALLOUTS: (Callout & { car: string; who: string })[] = ROWS.flatMap((row) =>
+  row.bars.filter((bar) => bar.note).map((bar) => ({ car: row.car, who: bar.who, note: bar.note! })),
+).map((c, i) => ({ ...c, n: i + 1 }));
+const CALLOUTS_BELOW_FROM = 3;
+const calloutOf = (car: string, who: string) => CALLOUTS.find((c) => c.car === car && c.who === who)?.n;
 
 /** The booking the docked sheet shows until another is clicked. */
 const FIRST: SheetBooking = { who: "Mia Chen", car: "Kia Telluride", plate: "8XKR214", rate: 89, state: "booked", start: DAYS[4], days: 5 };
@@ -110,6 +119,7 @@ export function CalendarSection() {
           sub="Your whole fleet on one timeline, by car, rental or customer. Spot the free days, see what goes out and comes back, and never double-book a car."
         />
 
+        <CalloutBand side="top" items={CALLOUTS.filter((c) => c.n < CALLOUTS_BELOW_FROM)} />
         <div ref={tabletRef} className={`pg-tablet cs-tablet${lit ? " is-lit" : ""}`}>
           <i className="pg-tablet-camera" />
         <div className="cs-window">
@@ -193,6 +203,7 @@ export function CalendarSection() {
                         className={`cs-bar is-${bar.state}${(shown ? shown.who === bar.who && shown.car === row.car : bar.open) ? " is-open" : ""}`}
                         style={{ "--cs-from": bar.from, "--cs-span": bar.span, "--cs-at": `${250 + step++ * 70}ms` } as CSSProperties}
                         aria-label={`${bar.who}, ${row.car}: open`}
+                        data-callout={calloutOf(row.car, bar.who)}
                         onClick={() =>
                           setSheet({ who: bar.who, car: row.car, plate: row.plate, rate: row.rate ?? 89, state: bar.state, start: DAYS[bar.from], days: bar.span })
                         }
@@ -284,6 +295,8 @@ export function CalendarSection() {
           </BrowserChrome>
         </div>
         </div>
+        <CalloutBand side="bottom" items={CALLOUTS.filter((c) => c.n >= CALLOUTS_BELOW_FROM)} />
+        <CalloutLeaders rootRef={ref} count={CALLOUTS.length} bottomFrom={CALLOUTS_BELOW_FROM} />
 
       </div>
       {!docked && <CalendarSheet booking={sheet} onClose={closeSheet} />}

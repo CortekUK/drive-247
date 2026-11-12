@@ -37,7 +37,7 @@ import type {
   PaymentStepProps,
 } from "@/components/onboarding/onboarding-types";
 import { SIGNUP_ERROR_COPY } from "@/components/onboarding/onboarding-types";
-import { isMockSignup, mockMarkPaid } from "@/components/onboarding/mock-signup";
+import { isMockSignup, mockCardOutcome, mockMarkPaid } from "@/components/onboarding/mock-signup";
 import type { SignupPlan } from "@/lib/plans";
 import type { PromoOffer } from "@/lib/promo-offer";
 import { readReferralCodeFromDocument } from "@/lib/referral-cookie";
@@ -317,6 +317,11 @@ export function PaymentStep({
    */
   const appearance = React.useMemo<StripeElementsOptions["appearance"]>(() => {
     const dark = resolvedTheme === "dark";
+    // Phones: 16px text in the card fields. iOS zooms the whole page into any
+    // field set smaller than 16px the moment it is tapped (card number, expiry,
+    // security code), and leaves it zoomed. Desktop keeps 15px.
+    const phone =
+      typeof window !== "undefined" && window.matchMedia("(max-width: 639.98px)").matches;
     // The Payment Element renders in Stripe's iframe, where `fontFamily:
     // "inherit"` has no page to inherit from: the labels fell back to the
     // browser serif (Sep 17 2026 screenshot). Name the site's font and load it
@@ -333,7 +338,7 @@ export function PaymentStep({
         colorDanger: dark ? "#f87171" : "#dc2626",
         colorBackground: dark ? "#13131d" : "#ffffff",
         fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif",
-        fontSizeBase: "15px",
+        fontSizeBase: phone ? "16px" : "15px",
         fontWeightNormal: "400",
         fontWeightMedium: "500",
         borderRadius: "12px",
@@ -434,14 +439,14 @@ export function PaymentStep({
               </Badge>
             )}
           </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="mt-0.5 text-xs text-muted-foreground max-sm:whitespace-nowrap">
             {plan.fleetBand}
           </p>
         </div>
         {isTrial ? (
           // Free trial: nothing today. The price and the day it starts are said
           // here, before the card is saved, so day 6 is never a surprise.
-          <div className="shrink-0 text-right">
+          <div className="shrink-0 text-right max-[359.98px]:shrink">
             <p className="text-2xl font-bold tracking-tighter">$0</p>
             <p className="text-xs text-muted-foreground">
               today · then {promo ? "discounted" : `$${plan.priceUsd}`}/month
@@ -679,6 +684,13 @@ function PaymentForm({
           return;
         }
         await new Promise((r) => setTimeout(r, 1200));
+        // ?scenario=card-declined / card-auth-failed: the same inline message
+        // a real decline or failed bank check shows (see /dev/signup-states).
+        const outcome = mockCardOutcome();
+        if (outcome) {
+          setMessage(SIGNUP_ERROR_COPY[outcome]);
+          return;
+        }
         mockMarkPaid();
         onPaid();
         return;
@@ -1195,14 +1207,14 @@ export function DiscountCodeFields({
           autoComplete="off"
           spellCheck={false}
           maxLength={64}
-          className="h-9 font-mono text-sm uppercase placeholder:font-sans placeholder:normal-case"
+          className="h-9 font-mono text-sm uppercase placeholder:font-sans placeholder:normal-case max-sm:h-11 max-sm:text-base"
         />
         {showingApplied ? (
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="h-9 shrink-0"
+            className="h-9 shrink-0 max-sm:h-11 max-sm:px-4"
             disabled={pending || busy}
             onClick={() => void remove()}
           >
@@ -1213,7 +1225,7 @@ export function DiscountCodeFields({
             type="submit"
             variant="outline"
             size="sm"
-            className="h-9 shrink-0"
+            className="h-9 shrink-0 max-sm:h-11 max-sm:px-4"
             disabled={!value.trim() || pending || busy}
           >
             {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : "Apply"}

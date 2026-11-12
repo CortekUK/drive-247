@@ -30,14 +30,14 @@ const CARS = [
 ];
 
 /* Places on the drawn map, in % of the map, and how many rentals started or ended there. */
-const HUB = { label: "National Airport", n: 31, x: 52, y: 66 };
+const HUB = { label: "National Airport", n: 31, x: 52, y: 66, side: "left" };
 const PLACES = [
-  { label: "Bethesda", n: 11, x: 31, y: 18, pickup: false },
-  { label: "Georgetown", n: 14, x: 43, y: 44, pickup: false },
-  { label: "Union Station", n: 22, x: 66, y: 48, pickup: true },
-  { label: "Arlington", n: 17, x: 34, y: 54, pickup: true },
-  { label: "Navy Yard", n: 9, x: 67, y: 57, pickup: false },
-  { label: "Alexandria", n: 8, x: 50, y: 85, pickup: false },
+  { label: "Bethesda", n: 11, x: 31, y: 18, pickup: false, side: "right" },
+  { label: "Georgetown", n: 14, x: 43, y: 44, pickup: false, side: "left" },
+  { label: "Union Station", n: 22, x: 66, y: 48, pickup: true, side: "right" },
+  { label: "Arlington", n: 17, x: 34, y: 54, pickup: true, side: "left" },
+  { label: "Navy Yard", n: 9, x: 67, y: 57, pickup: false, side: "right" },
+  { label: "Alexandria", n: 8, x: 50, y: 85, pickup: false, side: "right" },
 ];
 
 /* The same places with their real coordinates, for the Google map. */
@@ -127,15 +127,21 @@ function Places() {
             <line key={p.label} x1={p.x} y1={p.y} x2={HUB.x} y2={HUB.y} />
           ))}
         </svg>
+        {/* Phones put each place's count inside its dot and its name to the side that stays
+            clear of its neighbours (`side`); desktop keeps "Name · n" under the dot. */}
         {[...PLACES, { ...HUB, pickup: true }].map((p) => (
           <span
             key={p.label}
             className={`ia-pin${p.pickup ? " is-pickup" : ""}${p.label === HUB.label ? " is-hub" : ""}`}
+            data-side={p.side}
             style={{ left: `${p.x}%`, top: `${p.y}%` } as CSSProperties}
           >
-            <i />
+            <i>
+              <b className="ia-pin-n">{p.n}</b>
+            </i>
             <small>
-              {p.label} · {p.n}
+              {p.label}
+              <span className="ia-pin-count"> · {p.n}</span>
             </small>
           </span>
         ))}

@@ -61,7 +61,9 @@ export function FloatingTrial({ mobileOnly = false }: { mobileOnly?: boolean }) 
 
   return (
     <div className={`fcta${mobileOnly ? " is-mobile-only" : ""}${shown ? " is-shown" : ""}`} aria-hidden={!shown || undefined} inert={!shown || undefined}>
-      <HeaderCta label="Start free trial" href="#pricing" className="fcta-btn" />
+      {/* The offer itself, not the action (boss, 2026-11-12: "more compelling than Start free
+          trial"). No day count: the trial length is set per plan in the database. */}
+      <HeaderCta label="Try it free" href="#pricing" className="fcta-btn" />
     </div>
   );
 }

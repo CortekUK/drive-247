@@ -39,3 +39,10 @@
 @media (max-width: 767.98px) {
   .di-arrow { display: none; }
 }
+
+/* Phones: the short version of the line under the heading, two lines at most (user, 2026-11-12). */
+.di-sub-short { display: none; }
+@media (max-width: 767.98px) {
+  .di-sub-long { display: none; }
+  .di-sub-short { display: inline; }
+}

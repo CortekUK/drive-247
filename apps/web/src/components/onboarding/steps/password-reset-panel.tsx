@@ -365,7 +365,7 @@ export function PasswordResetPanel({
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             We&apos;ll email a 6-digit code to{" "}
             {/* break-all: a long address must not push the dialog sideways at 375px. */}
-            <span className="font-medium break-all text-foreground">{email}</span>.
+            <span className="font-medium break-all text-foreground max-sm:[word-break:normal] max-sm:[overflow-wrap:break-word]">{email}</span>.
             It expires in 15 minutes.
           </p>
 
@@ -444,7 +444,7 @@ export function PasswordResetPanel({
           */}
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             If{" "}
-            <span className="font-medium break-all text-foreground">{email}</span>{" "}
+            <span className="font-medium break-all text-foreground max-sm:[word-break:normal] max-sm:[overflow-wrap:break-word]">{email}</span>{" "}
             can be reset from here, a 6-digit code is on its way. Enter it below
             with your new password.
           </p>

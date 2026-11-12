@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { REFERRAL_COOKIE } from "@/lib/referral-cookie";
 import { promoRejectionText } from "@/lib/promo-offer";
+import { mockLinkAnswer } from "@/lib/subscribe-link-mock";
 
 export const dynamic = "force-dynamic";
 
@@ -82,9 +83,12 @@ function hoursLeft(expiresAt?: string): string {
 
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <main className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <div className="mb-6 text-2xl font-semibold tracking-tight text-slate-900">Drive<span className="text-indigo-600">247</span></div>
+    // Phones (below sm): the card starts near the top instead of floating mid-screen,
+    // with one gutter instead of page gutter + 32px card padding (boss, 2026-11-12).
+    // sm and up keep the original centred card exactly.
+    <main className="min-h-screen bg-slate-50 flex items-start justify-center px-3 py-5 sm:items-center sm:px-4 sm:py-12">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        <div className="mb-5 text-2xl font-semibold sm:mb-6 tracking-tight text-slate-900">Drive<span className="text-indigo-600">247</span></div>
         <h1 className="text-xl font-medium text-slate-900">{title}</h1>
         <div className="mt-3 space-y-4 text-sm leading-relaxed text-slate-600">{children}</div>
       </div>
@@ -95,12 +99,19 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
 export default async function SubscribePage({ params, searchParams }: PageProps) {
   const { token } = await params;
   const sp = await searchParams;
-  const cancelled = sp?.cancelled === "1";
+  let cancelled = sp?.cancelled === "1";
   const err = sp?.err;
+
+  // Dev only: `mock-*` tokens get a canned answer (lib/subscribe-link-mock.ts),
+  // so every state of this page can be reviewed with no backend. Always null in
+  // a build.
+  const mockPromoParam = typeof sp?.promo === "string" ? sp.promo.trim().toUpperCase().slice(0, 64) : "";
+  const mock = mockLinkAnswer(token, mockPromoParam);
+  if (mock?.cancelled) cancelled = true;
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-  if (!token || !supabaseUrl || !anonKey) {
+  if (!mock && (!token || !supabaseUrl || !anonKey)) {
     return <Shell title="This link is incomplete">
       <p>Ask your Drive247 contact to send you a fresh link.</p>
     </Shell>;
@@ -114,14 +125,14 @@ export default async function SubscribePage({ params, searchParams }: PageProps)
   // link (cookie). "?promo=none" means the visitor removed it.
   const promoParam = typeof sp?.promo === "string" ? sp.promo.trim().toUpperCase().slice(0, 64) : "";
   const cookieCode = (await cookies()).get(REFERRAL_COOKIE)?.value?.toUpperCase().slice(0, 64) ?? "";
-  const typedCode = promoParam === "NONE" ? "" : promoParam || cookieCode;
+  const typedCode = mock ? (mock.typedCode ?? mockPromoParam.replace(/^NONE$/, "")) : promoParam === "NONE" ? "" : promoParam || cookieCode;
 
   // Read through subscription-link-v2, which answers exactly as the original
   // does plus the promo code. If it is unavailable for any reason, fall back to
   // the original: a prospect must never be blocked by the promo feature.
-  let info: LinkInfo = { state: "invalid" };
-  let loaded = false;
-  try {
+  let info: LinkInfo = mock ? mock.info : { state: "invalid" };
+  let loaded = !!mock;
+  if (!loaded) try {
     const res = await fetch(
       `${v2Base}?token=${encodeURIComponent(token)}&info=1${typedCode ? `&promo_code=${encodeURIComponent(typedCode)}` : ""}`,
       { headers, cache: "no-store" },
@@ -263,7 +274,8 @@ export default async function SubscribePage({ params, searchParams }: PageProps)
 
       {info.linkMode !== "invoice" && (
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <div className="flex items-baseline justify-between">
+        {/* flex-wrap: at 320px the plan name, struck price and promo price can't share a line. */}
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
           <span className="font-medium text-slate-900">{info.planName}</span>
           <span className="text-lg font-semibold text-slate-900">
             {promoPrice && <s className="mr-2 text-sm font-normal text-slate-400">{price}</s>}
@@ -297,18 +309,25 @@ export default async function SubscribePage({ params, searchParams }: PageProps)
       {info.linkMode !== "invoice" && !promo && (
         <form method="GET" className="space-y-1.5">
           <label htmlFor="promo" className="text-xs font-medium text-slate-700">Have a promo code?</label>
+          {/* 16px text on phones: iOS Safari zooms the page into any input smaller than that. */}
           <div className="flex gap-2">
             <input id="promo" name="promo" defaultValue={typedCode} autoComplete="off"
-              className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm uppercase text-slate-900 placeholder:normal-case placeholder:font-sans"
+              className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 font-mono text-base uppercase sm:text-sm text-slate-900 placeholder:normal-case placeholder:font-sans"
               placeholder="e.g. SUNSET-4821" />
-            <button type="submit" className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Apply</button>
+            <button type="submit" className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Apply</button>
           </div>
           {promoMessage && <p className="text-xs text-red-700">{promoMessage}</p>}
         </form>
       )}
       <p>Payment is handled by Stripe. We never see your card details.</p>
 
-      <form method="POST" action={`${fnBase}?token=${encodeURIComponent(token)}`} className="space-y-4 pt-1">
+      {/* A mock link never reaches Stripe: it goes straight to its own done page. */}
+      <form
+        method={mock ? "GET" : "POST"}
+        action={mock ? `/subscribe/${encodeURIComponent(token)}/done` : `${fnBase}?token=${encodeURIComponent(token)}`}
+        className="space-y-4 pt-1"
+      >
+        {mock && <input type="hidden" name="session_id" value="mock" />}
         {/* A code the prospect typed or carried in; one sales pre-applied is read from the link itself. */}
         {promo && !promo.preApplied && <input type="hidden" name="promo_code" value={promo.displayCode} />}
         <label className="flex cursor-pointer items-start gap-3 text-slate-700">

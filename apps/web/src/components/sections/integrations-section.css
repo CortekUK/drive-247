@@ -381,3 +381,15 @@
   .ig-back p { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 6; font-size: 11.5px; line-height: 1.4; }
   .ig-tile { -webkit-tap-highlight-color: transparent; }
 }
+
+/* Phones (Ghulam, 2026-11-12: too much space): tighter above and below the cards. */
+@media (max-width: 719.98px) {
+  .ig-section { padding-block: 16px 24px; }
+  .ig-grid { margin-top: 18px; }
+}
+
+/* Phones: the tiles follow the heading's line closely (user, 2026-11-12). */
+@media (max-width: 767.98px) {
+  .ig-copy .sh { margin-bottom: 20px; }
+  .ig-grid { margin-top: 0; }
+}

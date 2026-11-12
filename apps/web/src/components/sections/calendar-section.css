@@ -221,3 +221,109 @@ button.cs-bar:focus-visible { outline: 2px solid var(--cs-brand); outline-offset
 
 /* The labels on the sliding track's calendar (product-track.css shows and places them). */
 .cs-note, .cs-free, .cs-now-label { display: none; }
+
+/*
+ * Phones, inside the product track: the screen's labels move out of the calendar into the
+ * margin above and below it, tied to their bookings by thin lines (calendar-callouts.tsx;
+ * boss, 2026-11-12: "labels can come outside the view, with better UI"). In the calendar
+ * they were cut by the pinned cars and the screen edge as it panned; here they are whole.
+ * Two above, two below, staggered left/right so no line runs through another label.
+ */
+.cs-callouts, .cs-leaders { display: none; }
+@media (max-width: 767.98px) {
+  .pt-panel #calendar .cs-inner { position: relative; }
+  /* The in-grid labels give way to the ones in the margin. The free days stay: they are the slot. */
+  .pt-panel #calendar .cs-lane .cs-note { display: none; }
+
+  .pt-panel #calendar .cs-callouts {
+    position: relative;
+    z-index: 7;
+    display: grid;
+    gap: 12px;
+    padding-inline: 16px;
+  }
+  .pt-panel #calendar .cs-callouts.is-top { margin: 28px 0 34px; }
+  .pt-panel #calendar .cs-callouts.is-bottom { margin: 34px 0 4px; }
+  .pt-panel #calendar .cs-callout:nth-child(odd) { justify-self: start; }
+  .pt-panel #calendar .cs-callout:nth-child(even) { justify-self: end; }
+  .pt-panel #calendar .cs-callout {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    max-width: calc(100vw - 64px);
+    padding: 7px 14px 7px 7px;
+    border-radius: 12px;
+    background: #475569;
+    box-shadow: 0 8px 22px rgb(71 85 105 / 0.2);
+    color: #fff;
+    font-size: 13.5px;
+    font-weight: 500;
+    line-height: 1.25;
+    opacity: 0;
+    translate: 0 6px;
+  }
+  .pt-panel #calendar .cs-callout > i {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    color: #475569;
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 700;
+  }
+  .pt-panel #calendar .cs-callout > b { font-weight: 500; }
+
+  .pt-panel #calendar .cs-leaders {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+  .pt-panel #calendar .cs-leaders g { transition: opacity 200ms ease-out; }
+  .pt-panel #calendar .cs-leaders g[data-off] { opacity: 0.3; }
+  .pt-panel #calendar .cs-leader,
+  .pt-panel #calendar .cs-leader-halo {
+    fill: none;
+    stroke-linecap: round;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+  .pt-panel #calendar .cs-leader { stroke: rgb(71 85 105 / 0.7); stroke-width: 1.5; }
+  .pt-panel #calendar .cs-leader-halo { stroke: rgb(255 255 255 / 0.8); stroke-width: 5; }
+  .pt-panel #calendar .cs-leader-dot { fill: #fff; stroke: #475569; stroke-width: 1.75; opacity: 0; }
+
+  /* One arrival: the labels settle, then their lines draw down to the bookings. */
+  .pt-panel #calendar .cs-inner.is-in .cs-callout { opacity: 1; translate: 0 0; transition: opacity 400ms ease-out 700ms, translate 600ms cubic-bezier(0.16, 1, 0.3, 1) 700ms; }
+  .pt-panel #calendar .cs-inner.is-in .cs-leader,
+  .pt-panel #calendar .cs-inner.is-in .cs-leader-halo { stroke-dashoffset: 0; transition: stroke-dashoffset 900ms cubic-bezier(0.65, 0, 0.35, 1) 1000ms; }
+  .pt-panel #calendar .cs-inner.is-in .cs-leader-dot { opacity: 1; transition: opacity 250ms ease-out 1800ms; }
+}
+@media (max-width: 767.98px) and (prefers-reduced-motion: reduce) {
+  .pt-panel #calendar .cs-callout,
+  .pt-panel #calendar .cs-leader,
+  .pt-panel #calendar .cs-leader-halo,
+  .pt-panel #calendar .cs-leader-dot { opacity: 1; translate: none; stroke-dashoffset: 0; transition: none !important; }
+}
+
+/*
+ * Phones: the labels arrive at once (user, 2026-11-12: "these labels should come in view
+ * immediately, with animation, so this space doesn't look empty"): the chips rise in as soon
+ * as the calendar is on screen, one a beat after another, then the lines draw to their
+ * bookings. The band above the calendar is also a little tighter.
+ */
+@media (max-width: 767.98px) {
+  .pt-panel #calendar .cs-callouts.is-top { margin-top: 12px; margin-bottom: 26px; }
+  .pt-panel #calendar .cs-inner.is-in .cs-callout { transition: opacity 300ms ease-out var(--cs-at, 0ms), translate 450ms cubic-bezier(0.16, 1, 0.3, 1) var(--cs-at, 0ms); }
+  .pt-panel #calendar .cs-callout:nth-child(2) { --cs-at: 90ms; }
+  .pt-panel #calendar .cs-inner.is-in .cs-leader,
+  .pt-panel #calendar .cs-inner.is-in .cs-leader-halo { transition: stroke-dashoffset 600ms cubic-bezier(0.65, 0, 0.35, 1) 250ms; }
+  .pt-panel #calendar .cs-inner.is-in .cs-leader-dot { transition: opacity 200ms ease-out 800ms; }
+}

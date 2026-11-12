@@ -250,9 +250,9 @@ export function TenantIdentityFields({
             aria-invalid={Boolean(slugError) || slugState.kind === "unavailable"}
             aria-describedby="signup-slug-status"
             onChange={(e) => setSlug(e.target.value)}
-            className="h-full min-w-0 flex-1 rounded-l-xl bg-transparent pl-4 pr-1 text-[15px] outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
+            className="h-full min-w-0 flex-1 rounded-l-xl bg-transparent pl-4 pr-1 text-[15px] outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed max-sm:text-base"
           />
-          <span className="shrink-0 pr-4 pl-0 text-[15px] text-muted-foreground select-none">
+          <span className="shrink-0 pr-4 pl-0 text-[15px] text-muted-foreground select-none max-sm:text-base">
             {SLUG_SUFFIX}
           </span>
         </div>

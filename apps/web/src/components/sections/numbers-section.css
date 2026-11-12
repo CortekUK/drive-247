@@ -101,3 +101,43 @@
   .nm-stat:last-child:nth-child(odd) .nm-value { margin-top: 0; }
   .nm-stat:last-child:nth-child(odd) .nm-label { margin-top: 6px; }
 }
+
+/*
+ * Phones, boss review 2026-11-12: "these gauges can be smaller, 3 in 1 line, we want to show
+ * the numbers bigger". Three to a row on a six-column grid: the first three take two columns
+ * each, the last two a column and a half each, so the second row is full and balanced rather
+ * than one card hanging alone. The dial shrinks to an accent over the figure, the figure is
+ * the biggest thing in the card, and the one-line description goes (it can't sit in a third
+ * of a phone without wrapping to four lines). The dial's lines are thickened so they still
+ * read at this size. Overrides the two-column cluster above; desktop is untouched.
+ */
+@media (max-width: 559.98px) {
+  .nm-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+  .nm-stat,
+  .nm-stat:last-child:nth-child(odd) {
+    grid-column: span 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 4px 14px;
+    border-radius: 18px;
+    text-align: center;
+  }
+  .nm-stat:nth-child(n + 4),
+  .nm-stat:last-child:nth-child(odd) { grid-column: span 3; }
+  .nm-gauge,
+  .nm-stat:last-child:nth-child(odd) .nm-gauge { max-width: 60px; }
+  .nm-gauge-track, .nm-gauge-fill { stroke-width: 9; }
+  .nm-gauge-tick, .nm-gauge-tick.is-major { stroke-width: 2.6; }
+  .nm-gauge-icon { display: none; }
+  .nm-value,
+  .nm-stat:last-child:nth-child(odd) .nm-value {
+    margin-top: 8px;
+    font-size: clamp(21px, 6.9vw, 28px);
+    font-weight: 700;
+    letter-spacing: -0.05em;
+  }
+  .nm-label,
+  .nm-stat:last-child:nth-child(odd) .nm-label { margin-top: 6px; font-size: 12px; line-height: 1.25; font-weight: 500; }
+  .nm-detail { display: none; }
+}

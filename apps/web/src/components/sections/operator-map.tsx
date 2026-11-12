@@ -171,9 +171,10 @@ export function OperatorMap({ initial }: { initial: MapOperator[] }) {
                     <div key={`${copy}-${operator.slug}`} className="om-tile" title={operator.name}>
                       {mask ? (
                         <span className="om-logo" style={{ "--om-mask": `url("${mask}")` } as CSSProperties} />
-                      ) : mask === null ? (
-                        <span className="om-word">{operator.name}</span>
-                      ) : null}
+                      ) : (
+                        // While its logo is still being made the name stands in, faintly, so no tile is blank.
+                        <span className={`om-word${mask === null || !operator.logo ? "" : " is-pending"}`}>{operator.name}</span>
+                      )}
                     </div>
                   );
                 }),

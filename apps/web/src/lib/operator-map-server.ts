@@ -36,8 +36,12 @@ const PAGE_SIZE = 1000;
 
 async function readOperators(): Promise<MapOperator[]> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set");
+  // The service role counts bookings for the tile order. Without it (every local checkout)
+  // the public key still reads the companies, names and logos, so the wall always shows;
+  // every company then weighs the same (user, 2026-11-12: "put this section").
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = service ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) throw new Error("NEXT_PUBLIC_SUPABASE_URL and a Supabase key are not set");
 
   const db = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
   // Logos are only ever loaded from our own public storage, never from a URL a tenant typed.
@@ -57,7 +61,7 @@ async function readOperators(): Promise<MapOperator[]> {
   // a select stops at 1,000 rows without saying so.
   const bookings = new Map<string, number>();
   const ids = operators.map((operator) => operator.id);
-  for (let from = 0; ; from += PAGE_SIZE) {
+  for (let from = 0; service; from += PAGE_SIZE) {
     const { data: rows, error } = await db
       .from("rentals")
       .select("tenant_id")
@@ -103,10 +107,10 @@ export async function fetchOperatorMap(): Promise<MapOperator[]> {
    * as an error on every request put a permanent issue in the Next.js dev overlay.
    * A real read failure with the key set is still an error below.
    */
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || (!process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)) {
     if (!warnedNoKey) {
       warnedNoKey = true;
-      console.warn("[operator-map] SUPABASE_SERVICE_ROLE_KEY is not set; the operator logo wall is hidden.");
+      console.warn("[operator-map] no Supabase URL or key is set; the operator logo wall is hidden.");
     }
     return [];
   }

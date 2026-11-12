@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { mockDoneAnswer } from "@/lib/subscribe-link-mock";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +15,12 @@ interface PageProps {
 
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <main className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <div className="mb-6 text-2xl font-semibold tracking-tight text-slate-900">Drive<span className="text-indigo-600">247</span></div>
+    // Phones (below sm): the card starts near the top instead of floating mid-screen,
+    // with one gutter instead of page gutter + 32px card padding (boss, 2026-11-12).
+    // sm and up keep the original centred card exactly.
+    <main className="min-h-screen bg-slate-50 flex items-start justify-center px-3 py-5 sm:items-center sm:px-4 sm:py-12">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        <div className="mb-5 text-2xl font-semibold sm:mb-6 tracking-tight text-slate-900">Drive<span className="text-indigo-600">247</span></div>
         <h1 className="text-xl font-medium text-slate-900">{title}</h1>
         <div className="mt-3 space-y-4 text-sm leading-relaxed text-slate-600">{children}</div>
       </div>
@@ -43,7 +47,13 @@ export default async function SubscribeDonePage({ params, searchParams }: PagePr
   let portalUrl: string | undefined;
   let companyName: string | undefined;
 
-  if (token && sessionId && supabaseUrl && anonKey) {
+  // Dev only: a `mock-*` token fakes Stripe's return leg (lib/subscribe-link-mock.ts).
+  const mock = mockDoneAnswer(token);
+  if (mock) {
+    state = mock.state;
+    portalUrl = mock.portalUrl;
+    companyName = mock.companyName;
+  } else if (token && sessionId && supabaseUrl && anonKey) {
     try {
       const res = await fetch(
         `${supabaseUrl}/functions/v1/${fn}?token=${encodeURIComponent(token)}&done=1&session_id=${encodeURIComponent(sessionId)}`,

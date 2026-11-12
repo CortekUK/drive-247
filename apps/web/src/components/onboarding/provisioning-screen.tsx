@@ -287,7 +287,7 @@ export function ProvisioningScreen() {
               type="button"
               onClick={requestClose}
               aria-label="Close"
-              className={cn("absolute top-4 right-5 z-10 flex size-9 items-center justify-center rounded-full transition-colors duration-200 ease-out focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none motion-reduce:transition-none sm:right-8", succeeded && result ? "bg-white text-zinc-600 ring-1 ring-zinc-200 hover:text-zinc-900" : "text-muted-foreground hover:bg-zinc-100 hover:text-foreground dark:hover:bg-white/10")}
+              className={cn("absolute top-4 right-5 z-10 flex size-9 items-center justify-center rounded-full max-sm:top-2 max-sm:right-3 max-sm:size-11 transition-colors duration-200 ease-out focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none motion-reduce:transition-none sm:right-8", succeeded && result ? "bg-white text-zinc-600 ring-1 ring-zinc-200 hover:text-zinc-900" : "text-muted-foreground hover:bg-zinc-100 hover:text-foreground dark:hover:bg-white/10")}
             >
               <X className="h-4 w-4" />
             </button>
@@ -321,7 +321,7 @@ export function ProvisioningScreen() {
                       <h1
                         key={activeMilestone ?? "finishing"}
                         aria-live="polite"
-                        className={cn("mt-10 text-[30px] leading-tight font-semibold tracking-[-0.02em] text-balance sm:text-[40px]", SIGNUP_ENTER)}
+                        className={cn("mt-10 text-[30px] leading-tight font-semibold tracking-[-0.02em] text-balance max-sm:mt-6 max-sm:text-[28px] sm:text-[40px]", SIGNUP_ENTER)}
                       >
                         {activeMilestone ? STEP_LINES[activeMilestone].title : "Putting the kettle on"}
                       </h1>
@@ -364,7 +364,7 @@ export function ProvisioningScreen() {
                   </>
                 ) : (
                   <DialogPrimitive.Title asChild>
-                    <h1 className="mt-10 text-[30px] leading-tight font-semibold tracking-[-0.02em] text-balance">
+                    <h1 className="mt-10 text-[30px] leading-tight font-semibold tracking-[-0.02em] text-balance max-sm:mt-6 max-sm:text-[28px]">
                       {failed && activeMilestone ? `Stuck on: ${MILESTONE_COPY[activeMilestone].running.toLowerCase()}` : `Building ${companyName}`}
                     </h1>
                   </DialogPrimitive.Title>
@@ -390,12 +390,12 @@ export function ProvisioningScreen() {
                         Try again
                       </Button>
                       {recoverable && !fixing && (
-                        <Button variant="outline" onClick={() => setFixing(true)}>
+                        <Button variant="outline" onClick={() => setFixing(true)} className="max-sm:h-11">
                           <Pencil className="h-4 w-4" />
                           Edit details
                         </Button>
                       )}
-                      <Button variant="ghost" asChild>
+                      <Button variant="ghost" asChild className="max-sm:h-11">
                         <a href="/strategy-call">
                           <MessageSquare className="h-4 w-4" />
                           Talk to us
