@@ -86,7 +86,7 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
     // Phones (below sm): the card starts near the top instead of floating mid-screen,
     // with one gutter instead of page gutter + 32px card padding (boss, 2026-11-12).
     // sm and up keep the original centred card exactly.
-    <main className="min-h-screen bg-slate-50 flex items-start justify-center px-3 py-5 sm:items-center sm:px-4 sm:py-12">
+    <main className="min-h-svh bg-slate-50 flex items-center justify-center px-3 py-5 sm:px-4 sm:py-12">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
         <div className="mb-5 text-2xl font-semibold sm:mb-6 tracking-tight text-slate-900">Drive<span className="text-indigo-600">247</span></div>
         <h1 className="text-xl font-medium text-slate-900">{title}</h1>

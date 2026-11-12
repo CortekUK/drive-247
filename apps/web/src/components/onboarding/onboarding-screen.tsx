@@ -343,10 +343,9 @@ export function OnboardingScreen() {
           </p>
 
           {/* ── the screen ────────────────────────────────────────────────── */}
-          {/* Phones: the card sits just under the progress, not in the middle of
-              the screen, so the on-screen keyboard (which covers the bottom
-              ~40% of a phone) never hides the button under the fields. */}
-          <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-3 pb-4 max-sm:justify-start max-sm:pb-[max(12px,env(safe-area-inset-bottom))] sm:px-6 sm:pb-8">
+          {/* Centred on every screen size (user, 2026-11-13). The page itself never
+              scrolls: a card taller than the screen scrolls inside itself. */}
+          <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-3 pb-4 max-sm:pb-[max(24px,env(safe-area-inset-bottom))] sm:px-6 sm:pb-8">
             {/* Progress sits above the card, not on it. */}
             <ol
               className="mb-5 flex shrink-0 items-center justify-center gap-1.5 max-sm:mb-4"
@@ -376,7 +375,7 @@ export function OnboardingScreen() {
               {/* Sized to fit: the picture shrinks, then steps aside, on short
                   screens (see ScreenHead), so the page itself never scrolls.
                   The overflow here is a last resort for a phone held sideways. */}
-              <div className="min-h-0 overflow-y-auto px-6 py-7 [scrollbar-width:none] sm:px-10 sm:py-8 [&::-webkit-scrollbar]:hidden">
+              <div className="min-h-0 overflow-y-auto px-6 py-7 [scrollbar-width:none] overscroll-contain sm:px-10 sm:py-8 [&::-webkit-scrollbar]:hidden">
                 <div ref={contentRef} className="w-full">
                 {closeConfirmOpen ? (
                   <div key="leave" className={SIGNUP_ENTER}>
