@@ -97,7 +97,7 @@ export default function InsurancesAnalyticsPage() {
   }, [allInsurances]);
 
   const statusRadialData = useMemo(() => {
-    const active = allInsurances.filter(d => d.status === "active" || d.status === "confirmed").length;
+    const active = allInsurances.filter(d => ["active", "confirmed"].includes((d.status || "").toLowerCase())).length;
     const total = allInsurances.length;
     const rate = total > 0 ? Math.round((active / total) * 100) : 0;
     return { rate, active, total, inactive: total - active };

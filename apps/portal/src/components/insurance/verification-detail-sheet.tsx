@@ -51,11 +51,14 @@ export function VerificationDetailSheet({
   open,
   onOpenChange,
   onAttachClick,
+  readOnly = false,
 }: {
   verification: InsuranceVerification | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAttachClick: (verificationId: string) => void;
+  /** A viewer, or a manager without editor access: look, never change. */
+  readOnly?: boolean;
 }) {
   const reverify = useReverifyInsurance();
 
@@ -197,6 +200,7 @@ export function VerificationDetailSheet({
                     </span>
                   )}
                 </div>
+                {!readOnly && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -204,7 +208,10 @@ export function VerificationDetailSheet({
                 >
                   Change
                 </Button>
+                )}
               </div>
+            ) : readOnly ? (
+              <p className="text-sm text-muted-foreground">Not attached to a rental</p>
             ) : (
               <Button
                 variant="outline"
@@ -220,6 +227,7 @@ export function VerificationDetailSheet({
           <Separator />
 
           <div className="flex flex-wrap gap-2">
+            {!readOnly && (
             <Button
               variant="outline"
               size="sm"
@@ -231,6 +239,7 @@ export function VerificationDetailSheet({
               />
               Re-run AI
             </Button>
+            )}
             {verification.file_url && (
               <Button variant="outline" size="sm" asChild>
                 <a

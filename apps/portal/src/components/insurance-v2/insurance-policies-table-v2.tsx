@@ -22,6 +22,7 @@
 
 import { AlertTriangle, DollarSign, Download, ExternalLink, Loader2, MoreHorizontal } from "lucide-react";
 import { format } from "date-fns";
+import { parseLocalDate } from "@/lib/date-utils";
 import { Button } from "@/components/ui-v2/button";
 import {
   DropdownMenu,
@@ -64,6 +65,21 @@ export interface InsurancePolicyRowV2 {
   premium_amount?: number | null;
   payment_status?: "paid" | "partial" | "unpaid" | null;
   inshur?: InshurCoverage;
+  /** Carrier named on an uploaded document ("Progressive"). */
+  insurance_provider?: string | null;
+  /** Policy number on an uploaded document. */
+  policy_number?: string | null;
+  /** Cover dates: an uploaded document's start/end, a Bonzah policy's trip dates. */
+  start_date?: string | null;
+  end_date?: string | null;
+}
+
+/** "Aug 09, 2026 – Aug 09, 2027" from two YYYY-MM-DD dates; null when neither is set. */
+function coverDates(start?: string | null, end?: string | null): string | null {
+  const fmt = (d?: string | null) => (d ? format(parseLocalDate(d.slice(0, 10)), "MMM dd, yyyy") : null);
+  const a = fmt(start), b = fmt(end);
+  if (!a && !b) return null;
+  return `${a ?? "…"} – ${b ?? "…"}`;
 }
 
 /**
@@ -117,7 +133,8 @@ export function InsurancePoliciesTableV2<T extends InsurancePolicyRowV2>({
   onDownload: (fileUrl: string, fileName: string) => void;
   onView: (fileUrl: string) => void;
   onBonzahDownload: (doc: T) => void;
-  onAddPayment: (doc: T) => void;
+  /** Left out for a read-only user: no Add Payment item. */
+  onAddPayment?: (doc: T) => void;
   onViewRental: (doc: T) => void;
 }) {
   const policyRows = useProgressiveRows(rows, resetKey);
@@ -149,6 +166,7 @@ export function InsurancePoliciesTableV2<T extends InsurancePolicyRowV2>({
             const isInshur = !hasFile && doc.provider === "inshur";
             const isBonzah = !hasFile && doc.provider === "bonzah";
             const canAddPayment =
+              !!onAddPayment &&
               (isInshur || isBonzah) &&
               (doc.payment_status === "unpaid" || doc.payment_status === "partial") &&
               !!doc.rental_id;
@@ -198,6 +216,20 @@ export function InsurancePoliciesTableV2<T extends InsurancePolicyRowV2>({
                         </span>
                       )}
                     </div>
+                    {(() => {
+                      // An uploaded document's carrier and policy number live in
+                      // their own columns, not in its name, so show them here.
+                      const meta = doc.provider === "uploaded"
+                        ? [doc.insurance_provider, doc.policy_number].filter(Boolean).join(" · ")
+                        : "";
+                      const dates = coverDates(doc.start_date, doc.end_date);
+                      const line = [meta, dates].filter(Boolean).join(" · ");
+                      return line ? (
+                        <span className={cn("block max-w-full truncate text-xs", LIST_CLASSES.text, "text-muted-foreground")} title={line}>
+                          {line}
+                        </span>
+                      ) : null;
+                    })()}
                     {/* v1 puts InshurModeChip next to the name, never only in the
                         status column, because status columns get scanned past.
                         Here it is the rentals list's flag line under the name,
@@ -256,9 +288,13 @@ export function InsurancePoliciesTableV2<T extends InsurancePolicyRowV2>({
                     ) : (
                       <Blank />
                     )
+                  ) : doc.status ? (
+                    // An uploaded document carries its own status ("Active").
+                    <ListStatusText tone={BONZAH_STATUS_TONE_V2[doc.status.toLowerCase()] ?? "muted"}>
+                      {doc.status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                    </ListStatusText>
                   ) : doc.document_type ? (
-                    // An uploaded document has no policy status; v1 shows its
-                    // document type here, quietly.
+                    // No status on file: v1 shows its document type here, quietly.
                     <span className="block truncate" title={doc.document_type}>
                       <ListStatusText tone="muted">{doc.document_type}</ListStatusText>
                     </span>
@@ -339,7 +375,7 @@ export function InsurancePoliciesTableV2<T extends InsurancePolicyRowV2>({
                             ) : (
                               <>
                                 {canAddPayment && (
-                                  <DropdownMenuItem onClick={() => onAddPayment(doc)}>
+                                  <DropdownMenuItem onClick={() => onAddPayment?.(doc)}>
                                     <DollarSign className="h-4 w-4" />
                                     Add Payment
                                   </DropdownMenuItem>

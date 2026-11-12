@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import Link from "next/link";
 import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
@@ -49,6 +50,10 @@ export function VerificationsTab({
 }: { search?: string; onSearchChange?: (next: string) => void } = {}) {
   const { data: verifications = [], isLoading } = useInsuranceVerifications();
   const del = useDeleteInsuranceVerification();
+  // Insurances is view-only for managers and a viewer may never write, so the
+  // upload, attach, re-run and delete controls are drawn only for editors.
+  const { canEdit } = useManagerPermissions();
+  const canWrite = canEdit("insurances");
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -122,10 +127,12 @@ export function VerificationsTab({
           />
         </div>
         )}
+        {canWrite && (
         <Button onClick={() => setUploadOpen(true)} className="bg-gradient-primary">
           <Plus className="h-4 w-4 mr-2" />
           Verify Insurance
         </Button>
+        )}
       </div>
 
       {isLoading ? (
@@ -148,8 +155,8 @@ export function VerificationsTab({
             verifications={filtered}
             resetKey={`${tenant?.id ?? ""}|${search.trim().toLowerCase()}`}
             onOpen={openDetail}
-            onAttach={openAttach}
-            onDelete={handleDelete}
+            onAttach={canWrite ? openAttach : undefined}
+            onDelete={canWrite ? handleDelete : undefined}
           />
         ) : (
         <Card>
@@ -213,6 +220,8 @@ export function VerificationsTab({
                               {v.rentals?.rental_number ||
                                 v.rental_id.slice(0, 8)}
                             </Link>
+                          ) : !canWrite ? (
+                            <span className="text-muted-foreground italic">—</span>
                           ) : (
                             <Button
                               size="sm"
@@ -250,6 +259,7 @@ export function VerificationsTab({
                                 </a>
                               </Button>
                             )}
+                            {canWrite && (
                             <Button
                               size="icon"
                               variant="ghost"
@@ -261,6 +271,7 @@ export function VerificationsTab({
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -283,6 +294,7 @@ export function VerificationsTab({
         open={detailOpen}
         onOpenChange={setDetailOpen}
         onAttachClick={openAttach}
+        readOnly={!canWrite}
       />
       <AttachVerificationDialog
         open={attachOpen}

@@ -78,9 +78,11 @@ export function InsuranceVerificationsTableV2({
   /** v1's row click: the detail sheet. */
   onOpen: (verification: InsuranceVerification) => void;
   /** v1's Attach button. */
-  onAttach: (verificationId: string) => void;
+  /** Left out for a read-only user: no Attach button. */
+  onAttach?: (verificationId: string) => void;
   /** v1's Delete button, which confirms before deleting. */
-  onDelete: (verificationId: string) => void;
+  /** Left out for a read-only user: no Delete button. */
+  onDelete?: (verificationId: string) => void;
 }) {
   const verificationRows = useProgressiveRows(verifications, resetKey);
 
@@ -147,6 +149,8 @@ export function InsuranceVerificationsTableV2({
                     >
                       {rentalLabel}
                     </Link>
+                  ) : !onAttach ? (
+                    <Blank />
                   ) : (
                     <Button
                       size="xs"
@@ -175,6 +179,7 @@ export function InsuranceVerificationsTableV2({
                         </a>
                       </Button>
                     )}
+                    {onDelete && (
                     <Button
                       size="icon-sm"
                       variant="ghost"
@@ -184,6 +189,7 @@ export function InsuranceVerificationsTableV2({
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
+                    )}
                   </div>
                 </ListCell>
               </ListRow>
