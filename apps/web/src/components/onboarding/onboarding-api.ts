@@ -3,6 +3,7 @@
 import type { SignupPlanId } from "@/lib/plans";
 import type { PromoOffer } from "@/lib/promo-offer";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
+import { readMetaTracking } from "@/lib/meta-tracking";
 import { isMockSignup, mockFunction, MockFunctionError } from "./mock-signup";
 import {
   SIGNUP_ERROR_COPY,
@@ -705,7 +706,8 @@ export function signupResetComplete(b: {
  * (edge case 41).
  */
 export function signupProvision(b: ProvisionRequest): Promise<ProvisionResponse> {
-  return callFunction<ProvisionResponse>("signup-provision", b, {
+  // Meta ad ids for the server-side StartTrial event (see lib/meta-tracking.ts).
+  return callFunction<ProvisionResponse>("signup-provision", { ...b, metaTracking: readMetaTracking() }, {
     auth: "session",
     timeoutMs: 180_000,
     dedupeKey: "signup-provision",

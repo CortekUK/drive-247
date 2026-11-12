@@ -32,6 +32,7 @@ import {
 } from "@/lib/signup-validation";
 import { takeSignupPrefill } from "@/lib/signup-prefill";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
+import { trackStartTrial } from "@/lib/meta-tracking";
 
 import {
   fetchSignupMeta,
@@ -632,6 +633,19 @@ export function OnboardingProvider({
       // A promo / referral code has done its job once the operator exists: the
       // landing page must not keep offering it to them on this browser.
       clearReferralCodeInDocument();
+      // Meta StartTrial, browser half: only now, on the server's success (the
+      // response or the poller), never on the click. signup-provision sends the
+      // server half with the same event id. Not for the localhost mock signup.
+      if (!isMockSignup()) {
+        const email = stateRef.current.account?.email ?? null;
+        void getBrowserSupabase()
+          .auth.getSession()
+          .then(
+            ({ data }) => data.session?.user?.id ?? null,
+            () => null,
+          )
+          .then((userId) => trackStartTrial({ tenantId: result.tenantId, email, userId }));
+      }
       dispatch({ type: "result", result });
       dispatch({
         type: "provisioning",

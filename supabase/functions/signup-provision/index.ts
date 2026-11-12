@@ -73,6 +73,7 @@ import { sendResendEmail } from "../_shared/resend-service.ts";
 import { buildCmsContent, seedTenantCmsContent } from "../_shared/tenant-cms-content.ts";
 import { readRehearsalFor, REHEARSAL_TENANT_SLUG } from "../_shared/signup-rehearsal.ts";
 import { isSecured, markTrialGrantUsed, savedPaymentMethodOf } from "../_shared/signup-trial.ts";
+import { sanitiseBrowserIds, sendStartTrialInBackground } from "../_shared/meta-capi.ts";
 
 const LOG = "[signup-provision]";
 
@@ -272,6 +273,8 @@ interface ProvisionRequest {
     closesAt?: string;
   };
   acceptedTerms?: boolean;
+  /** Meta ad ids from the browser ({fbp, fbc, eventSourceUrl}); see _shared/meta-capi.ts. */
+  metaTracking?: unknown;
 }
 
 Deno.serve(async (req) => {
@@ -485,6 +488,20 @@ Deno.serve(async (req) => {
             provisionLockAt: null,
             lastError: null,
           });
+          // The client never saw this signup succeed, so this is its first report.
+          if (!adoptCanary) {
+            await sendStartTrialInBackground(supabase, {
+              eventId: `${pendingId}_trial`,
+              email: meta.email,
+              fullName: meta.fullName,
+              phone: typeof body.businessPhone === "string" ? body.businessPhone : null,
+              externalId: authUserId,
+              clientIp: clientIp(req),
+              userAgent: req.headers.get("user-agent"),
+              browser: sanitiseBrowserIds(body.metaTracking),
+              mode: meta.mode ?? getSignupStripeMode(),
+            }, LOG);
+          }
           return jsonResponse({
             success: true,
             tenantId: pendingId,
@@ -1646,6 +1663,22 @@ Deno.serve(async (req) => {
       }
     } catch (e) {
       console.error(`${LOG} welcome email threw for ${meta.email} (non-fatal):`, e);
+    }
+
+    // Meta StartTrial (server half; the browser sends the same event_id).
+    // Not for a rehearsal: that adopts the northwind canary, not a new signup.
+    if (!adoptCanary) {
+      await sendStartTrialInBackground(supabase, {
+        eventId: `${tenantId}_trial`,
+        email: meta.email,
+        fullName: meta.fullName,
+        phone: phoneE164,
+        externalId: authUserId,
+        clientIp: clientIp(req),
+        userAgent: req.headers.get("user-agent"),
+        browser: sanitiseBrowserIds(body.metaTracking),
+        mode,
+      }, LOG);
     }
 
     return jsonResponse({

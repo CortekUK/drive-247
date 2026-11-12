@@ -4,9 +4,8 @@ import { JsonLd } from "@/components/shared/json-ld";
 import { ThemeProvider } from "@/components/shared/theme-provider";
 import { BookDemoDialog } from "@/components/book-demo/book-demo-dialog";
 import { SITE_META, SITE_URL } from "@/lib/constants";
+import { FBCLID_CAPTURE_SCRIPT, META_PIXEL_ID } from "@/lib/meta-tracking";
 import "./globals.css";
-
-const META_PIXEL_ID = "2196369497442053";
 
 const META_PIXEL_SCRIPT = `!function(f,b,e,v,n,t,s)
 {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -89,6 +88,7 @@ export default function RootLayout({
       <head>
         <JsonLd data={organizationLd} />
         <JsonLd data={softwareLd} />
+        <script dangerouslySetInnerHTML={{ __html: FBCLID_CAPTURE_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: META_PIXEL_SCRIPT }} />
       </head>
       <body className="font-sans antialiased">
