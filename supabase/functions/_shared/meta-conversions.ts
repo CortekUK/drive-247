@@ -147,7 +147,12 @@ export async function sendStartTrial(input: StartTrialInput): Promise<boolean> {
         console.error(`${LOG} StartTrial refused (${res.status}):`, (await res.text()).slice(0, 500));
         return false;
       }
-      console.log(`${LOG} StartTrial sent for ${event.event_id}${testCode ? " (test event)" : ""}`);
+      // Meta's own receipt (how many events it counted, its trace id, any
+      // warnings), so a "sent" that never shows in Events Manager can be traced.
+      const receipt = (await res.text().catch(() => "")).slice(0, 400);
+      console.log(
+        `${LOG} StartTrial sent for ${event.event_id}${testCode ? ` (test event, code ${testCode})` : ""} to ${pixelId}: ${receipt}`,
+      );
       return true;
     } finally {
       clearTimeout(timer);

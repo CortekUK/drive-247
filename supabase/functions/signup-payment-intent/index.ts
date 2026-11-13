@@ -148,6 +148,10 @@ Deno.serve(async (req) => {
 
     // Mode is locked at account creation — see signup-state.ts.
     const mode = meta.mode ?? getSignupStripeMode();
+    // The price the super admin pinned on a plan lives in the LIVE Stripe account.
+    // A rehearsal runs on the test account, where that id does not exist, so there
+    // the price is found (or made once) by the plan's lookup key instead.
+    const pinnedPriceId = mode === "live" ? plan.stripePriceId : null;
 
     let stripe;
     let publishableKey: string;
@@ -208,9 +212,9 @@ Deno.serve(async (req) => {
               ? item.price.unit_amount * (typeof item?.quantity === "number" ? item.quantity : 1)
               : null;
           const priceChanged =
-            (!!plan.stripePriceId && !!existingPriceId && existingPriceId !== plan.stripePriceId) ||
+            (!!pinnedPriceId && !!existingPriceId && existingPriceId !== pinnedPriceId) ||
             (existingAmount !== null && existingAmount !== plan.amountCents) ||
-            (!plan.stripePriceId && !!item?.price?.lookup_key && item.price.lookup_key !== plan.lookupKey);
+            (!pinnedPriceId && !!item?.price?.lookup_key && item.price.lookup_key !== plan.lookupKey);
           // The admin switched the trial on/off or changed its length before
           // this visitor finished: replace it so they get what the card says.
           const trialChanged = !isSecured(existing) && trialTermsChanged(existing, trialDays);
@@ -311,7 +315,7 @@ Deno.serve(async (req) => {
                     ? `plan changed to ${plan.id}`
                     : trialChanged
                     ? `trial changed to ${trialDays} day(s)`
-                    : `price changed (${existingPriceId ?? "?"} ${existingAmount ?? "?"} -> ${plan.stripePriceId ?? plan.lookupKey} ${plan.amountCents})`),
+                    : `price changed (${existingPriceId ?? "?"} ${existingAmount ?? "?"} -> ${pinnedPriceId ?? plan.lookupKey} ${plan.amountCents})`),
               );
             } catch (e) {
               console.warn(`${LOG} could not cancel ${existing.id} (non-fatal):`, e);
@@ -389,8 +393,8 @@ Deno.serve(async (req) => {
       // by lookup_key would still work, but only because `plan` now carries the
       // DB's key — going straight to the id removes a Stripe round trip and any
       // chance of racing a key rotation mid-request.
-      const priceId = plan.stripePriceId
-        ? plan.stripePriceId
+      const priceId = pinnedPriceId
+        ? pinnedPriceId
         : (await getOrCreateSignupPrice(stripe, plan, mode)).priceId;
 
       // ---------------------------------------------------------------------

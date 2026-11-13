@@ -145,6 +145,10 @@ Deno.serve(async (req) => {
     const promoView = promo ? await publicCodeView(supabase, promo) : null;
 
     const mode = meta.mode ?? getSignupStripeMode();
+    // The price the super admin pinned on a plan lives in the LIVE Stripe account.
+    // A rehearsal runs on the test account, where that id does not exist, so there
+    // the price is found (or made once) by the plan's lookup key instead.
+    const pinnedPriceId = mode === "live" ? plan.stripePriceId : null;
 
     let stripe;
     let publishableKey: string;
@@ -184,9 +188,9 @@ Deno.serve(async (req) => {
               ? item.price.unit_amount * (typeof item?.quantity === "number" ? item.quantity : 1)
               : null;
           const priceChanged =
-            (!!plan.stripePriceId && !!existingPriceId && existingPriceId !== plan.stripePriceId) ||
+            (!!pinnedPriceId && !!existingPriceId && existingPriceId !== pinnedPriceId) ||
             (existingAmount !== null && existingAmount !== plan.amountCents) ||
-            (!plan.stripePriceId && !!item?.price?.lookup_key && item.price.lookup_key !== plan.lookupKey);
+            (!pinnedPriceId && !!item?.price?.lookup_key && item.price.lookup_key !== plan.lookupKey);
           // A different code (or adding/removing one) changes what the first
           // invoice asks for, so the old incomplete subscription is stale too.
           const promoChanged = (existing.metadata?.d247_promo_code_id ?? "") !== (promo?.id ?? "");
@@ -320,8 +324,8 @@ Deno.serve(async (req) => {
       }
 
       // 3. Price.
-      const priceId = plan.stripePriceId
-        ? plan.stripePriceId
+      const priceId = pinnedPriceId
+        ? pinnedPriceId
         : (await getOrCreateSignupPrice(stripe, plan, mode)).priceId;
 
       // 3b. The code's coupon, for this plan's product only. A free trial
