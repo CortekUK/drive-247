@@ -66,7 +66,10 @@ export function useCreateDraftRental({ replace = false }: { replace?: boolean } 
   const router = useRouter();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  return useMutation({
+  // A double click on New Rental fired two inserts before `isPending` could
+  // disable the button, leaving two drafts (QA R2.11). One start at a time.
+  const inFlight = useRef(false);
+  const mutation = useMutation({
     mutationFn: async () => {
       if (!tenant?.id) throw new Error("No tenant");
       const { data, error } = await supabase
@@ -98,6 +101,18 @@ export function useCreateDraftRental({ replace = false }: { replace?: boolean } 
         variant: "destructive",
       }),
   });
+  return {
+    ...mutation,
+    mutate: () => {
+      if (inFlight.current) return;
+      inFlight.current = true;
+      mutation.mutate(undefined, {
+        onSettled: () => {
+          inFlight.current = false;
+        },
+      });
+    },
+  };
 }
 
 /** The drafts, as one quiet row above the list. Nothing when there are none. */
