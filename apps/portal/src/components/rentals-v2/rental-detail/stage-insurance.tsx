@@ -85,6 +85,7 @@ import { BuyInsuranceDialog } from "@/components/rentals/buy-insurance-dialog";
 import type { StageProps } from "./stages";
 import { SHOW_MULTI_PERIOD } from "./multi-period";
 import { BonzahCoverCard } from "./bonzah-cover-card";
+import { fromVerification, OwnInsuranceList, useCustomerInsuranceDocs } from "./own-insurance";
 import { isRentalClosedForInsurance, RENTAL_CLOSED_INSURANCE_NOTE } from "@/lib/bonzah-rental-closed";
 import {
   fmtDate,
@@ -203,6 +204,12 @@ export function StageInsurance({ detail, onStage, refetch }: StageProps) {
 
   const { data: policies = [], isLoading } = useRentalInsurancePolicies(rental.id);
   const { data: uploaded = [] } = useRentalInsuranceVerifications(rental.id);
+  // The customer's own uploads (customer portal → Insurances) count too (QA R7).
+  const { data: customerCerts = [] } = useCustomerInsuranceDocs(detail.customer?.id ?? rental.customer_id, rental.id);
+  const ownCerts = useMemo(
+    () => [...customerCerts, ...uploaded.map(fromVerification)].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)),
+    [customerCerts, uploaded]
+  );
   const { balanceNumber, isBonzahConnected, bonzahMode, portalUrl } = useBonzahBalance();
   const { isEligible, isLoading: eligibilityLoading, reason: ineligibleReason } =
     useBonzahVehicleEligibility({
@@ -459,7 +466,7 @@ export function StageInsurance({ detail, onStage, refetch }: StageProps) {
             </Button>
           </div>
 
-          {uploaded.length === 0 ? (
+          {ownCerts.length === 0 ? (
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
@@ -476,51 +483,11 @@ export function StageInsurance({ detail, onStage, refetch }: StageProps) {
             </button>
           ) : (
             <div className="mt-4 min-h-0 flex-1 overflow-y-auto no-scrollbar">
-              <div className={listCls}>
-                {uploaded.map((v) => {
-                  const flags = v.ai_findings?.flags ?? [];
-                  const busy = v.status === "pending" || v.status === "processing";
-                  const ok = v.status === "verified";
-                  return (
-                    <div key={v.id} className="flex items-center gap-4 px-5 py-3">
-                      <div className="min-w-0 flex-1">
-                        <a
-                          href={v.file_url || undefined}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block truncate text-sm font-medium underline-offset-2 hover:underline"
-                        >
-                          {v.extracted_fields?.insurer || v.file_name}
-                        </a>
-                        <p
-                          className="truncate text-xs text-muted-foreground"
-                          title={v.ai_findings?.reasoning ?? undefined}
-                        >
-                          {busy
-                            ? "Reading the document…"
-                            : ok
-                              ? [
-                                  v.extracted_fields?.policy_number,
-                                  v.extracted_fields?.end_date ? `to ${v.extracted_fields.end_date}` : null,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" · ") || "Nothing was read off the document."
-                              : flags.join(" · ") || "Needs a look"}
-                        </p>
-                      </div>
-                      <span
-                        className={cn(
-                          "flex shrink-0 items-center gap-1.5 text-xs font-medium",
-                          busy ? "text-muted-foreground" : ok ? "text-success" : "text-warning"
-                        )}
-                      >
-                        {busy ? <Loader2 className="size-3.5 animate-spin" /> : ok ? <Check className="size-3.5" /> : null}
-                        {busy ? "Reading" : ok ? "Valid" : "Needs a look"}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+              <OwnInsuranceList
+                certs={ownCerts}
+                rental={{ start: rental.start_date?.slice(0, 10) ?? null, end: rental.end_date?.slice(0, 10) ?? null }}
+                renter={detail.customerName ?? null}
+              />
             </div>
           )}
         </Surface>
