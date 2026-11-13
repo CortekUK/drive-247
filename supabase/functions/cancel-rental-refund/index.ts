@@ -83,7 +83,13 @@ serve(async (req) => {
       rental,
       logPrefix: "[CANCEL-REFUND]",
     });
-    if (!auth.ok) return refuse(auth.status, auth.message);
+    if (!auth.ok) {
+      // The shared guard words its role refusal for deposit holds.
+      const msg = /deposit hold/i.test(auth.message)
+        ? "Your role can see this rental but cannot cancel it. Ask an admin to do this."
+        : auth.message;
+      return refuse(auth.status, msg, "not_allowed");
+    }
     if (requestTenantId && rental.tenant_id && requestTenantId !== rental.tenant_id) {
       return refuse(403, "Not authorised for this rental");
     }
