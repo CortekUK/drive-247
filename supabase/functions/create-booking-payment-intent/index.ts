@@ -348,6 +348,12 @@ async function mint(supabase: SupabaseClient, body: Record<string, any>, req: Re
     .limit(1)
     .maybeSingle()
 
+  // Set when an unpaid attempt is still open but for an outdated amount (staff
+  // changed the dates, place or extras after the card form was opened). Its
+  // intent is cancelled and THIS row is re-pointed at the new intent, so the
+  // customer can never pay the old figure and no second Pending row appears.
+  let staleRowId: string | null = null
+
   if (reusableRow?.stripe_payment_intent_id) {
     try {
       const existing = await stripe.paymentIntents.retrieve(reusableRow.stripe_payment_intent_id, stripeOptions)
@@ -355,6 +361,11 @@ async function mint(supabase: SupabaseClient, body: Record<string, any>, req: Re
         const refreshed = await stripe.paymentIntents.update(existing.id, { metadata }, stripeOptions)
         console.log('Reusing in-flight PaymentIntent:', refreshed.id, 'for rental', rentalId)
         return respond(refreshed.client_secret, refreshed.id, true)
+      }
+      if (REUSABLE_PI_STATUSES.has(existing.status) && existing.amount !== amountMinorUnits) {
+        await stripe.paymentIntents.cancel(existing.id, undefined, stripeOptions)
+        staleRowId = reusableRow.id
+        console.log('Cancelled outdated PaymentIntent:', existing.id, `amount ${existing.amount} -> ${amountMinorUnits}`)
       }
       if (existing.status === 'succeeded') {
         // Paid already (e.g. the settle call was lost). Commit it rather than
@@ -388,7 +399,22 @@ async function mint(supabase: SupabaseClient, body: Record<string, any>, req: Re
   // both find the payment by stripe_payment_intent_id.
   const isTargetedFlow = !!targets || !!extensionId
   let updated: { id: string }[] | null = null
-  if (!isTargetedFlow) {
+  if (staleRowId) {
+    const { data, error: staleError } = await supabase
+      .from('payments')
+      .update({
+        stripe_payment_intent_id: paymentIntent.id,
+        platform_account: platformAccount,
+        amount: amountDue,
+        remaining_amount: amountDue,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', staleRowId)
+      .eq('status', 'Pending')
+      .select('id')
+    if (staleError) console.error('Failed to re-point the outdated payment row:', staleError)
+    updated = data
+  } else if (!isTargetedFlow) {
     const { data, error: updateError } = await supabase
       .from('payments')
       .update({

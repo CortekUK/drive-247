@@ -457,9 +457,11 @@ function DateBar({
   const End = ({ label, at, hasTime }: { label: string; at: string; hasTime: boolean }) => (
     <div className="min-w-0">
       <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="mt-0.5 truncate font-heading text-lg font-semibold tracking-tight">
+      {/* On a phone the date and time each get their own line instead of
+          truncating to "Fe…" (QA R5.12). */}
+      <p className="mt-0.5 font-heading text-lg font-semibold tracking-tight sm:truncate">
         {at ? fmtDate(at.slice(0, 10)) : label === "Drop-off" ? "Open-ended" : "No date"}
-        <span className="ml-2 text-sm font-normal text-muted-foreground">
+        <span className="text-sm font-normal text-muted-foreground max-sm:block sm:ml-2">
           {at && hasTime ? fmtClock(at.slice(11, 16)) : "no time set"}
         </span>
       </p>
@@ -470,14 +472,14 @@ function DateBar({
       <End label="Pickup" at={pickup} hasTime={hasPickupTime} />
       <span className="text-muted-foreground">→</span>
       <End label="Drop-off" at={ret} hasTime={hasReturnTime} />
-      <span className="ml-auto shrink-0 text-right text-xs text-muted-foreground">
+      <span className="ml-auto shrink-0 text-right text-xs text-muted-foreground max-sm:ml-0 max-sm:w-full max-sm:text-left">
         <span className="block font-medium text-foreground">{summary}</span>
         Times in {timezone}
       </span>
     </>
   );
   const cls =
-    "flex flex-none items-center gap-6 rounded-4xl bg-card px-5 py-4 text-left shadow-md ring-1 ring-foreground/5 dark:ring-foreground/10";
+    "flex flex-none flex-wrap items-center gap-x-6 gap-y-3 rounded-4xl bg-card px-5 py-4 text-left shadow-md ring-1 ring-foreground/5 dark:ring-foreground/10";
   return editable ? (
     <button
       type="button"

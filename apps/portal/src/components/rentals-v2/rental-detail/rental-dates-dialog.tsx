@@ -301,7 +301,11 @@ export function RentalDatesDialog({
           </Button>
           <div className={cn("flex min-w-0 flex-1 gap-6", isLoading && "opacity-50")}>
             <Month base={month} />
-            <Month base={addMonths(month, 1)} />
+            {/* One month on a phone, two side by side from sm up: two at 390px
+                ran the day numbers together (QA R5.12). */}
+            <div className="hidden min-w-0 flex-1 sm:flex">
+              <Month base={addMonths(month, 1)} />
+            </div>
           </div>
           <Button variant="ghost" size="icon-sm" aria-label="Later months" onClick={() => setMonth((m) => addMonths(m, 1))}>
             <ChevronRight />
@@ -325,7 +329,7 @@ export function RentalDatesDialog({
         )}
 
         {/* the two ends, each with its time */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <End label="Pickup" day={start} time={startTime} setTime={setStartTime} active={!start || !!end} />
           <End label="Return" day={end} time={endTime} setTime={setEndTime} active={!!start && !end} />
         </div>
@@ -381,7 +385,7 @@ function End({
     >
       <div className="min-w-0 flex-1">
         <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-        <p className={cn("mt-1 truncate font-heading text-lg font-semibold tracking-tight", !day && "text-base font-normal text-muted-foreground")}>
+        <p className={cn("mt-1 truncate font-heading text-lg font-semibold tracking-tight max-sm:text-base", !day && "text-base font-normal text-muted-foreground")}>
           {day ? format(fromYmd(day), "EEE d MMM yyyy") : `Pick the ${label.toLowerCase()} day`}
         </p>
       </div>
