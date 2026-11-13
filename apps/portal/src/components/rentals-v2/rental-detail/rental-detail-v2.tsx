@@ -66,6 +66,7 @@ import { ExtensionView } from "./extension-view";
 import { PeriodView } from "./period-view";
 import { previewPeriods } from "./rail-preview";
 import { useV2 } from "@/lib/v2-context";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { RightRail, rentalRailTabs } from "./right-rail";
 import { ContextColumn, DOCK_CLEARANCE, RecordDock, RecordDockNav, contextTabPanels, useWiderThan } from "@/components/ui-v2/record-dock";
 import { EmptyHint, Panel } from "./_kit";
@@ -145,6 +146,13 @@ const STAGE_VIEWS: Partial<Record<StageId, React.ComponentType<StageProps>>> = {
 };
 
 export function RentalDetailV2() {
+  // Viewers and read-only managers see every stage but can change nothing:
+  // the whole stage panel sits in a disabled fieldset, so every button, input
+  // and picker in it is off at once, without each stage having to remember
+  // (QA R2.14). Links still work. The stage RPCs refuse viewers on their own,
+  // but let any manager through, so the screen is where read-only holds.
+  const { canEdit: canEditTab } = useManagerPermissions();
+  const readOnly = !canEditTab("rentals");
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -247,6 +255,12 @@ export function RentalDetailV2() {
         key={`${extension ? `ext-${extension.step}` : periodView ? `period-${periodView.period}-${periodView.step}` : overview ? "overview" : stage}:${phase}`}
         className={`flex min-w-0 flex-1 flex-col overflow-hidden md:pr-6${docked ? " " + DOCK_CLEARANCE : ""}`}
       >
+        {readOnly && (
+          <p className="mb-2 shrink-0 rounded-2xl bg-muted px-4 py-2 text-xs text-muted-foreground">
+            View only. Your role can see this rental but not change it.
+          </p>
+        )}
+        <fieldset disabled={readOnly} className="contents">
         {extension ? (
           <ExtensionView detail={detail} state={extension} />
         ) : overview ? (
@@ -267,6 +281,7 @@ export function RentalDetailV2() {
             </EmptyHint>
           </Panel>
         )}
+        </fieldset>
       </div>
 
       {contextFits ? (

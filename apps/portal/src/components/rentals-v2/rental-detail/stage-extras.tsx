@@ -225,21 +225,49 @@ type CatalogueExtra = {
   billing_type: "per_trip" | "per_day" | null;
   max_quantity: number | null;
   image_urls: string[] | null;
+  /** A per-car extra with no price set for THIS rental's car (QA R2.9). */
+  noPrice?: boolean;
 };
 
-function useExtrasCatalogue() {
+/**
+ * The catalogue priced for this rental's car. A `per_vehicle` extra costs its
+ * price for the car (rental_extras_vehicle_pricing); `rental_extras.price` is
+ * only a placeholder for it. Showing that placeholder offered a price that
+ * update_rental_extras_v2 then refused ("has no price for this car"), so an
+ * extra with no price for the car is shown as such and cannot be added — the
+ * booking site does not offer it either (QA R2.9).
+ */
+function useExtrasCatalogue(vehicleId: string | null) {
   const { tenant } = useTenant();
   return useQuery({
-    queryKey: ["rental-extras-catalogue-v2", tenant?.id],
+    queryKey: ["rental-extras-catalogue-v2", tenant?.id, vehicleId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("rental_extras")
-        .select("id, name, description, price, billing_type, max_quantity, image_urls")
+        .select("id, name, description, price, pricing_type, billing_type, max_quantity, image_urls")
         .eq("tenant_id", tenant!.id)
         .eq("is_active", true)
         .order("sort_order", { ascending: true });
       if (error) throw error;
-      return (data ?? []) as CatalogueExtra[];
+      const rows = (data ?? []) as (CatalogueExtra & { pricing_type?: string | null })[];
+      const perCar = rows.filter((e) => e.pricing_type === "per_vehicle").map((e) => e.id);
+      const carPrice = new Map<string, number>();
+      if (perCar.length && vehicleId) {
+        const { data: vp, error: vpErr } = await (supabase as any)
+          .from("rental_extras_vehicle_pricing")
+          .select("extra_id, price")
+          .eq("vehicle_id", vehicleId)
+          .in("extra_id", perCar);
+        if (vpErr) throw vpErr;
+        for (const p of vp ?? []) carPrice.set(p.extra_id, Number(p.price));
+      }
+      return rows.map((e) =>
+        e.pricing_type === "per_vehicle"
+          ? carPrice.has(e.id)
+            ? { ...e, price: carPrice.get(e.id)! }
+            : { ...e, price: 0, noPrice: true }
+          : e
+      ) as CatalogueExtra[];
     },
     enabled: !!tenant?.id,
   });
@@ -273,7 +301,7 @@ export function StageExtras({ detail }: StageProps) {
   const rental = detail.rental;
   const { data: selections, isLoading: extrasLoading } = useRentalExtraSelections(rental.id);
   const { data: drivers, isLoading: driversLoading } = useRentalAdditionalDrivers(rental.id);
-  const { data: catalogue } = useExtrasCatalogue();
+  const { data: catalogue } = useExtrasCatalogue(rental.vehicle_id ?? null);
   const editable = useExtrasEditable(rental.id);
   const canEdit = editable.data?.ok === true;
 
@@ -448,13 +476,19 @@ export function StageExtras({ detail }: StageProps) {
                         <Thumb src={e.image_urls?.[0]} />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium">{e.name}</p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {formatCurrency(Number(e.price), currency)} {perDay ? "a day" : "one-off"}
-                            {e.description ? ` · ${e.description}` : ""}
-                          </p>
+                          {e.noPrice ? (
+                            <p className="truncate text-xs text-muted-foreground">
+                              No price for this car — set one in Settings, Extras
+                            </p>
+                          ) : (
+                            <p className="truncate text-xs text-muted-foreground">
+                              {formatCurrency(Number(e.price), currency)} {perDay ? "a day" : "one-off"}
+                              {e.description ? ` · ${e.description}` : ""}
+                            </p>
+                          )}
                         </div>
                         {toggle ? (
-                          <Button size="sm" variant={q > 0 ? "default" : "outline"} onClick={() => setQty(e, q > 0 ? 0 : 1)}>
+                          <Button size="sm" variant={q > 0 ? "default" : "outline"} disabled={e.noPrice && q === 0} onClick={() => setQty(e, q > 0 ? 0 : 1)}>
                             {q > 0 ? "Added" : "Add"}
                           </Button>
                         ) : (
@@ -467,7 +501,7 @@ export function StageExtras({ detail }: StageProps) {
                               size="icon-sm"
                               variant="ghost"
                               aria-label={`One more ${e.name}`}
-                              disabled={e.max_quantity != null && q >= e.max_quantity}
+                              disabled={!!e.noPrice || (e.max_quantity != null && q >= e.max_quantity)}
                               onClick={() => setQty(e, q + 1)}
                             >
                               <Plus />

@@ -124,6 +124,7 @@ const SKELETON_RENTALS: EnhancedRental[] = skeletonRows(8, (f) => ({
   promo_code: null,
   protection_cost: 0,
   total_amount: f.money(),
+  billed_total: null,
   status: "active",
   computed_status: f.pick(["Active", "Upcoming", "Completed", "Pending"]),
   duration_months: 1,
@@ -431,7 +432,7 @@ export function RentalsListV2() {
         csvDate(r.start_date),
         csvDate(r.end_date),
         r.computed_status,
-        Number(r.total_amount) || 0,
+        Number(r.billed_total ?? r.total_amount) || 0,
         currency,
         csvDate(r.created_at),
       ]),
@@ -472,7 +473,7 @@ export function RentalsListV2() {
       partySub: rental.vehicle
         ? [[rental.vehicle.make, rental.vehicle.model].filter(Boolean).join(" "), rental.vehicle.reg].filter(Boolean).join(" · ")
         : null,
-      amount: formatCurrency(Number(rental.total_amount) || 0, tenant?.currency_code || "USD"),
+      amount: formatCurrency(Number(rental.billed_total ?? rental.total_amount) || 0, tenant?.currency_code || "USD"),
       start: rental.start_date,
       end: rental.end_date,
       ongoing: rental.is_pay_as_you_go,
