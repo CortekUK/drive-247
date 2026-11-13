@@ -1,6 +1,7 @@
 "use client";
 
 import type { SignupPlanId } from "@/lib/plans";
+import type { MetaBrowserSignals } from "@/lib/meta-tracking";
 import type { PromoOffer } from "@/lib/promo-offer";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
 import { isMockSignup, mockFunction, MockFunctionError } from "./mock-signup";
@@ -67,6 +68,8 @@ export interface ProvisionRequest {
     closesAt?: string;
   };
   acceptedTerms: boolean;
+  /** Meta's browser cookies, so the server's StartTrial event is tied to the ad click. */
+  tracking?: MetaBrowserSignals;
 }
 
 // ---------------------------------------------------------------------------
@@ -149,6 +152,12 @@ export interface ProvisionResponse {
   portalSignInUrl: string | null;
   contentSeeded: boolean;
   milestones: ProvisionMilestone[];
+  /**
+   * The id to send Meta's `StartTrial` under, on the run that created the
+   * account. `null` on a repeat (already counted) and on rehearsals; absent
+   * from a server that predates it.
+   */
+  startTrialEventId?: string | null;
 }
 
 /** The envelope every signup function returns on failure. */

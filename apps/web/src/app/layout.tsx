@@ -3,10 +3,10 @@ import { Inter } from "next/font/google";
 import { JsonLd } from "@/components/shared/json-ld";
 import { ThemeProvider } from "@/components/shared/theme-provider";
 import { BookDemoDialog } from "@/components/book-demo/book-demo-dialog";
+import { AdClickCapture } from "@/components/shared/ad-click-capture";
 import { SITE_META, SITE_URL } from "@/lib/constants";
+import { META_PIXEL_ID } from "@/lib/meta-tracking";
 import "./globals.css";
-
-const META_PIXEL_ID = "2196369497442053";
 
 const META_PIXEL_SCRIPT = `!function(f,b,e,v,n,t,s)
 {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -101,6 +101,7 @@ export default function RootLayout({
             src={`https://www.facebook.com/tr?id=${META_PIXEL_ID}&ev=PageView&noscript=1`}
           />
         </noscript>
+        <AdClickCapture />
         <ThemeProvider>
           <a
             href="#main"

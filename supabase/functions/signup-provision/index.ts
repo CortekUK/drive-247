@@ -73,6 +73,12 @@ import { sendResendEmail } from "../_shared/resend-service.ts";
 import { buildCmsContent, seedTenantCmsContent } from "../_shared/tenant-cms-content.ts";
 import { readRehearsalFor, REHEARSAL_TENANT_SLUG } from "../_shared/signup-rehearsal.ts";
 import { isSecured, markTrialGrantUsed, savedPaymentMethodOf } from "../_shared/signup-trial.ts";
+import {
+  metaTestCode,
+  sendStartTrial,
+  startTrialEventId,
+  type MetaBrowserSignals,
+} from "../_shared/meta-conversions.ts";
 
 const LOG = "[signup-provision]";
 
@@ -272,6 +278,8 @@ interface ProvisionRequest {
     closesAt?: string;
   };
   acceptedTerms?: boolean;
+  /** Meta's browser cookies, so the server's StartTrial event can be tied to the ad click. */
+  tracking?: MetaBrowserSignals;
 }
 
 Deno.serve(async (req) => {
@@ -335,6 +343,8 @@ Deno.serve(async (req) => {
           portalSignInUrl: meta.portalSignInUrl ?? null,
           contentSeeded: meta.contentSeeded !== false,
           milestones: meta.milestones ?? [],
+          // Already counted on the run that created the account.
+          startTrialEventId: null,
         });
       }
       // The tenant id is stale (a rollback that could not clear the metadata).
@@ -1604,6 +1614,30 @@ Deno.serve(async (req) => {
     );
 
     /**
+     * Tell Meta a trial started (the ad campaign optimises for this event).
+     *
+     * Only here, on the run that created the account: the idempotent hit at the
+     * top returns before this, so a retry or a second tab never sends it again.
+     * Real signups only — a rehearsal or a test-mode signup is not a customer —
+     * unless a test code is set, which routes the event to Meta's "Test events"
+     * tab and is how the wiring is checked before go-live.
+     *
+     * The id goes back to the browser so its pixel sends the same event under
+     * the same id and Meta counts the pair once. Never fails the signup.
+     */
+    const trackStartTrial = (mode === "live" && !adoptCanary) || !!metaTestCode();
+    if (trackStartTrial) {
+      await sendStartTrial({
+        userId: authUserId,
+        email: meta.email,
+        fullName: meta.fullName,
+        phone: body.businessPhone ?? null,
+        signals: body.tracking ?? null,
+        req,
+      });
+    }
+
+    /**
      * Welcome email carrying the addresses we just minted.
      *
      * This became REQUIRED, not a nicety, the moment the business form stopped
@@ -1658,6 +1692,7 @@ Deno.serve(async (req) => {
       portalSignInUrl,
       contentSeeded,
       milestones: PROVISION_MILESTONES,
+      startTrialEventId: trackStartTrial ? startTrialEventId(authUserId) : null,
     });
   } catch (error) {
     // Last resort. The lock is released on a best-effort basis so a crash does

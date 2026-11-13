@@ -18,6 +18,7 @@ import {
   type SignupPlan,
   type SignupPlanId,
 } from "@/lib/plans";
+import { readMetaSignals, trackStartTrial } from "@/lib/meta-tracking";
 import { promoRejectionText, type PromoOffer } from "@/lib/promo-offer";
 import {
   clearReferralCodeInDocument,
@@ -48,6 +49,7 @@ import {
   type ClientSignupMeta,
   type PaymentIntentResponse,
   type ProvisionRequest,
+  type ProvisionResponse,
   type ResumeSignupDTO,
 } from "./onboarding-api";
 import {
@@ -500,7 +502,33 @@ function buildProvisionRequest(v: TenantFormValues): ProvisionRequest {
     companyName: v.companyName,
     slug: v.slug,
     acceptedTerms: v.acceptedTerms,
+    tracking: readMetaSignals(),
   };
+}
+
+/**
+ * Tell Meta's pixel a trial started, under the id the server used for its own
+ * copy of the event, so the two count as one signup.
+ *
+ * Only ever called with the answer to a provision THIS tab submitted. A server
+ * that says `null` has already counted this account (a repeat) or is not
+ * counting it (a rehearsal); one that predates the field says nothing, and the
+ * id is then built the way the server builds it. Never in the dev mock.
+ */
+async function reportStartTrial(res: ProvisionResponse): Promise<void> {
+  if (isMockSignup() || res.startTrialEventId === null) return;
+  try {
+    const { data } = await getBrowserSupabase().auth.getSession();
+    const user = data.session?.user;
+    if (!user) return;
+    trackStartTrial({
+      eventId: res.startTrialEventId ?? `${user.id}_trial`,
+      userId: user.id,
+      email: user.email ?? "",
+    });
+  } catch {
+    /* tracking never gets in the way of the success screen */
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -960,6 +988,7 @@ export function OnboardingProvider({
 
       try {
         const res = await signupProvision(body);
+        void reportStartTrial(res);
         settleSuccess({
           tenantId: res.tenantId,
           slug: res.slug,
