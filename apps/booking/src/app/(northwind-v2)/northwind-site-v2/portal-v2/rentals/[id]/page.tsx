@@ -146,7 +146,11 @@ function RentalHeader({ rental }: { rental: CustomerRentalDetail }) {
           <RentalStatusChip lifecycle={rental.lifecycle} />
           {/* An "unpaid" chip only ever came from `rentals.payment_status`,
               which goes stale; what is owed is the line below, from the ledger. */}
-          {money === null && rental.paymentState !== 'unpaid' ? <PaymentStatusChip state={rental.paymentState} /> : null}
+          {/* Not on a cancelled rental: "Paid" there read as money kept (QA R12.8);
+              the cancelled stripe below says what was refunded. */}
+          {money === null && rental.paymentState !== 'unpaid' && rental.lifecycle !== 'cancelled' ? (
+            <PaymentStatusChip state={rental.paymentState} />
+          ) : null}
           {rental.isExtended ? <StatusChip tone="info">Extended</StatusChip> : null}
         </span>
       </div>
@@ -274,6 +278,12 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
         )
       : null;
 
+  // What came back on a cancelled rental (QA R12.8): the page said "cancelled"
+  // and still showed the rental as Paid, with no word of the refund.
+  const { payments: customerPayments } = useCustomerPayments();
+  const refundedHere = customerPayments
+    .filter((p) => p.rentalId === rental.id)
+    .reduce((sum, p) => sum + (Number(p.refunded) || 0), 0);
   const delivered = rental.deliveryMethod === 'delivery' || !!rental.deliveryAddress;
   const pickupPlace = rental.deliveryAddress ?? rental.pickupLocation;
   const returnPlace = rental.collectionAddress ?? rental.returnLocation;
@@ -287,8 +297,15 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
           item={{
             key: 'cancelled',
             variant: 'red',
-            title: 'This rental was cancelled',
-            description: rental.cancellationReason ?? 'If you did not expect this, contact us and we will look into it',
+            title:
+              refundedHere > 0
+                ? `This rental was cancelled · ${formatCurrency(refundedHere)} refunded to your card`
+                : 'This rental was cancelled',
+            description:
+              rental.cancellationReason ??
+              (refundedHere > 0
+                ? 'Refunds usually reach your account in 5 to 10 working days. If you did not expect this, contact us.'
+                : 'If you did not expect this, contact us and we will look into it'),
           }}
         />
       ) : rental.cancellationRequested ? (

@@ -4,6 +4,7 @@ import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { getConnectAccountId, getStripeClientForRecord, type StripeMode } from '../_shared/stripe-client.ts';
 import { cancelBonzahPoliciesForRental, bonzahCancellationWarning } from '../_shared/bonzah-rental-cancellation.ts';
 import { tryProviderRefund } from '../_shared/payments/refund.ts';
+import { authorizeDepositHoldRequest } from '../_shared/deposit-hold-auth.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,6 +21,19 @@ interface CancelRefundRequest {
   cancelledBy: string; // Admin user ID
   tenantId?: string;
 }
+
+const refuse = (status: number, error: string, code?: string) =>
+  new Response(JSON.stringify({ success: false, error, code }), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
+/**
+ * Statuses a rental may still be CANCELLED from (QA R12.10, Nov 14 2026): only
+ * before handover. Once the car is out (Active) the rental is ended, not
+ * cancelled, and money goes back through a refund on the Payments stage.
+ */
+const CANCELLABLE = new Set(["pending", "confirmed", "upcoming", "reserved"]);
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -57,6 +71,46 @@ serve(async (req) => {
         JSON.stringify({ error: "Rental not found", details: rentalError?.message }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // ── Who is asking (QA R12, Nov 14 2026) ────────────────────────────────
+    // This function refunds money and cancels a booking. It read no caller at
+    // all, so the public anon key in the booking site's bundle was enough to
+    // cancel and refund any tenant's rental. Staff of the rental's tenant with
+    // a write role (not viewers), super admins, and the service role only.
+    const auth = await authorizeDepositHoldRequest(req, supabase, {
+      rentalId,
+      rental,
+      logPrefix: "[CANCEL-REFUND]",
+    });
+    if (!auth.ok) return refuse(auth.status, auth.message);
+    if (requestTenantId && rental.tenant_id && requestTenantId !== rental.tenant_id) {
+      return refuse(403, "Not authorised for this rental");
+    }
+
+    // ── The intended rule: cancel only before handover ────────────────────
+    const statusLc = String(rental.status ?? "").toLowerCase();
+    if (statusLc === "cancelled") return refuse(409, "This rental is already cancelled.", "already_cancelled");
+    if (statusLc === "active") {
+      return refuse(
+        409,
+        "The car is already out: this rental is Active. A rental can only be cancelled before handover. End it instead, and refund on the Payments stage if money is owed back.",
+        "active",
+      );
+    }
+    if (!CANCELLABLE.has(statusLc)) {
+      return refuse(409, `A ${rental.status} rental cannot be cancelled. Only a rental that has not been handed over can.`, "not_cancellable");
+    }
+    const { count: handedOver } = await supabase
+      .from("rental_key_handovers")
+      .select("id", { count: "exact", head: true })
+      .eq("rental_id", rentalId)
+      .not("handed_at", "is", null);
+    if ((handedOver ?? 0) > 0) {
+      return refuse(409, "The keys have already been handed over, so this rental can no longer be cancelled. End it instead.", "handed_over");
+    }
+    if (refundType === "partial" && !(Number(refundAmount) > 0)) {
+      return refuse(400, "Enter a refund amount above 0.", "bad_amount");
     }
 
     // Get customer details
@@ -116,6 +170,13 @@ serve(async (req) => {
       return { client, options: accountId ? { stripeAccount: accountId } : undefined };
     };
 
+    // Other Stripe payments on this rental that this cancellation did NOT refund.
+    // Declared BEFORE the lookup that fills it: it used to be declared after,
+    // so any rental with two payments (rent + deposit) threw "Cannot access
+    // 'unrefundedOtherPayments' before initialization" and could not be
+    // cancelled at all (QA R12.6).
+    let unrefundedOtherPayments: Array<{ id: string; amount: number; alreadyRefunded: number }> = [];
+
     // Get related payment with Stripe payment intent
     let payment = null;
     if (paymentId) {
@@ -167,8 +228,19 @@ serve(async (req) => {
 
     let refundResult = null;
     let stripeRefundId = null;
-    // Other Stripe payments on this rental that this cancellation did NOT refund.
-    let unrefundedOtherPayments: Array<{ id: string; amount: number; alreadyRefunded: number }> = [];
+
+    // Never refund more than this payment still holds (QA R12.6). Stripe would
+    // refuse it too, but only after the rest of this function had run.
+    if (refundType === "partial" && payment) {
+      const refundable = Math.round((Number(payment.amount || 0) - Number(payment.refund_amount || 0)) * 100) / 100;
+      if (Number(refundAmount) > refundable + 0.001) {
+        return refuse(
+          400,
+          `You can refund at most $${refundable.toFixed(2)}: that is what this payment still holds. Nothing was cancelled or refunded.`,
+          "refund_too_large",
+        );
+      }
+    }
 
     // Process Stripe refund if applicable
     if (payment?.stripe_payment_intent_id && refundType !== "none") {
@@ -267,18 +339,35 @@ serve(async (req) => {
       }
     }
 
-    // Update rental status to Cancelled
+    // A refund that failed must not cancel the booking: the customer would be
+    // told they were cancelled and refunded while no money moved (QA R12.6).
+    if (refundType !== "none" && (refundResult as any)?.type === "error") {
+      return refuse(
+        502,
+        `The refund did not go through, so the rental was NOT cancelled: ${(refundResult as any).message ?? "unknown error"}`,
+        "refund_failed",
+      );
+    }
+
+    // Update rental status to Cancelled. It also wrote a `notes` column that
+    // rentals does not have, so this update failed EVERY time and was only
+    // logged: the money went back but the rental stayed Pending and kept the
+    // car (QA R12.1).
     const { error: updateRentalError } = await supabase
       .from("rentals")
       .update({
         status: "Cancelled",
         updated_at: new Date().toISOString(),
-        notes: `Cancelled by admin. Reason: ${reason}${refundResult ? `. Refund: ${JSON.stringify(refundResult)}` : ""}`,
       })
       .eq("id", rentalId);
 
     if (updateRentalError) {
       console.error("Failed to update rental:", updateRentalError);
+      return refuse(
+        500,
+        `The refund was made${stripeRefundId ? ` (${stripeRefundId})` : ""}, but the rental could not be marked cancelled: ${updateRentalError.message}. Set it by hand.`,
+        "status_not_saved",
+      );
     }
 
     // Void the rental's synced Xero / Zoho invoices (Sprint 6 patch).

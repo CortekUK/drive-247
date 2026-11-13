@@ -55,7 +55,8 @@
  */
 
 import { useMemo, useState } from "react";
-import { ChevronRight, CornerDownRight, CreditCard, ExternalLink, Loader2, Lock, Plus, ReceiptText, ShieldAlert, Trash2, Undo2 } from "lucide-react";
+import { Ban, ChevronRight, CornerDownRight, CreditCard, ExternalLink, Loader2, Lock, Plus, ReceiptText, ShieldAlert, Trash2, Undo2 } from "lucide-react";
+import { CancelRentalDialog } from "@/components/shared/dialogs/cancel-rental-dialog";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui-v2/button";
@@ -103,6 +104,7 @@ const when = (iso: string | null | undefined) => (iso ? fmtDateTime(parseAt(Stri
 
 export function StagePayments({ detail, refetch }: StageProps) {
   const rentalId = detail.rental.id;
+  const [cancelOpen, setCancelOpen] = useState(false);
 
   /* Reused v1 reads. The links query is only asked for the STATE it resolves —
      expiry and supersession — which the `payments` row does not carry on its
@@ -225,6 +227,17 @@ export function StagePayments({ detail, refetch }: StageProps) {
 
   const openReceipt = receiptOpen ? ledger.payments.find((p) => p.id === receiptOpen) ?? null : null;
 
+  /* ── cancelling (QA R12, Nov 14 2026) ───────────────────────────────────
+     The v2 screen had no way to cancel a paid booking at all. Only before
+     handover: a Pending rental can be cancelled; an Active one shows why not.
+     The dialog refunds the NEWEST payment (cancel-rental-refund's rule), so
+     its ceiling is what that payment still holds, not the rental price. */
+  const statusLc = String(detail.rental.status ?? "").toLowerCase();
+  const showCancel = statusLc === "pending" || statusLc === "active";
+  const newestPaid = [...ledger.payments]
+    .filter((p) => p.amountCents - p.refundedCents > 0)
+    .sort((a, b) => (a.at < b.at ? 1 : -1))[0];
+
   return (
     <AccountingSyncMarks paymentIds={syncPaymentIds}>
     <Panel
@@ -240,6 +253,18 @@ export function StagePayments({ detail, refetch }: StageProps) {
             disabledReason={t.outstanding === 0 ? "Nothing is owed on this rental." : null}
           />
           <StageAction icon={Plus} label="Add a charge" onClick={() => setRequest({ kind: "fine" })} />
+          {showCancel && (
+            <StageAction
+              icon={Ban}
+              label="Cancel rental"
+              onClick={() => setCancelOpen(true)}
+              disabledReason={
+                statusLc === "active"
+                  ? "The car is already out. A rental can only be cancelled before handover: end it instead, and refund here if money is owed back."
+                  : null
+              }
+            />
+          )}
         </span>
       }
     >
@@ -547,6 +572,26 @@ export function StagePayments({ detail, refetch }: StageProps) {
         request={request}
         onClose={() => setRequest(null)}
         refetch={onChanged}
+      />
+      {/* Cancel and refund — the v1 dialog (full / partial / none, reason,
+          confirm), calling cancel-rental-refund and the cancellation email. */}
+      <CancelRentalDialog
+        open={cancelOpen}
+        onOpenChange={(v) => {
+          setCancelOpen(v);
+          if (!v) onChanged();
+        }}
+        rental={{
+          id: rentalId,
+          customer: { name: detail.customerName ?? undefined, email: detail.customer?.email ?? undefined },
+          vehicle: { make: detail.vehicle?.make ?? undefined, model: detail.vehicle?.model ?? undefined },
+          monthly_amount: Number(detail.rental.monthly_amount) || 0,
+        }}
+        payment={
+          newestPaid
+            ? { id: newestPaid.id, amount: Math.round(newestPaid.amountCents - newestPaid.refundedCents) / 100 }
+            : undefined
+        }
       />
       </div>
     </Panel>
