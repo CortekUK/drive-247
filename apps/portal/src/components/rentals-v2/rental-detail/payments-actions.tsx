@@ -152,7 +152,12 @@ function AimDialog({
   const categories = [...new Set(chosen.map((t) => t.category))];
 
   const unreachable = targets.filter((t) => !t.settleable);
-  const ok = cents > 0 && chosen.length > 0;
+  /* More than is owed is refused here (QA R8.10). This dialog hands the amount
+     to v1's AddPaymentDialog as `defaultAmount`, and that switches OFF v1's own
+     overpayment check, so a $500 cash entry against $185 owed was recorded
+     without a word. */
+  const tooMuch = chosen.length > 0 && cents > owed;
+  const ok = cents > 0 && chosen.length > 0 && !tooMuch;
 
   const toggle = (key: string) =>
     setPicked((prev) => {
@@ -237,9 +242,17 @@ function AimDialog({
                 inputMode="decimal"
                 value={typed ?? (owed / 100).toFixed(2)}
                 onChange={(e) => setTyped(e.target.value)}
-                className={cn(inputCls, "pl-7 tabular-nums")}
+                aria-invalid={tooMuch || undefined}
+                aria-label="Amount"
+                className={cn(inputCls, "pl-7 tabular-nums", tooMuch && "border-destructive")}
               />
             </div>
+            {tooMuch && (
+              <p role="alert" className="mt-1.5 text-xs font-medium text-destructive">
+                That is more than is owed. At most {usd(owed)} can be taken against what is ticked; nothing over that is
+                recorded or charged.
+              </p>
+            )}
           </Field>
 
           {unreachable.length > 0 && (
@@ -252,7 +265,9 @@ function AimDialog({
           )}
 
           <p className="rounded-3xl bg-muted/40 px-4 py-3 text-sm leading-relaxed">
-            {!ok
+            {tooMuch
+              ? `Lower the amount to ${usd(owed)} or less.`
+              : !ok
               ? "Tick at least one category and enter an amount."
               : `Will open the payment window for ${usd(cents)} against ${list(
                   categories
