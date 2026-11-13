@@ -64,6 +64,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTenant } from "@/contexts/TenantContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui-v2/badge";
 import { Button } from "@/components/ui-v2/button";
 import {
@@ -198,6 +200,46 @@ export function StageHandover({ detail, onStage, refetch }: StageProps) {
   const review = useReviewDamageReport(rental.id);
 
   const [confirming, setConfirming] = useState<HandoverType | null>(null);
+  const { toast } = useToast();
+  /** How the car leaves, chosen in the collection confirm (QA R10.5). */
+  const [collectBy, setCollectBy] = useState<"in_person" | "lockbox">("in_person");
+  const [sendingCode, setSendingCode] = useState(false);
+
+  /* -- what has to be true before the car goes out (QA R10.1) ------------
+     The agreement signed and nothing owed. Before this the stage offered
+     "Confirm collection" on any rental, recorded it, and left an unsigned or
+     unpaid rental quietly Pending without saying why. */
+  const { data: owedCents } = useQuery({
+    queryKey: ["handover-owed-v2", rental.id, tenant?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ledger_entries")
+        .select("remaining_amount, category")
+        .eq("rental_id", rental.id)
+        .eq("tenant_id", tenant!.id)
+        .eq("type", "Charge");
+      if (error) throw error;
+      return (data ?? [])
+        .filter((r: any) => r.category !== "Security Deposit")
+        .reduce((sum: number, r: any) => sum + Math.round(Number(r.remaining_amount || 0) * 100), 0);
+    },
+    enabled: !!tenant?.id,
+  });
+  const signed = ["completed", "signed"].includes(String(rental.document_status ?? "").toLowerCase());
+  const missing: { text: string; stage?: "agreement" | "payments" | "customer" | "vehicle" }[] = [];
+  if (!detail.customer) missing.push({ text: "No customer is on this rental.", stage: "customer" });
+  if (!vehicle) missing.push({ text: "No car is on this rental.", stage: "vehicle" });
+  if (!signed)
+    missing.push({
+      text:
+        rental.document_status === "sent" || rental.document_status === "delivered"
+          ? "The agreement has been sent but not signed yet."
+          : "The agreement has not been signed yet.",
+      stage: "agreement",
+    });
+  if (owedCents === undefined) missing.push({ text: "Checking what is owed..." });
+  else if (owedCents > 0)
+    missing.push({ text: `${money(owedCents / 100)} is still owed on this rental.`, stage: "payments" });
 
   const giving = inOrder(givingHandover?.photos ?? []);
   const receiving = inOrder(receivingHandover?.photos ?? []);
@@ -259,6 +301,94 @@ export function StageHandover({ detail, onStage, refetch }: StageProps) {
     ? settings.lockbox_notification_methods
     : ["email"];
 
+  /**
+   * Send the lockbox code: v1's send (key-handover-section.tsx) on this stage
+   * (QA R10.5). Same edge function, same log rows, same rental flags; the
+   * channels are the tenant's setting rather than a per-send override.
+   */
+  const sendLockboxCode = async (): Promise<boolean> => {
+    if (!vehicle?.lockbox_code || !tenant?.id) return false;
+    setSendingCode(true);
+    const sendEmail = channels.includes("email");
+    const sendSms = channels.includes("sms");
+    const channel = sendSms && !sendEmail ? "sms" : "email";
+    const to = channel === "sms" ? detail.customer?.phone : detail.customer?.email;
+    try {
+      await supabase.from("rentals").update({ delivery_method: "lockbox" }).eq("id", rental.id).eq("tenant_id", tenant.id);
+      const { error } = await supabase.functions.invoke("notify-lockbox-code", {
+        body: {
+          customerName: detail.customerName ?? detail.customer?.name ?? "",
+          customerEmail: detail.customer?.email ?? null,
+          customerPhone: detail.customer?.phone ?? null,
+          vehicleName: detail.vehicleName ?? `${vehicle.make ?? ""} ${vehicle.model ?? ""}`.trim(),
+          vehicleReg: vehicle.reg,
+          lockboxCode: vehicle.lockbox_code,
+          lockboxInstructions: vehicle.lockbox_instructions || "",
+          deliveryAddress: rental.delivery_address || "",
+          bookingRef: rental.rental_number ?? "",
+          rentalId: rental.id,
+          tenantId: tenant.id,
+          odometerReading: givingHandover?.mileage ?? null,
+          notes: givingHandover?.notes ?? null,
+          photoUrls: (givingHandover?.photos ?? []).map((ph) => ph.file_url),
+          defaultInstructions: (settings as any)?.lockbox_default_instructions ?? null,
+          sendEmail,
+          sendSms,
+        },
+      });
+      if (error) {
+        await supabase.from("lockbox_send_log").insert({
+          rental_id: rental.id,
+          tenant_id: tenant.id,
+          event_type: "failed",
+          channel,
+          details: `Send failed: ${error.message || "Unknown error"}`,
+        } as any);
+        toast({ title: "The code was not sent", description: "Contact the customer another way, or try again.", variant: "destructive" });
+        return false;
+      }
+      await supabase.from("lockbox_send_log").insert({
+        rental_id: rental.id,
+        tenant_id: tenant.id,
+        event_type: wentOut ? "resent" : "sent",
+        channel,
+        sent_by_name: "Admin",
+        details: `Lockbox code sent to ${to || "customer"} via ${channel}`,
+      } as any);
+      await supabase.from("rentals").update({ lockbox_sent_at: new Date().toISOString() }).eq("id", rental.id).eq("tenant_id", tenant.id);
+      toast({ title: "Lockbox code sent", description: `Sent to ${to || "the customer"} by ${channel}.` });
+      return true;
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
+  /**
+   * Collection. v2 has no Approve step, and v1's hook only turns a rental
+   * Active when approval_status is "approved" AND payment_status "fulfilled",
+   * which a rental made and paid on this screen never gets, so it stayed
+   * Pending after the keys went out (QA R10.2). The gate above has already
+   * proved what those flags stand for (signed, nothing owed), so they are set
+   * here, then the shared hook records the handover and activates.
+   */
+  const confirmCollection = async () => {
+    if (!tenant?.id || missing.length > 0) return;
+    if (collectBy === "lockbox" && lockboxOn && vehicle?.lockbox_code) {
+      const ok = await sendLockboxCode();
+      if (!ok) return;
+    } else {
+      await supabase.from("rentals").update({ delivery_method: "in_person" }).eq("id", rental.id).eq("tenant_id", tenant.id);
+    }
+    if (rental.approval_status !== "approved" || rental.payment_status !== "fulfilled") {
+      await supabase
+        .from("rentals")
+        .update({ approval_status: "approved", payment_status: "fulfilled" })
+        .eq("id", rental.id)
+        .eq("tenant_id", tenant.id);
+    }
+    markKeyHanded.mutate("giving", { onSuccess: () => refetch() });
+  };
+
   /* ── the panel ──────────────────────────────────────────────────────── */
 
   if (isLoading) {
@@ -288,7 +418,11 @@ export function StageHandover({ detail, onStage, refetch }: StageProps) {
       description="What the car looked like when it left, what it looked like when it came back, and what changed in between."
       footer={
         !wentOut ? (
-          <ActionButton onClick={() => setConfirming("giving")} disabled={markKeyHanded.isPending}>
+          <ActionButton
+            onClick={() => setConfirming("giving")}
+            disabled={markKeyHanded.isPending || missing.length > 0}
+            title={missing.length > 0 ? `Not yet: ${missing.map((m) => m.text).join(" ")}` : undefined}
+          >
             {markKeyHanded.isPending ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
@@ -316,6 +450,37 @@ export function StageHandover({ detail, onStage, refetch }: StageProps) {
         )
       }
     >
+      {!wentOut && missing.length > 0 && (
+        <div role="status" className="rounded-3xl border border-warning/40 bg-warning/10 px-5 py-4 text-sm">
+          <p className="font-medium">The car can&apos;t go out yet</p>
+          <ul className="mt-2 space-y-1.5">
+            {missing.map((m) => (
+              <li key={m.text} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span>{m.text}</span>
+                {m.stage && (
+                  <button
+                    type="button"
+                    onClick={() => onStage(m.stage!)}
+                    className="cursor-pointer text-xs font-medium text-primary underline-offset-2 hover:underline dark:text-[hsl(var(--v2-link,var(--primary)))]"
+                  >
+                    {m.stage === "agreement"
+                      ? "Go to Agreement"
+                      : m.stage === "payments"
+                        ? "Go to Payments"
+                        : m.stage === "customer"
+                          ? "Go to Customer"
+                          : "Go to Vehicle"}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Confirm collection opens once the agreement is signed and nothing is owed.
+          </p>
+        </div>
+      )}
+
       {/* ── the two halves ──────────────────────────────────────────────── */}
       <HandoverCard
         kind="giving"
@@ -325,6 +490,8 @@ export function StageHandover({ detail, onStage, refetch }: StageProps) {
         vehicleLabel={detail.vehicleLabel}
         onUpload={(file) => uploadPhoto.mutate({ type: "giving", file })}
         onDelete={(photo) => deletePhoto.mutate(photo)}
+        minMileage={vehicle?.current_mileage ?? null}
+        minMileageWhy="the car's recorded mileage"
         onMileage={(m) => updateMileage.mutate({ type: "giving", mileage: m })}
         onNotes={(notes) => updateNotes.mutate({ type: "giving", notes })}
         onUndo={() => unmarkKeyHanded.mutate("giving")}
@@ -342,6 +509,8 @@ export function StageHandover({ detail, onStage, refetch }: StageProps) {
         vehicleLabel={detail.vehicleLabel}
         onUpload={(file) => uploadPhoto.mutate({ type: "receiving", file })}
         onDelete={(photo) => deletePhoto.mutate(photo)}
+        minMileage={givingHandover?.mileage ?? null}
+        minMileageWhy="the reading when it went out"
         onMileage={(m) => updateMileage.mutate({ type: "receiving", mileage: m })}
         onNotes={(notes) => updateNotes.mutate({ type: "receiving", notes })}
         onUndo={() => unmarkKeyHanded.mutate("receiving")}
@@ -604,11 +773,11 @@ export function StageHandover({ detail, onStage, refetch }: StageProps) {
               <div className="mt-5">
                 <ActionButton
                   variant="outline"
-                  disabled
-                  title="Sending the code also picks the channels, logs the send and sets the rental's collection method — that whole flow is on v1's handover section and is not on this stage yet."
+                  disabled={sendingCode || !detail.customer}
+                  onClick={() => void sendLockboxCode()}
                 >
-                  <KeyRound className="size-4" />
-                  Send the code to the customer
+                  {sendingCode ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
+                  {wentOut || rental.lockbox_sent_at ? "Send the code again" : "Send the code to the customer"}
                 </ActionButton>
               </div>
             </>
@@ -631,11 +800,31 @@ export function StageHandover({ detail, onStage, refetch }: StageProps) {
                 that before pressing it, not after. */}
             <AlertDialogDescription>{confirmCopy.body}</AlertDialogDescription>
           </AlertDialogHeader>
+          {confirming === "giving" && lockboxOn && vehicle?.lockbox_code && (
+            <div role="radiogroup" aria-label="How is the car collected?" className="space-y-2 text-sm">
+              <p className="font-medium">How is the car collected?</p>
+              {(["in_person", "lockbox"] as const).map((m) => (
+                <label key={m} className="flex cursor-pointer items-start gap-2">
+                  <input type="radio" name="collect-by" checked={collectBy === m} onChange={() => setCollectBy(m)} className="mt-1" />
+                  <span>
+                    {m === "in_person"
+                      ? "In person: the keys are handed over at the desk"
+                      : `By lockbox: sends code ${vehicle.lockbox_code} for ${vehicle.reg} to ${
+                          channels.includes("sms") && !channels.includes("email")
+                            ? detail.customer?.phone ?? "the customer"
+                            : detail.customer?.email ?? "the customer"
+                        }`}
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>Not yet</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (confirming) markKeyHanded.mutate(confirming, { onSuccess: () => refetch() });
+                if (confirming === "giving") void confirmCollection();
+                else if (confirming) markKeyHanded.mutate(confirming, { onSuccess: () => refetch() });
                 setConfirming(null);
               }}
             >
@@ -665,7 +854,12 @@ function HandoverCard({
   onUndo,
   uploading,
   undoing,
+  minMileage,
+  minMileageWhy,
 }: {
+  /** The lowest reading that makes sense here (QA R10.4). */
+  minMileage?: number | null;
+  minMileageWhy?: string;
   kind: HandoverType;
   handover: KeyHandover | undefined;
   /** Already sorted into the order the model will compare them in. */
@@ -695,10 +889,22 @@ function HandoverCard({
   const [odometer, setOdometer] = useState(handover?.mileage != null ? String(handover.mileage) : "");
   const [notes, setNotes] = useState(handover?.notes ?? "");
 
+  const [odometerProblem, setOdometerProblem] = useState<string | null>(null);
   const commitOdometer = () => {
     const trimmed = odometer.trim();
     const next = trimmed === "" ? null : Number(trimmed);
     if (next !== null && !Number.isFinite(next)) return;
+    /* A reading below the floor is refused, not saved (QA R10.4): it would
+       understate the miles driven and the excess charge worked out from them. */
+    if (next !== null && (next < 0 || (minMileage != null && next < minMileage))) {
+      setOdometerProblem(
+        next < 0
+          ? "A reading can't be negative. Not saved."
+          : `That is below ${minMileageWhy ?? "the last reading"} (${minMileage!.toLocaleString()}). Check the dashboard: the odometer can't go backwards. Not saved.`
+      );
+      return;
+    }
+    setOdometerProblem(null);
     if ((handover?.mileage ?? null) !== next) onMileage(next);
   };
 
@@ -833,9 +1039,20 @@ function HandoverCard({
                   onChange={(e) => setOdometer(e.target.value)}
                   onBlur={commitOdometer}
                   placeholder={giving ? "Mileage at pickup" : "Mileage at return"}
-                  className={cn(inputCls, "pl-9")}
+                  aria-label={giving ? "Mileage at pickup" : "Mileage at return"}
+                  aria-invalid={odometerProblem ? true : undefined}
+                  className={cn(inputCls, "pl-9", odometerProblem && "border-destructive")}
                 />
               </div>
+              {odometerProblem ? (
+                <p role="alert" className="mt-1.5 text-xs font-medium text-destructive">
+                  {odometerProblem}
+                </p>
+              ) : minMileage != null ? (
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  At least {minMileage.toLocaleString()} ({minMileageWhy}).
+                </p>
+              ) : null}
             </Field>
             <Field label="Vehicle">
               <div className={cn(inputCls, "items-center bg-muted/40 text-muted-foreground")}>
