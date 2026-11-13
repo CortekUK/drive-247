@@ -55,6 +55,7 @@ export function VehiclePicker({
   startDate,
   endDate,
   keptPrice,
+  afterHandover = false,
   onDone,
 }: {
   rentalId: string;
@@ -66,6 +67,13 @@ export function VehiclePicker({
    * does not re-price, and the screen says so before anyone picks (QA R4.8).
    */
   keptPrice?: string | null;
+  /**
+   * The keys are already with the customer (handed over, not yet returned).
+   * A swap is still allowed — it is how a car that breaks down mid-rental is
+   * replaced — but only as a breakdown replacement: staff tick that it is one
+   * and type why, and the reason is saved on the swap record (QA R4.9).
+   */
+  afterHandover?: boolean;
   /** Leave the picker — after a swap lands, or to keep the current car. */
   onDone: (changed: boolean) => void;
 }) {
@@ -73,6 +81,11 @@ export function VehiclePicker({
   const queryClient = useQueryClient();
   const [term, setTerm] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
+  const [isBreakdown, setIsBreakdown] = useState(false);
+  const [why, setWhy] = useState("");
+  const [blockOld, setBlockOld] = useState(true);
+  /** After handover a swap needs the breakdown tick and a reason; before it, nothing extra. */
+  const swapReady = !afterHandover || (isBreakdown && why.trim().length >= 3);
   const currency = tenant?.currency_code || "USD";
   const unit = (tenant?.distance_unit || "miles") as DistanceUnit;
 
@@ -113,9 +126,20 @@ export function VehiclePicker({
 
   /* `swap` is the hook's `mutate`: it raises its own error toast and
      invalidates v1's keys — this screen's key is refreshed here. */
-  const use = (vehicleId: string) =>
+  const today = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+  const use = (vehicleId: string) => {
+    if (!swapReady) return;
+    const blocking = afterHandover && blockOld && !!endDate && endDate >= today;
     swap(
-      { newVehicleId: vehicleId },
+      {
+        newVehicleId: vehicleId,
+        reason: afterHandover ? `Breakdown replacement: ${why.trim()}` : undefined,
+        blockOldStart: blocking ? today : null,
+        blockOldEnd: blocking ? endDate : null,
+      },
       {
         onSuccess: () => {
           void queryClient.invalidateQueries({ queryKey: ["rental-detail-v2", rentalId] });
@@ -123,6 +147,7 @@ export function VehiclePicker({
         },
       } as any
     );
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
@@ -150,6 +175,47 @@ export function VehiclePicker({
           Swapping keeps this rental&apos;s price: <span className="font-semibold text-foreground">{keptPrice}</span>. The
           new car&apos;s own rates are not applied, and the charges stay as they are.
         </p>
+      )}
+      {currentVehicleId && afterHandover && (
+        <div className="shrink-0 space-y-2.5 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 text-xs">
+          <p className="flex items-start gap-2 font-medium text-foreground">
+            <AlertTriangle className="mt-px size-4 shrink-0 text-warning" />
+            <span>
+              The keys are already with the customer. Swap the car now only to replace one that has broken down.
+            </span>
+          </p>
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={isBreakdown}
+              onChange={(e) => setIsBreakdown(e.target.checked)}
+              className="size-4 accent-[hsl(var(--primary))]"
+            />
+            <span>This is a breakdown replacement</span>
+          </label>
+          <textarea
+            value={why}
+            onChange={(e) => setWhy(e.target.value)}
+            rows={2}
+            placeholder="What happened? e.g. Engine warning light on the motorway, car recovered to the garage"
+            aria-label="Reason for the swap"
+            className="w-full resize-none rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring/30"
+          />
+          {endDate && endDate >= today && (
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={blockOld}
+                onChange={(e) => setBlockOld(e.target.checked)}
+                className="size-4 accent-[hsl(var(--primary))]"
+              />
+              <span>Block the old car for maintenance until the rental&apos;s return date, so nobody else books it</span>
+            </label>
+          )}
+          {!swapReady && (
+            <p className="text-muted-foreground">Tick the box and say what happened to swap the car. The reason is saved with the swap.</p>
+          )}
+        </div>
       )}
 
       {!q ? (
@@ -276,7 +342,8 @@ export function VehiclePicker({
                       <div className="absolute inset-y-0 right-0 flex items-center rounded-r-2xl pl-20 pr-3 [background:linear-gradient(to_left,hsl(var(--primary)/0.1)_65%,transparent),linear-gradient(to_left,hsl(var(--card))_65%,transparent)]">
                         <Button
                           size="sm"
-                          disabled={isSwapping}
+                          disabled={isSwapping || !swapReady}
+                          title={swapReady ? undefined : "Tick \"This is a breakdown replacement\" and say what happened first"}
                           onClick={(e) => {
                             e.stopPropagation();
                             use(v.id);

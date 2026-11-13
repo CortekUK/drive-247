@@ -58,6 +58,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useKeyHandover } from "@/hooks/use-key-handover";
 import { formatCurrency, formatDistance, type DistanceUnit } from "@/lib/format-utils";
 import { resolveAgreementMileage } from "@/lib/agreement-mileage";
 import { getUnlimitedMileageOption } from "@/lib/mileage-utils";
@@ -181,6 +182,9 @@ export function StageVehicle({ detail, refetch }: StageProps) {
   const [picking, setPicking] = useState(false);
 
   const vehicle = detail.vehicle;
+  /* Keys out and not yet back: a swap now is a breakdown replacement and asks why (QA R4.9). */
+  const { givingHandover, receivingHandover } = useKeyHandover(detail.rental.id);
+  const keysOut = !!givingHandover?.handed_at && !receivingHandover?.handed_at;
   const { data: facts, isLoading: factsLoading } = useVehicleFacts(vehicle?.id ?? null);
   const { data: excessCharge } = useExcessMileageCharge(detail.rental.id);
   const { data: photos } = useVehiclePhotos(vehicle?.id ?? null);
@@ -316,6 +320,7 @@ export function StageVehicle({ detail, refetch }: StageProps) {
               ? `${formatCurrency(Number(rental.monthly_amount), currency)}${detail.days != null ? ` for ${detail.days} ${detail.days === 1 ? "day" : "days"}` : ""}`
               : null
           }
+          afterHandover={keysOut}
           onDone={(changed) => {
             setPicking(false);
             if (changed) refetch();
