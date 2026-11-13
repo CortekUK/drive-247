@@ -19,7 +19,7 @@ import { ACCOUNT_PAGE_COUNT, AccountStep, type ResetShellState } from "./steps/a
 import { PaymentStep } from "./steps/payment-step";
 import { VerifyStep } from "./steps/verify-step";
 import { SignupDoodles } from "./signup-doodles";
-import { ScreenHead, SignupWash, SIGNUP_CARD, SIGNUP_ENTER, SIGNUP_PRIMARY, SIGNUP_QUIET } from "./signup-ui";
+import { ScreenHead, SignupWash, SIGNUP_CARD, SIGNUP_ENTER, SIGNUP_HIT, SIGNUP_PRIMARY, SIGNUP_QUIET } from "./signup-ui";
 
 /**
  * The self-serve signup, full screen.
@@ -315,7 +315,7 @@ export function OnboardingScreen() {
           <SignupDoodles />
 
           {/* ── top bar ───────────────────────────────────────────────────── */}
-          <header className="relative flex h-14 shrink-0 items-center justify-between gap-4 px-5 sm:h-16 sm:px-8">
+          <header className="relative flex h-14 shrink-0 items-center justify-between gap-4 px-5 max-sm:px-3 sm:h-16 sm:px-8">
             <div />
 
 
@@ -325,7 +325,7 @@ export function OnboardingScreen() {
                 onClick={requestClose}
                 disabled={state.busy || resolving || accountReset.busy}
                 aria-label={dialogStep === "account" ? "Close" : "Finish later"}
-                className="flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-out hover:bg-zinc-100 hover:text-foreground disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none dark:hover:bg-white/10"
+                className="flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-out max-sm:size-11 hover:bg-zinc-100 hover:text-foreground disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none dark:hover:bg-white/10"
               >
                 <X className="h-[18px] w-[18px]" />
               </button>
@@ -343,10 +343,12 @@ export function OnboardingScreen() {
           </p>
 
           {/* ── the screen ────────────────────────────────────────────────── */}
-          <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-3 pb-4 sm:px-6 sm:pb-8">
+          {/* Centred on every screen size (user, 2026-11-13). The page itself never
+              scrolls: a card taller than the screen scrolls inside itself. */}
+          <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-3 pb-4 max-sm:pb-[max(24px,env(safe-area-inset-bottom))] sm:px-6 sm:pb-8">
             {/* Progress sits above the card, not on it. */}
             <ol
-              className="mb-5 flex shrink-0 items-center justify-center gap-1.5"
+              className="mb-5 flex shrink-0 items-center justify-center gap-1.5 max-sm:mb-4"
               aria-label={`Step ${progressIndex + 1} of ${PROGRESS_LABELS.length}: ${PROGRESS_LABELS[progressIndex]}`}
             >
               {PROGRESS_LABELS.map((label, i) => (
@@ -373,7 +375,7 @@ export function OnboardingScreen() {
               {/* Sized to fit: the picture shrinks, then steps aside, on short
                   screens (see ScreenHead), so the page itself never scrolls.
                   The overflow here is a last resort for a phone held sideways. */}
-              <div className="min-h-0 overflow-y-auto px-6 py-7 [scrollbar-width:none] sm:px-10 sm:py-8 [&::-webkit-scrollbar]:hidden">
+              <div className="min-h-0 overflow-y-auto px-6 py-7 [scrollbar-width:none] overscroll-contain sm:px-10 sm:py-8 [&::-webkit-scrollbar]:hidden">
                 <div ref={contentRef} className="w-full">
                 {closeConfirmOpen ? (
                   <div key="leave" className={SIGNUP_ENTER}>
@@ -385,7 +387,7 @@ export function OnboardingScreen() {
                       <Button ref={keepGoingRef} type="button" onClick={cancelClose} className={SIGNUP_PRIMARY}>
                         Keep going
                       </Button>
-                      <button type="button" onClick={confirmClose} className={cn(SIGNUP_QUIET, "block w-full text-center")}>
+                      <button type="button" onClick={confirmClose} className={cn(SIGNUP_QUIET, SIGNUP_HIT, "block w-full text-center")}>
                         Leave
                       </button>
                     </div>
@@ -534,7 +536,7 @@ export function OnboardingScreen() {
                           type="button"
                           disabled={state.busy}
                           onClick={() => setAccountPage((p) => Math.max(0, p - 1))}
-                          className={cn(SIGNUP_QUIET, "mx-auto flex items-center gap-1.5")}
+                          className={cn(SIGNUP_QUIET, SIGNUP_HIT, "mx-auto flex items-center gap-1.5")}
                         >
                           <ArrowLeft className="h-3.5 w-3.5" />
                           Back

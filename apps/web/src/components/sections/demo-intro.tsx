@@ -190,8 +190,12 @@ export function DemoIntro() {
       }
       sub={
         <>
-          The next screen is a working demo. Type your company&apos;s name, pick a colour and a template, then book a car the way your renter would and watch it land in
-          your portal.
+          <span className="di-sub-long">
+            The next screen is a working demo. Type your company&apos;s name, pick a colour and a template, then book a car the way your renter would and watch it land
+            in your portal.
+          </span>
+          {/* Phones: the same promise in two lines (user, 2026-11-12). */}
+          <span className="di-sub-short">Brand a working demo, then book a car and watch it land in your portal.</span>
         </>
       }
     />

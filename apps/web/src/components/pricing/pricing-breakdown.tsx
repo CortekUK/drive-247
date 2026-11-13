@@ -41,19 +41,26 @@ const says = (bullets: readonly string[], words: string) => bullets.some((b) => 
  * card, both edited by a super admin). These lines read those bullets, so the breakdown and
  * the plans can never disagree.
  */
-const ROWS: { label: string; plan(p: SignupPlan): Val; enterprise(c: EnterpriseCardData): Val }[] = [
+/*
+ * `phone`: one of the five lines a phone shows (boss, 2026-11-12: "reduce to five, no long
+ * scrolling"). The rest are hidden on phones only; desktop compares every line.
+ */
+const ROWS: { label: string; phone?: true; plan(p: SignupPlan): Val; enterprise(c: EnterpriseCardData): Val }[] = [
   {
     label: "Per car, at a full fleet",
+    phone: true,
     plan: (p) => (p.maxVehicles > 0 ? { text: `${money(p.priceUsd / p.maxVehicles)} a month` } : { text: "By fleet" }),
     enterprise: () => ({ text: "Custom" }),
   },
   {
     label: "Support",
+    phone: true,
     plan: (p) => ({ text: says(p.bullets, "priority") ? "Priority" : "Standard" }),
     enterprise: (c) => ({ text: says(c.bullets, "named") ? "Named contact" : "Dedicated" }),
   },
   {
     label: "Onboarding",
+    phone: true,
     plan: (p) => ({ text: says(p.bullets, "onboarding") ? "30 minutes, free" : "Included" }),
     enterprise: (c) => ({ text: says(c.bullets, "migration") ? "With data migration" : "Assisted" }),
   },
@@ -68,10 +75,10 @@ const ROWS: { label: string; plan(p: SignupPlan): Val; enterprise(c: EnterpriseC
     },
     enterprise: (c) => ({ text: says(c.bullets, "slack") ? "Included" : "On request" }),
   },
-  { label: "Booking site on your own domain", plan: () => "yes", enterprise: () => "yes" },
+  { label: "Booking site on your own domain", phone: true, plan: () => "yes", enterprise: () => "yes" },
   { label: "Rentals, fleet and calendar", plan: () => "yes", enterprise: () => "yes" },
   { label: "Renter portal and records", plan: () => "yes", enterprise: () => "yes" },
-  { label: "Payments into your own account", plan: () => ({ text: "0% commission" }), enterprise: () => ({ text: "0% commission" }) },
+  { label: "Payments into your own account", phone: true, plan: () => ({ text: "0% commission" }), enterprise: () => ({ text: "0% commission" }) },
   { label: "Insights, finances and Trax", plan: () => "yes", enterprise: () => "yes" },
   { label: "ID checks, e-sign and texts", plan: () => "addon", enterprise: () => "addon" },
   { label: "Staff logins and bookings", plan: () => ({ text: "Unlimited" }), enterprise: () => ({ text: "Unlimited" }) },
@@ -91,7 +98,7 @@ function Rows({ values, hot, onHot }: { values: Val[]; hot: number | null; onHot
   return (
     <>
       {ROWS.map((row, i) => (
-        <div key={row.label} className={`pb-row${hot === i ? " is-hot" : ""}`} onMouseEnter={() => onHot(i)} onMouseLeave={() => onHot(null)}>
+        <div key={row.label} className={`pb-row${hot === i ? " is-hot" : ""}`} data-phone={row.phone || undefined} onMouseEnter={() => onHot(i)} onMouseLeave={() => onHot(null)}>
           <span>{row.label}</span>
           <Value val={values[i]} />
         </div>

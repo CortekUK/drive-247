@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Instrument_Serif } from "next/font/google";
-import { ArrowRight, Pause, Play, Volume2 } from "lucide-react";
+import { Pause, Play, Volume2 } from "lucide-react";
 import { useFadeIn } from "@/hooks/use-fade-in";
 import type { Testimonial } from "@/lib/testimonials-server";
 import "./testimonials-section.css";
@@ -139,7 +139,7 @@ export function TestimonialsSection({ testimonials }: { testimonials: Testimonia
             className="ts-frame"
             // The page line comes down onto this film and draws a frame round it (tour-layout.ts).
             data-line-frame
-            aria-label={`${withSound ? "Stop" : "Play with sound"}: ${current.title}, from our founder`}
+            aria-label={`${withSound ? "Stop" : "Play with sound"}: ${current.title}, from George, our Customer Success Manager`}
             onClick={pressFrame}
           >
             <video
@@ -169,8 +169,14 @@ export function TestimonialsSection({ testimonials }: { testimonials: Testimonia
             <p className="ts-sub">Why rental businesses run on Drive247.</p>
           </div>
 
+          {/* Who is speaking (boss, 2026-11-12: George, not "our founder"). Its own grid cell, so a
+              phone can set it beside the small film. */}
+          <div className="ts-who">
+            <p className="ts-label">From our Customer Success Manager, George</p>
+            <p className="ts-role">Chief Customer Experience</p>
+          </div>
+
           <div className="ts-films">
-            <p className="ts-label">From our founder</p>
             <ul>
               {FILMS.map((item, i) => (
                 <li key={item.src}>
@@ -191,10 +197,6 @@ export function TestimonialsSection({ testimonials }: { testimonials: Testimonia
                 </li>
               ))}
             </ul>
-            <a href="/strategy-call" className="ts-link">
-              See how Drive247 works for your fleet
-              <ArrowRight aria-hidden />
-            </a>
           </div>
         </div>
 

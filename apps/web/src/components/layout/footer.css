@@ -48,7 +48,7 @@
   .ft { padding-bottom: 72px; }
   .ft-word { display: none; }
   /* Without the wordmark there is nothing to fill a full screen: end with the content. */
-  .ft { min-height: 0; padding-bottom: 88px; }
+  .ft { min-height: 0; padding-bottom: 28px; } /* no gap under the legal links (user, 2026-11-12); the floating pill hides over the footer */
   .ft-top { padding-top: 48px; }
   .ft-top > .grid { row-gap: 32px; }
   .ft-top > .grid .grid { row-gap: 28px; }

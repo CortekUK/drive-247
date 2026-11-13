@@ -56,6 +56,7 @@
 .rc-step-detail > span { display: block; min-height: 0; overflow: hidden; padding-top: 4px; }
 @media (prefers-reduced-motion: reduce) { .rc-step-n, .rc-step-detail { transition: none; } }
 .rc-stage, .rc-rail { display: none; }
+.rc-phone-head { display: none; }
 .rc-steps { position: relative; }
 .rc-steps-line, .rc-branch { display: none; }
 
@@ -206,61 +207,138 @@
 /*
  * ---------------------------------------------------------------------------
  * Phones: the held screen, translated to one column. Keep in step with PHONE in
- * the component. For each feature: its heading and line, then its screen, which
- * sticks to the top of the phone on a frosted strip while the numbered steps scroll
- * up under it. The step that reaches the screen lights up (the same filled circle
- * as on desktop) and the screen shows that step. Desktop and tablet are untouched.
+ * the component. For each feature: its heading, line and screen as one block, which
+ * sticks to the top of the phone once it is all in view, while the steps (a flat
+ * bulleted list) scroll up under it. The step that reaches the screen is the one the
+ * screen shows. Desktop and tablet are untouched.
  * ---------------------------------------------------------------------------
  */
 @media (max-width: 767.98px) {
-  .rc-track { padding-block: 40px 24px; }
-  .rc-list { gap: 56px; }
+  .rc-track { padding-block: 32px 8px; }
+  .rc-list { gap: 40px; }
   .rc-list > li { display: flex; flex-direction: column; }
   .rc-detail, .rc-detail > div { display: contents; }
   .rc-list button { order: 0; }
-  .rc-detail p { order: 1; margin-top: 8px; font-size: 1.0625rem; }
+  .rc-detail p { order: 1; }
+  /*
+   * The heading and its line stay in the page for screen readers, but what shows is the copy
+   * inside the screen's block, so the three stick together (Ghulam, 2026-11-12: the screen
+   * should only stick once it is fully in view, with its heading).
+   */
+  .rc-list button, .rc-detail p {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .rc-phone-head { display: block; padding-bottom: 14px; }
+  .rc-phone-title { font-size: clamp(1.75rem, 8.4vw, 2.125rem); font-weight: 700; line-height: 1.08; letter-spacing: -0.04em; color: hsl(var(--v2-foreground)); }
+  /* Smaller, two lines at most (Ghulam, 2026-11-12). */
+  .rc-phone-lead { margin-top: 6px; font-size: 0.9375rem; line-height: 1.4; letter-spacing: -0.01em; text-wrap: pretty; color: hsl(var(--v2-muted-foreground)); }
 
-  .rc-panel.rc-inline {
+  /*
+   * The heading, line and screen stick as one, on the page's own colour: no tinted strip,
+   * no blur, no hard edge (Ghulam, 2026-11-12: "acts like a nav bar", then "don't add these
+   * sharp lines colors, make them gradient"). Nothing in the block ends in a straight line:
+   * its last 40px (empty, under the screen) fade out through an eased mask, so the screen's
+   * shadow dies away softly and the steps slip under it gradually rather than at a seam.
+   */
+  .rc-panel.rc-inline, .dark .rc-panel.rc-inline {
     order: 2;
     position: sticky;
     top: 0;
     z-index: 2;
-    margin: 16px -1.25rem 0;
-    padding: 12px 1.25rem 14px;
-    background: color-mix(in srgb, color-mix(in srgb, hsl(var(--v2-primary)) 7%, hsl(var(--v2-background))) 84%, transparent);
-    -webkit-backdrop-filter: blur(18px) saturate(150%);
-    backdrop-filter: blur(18px) saturate(150%);
-    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 10px), transparent);
-    mask-image: linear-gradient(to bottom, #000 calc(100% - 10px), transparent);
+    margin: 0 -1.25rem;
+    padding: 16px 1.25rem 40px;
+    background: none;
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), rgb(0 0 0 / 0.82) calc(100% - 30px), rgb(0 0 0 / 0.5) calc(100% - 19px), rgb(0 0 0 / 0.2) calc(100% - 9px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), rgb(0 0 0 / 0.82) calc(100% - 30px), rgb(0 0 0 / 0.5) calc(100% - 19px), rgb(0 0 0 / 0.2) calc(100% - 9px), transparent);
   }
-
-  /* The steps, with room after the last so it gets its turn on screen before the next feature. */
-  .rc-steps { order: 3; padding-bottom: 18svh; }
-  .rc-detail ul { margin-top: 6px; border-top: 0; }
-  .rc-detail li { padding-block: 16px; border-bottom: 0; }
-  /* The steps' own line, as on desktop, filled down to the step on screen. */
-  .rc-detail ul { position: relative; }
-  .rc-detail ul::before {
+  /*
+   * What hides the steps behind the block: the page's own ground and wash (landing-theme.css
+   * .lp-v2 and .lp-v2::before), laid over the whole screen exactly as the page lays them and
+   * cut to the block by its mask. Being the same layer in the same place, it can't drift from
+   * the page the way a `background-attachment: fixed` copy does (iOS ignores that).
+   */
+  .rc-panel.rc-inline::before {
     content: "";
-    position: absolute;
-    top: 30px;
-    bottom: 30px;
-    left: 13.25px;
-    width: 1.5px;
-    background: repeating-linear-gradient(to bottom, hsl(var(--v2-primary) / 0.3) 0 2px, transparent 2px 9px);
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-color: color-mix(in srgb, hsl(var(--v2-primary)) 7%, hsl(var(--v2-background)));
+    background-image:
+      radial-gradient(70rem 50rem at 105% -10%, hsl(var(--v2-wash) / 0.20), transparent 55%),
+      radial-gradient(60rem 48rem at -8% -6%, hsl(var(--v2-chart-3) / 0.16), transparent 52%),
+      radial-gradient(55rem 45rem at 50% 115%, hsl(var(--v2-wash) / 0.12), transparent 55%),
+      linear-gradient(180deg, hsl(var(--v2-wash) / 0.07) 0%, transparent 45%);
+    background-repeat: no-repeat;
   }
-  .rc-step-n { z-index: 1; }
+  .dark .rc-panel.rc-inline::before { background-color: color-mix(in srgb, hsl(var(--v2-primary)) 13%, hsl(var(--v2-background))); }
+  /* The block's bottom fade is its own padding now, so the steps start where they did. */
+  .rc-steps { margin-top: -12px; }
 
-  /* A step waits quietly until it reaches the screen, then stays lit once passed. */
-  .rc-step .rc-step-body { opacity: 0.42; transition: opacity 260ms ease-out; }
-  .rc-step:is([data-on], [data-done]) .rc-step-body { opacity: 1; }
-  .rc-step[data-on] .rc-step-title { color: hsl(var(--v2-primary)); font-weight: 600; }
-  .dark .rc-step[data-on] .rc-step-title { color: hsl(var(--v2-link)); }
+  /*
+   * The device group: smaller and higher, the tablet on the right with the phone on its
+   * lower left in every scene, so the phone is always on the same side (Ghulam, 2026-11-12).
+   */
+  .rc-inline .vs { aspect-ratio: 10 / 7.6; }
+  .rc-inline .vs .vs-tablet.is-left, .rc-inline .vs .vs-tablet.is-right { left: auto; right: 0; width: 86%; }
+  .rc-inline .vs .vs-phone.is-left, .rc-inline .vs .vs-phone.is-right { left: 0; right: auto; bottom: 0; width: 25%; }
+  .rc-inline .vs-row { top: 2%; }
+  .rc-inline .vs-row .vs-phone { width: 25%; }
+  .rc-inline .vs-phone figcaption { font-size: 11px; }
+  /* The window's tab title, quieter (Ghulam, 2026-11-12: "Northwind" too big). */
+  .rc-inline .pg-tabs { height: 22px; gap: 6px; padding-inline: 8px; }
+  .rc-inline .pg-lights i { width: 7px; height: 7px; }
+  .rc-inline .pg-tab { height: 18px; padding-inline: 6px; gap: 4px; font-size: 9px; }
+  .rc-inline .vs-favicon { width: 10px; height: 10px; border-radius: 3px; font-size: 7px; }
+
+  /*
+   * The steps, flat: a bullet, the step and its line, all of it readable at once, no numbers
+   * and no progress line (Ghulam, 2026-11-12), the same bullets as "Your own domain" above.
+   */
+  .rc-steps { order: 3; padding-bottom: 6svh; }
+  .rc-detail ul { margin-top: 4px; border-top: 0; }
+  .rc-detail li { position: relative; padding-block: 11px; padding-left: 22px; border-bottom: 1px solid hsl(var(--v2-foreground) / 0.12); font-size: 0.9375rem; }
+  .rc-detail li:last-child { border-bottom: 0; }
+  .rc-detail li::before { content: ""; position: absolute; left: 0; top: 18px; width: 8px; height: 8px; border-radius: 50%; background: hsl(var(--v2-primary)); }
+  .rc-step { gap: 0; }
+  .rc-step-n { display: none; }
+  .rc-step-title { font-weight: 600; }
+  .rc-step-detail { font-size: 0.875rem; line-height: 1.45; }
+  .rc-step-detail > span { padding-top: 2px; }
 }
 /* Short phones: a smaller screen leaves room for the steps under it. */
 @media (max-width: 767.98px) and (max-height: 700px) {
   .rc-panel.rc-inline .vs { width: 86%; margin-inline: auto; }
 }
-@media (max-width: 767.98px) and (prefers-reduced-motion: reduce) {
-  .rc-step .rc-step-body { transition: none; }
+
+/* Phones: each point is its name only, two lines at most; the long sentence under it goes
+   (boss, 2026-11-12: "remove these paragraphs on phone, points in 2 lines max"). */
+@media (max-width: 767.98px) {
+  .rc-step-detail { display: none; }
+  .rc-step-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+}
+
+/* Phones: the phone sits up on the dashboard, its foot level with the tablet's, and the
+   points start right under the pair with no empty band (boss, 2026-11-12). Overrides the
+   taller device box and the 40px fade above. */
+@media (max-width: 767.98px) {
+  .rc-inline .vs { aspect-ratio: 10 / 6.9; }
+  /* The phone rides up onto the dashboard instead of hanging off its foot. */
+  .rc-inline .vs .vs-phone.is-left, .rc-inline .vs .vs-phone.is-right { bottom: 11%; }
+  .rc-panel.rc-inline, .dark .rc-panel.rc-inline {
+    padding-bottom: 16px;
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), rgb(0 0 0 / 0.6) calc(100% - 8px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), rgb(0 0 0 / 0.6) calc(100% - 8px), transparent);
+  }
+  .rc-steps { margin-top: -10px; padding-bottom: 2svh; }
+  .rc-step { cursor: pointer; }
+  /* The point the screen is showing, in the accent. */
+  .rc-step-title { transition: color 200ms ease-out; }
+  .rc-step[data-on] .rc-step-title { color: hsl(var(--v2-primary)); }
+  .rc-list { gap: 24px; }
 }

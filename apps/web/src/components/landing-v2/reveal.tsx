@@ -21,7 +21,8 @@ export function Reveal({ children, className }: { children: ReactNode; className
           observer.disconnect();
         }
       },
-      { threshold: 0.12 },
+      // Phones: the moment it is a little way onto the screen; a share of a tall block came far too late.
+      matchMedia("(max-width: 767.98px)").matches ? { rootMargin: "0px 0px -6% 0px" } : { threshold: 0.12 },
     );
     observer.observe(el);
     return () => observer.disconnect();

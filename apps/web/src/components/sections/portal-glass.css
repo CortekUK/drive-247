@@ -374,3 +374,58 @@
 @media (max-width: 639.98px) and (prefers-reduced-motion: reduce) {
   .pg-points > div, .pg-points > div::before { opacity: 1; translate: none; scale: 1; transition: none !important; }
 }
+
+/*
+ * Phones, the feature rows only (#features; the window and phone here are shared with other
+ * sections, which keep theirs). Ghulam, 2026-11-12: smaller reading text, the lead in two
+ * lines; the phone on the same side in every row, smaller and higher on the window, not
+ * hanging under it; the window's tab title quieter.
+ */
+@media (max-width: 639.98px) {
+  #features .pg-lead { margin-top: 30px; font-size: 1rem; line-height: 1.42; }
+  #features .pg-body { margin-top: 10px; font-size: 0.875rem; line-height: 1.55; }
+  #features .pg-points > div { padding-block: 11px; font-size: 14px; }
+  #features .pg-points > div::before { top: 17px; }
+
+  #features .pg-device, #features .is-flipped .pg-device { margin: 22px 2px 0 12px; }
+  #features .pg-phone, #features .is-flipped .pg-phone { right: auto; left: -12px; bottom: -10px; width: 25%; }
+  #features .pg-tab { height: 24px; padding-inline: 7px; gap: 5px; font-size: 10px; }
+  #features .pg-tabs { height: 30px; }
+}
+/* The phone's drift tied to the scroll sat it low as a row came in; it stays put here. */
+@supports (animation-timeline: view()) {
+  @media (max-width: 639.98px) and (prefers-reduced-motion: no-preference) {
+    #features .pg-phone { animation: none; }
+  }
+}
+
+/* Phones, #features: every row's window AND phone come in from the same side, the
+   left, instead of alternating sides with the phone rising from below (user,
+   2026-11-12: "must come from one side, in all sections"). The row clips the start. */
+@media (max-width: 639.98px) {
+  #features .pg-row, #features .pg-row.is-flipped { --pg-from: -70vw; }
+  #features .pg-phone, #features .is-flipped .pg-phone { translate: -70vw 0; rotate: 0deg; }
+  #features .is-in .pg-phone { translate: 0 0; }
+}
+
+/* Phones, #features: no long paragraph, just the lead and the three points; each point is
+   two lines at most, its name and one short line (boss, 2026-11-12). */
+@media (max-width: 639.98px) {
+  #features .pg-body { display: none; }
+  #features .pg-points dt,
+  #features .pg-points dd { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 100%; }
+}
+
+/* Phones: the row builds sooner and quicker, so nothing on screen waits empty (user, 2026-11-12). */
+@media (max-width: 639.98px) {
+  #features .is-in .pg-tablet { --pg-at: 0ms; }
+  #features .is-in .pg-tabs { --pg-at: 120ms; }
+  #features .is-in .pg-address { --pg-at: 160ms; }
+  #features .is-in .pg-screen { --pg-at: 200ms; }
+  #features .is-in .pg-phone { --pg-at: 260ms; }
+  #features .is-in .pg-copy > :nth-child(2), #features .is-in .pg-copy > .pg-lead { --pg-at: 120ms; }
+  #features .is-in .pg-copy > :nth-child(3), #features .is-in .pg-copy > .pg-points { --pg-at: 200ms; }
+  #features .pg-points > div:nth-child(1) { --pg-pt: 240ms; }
+  #features .pg-points > div:nth-child(2) { --pg-pt: 320ms; }
+  #features .pg-points > div:nth-child(3) { --pg-pt: 400ms; }
+}

@@ -133,7 +133,7 @@ export function NumbersSection() {
         setRun(true);
         observer.disconnect();
       },
-      { threshold: 0.35 },
+      { threshold: matchMedia("(max-width: 767.98px)").matches ? 0.1 : 0.35 },
     );
     observer.observe(el);
     return () => observer.disconnect();

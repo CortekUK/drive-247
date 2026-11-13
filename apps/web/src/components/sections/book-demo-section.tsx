@@ -49,7 +49,7 @@ const script = Dancing_Script({ subsets: ["latin"], weight: ["600"], variable: "
  * likeness sits under Bryan's name. Replace it before this goes live: put his photo in
  * apps/web/public/team (square, at least 400px, face centred) and set its path here.
  */
-const PHOTO = "/team/csm-placeholder.jpg";
+const PHOTO = "/team/bryan.jpg";
 
 const QUOTE = "“Not sure yet? Give me twenty minutes. I’ll walk you through it myself, and there’s no pressure to sign.”";
 const WORDS = QUOTE.split(" ");

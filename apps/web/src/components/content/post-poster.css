@@ -69,19 +69,49 @@
 /* A story's one figure, at the start of the line under its card. */
 .pp-figure { font-weight: 700; color: var(--foreground); }
 
+/* The title's block at the foot of the photo; on desktop it holds only the title. */
+.pp-foot { position: relative; z-index: 1; }
+.pp-chip, .pp-in { display: none; }
+
 /*
- * Phones (Ghulam, 2026-11-11: "we don't know which is the caption of which pic"): stacked one
- * under another, a caption sat as close to the next photo as to its own. Each post is now one
- * card, the photo and its caption inside the same white box, with clear space between cards.
+ * Phones (boss, 2026-11-12, replacing the white box of 2026-11-11): each post is one standalone
+ * card, the photograph, and everything about it sits on it. The category (or, for a story, the
+ * operator) is a chip at the top; the title with "2 min read" (or the story's figure) at the
+ * foot. Nothing hangs below a card, so no caption can be read as the next card's and there is
+ * no empty space under it.
  */
 @media (max-width: 639.98px) {
-  .pp {
-    gap: 0;
-    padding: 6px;
-    border: 1px solid hsl(var(--v2-border));
-    background: hsl(var(--v2-card));
+  .pp { gap: 0; }
+  .pp-under { display: none; }
+  .pp-poster { border-radius: 20px; }
+  /* A little more shade at the top too, for the chip. */
+  .pp-poster::after {
+    background:
+      linear-gradient(180deg, rgb(8 10 16 / 0.32) 0%, rgb(8 10 16 / 0) 26%),
+      linear-gradient(180deg, rgb(8 10 16 / 0) 38%, rgb(8 10 16 / 0.6) 66%, rgb(8 10 16 / 0.9) 100%);
   }
-  .pp-poster { border-radius: 18px; }
-  .pp-under { gap: 6px; padding: 14px 12px 12px; }
-  .pp-excerpt { font-size: 14.5px; }
+  .pp-chip {
+    position: absolute;
+    z-index: 1;
+    top: 14px;
+    left: 14px;
+    display: block;
+    max-width: calc(100% - 28px);
+    overflow: hidden;
+    padding: 5px 11px;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.18);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .pp-foot { padding: 0 6cqw 6cqw; }
+  .pp-foot .pp-title { padding: 0; }
+  .pp-in { display: block; margin-top: 8px; font-size: 13px; line-height: 1.35; color: rgb(255 255 255 / 0.78); }
+  .pp-in strong { font-weight: 700; color: #fff; }
 }

@@ -53,7 +53,7 @@ export const PROBLEM_POINTS = [
 
 export const TESTIMONIALS = [
   {
-    before: "We went from juggling spreadsheets and three different apps to running everything from one dashboard. We finally have a system that matches how we actually operate. ",
+    before: "We swapped spreadsheets and three apps for one dashboard. ",
     bold: "Bookings doubled within the first quarter.",
     after: "",
     name: "Marcus Thompson",
@@ -75,7 +75,7 @@ export const TESTIMONIALS = [
     stars: 5,
   },
   {
-    before: "Setup was painless — ",
+    before: "Setup was painless: ",
     bold: "we were live in five days.",
     after: " The team actually understands what independent operators need.",
     name: "James Reilly",

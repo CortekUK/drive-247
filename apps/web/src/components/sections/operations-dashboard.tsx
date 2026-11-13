@@ -109,7 +109,8 @@ export function useReveal() {
       ([entry]) => {
         if (entry.isIntersecting) setVisible(true);
       },
-      { rootMargin: "0px 0px -30% 0px" },
+      // Phones: as soon as the row is a little way onto the screen, so nothing sits empty (user, 2026-11-12).
+      { rootMargin: matchMedia("(max-width: 767.98px)").matches ? "0px 0px -6% 0px" : "0px 0px -30% 0px" },
     );
     const reset = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting && entry.boundingClientRect.top > 0) setVisible(false);

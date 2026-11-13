@@ -70,6 +70,7 @@ import {
   FieldError,
   ScreenHead,
   SIGNUP_ENTER,
+  SIGNUP_HIT,
   SIGNUP_INPUT,
   SIGNUP_LABEL,
   SIGNUP_PRIMARY,
@@ -709,11 +710,12 @@ export function AccountStep({
               "Continue"
             )}
           </Button>
-          <div className="flex items-center justify-between gap-3">
-            <button type="button" disabled={busy} onClick={onUseDifferentEmail} className={SIGNUP_QUIET}>
+          {/* Narrow phones: the two links stack instead of each folding onto two lines. */}
+          <div className="flex items-center justify-between gap-3 max-[359.98px]:flex-col max-[359.98px]:gap-3">
+            <button type="button" disabled={busy} onClick={onUseDifferentEmail} className={cn(SIGNUP_QUIET, SIGNUP_HIT, "max-sm:whitespace-nowrap")}>
               Use a different email
             </button>
-            <button type="button" disabled={busy} onClick={openReset} className={SIGNUP_QUIET}>
+            <button type="button" disabled={busy} onClick={openReset} className={cn(SIGNUP_QUIET, SIGNUP_HIT, "max-sm:whitespace-nowrap")}>
               Forgot password?
             </button>
           </div>

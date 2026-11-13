@@ -306,3 +306,126 @@
 .mc-broadcast { position: relative; display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 12px; border: 1px dashed hsl(var(--v2-primary) / 0.3); border-radius: 16px; }
 .mc-avatar.is-group svg { width: 18px; height: 18px; }
 .mcr-player, .mcr-label { position: relative; }
+
+/*
+ * Phones, on the sliding track: the Messages screen at a phone's own scale (Ghulam,
+ * 2026-11-12: "make these chat msgs look smaller so we can show them better on screen").
+ * Same screen, same parts; only sizes and spacing change, so several messages, the call
+ * card and the composer sit in one screen. The thread fades at its edges instead of
+ * stopping in a straight line under the header and above the channel switch.
+ * `#multichat` outranks product-track.css's phone rules, which this replaces for phones.
+ */
+@media (max-width: 767.98px) {
+  .pt-panel:has(#multichat) { padding-block: 12px; }
+  .pt-panel #multichat .mc-app { zoom: 1; height: clamp(460px, calc(100svh - 110px), 640px); }
+
+  /* Header: one compact line. */
+  .pt-panel #multichat .mc-convo-head { gap: 10px; padding: 10px 16px; }
+  .pt-panel #multichat .mc-convo-head .mc-avatar { width: 32px; height: 32px; font-size: 12px; }
+  .pt-panel #multichat .mc-convo-head b { font-size: 15px; line-height: 1.25; }
+  .pt-panel #multichat .mc-convo-head small { font-size: 12px; }
+
+  /* Thread: smaller bubbles, tighter rhythm, soft top and bottom edges. */
+  .pt-panel #multichat .mc-thread {
+    gap: 10px;
+    padding: 14px 14px 22px;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 14px, #000 calc(100% - 26px), transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 14px, #000 calc(100% - 26px), transparent);
+  }
+  .pt-panel #multichat .mc-msg { gap: 3px; max-width: 84%; }
+  .pt-panel #multichat .mc-msg small { font-size: 10.5px; }
+  .pt-panel #multichat .mc-bubble { padding: 8px 12px; border-radius: 16px 16px 16px 5px; font-size: 13px; line-height: 1.42; }
+  .pt-panel #multichat .mc-msg.is-you .mc-bubble { border-radius: 16px 16px 5px 16px; }
+  .pt-panel #multichat .mc-subject { margin-bottom: 2px; }
+  .pt-panel #multichat .mc-call { gap: 4px; padding: 10px 12px; border-radius: 14px; font-size: 12.5px; }
+
+  /* The call card, a size down. */
+  .pt-panel #multichat .mcr { gap: 7px; padding: 12px 14px; border-radius: 16px; font-size: 12.5px; }
+  .pt-panel #multichat .mcr-head { gap: 9px; }
+  .pt-panel #multichat .mcr-icon { width: 30px; height: 30px; }
+  .pt-panel #multichat .mcr-icon svg { width: 14px; height: 14px; }
+  .pt-panel #multichat .mcr-title b { font-size: 13px; }
+  .pt-panel #multichat .mcr-title small { font-size: 11px; }
+  .pt-panel #multichat .mcr-dl { height: 26px; padding-inline: 9px; gap: 4px; font-size: 11px; }
+  .pt-panel #multichat .mcr-dl svg { width: 12px; height: 12px; }
+  .pt-panel #multichat .mcr-player { gap: 9px; margin-top: 2px; padding: 6px 10px; border-radius: 12px; }
+  .pt-panel #multichat .mcr-play { width: 28px; height: 28px; }
+  .pt-panel #multichat .mcr-play svg { width: 12px; height: 12px; }
+  .pt-panel #multichat .mcr-wave { height: 22px; }
+  .pt-panel #multichat .mcr-time { width: 58px; font-size: 10.5px; }
+  .pt-panel #multichat .mcr-label { margin-top: 4px; font-size: 9.5px; }
+  .pt-panel #multichat .mcr-summary { margin-top: -2px; line-height: 1.5; }
+
+  /* Composer: a slim channel switch and a compact draft. */
+  .pt-panel #multichat .mc-composer { padding: 0 14px 14px; }
+  .pt-panel #multichat .mc-switch { padding: 3px; }
+  .pt-panel #multichat .mc-switch button { height: 30px; gap: 5px; padding-inline: 10px; font-size: 12px; }
+  .pt-panel #multichat .mc-switch button svg { width: 14px; height: 14px; }
+  .pt-panel #multichat .mc-box,
+  .pt-panel #multichat .mc-callbox { gap: 8px; margin-top: 8px; padding: 10px 12px; border-radius: 14px; }
+  .pt-panel #multichat .mc-trax { margin-bottom: 3px; font-size: 11.5px; }
+  .pt-panel #multichat .mc-draft { font-size: 13px; line-height: 1.45; }
+  .pt-panel #multichat .mc-email-to { padding-bottom: 8px; font-size: 12.5px; }
+  .pt-panel #multichat .mc-send { height: 34px; gap: 6px; padding-inline: 14px; font-size: 13px; }
+  .pt-panel #multichat .mc-send svg { width: 13px; height: 13px; }
+  .pt-panel #multichat .mc-callbox b { font-size: 14px; }
+  .pt-panel #multichat .mc-callbox small { font-size: 12px; }
+}
+
+/*
+ * Phones, second pass (user, 2026-11-12: "make this box smaller and fit the things much
+ * better"). The conversation becomes a framed card the size of a phone's own messages screen,
+ * inset from the edges, instead of a full-bleed sheet: a slim header, the thread pinned to its
+ * latest message, the call card trimmed to what reads at this size (title, player, a three-line
+ * summary), and a composer whose channel switch spans the card in four equal parts.
+ */
+@media (max-width: 767.98px) {
+  .pt-panel #multichat .mc-app {
+    width: auto;
+    height: clamp(440px, calc(100svh - 190px), 560px);
+    margin-inline: 12px;
+    border: 1px solid hsl(239 40% 60% / 0.18);
+    border-radius: 22px;
+    overflow: hidden;
+    box-shadow: 0 18px 40px -24px hsl(239 60% 40% / 0.35);
+  }
+
+  .pt-panel #multichat .mc-convo-head { gap: 9px; padding: 9px 14px; }
+  .pt-panel #multichat .mc-convo-head .mc-avatar { width: 28px; height: 28px; font-size: 11px; }
+  .pt-panel #multichat .mc-convo-head b { font-size: 14px; }
+  .pt-panel #multichat .mc-convo-head small { font-size: 11px; }
+
+  .pt-panel #multichat .mc-thread { gap: 8px; padding: 12px 12px 18px; }
+  .pt-panel #multichat .mc-msg { max-width: 86%; }
+  .pt-panel #multichat .mc-msg small { font-size: 10px; }
+  .pt-panel #multichat .mc-bubble { padding: 7px 11px; font-size: 12.5px; line-height: 1.4; }
+
+  .pt-panel #multichat .mcr { gap: 6px; padding: 10px 12px; border-radius: 14px; font-size: 12px; }
+  .pt-panel #multichat .mcr-icon { width: 26px; height: 26px; }
+  .pt-panel #multichat .mcr-title b { font-size: 12.5px; }
+  .pt-panel #multichat .mcr-title small { font-size: 10.5px; }
+  /* Transcript as its icon alone; the word stays as the button's name. */
+  .pt-panel #multichat .mcr-dl { width: 28px; height: 28px; padding: 0; justify-content: center; font-size: 0; }
+  .pt-panel #multichat .mcr-dl svg { width: 13px; height: 13px; }
+  .pt-panel #multichat .mcr-player { gap: 8px; padding: 5px 8px; border-radius: 10px; }
+  .pt-panel #multichat .mcr-play { width: 24px; height: 24px; }
+  .pt-panel #multichat .mcr-play svg { width: 10px; height: 10px; }
+  .pt-panel #multichat .mcr-wave { height: 18px; }
+  .pt-panel #multichat .mcr-time { width: 54px; font-size: 10px; }
+  .pt-panel #multichat .mcr-label { margin-top: 2px; font-size: 9px; }
+  .pt-panel #multichat .mcr-summary {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+    line-height: 1.45;
+  }
+
+  .pt-panel #multichat .mc-composer { padding: 0 12px 12px; }
+  .pt-panel #multichat .mc-switch { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; overflow: visible; }
+  .pt-panel #multichat .mc-switch button { justify-content: center; height: 28px; gap: 4px; padding-inline: 4px; font-size: 11.5px; }
+  .pt-panel #multichat .mc-switch button svg { width: 13px; height: 13px; }
+  .pt-panel #multichat .mc-box,
+  .pt-panel #multichat .mc-callbox { gap: 6px; margin-top: 8px; padding: 9px 11px; border-radius: 12px; }
+  .pt-panel #multichat .mc-trax { font-size: 11px; }
+  .pt-panel #multichat .mc-draft { font-size: 12.5px; line-height: 1.42; }
+  .pt-panel #multichat .mc-send { height: 30px; padding-inline: 12px; font-size: 12px; }
+  .pt-panel #multichat .mc-send svg { width: 12px; height: 12px; }
+}

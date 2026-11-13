@@ -172,4 +172,12 @@
   .pb-row svg { width: 17px; height: 17px; }
   .pb-chip { font-size: 12px; padding: 2px 9px; }
   .pb-foot { font-size: 13.5px; }
+  /* Shorter (boss, 2026-11-12): five lines a card, no tagline, tighter rows. Desktop keeps all. */
+  .pb-row:not([data-phone]) { display: none; }
+  .pb-tagline { display: none; }
+  .pb-stick { padding-bottom: 16px; }
+  .pb-row { min-height: 42px; padding-block: 6px; }
+  .pb-col [data-slot="button"].pb-btn { height: 46px; }
+  /* The section's pb-20 plus the demo band's margin left ~120px of nothing under the note. */
+  #pricing { padding-bottom: 24px; }
 }

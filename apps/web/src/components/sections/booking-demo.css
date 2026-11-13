@@ -555,3 +555,6 @@
   .bd-window .bd-site-steps li:not(.is-now) em { display: none; }
   .bd-window .bd-site-steps li.is-now .bd-step { display: inline-flex; align-items: center; gap: 7px; padding: 3px 12px 3px 3px; border-radius: 99px; background: color-mix(in srgb, var(--bd-a) 12%, transparent); }
 }
+
+/* The short first tip is for phones only (your-site.css shows it there). */
+.bd-tip-short { display: none; }

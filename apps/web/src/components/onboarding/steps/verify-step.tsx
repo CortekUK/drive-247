@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { ScreenHead, SIGNUP_PRIMARY, SIGNUP_QUIET } from "@/components/onboarding/signup-ui";
+import { ScreenHead, SIGNUP_HIT, SIGNUP_PRIMARY, SIGNUP_QUIET } from "@/components/onboarding/signup-ui";
 
 /** Mirrors OTP_RESEND_COOLDOWN_MS in supabase/functions/_shared/signup-otp.ts. */
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -239,7 +239,7 @@ export function VerifyStep({
           type="button"
           onClick={() => void resend()}
           disabled={cooldown > 0 || busy || submitting}
-          className="font-medium text-indigo-600 underline-offset-4 hover:underline disabled:text-muted-foreground disabled:no-underline dark:text-indigo-400"
+          className={cn(SIGNUP_HIT, "font-medium text-indigo-600 underline-offset-4 hover:underline disabled:text-muted-foreground disabled:no-underline dark:text-indigo-400")}
         >
           {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
         </button>
@@ -247,7 +247,7 @@ export function VerifyStep({
           type="button"
           onClick={onUseDifferentEmail}
           disabled={busy || submitting}
-          className={SIGNUP_QUIET}
+          className={cn(SIGNUP_QUIET, SIGNUP_HIT)}
         >
           Use a different email
         </button>

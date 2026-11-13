@@ -371,7 +371,7 @@ async function callFunction<T>(name: string, body: unknown, opts: CallOptions): 
         if (mocked !== undefined) return mocked as T;
       } catch (e) {
         if (e instanceof MockFunctionError && isKnownCode(e.code)) {
-          throw new OnboardingApiError(e.code, e.message);
+          throw new OnboardingApiError(e.code, e.message, e.detail);
         }
         throw e;
       }

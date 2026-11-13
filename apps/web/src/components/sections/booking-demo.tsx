@@ -36,10 +36,10 @@ type View = DemoView;
 /* The four screens of the demo. `about` is the line on its card in your-site.tsx. */
 /* `short` is the tab's name on a phone, where the four tabs sit two by two. */
 export const DEMO_VIEWS: { id: View; label: string; short: string; about: string; icon: typeof Globe }[] = [
-  { id: "home", label: "Your booking site", short: "Booking site", about: "Your home page", icon: Globe },
-  { id: "site", label: "Your booking widget", short: "Booking widget", about: "Book a car as a renter", icon: CalendarCheck },
-  { id: "renter", label: "Your customer's portal", short: "Customer portal", about: "What your renter sees", icon: UserRound },
-  { id: "portal", label: "Your admin portal", short: "Admin portal", about: "Where the booking lands", icon: LayoutDashboard },
+  { id: "home", label: "Your booking site", short: "Site", about: "Your home page", icon: Globe },
+  { id: "site", label: "Your booking widget", short: "Widget", about: "Book a car as a renter", icon: CalendarCheck },
+  { id: "renter", label: "Your customer's portal", short: "Customer", about: "What your renter sees", icon: UserRound },
+  { id: "portal", label: "Your admin portal", short: "Admin", about: "Where the booking lands", icon: LayoutDashboard },
 ];
 const VIEWS = DEMO_VIEWS;
 
@@ -301,6 +301,8 @@ export function BookingDemoStage({
     onJourney?.({ step: journeyStep, tip, started, reset: () => resetRef.current() });
   }, [onJourney, journeyStep, tip, started]);
   const portal = view === "portal";
+  // Phones show a shorter first tip (user, 2026-11-12); every later tip is already short.
+  const tipShort = view === "home" && sitePage === "home" ? "Your booking site. Tap Book a car or Dashboard to look around." : null;
   const hint = (on: boolean) => (on ? " bd-hint" : "");
 
   /*
@@ -354,7 +356,14 @@ export function BookingDemoStage({
           )}
           <div className="bd-tipline">
             <p className="bd-tip" aria-live="polite">
-              {tip}
+              {tipShort ? (
+                <>
+                  <span className="bd-tip-long">{tip}</span>
+                  <span className="bd-tip-short">{tipShort}</span>
+                </>
+              ) : (
+                tip
+              )}
             </p>
             {(pickup !== null || stage !== "dates") && (
               <button type="button" className="bd-reset" onClick={reset}>

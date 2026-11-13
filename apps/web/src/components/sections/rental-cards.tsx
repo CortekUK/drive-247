@@ -84,6 +84,8 @@ const FEATURES: { tone: FlowTone; title: string; lead: string; points: Point[] }
  * one per point. The total weight sets the track's height in the CSS.
  */
 const WEIGHTS = [2, 4, 2, 2];
+/* Points per feature, for the phone's scene clock. */
+const POINT_COUNTS = FEATURES.map((f) => f.points.length);
 const STEPS = [3, 6, 3, 3];
 
 /* Which of a feature's points its drawing is showing. */
@@ -98,8 +100,14 @@ const HOLD = "(min-width: 1000px) and (min-height: 640px) and (prefers-reduced-m
  */
 const PHONE = "(max-width: 767.98px)";
 
-/* On a phone, which step of each feature has scrolled up to its screen; null elsewhere. */
-function usePhoneSteps(listRef: RefObject<HTMLOListElement | null>, count: number) {
+/*
+ * On a phone, which step of each feature its screen is showing; null elsewhere. Scroll
+ * drives it (user, 2026-11-12: "why aren't these changing as I scroll?"): from when the
+ * feature's top reaches a third of the way down the screen until its bottom does, each step
+ * gets an equal share of that travel, so every scene shows as you scroll past without any
+ * extra empty room under the points. Tapping a point shows its scene until the next scroll.
+ */
+function usePhoneSteps(listRef: RefObject<HTMLOListElement | null>, counts: number[]) {
   const [steps, setSteps] = useState<number[] | null>(null);
 
   useEffect(() => {
@@ -113,36 +121,35 @@ function usePhoneSteps(listRef: RefObject<HTMLOListElement | null>, count: numbe
         setSteps(null);
         return;
       }
-      const next = Array.from(list.children).slice(0, count).map((item) => {
-        const screen = item.querySelector<HTMLElement>(".rc-inline");
-        const rows = Array.from(item.querySelectorAll<HTMLElement>(".rc-step"));
-        if (!screen || !rows.length) return 0;
-        // The line a step crosses to become the one on screen: a little under the stuck screen.
-        const line = screen.getBoundingClientRect().bottom + 56;
-        let on = 0;
-        rows.forEach((row, i) => {
-          if (row.getBoundingClientRect().top < line) on = i;
-        });
-        return on;
+      const line = innerHeight / 3;
+      const next = (Array.from(list.children).slice(0, counts.length) as HTMLElement[]).map((item, i) => {
+        const box = item.getBoundingClientRect();
+        if (box.height <= 0) return 0;
+        const progress = Math.min(0.999, Math.max(0, (line - box.top) / box.height));
+        return Math.floor(progress * counts[i]);
       });
-      setSteps((prev) => (prev && prev.length === next.length && prev.every((v, i) => v === next[i]) ? prev : next));
+      setSteps((prev) => (prev && prev.length === next.length && prev.every((v, k) => v === next[k]) ? prev : next));
     };
-    const onScroll = () => {
+    const queue = () => {
       if (!frame) frame = requestAnimationFrame(paint);
     };
     paint();
-    addEventListener("scroll", onScroll, { passive: true });
-    addEventListener("resize", onScroll);
-    phone.addEventListener("change", onScroll);
+    addEventListener("scroll", queue, { passive: true });
+    addEventListener("resize", queue);
+    phone.addEventListener("change", queue);
     return () => {
-      removeEventListener("scroll", onScroll);
-      removeEventListener("resize", onScroll);
-      phone.removeEventListener("change", onScroll);
+      removeEventListener("scroll", queue);
+      removeEventListener("resize", queue);
+      phone.removeEventListener("change", queue);
       cancelAnimationFrame(frame);
     };
-  }, [listRef, count]);
+  }, [listRef, counts]);
 
-  return steps;
+  const pick = (feature: number, step: number) => {
+    setSteps((prev) => (prev ? prev.map((v, i) => (i === feature ? step : v)) : prev));
+  };
+
+  return { steps, pick };
 }
 
 function useActiveFeature(count: number) {
@@ -272,7 +279,7 @@ function Graphic({ feature, active, step }: { feature: (typeof FEATURES)[number]
 
 export function RentalCards() {
   const { trackRef, pinRef, listRef, liveRef, branchRef, active, step, goTo } = useActiveFeature(FEATURES.length);
-  const phoneSteps = usePhoneSteps(listRef, FEATURES.length);
+  const { steps: phoneSteps, pick: pickPhoneStep } = usePhoneSteps(listRef, POINT_COUNTS);
 
   return (
     <section ref={trackRef} aria-label="Everything around each rental" className="rc-track">
@@ -305,6 +312,7 @@ export function RentalCards() {
                         className="rc-step"
                         data-on={p === lit ? "" : undefined}
                         data-done={p < lit ? "" : undefined}
+                        onClick={phoneSteps ? () => pickPhoneStep(i, p) : undefined}
                       >
                         <span className="rc-step-n" aria-hidden>
                           {p + 1}
@@ -328,6 +336,12 @@ export function RentalCards() {
               </div>
               {/* Where the screen sits when the section does not hold still. */}
               <div className={`rc-panel rc-inline is-${feature.tone}`}>
+                {/* Phones only: the heading and line again, so they stick with the screen as one
+                    piece (rental-cards.css). Hidden from screen readers, which read the real ones. */}
+                <div className="rc-phone-head" aria-hidden>
+                  <p className="rc-phone-title">{feature.title}</p>
+                  <p className="rc-phone-lead">{feature.lead}</p>
+                </div>
                 <Graphic feature={feature} active step={phoneSteps ? phoneSteps[i] : undefined} />
               </div>
             </li>

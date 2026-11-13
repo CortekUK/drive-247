@@ -347,3 +347,40 @@ img.pw-note-icon { object-fit: cover; padding: 0; background: #fff; box-shadow: 
 @media (max-width: 759.98px) and (prefers-reduced-motion: reduce) {
   .pw-col, .pw-dots button { transition: none; }
 }
+
+/*
+ * Phones, take two (Ghulam, 2026-11-12: "the user will never scroll sideways"): no swipe row.
+ * All three phones in one view, side by side, small, each with its short title under it.
+ * The script's centring scroll does nothing once the row no longer scrolls.
+ */
+@media (max-width: 759.98px) {
+  .pw-section { padding-block: 0 24px; }
+  .pw-stage {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    align-items: start;
+    margin: 20px 0 0;
+    padding: 0;
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+  .pw-col, .pw-col.is-home { width: auto; max-width: none; gap: 8px; }
+  /* The home screen stands a little forward, as on desktop. */
+  .pw-col.is-ops, .pw-col.is-renter { margin-top: 14px; }
+  .pw-phone, .pw-phone.is-home { width: 100%; padding: 3px; border-radius: 18px; }
+  .pw-screen { border-radius: 15px; }
+  .pw-status { height: 14px; padding: 2px 8px 0 10px; font-size: 6px; }
+  .pw-status svg { width: 6px; height: 6px; }
+  .pw-status span { gap: 2px; }
+  .pw-shot { top: 14px; height: calc(100% - 14px); }
+  .pw-note { top: 16px; inset-inline: 3px; gap: 4px; padding: 4px 5px; border-radius: 8px; font-size: 5.5px; line-height: 1.3; }
+  .pw-note-icon { width: 12px; height: 12px; border-radius: 3px; font-size: 6px; }
+  .pw-badge { top: -3px; right: -3px; min-width: 10px; height: 10px; padding-inline: 2px; font-size: 6px; }
+  .pw-home .pw-app small { font-size: max(5px, 3.4cqw); }
+  .pw-home .pw-dock { bottom: 5px; inset-inline: 5px; padding: 4px; border-radius: 12px; }
+  .pw-col figcaption { gap: 0; }
+  .pw-col figcaption b { font-size: 11.5px; line-height: 1.25; text-wrap: balance; }
+  .pw-col figcaption span { display: none; }
+  .pw-dots { display: none; }
+}

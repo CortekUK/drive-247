@@ -902,4 +902,18 @@
 @media (max-width: 767.98px) {
   .tm-root { margin-top: 16px; }
   .tm-root .tm-copy { padding-top: 40px; }
+
+  /* Boss review, 2026-11-12: the line under "I'm Trax. Just ask." is there for the look, so it
+     is smaller and runs to about two lines. */
+  .tm-copy .tm-sub { max-width: 34rem; margin-inline: auto; font-size: 13.5px; line-height: 1.5; }
+
+  /* The Trax window a little bigger (less side margin, a little less gap to the boxes) and the
+     words inside it a size smaller; everything stays inside the window. */
+  .tm-stage { padding-inline: 10px; row-gap: clamp(24px, 4.2svh, 44px); }
+  .tm-greeting h3 { font-size: 17px; }
+  .tm-bubble { font-size: 13px; }
+  .tm-status { font-size: 11.5px; }
+  .tm-list li { font-size: 12px; }
+  .tm-list b { font-size: 11px; }
+  .tm-draft { font-size: 13px; }
 }

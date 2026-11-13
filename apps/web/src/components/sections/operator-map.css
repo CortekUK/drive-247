@@ -113,3 +113,6 @@
 @media (max-width: 560px) {
   .om { height: 72svh; min-height: 480px; padding-inline: 16px; }
 }
+
+/* A name standing in while its logo is made: faint, so the logo arriving reads as the tile filling in. */
+.om-word.is-pending { opacity: 0.3; }

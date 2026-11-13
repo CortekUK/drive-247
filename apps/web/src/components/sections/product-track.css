@@ -889,6 +889,54 @@
   .pt-panel .mcr-lines,
   .pt-panel .mcr-more,
   .pt-panel .mcr-cols ~ .mcr-label { display: none; }
+
+  /*
+   * Boss review, 2026-11-12 (phones).
+   * No pill rail over the track: it covered the headings and read as a navigation bar, which
+   * the page deliberately has none of.
+   */
+  .pt-rail { display: none; }
+
+  /* Each screen is the app window alone, edge to edge: no tablet frame, no rounded card, no
+     side margin; just a hairline above and below, like an application window. */
+  .pt-panel #calendar .cs-inner,
+  .pt-panel .mc-inner,
+  .pt-panel .ia-window { width: 100%; margin-inline: 0; }
+  .pt-panel #calendar .cs-tablet,
+  .pt-panel #calendar .cs-tablet.is-lit { padding: 0; border-radius: 0; background: none; box-shadow: none; }
+  .pt-panel #calendar .cs-tablet .cs-window,
+  .pt-panel .mc-window,
+  .pt-panel .ia-window { border: 0; border-block: 1px solid hsl(var(--v2-border)); border-radius: 0; box-shadow: none; }
+
+  /* Calendar: bigger labels, to read at a glance on a phone. */
+  .pt-panel #calendar .cs-note > span { padding: 0.6em 1em 0.6em 0.55em; }
+  .pt-panel #calendar .cs-note > span > i { width: 20px; height: 20px; font-size: 11px; }
+  .pt-panel #calendar .cs-note > span > b { font-size: 14.5px; }
+  .pt-panel #calendar .cs-free > b { font-size: 15px; }
+  .pt-panel #calendar .cs-free > small { font-size: 13px; }
+
+  /* Messages: the app without the browser around it (as the calendar), a size smaller, and
+     short enough to sit whole on the screen. */
+  .pt-panel .mc-window .pg-tabs,
+  .pt-panel .mc-window .pg-address { display: none; }
+  .pt-panel .mc-app { zoom: 0.88; height: clamp(440px, calc(100svh - 150px), 700px); }
+
+  /* Insights: tighter, so the wave, the map and the fleet pulse fit about one screen. */
+  .pt-panel .ia-bar { padding: 16px 16px 0; gap: 10px; }
+  .pt-panel .ia-page { font-size: 22px; }
+  .pt-panel .ia-lede { font-size: 13px; }
+  .pt-panel .ia-grid { gap: 10px; padding: 12px 12px 12px; }
+  .pt-panel .ia-panel { padding: 14px 14px; }
+  .pt-panel .ia-figure { font-size: 22px; }
+  .pt-panel .ia-panel { min-height: 0; }
+  .pt-panel .ia-body { margin-top: 8px; }
+  .pt-panel .ia-wave { min-height: 96px; }
+  .pt-panel .ia-wave-plot { margin-top: 18px; }
+  .pt-panel .ia-places { min-height: 190px; padding: 0; }
+  .pt-panel .ia-pulse { gap: 5px; }
+  .pt-panel .ia-pulse span i { height: 12px; }
+  /* The page's one-line description goes; the title and its tabs say where we are. */
+  .pt-panel .ia-lede { display: none; }
 }
 
 /* The words type in on each arrival, as on the desktop track. */
