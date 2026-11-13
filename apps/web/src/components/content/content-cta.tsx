@@ -19,14 +19,11 @@ export function ContentCta() {
         <h2 id="ct-cta-title" className="cc-title">
           Run your rental business <em className="cc-cursive">on Drive247.</em>
         </h2>
-        <p className="cc-sub">Start a free trial today, or book a demo and we&apos;ll show you around.</p>
+        <p className="cc-sub">Start a free trial today and see it run your own bookings.</p>
         <div className="cc-row">
           <a href="/#pricing" className="cc-btn cc-btn-solid">
             Start free trial
             <ArrowRight strokeWidth={2} aria-hidden />
-          </a>
-          <a href="/strategy-call" className="cc-btn cc-btn-line">
-            Book a demo
           </a>
         </div>
       </div>

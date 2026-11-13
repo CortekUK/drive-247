@@ -5,7 +5,8 @@
  *   1. Remember which ad a visitor came from. An ad link carries `?fbclid=...`;
  *      it is on the first page only, and signup happens pages later (after a
  *      Google sign-in or a Stripe redirect, both of which drop the query string).
- *   2. Send `StartTrial` once a new account exists.
+ *   2. Send `CompleteRegistration` once an account exists, and `StartTrial`
+ *      once its trial has started.
  *
  * The server sends the same event through the Conversions API
  * (supabase/functions/_shared/meta-conversions.ts) under the same id, so Meta
@@ -20,6 +21,7 @@ export const META_PIXEL_ID = "2196369497442053";
 /** Our own copy of the ad click id, in Meta's `_fbc` format. */
 const CLICK_COOKIE = "d247_fbc";
 const CLICK_COOKIE_DAYS = 90;
+/** Named for the first event it guarded; it now guards every event id. */
 const SENT_KEY_PREFIX = "d247_start_trial_sent:";
 
 type Fbq = (...args: unknown[]) => void;
@@ -81,13 +83,12 @@ export function readMetaSignals(): MetaBrowserSignals {
   }
 }
 
-/**
- * Send `StartTrial` from the browser, once per account on this browser.
- *
- * `eventId` must be the id the server used. The email and user id are handed to
- * the pixel for matching; it hashes them itself before anything leaves the page.
- */
-export function trackStartTrial(input: { eventId: string; userId: string; email: string }): void {
+/** One pixel event, once per event id on this browser, with the account handed over for matching. */
+function sendOnce(
+  eventName: string,
+  input: { eventId: string; userId: string; email: string },
+  params?: Record<string, unknown>,
+): void {
   try {
     const send = fbq();
     if (!send) return;
@@ -100,8 +101,28 @@ export function trackStartTrial(input: { eventId: string; userId: string; email:
     }
     const email = input.email.trim().toLowerCase();
     send("init", META_PIXEL_ID, { ...(email ? { em: email } : {}), external_id: input.userId });
-    send("track", "StartTrial", { currency: "USD", value: 0 }, { eventID: input.eventId });
+    send("track", eventName, params ?? {}, { eventID: input.eventId });
   } catch {
-    /* never let tracking break the success screen */
+    /* never let tracking break the signup */
   }
+}
+
+/**
+ * Send `StartTrial` from the browser, once per account on this browser.
+ *
+ * `eventId` must be the id the server used. The email and user id are handed to
+ * the pixel for matching; it hashes them itself before anything leaves the page.
+ */
+export function trackStartTrial(input: { eventId: string; userId: string; email: string }): void {
+  sendOnce("StartTrial", input, { currency: "USD", value: 0 });
+}
+
+/**
+ * Send `CompleteRegistration` once an account exists with a confirmed email:
+ * the step before the card. More people reach it than start a trial, so Meta
+ * has more to learn from while trial numbers are low. Browser only: there is
+ * no server copy, so nothing needs deduplicating.
+ */
+export function trackRegistration(input: { userId: string; email: string }): void {
+  sendOnce("CompleteRegistration", { ...input, eventId: `${input.userId}_registration` });
 }

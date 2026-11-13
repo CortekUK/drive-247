@@ -18,7 +18,8 @@ import {
   type SignupPlan,
   type SignupPlanId,
 } from "@/lib/plans";
-import { readMetaSignals, trackStartTrial } from "@/lib/meta-tracking";
+import { captureSignup, identifyAccount } from "@/lib/analytics";
+import { readMetaSignals, trackRegistration, trackStartTrial } from "@/lib/meta-tracking";
 import { promoRejectionText, type PromoOffer } from "@/lib/promo-offer";
 import {
   clearReferralCodeInDocument,
@@ -526,8 +527,28 @@ async function reportStartTrial(res: ProvisionResponse): Promise<void> {
       userId: user.id,
       email: user.email ?? "",
     });
+    captureSignup("signup_trial_started", { tenant_slug: res.slug });
   } catch {
     /* tracking never gets in the way of the success screen */
+  }
+}
+
+/**
+ * An account now exists with a confirmed email and a session: the step before
+ * the card. Tells Meta's pixel (`CompleteRegistration`) and PostHog, and ties
+ * this browser's earlier page views to the account. Never in the dev mock.
+ */
+async function reportRegistration(method: "email" | "oauth"): Promise<void> {
+  if (isMockSignup()) return;
+  try {
+    const { data } = await getBrowserSupabase().auth.getSession();
+    const user = data.session?.user;
+    if (!user) return;
+    trackRegistration({ userId: user.id, email: user.email ?? "" });
+    identifyAccount(user.id);
+    captureSignup("signup_account_created", { method });
+  } catch {
+    /* tracking never gets in the way of the signup */
   }
 }
 
@@ -1236,6 +1257,7 @@ export function OnboardingProvider({
       setCloseConfirmOpen(false);
       setPlanSwitchBlocked(null);
       setIsOpen(true);
+      if (!isMockSignup()) captureSignup("signup_opened", { plan: planId });
 
       const current = stateRef.current;
 
@@ -1423,6 +1445,7 @@ export function OnboardingProvider({
         dispatch({ type: "business", patch: draftToBusiness(pending.values) });
 
         await signupBeginOauth({ planId: pending.planId });
+        void reportRegistration("oauth");
         // Only now — the draft is worth keeping only against a signup that
         // actually exists.
         await saveTenantDraft(pending.values);
@@ -1638,6 +1661,7 @@ export function OnboardingProvider({
           // a reload during the code screen survivable.
           writeLocalTenantDraft(tenant);
           setHasResumableSignup(true);
+          if (!isMockSignup()) captureSignup("signup_account_submitted", { plan: planId });
           dispatch({ type: "goto", step: "verify" });
           return;
         }
@@ -1667,6 +1691,7 @@ export function OnboardingProvider({
           account: { fullName: values.fullName.trim(), email: values.email.trim().toLowerCase() },
         });
         dispatch({ type: "signInPrompt", prompt: null });
+        void reportRegistration("email");
 
         // Persist the tenant details NOW, in the one window where a session
         // exists and nothing has been charged yet. `signup-begin` does not take
@@ -1810,6 +1835,7 @@ export function OnboardingProvider({
             dispatch({ type: "resumeTo", step: "account" });
             return true;
           }
+          void reportRegistration("email");
         }
 
         // Now that a session exists, the draft can reach the server copy — the

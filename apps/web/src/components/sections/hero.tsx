@@ -58,9 +58,6 @@ export function Hero({ trialDays = 0 }: { trialDays?: number }) {
           <Image src="/logo-dark.png" alt="Drive247" width={855} height={195} priority />
         </a>
         <nav className="hg-nav" aria-label="Get started">
-          <Button asChild size="sm" className="hg-ghost">
-            <a href="/strategy-call">Book a demo</a>
-          </Button>
           <Button asChild size="sm" className="hg-primary">
             <a href="#pricing">Start free trial</a>
           </Button>

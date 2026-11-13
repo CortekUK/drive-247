@@ -6,6 +6,7 @@ import { BookDemoDialog } from "@/components/book-demo/book-demo-dialog";
 import { AdClickCapture } from "@/components/shared/ad-click-capture";
 import { SITE_META, SITE_URL } from "@/lib/constants";
 import { META_PIXEL_ID } from "@/lib/meta-tracking";
+import { POSTHOG_SCRIPT } from "@/lib/analytics";
 import "./globals.css";
 
 const META_PIXEL_SCRIPT = `!function(f,b,e,v,n,t,s)
@@ -90,6 +91,7 @@ export default function RootLayout({
         <JsonLd data={organizationLd} />
         <JsonLd data={softwareLd} />
         <script dangerouslySetInnerHTML={{ __html: META_PIXEL_SCRIPT }} />
+        {POSTHOG_SCRIPT && <script dangerouslySetInnerHTML={{ __html: POSTHOG_SCRIPT }} />}
       </head>
       <body className="font-sans antialiased">
         <noscript>
