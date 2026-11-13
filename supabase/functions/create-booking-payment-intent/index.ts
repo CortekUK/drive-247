@@ -252,8 +252,14 @@ async function mint(supabase: SupabaseClient, body: Record<string, any>, req: Re
     .select('id', { count: 'exact', head: true })
     .eq('rental_id', rentalId)
   if (rentalRow.auto_extend_enabled || (extensionsCount ?? 0) > 0) depositHoldAmount = 0
-  const shouldShowDepositNotice = !!placeDepositHoldAfter && !!tenant.security_deposit_enabled
+  // A new booking holds the deposit on the card it was paid with whenever the
+  // tenant takes deposits as a HOLD (QA R9.1). The server decides: the booking
+  // page shows "held on your card" from the same settings but never sent
+  // `placeDepositHoldAfter`, so no hold was ever placed.
+  const isNewBooking = !extensionId && !paygAccrualId && !installmentId && source !== 'portal' && source !== 'customer_portal'
+  const holdDeposit = (!!placeDepositHoldAfter || isNewBooking) && !!tenant.security_deposit_enabled
     && tenant.deposit_charge_enabled !== true && depositHoldAmount > 0
+  const shouldShowDepositNotice = holdDeposit
   const depositNoticeText = shouldShowDepositNotice
     ? `After payment, a ${formatCurrency(depositHoldAmount, currencyCode.toUpperCase())} security deposit hold (not a charge) will be authorised on the same card. Released when your rental ends.`
     : null
@@ -315,7 +321,7 @@ async function mint(supabase: SupabaseClient, body: Record<string, any>, req: Re
   if (extensionId) metadata.extension_id = String(extensionId)
   if (paygAccrualId) metadata.payg_accrual_id = String(paygAccrualId)
   if (installmentId) metadata.installment_id = String(installmentId)
-  if (placeDepositHoldAfter) metadata.place_deposit_hold = 'true'
+  if (holdDeposit) metadata.place_deposit_hold = 'true'
 
   const respond = (clientSecret: string | null, paymentIntentId: string, reused: boolean) =>
     jsonOk({
@@ -562,6 +568,22 @@ async function settlePayment(
     const source = pi.metadata?.source
     if (row.booking_source === 'website' && source !== 'customer_portal' && source !== 'portal' && !pi.metadata?.extension_id) {
       await sendBookingReceived(supabase, rentalId, row.id, pi.amount_received / 100)
+    }
+  }
+
+  // The deposit hold, on the card just saved by this payment (QA R9.1).
+  // place-deposit-hold is idempotent and refuses when deposits are charged,
+  // switched off or $0, so a repeat call or a changed setting is harmless.
+  if (transitioned && pi.metadata?.place_deposit_hold === 'true') {
+    try {
+      const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/place-deposit-hold`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+        body: JSON.stringify({ rentalId }),
+      })
+      if (!res.ok) console.error('[settle] place-deposit-hold failed:', res.status, await res.text())
+    } catch (err) {
+      console.error('[settle] could not place the deposit hold:', err)
     }
   }
 

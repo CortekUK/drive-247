@@ -186,6 +186,12 @@ export function StagePayments({ detail, refetch }: StageProps) {
     t.outstanding === 0 ? "text-success" : overdue ? "text-destructive" : "text-warning";
   const paidShare = t.charged > 0 ? Math.min(1, t.applied / t.charged) : 0;
 
+  // What the deposit came to (QA R9.4): kept from the hold, and handed back.
+  const depositKept =
+    deposit.deductions.reduce((n, d) => n + d.amountCents, 0) || (deposit.status === "captured" ? deposit.charged : 0);
+  const depositReleased = deposit.events
+    .filter((e) => e.action === "release" && e.outcome === "succeeded")
+    .reduce((n, e) => n + e.amountCents, 0);
   const depositWord =
     deposit.status === "held"
       ? `${usd(held)} held`
@@ -194,9 +200,11 @@ export function StagePayments({ detail, refetch }: StageProps) {
           ? `${usd(deposit.charged)} billed`
           : "No deposit"
         : deposit.status === "released"
-          ? "Released"
+          ? depositReleased > 0 ? `${usd(depositReleased)} released` : "Released"
           : deposit.status === "captured"
-            ? "Captured"
+            ? depositKept > 0
+              ? `${usd(depositKept)} kept${depositReleased > 0 ? ` · ${usd(depositReleased)} released` : ""}`
+              : "Captured"
             : deposit.status === "needs_review"
               ? "Needs review"
               : deposit.status === "failed"

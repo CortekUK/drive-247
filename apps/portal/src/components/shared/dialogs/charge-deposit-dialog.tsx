@@ -87,14 +87,11 @@ export const ChargeDepositDialog = ({
   const currency = tenant?.currency_code || "USD";
   const expiry = formatHoldExpiry(holdExpiresAt);
 
-  // Partial captures are temporarily disabled until Stripe approves
-  // multicapture for the platform's Connect accounts. Without multicapture,
-  // a partial capture would release the uncaptured remainder back to the
-  // customer (Stripe's default for single-capture PaymentIntents) and we'd
-  // have to spin up a fresh authorisation for the remainder — which the
-  // customer sees as the original hold dropping off and a new hold appearing
-  // on their card. To avoid that surprise, the dialog locks to a FULL hold
-  // capture for now. Re-enable the amount input once multicapture is granted.
+  // Partial charges (QA R9.4, Nov 14 2026): a part charge SETTLES the deposit —
+  // capture-deposit-hold is called with releaseRemainder, Stripe captures that
+  // amount and releases the rest to the customer's card. Keeping the rest on
+  // hold mid-rental (multicapture / rollover) stays off: without multicapture
+  // it shows the customer the original hold dropping and a new one appearing.
   const schema = z.object({
     reason: z.string().min(1, "Reason is required"),
   });
@@ -164,7 +161,14 @@ export const ChargeDepositDialog = ({
     }
   };
 
-  // Step 2: capture the live hold.
+  // Step 2: capture the live hold — all of it, or part of it and release the rest.
+  const [amountText, setAmountText] = useState(() => String(holdAmount ?? ""));
+  useEffect(() => { if (open) setAmountText(String(holdAmount ?? "")); }, [open, holdAmount]);
+  const chargeAmount = Math.round((Number(amountText) || 0) * 100) / 100;
+  const amountError =
+    !(chargeAmount > 0) ? "Enter an amount above 0." : chargeAmount > holdAmount ? `At most ${formatCurrency(holdAmount, currency)} is held.` : null;
+  const partial = !amountError && chargeAmount < holdAmount;
+  const releaseAmount = Math.round((holdAmount - chargeAmount) * 100) / 100;
   const onSubmit = async (data: FormData) => {
     setSubmitting(true);
     try {
@@ -172,8 +176,9 @@ export const ChargeDepositDialog = ({
         body: {
           rentalId,
           tenantId: tenant?.id,
-          amount: holdAmount,
+          amount: chargeAmount,
           reason: data.reason,
+          releaseRemainder: partial,
         },
       });
       if (error) throw new Error(error.message || "Capture failed");
@@ -200,7 +205,9 @@ export const ChargeDepositDialog = ({
       invalidateRentalQueries();
       toast({
         title: "Hold charged",
-        description: `Charged ${formatCurrency(holdAmount, currency)}. Hold fully captured.`,
+        description: partial
+          ? `Charged ${formatCurrency(chargeAmount, currency)}. ${formatCurrency(releaseAmount, currency)} released to the customer.`
+          : `Charged ${formatCurrency(chargeAmount, currency)}. Hold fully captured.`,
       });
       onOpenChange(false);
       onSuccess?.();
@@ -295,31 +302,32 @@ export const ChargeDepositDialog = ({
           // ── Step 2: capture the live hold ──
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-2">
-              {/* Loud, up-front notice that partial captures are temporarily off.
-                  Goes ABOVE the amount + reason so the operator reads it before
-                  anything else and there's no surprise after they click charge. */}
-              <Alert className="border-amber-500/60 bg-amber-500/10">
-                <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                <AlertDescription className="space-y-1.5 pl-1">
-                  <p className="text-sm font-bold text-amber-900 dark:text-amber-100">
-                    Partial pre-auth charging is not available right now.
+              {/* Charge all of it, or part of it and release the rest (QA R9.4).
+                  A part charge settles the deposit: Stripe captures that amount and
+                  hands the remainder back to the customer's card at once. Nothing
+                  is re-held, so the customer never sees a second hold appear. */}
+              <div className="space-y-1.5">
+                <label htmlFor="deposit-charge-amount" className="text-sm font-medium">Amount to charge</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="deposit-charge-amount"
+                    inputMode="decimal"
+                    value={amountText}
+                    onChange={(e) => setAmountText(e.target.value.replace(/[^0-9.]/g, ""))}
+                    className="h-9 w-32 rounded-md border border-input bg-background px-3 text-sm"
+                  />
+                  <span className="text-xs text-muted-foreground">of {formatCurrency(holdAmount, currency)} held</span>
+                </div>
+                {amountError ? (
+                  <p className="text-xs font-medium text-red-500">{amountError}</p>
+                ) : partial ? (
+                  <p className="text-xs text-muted-foreground">
+                    Charges <strong>{formatCurrency(chargeAmount, currency)}</strong> and releases the other{" "}
+                    <strong>{formatCurrency(releaseAmount, currency)}</strong> back to the customer&apos;s card. The deposit is then settled.
                   </p>
-                  <p className="text-xs leading-relaxed text-amber-900/85 dark:text-amber-100/85">
-                    Charging this hold will capture the <strong>full {formatCurrency(holdAmount, currency)}</strong>.
-                    <br />
-                    <strong>Coming soon:</strong> we&apos;re enabling partial charges as soon as Stripe approves
-                    the <em>multicapture</em> feature for your account — you&apos;ll then be able to charge any
-                    amount and keep the rest on hold automatically.
-                  </p>
-                </AlertDescription>
-              </Alert>
-
-              {/* Full-hold capture only — see comment block above the schema for
-                  why. Showing the amount as static text instead of an input makes
-                  it impossible to accidentally submit a partial value. */}
-              <div className="rounded-md border border-border bg-muted/40 px-3 py-2 flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Amount to charge</span>
-                <span className="text-base font-semibold">{formatCurrency(holdAmount, currency)}</span>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Charges the whole deposit.</p>
+                )}
               </div>
 
               {/* When this authorisation dies. An operator charging a long rental
@@ -370,8 +378,8 @@ export const ChargeDepositDialog = ({
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={busy}>
-                  {submitting ? "Charging…" : `Charge ${formatCurrency(holdAmount, currency)}`}
+                <Button type="submit" disabled={busy || !!amountError}>
+                  {submitting ? "Charging…" : `Charge ${formatCurrency(chargeAmount, currency)}`}
                 </Button>
               </div>
             </form>
