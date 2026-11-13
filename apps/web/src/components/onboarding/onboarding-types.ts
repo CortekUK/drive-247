@@ -154,7 +154,7 @@ export const SIGNUP_ERROR_COPY: Record<SignupErrorCode, string> = {
   STRIPE_JS_UNAVAILABLE:
     "The secure payment form couldn't load. Check your connection or any ad blocker, then try again.",
   CONFIG_MISSING:
-    "Signup is temporarily unavailable — our team has been alerted. Please book a strategy call and we'll set you up directly.",
+    "Signup is temporarily unavailable — our team has been alerted. Please email support@drive-247.com and we'll set you up directly.",
   RATE_LIMITED: "Too many attempts. Please wait a few minutes and try again.",
   NETWORK: "We couldn't reach our servers. Check your connection and try again.",
   SESSION_LOST: "Your session expired. Please sign in again to continue.",

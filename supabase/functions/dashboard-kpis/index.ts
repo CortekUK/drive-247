@@ -3,16 +3,33 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-tenant-id',
 };
+
+// TENANT ISOLATION. The queries below run with the service key, which skips
+// row-level security, so every one of them MUST carry the caller's tenant. Until
+// 2026-11-14 none did, and every portal's dashboard showed the totals of all
+// tenants added together.
+//
+// The tenant comes from the caller's own staff record, never from the request.
+// A super admin has no tenant of their own: they may name one in `x-tenant-id`,
+// and without it they get the platform-wide totals, as before.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
 
 // In-memory cache for dashboard data
 const cache = new Map<string, { data: any; timestamp: number; ttl: number }>();
 
 const CACHE_TTL = 60 * 1000; // 60 seconds
 
-function getCacheKey(from?: string, to?: string): string {
-  return `dashboard:${from || 'no-from'}:${to || 'no-to'}`;
+function getCacheKey(scope: string, from?: string | null, to?: string | null, timezone?: string): string {
+  return `dashboard:${scope}:${from || 'no-from'}:${to || 'no-to'}:${timezone || 'no-tz'}`;
 }
 
 function isCacheValid(entry: { timestamp: number; ttl: number }): boolean {
@@ -30,6 +47,29 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
+
+    // Who is asking, and for which tenant.
+    const token = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '');
+    const { data: { user } } = token ? await supabase.auth.getUser(token) : { data: { user: null } };
+    if (!user) return json({ error: 'Unauthorized' }, 401);
+
+    const { data: staff } = await supabase
+      .from('app_users')
+      .select('tenant_id, is_super_admin, is_active')
+      .eq('auth_user_id', user.id)
+      .maybeSingle();
+    if (!staff || staff.is_active === false) return json({ error: 'Forbidden' }, 403);
+
+    let tenantId: string | null = staff.tenant_id ?? null;
+    if (staff.is_super_admin) {
+      const asked = req.headers.get('x-tenant-id')?.trim() ?? '';
+      tenantId = UUID.test(asked) ? asked : tenantId;
+    } else if (!tenantId) {
+      return json({ error: 'Forbidden' }, 403);
+    }
+    // Every query goes through this, so none can forget the tenant.
+    const scoped = <Q extends { eq: (column: string, value: string) => Q }>(query: Q): Q =>
+      tenantId ? query.eq('tenant_id', tenantId) : query;
 
     const url = new URL(req.url);
     const from = url.searchParams.get('from');
@@ -52,7 +92,7 @@ serve(async (req) => {
     }
 
     // Check cache first
-    const cacheKey = getCacheKey(from, to);
+    const cacheKey = getCacheKey(tenantId ?? 'platform', from, to, timezone);
     const cached = cache.get(cacheKey);
     if (cached && isCacheValid(cached)) {
       return new Response(JSON.stringify(cached.data), {
@@ -76,47 +116,47 @@ serve(async (req) => {
       fleetUtilizationResult
     ] = await Promise.allSettled([
       // Overdue Payments
-      supabase
+      scoped(supabase
         .from('ledger_entries')
-        .select('remaining_amount')
+        .select('remaining_amount'))
         .eq('type', 'Charge')
         .eq('category', 'Rental')
         .gt('remaining_amount', 0)
         .lt('due_date', today),
 
       // Due Today
-      supabase
+      scoped(supabase
         .from('ledger_entries')
-        .select('remaining_amount')
+        .select('remaining_amount'))
         .eq('type', 'Charge')
         .eq('category', 'Rental')
         .gt('remaining_amount', 0)
         .eq('due_date', today),
 
       // Active Rentals
-      supabase
+      scoped(supabase
         .from('rentals')
-        .select('*', { count: 'exact', head: true })
+        .select('*', { count: 'exact', head: true }))
         .eq('status', 'Active'),
 
       // Open Fines with due soon count
-      supabase
+      scoped(supabase
         .from('fines')
-        .select('amount, due_date, status')
+        .select('amount, due_date, status'))
         .in('status', ['Open', 'Appealed', 'Charged']),
 
       // Monthly Revenue (if date range provided)
-      from && to ? supabase
+      from && to ? scoped(supabase
         .from('pnl_entries')
-        .select('amount')
+        .select('amount'))
         .eq('side', 'Revenue')
         .gte('entry_date', from)
         .lte('entry_date', to) : Promise.resolve({ data: [] }),
 
       // Fleet Utilization
-      supabase
+      scoped(supabase
         .from('vehicles')
-        .select('status, is_disposed')
+        .select('status, is_disposed'))
         .eq('is_disposed', false)
     ]);
 

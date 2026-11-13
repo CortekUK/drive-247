@@ -1097,7 +1097,7 @@ function ConfigurationErrorPanel() {
         asChild
         className="mt-4 bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
       >
-        <a href="/strategy-call">Book a strategy call</a>
+        <a href="mailto:support@drive-247.com">Email support</a>
       </Button>
     </FallbackForm>
   );

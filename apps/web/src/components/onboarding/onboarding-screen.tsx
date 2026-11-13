@@ -182,7 +182,7 @@ export function OnboardingScreen() {
   const bannerError =
     state.error && !INLINE_ONLY_CODES.has(state.error.code)
       ? // CONFIG_MISSING on the payment step is rendered by PaymentStep as a
-        // full replacement for the card form, with its own strategy-call button.
+        // full replacement for the card form, with its own support link.
         state.error.code === "CONFIG_MISSING" && step === "payment"
         ? null
         : state.error
@@ -501,8 +501,8 @@ export function OnboardingScreen() {
                       <AlertDescription className="text-red-600 dark:text-red-400">
                         <span>{SIGNUP_ERROR_COPY[bannerError.code]}</span>
                         {bannerError.code === "CONFIG_MISSING" ? (
-                          <a href="/strategy-call" className="font-semibold underline underline-offset-4">
-                            Book a strategy call
+                          <a href="mailto:support@drive-247.com" className="font-semibold underline underline-offset-4">
+                            Email support
                           </a>
                         ) : null}
                       </AlertDescription>

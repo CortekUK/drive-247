@@ -396,9 +396,9 @@ export function ProvisioningScreen() {
                         </Button>
                       )}
                       <Button variant="ghost" asChild className="max-sm:h-11">
-                        <a href="/strategy-call">
+                        <a href="mailto:support@drive-247.com">
                           <MessageSquare className="h-4 w-4" />
-                          Talk to us
+                          Email support
                         </a>
                       </Button>
                     </div>

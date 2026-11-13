@@ -593,8 +593,8 @@ export function AccountStep({
           <Button type="button" onClick={onUseDifferentEmail} className={SIGNUP_PRIMARY}>
             Use a different email
           </Button>
-          <a href="/strategy-call" className={cn(SIGNUP_QUIET, "block text-center")}>
-            Talk to us
+          <a href="mailto:support@drive-247.com" className={cn(SIGNUP_QUIET, "block text-center")}>
+            Email support
           </a>
         </div>
       </div>
