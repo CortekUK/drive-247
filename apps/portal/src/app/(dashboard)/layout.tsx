@@ -5,6 +5,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useAuth } from "@/stores/auth-store";
 import { Button } from "@/components/ui/button";
 import { useTenant } from "@/contexts/TenantContext";
+import { flagWrongPortal, isWrongPortal } from "@/lib/wrong-portal";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
 import { useTenantSubscriptionRealtime } from "@/hooks/use-tenant-subscription-realtime";
@@ -547,8 +548,18 @@ export default function DashboardLayout({
         router.replace("/login");
         return;
       }
+
+      // A login from ANOTHER company on this company's address (QA R1.12).
+      // The login page refuses it; this catches a session that got here anyway.
+      if (isWrongPortal(appUser, tenant?.id)) {
+        flagWrongPortal();
+        // The store's signOut is scope "local": only this browser, never the
+        // person's own portal elsewhere.
+        void Promise.resolve(signOut()).finally(() => router.replace("/login?error=wrong_portal"));
+        return;
+      }
     }
-  }, [user, appUser, profileUnavailable, loading, router, pathname]);
+  }, [user, appUser, profileUnavailable, loading, router, pathname, tenant?.id, signOut]);
 
   // Self-heal a stale profile. When the lookup fails but we still hold a
   // profile, the dashboard keeps rendering with the pinned copy — deliberately,
@@ -596,7 +607,9 @@ export default function DashboardLayout({
   }
 
   // Not authenticated - show nothing while redirecting
-  if (!user || !appUser || !appUser.is_active) {
+  // Never draw another company's portal for this login, even for one frame (QA R1.12).
+  const wrongPortal = isWrongPortal(appUser, tenant?.id);
+  if (!user || !appUser || !appUser.is_active || wrongPortal) {
     return loadingView;
   }
 

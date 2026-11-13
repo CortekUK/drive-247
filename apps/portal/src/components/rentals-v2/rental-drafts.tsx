@@ -29,6 +29,7 @@ import { FilePen, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { tenantToday } from "@/components/timeline-v2/model";
 
 type DraftRow = { id: string; rental_number: string | null; created_at: string | null };
@@ -103,6 +104,9 @@ export function useCreateDraftRental({ replace = false }: { replace?: boolean } 
 /** The drafts, as one quiet row above the list. Nothing when there are none. */
 export function RentalDrafts() {
   const { tenant } = useTenant();
+  // Viewers and read-only managers see the drafts but cannot throw them away (QA R1.11).
+  const { canEdit } = useManagerPermissions();
+  const canWrite = canEdit("rentals");
   const queryClient = useQueryClient();
   const { data: drafts = [] } = useRentalDrafts();
 
@@ -141,6 +145,7 @@ export function RentalDrafts() {
               · {formatDistanceToNow(new Date(d.created_at), { addSuffix: true })}
             </span>
           )}
+          {canWrite && (
           <button
             type="button"
             aria-label={`Discard draft ${d.rental_number ?? ""}`}
@@ -151,6 +156,7 @@ export function RentalDrafts() {
           >
             <X className="size-3" />
           </button>
+          )}
         </span>
       ))}
     </div>

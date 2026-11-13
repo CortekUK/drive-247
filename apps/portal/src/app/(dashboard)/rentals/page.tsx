@@ -606,14 +606,38 @@ const RentalsList = () => {
           </div>
         </>
       ) : (
-        <div className="text-center py-8">
-          <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium mb-2">No rentals found</h3>
-          <p className="text-muted-foreground mb-4">
-            No rentals match your current filters
-          </p>
-          <Button onClick={handleClearFilters}>Clear Filters</Button>
-        </div>
+        Array.from(searchParams.keys()).some((k) => k !== "view" && k !== "page") ? (
+          <div className="text-center py-8">
+            <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">No rentals found</h3>
+            <p className="text-muted-foreground mb-4">
+              No rentals match your current filters
+            </p>
+            <Button onClick={handleClearFilters}>Clear Filters</Button>
+          </div>
+        ) : (
+          // Nothing asked for and nothing there: a new operator, not a filter
+          // that matched nothing. "Clear Filters" would clear nothing (QA R1.10).
+          <div className="text-center py-8">
+            <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">No rentals yet</h3>
+            <p className="text-muted-foreground mb-4">
+              Each rental ties a customer to a car for set dates. Create your first one to get started.
+            </p>
+            {canEdit('rentals') && (
+              <Button
+                onClick={() =>
+                  rentalCreationBlocked
+                    ? setShowConnectStripeDialog(true)
+                    : router.push("/rentals/new")
+                }
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create your first rental
+              </Button>
+            )}
+          </div>
+        )
       )}
 
       {/* Rental Review Dialog */}

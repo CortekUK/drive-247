@@ -67,6 +67,7 @@ import { useCustomerReviews } from "@/hooks/use-customer-reviews";
 import { useCustomerReviewSummary } from "@/hooks/use-customer-review-summary";
 import type { StageProps } from "./stages";
 import { CustomerPicker, useCustomerSwitchable } from "./customer-picker";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import {
   StageAction,
   cardCls,
@@ -380,6 +381,9 @@ const ratingTone = (n: number) => (n >= 8 ? RATING_TONE.good : n >= 5 ? RATING_T
 
 export function StageCustomer({ detail, refetch }: StageProps) {
   const { tenantSlug } = useTenant();
+  // Re-running the ID check and sending a new link change the rental: not for read-only roles (QA R1.11).
+  const { canEdit } = useManagerPermissions();
+  const canWrite = canEdit("rentals");
   const customer = detail.customer;
   const customerId = customer?.id ?? null;
 
@@ -665,7 +669,7 @@ export function StageCustomer({ detail, refetch }: StageProps) {
             {/* Quick actions, quiet until hovered. They stop the click so the
                 card's own "open the check" does not fire underneath them. */}
             <span onClick={(e) => e.stopPropagation()} className="flex items-center gap-0.5">
-              {traxActions.onRescan && (
+              {canWrite && traxActions.onRescan && (
                 <IconAction
                   label={traxActions.rescanning ? "Scanning again…" : "Run Trax ID again"}
                   onClick={traxActions.onRescan}
@@ -674,9 +678,11 @@ export function StageCustomer({ detail, refetch }: StageProps) {
                   <RotateCw className={cn(traxActions.rescanning && "animate-spin motion-reduce:animate-none")} />
                 </IconAction>
               )}
-              <IconAction label="Send a new verification link" onClick={traxActions.onNewLink}>
-                <Link2 />
-              </IconAction>
+              {canWrite && (
+                <IconAction label="Send a new verification link" onClick={traxActions.onNewLink}>
+                  <Link2 />
+                </IconAction>
+              )}
             </span>
             {verification && (
               <ExternalLink

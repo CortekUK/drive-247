@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuthStore } from "@/stores/auth-store";
 import { toast } from "@/hooks/use-toast";
+import { peekWrongPortal } from "@/lib/wrong-portal";
 
 /**
  * Bulletproof force-logout listener for portal staff.
@@ -65,11 +66,16 @@ export function useSessionGuard() {
   const forceSignOut = useCallback(async () => {
     if (signingOutRef.current) return;
     signingOutRef.current = true;
-    toast({
-      title: "You've been signed out",
-      description:
-        "An administrator ended your session. Please sign in again.",
-    });
+    // A login from another company that the dashboard is already signing out
+    // (QA R1.12): the login page explains that; "an administrator ended your
+    // session" would be untrue.
+    if (!peekWrongPortal()) {
+      toast({
+        title: "You've been signed out",
+        description:
+          "An administrator ended your session. Please sign in again.",
+      });
+    }
     try {
       // scope: 'local' — revoke ONLY this browser's session, not every session
       // the user has. This matters for a super admin booted from a tenant portal:

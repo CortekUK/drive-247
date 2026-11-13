@@ -27,6 +27,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui-v2/button";
 import { RentalsTable, type RentalsTableRow } from "../../../../../shared/portal-v2/rentals-table";
+import { formatCurrency } from "@/lib/format-utils";
 import {
   FileText,
   Plus,
@@ -467,6 +468,11 @@ export function RentalsListV2() {
       reference: rental.rental_number,
       // The FULL name: the first name alone turned every Smith into one row.
       party: rental.customer.name,
+      // The car, so a row says which one went out without opening it (R1.2).
+      partySub: rental.vehicle
+        ? [[rental.vehicle.make, rental.vehicle.model].filter(Boolean).join(" "), rental.vehicle.reg].filter(Boolean).join(" · ")
+        : null,
+      amount: formatCurrency(Number(rental.total_amount) || 0, tenant?.currency_code || "USD"),
       start: rental.start_date,
       end: rental.end_date,
       ongoing: rental.is_pay_as_you_go,
@@ -641,6 +647,7 @@ export function RentalsListV2() {
               replaces the 520px from md up. */}
           <RentalsTable
             partyLabel="Customer"
+            showAmount
             rows={visibleRentals.map(toTableRow)}
             onOpen={(id) => router.push(`/rentals/${id}`)}
             scrollRootRef={scrollRootRef}

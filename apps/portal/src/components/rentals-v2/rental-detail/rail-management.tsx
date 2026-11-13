@@ -27,6 +27,7 @@ import { previewPeriods } from "./rail-preview";
 import { useV2 } from "@/lib/v2-context";
 import { fmtDate, money } from "./_kit";
 import type { RentalDetailV2 } from "./use-rental-detail-v2";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
 type Plan = {
   id: string;
@@ -210,6 +211,9 @@ function OverviewCard({ plans, onOpen, active }: { plans: Plan[]; onOpen: () => 
 
 export function RailManagement({ detail }: { detail: RentalDetailV2 }) {
   const [adding, setAdding] = useState(false);
+  // Adding a period changes the rental: not for read-only roles (QA R1.11).
+  const { canEdit } = useManagerPermissions();
+  const canWrite = canEdit("rentals");
   const router = useRouter();
   const searchParams = useSearchParams();
   const open = readExtension(searchParams);
@@ -309,7 +313,7 @@ export function RailManagement({ detail }: { detail: RentalDetailV2 }) {
       {/* The one place a new period is added — manual extension, auto-renew,
           pay as you go, installments or set dates. Not a plan, so it never
           counts toward Overview; hidden while one is being set up. */}
-      {!draft && (
+      {!draft && canWrite && (
         <div className="flex shrink-0 flex-col items-center pb-1">
           <button
             type="button"

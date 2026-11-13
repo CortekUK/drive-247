@@ -52,6 +52,7 @@ import {
 } from "@/components/auth-v2/brand-surface";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useTenant } from "@/contexts/TenantContext";
+import { WRONG_PORTAL_MESSAGE, flagWrongPortal, isWrongPortal, takeWrongPortal } from "@/lib/wrong-portal";
 import { useIsAreaHidden } from "@/lib/lean-context";
 import { usePinnedLightTheme } from "@/hooks/use-pinned-light-theme";
 
@@ -275,11 +276,26 @@ function LoginV2Content() {
   // `appUser.is_active` is part of the guard: the dashboard bounces deactivated
   // users back here, so redirecting them in without checking it produced its own
   // endless loop.
+  // A login from another company on this company's address (QA R1.12,
+  // lib/wrong-portal.ts): never redirect it in; sign it out here instead.
+  const wrongPortal = isWrongPortal(appUser, tenant?.id);
   useEffect(() => {
-    if (user && appUser && appUser.is_active && !loading) {
+    if (user && appUser && appUser.is_active && !loading && !wrongPortal) {
       router.replace(from);
     }
-  }, [user, appUser, loading, router, from]);
+  }, [user, appUser, loading, router, from, wrongPortal]);
+
+  useEffect(() => {
+    if (takeWrongPortal() || searchParams.get("error") === "wrong_portal") setError(WRONG_PORTAL_MESSAGE);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (user && wrongPortal && !loading) {
+      setError(WRONG_PORTAL_MESSAGE);
+      flagWrongPortal();
+      void supabase.auth.signOut({ scope: "local" }).finally(() => router.replace("/login?error=wrong_portal"));
+    }
+  }, [user, wrongPortal, loading, router]);
 
   // Show loading screen while checking auth
   if (loading) {
@@ -395,6 +411,15 @@ function LoginV2Content() {
         // had dropped this read along with `tenant_id`/`actor_id`/`entity_type`
         // from the insert below, which would have written anonymous rows.
         const signedInAppUser = useAuthStore.getState().appUser;
+
+        if (isWrongPortal(signedInAppUser, tenant?.id)) {
+          flagWrongPortal();
+          // "local": this browser only, so they stay signed in to their own portal.
+          await supabase.auth.signOut({ scope: "local" });
+          setError(WRONG_PORTAL_MESSAGE);
+          router.replace("/login?error=wrong_portal");
+          return;
+        }
 
         // Record policy acceptance via edge function (captures IP server-side)
         if (requiresPolicyAcceptance && data.acceptPolicies && tenant?.id) {
