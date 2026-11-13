@@ -54,12 +54,18 @@ export function VehiclePicker({
   currentVehicleId,
   startDate,
   endDate,
+  keptPrice,
   onDone,
 }: {
   rentalId: string;
   currentVehicleId: string | null;
   startDate: string | null;
   endDate: string | null;
+  /**
+   * On a swap: what the rental is priced at, e.g. "$150.00 for 3 days". A swap
+   * does not re-price, and the screen says so before anyone picks (QA R4.8).
+   */
+  keptPrice?: string | null;
   /** Leave the picker — after a swap lands, or to keep the current car. */
   onDone: (changed: boolean) => void;
 }) {
@@ -139,6 +145,12 @@ export function VehiclePicker({
           </span>
         )}
       </label>
+      {currentVehicleId && keptPrice && (
+        <p className="shrink-0 rounded-2xl bg-muted px-4 py-2.5 text-xs text-muted-foreground">
+          Swapping keeps this rental&apos;s price: <span className="font-semibold text-foreground">{keptPrice}</span>. The
+          new car&apos;s own rates are not applied, and the charges stay as they are.
+        </p>
+      )}
 
       {!q ? (
         /* ── nothing typed: the illustrated empty state ─────────────────── */

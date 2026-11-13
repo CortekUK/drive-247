@@ -311,6 +311,11 @@ export function StageVehicle({ detail, refetch }: StageProps) {
           currentVehicleId={vehicle.id}
           startDate={rental.start_date ? String(rental.start_date).slice(0, 10) : null}
           endDate={rental.end_date ? String(rental.end_date).slice(0, 10) : null}
+          keptPrice={
+            rental.monthly_amount != null
+              ? `${formatCurrency(Number(rental.monthly_amount), currency)}${detail.days != null ? ` for ${detail.days} ${detail.days === 1 ? "day" : "days"}` : ""}`
+              : null
+          }
           onDone={(changed) => {
             setPicking(false);
             if (changed) refetch();
