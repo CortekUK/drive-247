@@ -36,11 +36,17 @@
  * regenerates the still-unpaid charges in one transaction. The new total is on
  * screen before Save. When only times or places change, the rental price is
  * left exactly as it is — only the delivery and collection fees move.
+ *
+ * Each end picks its how again here, with the fee that goes with it (QA R5.6,
+ * Nov 13 2026 — staff could only retype the address, so a switch to delivery
+ * was never charged). Fees are not taxed, as on the booking site and in the
+ * create flow; `update_rental_terms_v2` writes them and rebuilds the
+ * Delivery Fee / Collection Fee charges with the rest.
  */
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Lock, MapPin, Truck } from "lucide-react";
+import { AlertTriangle, Building2, Lock, MapPin, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
@@ -55,7 +61,10 @@ import { calculateRentalPriceBreakdown } from "@/lib/calculate-rental-price";
 import { formatCurrency, type DistanceUnit } from "@/lib/format-utils";
 import { resolveAgreementTimeZone } from "@/lib/agreement-datetime";
 import { LocationAutocomplete } from "@/components/ui/location-autocomplete";
+import { LocationAutocompleteWithRadius } from "@/components/ui/location-autocomplete-with-radius";
+import { resolveDeliveryFee, type DeliveryTierConfig } from "@/lib/delivery-tiers";
 import { Button } from "@/components/ui-v2/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import type { RentalRow } from "./use-rental-detail-v2";
 import type { StageProps } from "./stages";
 import { WhereMap, type MapPlace } from "./where-map";
@@ -63,7 +72,32 @@ import { RentalDatesDialog } from "./rental-dates-dialog";
 import { fmtDate, Panel, Pill, StageAction, Surface } from "./_kit";
 
 type How = "fixed" | "location" | "area";
-type End = { how: How; address: string; locationId: string | null; fee: number; outOfRadius?: boolean };
+type End = {
+  how: How;
+  address: string;
+  locationId: string | null;
+  fee: number;
+  /** Area only: the address is outside the delivery radius (allowed, warned). */
+  outOfRadius?: boolean;
+  /** Area only: beyond the furthest distance band — not deliverable. */
+  blocked?: boolean;
+};
+
+/** What one end can choose from: Settings → Locations, for pickup or return. */
+type EndChoices = {
+  fixedAddress: string | null;
+  locations: PickupLocation[];
+  tierCfg: DeliveryTierConfig;
+  radiusKm: number;
+  centerLat: number | null;
+  centerLon: number | null;
+};
+
+/** The area fee for an address this far away — the create flow's LocationPicker rule. */
+function areaFee(c: EndChoices, distanceKm?: number): { fee: number; blocked: boolean } {
+  const r = resolveDeliveryFee(distanceKm, c.tierCfg);
+  return { fee: Number(r.fee) || 0, blocked: r.blocked };
+}
 
 const HOW_LABEL: Record<How, { out: string; back: string; icon: typeof Building2 }> = {
   fixed: { out: "Collects from us", back: "Returns to us", icon: Building2 },
@@ -185,6 +219,32 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
   const dirty =
     pickupAt !== origPickup || returnAt !== origReturn || !sameEnd(out, current.out) || !sameEnd(back, current.back);
   const backEnd: End = back;
+  const placesMoved = !sameEnd(out, current.out) || !sameEnd(back, current.back);
+
+  /* ── what each end can choose from (Settings → Locations) ─────────────── */
+  const tierCfg: DeliveryTierConfig = {
+    delivery_tiers_enabled: ls.delivery_tiers_enabled,
+    delivery_distance_tiers: ls.delivery_distance_tiers,
+    area_delivery_fee: ls.area_delivery_fee,
+  };
+  const centre = {
+    centerLat: ls.area_center_lat != null ? Number(ls.area_center_lat) : null,
+    centerLon: ls.area_center_lon != null ? Number(ls.area_center_lon) : null,
+  };
+  const outChoices: EndChoices = {
+    fixedAddress: ls.fixed_pickup_address,
+    locations: pickupLocations,
+    tierCfg,
+    radiusKm: Number(ls.pickup_area_radius_km) || 25,
+    ...centre,
+  };
+  const backChoices: EndChoices = {
+    fixedAddress: ls.fixed_return_address || ls.fixed_pickup_address,
+    locations: returnLocations,
+    tierCfg,
+    radiusKm: Number(ls.return_area_radius_km) || 25,
+    ...centre,
+  };
 
   /* ── the re-price, only when the dates move ───────────────────────────── */
   const newStart = pickupAt.slice(0, 10);
@@ -229,8 +289,12 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
     mutationFn: async () => {
       if (!pickupAt || !returnAt) throw new Error("Both a pickup and a return date are needed.");
       if (newEnd <= newStart) throw new Error("The return has to be after the pickup.");
-      if (!out.address.trim()) throw new Error("Say where the car goes out.");
-      if (!backEnd.address.trim()) throw new Error("Say where the car comes back.");
+      if (out.how === "location" && !out.locationId) throw new Error("Pick which of your locations the car goes out from.");
+      if (backEnd.how === "location" && !backEnd.locationId) throw new Error("Pick which of your locations the car comes back to.");
+      if (!out.address.trim()) throw new Error(out.how === "area" ? "Type the address we deliver to." : "Say where the car goes out.");
+      if (!backEnd.address.trim()) throw new Error(backEnd.how === "area" ? "Type the address we collect from." : "Say where the car comes back.");
+      if (out.blocked) throw new Error("That delivery address is further than you deliver.");
+      if (backEnd.blocked) throw new Error("That collection address is further than you collect from.");
       const terms: Record<string, unknown> = {
         start_date: newStart,
         end_date: newEnd,
@@ -239,9 +303,18 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
         pickup_location: out.address.trim(),
         return_location: backEnd.address.trim(),
       };
-      // A changed address no longer points at a saved location.
-      if (out.address !== current.out.address) terms.pickup_location_id = "";
-      if (backEnd.address !== current.back.address) terms.return_location_id = "";
+      // How each end changes hands, and its fee (QA R5.6). Sent only when a
+      // place changed, so a dates-only save leaves older rentals' fields alone.
+      if (placesMoved) {
+        Object.assign(terms, {
+          delivery_option: out.how,
+          pickup_location_id: out.how === "location" ? (out.locationId ?? "") : "",
+          return_location_id: backEnd.how === "location" ? (backEnd.locationId ?? "") : "",
+          uses_delivery_service: out.how === "area" || backEnd.how === "area",
+          delivery_fee: out.fee,
+          collection_fee: backEnd.fee,
+        });
+      }
       if (reprice) Object.assign(terms, { monthly_amount: reprice.price, tax_amount: reprice.tax, service_fee: reprice.service });
       const { data, error } = await (supabase as any).rpc("update_rental_terms_v2", {
         p_rental_id: rental.id,
@@ -365,7 +438,11 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
               title="Pickup"
               editable={canEdit}
               end={shownOut}
+              original={current.out}
               setEnd={setOut}
+              choices={outChoices}
+              currency={currency}
+              unit={unit}
             />
             <div className="h-px bg-foreground/5" />
             <PlaceRow
@@ -373,7 +450,11 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
               title="Drop-off"
               editable={canEdit}
               end={shownBack}
+              original={current.back}
               setEnd={setBack}
+              choices={backChoices}
+              currency={currency}
+              unit={unit}
             />
           </div>
 
@@ -400,6 +481,23 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
                 </span>
               ) : (
                 <span className="text-xs text-muted-foreground">Same dates — the rental price stays as it is.</span>
+              )}
+              {/* A new how or place moves its fee — say so before Save (QA R5.6). */}
+              {out.fee !== current.out.fee && (
+                <span className="text-xs text-muted-foreground">
+                  Delivery{" "}
+                  <span className="font-semibold text-foreground">
+                    {formatCurrency(current.out.fee, currency)} → {formatCurrency(out.fee, currency)}
+                  </span>
+                </span>
+              )}
+              {back.fee !== current.back.fee && (
+                <span className="text-xs text-muted-foreground">
+                  Collection{" "}
+                  <span className="font-semibold text-foreground">
+                    {formatCurrency(current.back.fee, currency)} → {formatCurrency(back.fee, currency)}
+                  </span>
+                </span>
               )}
               <span className="ml-auto flex items-center gap-2">
                 <Button size="sm" variant="ghost" onClick={reset}>
@@ -492,43 +590,188 @@ function DateBar({
   );
 }
 
+/** Short labels for the three-way choice; HOW_LABEL carries the long ones. */
+const HOW_CHOICE: Record<How, { out: string; back: string }> = {
+  fixed: { out: "Collects from us", back: "Returns to us" },
+  location: { out: "Our location", back: "Our location" },
+  area: { out: "We deliver", back: "We collect" },
+};
+
 /**
- * One row of picker two: just the address this end happens at — typed with the
- * app's Google address search. No "how", no fee (Ghulam, Oct 2 2026: "just the
- * pickup and drop-off address"); the rental's existing delivery fees are left
- * exactly as they are.
+ * One row of picker two: HOW this end changes hands, WHERE, and its fee — the
+ * same three "how"s and fees as the create flow (QA R5.6, which replaced the
+ * address-only row of Oct 2 2026):
+ *
+ *   Collects from us / Returns to us   the tenant's fixed address, free
+ *   Our location                       a saved location, that location's fee
+ *   We deliver / We collect            the customer's address, the area fee
+ *                                      (flat, or by distance band)
+ *
+ * Choosing the end's original how again puts back what it had, fee included.
  */
 function PlaceRow({
   side,
   title,
   editable,
   end,
+  original,
   setEnd,
+  choices,
+  currency,
+  unit,
 }: {
   side: "out" | "back";
   title: string;
   editable: boolean;
   end: End;
+  original: End;
   setEnd: (e: End) => void;
+  choices: EndChoices;
+  currency: string;
+  unit: DistanceUnit;
 }) {
+  const pick = (how: How) => {
+    if (how === end.how) return;
+    if (how === original.how) return setEnd(original);
+    if (how === "fixed") return setEnd({ how, address: choices.fixedAddress ?? "", locationId: null, fee: 0 });
+    if (how === "location") {
+      const only = choices.locations.length === 1 ? choices.locations[0] : null;
+      return setEnd({
+        how,
+        address: only?.address ?? "",
+        locationId: only?.id ?? null,
+        fee: Number(only?.delivery_fee) || 0,
+      });
+    }
+    setEnd({ how, address: "", locationId: null, fee: areaFee(choices).fee });
+  };
+
+  const feeName = side === "out" ? "Delivery fee" : "Collection fee";
+  const feeText =
+    end.fee > 0
+      ? `${end.how === "area" && !end.address ? "From " : ""}${formatCurrency(end.fee, currency)}`
+      : "Free";
+  const loc = end.locationId ? choices.locations.find((l) => l.id === end.locationId) : null;
+
   return (
-    <div className="flex items-center gap-x-5">
-      <h3 className="w-16 shrink-0 font-heading text-sm font-semibold">{title}</h3>
-      <div className="min-w-0 flex-1">
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <h3 className="w-16 shrink-0 font-heading text-sm font-semibold">{title}</h3>
         {editable ? (
-          <LocationAutocomplete
-            id={`${side}-address`}
-            value={end.address}
-            // A typed address replaces any saved location — v1's dialog clears
-            // the FK the same way.
-            onChange={(address) => setEnd({ ...end, address, locationId: null })}
-            placeholder={side === "out" ? "Pickup address" : "Drop-off address"}
-            v2States
-          />
+          <div role="radiogroup" aria-label={`${title}: how`} className="flex flex-wrap gap-1 rounded-full bg-muted/60 p-1">
+            {(["fixed", "location", "area"] as How[]).map((how) => {
+              const Icon = HOW_LABEL[how].icon;
+              const on = end.how === how;
+              return (
+                <button
+                  key={how}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  onClick={() => pick(how)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                    on
+                      ? "bg-card text-foreground shadow-sm ring-1 ring-foreground/10"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Icon className="size-3.5" />
+                  {HOW_CHOICE[how][side]}
+                </button>
+              );
+            })}
+          </div>
         ) : (
+          <span className="text-xs font-medium text-muted-foreground">
+            {loc ? `At ${loc.name}` : HOW_LABEL[end.how][side]}
+          </span>
+        )}
+        <span className="ml-auto text-xs text-muted-foreground">
+          {feeName} <span className="font-semibold text-foreground">{feeText}</span>
+        </span>
+      </div>
+
+      <div className="min-w-0 sm:pl-20">
+        {!editable ? (
           <p className="truncate text-sm font-medium">
             {end.address || <span className="font-normal text-muted-foreground">Not recorded</span>}
           </p>
+        ) : end.how === "fixed" ? (
+          choices.fixedAddress || end.address ? (
+            <p className="flex min-w-0 items-center gap-2 text-sm font-medium">
+              <Building2 className="size-4 shrink-0 text-muted-foreground" />
+              <span className="truncate">{end.address || choices.fixedAddress}</span>
+            </p>
+          ) : (
+            // No fixed address in Settings → Locations: type the one to use.
+            <LocationAutocomplete
+              id={`${side}-address`}
+              value={end.address}
+              onChange={(address) => setEnd({ ...end, address, locationId: null })}
+              placeholder="Your address"
+              v2States
+            />
+          )
+        ) : end.how === "location" ? (
+          choices.locations.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No saved locations yet. Add them in Settings → Locations.</p>
+          ) : (
+            <Select
+              value={end.locationId ?? ""}
+              onValueChange={(id) => {
+                const l = choices.locations.find((x) => x.id === id);
+                if (l) setEnd({ how: "location", address: l.address, locationId: l.id, fee: Number(l.delivery_fee) || 0 });
+              }}
+            >
+              <SelectTrigger id={`${side}-location`} className="w-full">
+                <SelectValue placeholder="Choose one of your locations">{loc?.name}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {choices.locations.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    <span className="flex w-full items-center gap-4">
+                      <span className="flex min-w-0 flex-col">
+                        <span className="font-medium">{l.name}</span>
+                        <span className="truncate text-xs text-muted-foreground">{l.address}</span>
+                      </span>
+                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                        {Number(l.delivery_fee) > 0 ? formatCurrency(Number(l.delivery_fee), currency) : "Free"}
+                      </span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )
+        ) : (
+          <div className="space-y-1.5">
+            <LocationAutocompleteWithRadius
+              id={`${side}-address`}
+              value={end.address}
+              onChange={(address, _lat, _lon, outOfRadius, distanceKm) => {
+                // Typing leaves the distance unknown (the fee reads "From"); a
+                // picked address sets it, and with it the distance band's fee.
+                const f = areaFee(choices, distanceKm);
+                setEnd({ how: "area", address, locationId: null, fee: f.fee, outOfRadius: !!outOfRadius, blocked: f.blocked });
+              }}
+              placeholder={side === "out" ? "Address we deliver to" : "Address we collect from"}
+              radiusKm={choices.radiusKm}
+              centerLat={choices.centerLat}
+              centerLon={choices.centerLon}
+              distanceUnit={unit}
+              allowOutOfRadius
+            />
+            {end.blocked ? (
+              <p className="flex items-center gap-1.5 text-xs text-destructive">
+                <AlertTriangle className="size-3.5" /> Further than you {side === "out" ? "deliver" : "collect from"}.
+              </p>
+            ) : end.outOfRadius ? (
+              <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="size-3.5" /> Outside your delivery area. You can still save it for this rental.
+              </p>
+            ) : null}
+          </div>
         )}
       </div>
     </div>
