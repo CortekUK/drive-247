@@ -146,6 +146,31 @@ export interface BookingPaymentIntentResponse {
   documentsUrl?: string | null;
 }
 
+/* ───────────────────────────────── settling ──────────────────────────────── */
+
+/**
+ * Tell the server a PaymentIntent the card form just confirmed has succeeded,
+ * so the payment is committed to the rental straight away instead of waiting
+ * for the once-a-minute recovery job. The server re-reads the intent from
+ * Stripe; this call only says "look now". Never throws: a failure here means
+ * the recovery job settles it a minute later, and the customer has already
+ * paid, so nothing on screen may depend on it.
+ */
+export async function settleBookingPayment(
+  rentalId: string | null,
+  paymentIntentId: string | null | undefined,
+): Promise<void> {
+  if (!rentalId || !paymentIntentId) return;
+  try {
+    const { error } = await supabase.functions.invoke(FUNCTION_NAME, {
+      body: { action: "settle", rentalId, paymentIntentId },
+    });
+    if (error) console.warn("[settleBookingPayment] settle failed, the recovery job will retry:", error);
+  } catch (caught) {
+    console.warn("[settleBookingPayment] settle not reached, the recovery job will retry:", caught);
+  }
+}
+
 /* ──────────────────────────────── the states ─────────────────────────────── */
 
 export type PaymentIntentFailureKind =

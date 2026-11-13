@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import {
+  settleBookingPayment,
   usePaymentIntent,
   type BookingPaymentIntentRequest,
   type BookingPaymentIntentResponse,
@@ -633,6 +634,8 @@ export function useCardFormController({
         // token here is the one that was minted before the hop, not a fresh one.
         const documentsToken = intent.documentsToken ?? null;
         if (paymentIntent.status === "succeeded") {
+          // Commit it now; the recovery job is the backstop if this is lost.
+          void settleBookingPayment(rentalId, paymentIntent.id);
           onOutcome({
             kind: "succeeded",
             rentalNumber: intent.rentalNumber,
@@ -674,6 +677,7 @@ export function useCardFormController({
     intent.clientSecret,
     intent.rentalNumber,
     intent.documentsToken,
+    rentalId,
     onOutcome,
   ]);
 
@@ -721,6 +725,9 @@ export function useCardFormController({
       // charge provably belong to the same rental.
       const documentsToken = intent.documentsToken ?? null;
       if (paymentIntent.status === "succeeded") {
+        // Commit it now so the portal shows it paid straight away; the
+        // recovery job is the backstop if this call is lost.
+        void settleBookingPayment(rentalId, paymentIntent.id);
         onOutcome({
           kind: "succeeded",
           rentalNumber: intent.rentalNumber,

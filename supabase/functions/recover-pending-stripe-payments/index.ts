@@ -134,6 +134,57 @@ Deno.serve(async (req) => {
     }
 
     // ----------------------------------------------------------------------
+    // PASS 1b (2026-11-13) — embedded-card payments from the booking site and
+    // the customer portal (create-booking-payment-intent). They have a
+    // PaymentIntent but no Checkout Session, so pass 1 never sees them. The
+    // card form settles them itself the moment Stripe says succeeded; this is
+    // the backstop for a customer who closed the tab first. It only ASKS that
+    // function to settle: settle re-reads the intent from Stripe and ignores
+    // anything it did not mint (metadata.settlement_source).
+    // ----------------------------------------------------------------------
+    let piScanned = 0;
+    let piSettled = 0;
+    let piErrors = 0;
+    {
+      const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
+      const { data: piRows, error: piErr } = await supabase
+        .from('payments')
+        .select('id, rental_id, stripe_payment_intent_id')
+        .eq('status', 'Pending')
+        .eq('payment_provider', 'stripe')
+        .eq('capture_status', 'requires_capture')
+        .is('stripe_checkout_session_id', null)
+        .not('stripe_payment_intent_id', 'is', null)
+        .not('rental_id', 'is', null)
+        .gte('created_at', cutoffIso)
+        .lte('created_at', oneMinuteAgo)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (piErr) console.error('[recover] Pass-1b query failed:', piErr.message);
+      for (const p of piRows ?? []) {
+        piScanned++;
+        try {
+          const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/create-booking-payment-intent`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            },
+            body: JSON.stringify({ action: 'settle', rentalId: p.rental_id, paymentIntentId: p.stripe_payment_intent_id }),
+          });
+          const out = await res.json().catch(() => null);
+          if (out?.settled && out?.transitioned) {
+            piSettled++;
+            console.log(`[recover] Settled embedded-card payment ${p.id} (${p.stripe_payment_intent_id})`);
+          }
+        } catch (err: any) {
+          piErrors++;
+          console.error(`[recover] Pass-1b failed for ${p.id}:`, err?.message);
+        }
+      }
+    }
+
+    // ----------------------------------------------------------------------
     // PASS 2 — re-allocate captured 'Credit' payments stranded on a rental
     // that still owes money. These are real Stripe money that committed but
     // FIFO left unallocated (pre-fix extension exclusion, or any allocation
@@ -204,6 +255,9 @@ Deno.serve(async (req) => {
       paid,
       unchanged,
       errors,
+      piScanned,
+      piSettled,
+      piErrors,
       creditScanned,
       creditHealed,
       creditErrors,
