@@ -181,7 +181,7 @@ function useRentalActivity(rental: Record<string, any>, tenantId: string | null 
           .eq("tenant_id", tenantId!),
         supabase
           .from("payments")
-          .select("id, amount, method, status, payment_type, refund_status, paid_at, payment_date, created_at")
+          .select("id, amount, method, status, payment_type, refund_status, paid_at, payment_date, created_at, created_by, stripe_payment_intent_id, stripe_checkout_session_id")
           .eq("rental_id", rentalId!)
           .eq("tenant_id", tenantId!),
         supabase
@@ -213,6 +213,8 @@ function useRentalActivity(rental: Record<string, any>, tenantId: string | null 
       ]);
 
       const events: Event[] = [];
+      /** The renter, for the steps they take themselves (signing, paying online). QA R13.1. */
+      const customerName = `${((rental as any).customers?.name as string | undefined) ?? "The customer"} (customer)`;
       const push = (e: Event | null) => {
         if (e && e.at) events.push(e);
       };
@@ -221,7 +223,17 @@ function useRentalActivity(rental: Record<string, any>, tenantId: string | null 
 
       push(
         rental.created_at
-          ? { id: "r-created", at: rental.created_at, kind: "change", icon: Plus, text: "Rental created" }
+          ? {
+              id: "r-created",
+              at: rental.created_at,
+              kind: "change",
+              icon: Plus,
+              text: "Rental created",
+              // QA R13.1: a booking-site rental was made by the customer.
+              by: ["website", "booking", "booking_site"].includes(String((rental as any).source ?? (rental as any).booking_source ?? "").toLowerCase())
+                ? `label:${customerName}`
+                : null,
+            }
           : null
       );
       push(
@@ -312,6 +324,7 @@ function useRentalActivity(rental: Record<string, any>, tenantId: string | null 
                 kind: "doc",
                 icon: FileSignature,
                 text: `${which} signed`,
+                by: `label:${customerName}`,
               }
             : null
         );
@@ -342,6 +355,11 @@ function useRentalActivity(rental: Record<string, any>, tenantId: string | null 
                 : `Payment received${p.method ? ` · ${p.method}` : ""}`,
           amount: money(num(p.amount)),
           bad: failed,
+          /* QA R13.1: who. A staff member who recorded it (payments.created_by),
+             or the customer when they paid online (a Stripe intent or checkout). */
+          by:
+            (p as any).created_by ??
+            ((p as any).stripe_payment_intent_id || (p as any).stripe_checkout_session_id ? `label:${customerName}` : null),
         });
       }
 
@@ -414,10 +432,10 @@ function useRentalActivity(rental: Record<string, any>, tenantId: string | null 
         new Set(events.map((e) => e.by).filter((v): v is string => typeof v === "string" && v.length > 0))
       );
       if (actorIds.length > 0) {
-        const { data: staff } = await supabase.from("app_users").select("id, name").in("id", actorIds);
+        const { data: staff } = await supabase.from("app_users").select("id, name").in("id", actorIds.filter((v) => !v.startsWith("label:")));
         const names = new Map((staff ?? []).map((u: any) => [u.id, u.name as string | null]));
         for (const e of events) {
-          if (e.by) e.by = names.get(e.by) ?? null;
+          if (e.by) e.by = e.by.startsWith("label:") ? e.by.slice(6) || null : names.get(e.by) ?? null;
         }
       }
 
