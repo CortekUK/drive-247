@@ -15,7 +15,7 @@
  *
  * MOCK (Ghulam, Oct 19 2026): a company with no feedback or no onboarding
  * answers shows sample ones, marked "Sample", so the UI can be reviewed.
- * Delete MOCK_FEEDBACK and MOCK_ONBOARDING once signed off.
+ * (The Oct 18 sample feedback and onboarding answers were removed, QA R17.)
  */
 
 import { useEffect, useState, type ReactNode } from 'react';
@@ -56,26 +56,6 @@ interface FirstRun {
   was_skipped: boolean;
   completed_at: string | null;
 }
-
-/* ------------------------------------------------------------------ mocks */
-
-const MOCK_FEEDBACK: FeedbackItem[] = [
-  { id: 'mock-1', category: 'bug', message: 'The calendar does not refresh after I extend a rental. I have to reload the page.', submitter_name: 'Sarah (Owner)', submitter_email: null, status: 'open', rating: 3, created_at: '2026-10-14T10:12:00Z' },
-  { id: 'mock-2', category: 'feature_request', message: 'Could we send the agreement by SMS as well as email?', submitter_name: 'Sarah (Owner)', submitter_email: null, status: 'open', rating: 4, created_at: '2026-10-08T16:40:00Z' },
-  { id: 'mock-3', category: 'improvement', message: 'Love the new dashboard. Faster to find today’s pickups.', submitter_name: 'Mike (Ops)', submitter_email: null, status: 'resolved', rating: 5, created_at: '2026-09-29T09:05:00Z' },
-];
-
-const MOCK_ONBOARDING: FirstRun = {
-  answers: {
-    fleet_size: '6-10',
-    primary_location: 'Miami, FL',
-    vehicle_types: ['suv', 'luxury'],
-    takes_payments_today: 'other_processor',
-    referral_source: 'word_of_mouth',
-  },
-  was_skipped: false,
-  completed_at: '2026-09-04T12:00:00Z',
-};
 
 /* ---------------------------------------------------------------- helpers */
 
@@ -118,7 +98,10 @@ export function OnboardingAnswers({ tenantId, companyName }: { tenantId: string;
   }, [tenantId]);
 
   if (firstRun === undefined) return <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>;
-  const shown = firstRun ?? MOCK_ONBOARDING;
+  // Real answers only (QA R17.5): the review mock showed sample answers for
+  // every tenant that had none.
+  if (firstRun === null) return <p className="py-6 text-center text-sm text-muted-foreground">{companyName} hasn&apos;t answered the first-run questions yet.</p>;
+  const shown = firstRun;
 
   return (
     <div>
@@ -306,8 +289,9 @@ export function HealthFeedbackPanel({ tenantId, className }: { tenantId: string;
       .then(({ data }: { data: FeedbackItem[] | null }) => setFeedback(data ?? []));
   }, [tenantId]);
 
-  const isSample = feedback !== null && feedback.length === 0;
-  const shown = isSample ? MOCK_FEEDBACK : feedback ?? [];
+  // Real feedback only (QA R17.4/R17.5): every tenant without feedback showed
+  // the same sample "4.0 · 3 replies · 2 open".
+  const shown = feedback ?? [];
   const openCount = shown.filter((f) => f.status === 'open').length;
   const rated = shown.filter((f) => f.rating !== null);
   const average = rated.length ? rated.reduce((sum, f) => sum + (f.rating ?? 0), 0) / rated.length : null;
