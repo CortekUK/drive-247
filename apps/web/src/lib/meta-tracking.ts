@@ -8,7 +8,7 @@
  *   2. Send `CompleteRegistration` once an account exists, and `StartTrial`
  *      once its trial has started.
  *
- * The server sends the same event through the Conversions API
+ * The server sends the same two events through the Conversions API
  * (supabase/functions/_shared/meta-conversions.ts) under the same id, so Meta
  * counts one signup. The pixel itself is loaded in app/layout.tsx.
  *
@@ -120,9 +120,9 @@ export function trackStartTrial(input: { eventId: string; userId: string; email:
 /**
  * Send `CompleteRegistration` once an account exists with a confirmed email:
  * the step before the card. More people reach it than start a trial, so Meta
- * has more to learn from while trial numbers are low. Browser only: there is
- * no server copy, so nothing needs deduplicating.
+ * has more to learn from while trial numbers are low. The server sends its own
+ * copy under the same id (`<account id>_signup`), so Meta counts the pair once.
  */
 export function trackRegistration(input: { userId: string; email: string }): void {
-  sendOnce("CompleteRegistration", { ...input, eventId: `${input.userId}_registration` });
+  sendOnce("CompleteRegistration", { ...input, eventId: `${input.userId}_signup` });
 }

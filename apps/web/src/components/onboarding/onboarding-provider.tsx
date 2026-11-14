@@ -1444,7 +1444,7 @@ export function OnboardingProvider({
         dispatch({ type: "setPlan", planId: pending.planId });
         dispatch({ type: "business", patch: draftToBusiness(pending.values) });
 
-        await signupBeginOauth({ planId: pending.planId });
+        await signupBeginOauth({ planId: pending.planId, tracking: readMetaSignals() });
         void reportRegistration("oauth");
         // Only now — the draft is worth keeping only against a signup that
         // actually exists.
@@ -1634,6 +1634,7 @@ export function OnboardingProvider({
           planId,
           companyWebsite: values.companyWebsite,
           formStartedAt: values.formStartedAt,
+          tracking: readMetaSignals(),
         });
 
         /*
@@ -1805,7 +1806,7 @@ export function OnboardingProvider({
       dispatch({ type: "busy", busy: true });
       dispatch({ type: "error", error: null });
       try {
-        const res = await signupVerifyOtp({ email, action: "verify", code });
+        const res = await signupVerifyOtp({ email, action: "verify", code, tracking: readMetaSignals() });
         if (!res.ok && !res.verified && !res.alreadyVerified) {
           setVerifyError(res.error ?? "That code is not valid.");
           return false;

@@ -23,6 +23,8 @@ export interface SignupBeginRequest {
   planId: SignupPlanId;
   companyWebsite?: string;
   formStartedAt?: number;
+  /** Meta's browser cookies, so the server's CompleteRegistration is tied to the ad click. */
+  tracking?: MetaBrowserSignals;
 }
 export interface SlugCheckRequest {
   slug: string;
@@ -85,6 +87,8 @@ export interface SignupBeginResponse {
 }
 export interface SignupBeginOauthRequest {
   planId: SignupPlanId;
+  /** Meta's browser cookies, so the server's CompleteRegistration is tied to the ad click. */
+  tracking?: MetaBrowserSignals;
 }
 export interface SignupBeginOauthResponse {
   success: true;
@@ -436,6 +440,8 @@ export interface SignupVerifyOtpRequest {
   email: string;
   action?: "verify" | "resend";
   code?: string;
+  /** Meta's browser cookies, so the server's CompleteRegistration is tied to the ad click. */
+  tracking?: MetaBrowserSignals;
 }
 export interface SignupVerifyOtpResponse {
   ok: boolean;
