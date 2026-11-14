@@ -59,12 +59,19 @@ import {
   type SignupMetadata,
 } from "../_shared/signup-state.ts";
 import { clean, MAX } from "../_shared/tenant-provisioning.ts";
+import {
+  sendCompleteRegistration,
+  shouldTrackSignup,
+  type MetaBrowserSignals,
+} from "../_shared/meta-conversions.ts";
 
 const LOG = "[signup-begin-oauth]";
 const HOUR_MS = 60 * 60 * 1000;
 
 interface BeginOauthRequest {
   planId?: string;
+  /** Meta's browser cookies, so the server's event is tied to the ad click. */
+  tracking?: MetaBrowserSignals;
 }
 
 /**
@@ -311,6 +318,19 @@ Deno.serve(async (req) => {
       plan_id: plan.id,
       outcome: "ok",
     });
+
+    // Google vouched for the address, so the account is real from here: tell
+    // Meta, under the id the browser's pixel uses. The "already has a signup"
+    // return above comes before this, so a repeat never sends it again.
+    if (shouldTrackSignup(meta)) {
+      await sendCompleteRegistration({
+        userId: user.id,
+        email,
+        fullName: meta.fullName,
+        signals: body.tracking ?? null,
+        req,
+      });
+    }
 
     return jsonResponse({
       success: true,

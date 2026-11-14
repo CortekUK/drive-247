@@ -26,6 +26,7 @@ import {
   OTP_MAX_ATTEMPTS,
 } from "../_shared/signup-otp.ts";
 import { sendEmail } from "../_shared/resend-service.ts";
+import { sendCompleteRegistration, shouldTrackSignup } from "../_shared/meta-conversions.ts";
 
 const LOG = "[signup-verify-otp]";
 
@@ -174,6 +175,20 @@ Deno.serve(async (req) => {
     }
 
     console.log(`${LOG} verified ${user.id}`);
+
+    // The account is real from here: tell Meta, under the id the browser's
+    // pixel uses for the same event. Only on this run, the one that confirmed
+    // the address. Never fails the verification.
+    if (shouldTrackSignup(meta)) {
+      await sendCompleteRegistration({
+        userId: user.id,
+        email,
+        fullName: meta.fullName,
+        signals: body.tracking ?? null,
+        req,
+      });
+    }
+
     return jsonResponse({ ok: true, verified: true });
   } catch (err) {
     console.error(`${LOG} unexpected`, err);

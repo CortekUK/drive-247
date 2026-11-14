@@ -1,11 +1,14 @@
 // =============================================================================
-// meta-conversions — tells Meta (Facebook ads) that a signup happened, from the
-// server, through the Conversions API.
+// meta-conversions — tells Meta (Facebook ads) about a signup, from the server,
+// through the Conversions API. Two events:
+//   CompleteRegistration  the account exists with a confirmed email
+//   StartTrial            the card is added and the trial has started
 //
-// The browser pixel sends the same event (apps/web/src/lib/meta-tracking.ts),
+// The browser pixel sends the same events (apps/web/src/lib/meta-tracking.ts),
 // but iPhone privacy settings and ad blockers drop a lot of browser events, so
-// the server copy is the one Meta can rely on. Both carry the SAME `event_id`,
-// which is how Meta counts one signup instead of two.
+// the server copy is the one Meta can rely on. Both carry the SAME `event_id`
+// (`<account id>_signup`, `<account id>_trial`), which is how Meta counts one
+// signup instead of two.
 //
 // Secrets (Supabase function secrets, never in the repo):
 //   META_CAPI_ACCESS_TOKEN     Events Manager → dataset → Settings → Conversions API
@@ -31,7 +34,7 @@ export interface MetaBrowserSignals {
   sourceUrl?: string;
 }
 
-export interface StartTrialInput {
+export interface MetaSignupInput {
   /** The new account's auth user id. */
   userId: string;
   email: string;
@@ -42,14 +45,29 @@ export interface StartTrialInput {
   req: Request;
 }
 
+export type StartTrialInput = MetaSignupInput;
+
 /** One id per account, shared by the browser and the server event. Never reused. */
 export function startTrialEventId(userId: string): string {
   return `${userId}_trial`;
 }
 
+/** The same, for `CompleteRegistration`. */
+export function registrationEventId(userId: string): string {
+  return `${userId}_signup`;
+}
+
 /** True while a test code is set: events go to Meta's "Test events" tab. */
 export function metaTestCode(): string | null {
   return Deno.env.get("META_CAPI_TEST_EVENT_CODE")?.trim() || null;
+}
+
+/**
+ * Whether a signup is one Meta should hear about: a real customer (live mode,
+ * not a Developer-page rehearsal), or anything at all while a test code is set.
+ */
+export function shouldTrackSignup(signup: { mode?: string | null; rehearsal?: unknown }): boolean {
+  return (signup.mode === "live" && !signup.rehearsal) || !!metaTestCode();
 }
 
 async function sha256(value: string): Promise<string> {
@@ -88,11 +106,29 @@ function clientIp(req: Request): string | undefined {
  * Call it once, on the run that actually created the account — never on an
  * idempotent repeat. Safe to await: it gives up after five seconds.
  */
-export async function sendStartTrial(input: StartTrialInput): Promise<boolean> {
+export function sendStartTrial(input: MetaSignupInput): Promise<boolean> {
+  return sendEvent("StartTrial", startTrialEventId(input.userId), input, { currency: "USD", value: 0 });
+}
+
+/**
+ * Send `CompleteRegistration` once an account has a confirmed email (the code
+ * was right, or Google vouched for the address). A repeat under the same id is
+ * harmless: Meta counts an event id once.
+ */
+export function sendCompleteRegistration(input: MetaSignupInput): Promise<boolean> {
+  return sendEvent("CompleteRegistration", registrationEventId(input.userId), input);
+}
+
+async function sendEvent(
+  eventName: string,
+  eventId: string,
+  input: MetaSignupInput,
+  customData?: Record<string, unknown>,
+): Promise<boolean> {
   try {
     const token = Deno.env.get("META_CAPI_ACCESS_TOKEN")?.trim();
     if (!token) {
-      console.warn(`${LOG} META_CAPI_ACCESS_TOKEN is not set — StartTrial not sent`);
+      console.warn(`${LOG} META_CAPI_ACCESS_TOKEN is not set — ${eventName} not sent`);
       return false;
     }
     const pixelId = Deno.env.get("META_PIXEL_ID")?.trim() || DEFAULT_PIXEL_ID;
@@ -120,12 +156,12 @@ export async function sendStartTrial(input: StartTrialInput): Promise<boolean> {
     if (fbc) userData.fbc = fbc;
 
     const event: Record<string, unknown> = {
-      event_name: "StartTrial",
+      event_name: eventName,
       event_time: Math.floor(Date.now() / 1000),
-      event_id: startTrialEventId(input.userId),
+      event_id: eventId,
       action_source: "website",
       user_data: userData,
-      custom_data: { currency: "USD", value: 0 },
+      ...(customData ? { custom_data: customData } : {}),
     };
     const sourceUrl = cleanUrl(input.signals?.sourceUrl) ?? cleanUrl(input.req.headers.get("referer"));
     if (sourceUrl) event.event_source_url = sourceUrl;
@@ -144,21 +180,21 @@ export async function sendStartTrial(input: StartTrialInput): Promise<boolean> {
         signal: controller.signal,
       });
       if (!res.ok) {
-        console.error(`${LOG} StartTrial refused (${res.status}):`, (await res.text()).slice(0, 500));
+        console.error(`${LOG} ${eventName} refused (${res.status}):`, (await res.text()).slice(0, 500));
         return false;
       }
       // Meta's own receipt (how many events it counted, its trace id, any
       // warnings), so a "sent" that never shows in Events Manager can be traced.
       const receipt = (await res.text().catch(() => "")).slice(0, 400);
       console.log(
-        `${LOG} StartTrial sent for ${event.event_id}${testCode ? ` (test event, code ${testCode})` : ""} to ${pixelId}: ${receipt}`,
+        `${LOG} ${eventName} sent for ${eventId}${testCode ? ` (test event, code ${testCode})` : ""} to ${pixelId}: ${receipt}`,
       );
       return true;
     } finally {
       clearTimeout(timer);
     }
   } catch (e) {
-    console.error(`${LOG} StartTrial threw (non-fatal):`, e);
+    console.error(`${LOG} ${eventName} threw (non-fatal):`, e);
     return false;
   }
 }

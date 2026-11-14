@@ -18,6 +18,11 @@
 // =============================================================================
 
 import { handleCors, errorResponse, jsonResponse } from "../_shared/cors.ts";
+import {
+  sendCompleteRegistration,
+  shouldTrackSignup,
+  type MetaBrowserSignals,
+} from "../_shared/meta-conversions.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { fetchSignupPlan } from "../_shared/signup-plans.ts";
@@ -100,6 +105,8 @@ interface BeginRequest {
   companyWebsite?: string;
   /** Date.now() captured when the account step mounted. */
   formStartedAt?: number;
+  /** Meta's browser cookies, so the server's event is tied to the ad click. */
+  tracking?: MetaBrowserSignals;
 }
 
 /**
@@ -458,6 +465,18 @@ Deno.serve(async (req) => {
       } catch (e) {
         console.error(`${LOG} OTP send threw for ${created.user.id}`, e);
       }
+    }
+
+    // With no code to wait for, the account is real already: tell Meta now.
+    // When a code IS coming, `signup-verify-otp` sends this once it is right.
+    if (!OTP_ENABLED && shouldTrackSignup(meta)) {
+      await sendCompleteRegistration({
+        userId: created.user.id,
+        email,
+        fullName,
+        signals: body.tracking ?? null,
+        req,
+      });
     }
 
     // The password is NOT echoed and NOT stored anywhere: the browser already
