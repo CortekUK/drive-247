@@ -71,13 +71,17 @@ export function useInsuranceVerifications() {
       return (data || []) as unknown as InsuranceVerification[];
     },
     enabled: !!tenant,
+    // QA I3.1: checks also arrive from the booking site (a customer sending a
+    // certificate), which this screen did not start, so look every 20 s and on
+    // returning to the tab, not only while one of ours is analysing.
+    refetchOnWindowFocus: true,
     refetchInterval: (q) => {
       const rows = (q.state.data || []) as InsuranceVerification[];
       return rows.some(
         (r) => r.status === "pending" || r.status === "processing",
       )
         ? 2500
-        : false;
+        : 20_000;
     },
   });
 }
@@ -217,6 +221,12 @@ export function useAttachInsuranceVerification() {
         })
         .eq("id", verificationId);
       if (error) throw error;
+      // QA I3.4/I3.5: now that there is a customer and rental dates, check the
+      // name on the policy and the cover dates against them (no new AI call).
+      const { error: recheckError } = await supabase.functions.invoke("verify-insurance-document", {
+        body: { verificationId, recheck: true },
+      });
+      if (recheckError) console.error("[insurance] recheck after attach failed", recheckError);
     },
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({

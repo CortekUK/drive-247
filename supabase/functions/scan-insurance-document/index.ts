@@ -102,7 +102,7 @@ serve(async (req) => {
     // Get document record to find the actual file URL
     const { data: docRecord, error: docError } = await supabase
       .from('customer_documents')
-      .select('file_url, mime_type, file_name, tenant_id')
+      .select('file_url, mime_type, file_name, file_size, tenant_id, rental_id, customer_id')
       .eq('id', documentId)
       .single();
 
@@ -466,6 +466,19 @@ IMPORTANT:
 
     console.log('[INSURANCE-AI] Document scan completed successfully. Decision:', verificationDecision);
 
+    // QA I3.1: a certificate the customer sent from the booking site never
+    // reached Insurances -> AI Verifications, where staff look. File it there
+    // too, with this scan's result (no second AI call), then let
+    // verify-insurance-document run its plain checks (expiry, name on the
+    // policy vs the customer, cover vs the rental dates). Best-effort.
+    if ((docRecord as { rental_id?: string | null })?.rental_id) {
+      try {
+        await mirrorToAiVerifications(supabase, supabaseUrl, supabaseServiceKey, docRecord as any, extractedData, validationScore, verificationDecision);
+      } catch (mirrorError) {
+        console.error('[INSURANCE-AI] could not add to AI Verifications:', mirrorError);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -687,4 +700,79 @@ function isFutureDate(dateString: string): boolean {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return date >= today;
+}
+
+/**
+ * QA I3.1: file a booking-site certificate in insurance_verifications so it
+ * shows in AI Verifications. Score follows this scan's own decision, mapped
+ * onto that table's bands (70+ verified, 40-69 flagged, under 40 rejected).
+ */
+async function mirrorToAiVerifications(
+  supabase: any,
+  supabaseUrl: string,
+  serviceKey: string,
+  doc: { file_url: string; mime_type: string | null; file_name: string | null; file_size: number | null; tenant_id: string; rental_id: string; customer_id: string | null },
+  data: ExtractedInsuranceData,
+  validationScore: number,
+  decision: string,
+) {
+  const path = String(doc.file_url || '');
+  if (!path) return;
+  const fileUrl = /^https?:/i.test(path) ? path : `${supabaseUrl}/storage/v1/object/public/customer-documents/${path}`;
+
+  let score = Math.round(Math.max(0, Math.min(1, validationScore)) * 100);
+  if (decision === 'auto_rejected') score = Math.min(score, 39);
+  else if (decision === 'pending_review') score = Math.max(40, Math.min(score, 69));
+  else if (decision === 'auto_approved') score = Math.max(score, 70);
+  const isInsurance = data.isValidDocument !== false;
+  if (!isInsurance) score = Math.min(score, 20);
+
+  const aiFlags = Array.from(new Set([...(data.reviewReasons || []), ...(data.suspiciousIndicators || [])].map(String)));
+  const notes = (data.validationNotes || []).map(String).join(' ');
+
+  // One row per file: a re-sent "policy.pdf" replaces its earlier check.
+  await supabase.from('insurance_verifications').delete().eq('tenant_id', doc.tenant_id).eq('file_url', fileUrl);
+  const { data: row, error } = await supabase
+    .from('insurance_verifications')
+    .insert({
+      tenant_id: doc.tenant_id,
+      rental_id: doc.rental_id,
+      customer_id: doc.customer_id,
+      file_url: fileUrl,
+      file_name: doc.file_name || path.split('/').pop(),
+      file_size: doc.file_size,
+      mime_type: doc.mime_type,
+      status: 'processing',
+      ai_score: score,
+      ai_findings: {
+        flags: aiFlags,
+        ai_flags: aiFlags,
+        reasoning: notes || `Sent by the customer from the booking site. AI decision: ${decision.replace('_', ' ')}.`,
+        is_insurance_document: isInsurance,
+        model: AI_MODEL,
+        source: 'booking_site',
+      },
+      extracted_fields: {
+        insurer: data.provider ?? null,
+        policy_number: data.policyNumber ?? null,
+        policy_holder: data.policyHolderName ?? null,
+        coverage_type: data.coverageType ?? null,
+        start_date: data.effectiveDate ?? null,
+        end_date: data.expirationDate ?? null,
+        vehicle_info: null,
+        premium_amount: null,
+        country: null,
+      },
+      attached_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+  if (error) throw error;
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/verify-insurance-document`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
+    body: JSON.stringify({ verificationId: row.id, recheck: true }),
+  });
+  if (!res.ok) console.error('[INSURANCE-AI] recheck failed', res.status, await res.text());
 }

@@ -1,6 +1,7 @@
 // @ts-nocheck - Deno edge function
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { runCoverChecks } from "../_shared/insurance-cover-checks.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -63,6 +64,12 @@ async function logUsage(params: {
 
 interface VerifyRequest {
   verificationId: string;
+  /**
+   * QA I3: re-run only the plain checks (expiry, name, rental dates) on what the
+   * AI already read, with no new AI call. Sent after a check is attached to a
+   * rental, and by scan-insurance-document for booking-site uploads.
+   */
+  recheck?: boolean;
 }
 
 interface ExtractedFields {
@@ -171,7 +178,10 @@ Return ONLY valid JSON, no markdown, no code blocks:
   }
 }
 
-Be honest. If it's clearly not insurance, set is_insurance_document=false and score<=20.`;
+Be honest. If it's clearly not insurance, set is_insurance_document=false and score<=20.
+
+Today's date is ${new Date().toISOString().slice(0, 10)}. Dates after today are normal for a current policy; do not flag them as "future dates".
+If the image is blurry, too small or any text cannot be read with confidence, add the flag "blurry / illegible critical fields" and set every field you cannot read to null. Never guess a date, name or number you cannot read.`;
 
   const startedAt = Date.now();
   const body = {
@@ -275,6 +285,80 @@ Be honest. If it's clearly not insurance, set is_insurance_document=false and sc
   };
 }
 
+/**
+ * QA I3: the status the screen shows. The AI score gives the starting point;
+ * the plain checks can only make it stricter: an expired policy is rejected,
+ * a blurry image, a name that is not the customer's or cover that misses the
+ * rental dates can no longer read "Verified".
+ */
+async function finalizeVerification(
+  supabase: any,
+  row: { id: string; rental_id: string | null },
+  ai: {
+    score: number;
+    isInsurance: boolean;
+    aiFlags: string[];
+    reasoning: string;
+    extracted: Record<string, unknown> | null;
+    model: string;
+    source?: string | null;
+  },
+) {
+  let customerName: string | null = null;
+  let rentalStart: string | null = null;
+  let rentalEnd: string | null = null;
+  if (row.rental_id) {
+    const { data: rental } = await supabase
+      .from("rentals")
+      .select("start_date, end_date, customers!rentals_customer_id_fkey ( name )")
+      .eq("id", row.rental_id)
+      .maybeSingle();
+    if (rental) {
+      rentalStart = rental.start_date ?? null;
+      rentalEnd = rental.end_date ?? null;
+      customerName = (rental.customers as { name?: string | null } | null)?.name ?? null;
+    }
+  }
+  const ex = (ai.extracted ?? {}) as Record<string, string | null>;
+  const checks = ai.isInsurance
+    ? runCoverChecks({
+      policyHolder: ex.policy_holder,
+      startDate: ex.start_date,
+      endDate: ex.end_date,
+      aiFlags: ai.aiFlags,
+      today: new Date().toISOString().slice(0, 10),
+      customerName,
+      rentalStart,
+      rentalEnd,
+    })
+    : { flags: [], outcome: null };
+
+  let status = statusFromScore(ai.score, ai.isInsurance);
+  if (checks.outcome === "reject") status = "rejected";
+  else if (checks.outcome === "review" && status === "verified") status = "flagged";
+
+  const { error } = await supabase
+    .from("insurance_verifications")
+    .update({
+      status,
+      ai_score: ai.score,
+      ai_findings: {
+        flags: [...checks.flags, ...ai.aiFlags],
+        ai_flags: ai.aiFlags,
+        cover_checks: checks.flags,
+        reasoning: ai.reasoning,
+        is_insurance_document: ai.isInsurance,
+        model: ai.model,
+        ...(ai.source ? { source: ai.source } : {}),
+      },
+      extracted_fields: ai.extracted,
+      ai_error: null,
+    })
+    .eq("id", row.id);
+  if (error) throw error;
+  return { status, checks };
+}
+
 function statusFromScore(score: number, isInsurance: boolean): string {
   if (!isInsurance) return "rejected";
   if (score >= 70) return "verified";
@@ -309,7 +393,7 @@ serve(async (req) => {
 
     const { data: row, error: fetchErr } = await supabase
       .from("insurance_verifications")
-      .select("id, tenant_id, file_url, mime_type, status")
+      .select("id, tenant_id, file_url, mime_type, status, rental_id, ai_score, ai_findings, extracted_fields")
       .eq("id", verificationId)
       .single();
 
@@ -321,6 +405,24 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
       );
+    }
+
+    if (body.recheck && row.ai_findings) {
+      const f = row.ai_findings as Record<string, unknown>;
+      const aiFlags = (Array.isArray(f.ai_flags) ? f.ai_flags : Array.isArray(f.flags) ? f.flags : []).map(String);
+      const done = await finalizeVerification(supabase, row, {
+        score: Number(row.ai_score) || 0,
+        isInsurance: f.is_insurance_document !== false,
+        aiFlags,
+        reasoning: String(f.reasoning ?? ""),
+        extracted: (row.extracted_fields ?? null) as Record<string, unknown> | null,
+        model: String(f.model ?? "gpt-4o"),
+        source: f.source ? String(f.source) : null,
+      });
+      return new Response(JSON.stringify({ ok: true, recheck: true, status: done.status, checks: done.checks.flags }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     await supabase
@@ -372,32 +474,23 @@ serve(async (req) => {
       row.tenant_id,
     );
 
-    const newStatus = statusFromScore(result.ai_score, result.is_insurance_document);
-
-    const { error: updateErr } = await supabase
-      .from("insurance_verifications")
-      .update({
-        status: newStatus,
-        ai_score: result.ai_score,
-        ai_findings: {
-          flags: result.flags,
-          reasoning: result.reasoning,
-          is_insurance_document: result.is_insurance_document,
-          model: "gpt-4o",
-        },
-        extracted_fields: result.extracted,
-        ai_error: null,
-      })
-      .eq("id", verificationId);
-
-    if (updateErr) throw updateErr;
+    const done = await finalizeVerification(supabase, row, {
+      score: result.ai_score,
+      isInsurance: result.is_insurance_document,
+      aiFlags: result.flags,
+      reasoning: result.reasoning,
+      extracted: result.extracted as unknown as Record<string, unknown>,
+      model: "gpt-4o",
+      source: (row.ai_findings as Record<string, unknown> | null)?.source as string | null ?? null,
+    });
+    const newStatus = done.status;
 
     return new Response(
       JSON.stringify({
         ok: true,
         status: newStatus,
         ai_score: result.ai_score,
-        flags: result.flags,
+        flags: [...done.checks.flags, ...result.flags],
         reasoning: result.reasoning,
         extracted: result.extracted,
       }),
