@@ -229,10 +229,15 @@ serve(async (req) => {
 
     // Send customer email
     if (resolvedEmail) {
+      // QA R15.9: without the tenant, resend-service fell back to the platform
+      // sender, so this email arrived from "Drive 247 <noreply@drive-247.com>"
+      // instead of the operator (notify-booking-pending already passes it).
       results.customerEmail = await sendEmail(
         resolvedEmail,
         customerSubject,
-        customerHtml
+        customerHtml,
+        supabase,
+        data.tenantId
       );
       console.log('Customer email result:', results.customerEmail);
     } else {
