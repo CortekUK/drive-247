@@ -52,6 +52,41 @@ import { RecordDock, useBelow } from '@nw/portal-v2/record-dock';
 import { InstalmentTrack, PaidBar } from '@nw/portal-v2/instalment-track';
 
 import { SecondaryDriverCard } from './secondary-driver-card';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@nw/integrations/supabase/client';
+
+/**
+ * Charges raised AFTER the booking (QA R16.3): excess miles, cleaning, damage,
+ * fines. The price breakdown is the booking invoice, so these never showed on
+ * the rental page, while Finances counted them: the same invoice read $185 here
+ * and $372.50 there. Read from the rental's own ledger, as Finances does.
+ */
+const BOOKING_CATEGORIES = new Set([
+  'rental', 'tax', 'service fee', 'delivery fee', 'collection fee', 'extras', 'insurance', 'security deposit', 'protection',
+]);
+function useAfterRentalCharges(rentalId: string) {
+  return useQuery({
+    queryKey: ['nw-after-rental-charges', rentalId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('ledger_entries')
+        .select('id, category, amount, reference, due_date')
+        .eq('rental_id', rentalId)
+        .eq('type', 'Charge');
+      if (error) throw error;
+      return ((data ?? []) as Array<{ id: string; category: string | null; amount: number; reference: string | null }>)
+        .filter((c) => !BOOKING_CATEGORIES.has(String(c.category ?? '').toLowerCase()) && Number(c.amount) > 0)
+        .map((c) => ({
+          id: c.id,
+          // "Damage · Scratch on the rear bumper - see return photo 1" -> keep the operator's words
+          label: (c.reference && c.reference.trim()) || String(c.category ?? 'Charge'),
+          category: String(c.category ?? 'Charge'),
+          amount: Math.round(Number(c.amount) * 100) / 100,
+        }));
+    },
+    staleTime: 30_000,
+  });
+}
 
 /** Hover = fade only, 200ms, ease-out on / ease-in off (V2_PLAN §12). */
 const HOVER_FADE = 'transition-colors duration-200 ease-in hover:ease-out motion-reduce:transition-none';
@@ -483,6 +518,8 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
 /** The price, itemised, with the total — the right column on a desktop, the dock's sheet on a phone. */
 function PriceBreakdownCard({ rental, className }: { rental: CustomerRentalDetail; className?: string }) {
   const { formatCurrency } = useTenantBranding();
+  const { data: after = [] } = useAfterRentalCharges(rental.id);
+  const afterTotal = Math.round(after.reduce((s, c) => s + c.amount, 0) * 100) / 100;
   return (
     <DetailCard title="Price breakdown" className={className}>
       <div className="px-6 py-2">
@@ -504,11 +541,28 @@ function PriceBreakdownCard({ rental, className }: { rental: CustomerRentalDetai
 
       <div className="mt-auto border-t border-pv-border px-6 py-4">
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-[14px] font-semibold text-pv-fg">Total</span>
+          <span className="text-[14px] font-semibold text-pv-fg">{afterTotal > 0 ? 'Booking total' : 'Total'}</span>
           <span className="text-[22px] font-bold tracking-[-0.02em] tabular-nums text-pv-fg">
             {formatCurrency(rental.breakdown.total)}
           </span>
         </div>
+        {afterTotal > 0 ? (
+          <div className="mt-3 border-t border-pv-border pt-3">
+            <p className="text-[12px] font-medium uppercase tracking-wider text-pv-muted-fg">After the rental</p>
+            {after.map((c) => (
+              <div key={c.id} className="flex items-baseline justify-between gap-3 py-1.5">
+                <span className="min-w-0 text-[13px] text-pv-muted-fg">{c.label}</span>
+                <span className="shrink-0 text-[13px] font-medium tabular-nums text-pv-fg">{formatCurrency(c.amount)}</span>
+              </div>
+            ))}
+            <div className="mt-2 flex items-baseline justify-between gap-3">
+              <span className="text-[14px] font-semibold text-pv-fg">Total with charges after the rental</span>
+              <span className="text-[18px] font-bold tabular-nums text-pv-fg">
+                {formatCurrency(Math.round((rental.breakdown.total + afterTotal) * 100) / 100)}
+              </span>
+            </div>
+          </div>
+        ) : null}
         {!rental.breakdown.fromInvoice ? (
           <p className="mt-2 text-[12px] leading-relaxed text-pv-muted-fg">
             We do not have an itemised invoice for this rental, so this is the agreed total only. Ask us for a
@@ -535,11 +589,14 @@ function PriceBreakdownCard({ rental, className }: { rental: CustomerRentalDetai
  */
 function PaymentCard({ rental }: { rental: CustomerRentalDetail }) {
   const { payableBalances, activePlans, isLoading } = useCustomerPayments();
+  const { data: after = [] } = useAfterRentalCharges(rental.id);
   if (isLoading || rental.lifecycle === 'cancelled') return null;
 
   const plan = activePlans.find((candidate) => candidate.rentalId === rental.id) ?? null;
   const owed = payableBalances.find((row) => row.rentalId === rental.id)?.amount ?? 0;
-  const paid = Math.max(0, rental.breakdown.total - owed);
+  // The whole bill: the booking plus anything charged after it (QA R16.3/R16.5).
+  const total = Math.round((rental.breakdown.total + after.reduce((s, c) => s + c.amount, 0)) * 100) / 100;
+  const paid = Math.max(0, total - owed);
 
   const facts = [
     { label: 'Invoice', value: rental.breakdown.invoiceNumber },
@@ -563,7 +620,7 @@ function PaymentCard({ rental }: { rental: CustomerRentalDetail }) {
       }
     >
       <div className="grid gap-6 px-6 py-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="min-w-0">{plan ? <InstalmentTrack plan={plan} /> : <PaidBar paid={paid} total={rental.breakdown.total} />}</div>
+        <div className="min-w-0">{plan ? <InstalmentTrack plan={plan} /> : <PaidBar paid={paid} total={total} />}</div>
         {facts.length > 0 ? (
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 lg:border-l lg:border-pv-border lg:pl-6">
             {facts.map((fact) => (
