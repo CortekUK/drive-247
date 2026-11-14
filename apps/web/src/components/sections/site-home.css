@@ -241,3 +241,14 @@
 /* A live drawing's nav, sign-in and buttons are real buttons (the demo). */
 .ws button { cursor: pointer; }
 .ws button.ws-link:hover { color: var(--ws-ink); }
+
+/*
+ * Phone-sized site (boss, 2026-11-13): the classic hero reads from the left like the rest of
+ * the page, with less to read: one line under the title.
+ */
+@container (max-width: 560px) {
+  .ws-c-hero { text-align: left; }
+  .ws-c-copy { margin-inline: 0; }
+  .ws-c-sub { margin-inline: 0; }
+  .ws-c-sub-more { display: none; }
+}

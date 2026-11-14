@@ -116,3 +116,12 @@
 
 /* A name standing in while its logo is made: faint, so the logo arriving reads as the tile filling in. */
 .om-word.is-pending { opacity: 0.3; }
+
+/* Phones (boss, 2026-11-13): a quieter wall, each name one word and a size down. */
+.om-word-short { display: none; }
+@media (max-width: 560px) {
+  .om-word { font-size: clamp(10px, 9cqi, 15px); -webkit-line-clamp: 1; }
+  .om-word-full { display: none; }
+  .om-word-short { display: inline; }
+  .om-logo { width: 60%; height: 48%; }
+}

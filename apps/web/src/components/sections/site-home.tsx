@@ -153,7 +153,7 @@ export function SiteHome({
               <h4 className="ws-c-title">
                 Your car is <em>ready</em> when you are.
               </h4>
-              <p className="ws-c-sub">Pick a car, choose your dates and pay online. We&apos;ll have it clean and waiting for you.</p>
+              <p className="ws-c-sub">Pick a car, choose your dates and pay online.<span className="ws-c-sub-more"> We&apos;ll have it clean and waiting for you.</span></p>
               <span className="ws-c-btns">
                 <Act onBook={onBook} className="ws-btn is-ink">
                   Choose your dates

@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
  */
 export function TrackLabel({ n, way, children }: { n: number; way: "down" | "down-left" | "right" | "left"; children: ReactNode }) {
   return (
-    <span className={`pt-label is-${way}`} aria-hidden>
+    <span className={`pt-label is-${way}`} data-n={n} aria-hidden>
       <span>
         <i>{n}</i>
         <b>{children}</b>

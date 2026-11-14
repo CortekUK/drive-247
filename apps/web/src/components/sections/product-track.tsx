@@ -274,7 +274,9 @@ export function ProductTrack({ children, stops = STOPS }: { children: ReactNode;
         let dx = (1 - enter) * (isIntro(panel) ? 0.34 : 0.18) * vw;
         let fade = 0.15 + 0.85 * enter;
         if (isIntro(panel)) {
-          const leave = smooth(clamp((vh * 0.3 - r.bottom) / (vh * 0.35)));
+          // It stays put while it heads the screen under it (boss, 2026-11-13: each screen and
+          // its words in one view) and slips away only as it leaves the top of the screen.
+          const leave = smooth(clamp((vh * 0.04 - r.bottom) / (vh * 0.2)));
           dx -= leave * 0.26 * vw;
           fade *= 1 - leave * 0.75;
         }

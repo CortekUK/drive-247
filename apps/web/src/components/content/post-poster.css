@@ -115,3 +115,25 @@
   .pp-in { display: block; margin-top: 8px; font-size: 13px; line-height: 1.35; color: rgb(255 255 255 / 0.78); }
   .pp-in strong { font-weight: 700; color: #fff; }
 }
+
+/*
+ * Illustrated posters (post-art.tsx), in the illustration guide's style (ILLUSTRATION_GUIDE.md):
+ * the drawing on paper, its one soft glow under it, and the title in ink at the foot, as the
+ * portal's feature cards are. Midnight and white type in dark mode. No shade over the picture.
+ */
+.pp-poster.is-art { background: #f7f8fc; box-shadow: inset 0 0 0 1px #e4e4e7; }
+.pp-poster.is-art::after { content: none; }
+.pp-poster.is-art .pp-title { color: #12141c; }
+.dark .pp-poster.is-art { background: #0c0c12; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08); }
+.dark .pp-poster.is-art .pp-title { color: #fff; }
+.pp-art { position: absolute; inset: 0; width: 100%; height: 100%; transition: transform 400ms ease-in; }
+.pp:hover .pp-art, .pp:focus-visible .pp-art { transform: scale(1.03); transition-timing-function: ease-out; }
+@media (prefers-reduced-motion: reduce) { .pp-art { transition: none; } }
+@media (max-width: 639.98px) {
+  .pp-poster.is-art .pp-chip { background: #fff; box-shadow: inset 0 0 0 1px #e4e4e7; color: #12141c; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .pp-poster.is-art .pp-in { color: #52525b; }
+  .pp-poster.is-art .pp-in strong { color: #12141c; }
+  .dark .pp-poster.is-art .pp-chip { background: #1b1b22; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1); color: #fff; }
+  .dark .pp-poster.is-art .pp-in { color: rgb(255 255 255 / 0.7); }
+  .dark .pp-poster.is-art .pp-in strong { color: #fff; }
+}

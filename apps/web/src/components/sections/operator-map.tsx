@@ -29,6 +29,16 @@ const COLUMNS = 7;
 const PACE = [64, 78, 58, 84, 70, 90, 62];
 
 /** Deal the operators round-robin, so the busiest companies spread across columns. */
+/*
+ * The name a phone tile shows: its one telling word, without the "Auto Rentals LLC" every
+ * rental company shares (boss, 2026-11-13: "one word instead of three", the wall was crowded).
+ */
+const GENERIC = new Set(["auto", "autos", "car", "cars", "rental", "rentals", "rent", "renting", "llc", "inc", "co", "company", "services", "service", "the", "and", "&", "exotic", "exotics", "luxury", "fleet", "group"]);
+function shortName(name: string) {
+  const words = name.split(/\s+/).filter(Boolean);
+  return words.find((w) => !GENERIC.has(w.toLowerCase().replace(/[^a-z&]/g, ""))) ?? words[0] ?? name;
+}
+
 function deal(operators: readonly MapOperator[], count: number): MapOperator[][] {
   const columns: MapOperator[][] = Array.from({ length: count }, () => []);
   operators.forEach((operator, index) => columns[index % count].push(operator));
@@ -173,7 +183,10 @@ export function OperatorMap({ initial }: { initial: MapOperator[] }) {
                         <span className="om-logo" style={{ "--om-mask": `url("${mask}")` } as CSSProperties} />
                       ) : (
                         // While its logo is still being made the name stands in, faintly, so no tile is blank.
-                        <span className={`om-word${mask === null || !operator.logo ? "" : " is-pending"}`}>{operator.name}</span>
+                        <span className={`om-word${mask === null || !operator.logo ? "" : " is-pending"}`}>
+                          <span className="om-word-full">{operator.name}</span>
+                          <span className="om-word-short" aria-hidden>{shortName(operator.name)}</span>
+                        </span>
                       )}
                     </div>
                   );

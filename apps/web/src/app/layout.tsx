@@ -9,7 +9,8 @@ import { META_PIXEL_ID } from "@/lib/meta-tracking";
 import { POSTHOG_SCRIPT } from "@/lib/analytics";
 import "./globals.css";
 
-const META_PIXEL_SCRIPT = `!function(f,b,e,v,n,t,s)
+// Not inside a frame: the phone track embeds screens from /embed, and they must not count as page views.
+const META_PIXEL_SCRIPT = `if(window.self===window.top){!function(f,b,e,v,n,t,s)
 {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
 n.callMethod.apply(n,arguments):n.queue.push(arguments)};
 if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
@@ -18,7 +19,7 @@ t.src=v;s=b.getElementsByTagName(e)[0];
 s.parentNode.insertBefore(t,s)}(window, document,'script',
 'https://connect.facebook.net/en_US/fbevents.js');
 fbq('init', '${META_PIXEL_ID}');
-fbq('track', 'PageView');`;
+fbq('track', 'PageView');}`;
 
 const inter = Inter({
   variable: "--font-sans",
@@ -91,7 +92,8 @@ export default function RootLayout({
         <JsonLd data={organizationLd} />
         <JsonLd data={softwareLd} />
         <script dangerouslySetInnerHTML={{ __html: META_PIXEL_SCRIPT }} />
-        {POSTHOG_SCRIPT && <script dangerouslySetInnerHTML={{ __html: POSTHOG_SCRIPT }} />}
+        {/* Not inside a frame, like the pixel: the phone track's /embed screens are not page views. */}
+        {POSTHOG_SCRIPT && <script dangerouslySetInnerHTML={{ __html: `if(window.self===window.top){${POSTHOG_SCRIPT}}` }} />}
       </head>
       <body className="font-sans antialiased">
         <noscript>

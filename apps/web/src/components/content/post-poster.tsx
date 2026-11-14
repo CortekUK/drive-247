@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { PostWithMeta } from "@/content/posts";
+import { PostArt, hasPostArt } from "./post-art";
 import "./post-poster.css";
 
 /**
@@ -37,15 +38,20 @@ export function PostPoster({ post }: { post: PostWithMeta }) {
 
   return (
     <Link href={`/blog/${post.slug}`} className="pp">
-      <div className="pp-poster">
-        <Image
-          src={poster.src}
-          alt=""
-          fill
-          sizes="(min-width: 1000px) 33vw, (min-width: 640px) 50vw, 100vw"
-          className="pp-photo"
-          style={{ objectPosition: poster.focus }}
-        />
+      <div className={`pp-poster${hasPostArt(post.slug) ? " is-art" : ""}`}>
+        {/* An illustration where the post has one (post-art.tsx), else its photograph. */}
+        {hasPostArt(post.slug) ? (
+          <PostArt slug={post.slug} />
+        ) : (
+          <Image
+            src={poster.src}
+            alt=""
+            fill
+            sizes="(min-width: 1000px) 33vw, (min-width: 640px) 50vw, 100vw"
+            className="pp-photo"
+            style={{ objectPosition: poster.focus }}
+          />
+        )}
         {/* Phones only (post-poster.css): what the post is, at the top of the photo. */}
         <span className="pp-chip">{post.category}</span>
         <div className="pp-foot">

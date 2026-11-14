@@ -34,12 +34,13 @@ export type DemoView = "home" | "site" | "renter" | "portal";
 type View = DemoView;
 
 /* The four screens of the demo. `about` is the line on its card in your-site.tsx. */
-/* `short` is the tab's name on a phone, where the four tabs sit two by two. */
+/* `short` is the phone tab's name: one word that says what it is. Boss, 2026-11-13: "widget" is
+   the wrong word (the long name too says "booking page"), and "Customer" / "Admin" too long. */
 export const DEMO_VIEWS: { id: View; label: string; short: string; about: string; icon: typeof Globe }[] = [
   { id: "home", label: "Your booking site", short: "Site", about: "Your home page", icon: Globe },
-  { id: "site", label: "Your booking widget", short: "Widget", about: "Book a car as a renter", icon: CalendarCheck },
-  { id: "renter", label: "Your customer's portal", short: "Customer", about: "What your renter sees", icon: UserRound },
-  { id: "portal", label: "Your admin portal", short: "Admin", about: "Where the booking lands", icon: LayoutDashboard },
+  { id: "site", label: "Your booking page", short: "Booking", about: "Book a car as a renter", icon: CalendarCheck },
+  { id: "renter", label: "Your customer's portal", short: "Renter", about: "What your renter sees", icon: UserRound },
+  { id: "portal", label: "Your admin portal", short: "Portal", about: "Where the booking lands", icon: LayoutDashboard },
 ];
 const VIEWS = DEMO_VIEWS;
 
@@ -211,7 +212,7 @@ export function BookingDemoStage({
   const booked = stage === "booked" && car !== null;
   const tip =
     view === "home" && sitePage !== "home"
-      ? `Your booking site's ${SITE_NAV.find((p) => p.id === sitePage)?.label} page. Every page is yours to edit. Book a car opens your booking widget.`
+      ? `Your booking site's ${SITE_NAV.find((p) => p.id === sitePage)?.label} page. Every page is yours to edit. Book a car opens your booking page.`
       : view === "renter" && booked && renterPage === "rentals"
         ? "Your customer's portal. Open the rental to see what's left to do before pickup."
         : view === "renter" && renterPage !== "rental" && renterPage !== "rentals"
@@ -219,7 +220,7 @@ export function BookingDemoStage({
         : view === "portal" && adminPage !== "rentals"
           ? `Your admin portal, ${ADMIN_NAV.find((p) => p.id === adminPage)?.label}. New bookings from your site land in Rentals.`
           : view === "home"
-      ? "Your booking site. Click any page, press Book a car for the widget, or Dashboard for your customer's portal."
+      ? "Your booking site. Click any page, press Book a car for the booking page, or Dashboard for your customer's portal."
       : view === "renter"
       ? booked
         ? approved
@@ -229,9 +230,9 @@ export function BookingDemoStage({
             : verified !== "yes"
               ? "Signed. Now press Verify to check the driving licence."
               : "All done on the customer's side. Open your admin portal to approve the booking."
-        : `Your customer's portal. Book a car in your booking widget and it shows up here.`
+        : `Your customer's portal. Book a car in your booking page and it shows up here.`
       : view === "portal" && !booked
-        ? "Your admin portal. Book a car in your booking widget and watch it arrive here."
+        ? "Your admin portal. Book a car in your booking page and watch it arrive here."
         : view === "portal"
           ? approved
             ? `Approved. ${RENTER.name} gets a confirmation and the car is held for those dates. That's the whole journey.`
@@ -242,7 +243,7 @@ export function BookingDemoStage({
                 : "It's paid. The agreement and the licence wait on the renter. Open your customer's portal."
         : stage === "dates"
       ? pickup === null
-        ? "Your booking widget. Tap the day you'd pick the car up."
+        ? "Your booking page. Tap the day you'd pick the car up."
         : back === null
           ? "Now tap the day you'd bring it back."
           : "Those are your dates. Press See cars."

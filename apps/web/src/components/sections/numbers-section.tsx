@@ -62,7 +62,10 @@ function Stat({ stat, run, delay }: { stat: ProofNumber; run: boolean; delay: nu
         </span>
         <span className="sr-only">{final}</span>
       </p>
-      <p className="nm-label">{stat.label}</p>
+      <p className="nm-label">
+        <span className="nm-label-full">{stat.label}</span>
+        <span className="nm-label-short" aria-hidden>{stat.short}</span>
+      </p>
       <p className="nm-detail">{stat.detail}</p>
     </li>
   );

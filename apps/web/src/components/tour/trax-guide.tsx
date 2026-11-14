@@ -10,8 +10,7 @@ import "./trax-guide.css";
 /*
  * Trax in the corner, on the hero only (Ghulam, 2026-11-07). It arrives a moment after the
  * page, says hello and offers to show the visitor around. As soon as they scroll down, it
- * leaves the corner to "Start free trial" (floating-trial.tsx, which appears at the same
- * point) and comes up inside the sections instead (trax-pointer.tsx).
+ * leaves the corner and comes up inside the sections instead (trax-pointer.tsx).
  *
  * The hello says itself once; the orb brings it back. "Not now" or the close button stop the
  * tour for the visit, and the orb starts it again. Motion is the Trax standard: 200ms,
