@@ -392,3 +392,33 @@
   .ts-quote figcaption span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: rgb(255 255 255 / 0.8); }
   .ts-quote figcaption strong { font-size: 0.8125rem; }
 }
+
+/*
+ * Phones (boss, 2026-11-13: "zoom out on this", show George's whole film, not too big): the
+ * player keeps the film's own 720:880 shape so nothing is cropped, and is sized off the screen
+ * height so it never takes over a phone. Centred, with his name over its foot as before.
+ */
+@media (max-width: 767px) {
+  .ts-frame {
+    justify-self: center;
+    width: min(100%, 300px, calc(42svh * 720 / 880));
+    aspect-ratio: 720 / 880;
+  }
+  .ts-frame video { object-position: 50% 50%; }
+  .ts-who { justify-self: center; width: min(100%, 300px, calc(42svh * 720 / 880)); padding-inline: 14px; }
+  .ts-who .ts-label { font-size: 0.875rem; }
+  .ts-who .ts-role { font-size: 0.75rem; }
+}
+@media (max-width: 767px) and (orientation: landscape) {
+  .ts-frame, .ts-who { width: min(100%, calc(70svh * 720 / 880)); }
+  .ts-frame { aspect-ratio: 720 / 880; }
+}
+
+/*
+ * Phones (boss, 2026-11-14): no empty room left and right of George's film. The player is the
+ * section's full width, as the list under it is, still in the film's own 720:880 shape, so the
+ * whole film shows and nothing is cropped.
+ */
+@media (max-width: 767px) {
+  .ts-frame, .ts-who { justify-self: stretch; width: 100%; }
+}

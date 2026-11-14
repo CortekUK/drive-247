@@ -969,3 +969,14 @@
   .pt-outer.is-flow .is-here .pt-long-shaft { scale: 1 1; transition: scale 700ms cubic-bezier(0.16, 1, 0.3, 1) calc(300ms + var(--pt-chars, 40) * 12ms); }
   .pt-outer.is-flow .is-here .pt-long-head { opacity: 1; transition: opacity 250ms ease-out calc(700ms + var(--pt-chars, 40) * 12ms); }
 }
+
+/*
+ * Phones (boss, 2026-11-13): the words above each screen smaller and higher, so the screen
+ * (track-phone-stage.tsx) arrives sooner, with less empty room between them.
+ */
+@media (max-width: 767.98px) {
+  .pt-panel:has(.pt-intro) { padding-block: 28px 4px; }
+  .pt-panel:has(.tps) { padding-block: 0 12px; }
+  .pt-intro-title { font-size: clamp(1.75rem, 8.2vw, 2.25rem); line-height: 1.06; }
+  .pt-intro-sub { margin-top: 10px; font-size: 0.9375rem; line-height: 1.45; }
+}

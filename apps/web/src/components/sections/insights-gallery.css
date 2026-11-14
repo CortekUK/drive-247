@@ -214,3 +214,33 @@
     mask-image: linear-gradient(to bottom, transparent, #000 72px, #000 calc(100% - 48px), transparent);
   }
 }
+
+/* Phones (boss, 2026-11-13): the "Insights" title goes, so the screen's own parts sit in view. */
+@media (max-width: 767.98px) {
+  .ia-page { display: none; }
+}
+
+/*
+ * Phones (boss, 2026-11-13): Insights in one screen, heading and all, as Trax is. Less room
+ * around the window, a shorter money chart and map, and the fleet rows closer, so "Every car,
+ * every dollar" and the whole window fit a phone's screen together.
+ */
+@media (max-width: 767.98px) {
+  .pt-track .pt-panel:has(#know-your-numbers) { padding-block: 0 8px; }
+  .pt-panel #know-your-numbers .ia-bar { padding-top: 8px; }
+  .pt-panel #know-your-numbers .ia-grid { gap: 10px; padding: 10px 12px 8px; }
+  .pt-panel #know-your-numbers .ia-panel { min-height: 0; padding: 12px 14px; }
+  .pt-panel #know-your-numbers .ia-figure { font-size: 22px; }
+  .pt-panel #know-your-numbers .ia-body { margin-top: 6px; }
+  .pt-panel #know-your-numbers .ia-wave { min-height: 92px; }
+  .pt-panel #know-your-numbers .ia-wave-plot { margin-top: 18px; }
+  .pt-panel #know-your-numbers .ia-places { min-height: 178px; }
+  .pt-panel #know-your-numbers .ia-pulse { gap: 4px; }
+  .pt-panel #know-your-numbers .ia-pulse span i { height: 12px; }
+}
+@media (max-width: 767.98px) {
+  .pt-panel #know-your-numbers .ia-panel.is-wave .ia-wave { flex: none; height: 84px; min-height: 0; }
+  .pt-panel #know-your-numbers .ia-panel.is-wave .ia-body { flex: none; }
+  .pt-track .pt-panel:has(#know-your-numbers) { min-height: 0; }
+}
+

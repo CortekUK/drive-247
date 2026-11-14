@@ -101,6 +101,23 @@ export function CalendarSection() {
     media.addEventListener("change", check);
     return () => media.removeEventListener("change", check);
   }, []);
+  /*
+   * In the phone track's frame (track-embed.tsx): as each numbered label is read below the
+   * screen, that label's booking opens in the sheet, the click the desktop visitor makes.
+   */
+  useEffect(() => {
+    if (window.self === window.top) return;
+    const onMessage = (event: MessageEvent<{ type?: string; n?: number }>) => {
+      if (event.origin !== location.origin || event.data?.type !== "d247-track-focus") return;
+      const callout = CALLOUTS.find((c) => c.n === event.data.n);
+      const row = callout && ROWS.find((r) => r.car === callout.car);
+      const bar = row?.bars.find((b) => b.who === callout?.who);
+      if (!row || !bar) return;
+      setSheet({ who: bar.who, car: row.car, plate: row.plate, rate: row.rate ?? 89, state: bar.state, start: DAYS[bar.from], days: bar.span });
+    };
+    addEventListener("message", onMessage);
+    return () => removeEventListener("message", onMessage);
+  }, []);
   const shown = sheet ?? (docked ? FIRST : null);
   let step = 0;
   let label = 0;
@@ -221,6 +238,7 @@ export function CalendarSection() {
                           className={`cs-note is-${bar.state}${bar.from + bar.span > DAYS.length - 3 ? " is-left" : ""}`}
                           style={{ "--cs-from": bar.from, "--cs-span": bar.span } as CSSProperties}
                           aria-hidden
+                          data-n={label + 1}
                         >
                           <span>
                             <i>{++label}</i>

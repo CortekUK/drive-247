@@ -1,0 +1,22 @@
+/* The page line on phones (phone-line.tsx). The layer and the line's look are page-line.css and portal-glass.css. */
+.pl-layer { display: none; }
+@media (max-width: 767.98px) {
+  .pl-layer { display: block; }
+  .pl-live { stroke-linejoin: round; }
+
+  /* A number the line has reached is filled, as desktop's numbers fill when its line reaches them. */
+  .rc-step[data-lined] .rc-step-n { border-color: hsl(var(--v2-primary)); color: #fff; transition-delay: 0ms; }
+  .rc-step[data-lined] .rc-step-n::before { scale: 1; opacity: 1; transition: scale 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms ease-out; }
+  .ls-step-no[data-lined] { border-color: hsl(var(--v2-primary)); background: hsl(var(--v2-primary)); color: #fff; }
+  /* The page line is the link between the numbers now: no line or arrow of their own (boss, 2026-11-14: "do not create an arrow"). */
+  .rc-detail li:not(:last-child)::after, .rc-detail li::before { content: none; }
+}
+
+/*
+ * Phones: the rental features' heading-and-picture block sticks on a copy of the page's ground,
+ * which hides the line behind it, so the block shows the line through: the same paths, shifted
+ * by phone-line.tsx to where the block is, over that ground and under the block's content.
+ */
+@media (max-width: 767.98px) {
+  .pl-through { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; overflow: hidden; pointer-events: none; }
+}

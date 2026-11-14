@@ -342,3 +342,106 @@
   .rc-step[data-on] .rc-step-title { color: hsl(var(--v2-primary)); }
   .rc-list { gap: 24px; }
 }
+
+/*
+ * Phones (boss, 2026-11-13): the phone goes on the RIGHT of the window in every scene, as in
+ * the feature rows above (portal-glass.css), at the same height on it: its top a little under
+ * the window's top, so it reads as one phone resting on the same spot everywhere.
+ */
+@media (max-width: 767.98px) {
+  /* Same picture as ID verification on desktop (verify-story.css), mirrored: the 1000 x 700
+     stage, the window 84% wide on the left, the phone 21% wide at the foot on the right. */
+  .rc-inline .vs { aspect-ratio: 1000 / 700; }
+  .rc-inline .vs .vs-tablet.is-left, .rc-inline .vs .vs-tablet.is-right { left: 0; right: auto; top: 0; width: 84%; }
+  .rc-inline .vs .vs-phone.is-left, .rc-inline .vs .vs-phone.is-right { left: auto; right: 0; top: auto; bottom: 0; width: 21%; }
+}
+
+/*
+ * Phones (boss, 2026-11-13): the numbers 1, 2, 3 are back, joined by the line, as on desktop.
+ * Between each number and the next runs a segment ending in an arrow pointing on to the next
+ * step. As you scroll, the step on screen fills: the segments up to it draw in solid first,
+ * then the number fills (its fill waits 180ms, rc-step-n above), so the line reads as arriving
+ * at each number. It is driven by the same data-on / data-done the screen above uses, so the
+ * line, the numbers and the screen always agree.
+ */
+@media (max-width: 767.98px) {
+  .rc-detail li { padding-left: 0; }
+  .rc-step { gap: 14px; }
+  .rc-step-n { display: grid; width: 26px; height: 26px; margin-top: -2px; font-size: 0.75rem; }
+  .rc-step-title { padding-top: 2px; }
+  .rc-detail li { border-bottom: 0; }
+  /* The segment from this number down to the next. */
+  .rc-detail li:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    left: 12.25px;
+    top: 38px;
+    bottom: -7px;
+    width: 1.5px;
+    background:
+      linear-gradient(hsl(var(--v2-primary)), hsl(var(--v2-primary))) top / 100% 0% no-repeat,
+      repeating-linear-gradient(to bottom, hsl(var(--v2-primary) / 0.35) 0 2px, transparent 2px 6px);
+    transition: background-size 260ms ease-out;
+  }
+  .rc-detail li[data-done]::after { background-size: 100% 100%, auto; }
+  /* Its arrowhead, pointing on to the next number. */
+  .rc-detail li::before {
+    left: 9px;
+    top: auto;
+    bottom: -6px;
+    width: 8px;
+    height: 8px;
+    border-radius: 0;
+    background: none;
+    border-right: 1.5px solid hsl(var(--v2-primary) / 0.45);
+    border-bottom: 1.5px solid hsl(var(--v2-primary) / 0.45);
+    rotate: 45deg;
+    transition: border-color 200ms ease-out 200ms;
+  }
+  .rc-detail li:last-child::before { display: none; }
+  .rc-detail li[data-done]::before { border-color: hsl(var(--v2-primary)); }
+  .rc-detail li { position: relative; padding-block: 12px; }
+}
+@media (max-width: 767.98px) and (prefers-reduced-motion: reduce) {
+  .rc-detail li::after, .rc-detail li::before { transition: none; }
+}
+
+/*
+ * Phones (boss, 2026-11-13, second look): the line between the numbers a little longer, as it
+ * was before. More room between the steps; the line and its arrow are placed from that room,
+ * so each segment runs from just under one number to just over the next (about 34px, was 15).
+ */
+@media (max-width: 767.98px) {
+  .rc-detail li { --rc-gap: 22px; padding-block: var(--rc-gap); }
+  /* The number spans gap-2px to gap+24px; the line starts 4px under it and ends 4px over the next. */
+  .rc-detail li:not(:last-child)::after { top: calc(var(--rc-gap) + 28px); bottom: calc(-1 * var(--rc-gap) + 6px); }
+  .rc-detail li::before { bottom: calc(-1 * var(--rc-gap) + 6px); }
+  .rc-steps { margin-top: -18px; }
+}
+
+/* Phones (boss, 2026-11-13, third look): the phone a little bigger; the thinner window border is in portal-glass.css. */
+@media (max-width: 767.98px) {
+  .rc-inline .vs .vs-phone.is-left, .rc-inline .vs .vs-phone.is-right { width: 25%; }
+}
+
+/*
+ * Every width (boss, 2026-11-13): every scene is the ID verification picture. The window on
+ * the left, the phone standing at the foot on the right, whichever side the scene asked for
+ * (verify-story.tsx `side`), so the phone is in the same place on every screen.
+ */
+.vs .vs-tablet.is-left, .vs .vs-tablet.is-right,
+.rc-inline .vs .vs-tablet.is-left, .rc-inline .vs .vs-tablet.is-right { left: 0; right: auto; }
+.vs .vs-phone.is-left, .vs .vs-phone.is-right,
+.rc-inline .vs .vs-phone.is-left, .rc-inline .vs .vs-phone.is-right { left: auto; right: 0; top: auto; bottom: 0; }
+
+/*
+ * Every width (user, 2026-11-14: every tablet-and-phone picture the same size, place and spacing):
+ * the tablet's screen is one shape in every picture, the ID verification screenshots' 1440 x 855
+ * (the feature rows' screens are too, portal-glass.css), so no tablet stands taller than another.
+ * A screenshot of another shape keeps its top (where the page title is) and loses a little foot.
+ */
+.rc-panel .vs .vs-tablet img.vs-shot, .rc-stage .rc-panel .vs .vs-tablet img.vs-shot { aspect-ratio: 1440 / 855; object-fit: cover; object-position: 50% 0; }
+/* Phones: the first step's words as far under the picture (30px) as a feature row's words are. */
+@media (max-width: 767.98px) {
+  .rc-steps { margin-top: -14px; }
+}

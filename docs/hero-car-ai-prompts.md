@@ -1,4 +1,4 @@
-# Hero car AI prompts
+clc# Hero car AI prompts
 
 The prompts the portal uses to turn an operator's photo of their car into a showroom car for the booking site's hero (Template 2). An operator uploads any photo: a car park, a driveway, a phone snap. The AI hands back the same car, cut out, cleaned up and sharp, ready to stand on the hero's glass. It also returns the car's name and the colour the hero's background should take from it.
 

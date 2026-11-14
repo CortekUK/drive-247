@@ -10,7 +10,8 @@ const ROWS: {
   big: string;
   lead: ReactNode;
   body: string;
-  points: [string, string][];
+  /** Term, its detail, and the same point as one short line (what a phone shows). */
+  points: [string, string, string][];
   src: string;
   phone: string;
   phoneAlt: string;
@@ -25,9 +26,9 @@ const ROWS: {
     lead: <>Customers book at an address you own, like <b>yourrentals.com</b>.</>,
     body: "Your name is what renters see in the address bar and on every link you send them, not ours. Put it on your cars, your cards and your ads, and every booking comes back to you.",
     points: [
-      ["Connect it yourself", "two DNS records, from your portal"],
-      ["Not ready yet?", "start on a Drive247 address"],
-      ["Your ads", "point them at your own site"],
+      ["Connect it yourself", "two DNS records, from your portal", "Connect it yourself from your portal"],
+      ["Not ready yet?", "start on a Drive247 address", "Start on a Drive247 address"],
+      ["Your ads", "point them at your own site", "Point your ads at your own site"],
     ],
     src: "/v2/site-main",
     phone: "/v2/rows/phone-domain",
@@ -43,9 +44,9 @@ const ROWS: {
     lead: <>Your brand and your cars, with <b>online booking and payments</b> built in.</>,
     body: "Renters pick their dates, choose a car and check out under your name. It comes with pages for your fleet and pricing, promotions, reviews, about and contact, so it works as your whole website.",
     points: [
-      ["Edit it yourself", "no waiting on a developer"],
-      ["Publish when ready", "see each change as you make it"],
-      ["Three steps to book", "dates, car, checkout"],
+      ["Edit it yourself", "no waiting on a developer", "Edit it yourself, no developer"],
+      ["Publish when ready", "see each change as you make it", "Publish when you\u2019re ready"],
+      ["Three steps to book", "dates, car, checkout", "Three steps: dates, car, checkout"],
     ],
     src: "/v2/hero-booking",
     phone: "/v2/phone-booking-site",
@@ -61,9 +62,9 @@ const ROWS: {
     lead: <>A <b>full rental admin dashboard</b> for your rentals, money, fleet and to-dos.</>,
     body: "Customers, vehicles, availability, agreements, finances and insights all sit in one place. Log in, see how the business is doing, and get straight to what needs you.",
     points: [
-      ["Your staff", "their own login and role"],
-      ["Your managers", "access set tab by tab"],
-      ["Trax", "ask about your own business"],
+      ["Your staff", "their own login and role", "Your staff get their own login"],
+      ["Your managers", "access set tab by tab", "Manager access, set tab by tab"],
+      ["Trax", "ask about your own business", "Ask Trax about your business"],
     ],
     src: "/v2/hero/dashboard",
     phone: "/v2/phone-dashboard",
@@ -79,9 +80,9 @@ const ROWS: {
     lead: <>Renters log in to see their <b>bookings, payments, agreements and documents</b>.</>,
     body: "Each renter gets their own login on your site, with their rentals, payments, agreements, documents and insurance together. They can check the details themselves instead of calling you to ask.",
     points: [
-      ["Messages", "they reach you from their portal"],
-      ["Their records", "there whenever they need them"],
-      ["Your name", "on your site, not a marketplace"],
+      ["Messages", "they reach you from their portal", "Renters message you from their portal"],
+      ["Their records", "there whenever they need them", "Their records, whenever they need them"],
+      ["Your name", "on your site, not a marketplace", "Your name, not a marketplace"],
     ],
     src: "/v2/hero-renter",
     phone: "/v2/phone-renter",
@@ -112,8 +113,14 @@ export function useReveal() {
       // Phones: as soon as the row is a little way onto the screen, so nothing sits empty (user, 2026-11-12).
       { rootMargin: matchMedia("(max-width: 767.98px)").matches ? "0px 0px -6% 0px" : "0px 0px -30% 0px" },
     );
+    /*
+     * Phones build once and stay built (boss, 2026-11-13: "when you scroll back up it glitches,
+     * like it tries re-animating"). Scrolling up brings the browser's toolbar back, the screen
+     * gets shorter, and a section near its foot dropped out and back in, replaying its build.
+     */
+    const phone = matchMedia("(max-width: 767.98px)").matches;
     const reset = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting && entry.boundingClientRect.top > 0) setVisible(false);
+      if (!phone && !entry.isIntersecting && entry.boundingClientRect.top > 0) setVisible(false);
     });
     trigger.observe(el);
     reset.observe(el);
@@ -141,10 +148,14 @@ function Row({ row, flipped }: { row: (typeof ROWS)[number]; flipped: boolean })
         <p className="pg-lead">{row.lead}</p>
         <p className="pg-body">{row.body}</p>
         <dl className="pg-points">
-          {row.points.map(([term, detail]) => (
+          {row.points.map(([term, detail, line]) => (
             <div key={term}>
               <dt>{term}</dt>
               <dd>{detail}</dd>
+              {/* Phones: the point as one line (boss, 2026-11-13: "make them one line"). */}
+              <dd className="pg-point-line" aria-hidden>
+                {line}
+              </dd>
             </div>
           ))}
         </dl>

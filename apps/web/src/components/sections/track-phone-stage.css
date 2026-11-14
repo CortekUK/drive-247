@@ -1,0 +1,210 @@
+/*
+ * The product track on phones (track-phone-stage.tsx): the whole desktop screen, scaled into
+ * one box that sticks at the top, with its numbered labels scrolling up under it.
+ */
+.tps { position: relative; flex: 1 1 auto; width: 100%; min-width: 0; padding: 0 1.25rem 8px; }
+.tps-stick {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 12px 0 18px;
+  /* The steps slip under the box: the page's own ground behind it, fading out at its foot. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent);
+}
+.tps-stick::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: color-mix(in srgb, hsl(var(--v2-primary)) 7%, hsl(var(--v2-background)));
+}
+.dark .tps-stick::before { background-color: color-mix(in srgb, hsl(var(--v2-primary)) 13%, hsl(var(--v2-background))); }
+
+/* The box: the screen meets its edges, framed like the other mockups' windows. */
+.tps-box {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 1280 / 800;
+  border: 1px solid hsl(var(--v2-border));
+  border-radius: 14px;
+  background: hsl(var(--v2-card));
+  box-shadow: 0 18px 44px rgb(13 8 70 / 0.16);
+}
+.tps-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  border: 0;
+  transform-origin: 0 0;
+  /* The page scrolls past it; the steps below are what you tap. */
+  pointer-events: none;
+}
+
+/* The numbered labels, joined by a line with arrows, filling as you scroll (as rental-cards.css). */
+.tps-steps { padding: 4px 0 18svh; }
+/* Each label gets a stretch of scrolling while the screen holds above it. */
+.tps-steps li { min-height: 15svh; }
+.tps-steps li { position: relative; display: flex; align-items: center; gap: 14px; padding-block: 12px; cursor: pointer; }
+.tps-n {
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid hsl(var(--v2-border));
+  border-radius: 50%;
+  background: hsl(var(--v2-card));
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: hsl(var(--v2-muted-foreground));
+  transition: border-color 200ms ease-out 180ms, color 200ms ease-out 180ms;
+}
+.tps-n::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  background: hsl(var(--v2-primary));
+  scale: 0;
+  transition: scale 200ms ease-in;
+}
+.tps-steps li:is([data-on], [data-done]) .tps-n { border-color: hsl(var(--v2-primary)); color: #fff; }
+.tps-steps li:is([data-on], [data-done]) .tps-n::before { scale: 1; transition: scale 420ms cubic-bezier(0.22, 1, 0.36, 1) 180ms; }
+.tps-label { font-size: 0.9375rem; font-weight: 500; line-height: 1.35; color: hsl(var(--v2-foreground)); transition: color 200ms ease-out; }
+.tps-steps li[data-on] .tps-label { color: hsl(var(--v2-primary)); font-weight: 600; }
+.dark .tps-steps li[data-on] .tps-label { color: hsl(var(--v2-link)); }
+.tps-steps li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 12.25px;
+  top: calc(50% + 15px);
+  bottom: calc(-50% + 15px);
+  width: 1.5px;
+  background:
+    linear-gradient(hsl(var(--v2-primary)), hsl(var(--v2-primary))) top / 100% 0% no-repeat,
+    repeating-linear-gradient(to bottom, hsl(var(--v2-primary) / 0.35) 0 2px, transparent 2px 6px);
+  transition: background-size 260ms ease-out;
+}
+.tps-steps li[data-done]::after { background-size: 100% 100%, auto; }
+.tps-steps li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  bottom: calc(-50% + 17px);
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid hsl(var(--v2-primary) / 0.45);
+  border-bottom: 1.5px solid hsl(var(--v2-primary) / 0.45);
+  rotate: 45deg;
+  transition: border-color 200ms ease-out 200ms;
+}
+.tps-steps li[data-done]::before { border-color: hsl(var(--v2-primary)); }
+@media (prefers-reduced-motion: reduce) {
+  .tps-n, .tps-n::before, .tps-label, .tps-steps li::after, .tps-steps li::before { transition: none !important; }
+}
+
+/*
+ * Inside the frame (track-embed.tsx): the screen alone, the view's exact size, nothing scrolls.
+ * The label being read stays lit; the others step back.
+ */
+html.is-track-embed, html.is-track-embed body { overflow: hidden; height: 100%; }
+.pt-embed.pt-outer { height: 100svh; margin: 0; }
+html.is-track-embed nextjs-portal { display: none; }
+html[data-track-focus] .pt-label > span,
+html[data-track-focus] .cs-note > span { transition: opacity 200ms ease-out, scale 200ms ease-out; }
+html[data-track-focus="1"] :is(.pt-label, .cs-note):not([data-n="1"]) > span,
+html[data-track-focus="2"] :is(.pt-label, .cs-note):not([data-n="2"]) > span,
+html[data-track-focus="3"] :is(.pt-label, .cs-note):not([data-n="3"]) > span,
+html[data-track-focus="4"] :is(.pt-label, .cs-note):not([data-n="4"]) > span,
+html[data-track-focus="5"] :is(.pt-label, .cs-note):not([data-n="5"]) > span,
+html[data-track-focus="6"] :is(.pt-label, .cs-note):not([data-n="6"]) > span { opacity: 0.35; }
+html[data-track-focus="1"] :is(.pt-label, .cs-note)[data-n="1"] > span,
+html[data-track-focus="2"] :is(.pt-label, .cs-note)[data-n="2"] > span,
+html[data-track-focus="3"] :is(.pt-label, .cs-note)[data-n="3"] > span,
+html[data-track-focus="4"] :is(.pt-label, .cs-note)[data-n="4"] > span,
+html[data-track-focus="5"] :is(.pt-label, .cs-note)[data-n="5"] > span,
+html[data-track-focus="6"] :is(.pt-label, .cs-note)[data-n="6"] > span { scale: 1.12; }
+/* Insights: the screen is the product, not a page with its own title (boss, 2026-11-13). */
+html.is-track-embed .ia-bar > div:first-child { visibility: hidden; }
+
+/*
+ * Phones (boss, 2026-11-13): room above the stuck screen, so it doesn't sit hard against the
+ * top of the phone. The room is the stuck block's own padding (not `top`), so the page's ground
+ * behind it still covers the labels scrolling up under it. Same for every screen on the track:
+ * calendar, messages and insights all stick this way.
+ */
+.tps-stick { padding-top: max(48px, calc(env(safe-area-inset-top) + 24px)); }
+
+/*
+ * Phones (boss, 2026-11-13, second look): more room between the intro text and the screen,
+ * and the labels closer together, so the line between the numbers is short (~34px, as in
+ * "Everything around each rental"), not a screen-tall run.
+ */
+.tps { margin-top: 0; } /* the stuck block's top padding is the room under the intro text */
+.tps-steps { padding-bottom: 10svh; }
+.tps-steps li { min-height: 0; padding-block: 21px; }
+/* Phones (boss, 2026-11-13): no empty band between the last label and the next screen's intro.
+   The last label still lights while the screen is stuck: it sits under the screen, not past it. */
+.tps-steps { padding-bottom: 0; }
+
+/*
+ * Phones (boss, 2026-11-13): no flat backing behind the stuck screen. Its colour could not match
+ * the page's gradient, so it showed as a pale box with hard edges. The labels that scroll up under
+ * the screen fade out instead (track-phone-stage.tsx, data-under), and the room above the screen
+ * is a little smaller.
+ */
+.tps-stick, .dark .tps-stick { padding-top: max(36px, calc(env(safe-area-inset-top) + 16px)); -webkit-mask-image: none; mask-image: none; }
+.tps-stick::before, .dark .tps-stick::before { content: none; }
+.tps-steps li { transition: opacity 160ms ease-out; }
+.tps-steps li[data-under] { opacity: 0; pointer-events: none; }
+
+/*
+ * Phones (boss, 2026-11-13): only the product's own card shows, sitting on the page. The frame
+ * around it is see-through: no border, fill or shadow on the box, and no page ground inside the
+ * embedded screen, so no pale rectangle shows around the card (insights most of all, whose card
+ * is shorter than the frame).
+ */
+.tps-box, .dark .tps-box { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.tps-frame { color-scheme: normal; background: transparent; }
+html.is-track-embed, html.is-track-embed body,
+html.is-track-embed .lp-v2, .dark html.is-track-embed .lp-v2 { background: transparent !important; }
+html.is-track-embed .lp-v2::before { content: none; }
+
+/*
+ * Phones (boss, 2026-11-13): the calendar and messages screens run edge to edge, the full
+ * width of the phone, with no page margin beside them. The numbered labels keep theirs.
+ */
+.tps { padding-inline: 0; }
+.tps-steps { padding-inline: 1.25rem; }
+
+/*
+ * Phones (boss, 2026-11-14): "the heading should be in view" with its screen. The heading and
+ * sub-line sit in the stuck block above the screen, so the two stick together, with a little
+ * room above the heading; the track's own intro for that screen is hidden on phones (only a
+ * phone stage renders `.tps`). Type as the intro's on phones (product-track.css).
+ */
+.tps { margin-top: 12px; }
+.tps-stick, .dark .tps-stick { padding-top: max(18px, calc(env(safe-area-inset-top) + 10px)); }
+.tps-head { padding: 0 1.25rem 18px; }
+.tps-title {
+  font-size: clamp(1.75rem, 8.2vw, 2.25rem);
+  font-weight: 400;
+  line-height: 1.06;
+  letter-spacing: -0.03em;
+  color: var(--foreground);
+  text-wrap: balance;
+}
+.tps-sub { margin-top: 10px; font-size: 0.9375rem; line-height: 1.45; color: var(--muted-foreground); }
+@media (max-width: 767.98px) {
+  .pt-track > .pt-panel:has(+ .pt-panel > .tps) { display: none; }
+}
+
+/* Phones (boss, 2026-11-14: no arrows between numbers; the line only becomes an arrow where desktop has one). */
+.tps-steps li:not(:last-child)::before { content: none; }

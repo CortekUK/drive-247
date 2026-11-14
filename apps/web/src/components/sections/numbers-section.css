@@ -141,3 +141,30 @@
   .nm-stat:last-child:nth-child(odd) .nm-label { margin-top: 6px; font-size: 12px; line-height: 1.25; font-weight: 500; }
   .nm-detail { display: none; }
 }
+
+/*
+ * Phones, boss review 2026-11-13: the figures were too big and crowded ("$180k" most of all),
+ * and the bottom two cards were bigger than the top three. Now all five cards are one size,
+ * three on top and two centred under them, each the same: a dial of one size, a smaller
+ * figure, and a label held to two lines, so dials, figures and labels line up across a row.
+ */
+@media (max-width: 559.98px) {
+  .nm-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+  .nm-stat,
+  .nm-stat:nth-child(n + 4),
+  .nm-stat:last-child:nth-child(odd) { grid-column: span 2; padding: 14px 6px 14px; }
+  .nm-stat:nth-child(4) { grid-column: 2 / span 2; }
+  .nm-stat:nth-child(5) { grid-column: 4 / span 2; }
+  .nm-gauge,
+  .nm-stat:last-child:nth-child(odd) .nm-gauge { width: 52px; max-width: 52px; }
+  .nm-value,
+  .nm-stat:last-child:nth-child(odd) .nm-value { margin-top: 8px; font-size: 18px; line-height: 1.1; letter-spacing: -0.03em; white-space: nowrap; }
+  .nm-label,
+  .nm-stat:last-child:nth-child(odd) .nm-label { min-height: 2.5em; margin-top: 5px; font-size: 11px; line-height: 1.25; color: hsl(var(--v2-muted-foreground)); }
+}
+.nm-label-short { display: none; }
+@media (max-width: 559.98px) {
+  .nm-label-full { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .nm-label-short { display: inline; }
+  .nm-label, .nm-stat:last-child:nth-child(odd) .nm-label { min-height: 0; font-size: 12px; }
+}

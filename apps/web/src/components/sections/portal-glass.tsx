@@ -80,14 +80,18 @@ export function PortalScreen({
   phone: string;
   phoneAlt: string;
 }) {
+  // A screenshot wider than the window's screen (ID verification's shape, portal-glass.css) is
+  // shown whole across it from the top, not cropped at its sides.
+  const [aw, ah] = aspect.split("/").map(Number);
+  const fit = aw / ah > 1440 / 855 ? " pg-shot-wide" : "";
   return (
     <div className="pg-device">
     {/* The browser, open on a tablet. */}
     <div className="pg-tablet">
       <i className="pg-tablet-camera" aria-hidden />
       <BrowserChrome tab={tab} url={url} screenStyle={{ aspectRatio: aspect }}>
-        <Image src={`${src}.png`} alt={alt} fill sizes="(min-width: 1200px) 60vw, 100vw" className="dark:hidden" />
-        <Image src={`${src}-dark.png`} alt={alt} fill sizes="(min-width: 1200px) 60vw, 100vw" className="hidden dark:block" />
+        <Image src={`${src}.png`} alt={alt} fill sizes="(min-width: 1200px) 60vw, 100vw" className={`dark:hidden${fit}`} />
+        <Image src={`${src}-dark.png`} alt={alt} fill sizes="(min-width: 1200px) 60vw, 100vw" className={`hidden dark:block${fit}`} />
       </BrowserChrome>
     </div>
     {/* The phone view, resting on the window's outer corner. */}

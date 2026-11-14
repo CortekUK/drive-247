@@ -384,3 +384,10 @@ img.pw-note-icon { object-fit: cover; padding: 0; background: #fff; box-shadow: 
   .pw-col figcaption span { display: none; }
   .pw-dots { display: none; }
 }
+
+/* Phones (boss, 2026-11-13): the heading reads from the left, like the other sections. */
+@media (max-width: 767.98px) {
+  .pw-head { text-align: left; }
+  .pw-head .sh { align-items: flex-start; margin-inline: 0; text-align: left; }
+  .pw-head .sh-title, .pw-head .sh-sub { margin-inline: 0; text-align: left; text-wrap: pretty; }
+}

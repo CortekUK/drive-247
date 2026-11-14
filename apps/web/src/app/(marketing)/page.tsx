@@ -9,8 +9,10 @@ import { Accent } from "@/components/sections/section-heading";
 import { TraxSection } from "@/components/sections/trax-section";
 import { PwaSection } from "@/components/sections/pwa-section";
 import { LandingTour } from "@/components/tour/landing-tour";
+import { PhoneLine } from "@/components/tour/phone-line";
 import { MultichatSection } from "@/components/sections/multichat-section";
 import { InsightsGallery } from "@/components/sections/insights-gallery";
+import { TrackPhoneStage } from "@/components/sections/track-phone-stage";
 import { IntegrationsSection } from "@/components/sections/integrations-section";
 import { TestimonialsSection } from "@/components/sections/testimonials-section";
 import { NumbersIntro, NumbersSection } from "@/components/sections/numbers-section";
@@ -112,7 +114,21 @@ export default async function Home({
         {/* Calendar → Multi-chat → Insights: pinned, sliding sideways, the product only */}
         <ProductTrack>
           <TrackIntro />
-          <CalendarSection />
+          {/* Phones: the whole screen in one box, labels below (track-phone-stage.tsx), with the
+              heading held above it (the intro before it is hidden on phones). */}
+          <TrackPhoneStage
+            panel="calendar"
+            title="The booking calendar"
+            heading={
+              <>
+                Every car, every booking, every return. <Accent>One&nbsp;calendar.</Accent>
+              </>
+            }
+            sub="Your whole fleet on one timeline. See what goes out, what comes back and which days are still free, and never double-book a car."
+            labels={["Click any booking to open it", "Out with a renter now", "Waiting on payment", "In service, hidden from your site"]}
+          >
+            <CalendarSection />
+          </TrackPhoneStage>
           <TrackIntro
             lead={false}
             title={
@@ -122,7 +138,19 @@ export default async function Home({
             }
             sub="Chat, texts, email and calls with each renter in one thread. Pick the channel for every reply, and see the whole history in one place."
           />
-          <MultichatSection />
+          <TrackPhoneStage
+            panel="messages"
+            title="Messages"
+            heading={
+              <>
+                Every renter, every channel. <Accent>One&nbsp;conversation.</Accent>
+              </>
+            }
+            sub="Chat, texts, email and calls with each renter in one thread. Pick the channel for every reply, and see the whole history in one place."
+            labels={["One message to many renters", "Every call recorded", "Trax sums up every call", "Pick the channel for each reply", "Trax drafts the reply", "Their booking, alongside"]}
+          >
+            <MultichatSection />
+          </TrackPhoneStage>
           <TrackIntro
             lead={false}
             title={
@@ -132,7 +160,21 @@ export default async function Home({
             }
             sub="See which cars make you money, which ones cost you money, and where your next opportunity is."
           />
-          <InsightsGallery />
+          {/* Insights as the calendar and messages are on phones (boss, 2026-11-13: in the "screen
+              view", end to end), without its "Insights" title (track-phone-stage.css). */}
+          <TrackPhoneStage
+            panel="insights"
+            title="Insights"
+            heading={
+              <>
+                Every car, every dollar. <Accent>Know your&nbsp;numbers.</Accent>
+              </>
+            }
+            sub="See which cars make you money, which ones cost you money, and where your next opportunity is."
+            labels={["Every payment, counted for you", "Spot the cars sitting idle", "See where renters go"]}
+          >
+            <InsightsGallery />
+          </TrackPhoneStage>
         </ProductTrack>
         <TraxSection />
         {/* Your booking site, one section (Ghulam, 2026-11-10): name, template and colour, then the working demo */}
@@ -167,6 +209,8 @@ export default async function Home({
         {/* The line down the whole page, and Trax in the corner walking through it. Last, so
             the sections that draw their own part of the line have measured first. */}
         <LandingTour />
+        {/* The same line on phones, where the desktop line's parts do not draw. */}
+        <PhoneLine />
       </main>
       <Footer />
     </LandingTheme>

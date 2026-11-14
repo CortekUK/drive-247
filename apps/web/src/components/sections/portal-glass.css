@@ -429,3 +429,157 @@
   #features .pg-points > div:nth-child(2) { --pg-pt: 320ms; }
   #features .pg-points > div:nth-child(3) { --pg-pt: 400ms; }
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * Boss's phone review, 2026-11-13.
+ *  - Each point is ONE line on a phone ("make them one line"): the short phrasing written
+ *    for it (`.pg-point-line`) shows, while the term and its detail stay for screen readers.
+ *  - The phone is on the RIGHT of the window (we read left to right, so the eye lands on the
+ *    window first), and it is the same phone as the ID verification flows below
+ *    (verify-story.css .vs-phone): thin even bezel, the same corner, the same shadow, the
+ *    same size against the window and the same height on it, in every row.
+ *    Sizes are in cqw of the device box so they keep those proportions at any phone width.
+ * ---------------------------------------------------------------------------
+ */
+.pg-point-line { display: none; }
+@media (max-width: 639.98px) {
+  #features .pg-points dt,
+  #features .pg-points dd:not(.pg-point-line) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  #features .pg-points .pg-point-line {
+    display: block;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-weight: 500;
+    color: hsl(var(--v2-foreground));
+  }
+  #features .pg-points > div { padding-block: 10px; }
+  #features .pg-points > div::before { top: 16px; }
+
+  #features .pg-device { container-type: inline-size; }
+  #features .pg-device, #features .is-flipped .pg-device { margin: 22px 0 0; }
+  /* The ID verification picture, mirrored (verify-story.css): a 1000 x 700 stage, the window
+     84% wide on the left, the phone 21% wide standing on the stage's foot on the right. */
+  #features .pg-device { aspect-ratio: 1000 / 700; }
+  #features .pg-phone, #features .is-flipped .pg-phone {
+    left: auto;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    width: 21cqw;
+    padding: 0.51cqw;
+    border-radius: 2.35cqw;
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14), 0 18px 44px rgb(13 8 70 / 0.28);
+  }
+  #features .pg-phone-screen { border-radius: 1.9cqw; }
+  /* The window gives the phone its room on the right, so the phone sits on its corner. */
+  #features .pg-tablet { width: 84%; }
+}
+
+/*
+ * Phones (boss, 2026-11-13, third look): the phone a little bigger and the window's black
+ * border thinner, in the feature rows and in "Everything around each rental" (rental-cards.css)
+ * alike, so every pair is the same picture.
+ */
+@media (max-width: 767.98px) {
+  #features .pg-phone, #features .is-flipped .pg-phone { width: 25cqw; }
+  #features .pg-tablet,
+  .rc-inline .vs .pg-tablet { padding: 4px; border-radius: 12px; }
+  #features .pg-tablet .pg-tablet-camera,
+  .rc-inline .vs .pg-tablet .pg-tablet-camera { top: 1px; width: 2px; height: 2px; }
+  /* The screen's corners follow the thinner border's (12px less the 4px border). */
+  #features .pg-tablet .pg-browser,
+  .rc-inline .vs .pg-tablet .pg-browser { border-radius: 8px; }
+}
+
+/*
+ * Every width (boss, 2026-11-13): the feature rows' window and phone are the ID verification
+ * picture too (verify-story.css), on desktop as on a phone. A 1000 x 700 stage (it grows if
+ * the window needs more), the window 84% wide on the left, the phone 21% wide standing on the
+ * stage's foot on the right, on every row, mirrored or not. Sizes in the stage's width.
+ */
+#features .pg-device, #features .is-flipped .pg-device { container-type: inline-size; aspect-ratio: 1000 / 700; }
+#features .pg-device .pg-tablet { width: 84%; padding: max(7px, 1.15cqw); border-radius: max(14px, 2.2cqw); }
+#features .pg-device .pg-phone, #features .is-flipped .pg-device .pg-phone {
+  left: auto;
+  right: 0;
+  top: auto;
+  bottom: 0;
+  width: 21cqw;
+  padding: 0.5cqw;
+  border-radius: 2.3cqw;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14), 0 18px 44px rgb(13 8 70 / 0.28);
+}
+#features .pg-device .pg-phone-screen { border-radius: 1.85cqw; }
+/* Phones: as set above for phones, a bigger phone and a thin border. */
+@media (max-width: 767.98px) {
+  #features .pg-device .pg-tablet { padding: 4px; border-radius: 12px; }
+  #features .pg-device .pg-phone, #features .is-flipped .pg-device .pg-phone { width: 25cqw; }
+}
+
+/*
+ * Phones (boss, 2026-11-13): the feature rows' window drawn exactly as ID verification's
+ * (rental-cards.css .rc-inline, verify-story.css): the slim tab strip only, no address bar, so
+ * the window has the same shape and the phone stands in the same place against it.
+ */
+@media (max-width: 767.98px) {
+  #features .pg-address { display: none; }
+  #features .pg-tabs { height: 22px; gap: 6px; padding-inline: 8px; }
+  #features .pg-lights { gap: 4px; }
+  #features .pg-lights i { width: 7px; height: 7px; }
+  #features .pg-tab { height: 18px; padding-inline: 6px; gap: 4px; font-size: 9px; }
+  #features .pg-tab img { width: 10px; height: 10px; }
+  #features .pg-newtab { width: 10px; height: 10px; }
+}
+/*
+ * Desktop: the window as big as ID verification's. The device takes two thirds of the row
+ * (was seven twelfths), with a narrower gap, so the window is ~810px wide as theirs is.
+ */
+@media (min-width: 1200px) {
+  #features .pg-row { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: clamp(64px, 6vw, 112px); }
+  #features .pg-row.is-flipped { grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); }
+}
+
+/*
+ * Every width (boss, 2026-11-13: "same space as ID verification"): the window's screen is the ID
+ * verification screen's shape (its screenshots are 1440 x 855), whatever the shape of the row's
+ * own screenshot, so every window is as tall as theirs and the room under it, beside the phone,
+ * is the same. The screenshot fills it from the top (object-fit: cover, as before).
+ */
+#features .pg-device .pg-screen { aspect-ratio: 1440 / 855 !important; }
+/* A wider screenshot (the booking site's) sits whole across the top; its page's own ground
+   carries on under it, white, or dark in dark mode. */
+#features .pg-device .pg-screen:has(.pg-shot-wide) { background: #fff; }
+.dark #features .pg-device .pg-screen:has(.pg-shot-wide) { background: #1b1b1b; }
+#features .pg-device .pg-screen img.pg-shot-wide { object-fit: contain; object-position: top; }
+
+/*
+ * Desktop (user, 2026-11-14: every tablet-and-phone picture the same size and place): the feature
+ * rows are laid out as "Everything around each rental" is (rental-cards.css .rc-pin), so their
+ * picture comes out exactly as big as ID verification's at every width: the same container and
+ * side room, words three parts to the picture's seven, the same gap, and the picture no taller
+ * than the screen allows (verify-story.css .rc-stage .vs). The phone stands still, as theirs does.
+ */
+@media (min-width: 1000px) {
+  #features .pg-row {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 7fr);
+    align-items: center;
+    gap: clamp(32px, 3.5vw, 64px);
+    width: min(100%, 1480px);
+    margin-inline: auto;
+    padding-inline: clamp(40px, 4.5vw, 72px);
+  }
+  #features .pg-row.is-flipped { grid-template-columns: minmax(0, 7fr) minmax(0, 3fr); }
+  #features .pg-copy { max-width: none; margin-inline: 0; }
+  #features .is-flipped .pg-copy { order: 2; }
+  #features .pg-device { justify-self: center; width: min(100%, calc((100svh - 120px) * 1000 / 700)); }
+}
+#features .pg-device .pg-phone { animation: none; }

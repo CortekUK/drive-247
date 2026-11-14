@@ -863,8 +863,8 @@
     flex-direction: column;
     height: 100svh;
     min-height: 0;
-    /* The bottom clears the floating "Start free trial" pill, so the last boxes stay in view. */
-    padding: clamp(14px, 3svh, 28px) 0 78px;
+    /* No floating trial pill any more (2026-11-14), so no room kept for it at the foot. */
+    padding: clamp(14px, 3svh, 28px) 0;
   }
   .tm-stage {
     flex: 1;
@@ -916,4 +916,20 @@
   .tm-list li { font-size: 12px; }
   .tm-list b { font-size: 11px; }
   .tm-draft { font-size: 13px; }
+}
+
+/*
+ * Phones (boss, 2026-11-13): Trax in one view, as the tour is. The words, the boxes and the
+ * Trax window share one screen-tall pin, so it sticks whole from its first line (the pin is no
+ * taller than the screen, so trax-section.tsx sets no negative top) and the scroll plays the
+ * question through it. No band between the words and the boxes, and none at the foot (the
+ * floating "Try it free" pill that needed room there is gone, 2026-11-14).
+ */
+@media (max-width: 767.98px) and (min-height: 560px) and (prefers-reduced-motion: no-preference) {
+  .tm-root .tm-pin { position: sticky; top: 0; display: flex; flex-direction: column; height: 100svh; }
+  .tm-root .tm-pin > .tm-copy { flex: none; padding: clamp(18px, 3.2svh, 32px) 1rem 0; }
+  .tm-root .tm-pin > .tm-copy .sh { margin: 0 auto; }
+  .tm-root .tm-pin > .tm-copy .sh-title { font-size: clamp(2rem, 10vw, 2.5rem); }
+  .tm-root .tm-pin > .tm-copy .sh-sub, .tm-copy .tm-sub { margin-top: 6px; }
+  .tm-root .tm-pin > .tm-section { flex: 1; height: auto; min-height: 0; padding: clamp(12px, 2svh, 20px) 0; }
 }
