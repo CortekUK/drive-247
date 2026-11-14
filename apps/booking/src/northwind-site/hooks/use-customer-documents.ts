@@ -50,6 +50,7 @@ import { useCustomer } from '@nw/hooks/use-customer';
 import { useTenant } from '@nw/contexts/TenantContext';
 import { supabase } from '@nw/integrations/supabase/client';
 import { parseDateOnly, todayDateString } from '@nw/lib/domain';
+import { toDocumentPath } from '@/lib/document-path';
 import type { Database } from '@nw/integrations/supabase/types';
 
 /* ─────────────────────────── storage constraints ───────────────────────── */
@@ -265,10 +266,12 @@ export function toStoragePath(fileUrl: string | null): string | null {
   const trimmed = fileUrl.trim();
   if (trimmed === '') return null;
 
-  const marker = `/${DOCUMENT_BUCKET}/`;
-  const markerAt = trimmed.indexOf(marker);
-  if (trimmed.startsWith('http') && markerAt !== -1) {
-    return trimmed.slice(markerAt + marker.length);
+  // QA I4.13: signed link (bucket going private) — parse a stored storage URL
+  // (public, sign or authenticated form) the same way the signed-link helper
+  // does, so View/Download always sign or download by the object path. Any
+  // other absolute URL stays as it is (`externalFileUrl` relies on that).
+  if (/^https?:/i.test(trimmed)) {
+    return toDocumentPath(trimmed) ?? trimmed;
   }
 
   const prefix = `${DOCUMENT_BUCKET}/`;

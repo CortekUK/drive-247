@@ -1,4 +1,5 @@
 "use client";
+import { openDocument } from "@/lib/document-url"; // QA I4.13: signed link (bucket going private)
 
 /**
  * The Insurance stage — the second OUTPUT, on real data.
@@ -488,6 +489,7 @@ export function StageInsurance({ detail, onStage, refetch }: StageProps) {
                           href={v.file_url || undefined}
                           target="_blank"
                           rel="noreferrer"
+                          onClick={(e) => { if (!v.file_url) return; e.preventDefault(); openDocument(v.file_url); }} // QA I4.13: signed link (bucket going private)
                           className="block truncate text-sm font-medium underline-offset-2 hover:underline"
                         >
                           {v.extracted_fields?.insurer || v.file_name}

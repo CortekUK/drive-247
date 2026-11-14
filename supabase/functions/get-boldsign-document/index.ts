@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { getBoldSignApiKey, getBoldSignBaseUrl, getTenantBoldSignMode } from '../_shared/boldsign-client.ts';
 import type { BoldSignMode } from '../_shared/boldsign-client.ts';
+import { signedDocumentUrl } from '../_shared/document-storage.ts'; // QA I4.13: bucket going private
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -42,22 +43,16 @@ Deno.serve(async (req) => {
           .single();
 
         if (doc?.file_url) {
-          if (doc.file_url.startsWith('http')) {
-            return jsonResponse({
-              ok: true,
-              documentUrl: doc.file_url,
-              status: 'completed',
-              source: 'stored',
-            });
+          // QA I4.13: bucket going private — hand the browser a 1-hour signed URL
+          // (a stored public URL or bare path both resolve; other hosts pass through).
+          const signedUrl = await signedDocumentUrl(supabase, doc.file_url);
+          if (!signedUrl) {
+            return errorResponse('Could not open the signed document', 500);
           }
-
-          const { data: urlData } = supabase.storage
-            .from('customer-documents')
-            .getPublicUrl(doc.file_url);
 
           return jsonResponse({
             ok: true,
-            documentUrl: urlData.publicUrl,
+            documentUrl: signedUrl,
             status: 'completed',
             source: 'stored',
           });

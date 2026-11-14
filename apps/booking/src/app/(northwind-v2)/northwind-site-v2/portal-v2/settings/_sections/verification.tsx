@@ -39,6 +39,7 @@ import { useTenant } from '@nw/contexts/TenantContext';
 import { useCustomerVerification, type CustomerVerificationRow } from '@nw/hooks/use-customer-verification';
 import { supabase } from '@nw/integrations/supabase/client';
 import { cn } from '@nw/lib/utils';
+import { useSignedDocumentUrl } from '@nw/lib/document-url';
 import { AddCustomerVerifyArt } from '@portal-v2-shared/empty-states/add-customer';
 import { TeachingEmptyState } from '@portal-v2-shared/empty-states/teaching-empty-state';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@portal-v2-shared/card';
@@ -567,18 +568,20 @@ function InFlight({ row, busy, onRestart, onCancel }: { row: CustomerVerificatio
  */
 function Picture({ label, src }: { label: string; src: string }) {
   const [failed, setFailed] = useState(false);
+  // QA I4.13: signed link (bucket going private) — the frame waits for it.
+  const signed = useSignedDocumentUrl(src);
   if (failed) return null;
   return (
     <figure className="flex min-w-0 flex-col gap-2">
       <a
-        href={src}
+        href={signed ?? undefined}
         target="_blank"
         rel="noopener noreferrer"
         className="block aspect-[4/3] overflow-hidden rounded-2xl bg-pv-muted"
         aria-label={`Open ${label}`}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt={label} onError={() => setFailed(true)} className="size-full object-cover" />
+        {signed ? <img src={signed} alt={label} onError={() => setFailed(true)} className="size-full object-cover" /> : null}
       </a>
       <figcaption className="text-[12px] font-medium text-pv-muted-fg">{label}</figcaption>
     </figure>

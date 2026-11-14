@@ -1,4 +1,5 @@
 "use client";
+import { openDocument } from "@/lib/document-url"; // QA I4.13: signed link (bucket going private)
 
 import { useState, useMemo } from "react";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -260,6 +261,7 @@ export function VerificationsTab({
                                   href={v.file_url}
                                   target="_blank"
                                   rel="noreferrer"
+                                  onClick={(e) => { e.preventDefault(); openDocument(v.file_url); }} // QA I4.13: signed link (bucket going private)
                                 >
                                   <ExternalLink className="h-3.5 w-3.5" />
                                 </a>

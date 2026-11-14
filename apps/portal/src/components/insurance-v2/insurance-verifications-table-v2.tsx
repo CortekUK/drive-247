@@ -1,4 +1,5 @@
 "use client";
+import { openDocument } from "@/lib/document-url"; // QA I4.13: signed link (bucket going private)
 
 /**
  * v2 (northwind): the /insurances AI Verifications tab's table, built from the
@@ -180,7 +181,8 @@ export function InsuranceVerificationsTableV2({
                   <div className="flex items-center justify-end gap-1">
                     {v.file_url && (
                       <Button size="icon-sm" variant="ghost" className={LIST_ROW_ACTION} asChild>
-                        <a href={v.file_url} target="_blank" rel="noreferrer" aria-label={`Open ${v.file_name}`}>
+                        {/* QA I4.13: signed link (bucket going private) */}
+                        <a href={v.file_url} target="_blank" rel="noreferrer" aria-label={`Open ${v.file_name}`} onClick={(e) => { e.preventDefault(); openDocument(v.file_url); }}>
                           <ExternalLink className="h-4 w-4" />
                         </a>
                       </Button>

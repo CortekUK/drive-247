@@ -51,6 +51,33 @@ function isPublicHttps(url: string): boolean {
     }
 }
 
+// QA I4.13: signed link (bucket going private). A stored customer-documents
+// reference (public URL or bare path) becomes a short-lived signed link; any other
+// address is returned unchanged. Mirrors toDocumentPath() in src/lib/document-url.ts,
+// which is a client module and so is not imported here.
+const DOCUMENT_MARKERS = [
+    '/storage/v1/object/public/customer-documents/',
+    '/storage/v1/object/sign/customer-documents/',
+    '/storage/v1/object/authenticated/customer-documents/',
+    '/storage/v1/object/customer-documents/',
+];
+
+async function signedStoredDocumentUrl(supabase: { storage: ReturnType<typeof createClient>['storage'] }, value: string): Promise<string> {
+    let path: string | null = null;
+    for (const marker of DOCUMENT_MARKERS) {
+        const at = value.indexOf(marker);
+        if (at >= 0) { path = decodeURIComponent(value.slice(at + marker.length).split('?')[0]); break; }
+    }
+    if (!path) {
+        if (/^(https?:|data:|blob:)/i.test(value)) return value;
+        path = value.replace(/^\/+/, '').replace(/^customer-documents\//, '');
+    }
+    const { data } = await supabase.storage.from('customer-documents').createSignedUrl(path, 60 * 10);
+    if (data?.signedUrl) return data.signedUrl;
+    // Signing refused: fall back to the public address (works only while the bucket is public).
+    return supabase.storage.from('customer-documents').getPublicUrl(path).data.publicUrl;
+}
+
 async function storedDocumentResponse(documentUrl: string, inline: boolean) {
     if (inline && !isOwnStorage(documentUrl) && isPublicHttps(documentUrl)) {
         try {
@@ -108,13 +135,8 @@ export async function POST(request: NextRequest) {
                         .single();
 
                     if (doc?.file_url) {
-                        let documentUrl = doc.file_url;
-                        if (!documentUrl.startsWith('http')) {
-                            const { data: urlData } = supabase.storage
-                                .from('customer-documents')
-                                .getPublicUrl(doc.file_url);
-                            documentUrl = urlData.publicUrl;
-                        }
+                        // QA I4.13: signed link (bucket going private)
+                        const documentUrl = await signedStoredDocumentUrl(supabase, doc.file_url);
                         return storedDocumentResponse(documentUrl, inline === true);
                     }
                 }
@@ -144,13 +166,8 @@ export async function POST(request: NextRequest) {
                     .single();
 
                 if (doc?.file_url) {
-                    let documentUrl = doc.file_url;
-                    if (!documentUrl.startsWith('http')) {
-                        const { data: urlData } = supabase.storage
-                            .from('customer-documents')
-                            .getPublicUrl(doc.file_url);
-                        documentUrl = urlData.publicUrl;
-                    }
+                    // QA I4.13: signed link (bucket going private)
+                    const documentUrl = await signedStoredDocumentUrl(supabase, doc.file_url);
 
                     return storedDocumentResponse(documentUrl, inline === true);
                 }

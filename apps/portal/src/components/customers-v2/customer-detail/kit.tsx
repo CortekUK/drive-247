@@ -26,6 +26,7 @@
 
 import { AlertTriangle, Check, ChevronRight, ImageIcon, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useDocumentSrc } from "@/components/shared/signed-document-image"; // QA I4.13: signed link (bucket going private)
 import { Button } from "@/components/ui-v2/button";
 import { Badge } from "@/components/ui-v2/badge";
 import type { SectionId } from "./sections";
@@ -528,6 +529,8 @@ export function Thumb({
   src?: string | null;
   onClick?: () => void;
 }) {
+  // QA I4.13: signed link (bucket going private)
+  const shownSrc = useDocumentSrc(src);
   return (
     <div className="min-w-0">
       <div
@@ -541,7 +544,7 @@ export function Thumb({
       >
         {src ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt={caption || ""} className="size-full object-cover" />
+          shownSrc ? <img src={shownSrc} alt={caption || ""} className="size-full object-cover" /> : null
         ) : (
           <ImageIcon className={cn("size-4", filled ? "text-muted-foreground" : "text-muted-foreground/40")} />
         )}

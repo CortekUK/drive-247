@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { openDocument } from "@/lib/document-url"; // QA I4.13: signed link (bucket going private)
+import { SignedDocumentImage } from "@/components/shared/signed-document-image"; // QA I4.13: signed link (bucket going private)
 import {
   FileImage,
   ExternalLink,
@@ -227,7 +229,8 @@ export function VerificationDetailSheet({
           {verification.file_url && (
             <div className="rounded-lg border overflow-hidden bg-muted/30">
               {(verification.mime_type || "").startsWith("image/") ? (
-                <img
+                // QA I4.13: signed link (bucket going private)
+                <SignedDocumentImage
                   src={verification.file_url}
                   alt={verification.file_name}
                   className="w-full max-h-72 object-contain"
@@ -370,6 +373,7 @@ export function VerificationDetailSheet({
                   href={verification.file_url}
                   target="_blank"
                   rel="noreferrer"
+                  onClick={(e) => { e.preventDefault(); openDocument(verification.file_url); }} // QA I4.13: signed link (bucket going private)
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
                   Open file

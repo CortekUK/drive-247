@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { openDocument, signedDocumentUrl } from "@/lib/document-url"; // QA I4.13: signed link (bucket going private)
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -355,20 +356,12 @@ export default function InsurancesList() {
     setCurrentPage(1);
   };
 
-  const getPublicUrl = (filePath: string) => {
-    if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-      return filePath;
-    }
-    const { data } = supabase.storage
-      .from('customer-documents')
-      .getPublicUrl(filePath);
-    return data.publicUrl;
-  };
-
   const handleDownload = async (fileUrl: string, fileName: string) => {
     try {
-      const publicUrl = getPublicUrl(fileUrl);
-      const response = await fetch(publicUrl);
+      // QA I4.13: signed link (bucket going private)
+      const signedUrl = await signedDocumentUrl(fileUrl);
+      if (!signedUrl) throw new Error('Could not sign the document link');
+      const response = await fetch(signedUrl);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -385,8 +378,8 @@ export default function InsurancesList() {
   };
 
   const handleView = (fileUrl: string) => {
-    const publicUrl = getPublicUrl(fileUrl);
-    window.open(publicUrl, "_blank");
+    // QA I4.13: signed link (bucket going private)
+    openDocument(fileUrl);
   };
 
   const handleBonzahDownload = async (doc: InsuranceDoc) => {

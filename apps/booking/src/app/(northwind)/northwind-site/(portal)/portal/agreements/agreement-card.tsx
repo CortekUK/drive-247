@@ -23,6 +23,7 @@ import {
   type AgreementState,
   type CustomerAgreement,
 } from '@nw/hooks/use-customer-agreements';
+import { openDocument, useSignedDocumentUrl } from '@nw/lib/document-url';
 
 type ChipTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
 
@@ -103,6 +104,8 @@ export function AgreementCard({
   const title = isExtension ? 'Extension agreement' : 'Rental agreement';
   const note = guidance(agreement, email);
   const document_ = agreement.signedDocument;
+  // QA I4.13: signed link (bucket going private)
+  const signedHref = useSignedDocumentUrl(document_?.url);
 
   async function handleDownload() {
     if (!document_) return;
@@ -207,8 +210,18 @@ export function AgreementCard({
               */}
               {document_ ? (
                 <>
+                  {/* QA I4.13: signed link (bucket going private); until it is ready, the click signs and opens */}
                   <Button asChild variant="brand-outline" className="h-11">
-                    <a href={document_.url} target="_blank" rel="noopener noreferrer">
+                    <a
+                      href={signedHref ?? '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(event) => {
+                        if (signedHref) return;
+                        event.preventDefault();
+                        void openDocument(document_.url);
+                      }}
+                    >
                       <SquareArrowOutUpRight aria-hidden className="size-4" />
                       Open
                       <span className="sr-only"> {title} in a new tab</span>

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { toast } from 'sonner';
+import { toDocumentPath } from '@/lib/document-url';
 
 export interface CustomerDocument {
   id: string;
@@ -78,7 +79,8 @@ export function useDeleteCustomerDocument() {
 
       // Delete the file from storage if it exists
       if (document?.file_url) {
-        const filePath = document.file_url.replace('customer-documents/', '');
+        // QA I4.13: signed link (bucket going private) — stored public URLs resolve to the object path
+        const filePath = toDocumentPath(document.file_url) ?? document.file_url;
         await supabase.storage
           .from('customer-documents')
           .remove([filePath]);
@@ -113,7 +115,8 @@ export function useDownloadDocument() {
         throw new Error('No file URL available');
       }
 
-      const filePath = document.file_url.replace('customer-documents/', '');
+      // QA I4.13: signed link (bucket going private) — authenticated download by object path
+      const filePath = toDocumentPath(document.file_url) ?? document.file_url;
       const { data, error } = await supabase.storage
         .from('customer-documents')
         .download(filePath);

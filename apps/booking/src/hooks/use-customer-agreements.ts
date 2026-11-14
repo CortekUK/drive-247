@@ -2,6 +2,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { toast } from 'sonner';
+import { signedDocumentUrl, toDocumentPath } from '@/lib/document-url';
 
 export interface CustomerAgreement {
   id: string; // rental_agreements.id
@@ -191,7 +192,10 @@ export function useDownloadAgreement() {
         const fileUrl = agreement.signed_document.file_url;
 
         if (fileUrl.startsWith('http')) {
-          const response = await fetch(fileUrl);
+          // QA I4.13: signed link (bucket going private)
+          const signed = await signedDocumentUrl(fileUrl);
+          if (!signed) throw new Error('Failed to download document');
+          const response = await fetch(signed);
           if (!response.ok) throw new Error('Failed to download document');
           const blob = await response.blob();
 
@@ -206,7 +210,8 @@ export function useDownloadAgreement() {
           return;
         }
 
-        const filePath = fileUrl.replace('customer-documents/', '');
+        // QA I4.13: signed link (bucket going private) — robust path for the authenticated download
+        const filePath = toDocumentPath(fileUrl) ?? fileUrl;
         const { data, error } = await supabase.storage
           .from('customer-documents')
           .download(filePath);
@@ -294,7 +299,10 @@ export function useViewAgreement() {
     mutationFn: async (agreement: CustomerAgreement): Promise<string> => {
       // If signed document exists with URL, return it
       if (agreement.signed_document?.file_url) {
-        return agreement.signed_document.file_url;
+        // QA I4.13: signed link (bucket going private)
+        const signed = await signedDocumentUrl(agreement.signed_document.file_url);
+        if (!signed) throw new Error('Failed to open document');
+        return signed;
       }
 
       // Otherwise fetch from BoldSign API

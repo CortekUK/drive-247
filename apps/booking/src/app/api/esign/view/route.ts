@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { isLeanTenant, readTenantOnV2ById } from '@/lib/lean-tenants';
+import { DOCUMENT_BUCKET, SIGNED_DOCUMENT_SECONDS, toDocumentPath } from '@/lib/document-path';
 
 // BoldSign configuration — resolved per-request based on tenant mode
 const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com';
@@ -48,6 +49,27 @@ function isPublicHttps(url: string): boolean {
     } catch {
         return false;
     }
+}
+
+/**
+ * QA I4.13: signed link (bucket going private). A stored customer-documents
+ * reference (public URL or bare path) becomes a short-lived signed link; any
+ * other address is passed through. Null when signing fails.
+ */
+async function signedStoredUrl(
+    supabase: SupabaseClient<any, any, any>,
+    value: string
+): Promise<string | null> {
+    const path = toDocumentPath(value);
+    if (!path) return value;
+    const { data, error } = await supabase.storage
+        .from(DOCUMENT_BUCKET)
+        .createSignedUrl(path, SIGNED_DOCUMENT_SECONDS);
+    if (error || !data?.signedUrl) {
+        console.error('Signed link for stored document failed:', error);
+        return null;
+    }
+    return data.signedUrl;
 }
 
 async function storedDocumentResponse(documentUrl: string, inline: boolean) {
@@ -106,12 +128,10 @@ export async function POST(request: NextRequest) {
                         .single();
 
                     if (doc?.file_url) {
-                        let documentUrl = doc.file_url;
-                        if (!documentUrl.startsWith('http')) {
-                            const { data: urlData } = supabase.storage
-                                .from('customer-documents')
-                                .getPublicUrl(doc.file_url);
-                            documentUrl = urlData.publicUrl;
+                        // QA I4.13: signed link (bucket going private)
+                        const documentUrl = await signedStoredUrl(supabase, doc.file_url);
+                        if (!documentUrl) {
+                            return NextResponse.json({ ok: false, error: 'Could not open the signed document' }, { status: 500 });
                         }
                         return storedDocumentResponse(documentUrl, inline === true);
                     }
@@ -141,12 +161,10 @@ export async function POST(request: NextRequest) {
                     .single();
 
                 if (doc?.file_url) {
-                    let documentUrl = doc.file_url;
-                    if (!documentUrl.startsWith('http')) {
-                        const { data: urlData } = supabase.storage
-                            .from('customer-documents')
-                            .getPublicUrl(doc.file_url);
-                        documentUrl = urlData.publicUrl;
+                    // QA I4.13: signed link (bucket going private)
+                    const documentUrl = await signedStoredUrl(supabase, doc.file_url);
+                    if (!documentUrl) {
+                        return NextResponse.json({ ok: false, error: 'Could not open the signed document' }, { status: 500 });
                     }
 
                     return storedDocumentResponse(documentUrl, inline === true);

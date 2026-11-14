@@ -20,6 +20,7 @@ import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react-nw';
 
 import { cn } from '@nw/lib/utils';
+import { useSignedDocumentUrl } from '@nw/lib/document-url';
 
 export function DocumentPreview({
   label,
@@ -33,6 +34,8 @@ export function DocumentPreview({
 }) {
   const [revealed, setRevealed] = useState(false);
   const [failed, setFailed] = useState(false);
+  // QA I4.13: signed link (bucket going private)
+  const signedSrc = useSignedDocumentUrl(src);
 
   return (
     <figure className="flex min-w-0 flex-col gap-2">
@@ -52,8 +55,10 @@ export function DocumentPreview({
           // A plain <img>, not next/image: these are Supabase storage URLs on a
           // host the image optimiser is not configured for, and routing private
           // documents through an optimiser cache would be worse, not better.
+          // QA I4.13: signed link (bucket going private) — nothing until it is signed.
+          signedSrc ? (
           <img
-            src={src}
+            src={signedSrc}
             alt={revealed ? label : ''}
             aria-hidden={!revealed}
             onError={() => setFailed(true)}
@@ -62,6 +67,7 @@ export function DocumentPreview({
               revealed ? 'blur-0' : 'scale-110 blur-lg',
             )}
           />
+          ) : null
         )}
 
         {!revealed && !failed ? (

@@ -19,7 +19,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { BlurredImage } from '@/components/ui/blurred-image';
+import { SignedBlurredImage } from '@/components/signed-document-image';
 
 interface AIVerificationQRProps {
   sessionId: string;
@@ -436,7 +436,8 @@ export default function AIVerificationQR({
                         verificationData?.document_front_url ? "border-primary/30" : "border-muted"
                       )}>
                         {verificationData?.document_front_url ? (
-                          <BlurredImage
+                          // QA I4.13: signed link (bucket going private)
+                          <SignedBlurredImage
                             src={verificationData.document_front_url}
                             alt="ID Front"
                           />
@@ -456,7 +457,8 @@ export default function AIVerificationQR({
                         verificationData?.document_back_url ? "border-primary/30" : "border-muted"
                       )}>
                         {verificationData?.document_back_url ? (
-                          <BlurredImage
+                          // QA I4.13: signed link (bucket going private)
+                          <SignedBlurredImage
                             src={verificationData.document_back_url}
                             alt="ID Back"
                           />
@@ -476,7 +478,8 @@ export default function AIVerificationQR({
                         verificationData?.selfie_image_url ? "border-primary/30" : "border-muted"
                       )}>
                         {verificationData?.selfie_image_url ? (
-                          <BlurredImage
+                          // QA I4.13: signed link (bucket going private)
+                          <SignedBlurredImage
                             src={verificationData.selfie_image_url}
                             alt="Selfie"
                           />
