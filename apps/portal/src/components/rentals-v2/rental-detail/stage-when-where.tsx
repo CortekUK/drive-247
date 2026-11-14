@@ -70,6 +70,14 @@ import type { StageProps } from "./stages";
 import { WhereMap, type MapPlace } from "./where-map";
 import { RentalDatesDialog } from "./rental-dates-dialog";
 import { fmtDate, Panel, Pill, StageAction, Surface } from "./_kit";
+import {
+  calendarDaysBetween,
+  checkTypedCode,
+  promoDiscount,
+  useDurationDiscount,
+  useStoredTypedCode,
+  type RentalPromo,
+} from "./rental-promo";
 
 type How = "fixed" | "location" | "area";
 type End = {
@@ -205,6 +213,15 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
   const [returnAt, setReturnAt] = useState("");
   const [out, setOut] = useState<End>(current.out);
   const [back, setBack] = useState<End>(current.back);
+  // A promo code typed here, as on the booking page (QA P8.4). `undefined` =
+  // untouched (the code already on the rental stands), `null` = removed.
+  const storedCode = useStoredTypedCode(tenant?.id, rental.promo_code);
+  const [typedPromo, setTypedPromo] = useState<RentalPromo | null | undefined>(undefined);
+  const [promoInput, setPromoInput] = useState("");
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [promoChecking, setPromoChecking] = useState(false);
+  const activeTyped = typedPromo === undefined ? storedCode.data ?? null : typedPromo;
+  const promoChanged = typedPromo !== undefined && (typedPromo?.code ?? null) !== (storedCode.data?.code ?? null);
   const origPickup = joinAt(rental.start_date, rental.pickup_time);
   const origReturn = joinAt(rental.end_date, rental.return_time);
   const reset = () => {
@@ -212,12 +229,19 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
     setReturnAt(origReturn);
     setOut(current.out);
     setBack(current.back);
+    setTypedPromo(undefined);
+    setPromoInput("");
+    setPromoError(null);
   };
   // Re-seed from the rental whenever it (or the settings it is read with) changes.
   useEffect(reset, [origPickup, origReturn, current]); // eslint-disable-line react-hooks/exhaustive-deps
   const sameEnd = (a: End, b: End) => a.how === b.how && a.address === b.address && a.locationId === b.locationId && a.fee === b.fee;
   const dirty =
-    pickupAt !== origPickup || returnAt !== origReturn || !sameEnd(out, current.out) || !sameEnd(back, current.back);
+    pickupAt !== origPickup ||
+    returnAt !== origReturn ||
+    !sameEnd(out, current.out) ||
+    !sameEnd(back, current.back) ||
+    (canEdit && promoChanged);
   const backEnd: End = back;
   const placesMoved = !sameEnd(out, current.out) || !sameEnd(back, current.back);
 
@@ -252,8 +276,11 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
   const datesMoved =
     canEdit &&
     (newStart !== String(rental.start_date ?? "").slice(0, 10) || newEnd !== String(rental.end_date ?? "").slice(0, 10));
+  // The long-rental discount for the new length, worked out the booking page's
+  // way; a typed code replaces it, they never stack (QA P8.8, P4.14).
+  const durationDiscount = useDurationDiscount(tenant?.id, timezone, calendarDaysBetween(newStart, newEnd));
   const reprice = useMemo(() => {
-    if (!datesMoved || !newStart || !newEnd || newEnd <= newStart || !detail.vehicle) return null;
+    if (!(datesMoved || (canEdit && promoChanged)) || !newStart || !newEnd || newEnd <= newStart || !detail.vehicle) return null;
     const breakdown = calculateRentalPriceBreakdown(
       newStart,
       newEnd,
@@ -273,7 +300,10 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
       true // v2: weekend/holiday surcharges only under 7 days (QA P5)
     );
     const price = Math.round(breakdown.rentalPrice * 100) / 100;
-    const discounted = price - (Number(rental.discount_applied) || 0);
+    // The discount comes off the rental only; tax and the fee follow what is left.
+    const promo = activeTyped ?? durationDiscount.data ?? null;
+    const discount = promoDiscount(promo, price);
+    const discounted = Math.round((price - discount) * 100) / 100;
     const rs = rentalSettings as any;
     const tax =
       rs?.tax_enabled && rs?.tax_percentage ? Math.round(discounted * (rs.tax_percentage / 100) * 100) / 100 : 0;
@@ -282,8 +312,20 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
       const v = Number(rs.service_fee_value ?? rs.service_fee_amount ?? 0) || 0;
       service = rs.service_fee_type === "percentage" ? Math.round(((discounted * v) / 100) * 100) / 100 : v;
     }
-    return { price, tax, service, days: breakdown.rentalDays, tier: breakdown.pricingTier };
-  }, [datesMoved, newStart, newEnd, detail.vehicle, weekend, holidays, overrides, vehicleId, mtd, rental, dayPrices, rentalSettings]);
+    return { price, promo, discount, tax, service, days: breakdown.rentalDays, tier: breakdown.pricingTier };
+  }, [datesMoved, canEdit, promoChanged, activeTyped, durationDiscount.data, newStart, newEnd, detail.vehicle, weekend, holidays, overrides, vehicleId, mtd, rental, dayPrices, rentalSettings]);
+
+  const applyPromo = async () => {
+    if (!tenant?.id) return;
+    setPromoChecking(true);
+    const { promo, error } = await checkTypedCode(tenant.id, timezone, promoInput);
+    setPromoChecking(false);
+    setPromoError(error);
+    if (promo) {
+      setTypedPromo(promo);
+      setPromoInput("");
+    }
+  };
 
   const save = useMutation({
     mutationFn: async () => {
@@ -315,7 +357,15 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
           collection_fee: backEnd.fee,
         });
       }
-      if (reprice) Object.assign(terms, { monthly_amount: reprice.price, tax_amount: reprice.tax, service_fee: reprice.service });
+      if (reprice)
+        Object.assign(terms, {
+          monthly_amount: reprice.price,
+          tax_amount: reprice.tax,
+          service_fee: reprice.service,
+          // The code and its discount travel with the price (QA P8.4, P8.8).
+          discount_applied: reprice.discount,
+          promo_code: reprice.promo?.code ?? "",
+        });
       const { data, error } = await (supabase as any).rpc("update_rental_terms_v2", {
         p_rental_id: rental.id,
         p_terms: terms,
@@ -456,6 +506,28 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
               currency={currency}
               unit={unit}
             />
+            <div className="h-px bg-foreground/5" />
+            {/* A promo code, and the long-rental discount, as on the booking page (QA P8.4, P8.8). */}
+            <PromoRow
+              editable={canEdit}
+              typed={activeTyped}
+              duration={reprice ? (reprice.promo?.source === "duration" ? reprice.promo : null) : null}
+              storedDiscount={Number(rental.discount_applied) || 0}
+              storedCode={rental.promo_code ?? null}
+              input={promoInput}
+              setInput={(v) => {
+                setPromoInput(v);
+                setPromoError(null);
+              }}
+              error={promoError}
+              checking={promoChecking}
+              onApply={applyPromo}
+              onRemove={() => {
+                setTypedPromo(null);
+                setPromoError(null);
+              }}
+              currency={currency}
+            />
           </div>
 
           <div className="relative min-h-40 flex-1 border-t border-foreground/5">
@@ -476,6 +548,13 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
                   <span className="font-semibold text-foreground">
                     {formatCurrency(Number(rental.monthly_amount) || 0, currency)} → {formatCurrency(reprice.price, currency)}
                   </span>
+                  {reprice.discount > 0 && (
+                    <>
+                      {" "}
+                      · {reprice.promo?.source === "duration" ? "Long-rental discount" : `Discount (${reprice.promo?.code})`} −
+                      {formatCurrency(reprice.discount, currency)}
+                    </>
+                  )}
                   {reprice.tax > 0 && <> · Tax {formatCurrency(reprice.tax, currency)}</>}
                   {reprice.service > 0 && <> · Service {formatCurrency(reprice.service, currency)}</>}
                 </span>
@@ -518,6 +597,90 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
 /* ══════════════════════════════════════════════════════════════════════════
    Pieces
    ══════════════════════════════════════════════════════════════════════════ */
+
+/** Promo code: type one, see it applied, or see the long-rental discount that applies by itself. */
+function PromoRow({
+  editable,
+  typed,
+  duration,
+  storedDiscount,
+  storedCode,
+  input,
+  setInput,
+  error,
+  checking,
+  onApply,
+  onRemove,
+  currency,
+}: {
+  editable: boolean;
+  typed: RentalPromo | null;
+  duration: RentalPromo | null;
+  storedDiscount: number;
+  storedCode: string | null;
+  input: string;
+  setInput: (v: string) => void;
+  error: string | null;
+  checking: boolean;
+  onApply: () => void;
+  onRemove: () => void;
+  currency: string;
+}) {
+  const describe = (p: RentalPromo) => (p.type === "percentage" ? `${p.value}% off the rental` : `${formatCurrency(p.value, currency)} off the rental`);
+  if (!editable) {
+    if (!storedCode && storedDiscount <= 0) return null;
+    return (
+      <div className="flex items-baseline justify-between gap-3 text-sm">
+        <span className="text-muted-foreground">Discount</span>
+        <span className="font-medium">
+          {storedCode ? `${storedCode} · ` : ""}−{formatCurrency(storedDiscount, currency)}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium">Promo code</span>
+        {typed ? (
+          <span className="flex items-center gap-2 text-sm">
+            <span className="font-medium text-[#16a34a]">
+              {typed.code} applied — {describe(typed)}
+            </span>
+            <Button size="sm" variant="ghost" onClick={onRemove}>
+              Remove
+            </Button>
+          </span>
+        ) : (
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              onApply();
+            }}
+          >
+            <input
+              aria-label="Promo code"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Code"
+              className="h-8 w-36 rounded-full border border-foreground/10 bg-background px-3 text-sm uppercase outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            <Button size="sm" variant="outline" type="submit" disabled={checking || !input.trim()}>
+              {checking ? "Checking…" : "Apply"}
+            </Button>
+          </form>
+        )}
+      </div>
+      {error && <p className="text-xs text-[#dc2626]">{error}</p>}
+      {!typed && duration && (
+        <p className="text-xs text-muted-foreground">
+          Long-rental discount applies by itself: {describe(duration)} ({duration.minDays}+ days). A code typed here replaces it.
+        </p>
+      )}
+    </div>
+  );
+}
 
 function Legend({ dot, label }: { dot: string; label: string }) {
   return (

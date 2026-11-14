@@ -115,6 +115,83 @@ export function useCreateDraftRental({ replace = false }: { replace?: boolean } 
   };
 }
 
+/**
+ * Leaving a draft nobody touched removes it (QA P8.12: "Leave without saving"
+ * must create no rental). Untouched = still Pending with no customer, no car and
+ * no return date. The delete repeats those conditions, so a draft that was
+ * filled in a moment ago (and not yet re-read here) is never removed.
+ *
+ * The delete waits a beat and is cancelled if the same rental mounts again:
+ * React's strict mode unmounts and remounts every effect once in development,
+ * and that must not throw the draft away while it is being looked at. Closing
+ * the tab or loading another page unmounts nothing, so `pagehide` sends the
+ * same delete as a keepalive request, which the browser finishes after the
+ * page is gone.
+ */
+const pendingDiscards = new Map<string, ReturnType<typeof setTimeout>>();
+
+type DraftLike = { id: string; status?: string | null; customer_id?: string | null; vehicle_id?: string | null; end_date?: string | null };
+
+export function useDiscardUntouchedDraftOnLeave(rental: DraftLike | null | undefined, enabled: boolean) {
+  const { tenant } = useTenant();
+  const queryClient = useQueryClient();
+  const latest = useRef(rental);
+  latest.current = rental;
+  const rid = rental?.id ?? null;
+  const tenantId = tenant?.id ?? null;
+  useEffect(() => {
+    if (!enabled || !rid || !tenantId) return;
+    const queued = pendingDiscards.get(rid);
+    if (queued) {
+      clearTimeout(queued);
+      pendingDiscards.delete(rid);
+    }
+    let token: string | null = null;
+    void supabase.auth.getSession().then(({ data }) => {
+      token = data.session?.access_token ?? null;
+    });
+    const untouched = () => {
+      const r = latest.current;
+      return !!r && r.id === rid && r.status === "Pending" && !r.customer_id && !r.vehicle_id && !r.end_date;
+    };
+    const discardNow = () => {
+      if (!untouched()) return;
+      void supabase
+        .from("rentals")
+        .delete()
+        .eq("id", rid)
+        .eq("tenant_id", tenantId)
+        .eq("status", "Pending")
+        .is("customer_id", null)
+        .is("vehicle_id", null)
+        .is("end_date", null)
+        .then(() => queryClient.invalidateQueries({ queryKey: draftsKey(tenantId) }));
+    };
+    const discardOnUnload = () => {
+      if (!untouched() || !token) return;
+      const base = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hviqoaokxvlancmftwuo.supabase.co";
+      const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+      const q = `id=eq.${rid}&tenant_id=eq.${tenantId}&status=eq.Pending&customer_id=is.null&vehicle_id=is.null&end_date=is.null`;
+      void fetch(`${base}/rest/v1/rentals?${q}`, {
+        method: "DELETE",
+        keepalive: true,
+        headers: { apikey: key, Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    };
+    window.addEventListener("pagehide", discardOnUnload);
+    return () => {
+      window.removeEventListener("pagehide", discardOnUnload);
+      pendingDiscards.set(
+        rid,
+        setTimeout(() => {
+          pendingDiscards.delete(rid);
+          discardNow();
+        }, 400)
+      );
+    };
+  }, [enabled, rid, tenantId, queryClient]);
+}
+
 /** The drafts, as one quiet row above the list. Nothing when there are none. */
 export function RentalDrafts() {
   const { tenant } = useTenant();
