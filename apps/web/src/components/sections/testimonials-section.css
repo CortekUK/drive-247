@@ -422,3 +422,19 @@
 @media (max-width: 767px) {
   .ts-frame, .ts-who { justify-self: stretch; width: 100%; }
 }
+
+/*
+ * Phones (boss, 2026-11-14: "captions that were previously present are now missing"): the
+ * film is the full width now, big enough for its captions again (they were hidden when it was
+ * a small picture beside George's name). They sit above his name at the film's foot.
+ */
+@media (max-width: 767px) {
+  .ts-caption { display: flex; bottom: 104px; width: calc(100% - 32px); font-size: 1.25rem; }
+}
+
+/* Phones: the page line frames the film and runs on down its right side (tour/phone-line.tsx).
+   Room under the frame before the first film, and the films' lengths kept clear of the line. */
+@media (max-width: 767.98px) {
+  .ts-films { margin-top: 26px; }
+  .ts-film { padding-right: 18px; }
+}

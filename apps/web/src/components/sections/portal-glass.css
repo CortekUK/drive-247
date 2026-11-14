@@ -583,3 +583,9 @@
   #features .pg-device { justify-self: center; width: min(100%, calc((100svh - 120px) * 1000 / 700)); }
 }
 #features .pg-device .pg-phone { animation: none; }
+
+/* Phones (boss, 2026-11-14): the phone smaller and higher, as in rental-cards.css; the stage as short as that leaves it. */
+@media (max-width: 767.98px) {
+  #features .pg-device, #features .is-flipped .pg-device { aspect-ratio: 1000 / 620; }
+  #features .pg-device .pg-phone, #features .is-flipped .pg-device .pg-phone { width: 21cqw; }
+}

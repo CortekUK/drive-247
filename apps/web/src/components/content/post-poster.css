@@ -137,3 +137,7 @@
   .dark .pp-poster.is-art .pp-in { color: rgb(255 255 255 / 0.7); }
   .dark .pp-poster.is-art .pp-in strong { color: #fff; }
 }
+
+/* The illustrated posters (boss, 2026-11-14): a subtle gradient on the card, a breath of indigo toward its foot. */
+.pp-poster.is-art { background: linear-gradient(165deg, #f9faff 0%, #f1f2fd 55%, #e8e9fc 100%); }
+.dark .pp-poster.is-art { background: linear-gradient(165deg, #0e0e16 0%, #12122a 60%, #18163a 100%); }
