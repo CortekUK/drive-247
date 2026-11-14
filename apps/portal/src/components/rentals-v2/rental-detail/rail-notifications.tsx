@@ -44,7 +44,7 @@ import { skeletonRows } from "@/lib/skeleton-data";
 import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 import type { RentalDetailV2 } from "./use-rental-detail-v2";
 import { useV2 } from "@/lib/v2-context";
-import { previewNotifications } from "./rail-preview";
+import { previewNotifications, railPreviewEnabled } from "./rail-preview";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -173,7 +173,7 @@ export function RailNotifications({ detail }: { detail: RentalDetailV2 }) {
 
   /* northwind preview — see rail-preview.ts. Shown only while the rental has
      no real notification; "read" on a preview row is local to this tab. */
-  const preview = useV2("chrome");
+  const preview = useV2("chrome") && railPreviewEnabled();
   const [previewRead, setPreviewRead] = useState<Set<string>>(new Set());
   const source = useMemo<Notification[]>(() => {
     if (loading) return SKELETON;

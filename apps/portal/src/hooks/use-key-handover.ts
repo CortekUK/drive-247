@@ -51,6 +51,18 @@ export interface KeyHandover {
   photos: HandoverPhoto[];
 }
 
+/** The signed-in staff member's app_users.id, or null. */
+async function currentAppUserId(): Promise<string | null> {
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth?.user?.id) return null;
+    const { data } = await supabase.from("app_users").select("id").eq("auth_user_id", auth.user.id).maybeSingle();
+    return (data as any)?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function useKeyHandover(rentalId: string | undefined) {
   const { toast } = useToast();
   const { tenant } = useTenant();
@@ -263,7 +275,9 @@ export function useKeyHandover(rentalId: string | undefined) {
       if (handover) {
         await supabase
           .from("rental_key_handovers")
-          .update({ handed_at: new Date().toISOString() })
+          // QA R13.1: say WHO handed the keys over. handed_by (FK app_users.id) was
+          // never written, so the rental's Activity showed every handover nameless.
+          .update({ handed_at: new Date().toISOString(), ...(await currentAppUserId().then((id) => (id ? { handed_by: id } : {}))) })
           .eq("id", handover.id);
       }
 
@@ -274,6 +288,7 @@ export function useKeyHandover(rentalId: string | undefined) {
           .from("rentals")
           .select(`
             id,
+            rental_number,
             approval_status,
             payment_status,
             start_date,
@@ -332,12 +347,21 @@ export function useKeyHandover(rentalId: string | undefined) {
             });
 
             if (customer?.email && vehicle) {
+              // QA R13: the function prints the plate, colour and both dates; without
+              // them the notice read "Toyota Camry (undefined), due back undefined".
+              const day = (d?: string | null) =>
+                d ? new Date(`${String(d).slice(0, 10)}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "";
               const notifyPayload = {
                 rentalId: rentalId,
                 customerName: customer.name,
                 customerEmail: customer.email,
+                customerPhone: customer.phone,
                 vehicleName: `${vehicle.make} ${vehicle.model}`,
-                bookingRef: rentalId,
+                vehicleReg: vehicle.reg,
+                vehicleColor: vehicle.color,
+                startDate: day(rental.start_date),
+                endDate: day(rental.end_date),
+                bookingRef: (rental as any).rental_number || rentalId,
                 tenantId: tenant?.id,
               };
               console.log('Invoking notify-rental-started with payload:', notifyPayload);
@@ -392,7 +416,7 @@ export function useKeyHandover(rentalId: string | undefined) {
         // Get the rental details including vehicle_id and tenant_id
         const { data: rental } = await supabase
           .from("rentals")
-          .select("vehicle_id, tenant_id, customer_id")
+          .select("vehicle_id, tenant_id, customer_id, rental_number, start_date, end_date, customer:customers(name, email, phone), vehicle:vehicles(make, model, reg)")
           .eq("id", rentalId)
           .maybeSingle();
 
@@ -449,11 +473,25 @@ export function useKeyHandover(rentalId: string | undefined) {
         // Send rental completed notification
         try {
           await supabase.functions.invoke('notify-rental-completed', {
-            body: {
-              rentalId: rentalId,
-              tenantId: rental?.tenant_id || tenant?.id,
-              bookingRef: rentalId.substring(0, 8).toUpperCase(),
-            }
+            // QA R13: the function prints the customer and the car; sent without them
+            // the notice read "Rental 90CAE6D2 for undefined (undefined) has been completed".
+            body: (() => {
+              const r = rental as any;
+              const day = (d?: string | null) =>
+                d ? new Date(`${String(d).slice(0, 10)}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "";
+              return {
+                rentalId: rentalId,
+                tenantId: rental?.tenant_id || tenant?.id,
+                bookingRef: r?.rental_number || rentalId.substring(0, 8).toUpperCase(),
+                customerName: r?.customer?.name,
+                customerEmail: r?.customer?.email,
+                customerPhone: r?.customer?.phone,
+                vehicleName: r?.vehicle ? `${r.vehicle.make ?? ""} ${r.vehicle.model ?? ""}`.trim() : undefined,
+                vehicleReg: r?.vehicle?.reg,
+                startDate: day(r?.start_date),
+                endDate: day(r?.end_date),
+              };
+            })()
           });
         } catch (notifyErr) {
           console.warn('[KEY-HANDOVER] Failed to send rental completed notification:', notifyErr);

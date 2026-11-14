@@ -74,7 +74,7 @@ import type { RentalDetailV2 } from "./use-rental-detail-v2";
 import { SHOW_MULTI_PERIOD } from "./multi-period";
 import { money } from "./_kit";
 import { useV2 } from "@/lib/v2-context";
-import { MIN_REAL, previewActivity, type PreviewActivity } from "./rail-preview";
+import { MIN_REAL, previewActivity, railPreviewEnabled, type PreviewActivity } from "./rail-preview";
 
 const PREVIEW_ICON: Record<PreviewActivity["icon"], React.ComponentType<{ className?: string }>> = {
   plus: Plus, check: Check, card: CreditCard, lock: Lock, key: KeyRound,
@@ -320,9 +320,13 @@ function useRentalActivity(rental: Record<string, any>, tenantId: string | null 
       /* ── payments ─────────────────────────────────────────────────── */
 
       for (const p of payments.data ?? []) {
-        const when = p.paid_at ?? (p.payment_date ? `${p.payment_date}T12:00:00Z` : null) ?? p.created_at;
+        /* QA R13: the real moment first. payment_date is a bare date pinned to
+           noon UTC, which put a payment taken today under "Yesterday 5:00 PM". */
+        const when = p.paid_at ?? p.created_at ?? (p.payment_date ? `${p.payment_date}T12:00:00Z` : null);
         if (!when) continue;
         const failed = ["failed", "cancelled", "canceled"].includes(String(p.status ?? "").toLowerCase());
+        /* A card link nobody has paid yet is a request, not money received. */
+        const waiting = !p.paid_at && String(p.status ?? "").toLowerCase() === "pending";
         const refunded = !!p.refund_status && String(p.refund_status).toLowerCase() !== "none";
         push({
           id: `p-${p.id}`,
@@ -333,7 +337,9 @@ function useRentalActivity(rental: Record<string, any>, tenantId: string | null 
             ? `Payment refunded${p.method ? ` · ${p.method}` : ""}`
             : failed
               ? `Payment failed${p.method ? ` · ${p.method}` : ""}`
-              : `Payment received${p.method ? ` · ${p.method}` : ""}`,
+              : waiting
+                ? `Payment requested${p.method ? ` · ${p.method}` : ""} · not paid`
+                : `Payment received${p.method ? ` · ${p.method}` : ""}`,
           amount: money(num(p.amount)),
           bad: failed,
         });
@@ -433,7 +439,7 @@ export function RailActivity({ detail }: { detail: RentalDetailV2 }) {
   const { data: real = [], isLoading } = useRentalActivity(detail.rental, tenant?.id);
 
   /* northwind preview — see rail-preview.ts. Real rows always win. */
-  const preview = useV2("chrome");
+  const preview = useV2("chrome") && railPreviewEnabled();
   const all = useMemo<Event[]>(() => {
     if (!preview || isLoading || real.length >= MIN_REAL) return real;
     const borrowed = previewActivity(detail).map((p) => ({ ...p, icon: PREVIEW_ICON[p.icon] }));

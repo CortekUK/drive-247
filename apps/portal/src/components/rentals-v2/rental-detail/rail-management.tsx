@@ -23,11 +23,13 @@ import { differenceInCalendarDays } from "date-fns";
 import { AddPeriodDialog } from "./add-period-dialog";
 import { EXTENSION_TITLE, extensionHref, overviewHref, periodHref, readExtension, readOverview, readPeriod } from "./extension-flow";
 import { stageHref } from "./stages";
-import { previewPeriods } from "./rail-preview";
+import { previewPeriods, railPreviewEnabled } from "./rail-preview";
 import { useV2 } from "@/lib/v2-context";
 import { fmtDate, money } from "./_kit";
 import type { RentalDetailV2 } from "./use-rental-detail-v2";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 type Plan = {
   id: string;
@@ -68,7 +70,10 @@ const day = (iso: string | null) =>
     ? new Date(`${String(iso).slice(0, 10)}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })
     : "Open-ended";
 
-function plansOf(detail: RentalDetailV2): Plan[] {
+/** The charges that make up the booking itself (not what was added after it). */
+const BOOKING_CATEGORIES = new Set(["Rental", "Tax", "Service Fee", "Delivery Fee", "Collection Fee", "Insurance", "Extras"]);
+
+function plansOf(detail: RentalDetailV2, bookingTotal: number | null): Plan[] {
   const r = detail.rental;
   return [
     {
@@ -80,7 +85,9 @@ function plansOf(detail: RentalDetailV2): Plan[] {
       startTime: r.pickup_time ?? null,
       endTime: r.return_time ?? null,
       days: detail.days,
-      amount: r.total_amount != null ? Number(r.total_amount) : null,
+      /* QA R13: read rentals.total_amount, a column that does not exist, so the
+         card never showed money. Now the sum of the booking's own charges. */
+      amount: bookingTotal ?? (r.total_amount != null ? Number(r.total_amount) : null),
     },
   ];
 }
@@ -214,6 +221,19 @@ export function RailManagement({ detail }: { detail: RentalDetailV2 }) {
   // Adding a period changes the rental: not for read-only roles (QA R1.11).
   const { canEdit } = useManagerPermissions();
   const canWrite = canEdit("rentals");
+  const { data: bookingTotal } = useQuery({
+    queryKey: ["rail-booking-total-v2", detail.rental.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ledger_entries")
+        .select("amount, category")
+        .eq("rental_id", detail.rental.id)
+        .eq("type", "Charge");
+      if (error) throw error;
+      const sum = (data ?? []).filter((c: any) => BOOKING_CATEGORIES.has(c.category)).reduce((s: number, c: any) => s + Number(c.amount || 0), 0);
+      return sum > 0 ? Math.round(sum * 100) / 100 : null;
+    },
+  });
   const router = useRouter();
   const searchParams = useSearchParams();
   const open = readExtension(searchParams);
@@ -245,7 +265,7 @@ export function RailManagement({ detail }: { detail: RentalDetailV2 }) {
   /* northwind preview — see rail-preview.ts. Real extensions are not read here
      yet, so on the v2 canary the chain borrows two manual extensions and one
      auto extension to be judged against. */
-  const preview = useV2("chrome");
+  const preview = useV2("chrome") && railPreviewEnabled();
   const borrowed: Plan[] = preview
     ? previewPeriods(detail).map((x) => ({
         id: x.id,
@@ -266,7 +286,7 @@ export function RailManagement({ detail }: { detail: RentalDetailV2 }) {
     const last = borrowed[borrowed.length - 1];
     draft.start = last.end ?? last.next ?? draft.start;
   }
-  const plans = [...plansOf(detail), ...borrowed, ...(draft ? [draft] : [])];
+  const plans = [...plansOf(detail, bookingTotal ?? null), ...borrowed, ...(draft ? [draft] : [])];
 
   return (
     /* Three bands (Oct 2 2026): Overview and the original booking pinned at

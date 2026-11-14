@@ -64,7 +64,7 @@ import { readExtension, readOverview, readPeriod } from "./extension-flow";
 import { RentalOverview } from "./rental-overview";
 import { ExtensionView } from "./extension-view";
 import { PeriodView } from "./period-view";
-import { previewPeriods } from "./rail-preview";
+import { previewPeriods, railPreviewEnabled } from "./rail-preview";
 import { useV2 } from "@/lib/v2-context";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { RightRail, rentalRailTabs } from "./right-rail";
@@ -167,7 +167,7 @@ export function RentalDetailV2() {
   const periodView = extension ? null : readPeriod(searchParams);
   /* The whole rental at a glance (`?overview=1`, Management's Overview card). */
   const overview = !extension && !periodView && readOverview(searchParams);
-  const previewOn = useV2("chrome");
+  const previewOn = useV2("chrome") && railPreviewEnabled();
 
   const { detail: loadedDetail, isLoading: detailLoading, notFound, error, refetch } = useRentalDetailV2(id);
   const isLoading = useSkeletonLoading(detailLoading);
