@@ -54,6 +54,9 @@ const PHOTO = "/team/bryan.jpg";
 const QUOTE = "“Not sure yet? Give me twenty minutes. I’ll walk you through it myself, and there’s no pressure to sign.”";
 const WORDS = QUOTE.split(" ");
 
+/** Where the phone page line runs (components/tour/phone-line.tsx PHONE). */
+const PHONE_LINE = "(max-width: 767.98px)";
+
 /** The tip sits this far down the screen (components/tour/tour-layout.ts TIP_AT). */
 const TIP = 0.7;
 const BIG = 100000;
@@ -152,10 +155,13 @@ export function BookDemoSection() {
     const el = root.current;
     if (!el || !lines) return;
     const media = matchMedia(LINE_MEDIA);
+    // Phones have a page line of their own (components/tour/phone-line.tsx): there too it comes
+    // in, writes the quote and leaves from its last word, as on desktop (Ghulam, 2026-11-14).
+    const phoneLine = matchMedia(PHONE_LINE);
 
     const measure = () => {
       const rows = rowRefs.current.slice(0, lines.length);
-      const solo = !media.matches;
+      const solo = !media.matches && !phoneLine.matches;
       if (solo) {
         delete el.dataset.lineIn;
         delete el.dataset.lineOut;
@@ -178,8 +184,12 @@ export function BookDemoSection() {
       const startX = first.left + inset;
       const endX = last.left + last.width - inset;
       // The line comes down just left of the sentence and turns into its first stroke.
-      const laneX = startX - TURN;
-      const outX = Math.min(w - 32, endX + 28);
+      // Phones: the lane the phone page line comes down (18px in), so it runs on straight into the quote.
+      const laneX = phoneLine.matches ? Math.min(startX - 12, 18 - box.left) : startX - TURN;
+      let outX = Math.min(w - 32, endX + 28);
+      // Where the button is nearly as wide as the card (phones), the line goes down clear of its end.
+      const btn = el.querySelector(".dc-btn")?.getBoundingClientRect();
+      if (btn && outX > btn.left - box.left - 8 && outX < btn.right - box.left + 7) outX = Math.min(w - 12, btn.right - box.left + 7);
       // The section above says where it let the line go; with none, the line comes straight down beside the first word.
       const before = el.previousElementSibling instanceof HTMLElement ? Number(el.previousElementSibling.dataset.lineOut) : NaN;
       const inX = Number.isFinite(before) && before > 0 ? before - box.left : laneX;
@@ -204,8 +214,9 @@ export function BookDemoSection() {
       // The line starts to leave as the tip reaches the foot of his name, with room left for it to go.
       const y1 = Math.min(h - 80, Math.max(last.y + 40, who ? who.bottom - box.top : last.y + 120));
       if (!solo) {
-        el.dataset.lineIn = String(Math.round(box.left + inX));
-        el.dataset.lineOut = String(Math.round(box.left + outX));
+        // Unrounded: the page line picks up at exactly this x, and half a pixel shows as a break.
+        el.dataset.lineIn = String(box.left + inX);
+        el.dataset.lineOut = String(box.left + outX);
       }
       const next: Art = { w, h, into: solo ? "" : into, out: solo ? "" : out, joins, rows: measured, solo, y0: first.y, y1 };
       // A phone's address bar showing or hiding fires resize with nothing here changed: keep the art, and the pen where it is.
@@ -219,12 +230,14 @@ export function BookDemoSection() {
     if (el.previousElementSibling) marks.observe(el.previousElementSibling, { attributes: true, attributeFilter: ["data-line-out"] });
     addEventListener("resize", measure);
     media.addEventListener("change", measure);
+    phoneLine.addEventListener("change", measure);
     void document.fonts?.ready.then(measure);
     return () => {
       sizes.disconnect();
       marks.disconnect();
       removeEventListener("resize", measure);
       media.removeEventListener("change", measure);
+      phoneLine.removeEventListener("change", measure);
     };
   }, [lines]);
 

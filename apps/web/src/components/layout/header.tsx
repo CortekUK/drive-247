@@ -109,6 +109,9 @@ export function Header({
             </nav>
 
             <div className="flex items-center gap-4 justify-self-end max-sm:gap-1 max-lg:gap-2">
+              <a href="/strategy-call" className="hidden items-center text-sm text-foreground/70 transition-colors duration-200 ease-out hover:text-foreground max-xl:h-11 sm:flex">
+                Book a demo
+              </a>
               <HeaderCta
                 label="Start free trial"
                 href={`${home}#pricing`}
@@ -139,6 +142,10 @@ export function Header({
                     {link.label}
                   </a>
                 ))}
+                {/* From `sm` up this one is already in the pill. */}
+                <a href="/strategy-call" onClick={() => setMenuOpen(false)} className="flex min-h-11 items-center rounded-lg px-3 text-sm text-foreground/80 transition-colors duration-200 ease-out hover:bg-muted hover:text-foreground sm:hidden">
+                  Book a demo
+                </a>
               </nav>
             )}
           </div>
@@ -177,9 +184,9 @@ export function Header({
         </Link>
 
         <div className="flex items-center gap-3">
-          {/* "Start free trial", or "Dashboard" once the server confirms
+          {/* "Book a strategy call", or "Dashboard" once the server confirms
               this caller already has a live portal. */}
-          <HeaderCta label="Start free trial" href="/#pricing" />
+          <HeaderCta />
         </div>
       </div>
     </header>

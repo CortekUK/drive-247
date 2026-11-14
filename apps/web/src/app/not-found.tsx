@@ -59,8 +59,8 @@ export default function NotFound() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-light.png" alt="Drive247" />
         </Link>
-        <a className="l4-btn primary" href="/#pricing">
-          Start free trial
+        <a className="l4-btn primary" href="/strategy-call">
+          Book a demo
         </a>
       </header>
 
@@ -80,8 +80,8 @@ export default function NotFound() {
             <ArrowLeft size={16} />
             Back to home
           </Link>
-          <a className="l4-btn outline lg" href="/#pricing">
-            Start free trial
+          <a className="l4-btn outline lg" href="/strategy-call">
+            Book a demo
             <ArrowRight size={16} />
           </a>
         </div>

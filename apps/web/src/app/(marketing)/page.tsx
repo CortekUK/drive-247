@@ -19,6 +19,7 @@ import { NumbersIntro, NumbersSection } from "@/components/sections/numbers-sect
 import { OperatorMap } from "@/components/sections/operator-map";
 import { fetchOperatorMap } from "@/lib/operator-map-server";
 import { StoriesSection } from "@/components/sections/stories-section";
+import { BookDemoSection } from "@/components/sections/book-demo-section";
 import { BlogSection } from "@/components/sections/blog-section";
 import { connection } from "next/server";
 
@@ -201,6 +202,8 @@ export default async function Home({
         {/* Getting started, one part of the page: the main heading, then the Launch cards (no heading) and Pricing, left-aligned */}
         <LaunchSection />
         {plans && <PricingSection plans={plans} offer={offer} enterprise={enterprise} detailed />}
+        {/* Not sure yet? Book a demo */}
+        <BookDemoSection />
         {/* The blog, for anyone who wants to read before deciding; the footer follows */}
         <BlogSection />
         {/* The line down the whole page, and Trax in the corner walking through it. Last, so

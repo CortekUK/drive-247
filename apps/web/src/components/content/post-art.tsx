@@ -1,11 +1,9 @@
-import { carSvg, MONO_PAINT } from "./car-art";
-
 /*
  * Illustrations for the blog posters on the landing page, in the Drive247 illustration style,
  * "quiet confidence" (ILLUSTRATION_GUIDE.md at the repo root; boss, 2026-11-14: not the same
  * pictures as the portal's, the same vibe). Ink lines, white cards, grey bars for words, one
- * indigo for the thing that matters, one soft glow, the approved car only where the post is
- * about cars. No chips, no figures, no extra colours.
+ * indigo for the thing that matters, one soft glow. No cars (boss, 2026-11-14: the drawn car
+ * looked wrong), no chips, no extra colours.
  *
  * Drawn on a 400 x 350 board, the poster's 4:3.5 shape. The art keeps to the top of the board,
  * and off its top-left corner (the category chip on phones), so the title reads clear at the
@@ -57,11 +55,11 @@ function customer(dark: boolean): string {
   </g>`;
 }
 
-/* Turo or your own booking site: your own site, at your own address, with your car on it. */
-function commission(dark: boolean, id: string): string {
+/* Turo or your own booking site: your own site, at your own address, and the payout in full, no commission. */
+function commission(dark: boolean): string {
   const p = pal(dark), S = line(p);
-  return `${glow(p, 220, 196, 178)}
-  <g transform="translate(56 54)">
+  return `${glow(p, 210, 196, 178)}
+  <g transform="translate(48 50)">
    <rect width="226" height="138" rx="14" fill="${p.card}" ${S}/>
    <path d="M0 14 Q0 0 14 0 L212 0 Q226 0 226 14 L226 26 L0 26 Z" fill="${p.lite}" opacity=".55"/>
    <path d="M0 26 H226" stroke="${p.ink}" stroke-width="1.6"/>
@@ -74,7 +72,14 @@ function commission(dark: boolean, id: string): string {
    <rect x="16" y="74" width="72" height="5" rx="2.5" fill="${p.lite}"/><rect x="16" y="84" width="56" height="5" rx="2.5" fill="${p.lite}"/>
    <rect x="16" y="102" width="46" height="18" rx="9" fill="${p.acc}"/>${txt(39, 114.5, "Book", 9, 700, p.onAcc, "middle")}
   </g>
-  <g transform="translate(196 118) scale(.56)">${carSvg(MONO_PAINT, id)}</g>`;
+  <g transform="translate(212 112)">
+   <rect width="136" height="86" rx="12" fill="${p.card}" ${S}/>
+   <rect x="14" y="16" width="50" height="5" rx="2.5" fill="${p.lite}"/>
+   ${txt(14, 48, "$1,240", 22, 700, p.ink)}
+   <rect x="14" y="60" width="86" height="16" rx="8" fill="${p.soft}"/>${txt(57, 71.5, "0% commission", 9, 700, p.acc, "middle")}
+   <circle cx="136" cy="0" r="12" fill="${p.acc}"/>${tick(130, 0.5, p.onAcc, 2.4)}
+  </g>
+  ${ground(p, 210, 204, 150)}`;
 }
 
 /* Signed and checked before pickup: the agreement signed and the licence checked, then the key goes. */
@@ -124,7 +129,7 @@ function weekend(dark: boolean): string {
   ${ground(p, 200, 202, 140)}`;
 }
 
-const ART: Record<string, (dark: boolean, id: string) => string> = {
+const ART: Record<string, (dark: boolean) => string> = {
   "turo-or-your-own-booking-site": commission,
   "signed-and-checked-before-pickup": signed,
   "weekend-and-holiday-pricing": weekend,
@@ -145,7 +150,7 @@ export function PostArt({ slug }: { slug: string }) {
           aria-hidden
           focusable="false"
           // Static art from constants only (see the note at the top); nothing user-supplied.
-          dangerouslySetInnerHTML={{ __html: art(dark, `pp-${slug}-${dark ? "d" : "l"}`) }}
+          dangerouslySetInnerHTML={{ __html: art(dark) }}
         />
       ))}
     </>

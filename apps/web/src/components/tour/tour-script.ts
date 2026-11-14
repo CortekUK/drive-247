@@ -318,6 +318,12 @@ export const TOUR: TourStop[] = [
     target: "#pricing",
   },
   {
+    id: "book-a-demo",
+    label: "Book a demo",
+    text: "Not sure yet? Bryan, our customer success manager, will walk you through it on a free 20-minute call. No obligation.",
+    target: "#book-a-demo",
+  },
+  {
     id: "blog",
     label: "That's the tour",
     text: "That's the tour. Start your free trial whenever you're ready, or read a guide first.",

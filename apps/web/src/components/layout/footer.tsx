@@ -18,6 +18,7 @@ const COLUMNS = [
   {
     title: "Get started",
     links: [
+      { label: "Book a demo", href: "/strategy-call" },
       { label: "Start free trial", href: "/#pricing" },
     ],
   },

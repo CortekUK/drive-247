@@ -445,3 +445,19 @@
 @media (max-width: 767.98px) {
   .rc-steps { margin-top: -14px; }
 }
+
+/*
+ * Phones (boss, 2026-11-14): the phone smaller and higher, so only a little of it hangs below
+ * the window (about 16px, was 45), and the picture as short as that leaves it, so the words
+ * under it start sooner. Same numbers as the feature rows (portal-glass.css): the stage is
+ * 1000 x 620, the window 84% wide, the phone 21% wide on the stage's foot. The three-phone
+ * scenes (front, back, selfie) shrink to fit the shorter stage. The steps sit closer together.
+ */
+@media (max-width: 767.98px) {
+  .rc-inline .vs { aspect-ratio: 1000 / 620; }
+  .rc-inline .vs .vs-phone.is-left, .rc-inline .vs .vs-phone.is-right { width: 21%; bottom: 0; }
+  .rc-inline .vs-row { top: 1%; }
+  .rc-inline .vs-row .vs-phone { width: 21%; }
+  .rc-detail li { --rc-gap: 11px; }
+  .rc-steps { margin-top: -12px; }
+}
