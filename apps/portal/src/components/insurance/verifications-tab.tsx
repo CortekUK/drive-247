@@ -205,10 +205,16 @@ export function VerificationsTab({
                           )}
                         </TableCell>
                         <TableCell>
+                          {v.review_decision ? (
+                            <span className={`text-xs font-medium ${v.review_decision === "approved" ? "text-green-700" : "text-red-700"}`}>
+                              {v.review_decision === "approved" ? "Approved by staff" : "Rejected by staff"}
+                            </span>
+                          ) : (
                           <VerificationStatusChip
                             status={v.status}
                             score={v.ai_score}
                           />
+                          )}
                         </TableCell>
                         <TableCell>
                           {v.rental_id ? (

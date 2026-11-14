@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
+import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import {
   Sheet,
@@ -19,6 +22,10 @@ import {
   AlertTriangle,
   CheckCircle2,
   Sparkles,
+  ThumbsUp,
+  ThumbsDown,
+  XCircle,
+  Undo2,
 } from "lucide-react";
 import type { InsuranceVerification } from "@/hooks/use-insurance-verifications";
 import {
@@ -27,6 +34,7 @@ import {
 } from "./verification-score-badge";
 import {
   useReverifyInsurance,
+  useReviewInsuranceVerification,
 } from "@/hooks/use-insurance-verifications";
 
 function Field({
@@ -61,8 +69,30 @@ export function VerificationDetailSheet({
   readOnly?: boolean;
 }) {
   const reverify = useReverifyInsurance();
+  const review = useReviewInsuranceVerification();
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+  useEffect(() => {
+    setRejecting(false);
+    setReason("");
+  }, [verification?.id, open]);
 
   if (!verification) return null;
+
+  const busy = verification.status === "pending" || verification.status === "processing";
+  const decide = async (decision: "approved" | "rejected" | null) => {
+    try {
+      await review.mutateAsync({ verificationId: verification.id, decision, reason });
+      toast.success(
+        decision === "approved" ? "Check approved" : decision === "rejected" ? "Check rejected" : "Decision undone",
+      );
+      setRejecting(false);
+      setReason("");
+    } catch (e: any) {
+      toast.error(e?.message || "Could not save the decision");
+    }
+  };
+  const reviewerName = verification.reviewer?.name || verification.reviewer?.email || "a team member";
 
   const ex = verification.extracted_fields;
   const findings = verification.ai_findings;
@@ -88,6 +118,100 @@ export function VerificationDetailSheet({
             />
             <ScorePill score={verification.ai_score} />
           </div>
+
+          {/* QA I3.9/I3.10: the staff decision, then the controls to make one. */}
+          {verification.review_decision && (
+            <div
+              className={`rounded-md border p-3 text-sm ${
+                verification.review_decision === "approved"
+                  ? "border-green-200 bg-green-50 text-green-800 dark:bg-green-950/30 dark:text-green-300"
+                  : "border-red-200 bg-red-50 text-red-800 dark:bg-red-950/30 dark:text-red-300"
+              }`}
+            >
+              <div className="flex items-center gap-2 font-medium">
+                {verification.review_decision === "approved" ? (
+                  <CheckCircle2 className="h-4 w-4" />
+                ) : (
+                  <XCircle className="h-4 w-4" />
+                )}
+                {verification.review_decision === "approved" ? "Approved" : "Rejected"} by {reviewerName}
+                {verification.reviewed_at && (
+                  <span className="font-normal opacity-80">
+                    · {format(new Date(verification.reviewed_at), "MMM dd, yyyy HH:mm")}
+                  </span>
+                )}
+              </div>
+              {verification.review_reason && <p className="mt-1 text-xs">Reason: {verification.review_reason}</p>}
+            </div>
+          )}
+
+          {!readOnly && !busy && (
+            <div className="rounded-md border p-3 space-y-3">
+              <div className="text-sm font-semibold">Your decision</div>
+              {!verification.review_decision ? (
+                <p className="text-xs text-muted-foreground">
+                  The AI's result is a suggestion. Check the document, then approve or reject it.
+                </p>
+              ) : null}
+              {rejecting ? (
+                <div className="space-y-2">
+                  <Textarea
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="Why is it rejected? e.g. the name does not match the driver's licence"
+                    rows={3}
+                    autoFocus
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={!reason.trim() || review.isPending}
+                      onClick={() => decide("rejected")}
+                    >
+                      <ThumbsDown className="h-4 w-4 mr-2" />
+                      Reject with this reason
+                    </Button>
+                    <Button size="sm" variant="ghost" disabled={review.isPending} onClick={() => setRejecting(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {verification.review_decision !== "approved" && (
+                    <Button
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                      disabled={review.isPending}
+                      onClick={() => decide("approved")}
+                    >
+                      <ThumbsUp className="h-4 w-4 mr-2" />
+                      Approve
+                    </Button>
+                  )}
+                  {verification.review_decision !== "rejected" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-red-700 border-red-200 hover:bg-red-50"
+                      disabled={review.isPending}
+                      onClick={() => setRejecting(true)}
+                    >
+                      <ThumbsDown className="h-4 w-4 mr-2" />
+                      Reject
+                    </Button>
+                  )}
+                  {verification.review_decision && (
+                    <Button size="sm" variant="ghost" disabled={review.isPending} onClick={() => decide(null)}>
+                      <Undo2 className="h-4 w-4 mr-2" />
+                      Undo decision
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {verification.ai_error && (
             <div className="rounded-md border border-red-200 bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-700 dark:text-red-300">

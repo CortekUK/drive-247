@@ -108,7 +108,13 @@ export function InsuranceVerificationsTableV2({
         <ListBody>
           {verificationRows.visible.map((v) => {
             const ex = v.extracted_fields;
-            const result = aiResultV2(v.status, v.ai_score);
+            // QA I3.9/I3.10: a staff decision outranks the AI's word.
+            const result =
+              v.review_decision === "approved"
+                ? { label: "Approved by staff", tone: "success" as ListTone }
+                : v.review_decision === "rejected"
+                  ? { label: "Rejected by staff", tone: "danger" as ListTone }
+                  : aiResultV2(v.status, v.ai_score);
             const rentalLabel = v.rental_id ? v.rentals?.rental_number || v.rental_id.slice(0, 8) : null;
 
             return (

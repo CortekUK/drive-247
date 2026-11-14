@@ -293,7 +293,7 @@ If the image is blurry, too small or any text cannot be read with confidence, ad
  */
 async function finalizeVerification(
   supabase: any,
-  row: { id: string; rental_id: string | null },
+  row: { id: string; rental_id: string | null; review_decision?: string | null },
   ai: {
     score: number;
     isInsurance: boolean;
@@ -302,6 +302,8 @@ async function finalizeVerification(
     extracted: Record<string, unknown> | null;
     model: string;
     source?: string | null;
+    /** Full AI re-run: a staff Approve/Reject no longer applies to the new result. */
+    clearReview?: boolean;
   },
 ) {
   let customerName: string | null = null;
@@ -336,6 +338,9 @@ async function finalizeVerification(
   let status = statusFromScore(ai.score, ai.isInsurance);
   if (checks.outcome === "reject") status = "rejected";
   else if (checks.outcome === "review" && status === "verified") status = "flagged";
+  // QA I3.9/I3.10: a staff decision stands until someone re-runs the AI.
+  const keepReview = !ai.clearReview && row.review_decision;
+  if (keepReview) status = row.review_decision === "approved" ? "verified" : "rejected";
 
   const { error } = await supabase
     .from("insurance_verifications")
@@ -353,6 +358,7 @@ async function finalizeVerification(
       },
       extracted_fields: ai.extracted,
       ai_error: null,
+      ...(ai.clearReview ? { review_decision: null } : {}),
     })
     .eq("id", row.id);
   if (error) throw error;
@@ -393,7 +399,7 @@ serve(async (req) => {
 
     const { data: row, error: fetchErr } = await supabase
       .from("insurance_verifications")
-      .select("id, tenant_id, file_url, mime_type, status, rental_id, ai_score, ai_findings, extracted_fields")
+      .select("id, tenant_id, file_url, mime_type, status, rental_id, ai_score, ai_findings, extracted_fields, review_decision")
       .eq("id", verificationId)
       .single();
 
@@ -481,6 +487,7 @@ serve(async (req) => {
       reasoning: result.reasoning,
       extracted: result.extracted as unknown as Record<string, unknown>,
       model: "gpt-4o",
+      clearReview: true,
       source: (row.ai_findings as Record<string, unknown> | null)?.source as string | null ?? null,
     });
     const newStatus = done.status;
