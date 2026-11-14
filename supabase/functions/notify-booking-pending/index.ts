@@ -234,6 +234,24 @@ serve(async (req) => {
         resolvedEmail = resolvedEmail || templateData.customer_email || '';
         resolvedPhone = resolvedPhone || templateData.customer_phone || '';
 
+        // QA R15.1: say what really happened to the card. A paid (captured)
+        // booking was told its card was only on hold.
+        try {
+          if (data.paymentId) {
+            const { data: pay } = await supabase
+              .from('payments')
+              .select('status, paid_at, capture_status')
+              .eq('id', data.paymentId)
+              .maybeSingle();
+            const held = !!pay && !pay.paid_at && /authori[sz]ed|requires_capture|hold/i.test(`${pay.status ?? ''} ${pay.capture_status ?? ''}`);
+            templateData.payment_note = held
+              ? `A temporary hold of ${formatCurrency(data.amount, currencyCode)} has been placed on your payment card. It will only be charged once your booking is confirmed.`
+              : `Your payment of ${formatCurrency(data.amount, currencyCode)} has been received. If we cannot confirm your booking, it will be refunded in full.`;
+          }
+        } catch (e) {
+          console.warn('Could not read the payment for the booking email note:', e);
+        }
+
         // Render email from custom or default template
         const rendered = await renderEmail(supabase, data.tenantId, 'booking_pending', templateData);
         customerSubject = rendered.subject;
