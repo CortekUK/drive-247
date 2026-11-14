@@ -567,6 +567,9 @@ export function useResendBookingDocumentsLink() {
     // button and post to the customer's inbox. Retrying it automatically would
     // do the same thing by accident.
     retry: false,
+    // React Query PAUSES a mutation while offline (networkMode 'online'), which is
+    // what left the page on "Sending… 0 of 1". 'always' lets it run and say so (QA I2.13).
+    networkMode: 'always',
     mutationFn: async ({ token }): Promise<ResendLinkResult> => {
       const { data, error } = await supabase.functions.invoke(LINK_FUNCTION, {
         body: { token, action: RESEND_ACTION },
@@ -767,6 +770,9 @@ export function useSubmitBookingInsurance() {
     // Never retried automatically: each attempt re-uploads every file. The
     // customer presses the button.
     retry: false,
+    // React Query PAUSES a mutation while offline (networkMode 'online'), which is
+    // what left the page on "Sending… 0 of 1". 'always' lets it run and say so (QA I2.13).
+    networkMode: 'always',
     mutationFn: async (input): Promise<SubmitBookingInsuranceResult> => {
       assertOnline();
       if (input.files.length === 0) {
@@ -988,6 +994,9 @@ export function useStartBookingIdentity() {
     // Not retried behind the customer's back: every attempt can consume one of
     // their ten sessions an hour.
     retry: false,
+    // React Query PAUSES a mutation while offline (networkMode 'online'), which is
+    // what left the page on "Sending… 0 of 1". 'always' lets it run and say so (QA I2.13).
+    networkMode: 'always',
     mutationFn: async ({ token }): Promise<BookingIdentitySession> => {
       assertOnline();
       const { data, error } = await withTimeout(supabase.functions.invoke(LINK_FUNCTION, {
@@ -1086,6 +1095,9 @@ export function useSubmitBookingIdentity() {
     // Never retried automatically: each attempt re-uploads three objects and
     // re-runs a paid OCR and face-match pass. The customer presses the button.
     retry: false,
+    // React Query PAUSES a mutation while offline (networkMode 'online'), which is
+    // what left the page on "Sending… 0 of 1". 'always' lets it run and say so (QA I2.13).
+    networkMode: 'always',
     mutationFn: async (input): Promise<SubmitBookingIdentityResult> => {
       assertOnline();
       const queue: { slot: IdentitySlot; file: File }[] = [
