@@ -211,7 +211,13 @@ export function StagePayments({ detail, refetch }: StageProps) {
       ? `${usd(held)} held`
       : deposit.status === "not_held"
         ? deposit.charged > 0
-          ? `${usd(deposit.charged)} billed`
+          ? // A charged deposit is the customer's money held, not revenue: say it
+            // goes back, and how much already has (QA R9.7).
+            deposit.refunded >= deposit.charged
+            ? `${usd(deposit.charged)} charged · refunded`
+            : deposit.refunded > 0
+              ? `${usd(deposit.charged)} charged · ${usd(deposit.refunded)} refunded`
+              : `${usd(deposit.charged)} charged · refundable`
           : "No deposit"
         : deposit.status === "released"
           ? depositReleased > 0 ? `${usd(depositReleased)} released` : "Released"
