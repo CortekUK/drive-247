@@ -251,7 +251,9 @@ IMPORTANT:
 - Coverage amounts should be numbers without currency symbols
 - If the document is NOT an insurance document, set isValidDocument to false
 - Check if dates are logically consistent (expiration after effective date)
-- Flag any suspicious patterns or quality issues`;
+- Flag any suspicious patterns or quality issues
+- Today's date is ${new Date().toISOString().slice(0, 10)}. Judge isExpired against today, not against any other date.
+- If the image is blurry, too small, cropped, or any text cannot be read with confidence: set needsManualReview to true, put "Image is blurry or unreadable" in reviewReasons, and set every field you cannot read to null. Never guess a date, a name or a number you cannot read.`;
 
     const tenantIdForLog = (docRecord as { tenant_id?: string })?.tenant_id ?? null;
 

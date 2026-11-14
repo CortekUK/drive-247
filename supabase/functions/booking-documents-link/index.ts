@@ -1247,8 +1247,46 @@ Deno.serve(async (req) => {
       .eq('token', token);
     if (slideError) console.error('[documents-link] could not extend link window:', slideError);
 
+    // ---- 5. What the AI check said about each certificate (QA I2.5/I2.8) ------
+    // The customer only ever saw "Received", so a pizza menu, an expired policy
+    // or an unreadable photo sat under review with nobody telling them to send
+    // the right one. Customer-safe: a coarse result and one plain sentence, no
+    // scores, no extracted fields.
+    const { data: docRows } = await supabase
+      .from('customer_documents')
+      .select('file_name, uploaded_at, created_at, ai_scan_status, verification_decision, ai_extracted_data')
+      .eq('rental_id', rental.id)
+      .eq('document_type', INSURANCE_DOCUMENT_TYPE)
+      .order('created_at', { ascending: false });
+    const insuranceFiles = (docRows ?? []).map((d) => {
+      const ai = (d.ai_extracted_data ?? {}) as Record<string, unknown>;
+      const reasons = [
+        ...(Array.isArray(ai.reviewReasons) ? ai.reviewReasons : []),
+        ...(Array.isArray(ai.suspiciousIndicators) ? ai.suspiciousIndicators : []),
+      ].map(String).join(' ').toLowerCase();
+      const decision = String(d.verification_decision ?? ai.verificationDecision ?? '');
+      const scan = String(d.ai_scan_status ?? 'pending');
+      let result: 'checking' | 'looks_good' | 'in_review' | 'not_insurance' | 'expired' | 'unreadable' = 'in_review';
+      let message = 'We will check this one by hand.';
+      if (scan === 'pending' || scan === 'processing') {
+        result = 'checking'; message = 'Checking it now…';
+      } else if (/blur|unreadable|illegible|not legible|cannot be read|poor quality|low quality/.test(reasons)) {
+        result = 'unreadable'; message = 'We could not read this clearly. Please send a sharper photo, or the PDF.';
+      } else if (ai.isValidDocument === false) {
+        result = 'not_insurance'; message = 'This does not look like an insurance certificate. Please send your certificate.';
+      } else if (ai.isExpired === true || /expired/.test(reasons)) {
+        result = 'expired'; message = 'This policy looks like it has expired. Please send a current certificate.';
+      } else if (decision === 'auto_approved') {
+        result = 'looks_good'; message = 'Looks good. The team will confirm it.';
+      } else if (scan === 'failed') {
+        result = 'in_review'; message = 'We could not check this automatically, so the team will look at it.';
+      }
+      return { name: d.file_name, uploadedAt: d.uploaded_at ?? d.created_at, result, message };
+    });
+
     return jsonResponse({
       ok: true,
+      insuranceFiles,
       /*
         The ONLY prefix this token may write to, and the one the submit action
         pins every claimed path against. Handed to the browser rather than

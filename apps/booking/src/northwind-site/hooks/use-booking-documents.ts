@@ -116,6 +116,20 @@ export interface BookingDocumentsSession {
    * parses to `null` — the same as "not started", which is the safe reading.
    */
   identityStatus: string | null;
+  /**
+   * Each insurance file already filed, newest first, with what the AI check
+   * made of it in one customer-safe sentence (QA I2.5/I2.8). `checking` while
+   * the scan runs. Empty from a server that predates it.
+   */
+  insuranceFiles: InsuranceFileResult[];
+}
+
+export type InsuranceFileVerdict = 'checking' | 'looks_good' | 'in_review' | 'not_insurance' | 'expired' | 'unreadable';
+export interface InsuranceFileResult {
+  name: string;
+  uploadedAt: string | null;
+  result: InsuranceFileVerdict;
+  message: string;
 }
 
 /**
@@ -205,6 +219,35 @@ const UNREACHABLE_COPY =
 const OFFLINE_COPY =
   'You appear to be offline, so we could not check your link. Nothing about ' +
   'your booking has changed — reconnect and try again.';
+
+/*
+  QA I2.13 (2026-11-14): with the connection gone, the send sat on "Sending…
+  0 of 1" for good — a storage upload or a function call that never settles
+  never reaches the catch that shows OFFLINE copy. Every send now checks the
+  connection first and puts a ceiling on each network step, so the customer is
+  told plainly instead of waiting. Nothing is filed until the server's submit
+  succeeds, so a stopped send leaves the booking exactly as it was.
+*/
+const NO_CONNECTION_COPY =
+  'No internet connection. Nothing was sent — check your connection, then press the button again.';
+const TOO_SLOW_COPY =
+  'This is taking too long, so we stopped. Check your internet connection and press the button again — nothing has been saved to your booking yet.';
+const UPLOAD_TIMEOUT_MS = 60_000;
+const CALL_TIMEOUT_MS = 30_000;
+
+function assertOnline(): void {
+  if (looksOffline()) throw new Error(NO_CONNECTION_COPY);
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(looksOffline() ? NO_CONNECTION_COPY : TOO_SLOW_COPY)), ms);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (err) => { clearTimeout(timer); reject(looksOffline() ? new Error(NO_CONNECTION_COPY) : err); },
+    );
+  });
+}
 
 /* ─────────────────────── reading the link function ─────────────────────── */
 
@@ -298,6 +341,15 @@ function parseSession(
       },
       documentsStatus: asString(body.documentsStatus),
       identityStatus: asString(body.identityStatus),
+      insuranceFiles: (Array.isArray(body.insuranceFiles) ? body.insuranceFiles : [])
+        .map((raw: unknown) => asRecord(raw))
+        .filter((f: Record<string, unknown>) => asString(f.name) !== null)
+        .map((f: Record<string, unknown>) => ({
+          name: asString(f.name) as string,
+          uploadedAt: asString(f.uploadedAt),
+          result: (asString(f.result) ?? 'in_review') as InsuranceFileVerdict,
+          message: asString(f.message) ?? '',
+        })),
     },
   };
 }
@@ -716,6 +768,7 @@ export function useSubmitBookingInsurance() {
     // customer presses the button.
     retry: false,
     mutationFn: async (input): Promise<SubmitBookingInsuranceResult> => {
+      assertOnline();
       if (input.files.length === 0) {
         throw new Error('Please choose at least one file to send.');
       }
@@ -743,7 +796,7 @@ export function useSubmitBookingInsurance() {
         input.onFileState?.(index, 'uploading');
         const path = `${input.uploadPrefix}/${insuranceObjectName(file.name)}`;
 
-        const { error } = await supabase.storage.from(DOCUMENT_BUCKET).upload(path, file, {
+        const { error } = await withTimeout(supabase.storage.from(DOCUMENT_BUCKET).upload(path, file, {
           // The REAL content type, unlike the identity flow this replaced, which
           // hardcoded image/jpeg. A PDF stored as image/jpeg is a PDF that will
           // not open for the operator who has to read it.
@@ -753,7 +806,7 @@ export function useSubmitBookingInsurance() {
           // is what makes "try again" safe to press twice and is why the object
           // name carries no timestamp.
           upsert: true,
-        });
+        }), UPLOAD_TIMEOUT_MS);
 
         if (error) {
           // The bucket's own message is kept: the difference between
@@ -779,9 +832,9 @@ export function useSubmitBookingInsurance() {
         });
       }
 
-      const { data, error } = await supabase.functions.invoke(LINK_FUNCTION, {
+      const { data, error } = await withTimeout(supabase.functions.invoke(LINK_FUNCTION, {
         body: { token: input.token, action: SUBMIT_ACTION, files: stored },
-      });
+      }), CALL_TIMEOUT_MS);
 
       if (error) {
         const body = await readServerBody(error);
@@ -936,9 +989,10 @@ export function useStartBookingIdentity() {
     // their ten sessions an hour.
     retry: false,
     mutationFn: async ({ token }): Promise<BookingIdentitySession> => {
-      const { data, error } = await supabase.functions.invoke(LINK_FUNCTION, {
+      assertOnline();
+      const { data, error } = await withTimeout(supabase.functions.invoke(LINK_FUNCTION, {
         body: { token, action: START_IDENTITY_ACTION },
-      });
+      }), CALL_TIMEOUT_MS);
 
       if (error) {
         const body = await readServerBody(error);
@@ -1033,6 +1087,7 @@ export function useSubmitBookingIdentity() {
     // re-runs a paid OCR and face-match pass. The customer presses the button.
     retry: false,
     mutationFn: async (input): Promise<SubmitBookingIdentityResult> => {
+      assertOnline();
       const queue: { slot: IdentitySlot; file: File }[] = [
         { slot: 'front', file: input.front },
         ...(input.back ? [{ slot: 'back' as const, file: input.back }] : []),
@@ -1056,7 +1111,7 @@ export function useSubmitBookingIdentity() {
         input.onPhotoState?.(slot, 'uploading');
         const path = `${input.uploadPrefix}/${IDENTITY_OBJECT[slot]}`;
 
-        const { error } = await supabase.storage.from(DOCUMENT_BUCKET).upload(path, file, {
+        const { error } = await withTimeout(supabase.storage.from(DOCUMENT_BUCKET).upload(path, file, {
           /*
             `image/jpeg` and a `.jpg` name regardless of the real bytes, because
             the path is a CONTRACT (see IDENTITY_OBJECT). A PNG therefore travels
@@ -1070,7 +1125,7 @@ export function useSubmitBookingIdentity() {
           // A retake must replace the first attempt rather than 409, which is
           // what makes "try again" safe to press twice.
           upsert: true,
-        });
+        }), UPLOAD_TIMEOUT_MS);
 
         if (error) {
           const message = `We could not store ${IDENTITY_LABEL[slot]}. ${error.message}`;
@@ -1086,7 +1141,7 @@ export function useSubmitBookingIdentity() {
         paths[slot] = path;
       }
 
-      const { data, error } = await supabase.functions.invoke(LINK_FUNCTION, {
+      const { data, error } = await withTimeout(supabase.functions.invoke(LINK_FUNCTION, {
         body: {
           token: input.token,
           action: SUBMIT_IDENTITY_ACTION,
@@ -1095,7 +1150,7 @@ export function useSubmitBookingIdentity() {
           documentBackPath: paths.back ?? null,
           selfiePath: paths.selfie,
         },
-      });
+      }), CALL_TIMEOUT_MS);
 
       if (error) {
         const body = await readServerBody(error);

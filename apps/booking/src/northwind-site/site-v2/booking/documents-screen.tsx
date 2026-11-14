@@ -18,6 +18,7 @@
  * is not repeated.
  */
 
+import { useEffect, useRef, useState } from 'react';
 import {
   Ban,
   CalendarDays,
@@ -48,7 +49,9 @@ import {
   useBookingDocumentsSession,
   useResendBookingDocumentsLink,
   type BookingDocumentsSession,
+  type InsuranceFileResult,
 } from '@nw/hooks/use-booking-documents';
+import type { InsuranceUploadHandle } from './insurance-upload';
 import { StatusChip } from '@nw/portal-v2/status-chip';
 import { CARD, PageIntro, SITE_CONTAINER } from '@nw/site-v2/kit';
 import { cn } from '@nw/lib/utils';
@@ -69,7 +72,7 @@ export function BookingDocumentsScreen({ token }: { token: string }) {
   return (
     <div className="pb-16 md:pb-24">
       {ready ? (
-        <ReadyScreen token={token} session={ready} />
+        <ReadyScreen token={token} session={ready} refetch={refetch} />
       ) : (
         <>
           <PageIntro
@@ -139,8 +142,25 @@ export function BookingDocumentsScreen({ token }: { token: string }) {
 
 /* ─────────────────────────── the two-part errand ───────────────────────── */
 
-function ReadyScreen({ token, session }: { token: string; session: BookingDocumentsSession }) {
+function ReadyScreen({
+  token,
+  session,
+  refetch,
+}: {
+  token: string;
+  session: BookingDocumentsSession;
+  refetch: () => unknown;
+}) {
   const operator = session.tenant.companyName ?? 'the rental company';
+
+  /* After sending: what the AI check made of each file (QA I2.5/I2.8). The page
+     used to say only "Received". It now lists every certificate with one plain
+     sentence and looks again every few seconds while a check is still running.
+     A second certificate or a better copy can be sent after the first (I2.10). */
+  const [addingMore, setAddingMore] = useState(false);
+  const [moreReady, setMoreReady] = useState(false);
+  const [moreSending, setMoreSending] = useState(false);
+  const moreRef = useRef<InsuranceUploadHandle>(null);
 
   const {
     identityDone,
@@ -160,6 +180,21 @@ function ReadyScreen({ token, session }: { token: string; session: BookingDocume
     handleInsuranceReady,
     handleSendEverything,
   } = useDocumentsErrand(session);
+
+  const files = session.insuranceFiles;
+  const stillChecking = insuranceDone && (files.length === 0 || files.some((f) => f.result === 'checking'));
+  const pollsLeft = useRef(40);
+  useEffect(() => {
+    if (!stillChecking || pollsLeft.current <= 0) return;
+    const timer = setTimeout(() => {
+      pollsLeft.current -= 1;
+      void refetch();
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [stillChecking, files, refetch]);
+  const needsAction = files.some(
+    (f) => f.result === 'not_insurance' || f.result === 'expired' || f.result === 'unreadable',
+  );
 
   /*
     The gate in one sentence, in the order the customer's worry runs: the money
@@ -222,20 +257,82 @@ function ReadyScreen({ token, session }: { token: string; session: BookingDocume
           />
         )}
 
-        {insuranceDone ? (
+        {insuranceDone && addingMore ? (
+          <div className="flex flex-col gap-3">
+            <InsuranceUpload
+              ref={moreRef}
+              token={token}
+              session={session}
+              alreadySubmitted
+              stepLabel={STEP_LABEL.insurance}
+              onSubmitted={() => {
+                setAddingMore(false);
+                void refetch();
+              }}
+              onReadyChange={setMoreReady}
+            />
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="brand-ghost"
+                className="h-11 px-5"
+                disabled={moreSending}
+                onClick={() => setAddingMore(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="brand"
+                className="h-11 px-5"
+                disabled={!moreReady || moreSending}
+                onClick={async () => {
+                  setMoreSending(true);
+                  try {
+                    await moreRef.current?.submit();
+                  } finally {
+                    setMoreSending(false);
+                  }
+                }}
+              >
+                {moreSending ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <Send aria-hidden className="size-4" />}
+                {moreSending ? 'Sending…' : 'Send these files'}
+              </Button>
+            </div>
+          </div>
+        ) : insuranceDone ? (
           <StepCard
             icon={ShieldCheck}
-            tone="success"
+            tone={needsAction ? undefined : 'success'}
             title="Your insurance document"
-            chip={<StatusChip tone="success">Received</StatusChip>}
-            description={
-              <>
-                We have your insurance document and it is{' '}
-                <span className="font-semibold text-pv-fg">under review</span> by {operator}. There is nothing
-                else for you to do on this step.
-              </>
+            chip={
+              <StatusChip tone={needsAction ? 'warning' : 'success'}>
+                {needsAction ? 'Please check' : 'Received'}
+              </StatusChip>
             }
-          />
+            description={
+              needsAction ? (
+                <>One of your files needs replacing, see below. Send a better copy and {operator} will look at it.</>
+              ) : (
+                <>
+                  We have your insurance document and it is{' '}
+                  <span className="font-semibold text-pv-fg">under review</span> by {operator}.
+                </>
+              )
+            }
+          >
+            <InsuranceResults files={files} />
+            <div className="mt-4">
+              <Button
+                type="button"
+                variant={needsAction ? 'brand' : 'brand-ghost'}
+                className="h-11 px-5"
+                onClick={() => setAddingMore(true)}
+              >
+                {needsAction ? 'Send a better copy' : 'Add or replace a certificate'}
+              </Button>
+            </div>
+          </StepCard>
         ) : (
           <InsuranceUpload
             ref={insuranceRef}
@@ -488,5 +585,45 @@ function ExpiredScreen({
         </div>
       ) : null}
     </NoticeScreen>
+  );
+}
+
+/** Each filed certificate with what the AI check made of it (QA I2.5/I2.8). */
+function InsuranceResults({ files }: { files: InsuranceFileResult[] }) {
+  if (files.length === 0) {
+    return (
+      <p className="flex items-center gap-2 text-sm text-pv-muted-fg" aria-live="polite">
+        <Loader2 aria-hidden className="size-4 animate-spin" /> Checking your files…
+      </p>
+    );
+  }
+  const tone: Record<InsuranceFileResult['result'], string> = {
+    checking: 'text-pv-muted-fg',
+    looks_good: 'text-pv-success',
+    in_review: 'text-pv-muted-fg',
+    not_insurance: 'text-pv-danger',
+    expired: 'text-pv-danger',
+    unreadable: 'text-pv-danger',
+  };
+  return (
+    <ul className="flex flex-col gap-2" aria-live="polite">
+      {files.map((f) => (
+        <li key={f.name} className="flex items-start gap-3 rounded-2xl border border-pv-border bg-pv-card px-3 py-2.5">
+          <span className="mt-0.5 shrink-0">
+            {f.result === 'checking' ? (
+              <Loader2 aria-hidden className="size-4 animate-spin text-pv-muted-fg" />
+            ) : f.result === 'looks_good' || f.result === 'in_review' ? (
+              <CircleCheck aria-hidden className={cn('size-4', tone[f.result])} />
+            ) : (
+              <CircleAlert aria-hidden className={cn('size-4', tone[f.result])} />
+            )}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium text-pv-fg">{f.name}</span>
+            <span className={cn('block text-xs leading-relaxed', tone[f.result])}>{f.message}</span>
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
