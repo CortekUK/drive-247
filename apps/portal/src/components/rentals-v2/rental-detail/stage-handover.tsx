@@ -170,6 +170,10 @@ const inOrder = (photos: HandoverPhoto[]) =>
     .slice()
     .sort((a, b) => new Date(a.uploaded_at).getTime() - new Date(b.uploaded_at).getTime());
 
+/** Money owed, to the cent: `money()` rounds to whole dollars, which read $187.50 as "$188" (QA R11). */
+const toCents = (n: number) =>
+  n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 /* ══════════════════════════════════════════════════════════════════════════
    The stage
    ══════════════════════════════════════════════════════════════════════════ */
@@ -209,7 +213,7 @@ export function StageHandover({ detail, onStage, refetch }: StageProps) {
      The agreement signed and nothing owed. Before this the stage offered
      "Confirm collection" on any rental, recorded it, and left an unsigned or
      unpaid rental quietly Pending without saying why. */
-  const { data: owedCents } = useQuery({
+  const { data: owedCents, refetch: refetchOwed } = useQuery({
     queryKey: ["handover-owed-v2", rental.id, tenant?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -239,7 +243,7 @@ export function StageHandover({ detail, onStage, refetch }: StageProps) {
     });
   if (owedCents === undefined) missing.push({ text: "Checking what is owed..." });
   else if (owedCents > 0)
-    missing.push({ text: `${money(owedCents / 100)} is still owed on this rental.`, stage: "payments" });
+    missing.push({ text: `${toCents(owedCents / 100)} is still owed on this rental.`, stage: "payments" });
 
   const giving = inOrder(givingHandover?.photos ?? []);
   const receiving = inOrder(receivingHandover?.photos ?? []);
@@ -399,6 +403,21 @@ export function StageHandover({ detail, onStage, refetch }: StageProps) {
     );
   }
 
+  /* -- the return confirm (QA R11.7 / R11.10) ------------------------------
+     Closing used to say the same thing whatever the money and the dates were.
+     Money still owed is now named, with the way to take it; and a return
+     before the booked date says what that does and does not change. */
+  const todayIso = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+  const bookedEnd = rental.end_date ? String(rental.end_date).slice(0, 10) : null;
+  const daysEarly =
+    bookedEnd && bookedEnd > todayIso
+      ? Math.round((Date.parse(bookedEnd + "T00:00:00Z") - Date.parse(todayIso + "T00:00:00Z")) / 86_400_000)
+      : 0;
+  const owedOnReturn = owedCents ?? 0;
+
   const confirmCopy =
     confirming === "giving"
       ? {
@@ -431,7 +450,13 @@ export function StageHandover({ detail, onStage, refetch }: StageProps) {
             Confirm collection
           </ActionButton>
         ) : !cameBack ? (
-          <ActionButton onClick={() => setConfirming("receiving")} disabled={markKeyHanded.isPending}>
+          <ActionButton
+            onClick={() => {
+              void refetchOwed();
+              setConfirming("receiving");
+            }}
+            disabled={markKeyHanded.isPending}
+          >
             {markKeyHanded.isPending ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
@@ -800,6 +825,36 @@ export function StageHandover({ detail, onStage, refetch }: StageProps) {
                 that before pressing it, not after. */}
             <AlertDialogDescription>{confirmCopy.body}</AlertDialogDescription>
           </AlertDialogHeader>
+          {confirming === "receiving" && owedOnReturn > 0 && (
+            <div role="alert" className="rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
+              <p className="font-medium text-destructive">{toCents(owedOnReturn / 100)} is still owed on this rental.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Closing now leaves it outstanding on the customer. Take it on Payments first, or close anyway and
+                chase it later.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirming(null);
+                  onStage("payments");
+                }}
+                className="mt-2 cursor-pointer text-xs font-medium text-primary underline-offset-2 hover:underline dark:text-[hsl(var(--v2-link,var(--primary)))]"
+              >
+                Go to Payments
+              </button>
+            </div>
+          )}
+          {confirming === "receiving" && daysEarly > 0 && (
+            <div role="note" className="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+              <p className="font-medium">
+                Back {daysEarly} {daysEarly === 1 ? "day" : "days"} early: it was booked until {bookedEnd}.
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                The rental closes today and the car is free from now. The price is not changed and nothing is refunded
+                automatically: refund a payment on Payments if you choose to.
+              </p>
+            </div>
+          )}
           {confirming === "giving" && lockboxOn && vehicle?.lockbox_code && (
             <div role="radiogroup" aria-label="How is the car collected?" className="space-y-2 text-sm">
               <p className="font-medium">How is the car collected?</p>
@@ -828,7 +883,11 @@ export function StageHandover({ detail, onStage, refetch }: StageProps) {
                 setConfirming(null);
               }}
             >
-              {confirming === "giving" ? "The car has gone out" : "The car is back"}
+              {confirming === "giving"
+                ? "The car has gone out"
+                : owedOnReturn > 0
+                  ? `Close with ${toCents(owedOnReturn / 100)} owed`
+                  : "The car is back"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -132,6 +132,9 @@ export const FIFO_CATEGORIES = [
   "Fine",
   "Fines",
   "Other",
+  // QA R11 (2026-11-14): added to payment_apply_fifo_v2 (migration
+  // 20261114090000) so the charge raised at return can be paid.
+  "Excess Mileage",
   "Security Deposit",
 ] as const;
 
@@ -151,7 +154,6 @@ export const fifoRank = (category: string) => {
  * mileage, leaving no `payment_applications` row and so no allocation trail).
  */
 export const UNSETTLEABLE = [
-  "Excess Mileage",
   "Unlimited Mileage",
   "Adjustment",
   "Supercharger",
