@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GHL_BOOKING_URL } from "@/lib/constants";
+import { openSignup } from "@/lib/open-signup";
 import { cn } from "@/lib/utils";
 import {
   getAllowedGhlOrigins,
@@ -71,6 +72,19 @@ const READINESS_OPTIONS = [
   "Comparing options",
   "Just researching",
 ];
+
+/*
+ * Whether the form ends at the calendar. Off unless NEXT_PUBLIC_DEMO_CALENDAR is "on".
+ *
+ * Off since 2026-11-16: in the two weeks before, 11 people filled in this form and none
+ * booked a time (strategy_call_bookings was empty), so the calendar was a dead end.
+ * With it off, the answers are still saved to contact_requests (admin → Contacts), the
+ * visitor is told the team will contact them, and is offered the free trial. Set the
+ * variable on Vercel and redeploy to bring the calendar back once it has open slots.
+ */
+function demoCalendarOn(): boolean {
+  return process.env.NEXT_PUBLIC_DEMO_CALENDAR === "on";
+}
 
 /* ─── GHL Booking Embed ─── */
 
@@ -332,6 +346,42 @@ export function BookDemoFlow({ onClose }: { onClose?(): void }) {
     }
   };
 
+  if (state?.success && !demoCalendarOn()) {
+    const firstName = values.name.trim().split(/\s+/)[0] ?? "";
+    return (
+      <div className="flex flex-col">
+        <div className="flex h-[500px] flex-col items-center overflow-hidden px-6 pt-8 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none sm:px-10">
+          <DemoLaunchArt className="max-w-[280px]" />
+          <h3 className="mt-4 text-center text-xl font-medium leading-snug text-foreground [text-wrap:balance]">
+            {firstName ? `Thanks, ${firstName}. We'll be in touch.` : "Thanks. We'll be in touch."}
+          </h3>
+          <p className="mx-auto mt-1.5 max-w-[26rem] text-center text-sm leading-relaxed text-muted-foreground [text-wrap:balance]">
+            Our team will contact you at <span className="font-medium text-foreground">{values.email.trim().toLowerCase()}</span> to set up your call.
+          </p>
+          <p className="mx-auto mt-4 max-w-[26rem] text-center text-sm leading-relaxed text-muted-foreground [text-wrap:balance]">
+            Want to look around first? Start your free trial now. It takes about two minutes.
+          </p>
+        </div>
+        <div className="flex items-center justify-between gap-4 px-6 py-4 sm:px-8">
+          <button type="button" onClick={onClose} className={cn(PILL, PILL_OUTLINE)}>
+            Close
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onClose?.();
+              // After this dialog has let go of the page, so the two never overlap.
+              window.setTimeout(openSignup, 150);
+            }}
+            className={cn(PILL, PILL_SOLID)}
+          >
+            Start free trial <ArrowRight />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (state?.success) {
     return (
       <div className="flex flex-col">
@@ -457,7 +507,7 @@ export function BookDemoFlow({ onClose }: { onClose?(): void }) {
             </>
           ) : last ? (
             <>
-              See available times <ArrowRight />
+              {demoCalendarOn() ? "See available times" : "Send"} <ArrowRight />
             </>
           ) : (
             <>

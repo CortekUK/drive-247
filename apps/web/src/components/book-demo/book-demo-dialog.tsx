@@ -77,7 +77,7 @@ export function BookDemoDialog() {
           )}
         >
           <DialogTitle className="sr-only">Book a demo</DialogTitle>
-          <DialogDescription className="sr-only">A few questions about your fleet, then pick a time for the call.</DialogDescription>
+          <DialogDescription className="sr-only">A few questions about your fleet, so our team can set up a call with you.</DialogDescription>
           <BookDemoFlow onClose={() => setOpen(false)} />
         </DialogPrimitive.Content>
       </DialogPortal>

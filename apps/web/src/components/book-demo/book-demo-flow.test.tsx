@@ -49,6 +49,9 @@ afterEach(() => {
 });
 
 describe("book a demo: calendar handoff", () => {
+  beforeEach(() => vi.stubEnv("NEXT_PUBLIC_DEMO_CALENDAR", "on"));
+  afterEach(() => vi.unstubAllEnvs());
+
   it("navigates only once when the trusted frame emits duplicate completion messages", async () => {
     navigation.replace.mockClear();
     await act(async () => root.render(<BookDemoFlow />));
@@ -73,5 +76,18 @@ describe("book a demo: calendar handoff", () => {
     expect(navigation.replace).toHaveBeenCalledWith(
       "/strategy-call/confirmation",
     );
+  });
+});
+
+describe("book a demo: with the calendar off (the default)", () => {
+  it("thanks the visitor and offers the free trial instead of an empty calendar", async () => {
+    await act(async () => root.render(<BookDemoFlow />));
+
+    expect(container.querySelector("iframe")).toBeNull();
+    expect(container.textContent).toContain("We'll be in touch.");
+    const trial = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Start free trial"),
+    );
+    expect(trial).toBeDefined();
   });
 });

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Menu, X } from "lucide-react";
+import { SIGNUP_START_HREF } from "@/lib/open-signup";
 import { HeaderCta } from "./header-cta";
 
 const PILL_LINKS = [
@@ -114,7 +115,7 @@ export function Header({
               </a>
               <HeaderCta
                 label="Start free trial"
-                href={`${home}#pricing`}
+                href={SIGNUP_START_HREF}
                 className="rounded-full bg-primary px-5 text-sm font-normal text-primary-foreground hover:bg-primary/90 max-xl:h-11 max-[359px]:px-3 max-[359px]:text-xs"
               />
               <button

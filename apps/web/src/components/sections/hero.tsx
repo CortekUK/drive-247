@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { StartTrialLink } from "@/components/shared/start-trial-link";
 import Image from "next/image";
 import { Check } from "lucide-react";
 import type { CSSProperties } from "react";
@@ -62,7 +63,8 @@ export function Hero({ trialDays = 0 }: { trialDays?: number }) {
             <a href="/strategy-call">Book a demo</a>
           </Button>
           <Button asChild size="sm" className="hg-primary">
-            <a href="#pricing">Start free trial</a>
+            {/* Opens the signup form directly, not the plans below. */}
+            <StartTrialLink>Start free trial</StartTrialLink>
           </Button>
         </nav>
       </div>

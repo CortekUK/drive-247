@@ -32,6 +32,7 @@ import {
   deriveSlugFromCompanyName,
   normalizeSlugClient,
 } from "@/lib/signup-validation";
+import { OPEN_SIGNUP_EVENT } from "@/lib/open-signup";
 import { takeSignupPrefill } from "@/lib/signup-prefill";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
 
@@ -1547,6 +1548,38 @@ export function OnboardingProvider({
     // Mount only: `open` is stable enough for a one-shot restore.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * "Start free trial" outside the pricing grid (the hero, the header, the demo
+   * form's thank-you screen): open the form straight away on the recommended
+   * plan, instead of scrolling to the cards. A button on this page asks with
+   * OPEN_SIGNUP_EVENT; one on another page sends the visitor to `?signup=start`.
+   * Choosing another card later still switches the plan before payment.
+   */
+  useEffect(() => {
+    const defaultPlan = (): SignupPlanId =>
+      plans.find((p) => p.highlighted)?.id ?? plans[0]?.id ?? SIGNUP_PLANS[0].id;
+
+    const onRequest = (event: Event) => {
+      event.preventDefault();
+      open(defaultPlan());
+    };
+    window.addEventListener(OPEN_SIGNUP_EVENT, onRequest);
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("signup") === "start") {
+      params.delete("signup");
+      const query = params.toString();
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+      );
+      window.setTimeout(() => open(defaultPlan()), 0);
+    }
+
+    return () => window.removeEventListener(OPEN_SIGNUP_EVENT, onRequest);
+  }, [open, plans]);
 
   useEffect(() => {
     if (!restoreCheckedRef.current) return;
