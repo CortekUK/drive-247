@@ -1,6 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { STORIES } from "@/content/stories";
+import { StartTrialLink } from "@/components/shared/start-trial-link";
+import { SIGNUP_START_HREF } from "@/lib/open-signup";
 import { FooterWater } from "./footer-water";
 import "./footer.css";
 
@@ -19,7 +21,8 @@ const COLUMNS = [
     title: "Get started",
     links: [
       { label: "Book a demo", href: "/strategy-call" },
-      { label: "Start free trial", href: "/#pricing" },
+      // Opens the signup form itself, like the hero button (StartTrialLink below).
+      { label: "Start free trial", href: SIGNUP_START_HREF },
     ],
   },
   {
@@ -61,9 +64,15 @@ export function Footer() {
                 <ul className="ft-list mt-4 space-y-3">
                   {column.links.map((link) => (
                     <li key={link.label}>
-                      <a href={link.href} className="ft-link ft-muted text-[15px] transition-colors duration-200 ease-out">
-                        {link.label}
-                      </a>
+                      {link.href === SIGNUP_START_HREF ? (
+                        <StartTrialLink className="ft-link ft-muted text-[15px] transition-colors duration-200 ease-out">
+                          {link.label}
+                        </StartTrialLink>
+                      ) : (
+                        <a href={link.href} className="ft-link ft-muted text-[15px] transition-colors duration-200 ease-out">
+                          {link.label}
+                        </a>
+                      )}
                     </li>
                   ))}
                 </ul>
