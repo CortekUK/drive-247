@@ -76,3 +76,19 @@ export const getTenantLegalEntityLine = (slug: string | undefined | null): strin
   if (!slug) return null;
   return TENANT_LEGAL_ENTITY_LINES[slug] ?? null;
 };
+
+/**
+ * Per-tenant Google Search Console verification tokens, rendered as
+ * <meta name="google-site-verification" content="…"> in the booking site's
+ * <head> (legacy layout generateMetadata). Keyed by tenant slug. There is no
+ * portal field for this yet, so an operator's request is added here.
+ */
+const TENANT_GOOGLE_SITE_VERIFICATION: Record<string, string> = {
+  // East Peak Rentals LLC, requested 2026-11-16.
+  eastpeakrentalsllc: 'f3HO87N_nqlTL12Bg1D87ml3OpIKnLTD5cwGZ9nC1xQ',
+};
+
+export const getTenantGoogleSiteVerification = (slug: string | undefined | null): string | null => {
+  if (!slug) return null;
+  return TENANT_GOOGLE_SITE_VERIFICATION[slug] ?? null;
+};

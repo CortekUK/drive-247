@@ -22,6 +22,7 @@ import { SuspendedGate } from '@/components/SuspendedGate';
 import { BookingPauseGate } from '@/components/BookingPauseGate';
 import { GoogleAnalytics } from '@/components/GoogleAnalytics';
 import { ServiceWorkerRegistrar } from '@/components/push/service-worker-registrar';
+import { getTenantGoogleSiteVerification } from '@/config/tenant-config';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -71,9 +72,14 @@ export async function generateMetadata(): Promise<Metadata> {
       return defaultMetadata;
     }
 
+    // Search Console ownership tag, when the operator asked for one. It goes on
+    // every return below, so a failed tenant lookup cannot drop it.
+    const googleToken = getTenantGoogleSiteVerification(tenantSlug);
+    const verification: Metadata = googleToken ? { verification: { google: googleToken } } : {};
+
     // Guard against missing env vars (e.g. during build or cold start)
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      return defaultMetadata;
+      return { ...defaultMetadata, ...verification };
     }
 
     // Create Supabase client for server-side fetch
@@ -89,7 +95,7 @@ export async function generateMetadata(): Promise<Metadata> {
       .single();
 
     if (!tenant) {
-      return defaultMetadata;
+      return { ...defaultMetadata, ...verification };
     }
 
     const title = tenant.meta_title || tenant.app_name || tenant.company_name || 'Premium Car Rentals';
@@ -97,6 +103,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
     return {
       ...PWA_METADATA,
+      ...verification,
       title,
       description,
       openGraph: {
