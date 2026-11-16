@@ -22,7 +22,7 @@ import { TraxBriefCard } from './admin-cards';
 import { RequestsCard } from './requests-card';
 import { TodoCard } from './todo-card';
 import { SortableCards } from './sortable-cards';
-import { PHONE_CAROUSEL, PageDots } from './phone-carousel';
+
 import { BusyDaysCard } from './busy-days-card';
 import { BookingSourcesCard } from './booking-sources-card';
 import { WebinarPolls } from './webinar-poll-card';
@@ -41,6 +41,18 @@ import { useDeskFeaturePresence } from '@/components/announcements/use-desk-feat
  * the feature card only. Their components and hooks are left in place,
  * unmounted — see git history for how they were wired.
  */
+/**
+ * The feature card on a phone: a slim strip, not a 230px card (boss, Nov 2026),
+ * set from here because its classes live in the announcements contract, which
+ * must stay byte-identical with the admin app's copy. Text on the left, one
+ * line each, the art fitted into the right-hand side.
+ */
+const PHONE_STRIP =
+  'max-md:order-first max-md:!h-[108px] ' +
+  'max-md:[&_[data-feature-slide]>div]:p-4 max-md:[&_[data-feature-slide]>div]:pr-[38%] ' +
+  'max-md:[&_h3]:max-w-none max-md:[&_h3]:text-[19px] max-md:[&_h3]:font-extrabold max-md:[&_h3]:leading-[1.15] max-md:[&_h3]:line-clamp-1 max-md:[&_h3_br]:hidden ' +
+  'max-md:[&_img]:object-contain max-md:[&_img]:object-right';
+
 export function HomeBands() {
   const { tenant } = useTenant();
   const { appUser } = useAuth();
@@ -81,38 +93,44 @@ export function HomeBands() {
     <div className="relative lg:min-h-0 lg:flex-1">
     {/* Ends 70px short of the screen (Sep 27 2026) so the top edge of the
         Busy days card peeks in: the page visibly continues below the cards. */}
-    <div className="flex flex-col gap-[30px] lg:h-[calc(100%-70px)]">
+    {/* No fixed height any more (boss, Nov 2026): Requests and To do take only
+        the room their rows need, so the column is as tall as its content. */}
+    <div className="flex flex-col gap-4 md:gap-[30px]">
       {/* Revenue line chart on the left, the feature card at the far right.
           With no feature the chart takes the whole row. */}
-      <section aria-label="On your desk" data-desk-band="" className={cn('shrink-0 md:-mt-[15px]', PHONE_CAROUSEL)}>
+      <section aria-label="On your desk" data-desk-band="" className="shrink-0 md:-mt-[15px]">
         {/* The chart takes whatever the feature card leaves. At lg+ the
-            card is a fixed 320 × 240 card; below that it runs full width.
-            On a phone the two are a swipeable pair (PHONE_CAROUSEL, set on the
-            section so this row's own classes stay exactly as they were). */}
-        <div ref={deskRowRef} className="flex flex-col items-stretch gap-5 lg:flex-row">
-          <RevenueLineCard className="flex-1" />
+            card is a fixed 320 × 240 card; below that it runs full width. */}
+        {/* Phones (boss, Nov 2026): no swipeable pair. The feature card comes
+            FIRST, as a slim strip across the top (PHONE_STRIP), and the chart
+            follows straight under it. */}
+        <div ref={deskRowRef} className="flex flex-col items-stretch gap-3 md:gap-5 lg:flex-row">
+          {/* `lg:` only: below lg the row is a COLUMN, where flex-1 (basis 0)
+              squashed the card to its text and the chart drew at 0px. */}
+          <RevenueLineCard className="lg:flex-1" />
           {deskFeature === 'deck' && (
-            <FeatureAnnouncementDeck features={features} variant="accent" className="shrink-0 lg:mt-[10px] lg:w-[320px]" />
+            <FeatureAnnouncementDeck features={features} variant="accent" className={cn('shrink-0 lg:mt-[10px] lg:w-[320px]', PHONE_STRIP)} />
           )}
           {deskFeature === 'skeleton' && (
             <div
               aria-hidden="true"
               data-feature-deck-skeleton=""
-              className={cn(FEATURE_CARD_UI.root, 'shrink-0 animate-pulse motion-reduce:animate-none lg:mt-[10px] lg:w-[320px]')}
+              className={cn(FEATURE_CARD_UI.root, 'shrink-0 animate-pulse motion-reduce:animate-none lg:mt-[10px] lg:w-[320px]', PHONE_STRIP)}
             />
           )}
         </div>
-        {deskFeature === 'deck' && <PageDots scroller={deskRowRef} count={2} />}
       </section>
 
       {/* The three questions after "how is the business doing" (Sep 27 2026):
           what does Trax make of today, who is waiting on me, and my own to-do list. See admin-cards.tsx. */}
       {/* Rearrangeable (Sep 27 2026): each card has a grip at its top centre,
           and this user's order is remembered in the browser. */}
-      <section aria-label="Operations" className="lg:-mb-[35px] lg:min-h-0 lg:flex-1">
+      {/* Requests and To do are as tall as their rows (three at most, then they
+          scroll); the Trax card stretches to the row they make. */}
+      <section aria-label="Operations">
         <SortableCards
           storageKey={`dashboard-v2:ops-order:${appUser?.id ?? 'anon'}`}
-          className="grid h-full grid-cols-1 items-stretch gap-5 md:grid-cols-3"
+          className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-3 md:gap-5"
           items={[
             {
               id: 'trax',
@@ -126,8 +144,8 @@ export function HomeBands() {
                 />
               ),
             },
-            ...(canView('rentals') ? [{ id: 'requests', label: 'Requests', node: <RequestsCard /> }] : []),
-            { id: 'todo', label: 'To do', node: <TodoCard /> },
+            ...(canView('rentals') ? [{ id: 'requests', label: 'Requests', node: <RequestsCard />, fit: true }] : []),
+            { id: 'todo', label: 'To do', node: <TodoCard />, fit: true },
           ]}
         />
       </section>
@@ -138,7 +156,7 @@ export function HomeBands() {
       <section
         ref={insightsRef}
         aria-label="Insights"
-        className="mt-[45px] grid grid-cols-1 items-stretch gap-5 pb-4 lg:mt-[65px] lg:grid-cols-3"
+        className="mt-6 grid grid-cols-1 items-stretch gap-4 pb-4 md:mt-[45px] md:gap-5 lg:mt-[65px] lg:grid-cols-3"
       >
         <BusyDaysCard data={busy} isLoading={busyLoading} />
         <BookingSourcesCard data={sources} isLoading={sourcesLoading} />

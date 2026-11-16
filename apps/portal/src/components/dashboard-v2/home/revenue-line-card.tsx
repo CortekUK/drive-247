@@ -424,7 +424,8 @@ export function RevenueLineCard({ className }: { className?: string }) {
        chart's flex-1 still has something to fill. */
     <div
       className={cn(
-        'grid h-[240px] min-w-0 grid-rows-[minmax(0,1fr)]',
+        // Shorter on a phone (boss, Nov 2026: compact, not in your face).
+        'grid h-[196px] min-w-0 grid-rows-[minmax(0,1fr)] md:h-[240px]',
         className
       )}
     >
@@ -445,7 +446,7 @@ export function RevenueLineCard({ className }: { className?: string }) {
 
       <div className="pt-2">
         <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-          <span className="text-[32px] font-semibold leading-none tracking-[-0.03em] tabular-nums text-[var(--pv-ink)]">
+          <span className="text-[26px] font-semibold leading-none tracking-[-0.03em] tabular-nums text-[var(--pv-ink)] md:text-[32px]">
             {data ? headline : '—'}
           </span>
         </div>

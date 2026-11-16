@@ -850,10 +850,13 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
           sidebars side by side inside `(dashboard)/layout.tsx`. The two agree
           on which section is showing through `?section=` and `sections.ts`, and
           share nothing else. */}
-      <AutoSkeleton loading={isLoading} className="flex h-[calc(100dvh-1rem)] min-h-[600px]">
+      {/* Phones: the frame is exactly the space under the top bar (`<main>` is a
+          flex column, so `flex-1` fills it), not 100dvh, which ran past the
+          bar and made the page scroll a little before the panel did. */}
+      <AutoSkeleton loading={isLoading} className="flex h-[calc(100dvh-1rem)] min-h-[600px] max-md:h-auto max-md:min-h-0 max-md:flex-1">
         {/* ── panel ─────────────────────────────────────────────────────── */}
         <main
-          className={`relative min-w-0 flex-1 overflow-hidden px-4 py-5 md:px-8 md:py-6${docked ? " " + DOCK_CLEARANCE : ""}`}
+          className={`relative min-w-0 flex-1 overflow-hidden px-0 pb-5 pt-0 md:px-8 md:py-6${docked ? " " + DOCK_CLEARANCE : ""}`}
         >
           {/* The only trace of the write path on screen, and it earns its place:
               there is no Save button, so an operator who types into a field has

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui-v2/input"
 import { Separator } from "@/components/ui-v2/separator"
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetDescription,
   SheetHeader,
@@ -20,12 +21,14 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui-v2/tooltip"
-import { PanelLeft } from "lucide-react"
+import { PanelLeft, X } from "lucide-react"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH = "16rem"
-const SIDEBAR_WIDTH_MOBILE = "18rem"
+/* Phones: the menu opened from the top bar's burger, FULL SCREEN from the
+   left (boss, Nov 2026, after first review). */
+const SIDEBAR_WIDTH_MOBILE = "100vw"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
@@ -187,7 +190,7 @@ function Sidebar({
           /* No edge line on phones: the Sheet primitive draws a border on its
              inner edge, and v2 separates surfaces by tone and space, never by
              rules. Same modifier as the primitive's, so tailwind-merge drops it. */
-          className="w-[var(--sidebar-width)] bg-sidebar p-0 text-sidebar-foreground data-[side=left]:border-r-0 data-[side=right]:border-l-0 [&>button]:hidden"
+          className="w-[var(--sidebar-width)] bg-sidebar p-0 text-sidebar-foreground data-[side=left]:w-[var(--sidebar-width)] data-[side=right]:w-[var(--sidebar-width)] data-[side=left]:border-r-0 data-[side=right]:border-l-0 [&>button]:hidden [&_[data-slot=sidebar-header]]:pt-0"
           style={
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -199,7 +202,22 @@ function Sidebar({
             <SheetTitle>Sidebar</SheetTitle>
             <SheetDescription>Displays the mobile sidebar.</SheetDescription>
           </SheetHeader>
-          <div className="flex h-full w-full flex-col">{children}</div>
+          {/* Full screen leaves no page strip to tap away, so the menu closes
+              from an ✕ at the top left, where the top bar's burger is (same
+              inset; a 48px row rather than the bar's 64 so the tenant row sits
+              close under it, user review Nov 2026): the same tap opens and
+              closes it. The sidebar header's own top padding is dropped in
+              here (`[&_[data-slot=sidebar-header]]:pt-0` above): this row
+              already gives the tenant row its room. */}
+          <div className="flex h-12 shrink-0 items-center px-4">
+            <SheetClose
+              aria-label="Close menu"
+              className="-ml-2 inline-flex size-9 items-center justify-center rounded-full text-foreground outline-none transition-colors hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-ring active:bg-primary/10"
+            >
+              <X className="size-[22px]" strokeWidth={2} aria-hidden />
+            </SheetClose>
+          </div>
+          <div className="flex min-h-0 w-full flex-1 flex-col pb-[env(safe-area-inset-bottom,0px)]">{children}</div>
         </SheetContent>
       </Sheet>
     )

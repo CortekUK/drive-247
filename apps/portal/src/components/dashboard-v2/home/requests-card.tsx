@@ -28,6 +28,7 @@ import { useCustomerRequests, type CustomerRequest, type RequestKind } from '@/h
 import { Eyebrow } from './ui';
 import { useAuth } from '@/stores/auth-store';
 import { buildDemoRequests } from './mock';
+import { useCapRows } from './cap-rows';
 import { ExpandButton } from './expand-button';
 import { PHONE_SHEET, SheetGrabber } from './phone-sheet';
 import { CardGrip } from './sortable-cards';
@@ -302,6 +303,7 @@ export function RequestsCard() {
   // The card: newest first, whatever the kind, without the removed ones.
   const requests = isLoading ? all : newestFirst(all.filter((r) => !hidden.has(r.id)));
   const [kindFilter, setKindFilter] = useState<RequestKind | 'all'>('all');
+  const cap = useCapRows();
   const isError = !demo && live.isError;
   const [allOpen, setAllOpenRaw] = useState(false);
   const setAllOpen = (o: boolean) => {
@@ -316,7 +318,7 @@ export function RequestsCard() {
 
   return (
     <div
-      className="flex min-h-[387px] flex-col overflow-hidden rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)] lg:min-h-0"
+      className="flex flex-col overflow-hidden rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)]"
       style={{ backgroundImage: CARD_WASH }}
     >
       <header className="flex items-center justify-between gap-3 px-6 pt-4">
@@ -332,8 +334,11 @@ export function RequestsCard() {
       {/* A grid of one stretched cell, so the AutoSkeleton wrapper still gives
           the empty state its full height to centre in; a long list overflows
           the cell and scrolls here as before. */}
+      {/* Only as tall as its rows, three at most, then it scrolls (cap-rows.ts). */}
       <div
-        className="relative mt-2 grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] overflow-y-auto px-4 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        ref={cap.ref}
+        style={cap.style}
+        className="relative mt-2 grid min-h-0 grid-cols-[minmax(0,1fr)] overflow-y-auto overscroll-contain px-4 pb-4 [scrollbar-width:thin]"
       >
         <AutoSkeleton loading={isLoading} className="h-full">
         {isError ? (
@@ -349,9 +354,8 @@ export function RequestsCard() {
             </p>
           </div>
         ) : (
-          // Every request on a desktop (the list scrolls); five on a phone, where
-          // the card is not height-bound — the expand icon opens the rest.
-          <ul className="max-md:[&>li:nth-child(n+6)]:hidden">
+          // Three on show, the rest a scroll away; the expand icon opens them grouped.
+          <ul>
             {requests.map((r) => (
               <RequestRow key={r.id} r={r} onOpen={() => open(r)} />
             ))}

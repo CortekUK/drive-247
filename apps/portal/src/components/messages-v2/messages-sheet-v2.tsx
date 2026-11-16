@@ -37,8 +37,11 @@ const initials = (name?: string | null) =>
   (name || "?").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
 
 /** Same shell as the v2 notification centre: one scroll region, no outer bar. */
+/* Phones (boss, Nov 2026): full screen, not a 3/4 panel over a blurred
+   strip. The sheet primitive's `data-[side=right]:w-3/4` has to be beaten with
+   the same modifier; padded for the status bar and the gesture bar. */
 const SHEET_SHELL =
-  `flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[420px] ${NO_SCROLLBAR}`;
+  `flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[420px] max-sm:data-[side=right]:w-full max-sm:data-[side=right]:border-l-0 max-sm:pt-[env(safe-area-inset-top,0px)] max-sm:pb-[env(safe-area-inset-bottom,0px)] ${NO_SCROLLBAR}`;
 
 /** `formatDistanceToNow` throws on an Invalid Date; a row must not. */
 function relativeTime(iso: string | null | undefined): string | null {

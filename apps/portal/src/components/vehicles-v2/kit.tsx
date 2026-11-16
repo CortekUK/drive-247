@@ -224,7 +224,7 @@ export function Panel({
 
       {/* `min-h-0` is load-bearing: without it a flex child refuses to shrink
           below its content and the column grows the page instead of scrolling. */}
-      <div className="mt-7 min-h-0 flex-1 space-y-6 overflow-y-auto no-scrollbar pb-8 pr-1">{children}</div>
+      <div className="mt-7 min-h-0 flex-1 space-y-6 overflow-y-auto no-scrollbar pb-8 md:pr-1">{children}</div>
     </div>
   );
 }
@@ -324,7 +324,8 @@ export function Stat({ label, value, hint }: { label: string; value: string; hin
 }
 
 export function StatDivider() {
-  return <div className="w-px shrink-0 bg-foreground/10" />;
+  // Phones stack the stats (see tab-money), so the rule turns horizontal.
+  return <div className="w-px shrink-0 bg-foreground/10 max-sm:h-px max-sm:w-full" />;
 }
 
 export function EmptyHint({ children }: { children: React.ReactNode }) {
@@ -450,7 +451,9 @@ export function AffixInput({
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur}
-        className={cn(inputCls, prefix && "pl-7", suffix && "pr-20", className)}
+        // 80px is reserved for the longest unit ("/month"). On a phone a short
+        // one ("km", "mi") keeps 44px, or "Unlimited" read "Unlimite".
+        className={cn(inputCls, prefix && "pl-7", suffix && "pr-20", suffix && suffix.length <= 3 && "max-sm:pr-11", className)}
       />
       {suffix && (
         <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">

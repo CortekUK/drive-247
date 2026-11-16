@@ -28,7 +28,7 @@ vi.mock('next/link', () => ({
     </a>
   ),
 }));
-vi.mock('@/components/ui-v2/sidebar', () => ({ SidebarTrigger: () => null }));
+vi.mock('@/components/ui-v2/sidebar', () => ({ useSidebar: () => ({ toggleSidebar: () => {} }) }));
 vi.mock('@/components/ui-v2/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,

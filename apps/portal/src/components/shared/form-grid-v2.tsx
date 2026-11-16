@@ -171,7 +171,7 @@ export function StepFooter({
 }) {
   const last = step === steps.length - 1;
   return (
-    <div className={cn("flex items-center justify-between gap-4", compact ? "px-8 py-4" : "mt-6 border-t px-10 py-5")}>
+    <div className={cn("flex items-center justify-between gap-4 max-sm:shrink-0 max-sm:gap-2 max-sm:px-4", compact ? "px-8 py-4" : "mt-6 border-t px-10 py-5")}>
       <Button
         type="button"
         variant="outline"

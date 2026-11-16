@@ -6,6 +6,21 @@ import { MOTION_DIALOG, MOTION_FADE } from "@/lib/motion"
 import { Button } from "@/components/ui-v2/button"
 import { X } from "lucide-react"
 
+/**
+ * Pass in a DialogContent's className to make it a whole screen on a phone
+ * (boss, Nov 2026: panels open full view). Below `sm` it fills the viewport,
+ * square, no ring, a column with the safe areas kept clear, and it fades in
+ * rather than sliding from the centre. From `sm` up it stays a centred dialog.
+ * The content inside decides what scrolls (give the body `max-sm:flex-1
+ * max-sm:min-h-0 max-sm:overflow-y-auto`).
+ */
+const PHONE_SCREEN_DIALOG =
+  "max-sm:inset-0 max-sm:flex max-sm:h-dvh max-sm:w-full max-sm:max-h-none max-sm:max-w-none " +
+  "max-sm:translate-x-0 max-sm:translate-y-0 max-sm:flex-col max-sm:overflow-hidden max-sm:rounded-none max-sm:shadow-none max-sm:ring-0 " +
+  "max-sm:pt-[env(safe-area-inset-top,0px)] max-sm:pb-[env(safe-area-inset-bottom,0px)] " +
+  "max-sm:data-[state=open]:slide-in-from-left-0 max-sm:data-[state=open]:slide-in-from-bottom-0 max-sm:data-[state=closed]:slide-out-to-left-0 max-sm:data-[state=closed]:slide-out-to-bottom-0 " +
+  "max-sm:data-[state=open]:zoom-in-100 max-sm:data-[state=closed]:zoom-out-100"
+
 function Dialog({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -167,6 +182,7 @@ function DialogDescription({
 }
 
 export {
+  PHONE_SCREEN_DIALOG,
   Dialog,
   DialogClose,
   DialogContent,

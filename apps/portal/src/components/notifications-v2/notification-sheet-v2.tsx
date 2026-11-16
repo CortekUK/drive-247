@@ -104,8 +104,11 @@ const EMPTY_COPY: Record<Filter, string> = {
  * scroll at all, so there is exactly one scroll region in the panel, and
  * NO_SCROLLBAR means no bar is painted for it either.
  */
+/* Phones (boss, Nov 2026): full screen, not a 3/4 panel over a blurred
+   strip. The sheet primitive's `data-[side=right]:w-3/4` has to be beaten with
+   the same modifier; padded for the status bar and the gesture bar. */
 const SHEET_SHELL =
-  `flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[420px] ${NO_SCROLLBAR}`;
+  `flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[420px] max-sm:data-[side=right]:w-full max-sm:data-[side=right]:border-l-0 max-sm:pt-[env(safe-area-inset-top,0px)] max-sm:pb-[env(safe-area-inset-bottom,0px)] ${NO_SCROLLBAR}`;
 
 /**
  * A timestamp that cannot take the panel down with it.
@@ -301,7 +304,7 @@ export function NotificationSheetV2({ trigger }: { trigger: React.ReactNode }) {
         <SheetHeader className="shrink-0 border-b border-border/60 px-5 py-4">
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
-              <SheetTitle className="text-[15px] font-semibold tracking-tight">
+              <SheetTitle className="whitespace-nowrap text-[15px] font-semibold tracking-tight">
                 Notifications
                 {unread > 0 && (
                   <span className="ml-2 inline-flex h-5 items-center rounded-full bg-primary/10 px-2 text-[11px] font-semibold text-primary">

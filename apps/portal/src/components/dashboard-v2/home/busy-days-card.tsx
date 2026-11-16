@@ -66,7 +66,7 @@ function Month({
             return (
               <span
                 key={date}
-                className="flex aspect-square items-center justify-center rounded-md border border-dashed border-[var(--pv-line)] text-[10px] tabular-nums text-[var(--pv-ink-3)] opacity-60"
+                className="flex aspect-square items-center justify-center rounded-md border border-dashed max-sm:aspect-auto max-sm:h-7 border-[var(--pv-line)] text-[10px] tabular-nums text-[var(--pv-ink-3)] opacity-60"
               >
                 {i + 1}
               </span>
@@ -77,7 +77,7 @@ function Month({
             <span
               key={date}
               title={`${format(parseISO(date), 'EEE d MMM')} · ${rented} of ${fleet} cars out · ${Math.round(share * 100)}%`}
-              className="flex aspect-square cursor-default items-center justify-center rounded-md text-[10px] font-medium tabular-nums transition-transform hover:scale-110"
+              className="flex aspect-square cursor-default items-center justify-center rounded-md max-sm:aspect-auto max-sm:h-7 text-[10px] font-medium tabular-nums transition-transform hover:scale-110"
               style={{
                 background: fill(share),
                 color: share > 0.55 ? 'var(--pv-on-accent)' : 'var(--pv-ink-2)',
@@ -135,7 +135,10 @@ export function BusyDaysCard({ data: loadedData, isLoading }: { data: BusyDays |
   const nothingYet = !isLoading && !!data && data.days.every((d) => d.rented === 0);
 
   return (
-    <div className="flex flex-col rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)] p-6 lg:col-span-2">
+    <div className="flex flex-col rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)] p-5 md:p-6 lg:col-span-2">
+      {/* Phones (boss, Nov 2026: smaller graphs and boxes): a little less
+          padding, and day tiles 28px tall instead of square (~42px), so a
+          month is about a third shorter. Same months, same tiles, same swipe. */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Eyebrow>Busy days</Eyebrow>

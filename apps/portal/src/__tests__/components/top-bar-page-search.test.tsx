@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('next/link', () => ({
   default: ({ children, href }: { children: ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
-vi.mock('@/components/ui-v2/sidebar', () => ({ SidebarTrigger: () => null }));
+vi.mock('@/components/ui-v2/sidebar', () => ({ useSidebar: () => ({ toggleSidebar: () => {} }) }));
 vi.mock('@/components/ui-v2/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,

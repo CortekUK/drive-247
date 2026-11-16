@@ -2,15 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, CircleDollarSign, MessageCircle, Search, SlidersHorizontal, X } from "lucide-react";
+import { ArrowUpRight, CircleDollarSign, Menu, MessageCircle, Search, SlidersHorizontal, X } from "lucide-react";
 import { TraxMark } from "@/components/trax/trax-greeting";
 
 import { Button } from "@/components/ui-v2/button";
 import { Separator } from "@/components/ui-v2/separator";
-import { SidebarTrigger } from "@/components/ui-v2/sidebar";
+import { useSidebar } from "@/components/ui-v2/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { GlobalSearchV2 } from "@/components/shared/layout/global-search-v2";
-import { HelplineLink } from "@/components/shared/layout/helpline-link";
+import { OPEN_PHONE_SEARCH_EVENT } from "@/components/shared/layout/phone-search-event";
 import { MessagesSheetV2 } from "@/components/messages-v2/messages-sheet-v2";
 import { NotificationBellV2 } from "@/components/notifications-v2/notification-bell-v2";
 import { useUnreadCount } from "@/hooks/use-unread-count";
@@ -132,6 +132,7 @@ const TIP =
 export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const { unreadCount: chatUnread } = useUnreadCount();
+  const { toggleSidebar } = useSidebar();
   const fieldRef = useRef<HTMLButtonElement>(null);
   /* The shared conversation, from the provider in the dashboard layout. Optional
      because the Messages workspace bypasses part of that layout — the button is
@@ -279,6 +280,21 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
     return () => window.removeEventListener("open-global-search", onOpen);
   }, []);
 
+  /* The phone tab bar's Search (mobile-tab-bar.tsx): the page's own field when
+     the page lends one, the way this bar's own Search button did; otherwise the
+     global dialog. */
+  useEffect(() => {
+    const onPhoneSearch = () => {
+      if (slot) setPhoneFieldOpen(true);
+      else {
+        setSearchSeed("");
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener(OPEN_PHONE_SEARCH_EVENT, onPhoneSearch);
+    return () => window.removeEventListener(OPEN_PHONE_SEARCH_EVENT, onPhoneSearch);
+  }, [slot]);
+
   return (
     <header
       /* A ROW, not a pinned layer. The v2 frame (see `(dashboard)/layout.tsx`)
@@ -295,32 +311,33 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
          `h-[calc(100svh-66px)]` / `h-[calc(100vh-4rem)]`, two of them Settings
          pages the canary reaches. Matching v1's 64px keeps that arithmetic true
          instead of leaving an 8px gap on those screens. */
-      className={"flex h-16 shrink-0 items-center gap-2 bg-transparent px-3 sm:px-4"}
+      className={"flex h-16 shrink-0 items-center gap-2 bg-transparent px-4"}
     >
       {/* Northwind only, renders nothing: carries out the super-admin Developer
           page's commands in this tab. See components/dev/dev-bridge.tsx. */}
       <DevBridge />
-      {/* Phone-only navigation opener. Replaces the floating left-edge handle.
-          Suppressed where the layout renders no sidebar at all — the Messages
-          workspace does that — because the trigger would still toggle sidebar
-          state and open nothing, which is a control that looks broken rather
-          than absent. */}
-      {/* Also stands down wherever the bottom tab bar is showing: its "More"
-          tab is the phone's one way into the rest of the app, and a burger
-          beside it opened the same menu a second way. It stays on record
-          screens, where the tab bar gives way to the record dock. */}
+      {/* Phones (boss, Nov 2026, after first review): the burger is at the
+          TOP LEFT and opens the menu full screen from the left. The menu is
+          the sidebar itself (a sheet below `md`), so its order, tenant row and
+          customiser are the desktop's. Its own ✕ sits on this exact spot, so
+          the same tap opens and closes it. Left out where the layout renders
+          no sidebar at all (the Messages workspace): it would open nothing.
+          `-ml-2` puts the glyph on the same edge as the content below. */}
       {showNavTrigger && (
-        <SidebarTrigger
-          aria-label="Open navigation"
-          className="-ml-1 shrink-0 md:hidden [body:has([data-mobile-tab-bar]):not(:has([data-record-dock]))_&]:hidden"
-        />
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label="Open menu"
+          className="-ml-2 inline-flex size-9 shrink-0 items-center justify-center rounded-full text-foreground transition-colors hover:bg-primary/10 active:bg-primary/10 md:hidden"
+        >
+          <Menu className="size-[22px]" strokeWidth={2} aria-hidden />
+        </button>
       )}
-
       {/* sm+ : either the page's own list search, or the global ⌘K pill.
           Never both — two search fields on one screen, one global and one
           local with nothing saying which, is the confusion this bar removes. */}
       {slot ? (
-        <div className={`${phoneField ? "block" : "hidden sm:block"} relative w-full max-w-[440px]`}>
+        <div className={`${phoneField ? "block" : "hidden sm:block"} relative w-full min-w-0 max-w-[440px]`}>
         <div
           className={`${FIELD} max-w-none`}
           /* Carried from the search box this replaces. `tab-tours/rentals.ts`
@@ -426,7 +443,9 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
             }
           >
             <ArrowUpRight className="size-4 shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" aria-hidden />
-            <span className="min-w-0 flex-1 truncate text-foreground">
+            {/* A phone shows the whole line (two rows if it needs them) and no
+                keyboard shortcut: there is no ⌘ to press. */}
+            <span className="min-w-0 flex-1 truncate text-foreground max-sm:whitespace-normal max-sm:[overflow:visible]">
               {noLocalMatch && (
                 <span className="text-muted-foreground">
                   No {slot.scopeLabel ? slot.scopeLabel.toLowerCase() : "results"} match —{" "}
@@ -434,7 +453,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
               )}
               Search everywhere for <span className="font-semibold">&ldquo;{trimmed}&rdquo;</span>
             </span>
-            <kbd className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
+            <kbd className="shrink-0 max-sm:hidden rounded-full bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
               ⌘↵
             </kbd>
           </button>
@@ -479,7 +498,9 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           type="button"
           onClick={slot ? () => setPhoneFieldOpen(true) : open}
           aria-label={slot ? "Search this page" : "Search"}
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/[0.07] text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] sm:hidden"
+          /* Search lives in the phone tab bar; this button is only for the
+             record screens, where the tab bar gives way to the record dock. */
+          className="[body:has([data-mobile-tab-bar]):not(:has([data-record-dock]))_&]:hidden inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/[0.07] text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] sm:hidden"
         >
           <Search className="size-4" aria-hidden />
         </button>
@@ -558,9 +579,8 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           </Tooltip>
         )}
 
-        {/* The support helpline, right before Help: the two ways to get help
-            sit together. A tel: link, so a click starts the call. */}
-        <HelplineLink className={phoneField ? "max-sm:hidden" : ""} />
+        {/* No support phone number here any more (boss, Nov 2026), on phones or
+            desktop: Help (Trax) is the way to get help. */}
 
         {trax && (
           <Tooltip>
@@ -623,6 +643,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
         <div className={BELL_FIX}>
           <NotificationBellV2 />
         </div>
+
 
 
 

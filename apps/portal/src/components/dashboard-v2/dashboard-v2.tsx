@@ -9,7 +9,6 @@ import { BonzahPendingAlert } from "@/components/dashboard/bonzah-pending-alert"
 import { HomeBands } from "@/components/dashboard-v2/home/home-bands";
 import { WebinarPopup } from "@/components/dashboard-v2/webinar-popup";
 import { HOME_PALETTE } from "@/components/dashboard-v2/home/ui";
-import { format } from "date-fns";
 
 /**
  * The v2 dashboard body.
@@ -42,21 +41,16 @@ export function DashboardV2() {
        the top. main's content box starts at 50px there, so 50 + 29 + 13 = 92,
        measured in headless Chrome. Below md the wrapper keeps no top padding. A banner, when one
        shows, renders first and pushes the bands down. */
-    <div className="mx-auto w-full max-w-[1560px] space-y-10 px-2 pb-4 md:pt-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+    <div className="mx-auto w-full max-w-[1560px] space-y-6 pb-4 md:space-y-10 md:px-2 md:pt-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
       {/*
         Operational alerts stay above the redesign. These are the banners that
         tell a tenant their credits are running out, or that Bonzah has made a
         decision on their onboarding — losing them to a visual refresh would be
         a functional regression, not a style change.
       */}
-      {/* Phone only: the iOS large title, the way Apple's own apps open a
-          main screen — the date in small caps over a big bold name. */}
-      <header className="-mb-5 px-1 pt-1 md:hidden">
-        <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          {format(new Date(), 'EEEE d MMMM')}
-        </p>
-        <h1 className="mt-0.5 text-[34px] font-bold leading-[1.1] tracking-[-0.03em] text-foreground">Home</h1>
-      </header>
+      {/* No "Home" title or date on a phone any more (boss, Nov 2026): the
+          bottom bar already says where you are, and the screen opens straight
+          on the business. */}
       {!creditsRetired && <LowCreditsBanner />}
       <BonzahStatusBanner />
       <BonzahPendingAlert />

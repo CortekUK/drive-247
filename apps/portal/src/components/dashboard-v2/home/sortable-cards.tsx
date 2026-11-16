@@ -38,6 +38,8 @@ export interface SortableCardItem {
   /** For the grip's label: "Move the To do card". */
   label: string;
   node: ReactNode;
+  /** As tall as its own content, not stretched to the row (Requests, To do). */
+  fit?: boolean;
 }
 
 /**
@@ -78,7 +80,7 @@ function SortableCard({ item }: { item: SortableCardItem }) {
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={cn('relative flex min-h-0 min-w-0 flex-col [&>*]:flex-1', isDragging && 'z-20 opacity-90')}
+      className={cn('relative flex min-h-0 min-w-0 flex-col [&>*]:flex-1', item.fit && 'self-start', isDragging && 'z-20 opacity-90')}
     >
       {item.node}
     </div>

@@ -304,7 +304,9 @@ export function OrgSwitcher({
           onClick={onNavigate}
           aria-label="Edit your booking site's branding"
           title="Edit branding"
-          className={cn(ROW_CONTROL, "opacity-0 focus-visible:opacity-100 group-hover/site:opacity-100")}
+          /* A touch screen has no hover, so there the pencil is always shown:
+             tapping it goes where hovering leads on desktop (boss, Nov 2026). */
+          className={cn(ROW_CONTROL, "opacity-0 focus-visible:opacity-100 group-hover/site:opacity-100 [@media(hover:none)]:opacity-100")}
         >
           <Pencil className={ROW_CONTROL_ICON} aria-hidden />
         </Link>

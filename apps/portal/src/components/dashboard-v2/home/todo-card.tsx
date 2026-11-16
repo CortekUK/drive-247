@@ -28,6 +28,7 @@ import { AlarmClock, Check, MoreVertical, Pencil, Plus, Trash2, X } from 'lucide
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { useCapRows } from './cap-rows';
 import { MAX_NOTE_LENGTH, useTenantNotes, type TenantNote } from '@/hooks/use-tenant-notes';
 import { Eyebrow } from './ui';
 import { ExpandButton } from './expand-button';
@@ -525,6 +526,7 @@ export function TodoCard() {
   // Composer.
   const inputRef = useRef<HTMLInputElement>(null);
   const [expanded, setExpanded] = useState(false);
+  const cap = useCapRows();
   const [body, setBody] = useState('');
   const [remindAt, setRemindAt] = useState<Date | null>(null);
   const canAdd = body.trim().length > 0 && !adding && !isUnavailable;
@@ -606,9 +608,16 @@ export function TodoCard() {
   // state its full height to centre in.
   // `inDialog`: the expanded dialog's rows show Edit / Delete icons instead of
   // the ⋮ menu (a dropdown there would open underneath the dialog).
+  // On the card it is only as tall as its rows, three at most, then it
+  // scrolls (cap-rows.ts); the dialog keeps the whole height it is given.
   const listFor = (inDialog: boolean) => (
     <div
-      className="relative mt-1.5 grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] overflow-y-auto px-4 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      ref={inDialog ? undefined : cap.ref}
+      style={inDialog ? undefined : cap.style}
+      className={cn(
+        'relative mt-1.5 grid min-h-0 grid-cols-[minmax(0,1fr)] overflow-y-auto overscroll-contain px-4 pb-3',
+        inDialog ? 'flex-1 grid-rows-[minmax(0,1fr)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : '[scrollbar-width:thin]'
+      )}
     >
       <AutoSkeleton loading={isLoading} className="h-full">
       {notes.length === 0 ? (
@@ -645,7 +654,7 @@ export function TodoCard() {
   );
 
   return (
-    <div className="flex min-h-[387px] flex-col overflow-hidden rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)] lg:min-h-0">
+    <div className="flex flex-col overflow-hidden rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)]">
       <header className="flex items-center justify-between gap-3 px-6 pt-4">
         <Eyebrow>To do</Eyebrow>
         <span className="flex items-center gap-0.5">

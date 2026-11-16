@@ -34,7 +34,6 @@ export {
   ListMetaChip,
   ListRow,
   ListStatusText,
-  ListTable,
   ListTableHeader,
   useProgressiveRows,
   useViewportFillCap,
@@ -42,6 +41,20 @@ export {
   type ProgressiveRows,
 } from "../../../../../shared/portal-v2/list-table";
 import type { ProgressiveRows } from "../../../../../shared/portal-v2/list-table";
+import { ListTable as SharedListTable } from "../../../../../shared/portal-v2/list-table";
+import type { ComponentProps } from "react";
+
+/**
+ * The kit's table with phone cards ON (boss, Nov 2026: the portal is a phone
+ * app first). Below `md` each row is a compact block, the first cell on top
+ * and the rest as small labelled values, scrolling with the page; the layout
+ * is `[data-phone-cards]` in styles/v2-theme.css. From `md` up nothing
+ * changes. A list that really must stay a table passes `phoneCards={false}`.
+ * The customer portal's copy of the kit leaves it off.
+ */
+export function ListTable({ phoneCards = true, ...props }: ComponentProps<typeof SharedListTable>) {
+  return <SharedListTable phoneCards={phoneCards} {...props} />;
+}
 
 /** The rentals list's class strings, one place. */
 export const LIST_CLASSES = {

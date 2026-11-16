@@ -139,7 +139,10 @@ export function useProgressiveRows<T>(rows: readonly T[], resetKey: string): Pro
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) showMore();
       },
-      { root: scrollRootRef.current, rootMargin: "300px 0px", threshold: 0 },
+      // A box that does not scroll (a phone-cards list, which scrolls with the
+      // page) is no root at all: the sentinel would always sit inside it and
+      // every row would load at once. The viewport is the root then.
+      { root: scrollsItself(scrollRootRef.current) ? scrollRootRef.current : null, rootMargin: "300px 0px", threshold: 0 },
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
@@ -169,6 +172,11 @@ export function useProgressiveRows<T>(rows: readonly T[], resetKey: string): Pro
     scrollRootRef,
     sentinelRef: setSentinel,
   };
+}
+
+function scrollsItself(el: HTMLElement | null): boolean {
+  if (!el || typeof getComputedStyle !== "function") return false;
+  return getComputedStyle(el).overflowY !== "visible";
 }
 
 /** Tailwind's `md`. Below it a list keeps the fixed 520px box. */
@@ -294,6 +302,34 @@ export function useViewportFillCap(ref: RefObject<HTMLElement | null>, enabled: 
 type RowsShell = Pick<ProgressiveRows<unknown>, "scrollRootRef" | "sentinelRef" | "hasMore">;
 
 /**
+ * For `phoneCards`: gives every body cell its column's name as `data-label`,
+ * read from the header row by position, so the phone layout can print it.
+ * Re-run whenever rows or headings change (rows arrive as the list scrolls).
+ * Attributes only: React does not own `data-label`, so it never fights this.
+ */
+function usePhoneCardLabels(ref: RefObject<HTMLElement | null>, enabled: boolean) {
+  useLayoutEffect(() => {
+    const root = ref.current;
+    if (!enabled || !root || typeof MutationObserver === "undefined") return;
+    const sync = () => {
+      const heads = Array.from(root.querySelectorAll("thead tr:first-child > th")).map((th) => (th.textContent ?? "").trim());
+      root.querySelectorAll("tbody tr").forEach((tr) => {
+        let col = 0;
+        Array.from(tr.children).forEach((td) => {
+          const label = heads[col] ?? "";
+          if (td.getAttribute("data-label") !== label) td.setAttribute("data-label", label);
+          col += Number((td as HTMLTableCellElement).colSpan) || 1;
+        });
+      });
+    };
+    sync();
+    const mo = new MutationObserver(sync);
+    mo.observe(root, { childList: true, subtree: true, characterData: true });
+    return () => mo.disconnect();
+  }, [ref, enabled]);
+}
+
+/**
  * The card, its scrolling body (the observer's root), the table and the "more
  * coming" bars.
  *
@@ -309,6 +345,7 @@ export function ListTable({
   minWidth = "min-w-[720px]",
   fillViewport = false,
   surface = "card",
+  phoneCards = false,
   children,
 }: {
   rows: RowsShell;
@@ -323,14 +360,25 @@ export function ListTable({
   fillViewport?: boolean;
   /** `settings` for a table on a settings page; see `ListSurface`. Leave it off everywhere else. */
   surface?: ListSurface;
+  /**
+   * Below `md`, each row as a compact block instead of a sideways-scrolling
+   * table: the first cell on top, every other cell under it with its column's
+   * name as a small label (`data-label`, copied from the header here), and the
+   * rows scrolling with the page rather than inside a 520px box. The layout
+   * itself is the host app's CSS, keyed on `data-phone-cards`. Off by default,
+   * so an app that does not style it keeps the table.
+   */
+  phoneCards?: boolean;
   children: ReactNode;
 }) {
   // ListTable only renders with its table, so the scroll root is mounted by
   // the time the hook's layout effect first runs.
   const fillCap = useViewportFillCap(rows.scrollRootRef, fillViewport);
+  usePhoneCardLabels(rows.scrollRootRef, phoneCards);
   const body = (
     <CardContent
       ref={rows.scrollRootRef}
+      data-phone-cards={phoneCards ? "" : undefined}
       className={cn(V2_LIST_CLASSES.scrollRoot, fillViewport && V2_LIST_CLASSES.fillViewport)}
       style={fillCap !== undefined ? { maxHeight: fillCap } : undefined}
     >

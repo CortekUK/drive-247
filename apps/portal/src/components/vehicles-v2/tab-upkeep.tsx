@@ -169,8 +169,11 @@ export function UpkeepTab({
       >
         <List>
           {rows.map((r) => (
-            <div key={r.key} className="flex items-center gap-4 px-5 py-3">
-              <p className="min-w-0 flex-1 text-sm font-medium">
+            /* Phones: the label takes its own line, the date and its verdict
+               share the next. Three fixed columns (flex + 10rem + 9rem) do
+               not fit a 300px row, and the label was drawn under the date. */
+            <div key={r.key} className="flex items-center gap-4 px-5 py-3 max-sm:flex-wrap max-sm:gap-x-3 max-sm:gap-y-2">
+              <p className="min-w-0 flex-1 text-sm font-medium max-sm:basis-full">
                 {r.label}
                 {!r.blocking && (
                   <span className="ml-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
@@ -189,15 +192,15 @@ export function UpkeepTab({
                 }}
                 onBlur={r.key === "warranty_end_date" ? (e) => commitWarranty("warranty_end_date", e.target.value) : undefined}
                 onKeyDown={r.key === "warranty_end_date" ? (e) => e.key === "Enter" && e.currentTarget.blur() : undefined}
-                className={cn(inputCls, "w-40 shrink-0 py-2 text-xs")}
+                className={cn(inputCls, "w-40 shrink-0 py-2 text-xs max-sm:w-auto max-sm:min-w-0 max-sm:flex-1")}
               />
-              <span className="w-36 shrink-0 text-right">
+              <span className="w-36 shrink-0 text-right max-sm:w-auto">
                 <VerdictPill verdict={r.verdict} date={r.date} blocking={r.blocking} />
               </span>
             </div>
           ))}
-          <div className="flex items-center gap-4 px-5 py-3">
-            <p className="min-w-0 flex-1 text-sm font-medium text-muted-foreground">
+          <div className="flex items-center gap-4 px-5 py-3 max-sm:flex-wrap max-sm:gap-y-2">
+            <p className="min-w-0 flex-1 text-sm font-medium text-muted-foreground max-sm:basis-full">
               Warranty started
             </p>
             <input
@@ -207,9 +210,9 @@ export function UpkeepTab({
               onChange={(e) => changeWarranty("warranty_start_date", e.target.value || null)}
               onBlur={(e) => commitWarranty("warranty_start_date", e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-              className={cn(inputCls, "w-40 shrink-0 py-2 text-xs")}
+              className={cn(inputCls, "w-40 shrink-0 py-2 text-xs max-sm:w-auto max-sm:min-w-0 max-sm:flex-1")}
             />
-            <span className="w-36 shrink-0" />
+            <span className="w-36 shrink-0 max-sm:hidden" />
           </div>
         </List>
         {warrantyIssue && (
@@ -223,7 +226,7 @@ export function UpkeepTab({
         title="Servicing"
         hint={`Counted every ${serviceInterval.toLocaleString("en-US")} ${fmt.distUnit} from the last service logged.`}
       >
-        <div className="grid grid-cols-[10rem_1fr] items-end gap-5">
+        <div className="grid grid-cols-[10rem_1fr] items-end gap-5 max-sm:grid-cols-1 max-sm:gap-3">
           <Field label="Odometer">
             <NumberInput
               value={vehicle.current_mileage}
@@ -236,7 +239,7 @@ export function UpkeepTab({
           </Field>
           <div
             className={cn(
-              "flex h-9 items-center gap-3 rounded-3xl px-4 text-sm ring-1",
+              "flex h-9 items-center gap-3 rounded-3xl px-4 text-sm ring-1 max-sm:h-auto max-sm:min-h-9 max-sm:py-2.5 max-sm:leading-snug",
               overdue ? "bg-warning-light/60 ring-warning/30" : "bg-muted/40 ring-foreground/5",
             )}
           >

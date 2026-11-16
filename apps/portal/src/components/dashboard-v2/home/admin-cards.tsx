@@ -241,7 +241,11 @@ export function TraxBriefCard(perms: {
         }
       }}
       className={cn(
-        'group relative flex min-h-[387px] flex-col overflow-hidden rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)] outline-none transition-colors lg:min-h-0',
+        // Phones: a fixed 300px, so it shows as many points as fit and hides
+        // the rest, exactly as on desktop. Unbounded it grew to ~600px with
+        // every point (boss, Nov 2026: compact, not in your face). `max-h`
+        // too: the sortable wrapper flexes its child, which overrides `h`.
+        'group relative flex min-h-[300px] flex-col overflow-hidden rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)] outline-none transition-colors max-md:h-[300px] max-md:max-h-[300px] lg:min-h-[280px]',
         'border-[var(--pv-accent-30)]',
         canTalk && 'cursor-pointer hover:border-[var(--pv-accent)] focus-visible:border-[var(--pv-accent)]'
       )}
@@ -281,7 +285,7 @@ export function TraxBriefCard(perms: {
           <p className="text-[13px] text-[var(--pv-ink-3)]">Looking over the business…</p>
         ) : (
           <div aria-live="polite" className="flex min-h-0 flex-1 flex-col">
-            <p className="text-[17px] font-extrabold leading-snug tracking-[-0.02em] text-[var(--pv-accent-ink)]">
+            <p className="text-[15px] font-extrabold leading-snug tracking-[-0.02em] text-[var(--pv-accent-ink)] md:text-[17px]">
               {shown}
               {!typed && <Caret />}
             </p>

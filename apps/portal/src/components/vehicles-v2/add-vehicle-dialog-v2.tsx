@@ -55,7 +55,7 @@ import { getCurrencySymbol, type DistanceUnit } from "@/lib/format-utils";
 import { financeColumnsForContractTotal, notReadyToRentReasons } from "@/lib/vehicle-utils";
 import { acquisitionCostIssue, addVehicleDialogSchema, type AddVehicleDialogFormValues } from "@/client-schemas/vehicles/add-vehicle-dialog";
 import { Button } from "@/components/ui-v2/button";
-import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui-v2/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger, PHONE_SCREEN_DIALOG } from "@/components/ui-v2/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import { useTraxPrice } from "@/hooks/use-trax-price";
 import { TraxIcon } from "@/components/chat/TraxIcon";
@@ -589,7 +589,7 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
         </DialogTrigger>
       )}
       <DialogContent
-        className="gap-0 overflow-hidden p-0 sm:max-w-[720px]"
+        className={cn("gap-0 overflow-hidden p-0 sm:max-w-[720px]", PHONE_SCREEN_DIALOG)}
         style={FORM_DIALOG_WASH}
         showCloseButton={false}
         // Open on the first field to type in, not on the first button —
@@ -604,9 +604,9 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
 
         {added ? (
           /* Done: the car is in. A moment of it, then where to next. */
-          <div className="flex flex-col">
+          <div className="flex flex-col max-sm:min-h-0 max-sm:flex-1">
             <style>{TWINKLE_CSS}</style>
-            <div className="flex h-[500px] flex-col items-center justify-center px-10 text-center">
+            <div className="flex h-[500px] flex-col items-center justify-center px-10 text-center max-sm:h-auto max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto max-sm:px-5">
               <div className="w-full max-w-[320px] duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none">
                 <AddVehicleAddedArt />
               </div>
@@ -619,7 +619,7 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
                 </p>
               </div>
             </div>
-            <div className="flex items-center justify-between gap-4 px-8 py-4">
+            <div className="flex items-center justify-between gap-4 px-8 py-4 max-sm:shrink-0 max-sm:px-4">
               <Button type="button" variant="outline" className="h-10 rounded-full px-5" onClick={() => setAdded(null)}>
                 <Plus className="size-4" /> Add another
               </Button>
@@ -644,14 +644,14 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
             if (last) void save();
             else void next();
           }}
-          className="flex flex-col"
+          className="flex flex-col max-sm:min-h-0 max-sm:flex-1"
         >
           <DevAutofillButton onFill={() => void autofill()} />
           {/* One screen: picture, what Trax is asking, two rows of fields.
               Same height on every step, so nothing jumps and nothing scrolls. */}
           <div
             key={step}
-            className="flex h-[500px] flex-col items-center overflow-hidden px-10 pt-8 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none"
+            className="flex h-[500px] flex-col items-center overflow-hidden px-10 pt-8 max-sm:h-auto max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto max-sm:px-4 max-sm:pt-6 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none"
           >
             <screen.art className="max-w-[280px]" />
             <h3 className="mt-4 text-center text-xl font-medium leading-snug text-foreground [text-wrap:balance]">{screen.title}</h3>

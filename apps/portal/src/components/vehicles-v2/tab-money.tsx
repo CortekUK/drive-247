@@ -113,7 +113,7 @@ export function MoneyTab({
 
   return (
     <Panel title="Money" description="What this car has brought in, what it cost, and whether it is ahead.">
-      <Surface className="flex gap-8">
+      <Surface className="flex gap-8 max-sm:flex-col max-sm:gap-4">
         <Stat
           label="Brought in"
           value={fmt.money(pl.revenue)}
