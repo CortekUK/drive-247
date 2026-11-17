@@ -207,6 +207,24 @@ function useWideFlag(onWideChange?: (wide: boolean) => void) {
   return { on, measure };
 }
 
+/**
+ * The day the trial ends and the card is first charged, as "1 December".
+ * Stripe's own trial end when we have it, else today plus the trial length.
+ */
+function firstPaymentLabel(trialEndsAt: string | null, trialDays: number): string | null {
+  let when: Date | null = trialEndsAt ? new Date(trialEndsAt) : null;
+  if (!when || Number.isNaN(when.getTime())) {
+    when = trialDays > 0 ? new Date(Date.now() + trialDays * 86_400_000) : null;
+  }
+  if (!when) return null;
+  const sameYear = when.getFullYear() === new Date().getFullYear();
+  return when.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+}
+
 export function PaymentStep({
   plan,
   clientSecret,
@@ -230,6 +248,7 @@ export function PaymentStep({
 }: PaymentStepProps) {
   const wide = useWideFlag(onWideChange);
   const isTrial = intentType === "setup";
+  const firstPayment = isTrial ? firstPaymentLabel(trialEndsAt, trialDays) : null;
 
   const timeline = billingTimeline(plan, promo, amountDueCents);
   const { resolvedTheme } = useTheme();
@@ -471,6 +490,18 @@ export function PaymentStep({
           </div>
         )}
       </div>
+
+      {isTrial && (
+        // Said right under the price, where people decide whether to give a
+        // card: the trial really is free and they can leave without paying.
+        // No mention of reminder emails until we actually send them.
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+          <span className="font-medium text-foreground">No charge today.</span>{" "}
+          {firstPayment
+            ? `Your first payment is on ${firstPayment}. Cancel before then and you won't be charged.`
+            : "Cancel before your trial ends and you won't be charged."}
+        </p>
+      )}
 
       {/* No "applied" note: the code stays in its box with Remove beside it,
           and the timeline below shows what it takes off. */}
