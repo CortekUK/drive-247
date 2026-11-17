@@ -220,6 +220,12 @@ interface DepositHoldRow {
   deposit_hold_next_retry_at: string | null;
   deposit_hold_failure_count: number | null;
   deposit_hold_payment_intent_id: string | null;
+  /**
+   * Set client-side, not a column. True when the deposit was taken as an
+   * ordinary payment instead of a card hold: the rental's Security Deposit
+   * ledger charge is fully paid and none of it has been refunded.
+   */
+  deposit_paid_in_ledger?: boolean;
   customers: { name: string | null } | null;
   vehicles: {
     reg: string | null;
@@ -385,6 +391,11 @@ function classify(
       // tenant who does not take deposits, or a rental the operator opted out of,
       // NULL is the correct and permanent state.
       if (expectedAmount <= 0) return null;
+      // No hold is also the normal state when the deposit was collected as an
+      // ordinary payment (cash, or card through the payment breakdown). The
+      // money is already with the operator, so the car is not uncovered, and
+      // "was never taken" would contradict the "Paid" chip on the same rental.
+      if (row.deposit_paid_in_ledger) return null;
       kind = "unsecured";
       severity = "critical";
       headline = "No deposit was ever secured on this rental";
@@ -690,6 +701,41 @@ export function useDepositHoldAlerts() {
       if (error) throw error;
 
       const rows = (data ?? []) as unknown as DepositHoldRow[];
+
+      // A rental with no hold may still have its deposit, paid as a normal
+      // charge. Look those up in the ledger so they are not reported as
+      // "never taken". Best effort: if this read fails, the row keeps its
+      // alarm rather than being silenced.
+      const noHoldIds = rows.filter((r) => r.deposit_hold_status == null).map((r) => r.id);
+      if (noHoldIds.length > 0) {
+        const { data: ledger, error: ledgerError } = await supabase
+          .from("ledger_entries")
+          .select("rental_id, type, amount, remaining_amount")
+          .eq("tenant_id", tenantId)
+          .eq("category", "Security Deposit")
+          .in("rental_id", noHoldIds);
+        if (!ledgerError && ledger) {
+          const totals = new Map<string, { charged: number; owed: number; refunded: number }>();
+          for (const e of ledger as Array<{ rental_id: string; type: string; amount: number | string | null; remaining_amount: number | string | null }>) {
+            const t = totals.get(e.rental_id) ?? { charged: 0, owed: 0, refunded: 0 };
+            const amount = Number(e.amount) || 0;
+            if (e.type === "Charge") {
+              t.charged += amount;
+              t.owed += Number(e.remaining_amount) || 0;
+            } else if (e.type === "Refund") {
+              t.refunded += Math.abs(amount);
+            }
+            totals.set(e.rental_id, t);
+          }
+          for (const r of rows) {
+            const t = totals.get(r.id);
+            if (t && t.charged > 0 && t.owed <= 0.005 && t.refunded <= 0.005) {
+              r.deposit_paid_in_ledger = true;
+            }
+          }
+        }
+      }
+
       return { rows, truncated: rows.length >= MAX_ROWS };
     },
     enabled: !!tenantId,
