@@ -51,7 +51,7 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 
 // ---------------------------------------------------------------------------
@@ -220,6 +220,10 @@ interface DepositHoldRow {
   deposit_hold_next_retry_at: string | null;
   deposit_hold_failure_count: number | null;
   deposit_hold_payment_intent_id: string | null;
+  /** Set when staff dismissed this rental's deposit alert for good. */
+  deposit_alert_dismissed_at: string | null;
+  /** The hold status the dismissal was made against ('none' for NULL). */
+  deposit_alert_dismissed_status: string | null;
   /**
    * Set client-side, not a column. True when the deposit was taken as an
    * ordinary payment instead of a card hold: the rental's Security Deposit
@@ -260,6 +264,8 @@ const ALERT_COLUMNS = `
   deposit_hold_next_retry_at,
   deposit_hold_failure_count,
   deposit_hold_payment_intent_id,
+  deposit_alert_dismissed_at,
+  deposit_alert_dismissed_status,
   customers!rentals_customer_id_fkey(name),
   vehicles!rentals_vehicle_id_fkey(reg, make, model, security_deposit)
 `;
@@ -369,6 +375,16 @@ function classify(
   if (Number.isFinite(endMs) && now > endMs + FINISHED_RENTAL_GRACE_MS) return null;
 
   const holdStatus = row.deposit_hold_status;
+
+  // ── Dismissed for good by staff. ──────────────────────────────────────────
+  //
+  // Scoped to ONE rental and to the deposit state it was dismissed in. If the
+  // state moves on (a hold is placed and later fails, say), this is a new fact
+  // and the alert comes back. Other rentals are unaffected.
+  if (row.deposit_alert_dismissed_at && row.deposit_alert_dismissed_status === holdStatusKey(holdStatus)) {
+    return null;
+  }
+
   const failureCount = Number(row.deposit_hold_failure_count) || 0;
   const nextRetryAt = row.deposit_hold_next_retry_at;
   const retryPending =
@@ -623,6 +639,31 @@ const EMPTY_COUNTS: Record<DepositHoldIssueKind, number> = {
 /** Shared so mutations (place / release / capture / force refresh) can invalidate. */
 export const depositHoldAlertsKey = (tenantId: string | undefined) =>
   ["deposit-hold-alerts", tenantId] as const;
+
+/** How a hold status is recorded on a dismissal. NULL (never placed) is 'none'. */
+export const holdStatusKey = (status: string | null | undefined): string => status ?? "none";
+
+/**
+ * Dismiss the deposit alert for one rental, for every staff member. It stays
+ * gone while the rental's deposit hold status is the one given here.
+ */
+export async function dismissDepositAlert(params: {
+  tenantId: string;
+  rentalId: string;
+  holdStatus: string | null;
+  appUserId: string | null;
+}): Promise<void> {
+  const { error } = await supabaseUntyped
+    .from("rentals")
+    .update({
+      deposit_alert_dismissed_at: new Date().toISOString(),
+      deposit_alert_dismissed_by: params.appUserId,
+      deposit_alert_dismissed_status: holdStatusKey(params.holdStatus),
+    })
+    .eq("id", params.rentalId)
+    .eq("tenant_id", params.tenantId);
+  if (error) throw error;
+}
 
 export function useDepositHoldAlerts() {
   const { tenant } = useTenant();

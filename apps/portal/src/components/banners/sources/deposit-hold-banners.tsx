@@ -37,13 +37,18 @@
  */
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/stores/auth-store";
 import { formatCurrency } from "@/lib/format-utils";
 import {
+  depositHoldAlertsKey,
+  dismissDepositAlert,
   useDepositHoldAlerts,
   type DepositHoldIssue,
   type DepositHoldSeverity,
@@ -461,8 +466,15 @@ export function useDepositHoldBanners(): AppBanner[] {
    * checking it. Short-circuit at the source instead: a hook that returns no
    * banners cannot leak one through any renderer.
    */
-  const { canView } = useManagerPermissions();
+  const { canView, canEdit } = useManagerPermissions();
   const canOpenRentals = canView("rentals");
+  // Dismissing for good changes the rental for the whole team, so it needs
+  // edit rights on rentals, not just view.
+  const canDismissForGood = canEdit("rentals");
+  const { appUser } = useAuth();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [dismissing, setDismissing] = useState(false);
 
   /**
    * TENANT GATE. Without it, every operator who does not take deposits gets a
@@ -519,6 +531,52 @@ export function useDepositHoldBanners(): AppBanner[] {
     const href = single ? single.href : cohortHref(winner);
 
     const action = { label: copy.ctaLabel, href };
+
+    /**
+     * "Dismiss for good" — the one way to clear a car-out alarm permanently.
+     *
+     * Only for a single named rental, never a whole cohort: one click must not
+     * bury several cars at once. It is saved on the rental, so it clears for
+     * every staff member, and it only holds while that rental's deposit status
+     * stays the same. Self-resolving cohorts already dismiss for good with the
+     * normal control, so they don't need it.
+     */
+    const dismissForGood =
+      single && !copy.lowEmphasis && canDismissForGood && tenant?.id
+        ? {
+            label: "Dismiss for good",
+            busy: dismissing,
+            onClick: () => {
+              if (dismissing) return;
+              const ref = namedRef(single) ?? "this rental";
+              const ok = window.confirm(
+                `Dismiss the deposit alert for ${ref} for everyone on your team?
+
+` +
+                  "It won't come back for this rental unless its deposit status changes. " +
+                  "Only do this if the deposit is handled or you've decided to go without one.",
+              );
+              if (!ok) return;
+              setDismissing(true);
+              dismissDepositAlert({
+                tenantId: tenant.id,
+                rentalId: single.rentalId,
+                holdStatus: single.holdStatus,
+                appUserId: appUser?.id ?? null,
+              })
+                .then(() => queryClient.invalidateQueries({ queryKey: depositHoldAlertsKey(tenant.id) }))
+                .then(() => toast({ title: "Deposit alert dismissed", description: `It won't show again for ${ref}.` }))
+                .catch((err: unknown) =>
+                  toast({
+                    title: "Could not dismiss the alert",
+                    description: err instanceof Error ? err.message : "Please try again.",
+                    variant: "destructive",
+                  }),
+                )
+                .finally(() => setDismissing(false));
+            },
+          }
+        : null;
 
     /**
      * FINGERPRINT — what makes a dismissed banner come back.
@@ -584,7 +642,9 @@ export function useDepositHoldBanners(): AppBanner[] {
 
       // B4 is the one state where nobody has to do anything, so its link is a
       // ghost rather than a button.
-      ...(copy.lowEmphasis ? { secondaryAction: action } : { action }),
+      ...(copy.lowEmphasis
+        ? { secondaryAction: action }
+        : { action, ...(dismissForGood ? { secondaryAction: dismissForGood } : {}) }),
 
       dismissal: {
         fingerprint: fp,
@@ -626,7 +686,7 @@ export function useDepositHoldBanners(): AppBanner[] {
     };
 
     return [banner];
-  }, [isSuccess, depositsInUse, canOpenRentals, data]);
+  }, [isSuccess, depositsInUse, canOpenRentals, data, canDismissForGood, tenant?.id, appUser?.id, dismissing, queryClient, toast]);
 }
 
 export default useDepositHoldBanners;
