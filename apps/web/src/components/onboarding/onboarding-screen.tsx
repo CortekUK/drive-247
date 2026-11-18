@@ -475,6 +475,7 @@ export function OnboardingScreen() {
                           onApplyPromo={applyPromoCode}
                           ownerName={state.account?.fullName ?? ""}
                           companyName={state.business.companyName}
+                          portalSlug={state.business.slug}
                           onWideChange={setPaymentWide}
                         />
                       ) : null}

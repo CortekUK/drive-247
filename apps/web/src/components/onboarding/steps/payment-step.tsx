@@ -38,6 +38,12 @@ import type {
 } from "@/components/onboarding/onboarding-types";
 import { SIGNUP_ERROR_COPY } from "@/components/onboarding/onboarding-types";
 import { isMockSignup, mockCardOutcome, mockMarkPaid } from "@/components/onboarding/mock-signup";
+import {
+  buildApplePayTerms,
+  formatFirstPayment,
+  resolveTrialEnd,
+  type ApplePayTerms,
+} from "@/components/onboarding/apple-pay-terms";
 import type { SignupPlan } from "@/lib/plans";
 import type { PromoOffer } from "@/lib/promo-offer";
 import { readReferralCodeFromDocument } from "@/lib/referral-cookie";
@@ -207,22 +213,10 @@ function useWideFlag(onWideChange?: (wide: boolean) => void) {
   return { on, measure };
 }
 
-/**
- * The day the trial ends and the card is first charged, as "1 December".
- * Stripe's own trial end when we have it, else today plus the trial length.
- */
+/** The day the trial ends and the card is first charged, as "1 December". */
 function firstPaymentLabel(trialEndsAt: string | null, trialDays: number): string | null {
-  let when: Date | null = trialEndsAt ? new Date(trialEndsAt) : null;
-  if (!when || Number.isNaN(when.getTime())) {
-    when = trialDays > 0 ? new Date(Date.now() + trialDays * 86_400_000) : null;
-  }
-  if (!when) return null;
-  const sameYear = when.getFullYear() === new Date().getFullYear();
-  return when.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "long",
-    ...(sameYear ? {} : { year: "numeric" }),
-  });
+  const when = resolveTrialEnd(trialEndsAt, trialDays);
+  return when ? formatFirstPayment(when) : null;
 }
 
 export function PaymentStep({
@@ -244,11 +238,18 @@ export function PaymentStep({
   onApplyPromo,
   ownerName = "",
   companyName = "",
+  portalSlug = "",
   onWideChange,
 }: PaymentStepProps) {
   const wide = useWideFlag(onWideChange);
   const isTrial = intentType === "setup";
   const firstPayment = isTrial ? firstPaymentLabel(trialEndsAt, trialDays) : null;
+
+  // Memoised so a re-render never hands Stripe's element a new options object.
+  const applePayTerms = React.useMemo(
+    () => buildApplePayTerms({ plan, promo, isTrial, trialDays, trialEndsAt, slug: portalSlug }),
+    [plan, promo, isTrial, trialDays, trialEndsAt, portalSlug],
+  );
 
   const timeline = billingTimeline(plan, promo, amountDueCents);
   const { resolvedTheme } = useTheme();
@@ -597,6 +598,7 @@ export function PaymentStep({
             onError={onError}
             intentType={intentType}
             onFormHeight={wide.measure}
+            applePayTerms={applePayTerms}
           />
         </Elements>
       )}
@@ -629,7 +631,10 @@ function PaymentForm({
   onError,
   intentType = "payment",
   onFormHeight,
+  applePayTerms,
 }: {
+  /** What the Apple Pay sheet shows in place of "Amount Pending". */
+  applePayTerms?: ApplePayTerms;
   busy: boolean;
   onPaid(): void;
   onError(err: OnboardingError): void;
@@ -640,6 +645,10 @@ function PaymentForm({
 }) {
   const stripe = useStripe();
   const elements = useElements();
+  const paymentElementOptions = React.useMemo(
+    () => ({ layout: "tabs" as const, ...(applePayTerms ? { applePay: applePayTerms } : {}) }),
+    [applePayTerms],
+  );
 
   // Stripe gives no event for "Pay without Link"; the iframe just grows. Its
   // height is the honest signal for which view is showing.
@@ -834,7 +843,7 @@ function PaymentForm({
       */}
       <div ref={elementBoxRef}>
       <PaymentElement
-        options={{ layout: "tabs" }}
+        options={paymentElementOptions}
         onReady={() => setElementReady(true)}
         /**
          * The one event that names why the card form did not appear.

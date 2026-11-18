@@ -516,6 +516,8 @@ export interface PaymentStepProps {
   ownerName?: string;
   /** The business being built, named in the screen's line. Display only. */
   companyName?: string;
+  /** The chosen portal address, where Apple Wallet links to manage the plan. */
+  portalSlug?: string;
 }
 
 // ---------------------------------------------------------------------------
