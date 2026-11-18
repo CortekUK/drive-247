@@ -372,7 +372,7 @@ export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
     id: 'sidebar',
     label: 'Navigation',
     title: 'Everything lives here',
-    body: 'Rentals, Vehicles and Customers up top. Money, records and settings under More.',
+    body: 'Rentals, Customers and Vehicles up top. Money, paperwork and your account below.',
     route: '/',
     anchors: [`${SIDEBAR} [data-sidebar="content"]`, SIDEBAR],
     side: 'right',

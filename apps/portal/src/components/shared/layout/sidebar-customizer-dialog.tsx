@@ -35,6 +35,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavPreferences } from "@/hooks/use-nav-preferences";
 import {
   applyNavPreferences,
+  dropRetiredDefaultOrder,
   isPermanentNavHref,
   type NavPreferences,
   type OverlayNavGroup,
@@ -241,8 +242,10 @@ export function SidebarCustomizerDialog({
   fixed?: OverlayNavItem[];
 }) {
   const { toast } = useToast();
-  const { preferences, save, isSaving, isUnavailable, isLoading } =
+  const { preferences: savedPreferences, save, isSaving, isUnavailable, isLoading } =
     useNavPreferences();
+  // The same reading the rail uses, so the dialog opens on the sidebar on screen.
+  const preferences = dropRetiredDefaultOrder(savedPreferences);
 
   // Every item the user is allowed to see, by href. The catalogue is derived
   // from the computed nav rather than a hardcoded list, so it can never offer
@@ -665,7 +668,7 @@ export function SidebarCustomizerDialog({
                 {draft.more.length > 0 && (
                   <>
                     <p className="mb-2 text-xs font-medium text-muted-foreground">
-                      More
+                      Money &amp; paperwork
                     </p>
                     <SortableContext
                       items={draft.more.map((href) => `more:${href}`)}
@@ -755,27 +758,40 @@ export function SidebarCustomizerDialog({
                   How your sidebar will look.
                 </p>
                 <div className="rounded-xl border border-border bg-muted/20 p-2">
-                  {fixed.length > 0 && (
-                    <div className="mb-2 space-y-0.5">
-                      {fixed.map((item) => (
-                        <PreviewRow key={item.href} item={item} muted />
-                      ))}
-                    </div>
-                  )}
                   <div className="space-y-0.5">
+                    {fixed.filter((item) => item.href === "/").map((item) => (
+                      <PreviewRow key={item.href} item={item} muted />
+                    ))}
                     {itemsOf(draft.top).map((item) => (
                       <PreviewRow key={item.href} item={item} />
                     ))}
                   </div>
-                  {(draft.more.length > 0 || visibleGroups.length > 0) && (
+                  {draft.more.length > 0 && (
                     <p className="px-2.5 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                      More
+                      Money &amp; paperwork
                     </p>
                   )}
                   <div className="space-y-0.5">
                     {itemsOf(draft.more).map((item) => (
                       <PreviewRow key={item.href} item={item} />
                     ))}
+                  </div>
+                  {fixed.some((item) => item.href !== "/") && (
+                    <p className="px-2.5 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Account
+                    </p>
+                  )}
+                  <div className="space-y-0.5">
+                    {fixed.filter((item) => item.href !== "/").map((item) => (
+                      <PreviewRow key={item.href} item={item} muted />
+                    ))}
+                  </div>
+                  {visibleGroups.length > 0 && (
+                    <p className="px-2.5 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      More
+                    </p>
+                  )}
+                  <div className="space-y-0.5">
                     {visibleGroups.map((group) => {
                       const groupIcon = groups.find((g) => g.label === group.label)?.icon;
                       return (
@@ -789,8 +805,8 @@ export function SidebarCustomizerDialog({
                   </div>
                 </div>
                 <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-                  Dashboard, Integrations, Billing, Customers and Rentals are
-                  always in your sidebar.
+                  Dashboard, Integrations, Billing, Support, Customers and
+                  Rentals are always in your sidebar.
                 </p>
               </div>
             </div>

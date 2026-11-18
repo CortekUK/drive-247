@@ -43,6 +43,7 @@ vi.mock('@/lib/v2-context', () => ({
   usePortalOnV2: () => true,
 }));
 vi.mock('@/components/rentals-v2/rental-detail/use-rental-detail-v2', () => ({ useRentalDetailV2: () => ({}) }));
+vi.mock('@/components/rentals-v2/rental-detail/use-extras-overview', () => ({ useExtrasOverview: () => ({ value: null, note: null }) }));
 vi.mock('@/components/vehicles-v2/use-vehicle-record', () => ({ useVehicleRecord: () => ({}) }));
 vi.mock('@/components/customers-v2/customer-detail/use-customer-detail-v2', () => ({ useCustomerRailHeader: () => ({ title: '', subtitle: '' }) }));
 vi.mock('@/components/shared/layout/org-switcher', () => ({ OrgSwitcher: () => null }));
@@ -98,20 +99,28 @@ beforeEach(() => {
 afterEach(() => { act(() => root?.unmount()); root = null; document.body.replaceChildren(); vi.unstubAllGlobals(); });
 
 describe('Support in the main sidebar', () => {
-  it('sits directly below Fines and opens the existing Support section', () => {
+  it('lays the rail out as Dashboard, Money & paperwork, then Account', () => {
     sidebar();
     const names = [...document.querySelectorAll('a')].map((a) => a.textContent?.replace(/\d+\+?$/, '').trim());
-    const fines = names.indexOf('Fines');
-    expect(fines).toBeGreaterThan(-1);
-    expect(names[fines + 1]).toBe('Support');
-    expect(names.slice(fines - 3, fines + 2)).toEqual(['Availability', 'Payments', 'Invoices', 'Fines', 'Support']);
+    const start = names.indexOf('Dashboard');
+    expect(names.slice(start, start + 12)).toEqual([
+      'Dashboard', 'Rentals', 'Customers', 'Vehicles', 'Availability',
+      'Agreements', 'Finances', 'Insights',
+      'Integrations', 'Billing', 'Rewards', 'Support',
+    ]);
+    const headings = [...document.querySelectorAll('p')].map((p) => p.textContent?.trim());
+    expect(headings).toContain('Money & paperwork');
+    expect(headings).toContain('Account');
+  });
+
+  it('sits at the end of Account and opens the existing Support section', () => {
+    sidebar();
     expect(link('Support')!.getAttribute('href')).toBe('/support');
     // Same row furniture as its neighbours: the same button slot and icon size.
-    expect(link('Support')!.getAttribute('data-sidebar')).toBe(link('Fines')!.getAttribute('data-sidebar'));
-    // The Support icon the profile menu used (LifeBuoy), at the neighbours' size.
+    expect(link('Support')!.getAttribute('data-sidebar')).toBe(link('Finances')!.getAttribute('data-sidebar'));
+    // Its icon is drawn at the neighbours' size.
     const iconClasses = (name: string) => (link(name)!.querySelector('svg')?.getAttribute('class') ?? '').split(' ').filter((c) => !c.startsWith('lucide'));
-    expect(link('Support')!.querySelector('svg')?.getAttribute('class')).toContain('lucide-life-buoy');
-    expect(iconClasses('Support')).toEqual(iconClasses('Fines'));
+    expect(iconClasses('Support')).toEqual(iconClasses('Finances'));
   });
 
   it('shows the unread-message count as a right-aligned badge inside the row, named for assistive tech', () => {

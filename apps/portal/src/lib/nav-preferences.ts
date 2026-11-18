@@ -238,6 +238,22 @@ export function applyNavPreferences({
   };
 }
 
+/**
+ * The v2 rail's main rows used to default to this order. Saving the customiser
+ * stored it even for someone who never moved a row, so an exact match is the old
+ * default rather than a choice, and must not pin them to it.
+ */
+const RETIRED_DEFAULT_TOP_ORDER = ["/customers", "/vehicles", "/rentals"];
+
+/** Forget a saved main-row order that is only the retired default. */
+export function dropRetiredDefaultOrder(preferences: NavPreferences): NavPreferences {
+  const order = preferences.topLevelOrder ?? [];
+  const isRetiredDefault =
+    order.length === RETIRED_DEFAULT_TOP_ORDER.length &&
+    order.every((href, index) => href === RETIRED_DEFAULT_TOP_ORDER[index]);
+  return isRetiredDefault ? { ...preferences, topLevelOrder: [] } : preferences;
+}
+
 /** True when the user has customised anything at all — drives the Reset state. */
 export function hasNavCustomisation(preferences: NavPreferences): boolean {
   return (

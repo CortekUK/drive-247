@@ -122,6 +122,7 @@ import { SidebarPromo } from "@/components/shared/layout/sidebar-promo";
 import { DevSection } from "@/components/shared/layout/dev-section";
 import { SidebarCustomizerDialog } from "@/components/shared/layout/sidebar-customizer-dialog";
 import { useNavPreferences } from "@/hooks/use-nav-preferences";
+import { dropRetiredDefaultOrder } from "@/lib/nav-preferences";
 import { applyNavPreferences } from "@/lib/nav-preferences";
 // The Trax conversation rail — the scoped rail this sidebar becomes on /trax.
 import { TraxRail } from "@/components/trax/trax-rail";
@@ -630,59 +631,26 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   };
   const canSeeRewards = filterItem({ name: "Rewards", href: "/rewards", icon: Gift });
 
-  // --- Section 2: the three things the job is actually made of ---
+  // --- Section 2: the daily work ---
   //
-  // Customer, then vehicle, then rental — the order a booking happens in, not
-  // alphabetical and not by how often each is clicked. These three stay alone
-  // up here; everything else lives under "More" below.
+  // Sits directly under Dashboard, in this order (Nov 19 2026).
   const rawTopLevel: NavItem[] = ([
+    { name: "Rentals", href: "/rentals", icon: NavRentals },
     { name: "Customers", href: "/customers", icon: NavCustomers },
     { name: "Vehicles", href: "/vehicles", icon: NavVehicles },
-    { name: "Rentals", href: "/rentals", icon: NavRentals },
-  ] as NavItem[]).filter(filterItem);
-
-  // --- Section 3: "More", flat ---
-  //
-  // These were pulled out of the "Bookings", "Finance" and "Records"
-  // drill-downs. They are daily work — take a payment, chase an invoice, check
-  // whether a car is free this weekend — and a drill-down was costing a click
-  // every time. They are NOT promoted to section 2: that section is deliberately
-  // three items, and diluting it to eleven made it an unscannable column.
-  //
-  // So they render flat inside "More", above the groups that remain. Visible
-  // without a click, without crowding the three that matter most.
-  //
-  const rawMoreItems: NavItem[] = ([
-    // Insights and Insurances are STILL off the rail by default, and this was
-    // the SECOND time they had been removed: they were taken out of the
-    // "Records" group, then a later restructure promoted them to top level and
-    // so reinstated them. They do not come back on their own.
-    //
-    // What changed on Sep 20 2026 is that the customiser now OFFERS them
-    // (`optional: true`): they are absent until a user switches one on for
-    // themselves, and switching one on writes its href into
-    // `NavPreferences.shown`. Nobody is shown one of those rows they did not
-    // ask for, while "the currently-hidden tabs can be shown" is true. Each is
-    // a decision that has a home on the rental itself (its Insurance and
-    // Payments stages), so a second, rental-agnostic list of the same records
-    // is two places to look for one answer.
-    //
-    // Agreements is ON by default again (Agreements v2, D2; team lead, Sep 21
-    // 2026: "the tab we had, let's use it"). It is no longer only a second view
-    // of the rental's Agreement stage: individual agreements are sent from it
-    // and the agreement templates live on it, so it has no other home. It is
-    // an ordinary row: it can still be hidden or moved in the customiser.
-    //
-    // All three routes are in ROUTE_TO_TAB (`reports`, `insurances`,
-    // `agreements`), so `filterItem` below decides whether a manager may see
-    // them at all, BEFORE any preference is read. Customisation can reveal a
-    // row this user could already have been given; it can never widen access.
-    { name: "Insights", href: "/insights", icon: NavInsights, optional: true },
-    { name: "Insurances", href: "/insurances", icon: NavInsurances, optional: true },
-    { name: "Agreements", href: "/agreements", icon: NavAgreements },
     // `/blocked-dates` is the route; "Availability" is what the page is FOR,
     // which is why the two do not match.
     { name: "Availability", href: "/blocked-dates", icon: NavAvailability },
+  ] as NavItem[]).filter(filterItem);
+
+  // --- Section 3: "Money & paperwork" ---
+  //
+  // Named `more` in the stored preferences (`moreOrder`), which is why these
+  // variables keep that name: renaming the key would orphan saved sidebars.
+  const rawMoreItems: NavItem[] = ([
+    // Agreements is an ordinary row: individual agreements are sent from it and
+    // the agreement templates live on it.
+    { name: "Agreements", href: "/agreements", icon: NavAgreements },
     // Finances — Payments, Invoices and Fines as one row opening one tabbed
     // screen (`/finances`), behind its own area gate. Tenants outside it keep
     // the three separate rows. `/finances` has no ROUTE_TO_TAB entry: the
@@ -694,17 +662,13 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
           { name: "Invoices", href: "/invoices", icon: Receipt },
           { name: "Fines", href: "/fines", icon: BadgeAlert },
         ]),
-    // Support — moved here from the profile menu so it is one click away, with its
-    // unread-message badge. Same destination as TRAX's Support control. Not given a
-    // ROUTE_TO_TAB entry: every staff role may reach its own tickets, and the
-    // messaging endpoint enforces the rest.
-    {
-      name: "Support",
-      href: SUPPORT_ROUTE,
-      icon: NavSupport,
-      badge: supportUnread ?? 0,
-      badgeLabel: (n: number) => `${n} unread ${n === 1 ? "message" : "messages"}`,
-    },
+    // Insights is on by default as of Nov 19 2026. Insurances stays off until a
+    // user adds it in the customiser, which writes its href into
+    // `NavPreferences.shown`. Both routes are in ROUTE_TO_TAB, so `filterItem`
+    // decides whether a manager may see them BEFORE any preference is read:
+    // customisation can never widen access.
+    { name: "Insights", href: "/insights", icon: NavInsights },
+    { name: "Insurances", href: "/insurances", icon: NavInsurances, optional: true },
     // NOTE: Credits is deliberately NOT here. `/credits` reads
     // `tenant_credit_wallets` — platform credit this tenant BUYS FROM US, with
     // its own packages and checkout. It is not renter money like the four
@@ -846,22 +810,33 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     .map((g) => ({ ...g, items: g.items.filter(filterItem) }))
     .filter((g) => g.items.length > 0);
 
+  // Support, with its unread-message badge. Same destination as TRAX's Support
+  // control. Not given a ROUTE_TO_TAB entry: every staff role may reach its own
+  // tickets, and the messaging endpoint enforces the rest.
+  const supportRow: NavItem = {
+    name: "Support",
+    href: SUPPORT_ROUTE,
+    icon: NavSupport,
+    badge: supportUnread ?? 0,
+    badgeLabel: (n: number) => `${n} unread ${n === 1 ? "message" : "messages"}`,
+  };
+
   /**
-   * The rows this rail renders itself, above everything customisable:
-   * Dashboard, Integrations and Billing. They are PERMANENT (team lead, Sep 20
-   * 2026) and never go through the overlay, so they are not in `rawTopLevel`.
+   * The rows this rail renders itself and the customiser does not move:
+   * Dashboard at the top, the rest under Account. They never go through the
+   * overlay, so they are not in `rawTopLevel`.
    *
-   * Declared here only so the customiser's preview can show them in place —
-   * a preview that silently omitted the first three rows would be a picture of
-   * a sidebar nobody has. They are not rendered from this list (the JSX
-   * below still owns that, with its tooltips, active states and comments), so
-   * keep the names in step if one of them is ever renamed.
+   * Declared here only so the customiser's preview can show them in place. They
+   * are not rendered from this list (the JSX below still owns that, with its
+   * tooltips, active states and comments), so keep the names in step if one of
+   * them is ever renamed.
    */
   const fixedRows: NavItem[] = [
     { name: "Dashboard", href: "/", icon: NavDashboard },
     { name: "Integrations", href: "/integrations", icon: NavIntegrations },
     { name: "Billing", href: "/subscription", icon: NavBilling },
     { name: "Rewards", href: "/rewards", icon: Gift },
+    supportRow,
   ];
 
   // The user's own arrangement, laid over the nav the app just computed.
@@ -878,11 +853,53 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     // `parseNavPreferences` defaults both, so every row stored before that
     // date still produces the sidebar it produced then.
     more: rawMoreItems,
-    preferences: navPreferences,
+    preferences: dropRetiredDefaultOrder(navPreferences),
   });
   const topLevel = arrangedNav.topLevel as NavItem[];
   const groups = arrangedNav.groups as NavGroup[];
   const moreItems = arrangedNav.more as NavItem[];
+
+  /** A plain link row: Money & paperwork, and Support under Account. */
+  const renderFlatRow = (item: NavItem) => {
+    const count = item.badge ?? 0;
+    return (
+      <SidebarMenuItem
+        key={item.href}
+        className="relative"
+        data-tour={`nav-${item.href.replace(/^\//, "")}`}
+      >
+        <SidebarMenuButton
+          asChild
+          isActive={isActive(item.href)}
+          tooltip={collapsed ? item.name : undefined}
+          className={NAV_ROW}
+        >
+          <Link
+            href={item.href}
+            onClick={closeMobileOnNav}
+            aria-label={count > 0 && item.badgeLabel ? `${item.name}, ${item.badgeLabel(count)}` : undefined}
+          >
+            <item.icon className="!size-[17px] shrink-0" />
+            <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "min-w-0 flex-1 truncate opacity-100"}`}>
+              {item.name}
+            </span>
+            {/* Right-aligned inside the row; the label is flex-1 and the digits
+                tabular, so a changing count never moves it. */}
+            {!collapsed && count > 0 && (
+              <span aria-hidden className={`ml-auto inline-flex min-w-[18px] shrink-0 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none tabular-nums animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
+                {count > 99 ? "99+" : count}
+              </span>
+            )}
+            {collapsed && count > 0 && (
+              <span aria-hidden className={`absolute -top-1 -right-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-0.5 text-[10px] font-bold leading-none tabular-nums animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
+                {count > 9 ? "9+" : count}
+              </span>
+            )}
+          </Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  };
 
   // --- Website view: the site's pages, and nothing else ---
   // Driven off the `cms_pages` rows rather than a hardcoded list, so the rail
@@ -1606,7 +1623,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
           </SidebarGroup>
         ) : (
           <>
-            {/* Dashboard + always-available utilities */}
+            {/* Dashboard, then the daily work. */}
             <SidebarGroup className="p-1.5 pb-0">
               <SidebarGroupContent>
                 <SidebarMenu>
@@ -1625,130 +1642,49 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
 
-                  {/* Integrations — from the source worktree. Not in
-                      ROUTE_TO_TAB, so unmapped means allowed for every role,
-                      exactly as `getTabKeyForRoute` treats it. */}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive("/integrations")}
-                      tooltip={collapsed ? "Integrations" : undefined}
-                      className={NAV_ROW}
+                  {!drillGroup && topLevel.map((item) => (
+                    // `data-tour` is the first-rental tour's anchor (see
+                    // `lib/first-rental-tour.ts`). An attribute rather than a
+                    // wrapper element, so it changes nothing about layout,
+                    // and derived from the href so it cannot drift from the
+                    // route: /vehicles → nav-vehicles. The tour also carries
+                    // an href-based fallback selector, so losing this line
+                    // degrades it rather than breaking it.
+                    <SidebarMenuItem
+                      key={item.href}
+                      className="relative"
+                      data-tour={`nav-${item.href.replace(/^\//, "")}`}
                     >
-                      <Link href="/integrations" onClick={closeMobileOnNav}>
-                        <NavIntegrations className="!size-[17px] shrink-0" />
-                        <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Integrations</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-
-                  {/* Billing — one row for the tenant's whole account with
-                      Drive247: the plan, its invoices, and the credit wallet.
-
-                      These were two rail entries and are now one. They are the
-                      same question asked twice ("what do I owe / what have I
-                      got left"), and `/subscription` already rendered a Tabs
-                      strip, so Credits joins Plan and Invoices as a third tab
-                      rather than living somewhere else entirely.
-
-                      Credits was previously under Finance, beside Payments,
-                      Invoices and Fines. That was wrong in a way worth naming:
-                      those are money between the operator and their RENTERS,
-                      while `/credits` is `tenant_credit_wallets` — credit the
-                      operator buys FROM US. Same word, opposite direction.
-
-                      `/credits` still resolves; it is not orphaned. This row
-                      just stops being the way in. */}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive("/subscription") || isActive("/credits") || isActive("/referrals")}
-                      tooltip={collapsed ? "Billing" : undefined}
-                      className={NAV_ROW}
-                    >
-                      <Link href="/subscription" onClick={closeMobileOnNav}>
-                        <NavBilling className="!size-[17px] shrink-0" />
-                        <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Billing</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-
-                  {/* Rewards — the Creator Rewards Programme. This rail only
-                      renders for v2-chrome tenants, which is exactly who the
-                      programme is for (the route 404s for everyone else).
-                      In ROUTE_TO_TAB under the Subscription key: the reward is
-                      money off the tenant's Drive247 bill. */}
-                  {canSeeRewards && (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive("/rewards")}
-                      tooltip={collapsed ? "Rewards" : undefined}
-                      className={NAV_ROW}
-                    >
-                      <Link href="/rewards" onClick={closeMobileOnNav}>
-                        <Gift className="!size-[17px] shrink-0" />
-                        <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Rewards</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  )}
-
-                  {/* Welcome pack, kept from v1 — the source worktree dropped
-                      it, but `/welcome` is a live route this branch's v1 rail
-                      links to, so removing the row would strand it.
-                      Deliberately NOT in ROUTE_TO_TAB: unmapped routes are
-                      allowed for every role, so a `viewer` or a restricted
-                      `manager` keeps it. They hit the same confusion as a head
-                      admin — gating the guide would silence exactly the people
-                      most likely to need it.
-
-                      Hidden from the lean canary only. This is the rail
-                      northwind actually renders, so this is the gate the owner
-                      sees; the v1 rail below carries the identical predicate so
-                      the two cannot drift. Everyone else keeps the row — 16
-                      operators across 14 tenants have read the pack. */}
-                  {!welcomeHidden && (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive("/welcome")}
-                      tooltip={collapsed ? "Welcome Pack" : undefined}
-                      className={NAV_ROW}
-                    >
-                      <Link href="/welcome" onClick={closeMobileOnNav}>
-                        <BookOpen className="h-4 w-4 shrink-0" />
-                        <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Welcome Pack</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  )}
-
-                  {/* No "Booking site" row here any more (Sep 21 2026). Its
-                      behaviour — open the site in a new tab, the arrow always
-                      showing, a Branding pencil on hover — moved onto the org
-                      row at the top of this rail, under the tenant's own name
-                      instead of a "Booking site" title. See org-switcher.tsx. */}
-
-                  {/* Ask AI — only when the caller owns a Trax instance to open. */}
-                  {onAskAI && (
-                    <SidebarMenuItem>
                       <SidebarMenuButton
-                        onClick={onAskAI}
-                        tooltip={collapsed ? "Ask AI" : undefined}
+                        asChild
+                        isActive={isActive(item.href)}
+                        tooltip={collapsed ? item.name : undefined}
                         className={NAV_ROW}
                       >
-                        <Sparkles className="h-4 w-4 shrink-0" />
-                        <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Ask AI</span>
+                        <Link href={item.href} onClick={closeMobileOnNav} className="flex items-center justify-between w-full">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <item.icon className="!size-[17px] shrink-0" />
+                            <span className={`text-[15px] md:text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
+                              {item.name}
+                            </span>
+                          </div>
+                          {!collapsed && item.badge !== undefined && item.badge > 0 && (
+                            <span className={`inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none rounded-full shrink-0 animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
+                              {item.badge}
+                            </span>
+                          )}
+                          {collapsed && item.badge !== undefined && item.badge > 0 && (
+                            <span className={`absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none rounded-full animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
+                              {item.badge > 9 ? '9+' : item.badge}
+                            </span>
+                          )}
+                        </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
-                  )}
+                  ))}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
-
-            {/* Separator — divides quick actions from the main navigation */}
-            <div className="mx-3 my-1.5 h-px bg-sidebar-border/60" />
 
             {drillGroup ? (
               /* Drill-in view — replaces the nav with the selected section */
@@ -1801,56 +1737,157 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
               </SidebarGroup>
             ) : (
               <>
-                {/* Top-level fingertip items — always visible */}
-                <SidebarGroup className="p-1.5 pb-0">
+                {/* Money & paperwork */}
+                {moreItems.length > 0 && (
+                  <SidebarGroup className="p-1.5 pt-2 pb-0">
+                    {!collapsed && (
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-2.5 pb-1">
+                        Money &amp; paperwork
+                      </p>
+                    )}
+                    <SidebarGroupContent>
+                      <SidebarMenu>{moreItems.map(renderFlatRow)}</SidebarMenu>
+                    </SidebarGroupContent>
+                  </SidebarGroup>
+                )}
+
+                {/* Account: the tenant's own relationship with Drive247. */}
+                <SidebarGroup className="p-1.5 pt-2 pb-0">
+                    {!collapsed && (
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-2.5 pb-1">
+                        Account
+                      </p>
+                    )}
                   <SidebarGroupContent>
                     <SidebarMenu>
-                      {topLevel.map((item) => (
-                        // `data-tour` is the first-rental tour's anchor (see
-                        // `lib/first-rental-tour.ts`). An attribute rather than a
-                        // wrapper element, so it changes nothing about layout,
-                        // and derived from the href so it cannot drift from the
-                        // route: /vehicles → nav-vehicles. The tour also carries
-                        // an href-based fallback selector, so losing this line
-                        // degrades it rather than breaking it.
-                        <SidebarMenuItem
-                          key={item.href}
-                          className="relative"
-                          data-tour={`nav-${item.href.replace(/^\//, "")}`}
+                      {/* Integrations — from the source worktree. Not in
+                          ROUTE_TO_TAB, so unmapped means allowed for every role,
+                          exactly as `getTabKeyForRoute` treats it. */}
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={isActive("/integrations")}
+                          tooltip={collapsed ? "Integrations" : undefined}
+                          className={NAV_ROW}
                         >
+                          <Link href="/integrations" onClick={closeMobileOnNav}>
+                            <NavIntegrations className="!size-[17px] shrink-0" />
+                            <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Integrations</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+
+                      {/* Billing — one row for the tenant's whole account with
+                          Drive247: the plan, its invoices, and the credit wallet.
+
+                          These were two rail entries and are now one. They are the
+                          same question asked twice ("what do I owe / what have I
+                          got left"), and `/subscription` already rendered a Tabs
+                          strip, so Credits joins Plan and Invoices as a third tab
+                          rather than living somewhere else entirely.
+
+                          Credits was previously under Finance, beside Payments,
+                          Invoices and Fines. That was wrong in a way worth naming:
+                          those are money between the operator and their RENTERS,
+                          while `/credits` is `tenant_credit_wallets` — credit the
+                          operator buys FROM US. Same word, opposite direction.
+
+                          `/credits` still resolves; it is not orphaned. This row
+                          just stops being the way in. */}
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={isActive("/subscription") || isActive("/credits") || isActive("/referrals")}
+                          tooltip={collapsed ? "Billing" : undefined}
+                          className={NAV_ROW}
+                        >
+                          <Link href="/subscription" onClick={closeMobileOnNav}>
+                            <NavBilling className="!size-[17px] shrink-0" />
+                            <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Billing</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+
+                      {/* Rewards — the Creator Rewards Programme. This rail only
+                          renders for v2-chrome tenants, which is exactly who the
+                          programme is for (the route 404s for everyone else).
+                          In ROUTE_TO_TAB under the Subscription key: the reward is
+                          money off the tenant's Drive247 bill. */}
+                      {canSeeRewards && (
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={isActive("/rewards")}
+                          tooltip={collapsed ? "Rewards" : undefined}
+                          className={NAV_ROW}
+                        >
+                          <Link href="/rewards" onClick={closeMobileOnNav}>
+                            <Gift className="!size-[17px] shrink-0" />
+                            <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Rewards</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                      )}
+
+                      {/* Support, with its unread-message badge. */}
+                      {renderFlatRow(supportRow)}
+
+                      {/* Welcome pack, kept from v1 — the source worktree dropped
+                          it, but `/welcome` is a live route this branch's v1 rail
+                          links to, so removing the row would strand it.
+                          Deliberately NOT in ROUTE_TO_TAB: unmapped routes are
+                          allowed for every role, so a `viewer` or a restricted
+                          `manager` keeps it. They hit the same confusion as a head
+                          admin — gating the guide would silence exactly the people
+                          most likely to need it.
+
+                          Hidden from the lean canary only. This is the rail
+                          northwind actually renders, so this is the gate the owner
+                          sees; the v1 rail below carries the identical predicate so
+                          the two cannot drift. Everyone else keeps the row — 16
+                          operators across 14 tenants have read the pack. */}
+                      {!welcomeHidden && (
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={isActive("/welcome")}
+                          tooltip={collapsed ? "Welcome Pack" : undefined}
+                          className={NAV_ROW}
+                        >
+                          <Link href="/welcome" onClick={closeMobileOnNav}>
+                            <BookOpen className="h-4 w-4 shrink-0" />
+                            <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Welcome Pack</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                      )}
+
+                      {/* No "Booking site" row here any more (Sep 21 2026). Its
+                          behaviour — open the site in a new tab, the arrow always
+                          showing, a Branding pencil on hover — moved onto the org
+                          row at the top of this rail, under the tenant's own name
+                          instead of a "Booking site" title. See org-switcher.tsx. */}
+
+                      {/* Ask AI — only when the caller owns a Trax instance to open. */}
+                      {onAskAI && (
+                        <SidebarMenuItem>
                           <SidebarMenuButton
-                            asChild
-                            isActive={isActive(item.href)}
-                            tooltip={collapsed ? item.name : undefined}
+                            onClick={onAskAI}
+                            tooltip={collapsed ? "Ask AI" : undefined}
                             className={NAV_ROW}
                           >
-                            <Link href={item.href} onClick={closeMobileOnNav} className="flex items-center justify-between w-full">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <item.icon className="!size-[17px] shrink-0" />
-                                <span className={`text-[15px] md:text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
-                                  {item.name}
-                                </span>
-                              </div>
-                              {!collapsed && item.badge !== undefined && item.badge > 0 && (
-                                <span className={`inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none rounded-full shrink-0 animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
-                                  {item.badge}
-                                </span>
-                              )}
-                              {collapsed && item.badge !== undefined && item.badge > 0 && (
-                                <span className={`absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none rounded-full animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
-                                  {item.badge > 9 ? '9+' : item.badge}
-                                </span>
-                              )}
-                            </Link>
+                            <Sparkles className="h-4 w-4 shrink-0" />
+                            <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Ask AI</span>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
-                      ))}
+                      )}
                     </SidebarMenu>
                   </SidebarGroupContent>
                 </SidebarGroup>
 
-                {/* Second-level groups — drill into the section on click */}
-                {(groups.length > 0 || moreItems.length > 0) && (
+                {/* Second-level groups — drill into the section on click. Only
+                    the features a company has switched on appear here. */}
+                {groups.length > 0 && (
                   <SidebarGroup className="p-1.5 pt-1 pb-2">
                     {!collapsed && (
                       <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-2.5 pb-1">
@@ -1859,52 +1896,6 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     )}
                     <SidebarGroupContent>
                       <SidebarMenu>
-                        {/* Flat rows first, then the drill-downs. These are
-                            ordinary links, not groups — they were lifted out of
-                            Bookings, Finance and Records so they cost no click,
-                            but they are not important enough to dilute the
-                            three items above. Same `data-tour` scheme as the
-                            top-level items. */}
-                        {moreItems.map((item) => {
-                          const count = item.badge ?? 0;
-                          return (
-                          <SidebarMenuItem
-                            key={item.href}
-                            className="relative"
-                            data-tour={`nav-${item.href.replace(/^\//, "")}`}
-                          >
-                            <SidebarMenuButton
-                              asChild
-                              isActive={isActive(item.href)}
-                              tooltip={collapsed ? item.name : undefined}
-                              className={NAV_ROW}
-                            >
-                              <Link
-                                href={item.href}
-                                onClick={closeMobileOnNav}
-                                aria-label={count > 0 && item.badgeLabel ? `${item.name}, ${item.badgeLabel(count)}` : undefined}
-                              >
-                                <item.icon className="!size-[17px] shrink-0" />
-                                <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "min-w-0 flex-1 truncate opacity-100"}`}>
-                                  {item.name}
-                                </span>
-                                {/* Right-aligned inside the row; the label is flex-1 and
-                                    the digits tabular, so a changing count never moves it. */}
-                                {!collapsed && count > 0 && (
-                                  <span aria-hidden className={`ml-auto inline-flex min-w-[18px] shrink-0 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none tabular-nums animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
-                                    {count > 99 ? "99+" : count}
-                                  </span>
-                                )}
-                                {collapsed && count > 0 && (
-                                  <span aria-hidden className={`absolute -top-1 -right-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-0.5 text-[10px] font-bold leading-none tabular-nums animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
-                                    {count > 9 ? "9+" : count}
-                                  </span>
-                                )}
-                              </Link>
-                            </SidebarMenuButton>
-                          </SidebarMenuItem>
-                          );
-                        })}
                         {groups.map((group) => {
                           const GroupIcon = group.icon;
                           const hasActive = group.items.some((i) => isActive(i.href));
