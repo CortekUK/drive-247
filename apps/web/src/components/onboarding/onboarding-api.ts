@@ -3,6 +3,7 @@
 import type { SignupPlanId } from "@/lib/plans";
 import type { MetaBrowserSignals } from "@/lib/meta-tracking";
 import type { PromoOffer } from "@/lib/promo-offer";
+import type { SignupAttribution } from "@/lib/signup-attribution";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
 import { isMockSignup, mockFunction, MockFunctionError } from "./mock-signup";
 import {
@@ -16,7 +17,7 @@ import {
 // ---------------------------------------------------------------------------
 // Request bodies
 // ---------------------------------------------------------------------------
-export interface SignupBeginRequest {
+export interface SignupBeginRequest extends SignupAttribution {
   fullName: string;
   email: string;
   password: string;
@@ -85,7 +86,7 @@ export interface SignupBeginResponse {
   /** True when a verification code was emailed and `verify` is the next step. */
   requiresVerification?: boolean;
 }
-export interface SignupBeginOauthRequest {
+export interface SignupBeginOauthRequest extends Partial<SignupAttribution> {
   planId: SignupPlanId;
   /** Meta's browser cookies, so the server's CompleteRegistration is tied to the ad click. */
   tracking?: MetaBrowserSignals;
@@ -514,6 +515,15 @@ export function signupBeginOauth(
   });
 }
 
+/** Saves "How did you hear about us?" for someone who is already signed in. */
+export function signupSaveAttribution(b: SignupAttribution): Promise<{ success: true }> {
+  return callFunction<{ success: true }>("signup-attribution", b, {
+    auth: "session",
+    timeoutMs: 15_000,
+    dedupeKey: "signup-attribution",
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Slug availability without a session
 // ---------------------------------------------------------------------------
@@ -755,6 +765,8 @@ export interface ClientSignupMeta {
   planId: string;
   fullName?: string;
   email?: string;
+  /** "How did you hear about us?" Absent until it has been answered. */
+  heardAbout?: string;
   mode?: "test" | "live";
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;

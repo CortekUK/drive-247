@@ -40,6 +40,11 @@ import {
   type SignupMetadata,
 } from "../_shared/signup-state.ts";
 import { clean, EMAIL_RE, MAX } from "../_shared/tenant-provisioning.ts";
+import {
+  phoneForMeta,
+  readSignupAttribution,
+  saveSignupAttribution,
+} from "../_shared/signup-attribution.ts";
 
 const LOG = "[signup-begin]";
 
@@ -107,6 +112,11 @@ interface BeginRequest {
   formStartedAt?: number;
   /** Meta's browser cookies, so the server's event is tied to the ad click. */
   tracking?: MetaBrowserSignals;
+  /** "How did you hear about us?" See _shared/signup-attribution.ts. */
+  heardAbout?: string;
+  heardAboutOther?: string;
+  /** Optional. */
+  phone?: string;
 }
 
 /**
@@ -365,12 +375,14 @@ Deno.serve(async (req) => {
     // pending confirmation would be a dead end nobody could clear.
     // -----------------------------------------------------------------------
     const now = new Date().toISOString();
+    const attribution = readSignupAttribution(body);
     const meta: SignupMetadata = {
       v: SIGNUP_META_VERSION,
       status: "account_created",
       planId: plan.id,
       fullName,
       email,
+      ...attribution,
       // Locked now. Later steps read THIS, not the env var, so flipping
       // SIGNUP_STRIPE_MODE mid-flight cannot strand an in-progress signup on
       // the wrong Stripe account.
@@ -440,6 +452,8 @@ Deno.serve(async (req) => {
       outcome: "ok",
     });
 
+    await saveSignupAttribution(supabase, { authUserId: created.user.id, email, attribution });
+
     /*
      * THE CODE. Sent from here rather than by GoTrue, so `custom-auth-email`
      * (which skips signup mail) is not in the path at all.
@@ -474,6 +488,7 @@ Deno.serve(async (req) => {
         userId: created.user.id,
         email,
         fullName,
+        phone: phoneForMeta(attribution.phone),
         signals: body.tracking ?? null,
         req,
       });

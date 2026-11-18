@@ -38,6 +38,7 @@
 
 import { getBrowserSupabase } from "@/lib/supabase/browser";
 import { isSignupPlanId, type SignupPlanId } from "@/lib/plans";
+import { isHeardAbout, type SignupAttribution } from "@/lib/signup-attribution";
 
 import type { BusinessDraft, TenantFormValues } from "./onboarding-types";
 
@@ -69,6 +70,8 @@ interface StoredOauthPending extends StoredDraft {
   planId: SignupPlanId;
   /** ms epoch. Anything older than OAUTH_PENDING_TTL_MS is treated as absent. */
   at: number;
+  /** Set when they answered the question before pressing the Google button. */
+  attribution?: SignupAttribution | null;
 }
 
 /**
@@ -233,18 +236,23 @@ export function clearTenantDraft(): void {
 // The Google handoff
 // ---------------------------------------------------------------------------
 
-export function writePendingOauth(planId: SignupPlanId, values: TenantFormValues): void {
+export function writePendingOauth(
+  planId: SignupPlanId,
+  values: TenantFormValues,
+  attribution: SignupAttribution | null = null,
+): void {
   writeJson(OAUTH_KEY, {
     v: DRAFT_VERSION,
     planId,
     at: Date.now(),
+    attribution,
     ...values,
   } satisfies StoredOauthPending);
 }
 
 /** The pending handoff, or null when there is none, it is stale, or it is malformed. */
 export function readPendingOauth():
-  | { planId: SignupPlanId; values: TenantFormValues }
+  | { planId: SignupPlanId; values: TenantFormValues; attribution: SignupAttribution | null }
   | null {
   const raw = readJson(OAUTH_KEY);
   if (!raw || typeof raw !== "object") return null;
@@ -274,6 +282,7 @@ export function readPendingOauth():
       slug: typeof blob.slug === "string" ? blob.slug : "",
       acceptedTerms: blob.acceptedTerms === true,
     },
+    attribution: isHeardAbout(blob.attribution?.heardAbout) ? blob.attribution ?? null : null,
   };
 }
 

@@ -149,6 +149,8 @@ interface MockStore {
   business: Record<string, unknown> | null;
   userMetadata: Record<string, unknown>;
   provisionStartedAt: number | null;
+  /** "How did you hear about us?" Absent until answered, as on the real server. */
+  heardAbout?: string;
 }
 
 function readStore(): MockStore | null {
@@ -264,6 +266,7 @@ function seedAt(at: "payment" | "build" | "done" | "recover", planId: string): v
     // without it, the build asks for the details again ("One last thing").
     userMetadata: at === "recover" ? {} : { d247_tenant_draft: { v: 1, ...SEED_BUSINESS } },
     provisionStartedAt: at === "done" ? Date.now() - 60_000 : null,
+    heardAbout: "instagram",
   });
 }
 
@@ -428,6 +431,7 @@ function metaOf(store: MockStore) {
     planId: live.planId,
     fullName: live.fullName,
     email: live.email,
+    heardAbout: live.heardAbout,
     mode: "test" as const,
     stripeCustomerId: "cus_mock",
     stripeSubscriptionId: "sub_mock",
@@ -507,6 +511,7 @@ export async function mockFunction(name: string, body: unknown): Promise<unknown
         business: null,
         userMetadata: {},
         provisionStartedAt: null,
+        heardAbout: typeof b.heardAbout === "string" ? b.heardAbout : undefined,
       });
       return {
         success: true,
@@ -515,6 +520,12 @@ export async function mockFunction(name: string, body: unknown): Promise<unknown
         stage: "account_created",
         requiresVerification: true,
       };
+    }
+
+    case "signup-attribution": {
+      await beat();
+      patchStore({ heardAbout: String(b.heardAbout ?? "") });
+      return { success: true };
     }
 
     case "signup-verify-otp": {
@@ -541,7 +552,11 @@ export async function mockFunction(name: string, body: unknown): Promise<unknown
 
     case "signup-begin-oauth": {
       await beat();
-      const store = patchStore({ planId: String(b.planId ?? ""), status: "account_created" });
+      const store = patchStore({
+        planId: String(b.planId ?? ""),
+        status: "account_created",
+        ...(typeof b.heardAbout === "string" ? { heardAbout: b.heardAbout } : {}),
+      });
       return {
         success: true,
         email: store?.email ?? MOCK_OWNER_EMAIL,

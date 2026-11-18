@@ -79,6 +79,12 @@ import {
   startTrialEventId,
   type MetaBrowserSignals,
 } from "../_shared/meta-conversions.ts";
+import {
+  linkSignupAttributionTenant,
+  phoneForMeta,
+  stripeAttributionMetadata,
+  type SignupAttribution,
+} from "../_shared/signup-attribution.ts";
 
 const LOG = "[signup-provision]";
 
@@ -1412,6 +1418,8 @@ Deno.serve(async (req) => {
       bookingUrl,
     });
 
+    await linkSignupAttributionTenant(supabase, authUserId, tenantId);
+
     // ---- 7b. Customer id on the tenant. Non-fatal. -----------------------
     // This is resolver step 1 for invoice.paid / invoice.payment_failed, and it
     // is what lets reconcile-subscriptions find this tenant later.
@@ -1446,7 +1454,11 @@ Deno.serve(async (req) => {
         },
       });
       await stripe.customers.update(subscription.customer as string, {
-        metadata: { d247_signup_auth_user: authUserId, tenant_id: tenantId! },
+        metadata: {
+          d247_signup_auth_user: authUserId,
+          tenant_id: tenantId!,
+          ...stripeAttributionMetadata(meta as SignupAttribution),
+        },
       });
     };
     try {
@@ -1631,7 +1643,7 @@ Deno.serve(async (req) => {
         userId: authUserId,
         email: meta.email,
         fullName: meta.fullName,
-        phone: body.businessPhone ?? null,
+        phone: body.businessPhone ?? phoneForMeta(meta.phone),
         signals: body.tracking ?? null,
         req,
       });

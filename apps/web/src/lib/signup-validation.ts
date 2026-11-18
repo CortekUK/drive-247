@@ -46,6 +46,9 @@ export type FieldErrors<K extends string> = Partial<Record<K, string>>;
 export type AccountField =
   | "fullName"
   | "email"
+  | "heardAbout"
+  | "heardAboutOther"
+  | "phone"
   | "password"
   | "companyName"
   | "slug"
@@ -554,6 +557,9 @@ export function validateAccount(
 export const ACCOUNT_FIELD_ORDER: readonly AccountField[] = [
   "fullName",
   "email",
+  "heardAbout",
+  "heardAboutOther",
+  "phone",
   "password",
   "companyName",
   "slug",

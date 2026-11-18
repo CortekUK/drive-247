@@ -64,6 +64,11 @@ import {
   shouldTrackSignup,
   type MetaBrowserSignals,
 } from "../_shared/meta-conversions.ts";
+import {
+  phoneForMeta,
+  readSignupAttribution,
+  saveSignupAttribution,
+} from "../_shared/signup-attribution.ts";
 
 const LOG = "[signup-begin-oauth]";
 const HOUR_MS = 60 * 60 * 1000;
@@ -72,6 +77,10 @@ interface BeginOauthRequest {
   planId?: string;
   /** Meta's browser cookies, so the server's event is tied to the ad click. */
   tracking?: MetaBrowserSignals;
+  /** Present only if they answered before pressing the Google button. */
+  heardAbout?: string;
+  heardAboutOther?: string;
+  phone?: string;
 }
 
 /**
@@ -271,12 +280,14 @@ Deno.serve(async (req) => {
     // Stamp it.
     // -----------------------------------------------------------------------
     const now = new Date().toISOString();
+    const attribution = readSignupAttribution(body);
     const meta: SignupMetadata = {
       v: SIGNUP_META_VERSION,
       status: "account_created",
       planId: plan.id,
       fullName: displayName(user),
       email,
+      ...attribution,
       // Locked now, exactly as `signup-begin` locks it. Later steps read THIS
       // rather than the env var, so flipping SIGNUP_STRIPE_MODE mid-flight
       // cannot strand an in-progress signup on the wrong Stripe account.
@@ -319,6 +330,8 @@ Deno.serve(async (req) => {
       outcome: "ok",
     });
 
+    await saveSignupAttribution(supabase, { authUserId: user.id, email, attribution });
+
     // Google vouched for the address, so the account is real from here: tell
     // Meta, under the id the browser's pixel uses. The "already has a signup"
     // return above comes before this, so a repeat never sends it again.
@@ -327,6 +340,7 @@ Deno.serve(async (req) => {
         userId: user.id,
         email,
         fullName: meta.fullName,
+        phone: phoneForMeta(attribution.phone),
         signals: body.tracking ?? null,
         req,
       });

@@ -102,6 +102,7 @@ export function OnboardingScreen() {
     markPaid,
     applyPromoCode,
     submitTenantDetails,
+    submitAttribution,
     startGoogleSignup,
     verifyEmailCode,
     resendEmailCode,
@@ -212,7 +213,7 @@ export function OnboardingScreen() {
   /** The create-account pages are only in play on the plain create form. */
   const paymentColumns = dialogStep === "payment" && !closeConfirmOpen;
   const paymentTwoCol = paymentColumns && paymentWide;
-  const paging = dialogStep === "account" && step !== "verify" && !state.signInPrompt && accountMode !== "tenant";
+  const paging = dialogStep === "account" && step !== "verify" && !state.signInPrompt && accountMode === "create";
   const onBusinessPage = paging && accountPage === ACCOUNT_PAGE_COUNT - 1;
 
   const progressIndex =
@@ -230,6 +231,8 @@ export function OnboardingScreen() {
         ? state.payment.paid
           ? { label: "Build my portal", busyLabel: "Setting up…" }
           : { label: "Continue to payment", busyLabel: "Saving…" }
+        : accountMode === "attribution"
+          ? { label: "Continue", busyLabel: "Saving…" }
         : onBusinessPage
           ? { label: "Continue to payment", busyLabel: "Creating your account…" }
           : { label: "Continue", busyLabel: "Working…" }
@@ -427,7 +430,8 @@ export function OnboardingScreen() {
                           appleEnabled={appleEnabled}
                           onSubmit={(values) => void submitAccount(values)}
                           onSubmitTenant={(values) => void submitTenantDetails(values)}
-                          onGoogle={(values, provider) => void startGoogleSignup(values, provider)}
+                          onSubmitAttribution={(values) => void submitAttribution(values)}
+                          onGoogle={(values, provider, attribution) => void startGoogleSignup(values, provider, attribution)}
                           onCheckSlug={checkSlug}
                           onSignIn={(values) => void signInExisting(values)}
                           onUseDifferentEmail={useDifferentEmail}

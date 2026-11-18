@@ -46,6 +46,14 @@ import {
   PasswordToggle,
   STRENGTH_BAR_CLASS,
 } from "@/components/onboarding/password-toggle";
+import { HeardAboutFields } from "@/components/onboarding/heard-about-fields";
+import {
+  attributionFromDraft,
+  EMPTY_ATTRIBUTION,
+  validateAttribution,
+  type AttributionDraft,
+  type AttributionField,
+} from "@/lib/signup-attribution";
 import {
   ACCOUNT_FIELD_ORDER,
   FIELD_MAX,
@@ -149,7 +157,7 @@ export interface AccountStepShellProps extends AccountStepProps {
 export const ACCOUNT_PAGE_COUNT = 3;
 const LAST_ACCOUNT_PAGE = ACCOUNT_PAGE_COUNT - 1;
 const PAGE_FIELDS: readonly (readonly AccountField[])[] = [
-  ["fullName", "email"],
+  ["fullName", "email", "heardAbout", "heardAboutOther", "phone"],
   ["password"],
   ["companyName", "slug", "acceptedTerms"],
 ];
@@ -178,6 +186,7 @@ export function AccountStep({
   appleEnabled,
   onSubmit,
   onSubmitTenant,
+  onSubmitAttribution,
   onGoogle,
   onCheckSlug,
   onSignIn,
@@ -194,6 +203,7 @@ export function AccountStep({
   const setPage = onPageChange ?? setOwnPage;
   const [fullName, setFullName] = React.useState(initialValues.fullName);
   const [email, setEmail] = React.useState(initialValues.email);
+  const [attribution, setAttribution] = React.useState<AttributionDraft>(EMPTY_ATTRIBUTION);
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
   const [confirmPassword, setConfirmPassword] = React.useState("");
@@ -277,6 +287,9 @@ export function AccountStep({
   const honeypotRef = React.useRef<HTMLInputElement>(null);
   const fullNameRef = React.useRef<HTMLInputElement>(null);
   const emailRef = React.useRef<HTMLInputElement>(null);
+  const heardAboutRef = React.useRef<HTMLSelectElement>(null);
+  const heardAboutOtherRef = React.useRef<HTMLInputElement>(null);
+  const phoneRef = React.useRef<HTMLInputElement>(null);
   const passwordRef = React.useRef<HTMLInputElement>(null);
   const signInPasswordRef = React.useRef<HTMLInputElement>(null);
   const companyNameRef = React.useRef<HTMLInputElement>(null);
@@ -321,13 +334,19 @@ export function AccountStep({
       ? fullNameRef.current
       : field === "email"
         ? emailRef.current
-        : field === "password"
-          ? passwordRef.current
-          : field === "companyName"
-            ? companyNameRef.current
-            : field === "slug"
-              ? slugRef.current
-              : termsRef.current;
+        : field === "heardAbout"
+          ? heardAboutRef.current
+          : field === "heardAboutOther"
+            ? heardAboutOtherRef.current
+            : field === "phone"
+              ? phoneRef.current
+              : field === "password"
+                ? passwordRef.current
+                : field === "companyName"
+                  ? companyNameRef.current
+                  : field === "slug"
+                    ? slugRef.current
+                    : termsRef.current;
 
   /**
    * A field to focus once its page has rendered. Set when an error belongs to a
@@ -467,7 +486,10 @@ export function AccountStep({
 
     // Pages 0 and 1 check only their own fields, then move on. Nothing is sent.
     if (page < LAST_ACCOUNT_PAGE) {
-      const all = validateAccount({ fullName, email, password, ...tenantValue });
+      const all: FieldErrors<AccountField> = {
+        ...validateAccount({ fullName, email, password, ...tenantValue }),
+        ...validateAttribution(attribution),
+      };
       const pageErrors: FieldErrors<AccountField> = {};
       for (const field of PAGE_FIELDS[page]) {
         if (all[field]) pageErrors[field] = all[field];
@@ -489,11 +511,13 @@ export function AccountStep({
 
     const nextErrors: FieldErrors<AccountField> = {
       ...validateAccount({ fullName, email, password, ...tenantValue }),
+      ...validateAttribution(attribution),
       ...(tenantErrors() ?? {}),
     };
     setErrors(nextErrors);
 
-    if (Object.keys(nextErrors).length > 0) {
+    const answered = attributionFromDraft(attribution);
+    if (Object.keys(nextErrors).length > 0 || !answered) {
       focusFirst(nextErrors, ACCOUNT_FIELD_ORDER);
       return;
     }
@@ -503,12 +527,13 @@ export function AccountStep({
       email: normalizeEmail(email),
       password,
       ...tenantValue,
+      attribution: answered,
       // Read from the DOM rather than from state: the whole point of the
       // honeypot is that only an automated filler touches it, and a bot that
       // sets `.value` directly never fires React's onChange.
       // A browser autofill that slipped past the attributes copies what the
       // person typed; a bot writes its own value. Only the latter is a trip.
-      companyWebsite: honeypotValue(honeypotRef.current?.value, [fullName, email, tenantValue.companyName]),
+      companyWebsite: honeypotValue(honeypotRef.current?.value, [fullName, email, attribution.phone, tenantValue.companyName]),
       // 0 only if the mount effect somehow has not run; falling back to "now"
       // is the safe direction (a zero would read as an implausibly old form).
       formStartedAt: formStartedAtRef.current || Date.now(),
@@ -531,6 +556,41 @@ export function AccountStep({
     onSubmitTenant(tenantValues());
   };
 
+  /** `attribution` mode's submit: the question on its own. */
+  const handleAttributionSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (busy) return;
+    const found = validateAttribution(attribution);
+    setErrors(found);
+    const answered = attributionFromDraft(attribution);
+    if (Object.keys(found).length > 0 || !answered) {
+      focusFirst(found, ACCOUNT_FIELD_ORDER);
+      return;
+    }
+    onSubmitAttribution(answered);
+  };
+
+  const attributionFields = (autoFocus: boolean) => (
+    <HeardAboutFields
+      value={attribution}
+      errors={{
+        heardAbout: fieldError("heardAbout"),
+        heardAboutOther: fieldError("heardAboutOther"),
+        phone: fieldError("phone"),
+      }}
+      busy={busy}
+      autoFocus={autoFocus}
+      onChange={(patch) => {
+        setAttribution((prev) => ({ ...prev, ...patch }));
+        markDirty();
+      }}
+      onClearError={(field: AttributionField) => clearFieldError(field)}
+      heardAboutRef={heardAboutRef}
+      otherRef={heardAboutOtherRef}
+      phoneRef={phoneRef}
+    />
+  );
+
   /**
    * "Continue with Google" — nothing asked before the redirect.
    *
@@ -552,7 +612,9 @@ export function AccountStep({
   const handleOauth = (provider: OauthProvider) => {
     if (busy) return;
     setErrors({});
-    onGoogle(tenantValues(), provider);
+    // An answer given before pressing the button crosses the redirect, so they
+    // are not asked twice. Without one, the question comes straight after sign-in.
+    onGoogle(tenantValues(), provider, attributionFromDraft(attribution));
   };
   const oauthEnabled = googleEnabled || appleEnabled;
 
@@ -725,6 +787,19 @@ export function AccountStep({
   }
 
   // -------------------------------------------------------------------------
+  // Branch: `attribution` mode — signed in with Google or Apple, so they never
+  // saw the question on the create-account form.
+  // -------------------------------------------------------------------------
+  if (mode === "attribution") {
+    return (
+      <form id="signup-account-form" onSubmit={handleAttributionSubmit} noValidate className={SIGNUP_ENTER}>
+        <ScreenHead title="One quick question" />
+        <div className="mt-6 space-y-3.5">{attributionFields(true)}</div>
+      </form>
+    );
+  }
+
+  // -------------------------------------------------------------------------
   // Branch: `tenant` mode — the account exists and only the tenant details are
   // missing. Usually after payment; before it on the Google return or a reload
   // on the code screen, which is what `paid` tells apart.
@@ -881,6 +956,8 @@ export function AccountStep({
                 </p>
               )}
             </div>
+
+            {attributionFields(false)}
           </div>
 
           {/*

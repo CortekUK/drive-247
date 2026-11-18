@@ -94,6 +94,11 @@ export interface SignupMetadata {
   paymentAttempts?: number;
   paidAt?: string;
   business?: SignupBusinessSnapshot;
+  /** "How did you hear about us?" See _shared/signup-attribution.ts. */
+  heardAbout?: string;
+  heardAboutOther?: string;
+  /** Optional, from the account step. `+` and digits when the country is known. */
+  phone?: string;
   /**
    * The in-flight email verification code — the HASH, never the code. Present
    * only between `signup-begin` and `signup-verify-otp`, and deleted the moment

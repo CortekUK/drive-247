@@ -20,6 +20,7 @@ import {
 } from "@/lib/plans";
 import { captureSignup, identifyAccount } from "@/lib/analytics";
 import { readMetaSignals, trackRegistration, trackStartTrial } from "@/lib/meta-tracking";
+import { isHeardAbout, type HeardAbout, type SignupAttribution } from "@/lib/signup-attribution";
 import { promoRejectionText, type PromoOffer } from "@/lib/promo-offer";
 import {
   clearReferralCodeInDocument,
@@ -41,6 +42,7 @@ import {
   lookupPromoCode,
   signupBegin,
   signupBeginOauth,
+  signupSaveAttribution,
   signupVerifyOtp,
   signupPaymentIntent,
   signupProvision,
@@ -528,26 +530,67 @@ async function reportStartTrial(res: ProvisionResponse): Promise<void> {
       userId: user.id,
       email: user.email ?? "",
     });
-    captureSignup("signup_trial_started", { tenant_slug: res.slug });
+    captureSignup("signup_trial_started", { tenant_slug: res.slug, ...(await heardAboutProps()) });
   } catch {
     /* tracking never gets in the way of the success screen */
   }
 }
 
 /**
+ * The PostHog property for this account's answer, read from the server's record
+ * so it is right on every path (a reload, another device, a Google return).
+ */
+async function heardAboutProps(): Promise<{ heard_about?: HeardAbout }> {
+  const answer = (await fetchSignupMeta())?.heardAbout;
+  return isHeardAbout(answer) ? { heard_about: answer } : {};
+}
+
+/** Sets the answer on the PostHog person and records `signup_account_created`. */
+async function reportAccountCreated(userId: string, method: "email" | "oauth"): Promise<void> {
+  const props = await heardAboutProps();
+  identifyAccount(userId, props);
+  captureSignup("signup_account_created", { method, ...props });
+}
+
+/**
  * An account now exists with a confirmed email and a session: the step before
  * the card. Tells Meta's pixel (`CompleteRegistration`) and PostHog, and ties
  * this browser's earlier page views to the account. Never in the dev mock.
+ *
+ * `holdPostHog` is for a Google or Apple signup that has not answered "How did
+ * you hear about us?" yet. Meta is told now; PostHog waits for the answer, so
+ * `signup_account_created` carries `heard_about` (see `submitAttribution`).
  */
-async function reportRegistration(method: "email" | "oauth"): Promise<void> {
+async function reportRegistration(
+  method: "email" | "oauth",
+  { holdPostHog = false }: { holdPostHog?: boolean } = {},
+): Promise<void> {
   if (isMockSignup()) return;
   try {
     const { data } = await getBrowserSupabase().auth.getSession();
     const user = data.session?.user;
     if (!user) return;
     trackRegistration({ userId: user.id, email: user.email ?? "" });
-    identifyAccount(user.id);
-    captureSignup("signup_account_created", { method });
+    if (!holdPostHog) await reportAccountCreated(user.id, method);
+  } catch {
+    /* tracking never gets in the way of the signup */
+  }
+}
+
+/** PostHog's half of the report, once the question on its own screen is answered. */
+async function reportAttributionAnswered(): Promise<void> {
+  if (isMockSignup()) return;
+  try {
+    const { data } = await getBrowserSupabase().auth.getSession();
+    const user = data.session?.user;
+    if (!user) return;
+    const provider = user.app_metadata?.provider;
+    if (provider === "google" || provider === "apple") {
+      await reportAccountCreated(user.id, "oauth");
+    } else {
+      // A password account already reported its creation when it was made.
+      identifyAccount(user.id, await heardAboutProps());
+    }
   } catch {
     /* tracking never gets in the way of the signup */
   }
@@ -619,6 +662,14 @@ export function OnboardingProvider({
   /** The business values typed before the code; saved once a session exists. */
   const pendingTenantRef = useRef<TenantFormValues | null>(null);
   const resumeHintRef = useRef<ClientSignupMeta | null>(null);
+
+  /** Where the flow carries on once "How did you hear about us?" is answered. */
+  const afterAttributionRef = useRef<(() => void | Promise<void>) | null>(null);
+  /**
+   * Set once they have answered on this page. If saving failed, the server still
+   * has no answer on record, and asking again would trap them on the question.
+   */
+  const attributionAnsweredRef = useRef(false);
 
   /**
    * The passive mount read itself, so `open()` can wait for it instead of
@@ -1186,6 +1237,23 @@ export function OnboardingProvider({
           dispatch({ type: "error", error: err("SIGNUP_NOT_FOUND") });
           return;
         }
+
+        // Heading for the card with no answer on record: a Google signup that
+        // closed the question screen and came back, or one that started earlier.
+        if (
+          signup.resumeStep === "payment" &&
+          !signup.paid &&
+          !attributionAnsweredRef.current &&
+          !(await fetchSignupMeta())?.heardAbout
+        ) {
+          dispatch({ type: "setAccount", account: { fullName: signup.fullName, email: signup.email } });
+          dispatch({ type: "signInPrompt", prompt: null });
+          afterAttributionRef.current = () => hydrateFromResume(signup, requestedPlanId);
+          setAccountMode("attribution");
+          dispatch({ type: "resumeTo", step: "account" });
+          return;
+        }
+
         hydrateFromResume(signup, requestedPlanId);
       } catch (e) {
         const error = toOnboardingError(e);
@@ -1445,39 +1513,66 @@ export function OnboardingProvider({
         dispatch({ type: "setPlan", planId: pending.planId });
         dispatch({ type: "business", patch: draftToBusiness(pending.values) });
 
-        await signupBeginOauth({ planId: pending.planId, tracking: readMetaSignals() });
-        void reportRegistration("oauth");
+        await signupBeginOauth({
+          planId: pending.planId,
+          tracking: readMetaSignals(),
+          ...(pending.attribution ?? {}),
+        });
         // Only now — the draft is worth keeping only against a signup that
         // actually exists.
         await saveTenantDraft(pending.values);
         clearPendingOauth();
 
-        resumeHintRef.current = await fetchSignupMeta();
+        let meta = await fetchSignupMeta();
+        // A returning Google user is not stamped again, so an answer they gave
+        // before pressing the button still has to be saved.
+        if (!meta?.heardAbout && pending.attribution) {
+          await signupSaveAttribution(pending.attribution).catch((e) =>
+            console.warn("[onboarding] could not save the signup answer", e),
+          );
+          meta = await fetchSignupMeta();
+        }
+        resumeHintRef.current = meta;
         setHasResumableSignup(true);
 
-        /*
-         * ASK FOR THE BUSINESS BEFORE THE CARD.
-         *
-         * A Google signup can now start without the company name and web
-         * address — that is the whole point of the button. The server would
-         * answer `payment` for a freshly stamped signup, and paying first would
-         * leave `signup-provision` with nothing to name the tenant after.
-         *
-         * `tenant` mode renders the account step as just those two fields plus
-         * the terms, which is exactly the screen this flow needs. It is the same
-         * mode the post-payment recovery path uses; the difference is only that
-         * nothing has been charged yet, and `submitTenantDetails` branches on
-         * that.
-         */
-        if (!pending.values.companyName.trim() || !pending.values.slug.trim()) {
-          setAccountMode("tenant");
+        const hasAnswer = Boolean(meta?.heardAbout);
+        void reportRegistration("oauth", { holdPostHog: !hasAnswer });
+
+        const carryOn = async () => {
+          /*
+           * ASK FOR THE BUSINESS BEFORE THE CARD.
+           *
+           * A Google signup can now start without the company name and web
+           * address — that is the whole point of the button. The server would
+           * answer `payment` for a freshly stamped signup, and paying first would
+           * leave `signup-provision` with nothing to name the tenant after.
+           *
+           * `tenant` mode renders the account step as just those two fields plus
+           * the terms, which is exactly the screen this flow needs. It is the same
+           * mode the post-payment recovery path uses; the difference is only that
+           * nothing has been charged yet, and `submitTenantDetails` branches on
+           * that.
+           */
+          if (!pending.values.companyName.trim() || !pending.values.slug.trim()) {
+            setAccountMode("tenant");
+            dispatch({ type: "resumeTo", step: "account" });
+            return;
+          }
+
+          // The server decides the step, exactly as it does for a password resume.
+          // For a signup that has just been stamped that is always `payment`.
+          await resolveResume(pending.planId);
+        };
+
+        // Google skips the form that carries the question, so it comes first.
+        if (!hasAnswer) {
+          afterAttributionRef.current = carryOn;
+          setAccountMode("attribution");
           dispatch({ type: "resumeTo", step: "account" });
           return;
         }
 
-        // The server decides the step, exactly as it does for a password resume.
-        // For a signup that has just been stamped that is always `payment`.
-        await resolveResume(pending.planId);
+        await carryOn();
       } catch (e) {
         const error = toOnboardingError(e);
         console.error("[onboarding] Google signup could not be started", error);
@@ -1668,6 +1763,7 @@ export function OnboardingProvider({
           companyWebsite: values.companyWebsite,
           formStartedAt: values.formStartedAt,
           tracking: readMetaSignals(),
+          ...values.attribution,
         });
 
         /*
@@ -1966,6 +2062,44 @@ export function OnboardingProvider({
   );
 
   /**
+   * The answer from the question's own screen.
+   *
+   * A failed save never stops the signup: losing one survey answer is far better
+   * than losing the customer on their way to the card.
+   */
+  const submitAttribution = useCallback(
+    async (values: SignupAttribution) => {
+      const s = stateRef.current;
+      if (s.busy) return;
+      dispatch({ type: "busy", busy: true });
+      dispatch({ type: "error", error: null });
+      try {
+        try {
+          await signupSaveAttribution(values);
+        } catch (e) {
+          const error = toOnboardingError(e);
+          if (isSessionLoss(error)) {
+            handleSessionLoss(error);
+            return;
+          }
+          console.warn("[onboarding] could not save the signup answer", error);
+        }
+        attributionAnsweredRef.current = true;
+        void reportAttributionAnswered();
+
+        const carryOn = afterAttributionRef.current;
+        afterAttributionRef.current = null;
+        setAccountMode("create");
+        if (carryOn) await carryOn();
+        else if (s.planId) await resolveResume(s.planId);
+      } finally {
+        dispatch({ type: "busy", busy: false });
+      }
+    },
+    [handleSessionLoss, resolveResume],
+  );
+
+  /**
    * "Continue with Google" — the point of no return for this page load.
    *
    * The redirect throws away every byte of React state, so everything needed on
@@ -1979,7 +2113,11 @@ export function OnboardingProvider({
    * reusing the last one used means creating the portal under the wrong address
    * — which nothing in this flow can undo afterwards.
    */
-  const startGoogleSignup = useCallback(async (values: TenantFormValues, provider: OauthProvider = "google") => {
+  const startGoogleSignup = useCallback(async (
+    values: TenantFormValues,
+    provider: OauthProvider = "google",
+    attribution: SignupAttribution | null = null,
+  ) => {
     const s = stateRef.current;
     const planId = s.planId;
     if (!planId) {
@@ -1995,7 +2133,7 @@ export function OnboardingProvider({
     dispatch({ type: "error", error: null });
     dispatch({ type: "business", patch: draftToBusiness(tenant) });
     try {
-      writePendingOauth(planId, tenant);
+      writePendingOauth(planId, tenant, attribution);
       const redirectTo = `${window.location.origin}${window.location.pathname}?signup=${provider}`;
       const { error: oauthError } = await getBrowserSupabase().auth.signInWithOAuth({
         provider,
@@ -2366,6 +2504,7 @@ export function OnboardingProvider({
       cancelClose,
       submitAccount,
       submitTenantDetails,
+      submitAttribution,
       startGoogleSignup,
       signInExisting,
       useDifferentEmail,
@@ -2383,6 +2522,7 @@ export function OnboardingProvider({
       setError,
     }),
     [
+      submitAttribution,
       state,
       plan,
       isOpen,

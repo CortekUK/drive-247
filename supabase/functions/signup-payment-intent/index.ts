@@ -52,6 +52,7 @@ import {
   trialEndIso,
   trialTermsChanged,
 } from "../_shared/signup-trial.ts";
+import { stampStripeCustomer, type SignupAttribution } from "../_shared/signup-attribution.ts";
 
 const LOG = "[signup-payment-intent]";
 const HOUR_MS = 60 * 60 * 1000;
@@ -385,6 +386,7 @@ Deno.serve(async (req) => {
         );
         stripeCustomerId = customer.id as string;
       }
+      await stampStripeCustomer(stripe, stripeCustomerId, meta as SignupAttribution);
 
       // ---------------------------------------------------------------------
       // 3. Price — one shared Price per plan, resolved by lookup_key.

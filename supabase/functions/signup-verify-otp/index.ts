@@ -27,6 +27,7 @@ import {
 } from "../_shared/signup-otp.ts";
 import { sendEmail } from "../_shared/resend-service.ts";
 import { sendCompleteRegistration, shouldTrackSignup } from "../_shared/meta-conversions.ts";
+import { phoneForMeta } from "../_shared/signup-attribution.ts";
 
 const LOG = "[signup-verify-otp]";
 
@@ -184,6 +185,7 @@ Deno.serve(async (req) => {
         userId: user.id,
         email,
         fullName: meta.fullName,
+        phone: phoneForMeta(meta.phone),
         signals: body.tracking ?? null,
         req,
       });

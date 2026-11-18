@@ -13,7 +13,8 @@
  *
  * Nothing typed into a field is sent: PostHog never records input values, and
  * the card form is Stripe's own frame, which no script on this page can read.
- * A person is known by their account id only, never by email.
+ * The one signup answer sent on purpose is `heard_about`, a value from a fixed
+ * list. A person is known by their account id only, never by email.
  *
  * Browser-only, and never throws: analytics must not be able to break signup.
  */
@@ -56,10 +57,13 @@ export function captureSignup(event: SignupEvent, properties?: Record<string, un
   }
 }
 
-/** Tie this browser's earlier page views to the account it just created. */
-export function identifyAccount(userId: string): void {
+/**
+ * Tie this browser's earlier page views to the account it just created.
+ * `properties` are set on the PostHog person.
+ */
+export function identifyAccount(userId: string, properties?: Record<string, unknown>): void {
   try {
-    posthog()?.identify(userId);
+    posthog()?.identify(userId, properties);
   } catch {
     /* analytics never gets in the way */
   }

@@ -1,5 +1,6 @@
 import type { SignupPlan, SignupPlanId } from "@/lib/plans";
 import type { PromoOffer } from "@/lib/promo-offer";
+import type { SignupAttribution } from "@/lib/signup-attribution";
 
 // ---------------------------------------------------------------------------
 // Steps
@@ -376,6 +377,8 @@ export interface AccountFormValues {
   /** Already normalised by the step — lowercase, `[a-z0-9-]`, no edge hyphens. */
   slug: string;
   acceptedTerms: boolean;
+  /** "How did you hear about us?" and the optional phone number. */
+  attribution: SignupAttribution;
   /** Honeypot. Always posted; a non-empty value means bot. */
   companyWebsite: string;
   /** Date.now() captured when the step mounted. */
@@ -406,8 +409,12 @@ export interface TenantFormValues {
  * a mid-payment device switch with a failed metadata write). Without it a paying
  * customer would be resumed onto a create-account form for an account they
  * already have.
+ *
+ * `attribution` — "How did you hear about us?" on its own. Google and Apple
+ * signups skip the form that carries the question, so they answer here straight
+ * after signing in. Anyone else who reaches the card with no answer sees it too.
  */
-export type AccountStepMode = "create" | "tenant";
+export type AccountStepMode = "create" | "tenant" | "attribution";
 
 /** The identity providers a signup can start with. */
 export type OauthProvider = "google" | "apple";
@@ -449,8 +456,17 @@ export interface AccountStepProps {
   onSubmit(values: AccountFormValues): void;
   /** `tenant` mode's submit: the account already exists and is paid for. */
   onSubmitTenant(values: TenantFormValues): void;
-  /** Leaves the page for Google or Apple, carrying these three values across the redirect. */
-  onGoogle(values: TenantFormValues, provider: OauthProvider): void;
+  /** `attribution` mode's submit. */
+  onSubmitAttribution(values: SignupAttribution): void;
+  /**
+   * Leaves the page for Google or Apple, carrying these values across the
+   * redirect. `attribution` is null when the question has not been answered yet.
+   */
+  onGoogle(
+    values: TenantFormValues,
+    provider: OauthProvider,
+    attribution: SignupAttribution | null,
+  ): void;
   /** Live availability for the web address. Debounced by the step. */
   onCheckSlug(slug: string): Promise<SlugCheckResult>;
   onSignIn(values: { email: string; password: string }): void;
@@ -528,8 +544,14 @@ export interface OnboardingContextValue {
   submitAccount(values: AccountFormValues): Promise<void>;
   /** `tenant`-mode submit: store the details and start provisioning straight away. */
   submitTenantDetails(values: TenantFormValues): Promise<void>;
+  /** `attribution`-mode submit: save the answer and carry on to the next screen. */
+  submitAttribution(values: SignupAttribution): Promise<void>;
   /** Stash the tenant details, then hand the browser to Google or Apple. Never returns. */
-  startGoogleSignup(values: TenantFormValues, provider?: OauthProvider): Promise<void>;
+  startGoogleSignup(
+    values: TenantFormValues,
+    provider?: OauthProvider,
+    attribution?: SignupAttribution | null,
+  ): Promise<void>;
   signInExisting(values: { email: string; password: string }): Promise<void>;
   useDifferentEmail(): void;
   /** Switch to the sign-in panel for an email the user has already typed. */
