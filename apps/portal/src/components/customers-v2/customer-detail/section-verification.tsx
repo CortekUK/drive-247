@@ -466,7 +466,7 @@ function ComparisonRow({ label, was, now }: { label: string; was: string; now: s
   const known = !blank(was) && !blank(now);
   const changed = known && was.trim().toLowerCase() !== now.trim().toLowerCase();
   return (
-    <div className="grid grid-cols-[8rem_1fr_auto_1fr] items-center gap-3 px-5 py-3">
+    <div className="grid grid-cols-[8rem_1fr_auto_1fr] items-center gap-3 px-5 py-3 max-sm:grid-cols-[5.5rem_1fr_auto_1fr] max-sm:gap-2 max-sm:px-4">
       <span className="text-xs text-muted-foreground">{label}</span>
       <span
         className={cn(
