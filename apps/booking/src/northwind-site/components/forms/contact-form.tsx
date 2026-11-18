@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@nw/components/ui/select";
 import { Textarea } from "@nw/components/ui/textarea";
+import { useTenant } from "@nw/contexts/TenantContext";
 
 import {
   CONTACT_DEFAULT_VALUES,
@@ -22,6 +23,7 @@ import {
 } from "./contact-form-logic";
 
 export function ContactForm() {
+  const { tenant } = useTenant();
   const [submitted, setSubmitted] = useState(false);
 
   const {
@@ -36,7 +38,7 @@ export function ContactForm() {
   });
 
   async function onSubmit(values: ContactValues) {
-    await submitContact(values);
+    await submitContact(values, { tenantId: tenant?.id, email: tenant?.contact_email });
     setSubmitted(true);
   }
 

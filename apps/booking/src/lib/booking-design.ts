@@ -6,9 +6,14 @@
  * designs:
  *
  *   original  src/app/(legacy)/...                       every tenant, unchanged
- *   new       src/app/(northwind)/northwind-site/...       NEW_DESIGN_TENANTS only
- *   new v2    src/app/(northwind-v2)/northwind-site-v2/... NEW_DESIGN_TENANTS, when the
+ *   new       src/app/(northwind)/northwind-site/...       new-design tenants only
+ *   new v2    src/app/(northwind-v2)/northwind-site-v2/... new-design tenants, when the
  *             super admin's Developer-tab switch (or a ?site=v2 preview) says v2
+ *
+ * A new-design tenant is one in NEW_DESIGN_TENANTS, or any tenant whose portal
+ * is on v2 (`tenants.portal_experience = 'v2'`): a v2 portal gets the v2 booking
+ * site. The middleware reads the row and passes `tenantGetsV2Site` in as
+ * `onV2Portal`.
  *
  * For a new-design tenant the middleware REWRITES (not redirects) the request
  * into the new design's routes, so the address in the browser never changes:
@@ -131,9 +136,34 @@ export type BookingDesignRoute =
   /** A retired address: send the browser to the one that replaced it (307). */
   | { action: 'redirect'; path: string };
 
-export function usesNewDesign(tenantSlug: string | null | undefined): boolean {
+/**
+ * Does this tenant's row put them on the v2 booking site?
+ *
+ * Two kinds of v2-portal tenant stay on the site they have:
+ *   - Square: v2 checkout only takes Stripe cards. `create-booking-payment-intent`
+ *     refuses a Square tenant after the rental is saved, so a customer could not
+ *     pay and the abandoned booking would hold the car.
+ *   - A custom site switched on in Super Admin: that site is theirs by choice.
+ */
+export function tenantGetsV2Site(
+  row:
+    | {
+        portal_experience?: string | null;
+        payment_provider?: string | null;
+        booking_v2_enabled?: boolean | null;
+        custom_site_eligible?: boolean | null;
+      }
+    | null
+    | undefined,
+): boolean {
+  if (row?.portal_experience !== 'v2') return false;
+  if (row.payment_provider === 'square') return false;
+  return !(row.booking_v2_enabled && row.custom_site_eligible);
+}
+
+export function usesNewDesign(tenantSlug: string | null | undefined, onV2Portal: boolean = false): boolean {
   if (!tenantSlug) return false;
-  return NEW_DESIGN_TENANTS.includes(tenantSlug);
+  return onV2Portal || NEW_DESIGN_TENANTS.includes(tenantSlug);
 }
 
 const firstSegment = (pathname: string): string => pathname.split('/')[1] ?? '';
@@ -145,8 +175,9 @@ export function routeBookingRequest(
   tenantSlug: string | null | undefined,
   pathname: string,
   siteVersion: SiteVersion = 'v1',
+  onV2Portal: boolean = false,
 ): BookingDesignRoute {
-  if (usesNewDesign(tenantSlug)) {
+  if (usesNewDesign(tenantSlug, onV2Portal)) {
     // Already inside the new design (an internal request, or someone who typed it).
     if (isUnder(pathname, NEW_DESIGN_PREFIX)) return { action: 'original' };
     if (isUnder(pathname, NEW_DESIGN_V2_PREFIX)) return { action: 'original' };

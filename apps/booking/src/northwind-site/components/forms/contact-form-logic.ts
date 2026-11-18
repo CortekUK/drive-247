@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { supabase } from "@nw/integrations/supabase/client";
+
 /**
  * The contact form's rules — the vehicle choices, the validation, the empty
  * values and the submit — in one place, so the current form
@@ -8,12 +10,12 @@ import { z } from "zod";
  */
 
 export const VEHICLE_OPTIONS = [
-  { value: "lexus-rx", label: "Lexus RX" },
-  { value: "porsche-911", label: "Porsche 911 Carrera" },
-  { value: "aston-vanquish", label: "Aston Martin Vanquish" },
-  { value: "rolls-phantom", label: "Rolls-Royce Phantom" },
-  { value: "bmw-m4", label: "BMW M4" },
-  { value: "audi-a4", label: "Audi A4" },
+  { value: "economy", label: "Economy" },
+  { value: "sedan", label: "Sedan" },
+  { value: "suv", label: "SUV" },
+  { value: "truck", label: "Truck" },
+  { value: "van", label: "Van" },
+  { value: "luxury", label: "Luxury" },
   { value: "other", label: "Other / Not sure" },
 ] as const;
 
@@ -35,7 +37,33 @@ export const CONTACT_DEFAULT_VALUES: ContactValues = {
   details: "",
 };
 
-export async function submitContact(values: ContactValues): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 600));
-  console.log("contact submission", values);
+/** The rental company the message goes to. */
+export interface ContactRecipient {
+  tenantId?: string | null;
+  email?: string | null;
+}
+
+/**
+ * Emails the message to the rental company, through the same function the
+ * original booking site's contact page uses. Throws when it cannot be delivered,
+ * so the form says so instead of claiming the message was sent.
+ */
+export async function submitContact(values: ContactValues, recipient: ContactRecipient): Promise<void> {
+  if (!recipient.email) throw new Error("This company has no contact email");
+
+  const vehicle =
+    VEHICLE_OPTIONS.find((option) => option.value === values.vehicleOfInterest)?.label ?? values.vehicleOfInterest;
+
+  const { error } = await supabase.functions.invoke("send-contact-email", {
+    body: {
+      name: values.fullName,
+      email: values.email,
+      phone: values.phone,
+      subject: `Vehicle enquiry: ${vehicle}`,
+      message: values.details?.trim() || "No additional details.",
+      adminEmail: recipient.email,
+      tenantId: recipient.tenantId ?? undefined,
+    },
+  });
+  if (error) throw error;
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { routeBookingRequest, usesNewDesign, type SiteVersion } from '@/lib/booking-design';
+import { routeBookingRequest, tenantGetsV2Site, usesNewDesign, type SiteVersion } from '@/lib/booking-design';
 import { customSitePathFor, isCustomSiteOn } from '@/lib/custom-site-routing';
 
 /** Set for the new design's visual-editor mode (read by src/app/(northwind)/layout.tsx). */
@@ -77,14 +77,15 @@ export async function middleware(request: NextRequest) {
     requestHeaders.set('x-tenant-slug', tenantSlug);
   }
 
-  // Which design this tenant gets — see src/lib/booking-design.ts. Every tenant
-  // except Northwind resolves to 'original' and continues exactly as before, and
-  // never waits on the site-version read below.
+  // Which design this tenant gets — see src/lib/booking-design.ts. A tenant on
+  // the v2 portal gets the v2 booking site; every other tenant resolves to
+  // 'original' and continues exactly as before.
+  const onV2Portal = tenantSlug ? await readTenantGetsV2Site(tenantSlug) : false;
   const sitePreview = parseSitePreview(request.nextUrl.searchParams.get(SITE_PREVIEW_PARAM));
-  const siteVersion: SiteVersion = usesNewDesign(tenantSlug)
+  const siteVersion: SiteVersion = usesNewDesign(tenantSlug, onV2Portal)
     ? sitePreview ?? parseSitePreview(request.cookies.get(SITE_PREVIEW_COOKIE)?.value) ?? (await fetchNorthwindSiteVersion())
     : 'v1';
-  const route = routeBookingRequest(tenantSlug, pathname, siteVersion);
+  const route = routeBookingRequest(tenantSlug, pathname, siteVersion, onV2Portal);
 
   if (route.action === 'new-design') {
     // The portal's visual editor opens the site with ?cms-edit=1. Stripped
@@ -207,6 +208,35 @@ async function fetchNorthwindSiteVersion(): Promise<SiteVersion> {
     return version;
   } catch {
     return 'v1';
+  }
+}
+
+// Whether a tenant gets the v2 booking site, held briefly because this runs on
+// every page request. A failed read keeps the last answer, so one network blip
+// cannot flip a visitor between the two designs; with no answer yet it serves the
+// original site. The cap keeps made-up subdomains from growing the map forever.
+const V2_SITE_TTL_MS = 30_000;
+const V2_SITE_TIMEOUT_MS = 1500;
+const V2_SITE_CACHE_MAX = 1000;
+const v2SiteCache = new Map<string, { on: boolean; at: number }>();
+
+async function readTenantGetsV2Site(tenantSlug: string): Promise<boolean> {
+  const hit = v2SiteCache.get(tenantSlug);
+  if (hit && Date.now() - hit.at < V2_SITE_TTL_MS) return hit.on;
+  try {
+    const { data, error } = await supabase
+      .from('tenants')
+      .select('portal_experience, payment_provider, booking_v2_enabled, custom_site_eligible')
+      .eq('slug', tenantSlug)
+      .abortSignal(AbortSignal.timeout(V2_SITE_TIMEOUT_MS))
+      .maybeSingle();
+    if (error) return hit?.on ?? false;
+    const on = tenantGetsV2Site(data);
+    if (v2SiteCache.size >= V2_SITE_CACHE_MAX) v2SiteCache.clear();
+    v2SiteCache.set(tenantSlug, { on, at: Date.now() });
+    return on;
+  } catch {
+    return hit?.on ?? false;
   }
 }
 

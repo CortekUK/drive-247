@@ -19,6 +19,7 @@ import { useForm } from 'react-hook-form';
 import { Check, ChevronDown } from 'lucide-react-nw';
 
 import { Button } from '@nw/components/ui/button';
+import { useTenant } from '@nw/contexts/TenantContext';
 import {
   CONTACT_DEFAULT_VALUES,
   VEHICLE_OPTIONS,
@@ -30,6 +31,7 @@ import { cn } from '@nw/lib/utils';
 import { CARD, FIELD, FIELD_LABEL } from '@nw/site-v2/kit';
 
 export function ContactForm() {
+  const { tenant } = useTenant();
   const [submitted, setSubmitted] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -46,7 +48,7 @@ export function ContactForm() {
   async function onSubmit(values: ContactValues) {
     setFailed(false);
     try {
-      await submitContact(values);
+      await submitContact(values, { tenantId: tenant?.id, email: tenant?.contact_email });
       setSubmitted(true);
     } catch {
       setFailed(true);

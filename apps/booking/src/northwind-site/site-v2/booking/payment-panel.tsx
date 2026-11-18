@@ -29,6 +29,7 @@ import {
 } from "@nw/components/booking/payment-panel-logic";
 import { Button } from "@nw/components/ui/button";
 import { Dialog } from "@nw/components/ui/dialog";
+import { useTenant } from "@nw/contexts/TenantContext";
 import type { BookingPaymentIntentResponse } from "@nw/hooks/use-payment-intent";
 import { cn } from "@nw/lib/utils";
 import { PvDialogContent } from "@nw/portal-v2/dialog";
@@ -359,6 +360,7 @@ function CardForm({
   onLoadError: (detail: string) => void;
   onCancel: () => void;
 }) {
+  const { tenant } = useTenant();
   const {
     setCardComplete,
     cardComplete,
@@ -409,7 +411,9 @@ function CardForm({
       */}
       <p className="rounded-xl border border-pv-border px-3.5 py-3 text-xs leading-relaxed text-pv-muted-fg">
         By paying you authorise{" "}
-        <strong className="font-semibold text-pv-fg">Drive247</strong>{" "}
+        <strong className="font-semibold text-pv-fg">
+          {tenant?.app_name || tenant?.company_name || "the rental company"}
+        </strong>{" "}
         {text.mandate}
       </p>
 
