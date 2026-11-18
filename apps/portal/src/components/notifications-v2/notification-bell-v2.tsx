@@ -21,7 +21,7 @@ export function NotificationBellV2() {
   return (
     <NotificationSheetV2
       trigger={
-        <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
+        <Button variant="ghost" size="icon" className="v2-phone-hit relative" aria-label="Notifications">
           <Bell className="h-5 w-5" />
           {/* Hidden at zero: an empty badge is a permanent small alarm. */}
           {unread > 0 && (

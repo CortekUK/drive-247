@@ -305,7 +305,7 @@ export function HeroChart({
               </span>
             )}
             <DropdownMenu>
-              <DropdownMenuTrigger className={RANGE_PICKER} aria-label={`Period: ${rangeInfo.label}`}>
+              <DropdownMenuTrigger className={`v2-phone-hit ${RANGE_PICKER}`} aria-label={`Period: ${rangeInfo.label}`}>
                 {rangeInfo.label}
                 <ChevronDown className="size-3.5 text-v2-muted-fg" />
               </DropdownMenuTrigger>

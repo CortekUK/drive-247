@@ -113,7 +113,7 @@ export function MoneyTab({
 
   return (
     <Panel title="Money" description="What this car has brought in, what it cost, and whether it is ahead.">
-      <Surface className="flex gap-8 max-sm:flex-col max-sm:gap-4">
+      <Surface className="flex gap-8 max-lg:flex-col max-lg:gap-4">
         <Stat
           label="Brought in"
           value={fmt.money(pl.revenue)}
@@ -139,8 +139,9 @@ export function MoneyTab({
                 key={r.id}
                 label={r.customer_name}
                 sub={`${fmtDate(r.start_date)} → ${fmtDate(r.end_date)} · ${daysBetween(r.start_date, r.end_date)} days`}
+                stackRight
                 right={
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 max-sm:justify-between">
                     <span
                       className={cn(
                         "text-sm font-medium tabular-nums",
@@ -149,7 +150,7 @@ export function MoneyTab({
                     >
                       {fmt.money(r.total)}
                     </span>
-                    <span className="w-24 text-right">
+                    <span className="w-24 text-right max-sm:w-auto">
                       <Pill tone={rentalTone(r.status)}>{r.status}</Pill>
                     </span>
                   </div>

@@ -17,4 +17,4 @@ export const HEADER_ACTIONS_V2 = "sm:self-end sm:h-6 sm:items-center";
  * size: a 32px pill, 13px text, 14px icon. `!mr-0` drops the `mr-2` the v1
  * buttons put on their icon, since `gap-1.5` now spaces it.
  */
-export const HEADER_PRIMARY_V2 = "h-8 gap-1.5 rounded-full px-3.5 text-[13px] [&_svg]:!size-3.5 [&_svg]:!mr-0";
+export const HEADER_PRIMARY_V2 = "v2-phone-hit h-8 gap-1.5 rounded-full px-3.5 text-[13px] [&_svg]:!size-3.5 [&_svg]:!mr-0";

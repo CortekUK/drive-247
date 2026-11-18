@@ -133,6 +133,7 @@ export function AvailabilityTab({
                 key={b.key}
                 label={b.label}
                 sub={b.detail}
+                stackRight
                 right={
                   <Pill tone={b.severity === "hard" ? "warning" : "neutral"}>
                     {b.severity === "hard" ? "Blocks booking" : "Some dates"}

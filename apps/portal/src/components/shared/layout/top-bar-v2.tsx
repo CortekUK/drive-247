@@ -328,7 +328,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           type="button"
           onClick={toggleSidebar}
           aria-label="Open menu"
-          className="-ml-2 inline-flex size-9 shrink-0 items-center justify-center rounded-full text-foreground transition-colors hover:bg-primary/10 active:bg-primary/10 md:hidden"
+          className="v2-phone-hit -ml-2 inline-flex size-9 shrink-0 items-center justify-center rounded-full text-foreground transition-colors hover:bg-primary/10 active:bg-primary/10 md:hidden"
         >
           <Menu className="size-[22px]" strokeWidth={2} aria-hidden />
         </button>
@@ -361,7 +361,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
                 type="button"
                 onClick={() => searchEverywhere(term)}
                 aria-label={`Remove ${slot.scopeLabel} filter and search everything`}
-                className="flex size-4 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-primary/15 hover:text-foreground"
+                className="v2-phone-hit flex size-4 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-primary/15 hover:text-foreground"
               >
                 <X className="size-3" aria-hidden />
               </button>
@@ -395,7 +395,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
               aria-pressed={slot.filters.open}
               onClick={() => slot.filters!.onOpenChange(!slot.filters!.open)}
               className={
-                "relative flex h-6 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors " +
+                "relative flex h-6 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors max-sm:h-7 max-sm:w-9 " +
                 (slot.filters.open
                   ? "bg-primary text-primary-foreground"
                   : "bg-primary/10 text-primary hover:bg-primary/20 dark:text-[hsl(var(--v2-link,var(--primary)))] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")
@@ -445,7 +445,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
             <ArrowUpRight className="size-4 shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" aria-hidden />
             {/* A phone shows the whole line (two rows if it needs them) and no
                 keyboard shortcut: there is no ⌘ to press. */}
-            <span className="min-w-0 flex-1 truncate text-foreground max-sm:whitespace-normal max-sm:[overflow:visible]">
+            <span className="min-w-0 flex-1 truncate text-foreground max-sm:whitespace-normal max-sm:leading-snug max-sm:[overflow:visible]">
               {noLocalMatch && (
                 <span className="text-muted-foreground">
                   No {slot.scopeLabel ? slot.scopeLabel.toLowerCase() : "results"} match —{" "}
@@ -592,7 +592,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
                 aria-expanded={trax.sheetOpen}
                 onClick={trax.sheetOpen ? trax.closeSheet : trax.openSheet}
                 className={
-                  "h-8 gap-1.5 pl-1.5 pr-2.5 text-[13px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:bg-primary/10 hover:text-primary dark:hover:text-[hsl(var(--v2-link,var(--primary)))] aria-expanded:bg-primary/10 " +
+                  "v2-phone-hit h-8 gap-1.5 pl-1.5 pr-2.5 text-[13px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:bg-primary/10 hover:text-primary dark:hover:text-[hsl(var(--v2-link,var(--primary)))] aria-expanded:bg-primary/10 " +
                   "dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))] " +
                   (trax.sheetOpen ? "bg-primary/10 dark:bg-[hsl(var(--v2-hover,var(--muted)))]" : "") +
                   // On a phone the open page field takes the row (see phoneField).
@@ -621,7 +621,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
               variant="ghost"
               size="icon-sm"
               aria-label="Multi Chat — messages, texts, emails and calls"
-              className="relative text-muted-foreground hover:bg-primary/10 hover:text-foreground aria-expanded:bg-primary/10 aria-expanded:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))]"
+              className="v2-phone-hit relative text-muted-foreground hover:bg-primary/10 hover:text-foreground aria-expanded:bg-primary/10 aria-expanded:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))]"
             >
               <MessageCircle />
               {chatUnread > 0 && (

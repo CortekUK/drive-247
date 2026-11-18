@@ -3,8 +3,15 @@
 import { useRef, useState } from "react";
 import { ArrowRight, CalendarPlus, CircleSlash } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, PHONE_SCREEN_DIALOG } from "@/components/ui-v2/dialog";
+import { cn } from "@/lib/utils";
 import { dayNumber, extensionValidation, prettyDay, shiftDay, vehicleLabel, type TimelineBooking, type TimelineVehicle } from "./model";
+
+/** Phones: full screen like every other panel, still scrolling if the keyboard squeezes it. */
+export const PHONE_TIMELINE_DIALOG = cn(
+  PHONE_SCREEN_DIALOG,
+  "max-sm:overflow-y-auto max-sm:pt-[calc(env(safe-area-inset-top,0px)+1.5rem)] max-sm:pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)]",
+);
 
 export function ManualExtensionDialog({ booking, currentEnd, sequence, onClose, onPreview }: { booking: TimelineBooking; currentEnd: string; sequence: number; onClose: () => void; onPreview: (end: string, note: string) => void }) {
   const opener = useRef(typeof document === "undefined" ? null : document.activeElement as HTMLElement);
@@ -12,7 +19,7 @@ export function ManualExtensionDialog({ booking, currentEnd, sequence, onClose, 
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const start = shiftDay(currentEnd, 1);
-  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}><DialogContent className="tl-dialog sm:max-w-[480px] rounded-2xl gap-5 max-h-[90svh] overflow-y-auto" onCloseAutoFocus={e => { e.preventDefault(); opener.current?.focus(); }}>
+  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}><DialogContent className={cn("tl-dialog sm:max-w-[480px] rounded-2xl gap-5 max-h-[90svh] overflow-y-auto", PHONE_TIMELINE_DIALOG)} onCloseAutoFocus={e => { e.preventDefault(); opener.current?.focus(); }}>
     <DialogHeader><span className="tl-heading-icon mb-2"><CalendarPlus size={19} /></span><DialogTitle>Manual extension #{sequence}</DialogTitle><DialogDescription>Explore the next period for {booking.number}.</DialogDescription></DialogHeader>
     <div className="rounded-xl border border-border bg-muted/30 p-3.5"><p className="text-sm font-medium">{booking.customer.name}</p><p className="mt-1 text-xs text-muted-foreground">{vehicleLabel(booking.vehicle)}</p><div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-xs"><span className="text-muted-foreground">Current end date</span><strong className="font-medium">{prettyDay(currentEnd)}</strong></div></div>
     <form noValidate onSubmit={e => { e.preventDefault(); const message = extensionValidation(currentEnd, end); if (message) return setError(message); onPreview(end, note.trim()); }}>
@@ -35,7 +42,7 @@ export function BlockDatesDialog({ vehicles, vehicleId, start, previewOnly = fal
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}><DialogContent className="tl-dialog sm:max-w-[460px] rounded-2xl gap-5 max-h-[90svh] overflow-y-auto" showCloseButton={!busy} onCloseAutoFocus={e => { e.preventDefault(); opener.current?.focus(); }}>
+  return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}><DialogContent className={cn("tl-dialog sm:max-w-[460px] rounded-2xl gap-5 max-h-[90svh] overflow-y-auto", PHONE_TIMELINE_DIALOG)} showCloseButton={!busy} onCloseAutoFocus={e => { e.preventDefault(); opener.current?.focus(); }}>
     <DialogHeader><span className="tl-heading-icon mb-2"><CircleSlash size={18} /></span><DialogTitle>Block vehicle dates</DialogTitle><DialogDescription>Choose the vehicle and the dates it will be unavailable.</DialogDescription></DialogHeader>
     <form noValidate onSubmit={async e => {
       e.preventDefault();

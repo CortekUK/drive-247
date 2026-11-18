@@ -109,12 +109,12 @@ export function VehiclePhotosPickerV2({
         )}
 
         {/* Hover actions — fade only, per the motion standard. */}
-        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 p-1.5 opacity-0 transition-opacity duration-200 ease-in group-hover:opacity-100 group-hover:ease-out group-focus-within:opacity-100 motion-reduce:transition-none">
+        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 p-1.5 opacity-0 max-md:opacity-100 transition-opacity duration-200 ease-in group-hover:opacity-100 group-hover:ease-out group-focus-within:opacity-100 motion-reduce:transition-none">
           {!big ? (
             <button
               type="button"
               onClick={() => move(i, 0)}
-              className="inline-flex h-6 items-center gap-1 rounded-full bg-background/95 px-2 text-[10px] font-medium text-foreground hover:bg-background"
+              className="v2-phone-hit inline-flex h-6 items-center gap-1 rounded-full bg-background/95 px-2 text-[10px] font-medium text-foreground hover:bg-background"
             >
               <Star className="size-2.5" /> Make cover
             </button>
@@ -125,7 +125,7 @@ export function VehiclePhotosPickerV2({
             type="button"
             aria-label="Remove photo"
             onClick={() => onRemove(p.url)}
-            className="flex size-6 items-center justify-center rounded-full bg-background/95 text-foreground hover:bg-background"
+            className="v2-phone-hit flex size-6 items-center justify-center rounded-full bg-background/95 text-foreground hover:bg-background"
           >
             <X className="size-3" />
           </button>

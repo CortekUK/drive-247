@@ -89,7 +89,7 @@ export function SearchField({
               type="button"
               onClick={() => searchEverywhere(term)}
               aria-label={`Remove ${slot.scopeLabel} filter and search everything`}
-              className="flex size-4 cursor-pointer items-center justify-center rounded text-v2-muted-fg transition-colors hover:bg-v2-primary/15 hover:text-v2-fg"
+              className="v2-phone-hit flex size-4 cursor-pointer items-center justify-center rounded text-v2-muted-fg transition-colors hover:bg-v2-primary/15 hover:text-v2-fg"
             >
               <X className="size-3" aria-hidden />
             </button>
@@ -120,7 +120,7 @@ export function SearchField({
             aria-pressed={slot.filters.open}
             onClick={() => slot.filters!.onOpenChange(!slot.filters!.open)}
             className={
-              "relative flex h-6 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[calc(var(--v2-radius,var(--radius))_-_2px)] transition-colors " +
+              "relative flex h-6 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[calc(var(--v2-radius,var(--radius))_-_2px)] transition-colors max-sm:h-7 max-sm:w-9 " +
               (slot.filters.open
                 ? "bg-v2-primary text-v2-primary-fg"
                 : "bg-v2-primary/10 text-v2-primary hover:bg-v2-primary/20 dark:text-[hsl(var(--v2-link,var(--primary)))] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")
@@ -160,7 +160,7 @@ export function SearchField({
           }
         >
           <ArrowUpRight className="size-4 shrink-0 text-v2-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" aria-hidden />
-          <span className="min-w-0 flex-1 truncate text-v2-fg">
+          <span className="min-w-0 flex-1 truncate text-v2-fg max-sm:whitespace-normal max-sm:leading-snug max-sm:[overflow:visible]">
             {noLocalMatch && (
               <span className="text-v2-muted-fg">
                 No {slot.scopeLabel ? slot.scopeLabel.toLowerCase() : "results"} match —{" "}
@@ -168,7 +168,7 @@ export function SearchField({
             )}
             Search everywhere for <span className="font-semibold">&ldquo;{trimmed}&rdquo;</span>
           </span>
-          <kbd className="shrink-0 rounded-full bg-v2-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-v2-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
+          <kbd className="shrink-0 max-sm:hidden rounded-full bg-v2-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-v2-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
             ⌘↵
           </kbd>
         </button>

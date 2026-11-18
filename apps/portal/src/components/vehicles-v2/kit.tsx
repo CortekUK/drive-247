@@ -192,7 +192,7 @@ export const inputCls =
   "flex h-9 w-full rounded-3xl border border-transparent bg-input/50 px-3.5 py-1 text-sm outline-none transition-[color,box-shadow,background-color] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60";
 
 export const textareaCls =
-  "flex min-h-16 w-full resize-none rounded-2xl border border-transparent bg-input/50 px-3.5 py-3 text-sm outline-none transition-[color,box-shadow,background-color] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60";
+  "flex min-h-16 max-sm:min-h-20 w-full resize-none rounded-2xl border border-transparent bg-input/50 px-3.5 py-3 text-sm outline-none transition-[color,box-shadow,background-color] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60";
 
 /**
  * A tab's frame: fixed head, scrolling body.
@@ -263,14 +263,14 @@ export function Section({
   tourId?: string;
 }) {
   return (
-    <div className={cn(cardCls, "p-6", className)}>
+    <div className={cn(cardCls, "p-6 max-sm:p-4", className)}>
       {(title || action) && (
         <div data-tour={tourId} className="mb-5 flex items-start justify-between gap-4">
           <div className="min-w-0">
             {title && <h3 className="font-heading text-sm font-semibold tracking-tight">{title}</h3>}
             {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
           </div>
-          {action}
+          {action && <div className="max-sm:shrink-0 max-sm:whitespace-nowrap">{action}</div>}
         </div>
       )}
       {children}
@@ -297,18 +297,21 @@ export function DataRow({
   label,
   sub,
   right,
+  stackRight,
 }: {
   label: React.ReactNode;
   sub?: React.ReactNode;
   right?: React.ReactNode;
+  /** Phones: `right` takes its own line under the text, so neither is squeezed. */
+  stackRight?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-4 px-5 py-3.5">
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">{label}</div>
+    <div className={cn("flex items-center gap-4 px-5 py-3.5 max-sm:px-4", stackRight && "max-sm:flex-wrap max-sm:gap-2")}>
+      <div className={cn("min-w-0 flex-1", stackRight && "max-sm:basis-full")}>
+        <div className="truncate text-sm font-medium max-sm:overflow-visible max-sm:whitespace-normal">{label}</div>
         {sub && <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div>}
       </div>
-      {right}
+      {stackRight ? <div className="max-sm:w-full">{right}</div> : right}
     </div>
   );
 }
@@ -318,14 +321,14 @@ export function Stat({ label, value, hint }: { label: string; value: string; hin
     <div className="min-w-0 flex-1">
       <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/80">{label}</p>
       <p className="mt-1.5 truncate font-heading text-2xl font-semibold tracking-tight">{value}</p>
-      {hint && <p className="mt-0.5 truncate text-xs text-muted-foreground">{hint}</p>}
+      {hint && <p className="mt-0.5 truncate text-xs text-muted-foreground max-sm:overflow-visible max-sm:whitespace-normal">{hint}</p>}
     </div>
   );
 }
 
 export function StatDivider() {
-  // Phones stack the stats (see tab-money), so the rule turns horizontal.
-  return <div className="w-px shrink-0 bg-foreground/10 max-sm:h-px max-sm:w-full" />;
+  // Phones and tablets stack the stats (see tab-money), so the rule turns horizontal.
+  return <div className="w-px shrink-0 bg-foreground/10 max-lg:h-px max-lg:w-full" />;
 }
 
 export function EmptyHint({ children }: { children: React.ReactNode }) {
@@ -453,7 +456,7 @@ export function AffixInput({
         onBlur={onBlur}
         // 80px is reserved for the longest unit ("/month"). On a phone a short
         // one ("km", "mi") keeps 44px, or "Unlimited" read "Unlimite".
-        className={cn(inputCls, prefix && "pl-7", suffix && "pr-20", suffix && suffix.length <= 3 && "max-sm:pr-11", className)}
+        className={cn(inputCls, prefix && "pl-7", suffix && "pr-20 max-sm:pr-14", suffix && suffix.length <= 3 && "max-sm:pr-11", type === "date" && "max-sm:px-2.5", className)}
       />
       {suffix && (
         <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
@@ -709,14 +712,14 @@ export function SwitchRow({
       aria-pressed={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="group/switchrow flex w-full cursor-pointer items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-primary/5 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] disabled:cursor-not-allowed disabled:opacity-60"
+      className="group/switchrow flex w-full cursor-pointer items-center gap-4 px-5 py-3.5 max-sm:px-4 text-left transition-colors hover:bg-primary/5 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] disabled:cursor-not-allowed disabled:opacity-60"
     >
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">{label}</span>
+        <span className="block truncate text-sm font-medium max-sm:overflow-visible max-sm:whitespace-normal">{label}</span>
         {/* Muted text is 4.36:1 on the light hover tint, so while this row is
             hovered the hint reads --v2-muted-on-tint (v2 only; dark and v1 keep
             the muted token). */}
-        {hint && <span className="mt-0.5 block truncate text-xs text-muted-foreground group-hover/switchrow:text-[hsl(var(--v2-muted-on-tint,var(--muted-foreground)))]">{hint}</span>}
+        {hint && <span className="mt-0.5 block truncate text-xs text-muted-foreground group-hover/switchrow:text-[hsl(var(--v2-muted-on-tint,var(--muted-foreground)))] max-sm:overflow-visible max-sm:whitespace-normal">{hint}</span>}
       </span>
       <Switch checked={checked} />
     </button>
@@ -800,21 +803,22 @@ export function OptionCard({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full cursor-pointer items-center gap-3 rounded-4xl px-5 py-4 text-left transition-all",
+        "flex w-full cursor-pointer items-center gap-3 rounded-4xl px-5 py-4 text-left transition-all max-sm:flex-wrap max-sm:gap-y-2 max-sm:px-4 max-sm:py-3",
         selected
           ? "bg-primary-light ring-2 ring-primary/40"
           : "bg-card shadow-md ring-1 ring-foreground/5 hover:ring-primary/30 dark:ring-foreground/10",
       )}
     >
-      <span className="min-w-0 flex-1">
-        <span className="block truncate font-heading text-sm font-medium">{title}</span>
+      {/* Phones: the name and address get the full width; fee and tick go under. */}
+      <span className="min-w-0 flex-1 max-sm:basis-full">
+        <span className="block truncate font-heading text-sm font-medium max-sm:overflow-visible max-sm:whitespace-normal">{title}</span>
         {subtitle && (
-          <span className="mt-0.5 block truncate text-xs text-muted-foreground">{subtitle}</span>
+          <span className="mt-0.5 block truncate text-xs text-muted-foreground max-sm:overflow-visible max-sm:whitespace-normal">{subtitle}</span>
         )}
       </span>
       {right}
       {selected && (
-        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary">
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary max-sm:ml-auto">
           <Check className="size-3 text-primary-foreground" strokeWidth={3} />
         </span>
       )}

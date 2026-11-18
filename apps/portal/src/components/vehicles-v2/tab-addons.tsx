@@ -257,7 +257,7 @@ export function AddonsTab({
                 <div key={h.id} className="rounded-3xl bg-muted/40 px-5 py-4 ring-1 ring-foreground/5">
                   <div className="flex items-center gap-4">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{h.name}</p>
+                      <p className="truncate text-sm font-medium max-sm:overflow-visible max-sm:whitespace-normal">{h.name}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {fmtDate(h.start_date)} → {fmtDate(h.end_date)} · +{h.surcharge_percent}%
                         {h.recurs_annually ? " · every year" : ""}
@@ -323,7 +323,7 @@ export function AddonsTab({
           </List>
         )}
         {!readOnly && (
-          <div className="grid grid-cols-[1fr_1fr_auto] items-end gap-3">
+          <div className="grid grid-cols-[1fr_1fr_auto] items-end gap-3 max-sm:grid-cols-2 max-sm:[&>button]:col-span-2">
             <AffixInput
               type="date"
               value={dayDraft.date}
