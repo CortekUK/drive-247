@@ -219,7 +219,7 @@ function Row({
             size="icon"
             title="Mark as read"
             aria-label="Mark as read"
-            className="h-7 w-7 shrink-0 rounded-full opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+            className="h-7 w-7 shrink-0 rounded-full opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-md:opacity-100"
             onClick={(e) => { e.stopPropagation(); onMarkRead(); }}
           >
             <CheckCheck className="h-3.5 w-3.5" />

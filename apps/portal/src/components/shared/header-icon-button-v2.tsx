@@ -65,6 +65,8 @@ export function headerIconButtonClass(className?: string, labelled = false) {
     // `labelled`: the same pill with words in it (Availability's "Hours" and
     // timezone buttons) — 32px tall, sized to its text instead of square.
     buttonVariants({ variant: "outline", size: labelled ? "sm" : "icon-sm" }),
+    // Looks 32px everywhere; on a phone the finger gets 44px (v2-theme.css).
+    "v2-phone-hit",
     labelled && "px-3 gap-1.5 text-[13px] font-medium",
     // Purple at rest, the tour icon's look (team lead, Sep 16 2026): tinted
     // outline, faint purple ground, purple glyph; a shade deeper on hover/open.

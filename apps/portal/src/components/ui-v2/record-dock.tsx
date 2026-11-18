@@ -49,9 +49,9 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { PanelRight } from "lucide-react";
+import { PanelRight, X } from "lucide-react";
 import type { ContextTab } from "@/components/timeline-v2/context-rail";
-import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui-v2/drawer";
+import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui-v2/drawer";
 import { cn } from "@/lib/utils";
 
 /**
@@ -274,11 +274,19 @@ export function RecordDock({
               Radix warns rather than silently shipping a dangling
               aria-describedby. Passing undefined drops the attribute, which is
               the acknowledged form of "this dialog has no description". */}
+          {/* Phones: full screen like every other panel (boss, Nov 2026), so the
+              grab handle gives way to a ✕ and the card's inset and corners go. */}
           <DrawerContent
-            className="max-h-[85svh]"
+            className="max-h-[85svh] max-md:h-dvh max-md:p-0 max-md:pt-[env(safe-area-inset-top,0px)] max-md:before:inset-0 max-md:before:rounded-none max-md:before:border-0 max-md:before:shadow-none max-md:data-[vaul-drawer-direction=bottom]:mt-0 max-md:data-[vaul-drawer-direction=bottom]:max-h-dvh max-md:[&>div:first-child]:!hidden"
             {...(panel.description ? {} : { "aria-describedby": undefined })}
           >
-            <DrawerHeader className="gap-1 pb-3 text-left">
+            <DrawerClose
+              aria-label={`Close ${panel.label}`}
+              className="absolute right-2 top-[calc(env(safe-area-inset-top,0px)+0.5rem)] z-10 inline-flex size-11 items-center justify-center rounded-full text-muted-foreground transition-colors active:bg-primary/10 md:hidden"
+            >
+              <X className="size-5" aria-hidden />
+            </DrawerClose>
+            <DrawerHeader className="gap-1 pb-3 text-left max-md:pr-14">
               <DrawerTitle className="text-base">{panel.label}</DrawerTitle>
               {panel.description ? <DrawerDescription>{panel.description}</DrawerDescription> : null}
             </DrawerHeader>
@@ -315,7 +323,7 @@ export function contextTabPanels(tabs: ContextTab[]): DockPanel[] {
     label: tab.label,
     icon: tab.icon ?? PanelRight,
     content: () => (
-      <div className={cn("h-[68svh] min-h-0", tab.scroll === false && "flex flex-col")}>{tab.content}</div>
+      <div className={cn("h-[68svh] min-h-0 max-md:h-full", tab.scroll === false && "flex flex-col")}>{tab.content}</div>
     ),
   }));
 }

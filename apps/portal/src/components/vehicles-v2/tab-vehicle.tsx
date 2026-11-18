@@ -143,8 +143,10 @@ export function VehicleTab({
                     )}
                   </div>
                   {!readOnly && (
-                    <div className="flex items-center gap-2 px-4 py-2.5">
-                      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2 px-4 py-2.5 max-sm:flex-wrap max-sm:gap-x-0 max-sm:gap-y-0 max-sm:px-2 max-sm:py-2">
+                      {/* Phones: the caption has its own line, or the buttons
+                          beside it leave room for one letter of it. */}
+                      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground max-sm:basis-full max-sm:px-1">
                         Photo {i + 1}
                       </span>
                       {!isCover && (
@@ -159,9 +161,11 @@ export function VehicleTab({
                           Cover
                         </Button>
                       )}
-                      <IconButton title="Remove photo" onClick={() => onRemovePhoto(p.id)}>
-                        <X className="size-3.5" />
-                      </IconButton>
+                      <span className="max-sm:ml-auto">
+                        <IconButton title="Remove photo" onClick={() => onRemovePhoto(p.id)}>
+                          <X className="size-3.5" />
+                        </IconButton>
+                      </span>
                     </div>
                   )}
                 </div>
@@ -223,23 +227,28 @@ export function VehicleTab({
               disabled={readOnly}
             />
           </Field>
-          <Field label="Registration plate" error={fieldErrors.reg}>
-            <TextInput
-              value={vehicle.reg}
-              transform={(v) => v.toUpperCase()}
-              onChange={(v) => patch({ reg: v })}
-              placeholder="6HNA118"
-              disabled={readOnly}
-            />
-          </Field>
-          <Field label="VIN" hint="Never shown to a customer.">
-            <TextInput
-              value={vehicle.vin}
-              onChange={(v) => patch({ vin: v })}
-              placeholder="1HGCV1F34PA004471"
-              disabled={readOnly}
-            />
-          </Field>
+          {/* Phones: a full row each, or a 17-character VIN is cut off. */}
+          <div className="max-sm:col-span-2">
+            <Field label="Registration plate" error={fieldErrors.reg}>
+              <TextInput
+                value={vehicle.reg}
+                transform={(v) => v.toUpperCase()}
+                onChange={(v) => patch({ reg: v })}
+                placeholder="6HNA118"
+                disabled={readOnly}
+              />
+            </Field>
+          </div>
+          <div className="max-sm:col-span-2">
+            <Field label="VIN" hint="Never shown to a customer.">
+              <TextInput
+                value={vehicle.vin}
+                onChange={(v) => patch({ vin: v })}
+                placeholder="1HGCV1F34PA004471"
+                disabled={readOnly}
+              />
+            </Field>
+          </div>
         </div>
       </Section>
 

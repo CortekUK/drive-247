@@ -48,7 +48,7 @@ export function FilterChip({
       aria-pressed={active}
       style={style}
       className={cn(
-        "cursor-pointer rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+        "cursor-pointer rounded-full border px-2.5 py-1 text-xs font-medium transition-colors max-md:min-h-8 max-md:px-3",
         active
           ? color
             ? "text-[var(--chip)] dark:text-[color-mix(in_srgb,var(--chip)_60%,white)]"
@@ -124,7 +124,7 @@ export function FilterShell({
             variant="ghost"
             size="sm"
             onClick={onClear}
-            className="h-7 px-2 text-xs text-muted-foreground"
+            className="h-7 px-2 text-xs text-muted-foreground max-md:h-9"
           >
             <RotateCcw className="mr-1 size-3" />
             Reset
@@ -135,7 +135,7 @@ export function FilterShell({
           size="icon"
           onClick={onClose}
           aria-label="Close filters"
-          className="size-7 rounded-md"
+          className="size-7 rounded-md max-md:size-9"
         >
           <X className="size-3.5" />
         </Button>

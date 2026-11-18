@@ -45,7 +45,7 @@ export function FilterChip({
       aria-pressed={active}
       style={style}
       className={cn(
-        "cursor-pointer rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+        "cursor-pointer rounded-full border px-2.5 py-1 text-xs font-medium transition-colors max-md:min-h-8 max-md:px-3",
         active
           ? color
             ? "text-[var(--chip)] dark:text-[color-mix(in_srgb,var(--chip)_60%,white)]"
@@ -109,7 +109,7 @@ export function FilterShell({
           <button
             type="button"
             onClick={onClear}
-            className={cn(V2_BUTTON_GHOST_SM, "h-7 px-2 text-xs text-v2-muted-fg")}
+            className={cn(V2_BUTTON_GHOST_SM, "h-7 px-2 text-xs text-v2-muted-fg max-md:h-9")}
           >
             <RotateCcw className="mr-1 size-3" />
             Reset
@@ -119,7 +119,7 @@ export function FilterShell({
           type="button"
           onClick={onClose}
           aria-label="Close filters"
-          className={cn(V2_BUTTON_OUTLINE_ICON, "size-7 rounded-[calc(var(--v2-radius,var(--radius))_-_2px)]")}
+          className={cn(V2_BUTTON_OUTLINE_ICON, "size-7 rounded-[calc(var(--v2-radius,var(--radius))_-_2px)] max-md:size-9")}
         >
           <X className="size-3.5" />
         </button>

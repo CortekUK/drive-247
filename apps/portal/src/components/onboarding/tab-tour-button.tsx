@@ -168,6 +168,7 @@ export function TabTourButton({ tour, className }: TabTourButtonProps) {
             runTabTour(tour);
           }}
           className={cn(
+            "v2-phone-hit",
             'relative inline-flex shrink-0 items-center justify-center rounded-full border',
             'transition-colors focus-visible:outline-none focus-visible:ring-2',
             'focus-visible:ring-ring focus-visible:ring-offset-2',

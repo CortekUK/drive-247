@@ -214,9 +214,10 @@ export function FeaturedDeck({
  * Phones (boss, Nov 2026, the Home rule carried to every tab): the featured
  * card is not a 240px box under the graph but a slim strip ABOVE it, the way
  * Home's feature card is (home-bands.tsx). First in the hero row, no minimum
- * height, the title on one line. Same card, same link, same dots.
+ * height, the title on one line. Same card, same link, same dots. Tablets too:
+ * the hero row is stacked until `lg`, where the tall card was mostly empty.
  */
 const PHONE_STRIP =
-  "max-md:order-first max-md:min-h-0 " +
-  "max-md:[&_h3]:max-w-none max-md:[&_h3]:line-clamp-1 max-md:[&_h3]:text-[19px] max-md:[&_h3]:font-extrabold max-md:[&_h3]:leading-[1.15] max-md:[&_h3_br]:hidden max-md:[&_h3]:mb-2 " +
-  "max-md:[&_[role=group]>*]:pt-4";
+  "max-lg:order-first max-lg:min-h-0 " +
+  "max-lg:[&_h3]:max-w-none max-lg:[&_h3]:line-clamp-1 max-lg:[&_h3]:text-[19px] max-lg:[&_h3]:font-extrabold max-lg:[&_h3]:leading-[1.15] max-lg:[&_h3_br]:hidden max-lg:[&_h3]:mb-2 " +
+  "max-lg:[&_[role=group]>*]:pt-4";

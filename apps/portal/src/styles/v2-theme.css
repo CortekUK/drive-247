@@ -1934,9 +1934,10 @@ html[data-trax-panel] {
  * the header via `data-label` (shared/portal-v2/list-table.tsx). A trailing
  * unlabelled cell (a row's ⋯ menu) goes to the row's top-right corner.
  * =========================================================================== */
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .v2-theme [data-phone-cards] {
-    max-height: none;
+    /* !important: from md up `useViewportFillCap` sets an inline height cap. */
+    max-height: none !important;
     overflow: visible;
   }
   .v2-theme [data-phone-cards] > [data-slot="table-container"],
@@ -1954,15 +1955,15 @@ html[data-trax-panel] {
     padding-top: 4px;
     padding-bottom: 4px;
   }
-  /* Each value takes its natural width and whole values wrap to the next
-     line. (Equal grid columns were tried: they broke words mid-way,
-     "Unavailab-le", which reads worse than slightly uneven columns.) */
+  /* Two equal columns, so a field sits in the same place on every card and
+     the list can be scanned straight down. Half a card is wide enough that
+     whole words fit ("Unavailable" broke mid-word in four narrow columns). */
   .v2-theme [data-phone-cards] tbody tr {
     position: relative;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    column-gap: 18px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    column-gap: 16px;
     row-gap: 8px;
     padding: 12px 16px;
   }
@@ -1977,8 +1978,13 @@ html[data-trax-panel] {
     line-height: 1.3;
   }
   .v2-theme [data-phone-cards] tbody td:first-child {
-    flex: 1 0 100%;
+    grid-column: 1 / -1;
     font-size: 15px;
+  }
+  /* Status text and plain values share one size and baseline. */
+  .v2-theme [data-phone-cards] tbody td:not(:first-child) > span {
+    font-size: 13px;
+    line-height: 1.3;
   }
   /* A value too long for the row wraps at word gaps instead of being cut off. */
   .v2-theme [data-phone-cards] tbody td:not(:first-child),
@@ -2011,6 +2017,45 @@ html[data-trax-panel] {
   }
   .v2-theme [data-phone-cards] tbody td:first-child:has(~ td[data-label=""]:last-child) {
     padding-right: 36px;
+  }
+}
+
+/* Tablets beside the sidebar: the table's columns ran off the side, so they get
+   the same cards with every field on one line. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .v2-theme [data-phone-cards] tbody tr {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* ===========================================================================
+ * Fingers are bigger than the controls look. Compact buttons keep their size
+ * on a phone (boss: compact, never "in your face") and take a larger invisible
+ * tap area, so a 32px icon is a 44px target. Pointer-coarse only: a mouse on a
+ * narrow window hits exactly what it sees.
+ * =========================================================================== */
+@media (max-width: 767px) and (pointer: coarse) {
+  .v2-theme .v2-phone-hit:not(.absolute):not(.fixed),
+  .v2-theme [data-slot="button"]:is([data-size="icon-sm"], [data-size="icon-xs"], [data-size="xs"], [data-size="sm"]):not(.absolute):not(.fixed) {
+    position: relative;
+  }
+  .v2-theme .v2-phone-hit::after,
+  .v2-theme [data-slot="button"]:is([data-size="icon-sm"], [data-size="icon-xs"], [data-size="xs"], [data-size="sm"])::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+  }
+}
+
+/* iOS zooms the whole page when a field under 16px takes focus, and does not
+   zoom back out. Only iOS matches this @supports; Android stays compact. */
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 767px) {
+    .v2-theme input:not([type="checkbox"]):not([type="radio"]),
+    .v2-theme textarea,
+    .v2-theme select {
+      font-size: 16px !important;
+    }
   }
 }
 

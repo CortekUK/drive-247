@@ -175,7 +175,7 @@ export function StepFooter({
       <Button
         type="button"
         variant="outline"
-        className="h-10 rounded-full px-5"
+        className="h-10 rounded-full px-5 max-sm:shrink-0 max-sm:px-4"
         onClick={() => (step === 0 ? onCancel() : onBack())}
         disabled={loading}
       >
@@ -189,7 +189,7 @@ export function StepFooter({
       </Button>
 
       {compact ? (
-        <ol className="flex items-center gap-1.5" aria-label={`Step ${step + 1} of ${steps.length}: ${steps[step]}`}>
+        <ol className="flex items-center gap-1.5 max-sm:min-w-0 max-sm:gap-1" aria-label={`Step ${step + 1} of ${steps.length}: ${steps[step]}`}>
           {steps.map((title, i) => (
             <li
               key={title}
@@ -224,7 +224,7 @@ export function StepFooter({
       </ol>
       )}
 
-      <Button type="submit" className="h-10 rounded-full px-5" variant={last ? "default" : "outline"} disabled={loading}>
+      <Button type="submit" className="h-10 rounded-full px-5 max-sm:shrink-0 max-sm:px-4" variant={last ? "default" : "outline"} disabled={loading}>
         {loading ? (
           <>
             <Loader2 className="size-4 animate-spin" /> {busyLabel}

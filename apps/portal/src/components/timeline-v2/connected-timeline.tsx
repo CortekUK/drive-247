@@ -14,7 +14,7 @@ import type { RentalFilters } from "@/hooks/use-enhanced-rentals";
 import { VehicleTimelinePricing } from "./vehicle-pricing";
 import { EMPTY_TIMELINE, shiftDay, tenantToday, type TimelineScope } from "./model";
 import { TimelineBoard, initialTimelineView, type TimelineRange } from "./timeline-board";
-import { BlockDatesDialog } from "./timeline-dialogs";
+import { BlockDatesDialog, PHONE_TIMELINE_DIALOG } from "./timeline-dialogs";
 import { useTimelineData } from "./use-timeline-data";
 import { useViewportFillCap } from "@/components/shared/list-table-v2";
 
@@ -75,7 +75,7 @@ export function ConnectedTimeline({ scope, compact = false, heading, initialFilt
           </> : undefined} />
         </div>
       : <TimelineBoard {...boardProps} compact={compact} onExpand={compact ? expand : undefined} />}
-    <Dialog open={expanded} onOpenChange={setExpanded}><DialogContent onCloseAutoFocus={e => { e.preventDefault(); expandOpener.current?.focus(); }} className="tl-dialog w-[calc(100vw-2rem)] max-h-[90svh] overflow-auto sm:max-w-[1180px] rounded-2xl"><DialogHeader><DialogTitle>{heading || "Booking timeline"}</DialogTitle><DialogDescription>The same bookings, with more room to explore.</DialogDescription></DialogHeader><TimelineBoard {...boardProps} /></DialogContent></Dialog>
+    <Dialog open={expanded} onOpenChange={setExpanded}><DialogContent onCloseAutoFocus={e => { e.preventDefault(); expandOpener.current?.focus(); }} className={`tl-dialog w-[calc(100vw-2rem)] max-h-[90svh] overflow-auto sm:max-w-[1180px] rounded-2xl ${PHONE_TIMELINE_DIALOG}`}><DialogHeader><DialogTitle>{heading || "Booking timeline"}</DialogTitle><DialogDescription>The same bookings, with more room to explore.</DialogDescription></DialogHeader><TimelineBoard {...boardProps} /></DialogContent></Dialog>
     {blockOpen && <BlockDatesDialog vehicles={data.vehicles} vehicleId={scope.kind === "vehicle" ? scope.id : undefined} start={blockStart} onClose={() => setBlockOpen(false)} onConfirm={async input => {
       if (!allowed || !writableAvailability) throw new Error("Your access has changed. You can no longer block dates from this view.");
       await createBlock.mutateAsync(input);

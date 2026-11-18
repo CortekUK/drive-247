@@ -110,7 +110,7 @@ export function ListingTab<K extends string>({
               const Row = (
                 <>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{b.label}</span>
+                    <span className="block truncate text-sm font-medium max-sm:overflow-visible max-sm:whitespace-normal">{b.label}</span>
                     <span className="mt-0.5 block text-xs text-muted-foreground">{b.detail}</span>
                   </span>
                   {(target || b.href) && <ChevronRight className="size-4 shrink-0 text-muted-foreground" />}
