@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Onboarding calls — Brian's view of the free 30-minute call (Nov 2026).
+ * Onboarding calls — Bryan's view of the free 30-minute call (Nov 2026).
  *
  * Every Portal V2 tenant still in its first 30 days (or on a trial), and
  * where it stands: not booked, booked, done. The portal's home card offers the
@@ -35,7 +35,7 @@ import { cn } from '@/lib/utils';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
-const BOOKING_URL = 'https://api.leadconnectorhq.com/widget/booking/WhGxejLXDJt4pN10JYUg';
+const BOOKING_URL = 'https://api.leadconnectorhq.com/widget/bookings/drive247-onboarding-call';
 const DAY = 86_400_000;
 
 interface Row {
@@ -43,6 +43,7 @@ interface Row {
   slug: string;
   company_name: string | null;
   contact_email: string | null;
+  phone: string | null;
   tenant_created_at: string;
   subscription_status: string | null;
   trial_end: string | null;
@@ -50,19 +51,25 @@ interface Row {
   call_booked_via: string | null;
   call_scheduled_for: string | null;
   call_completed_at: string | null;
+  call_cancelled_at: string | null;
+  call_missed_at: string | null;
   site_previewed_at: string | null;
   dismissed_at: string | null;
+  welcome_sent_at: string | null;
   reminder_sent_at: string | null;
+  follow_up_sent_at: string | null;
   admin_notes: string | null;
   vehicle_count: number;
   has_logo: boolean;
 }
 
-type Stage = 'done' | 'booked' | 'nudge' | 'new';
+type Stage = 'done' | 'booked' | 'missed' | 'cancelled' | 'nudge' | 'new';
 
 function stageOf(r: Row): Stage {
   if (r.call_completed_at) return 'done';
   if (r.call_booked_at) return 'booked';
+  if (r.call_missed_at) return 'missed';
+  if (r.call_cancelled_at) return 'cancelled';
   return Date.now() - new Date(r.tenant_created_at).getTime() >= DAY ? 'nudge' : 'new';
 }
 
@@ -70,8 +77,25 @@ const STAGE: Record<Stage, { label: string; cls: string }> = {
   nudge: { label: 'Not booked · 24h+', cls: 'text-amber-700 dark:text-amber-400' },
   new: { label: 'Not booked yet', cls: 'text-muted-foreground' },
   booked: { label: 'Booked', cls: 'text-indigo-700 dark:text-indigo-400' },
+  missed: { label: 'Missed', cls: 'text-red-700 dark:text-red-400' },
+  cancelled: { label: 'Cancelled', cls: 'text-red-700 dark:text-red-400' },
   done: { label: 'Call done', cls: 'text-green-700 dark:text-green-400' },
 };
+
+const STAGE_ORDER: Stage[] = ['nudge', 'new', 'booked', 'missed', 'cancelled', 'done'];
+
+/** Clears a booking when the call did not happen, so the customer can book again. */
+const NOT_BOOKED = { call_booked_at: null, call_booked_via: null, call_scheduled_for: null, booking_notified_for: null };
+/** Clears an earlier missed or cancelled call once there is a newer outcome. */
+const NO_LOST_CALL = { call_cancelled_at: null, call_missed_at: null };
+
+/** The latest email sent to this customer, for the status line. */
+function lastEmail(r: Row): string {
+  if (r.follow_up_sent_at) return `Follow-up sent ${fmtWhen(r.follow_up_sent_at)}`;
+  if (r.reminder_sent_at) return `Reminded ${fmtWhen(r.reminder_sent_at)}`;
+  if (r.welcome_sent_at) return `Welcome sent ${fmtWhen(r.welcome_sent_at)}`;
+  return '';
+}
 
 interface CalendarEvent {
   id: string;
@@ -106,10 +130,11 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [notInstalled, setNotInstalled] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
-  const [due, setDue] = useState<{ due: { slug: string; email: string }[]; skipped: { slug: string; reason: string }[] } | null>(null);
+  const [due, setDue] = useState<{ due: { slug: string; email: string; step?: string }[]; skipped: { slug: string; reason: string }[] } | null>(null);
   const [notesFor, setNotesFor] = useState<Row | null>(null);
   const [notes, setNotes] = useState('');
   const [unmatched, setUnmatched] = useState<CalendarEvent[]>([]);
+  const [filter, setFilter] = useState<Stage | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -129,7 +154,7 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
         .select('id, received_at, email, name, status, starts_at, outcome')
         .is('tenant_id', null)
         // Only bookings whose email matched no tenant at all. A V1 customer's
-        // ordinary support booking on the shared calendar is not Brian's to place.
+        // ordinary support booking on the shared calendar is not Bryan's to place.
         .eq('outcome', 'no tenant with that email')
         .gte('received_at', new Date(Date.now() - 30 * DAY).toISOString())
         .order('received_at', { ascending: false })
@@ -147,18 +172,27 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
   }, [load]);
 
   const counts = useMemo(() => {
-    const c: Record<Stage, number> = { nudge: 0, new: 0, booked: 0, done: 0 };
+    const c: Record<Stage, number> = { nudge: 0, new: 0, booked: 0, missed: 0, cancelled: 0, done: 0 };
     for (const r of rows ?? []) c[stageOf(r)] += 1;
     return c;
   }, [rows]);
 
-  // Who needs Brian first: not booked after 24h, then booked, then new, then done.
+  // Who needs Bryan first: lost calls and not booked after 24h, then booked, new, done.
   const sorted = useMemo(() => {
-    const order: Record<Stage, number> = { nudge: 0, booked: 1, new: 2, done: 3 };
-    return [...(rows ?? [])].sort(
-      (a, b) => order[stageOf(a)] - order[stageOf(b)] || b.tenant_created_at.localeCompare(a.tenant_created_at),
-    );
-  }, [rows]);
+    const order: Record<Stage, number> = { missed: 0, cancelled: 1, nudge: 2, booked: 3, new: 4, done: 5 };
+    return [...(rows ?? [])]
+      .filter((r) => !filter || stageOf(r) === filter)
+      .sort((a, b) => order[stageOf(a)] - order[stageOf(b)] || b.tenant_created_at.localeCompare(a.tenant_created_at));
+  }, [rows, filter]);
+
+  // Calls still to come, soonest first.
+  const upcoming = useMemo(
+    () =>
+      (rows ?? [])
+        .filter((r) => stageOf(r) === 'booked' && r.call_scheduled_for && new Date(r.call_scheduled_for).getTime() >= Date.now())
+        .sort((a, b) => a.call_scheduled_for!.localeCompare(b.call_scheduled_for!)),
+    [rows],
+  );
 
   /** Upsert one tenant's row as super admin (RLS: super admin manages). */
   const patch = async (r: Row, values: Record<string, unknown>, done: string) => {
@@ -239,24 +273,57 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-4">
-        {(['nudge', 'new', 'booked', 'done'] as Stage[]).map((s) => (
-          <Card key={s}>
-            <CardContent className="p-4">
-              <p className={cn('text-xs font-medium', STAGE[s].cls)}>{STAGE[s].label}</p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums">{loading && !rows ? '—' : counts[s]}</p>
-            </CardContent>
-          </Card>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {STAGE_ORDER.map((s) => (
+          <button
+            key={s}
+            type="button"
+            aria-pressed={filter === s}
+            onClick={() => setFilter((current) => (current === s ? null : s))}
+            className="rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Card className={cn('h-full transition-colors hover:bg-muted/40', filter === s && 'border-primary')}>
+              <CardContent className="p-4">
+                <p className={cn('text-xs font-medium', STAGE[s].cls)}>{STAGE[s].label}</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums">{loading && !rows ? '—' : counts[s]}</p>
+              </CardContent>
+            </Card>
+          </button>
         ))}
       </div>
 
-      {/* ── the 24h reminder ─────────────────────────────────────────────── */}
+      {/* ── calls still to come ──────────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle>24-hour reminder email</CardTitle>
+          <CardTitle>Upcoming calls</CardTitle>
+          <CardDescription>Booked on your calendar, soonest first.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          {upcoming.length === 0 ? (
+            <p className="px-6 pb-6 text-sm text-muted-foreground">No calls booked right now.</p>
+          ) : (
+            <ul className="divide-y">
+              {upcoming.map((r) => (
+                <li key={r.tenant_id} className="flex flex-wrap items-center justify-between gap-2 px-6 py-3 text-sm">
+                  <span className="min-w-0">
+                    <span className="font-medium">{r.company_name || r.slug}</span>
+                    <span className="text-muted-foreground"> · {[r.contact_email, r.phone].filter(Boolean).join(' · ')}</span>
+                  </span>
+                  <span className="text-xs font-medium text-indigo-700 dark:text-indigo-400">{fmtWhen(r.call_scheduled_for)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── the booking emails ───────────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Booking emails</CardTitle>
           <CardDescription>
-            Sent automatically every hour: one email, once, to a V2 operator on a trial or paid plan who signed up
-            1–14 days ago and has not booked. You can check who is due and send now instead of waiting.
+            Sent automatically until the customer books: a welcome right after signup, a reminder after 24 hours and a
+            follow-up after 48 to 72 hours. You can check who is due and send now instead of waiting.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -280,7 +347,11 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
                 <ul className="space-y-1">
                   {due.due.map((d) => (
                     <li key={d.slug}>
-                      <span className="font-medium">{d.slug}</span> <span className="text-muted-foreground">· {d.email}</span>
+                      <span className="font-medium">{d.slug}</span>{' '}
+                      <span className="text-muted-foreground">
+                        · {d.email}
+                        {d.step && ` · ${d.step.replace('_', '-')}`}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -299,7 +370,9 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
       <Card>
         <CardHeader>
           <CardTitle>Operators</CardTitle>
-          <CardDescription>Not booked after 24 hours first. The checklist is what they did before the call.</CardDescription>
+          <CardDescription>
+            {filter ? `Showing: ${STAGE[filter].label}. Select it again to show everyone.` : 'Missed, cancelled and not booked after 24 hours come first.'}
+          </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           {loading && !rows ? (
@@ -308,7 +381,9 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
               <Skeleton className="h-12 w-full" />
             </div>
           ) : sorted.length === 0 ? (
-            <p className="px-6 pb-6 text-sm text-muted-foreground">No new Portal V2 operators right now.</p>
+            <p className="px-6 pb-6 text-sm text-muted-foreground">
+              {filter ? 'Nobody at this stage right now.' : 'No new Portal V2 operators right now.'}
+            </p>
           ) : (
             <ul className="divide-y">
               {sorted.map((r) => {
@@ -322,7 +397,8 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
                         <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">{r.slug}</span>
                       </p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {r.contact_email ?? 'no email'} · signed up {ago(r.tenant_created_at)}
+                        {r.contact_email ?? 'no email'}
+                        {r.phone && ` · ${r.phone}`} · signed up {ago(r.tenant_created_at)}
                         {r.subscription_status && ` · ${r.subscription_status}`}
                         {r.trial_end && r.subscription_status === 'trialing' && ` until ${fmtWhen(r.trial_end).split(',')[0]}`}
                       </p>
@@ -336,11 +412,11 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
                             ? r.call_scheduled_for
                               ? `Call ${fmtWhen(r.call_scheduled_for)}`
                               : `${fmtWhen(r.call_booked_at)}${r.call_booked_via === 'admin' ? ' · by you' : ' · said they booked'}`
-                            : r.reminder_sent_at
-                              ? `Reminded ${fmtWhen(r.reminder_sent_at)}`
-                              : r.dismissed_at
-                                ? 'Hid the card'
-                                : ''}
+                            : r.call_missed_at
+                              ? fmtWhen(r.call_missed_at)
+                              : r.call_cancelled_at
+                                ? fmtWhen(r.call_cancelled_at)
+                                : lastEmail(r) || (r.dismissed_at ? 'Hid the card' : '')}
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-1.5 lg:flex-1">
@@ -368,11 +444,31 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
                               size="sm"
                               disabled={busy}
                               onClick={() =>
-                                void patch(r, { call_booked_at: new Date().toISOString(), call_booked_via: 'admin' }, `${r.company_name || r.slug} marked as booked`)
+                                void patch(r, { call_booked_at: new Date().toISOString(), call_booked_via: 'admin', ...NO_LOST_CALL }, `${r.company_name || r.slug} marked as booked`)
                               }
                             >
                               <CalendarCheck className="mr-1.5 h-3.5 w-3.5" />
                               Mark booked
+                            </Button>
+                          </>
+                        )}
+                        {!r.call_completed_at && r.call_booked_at && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={busy}
+                              onClick={() => void patch(r, { ...NOT_BOOKED, call_missed_at: new Date().toISOString() }, `${r.company_name || r.slug} marked as missed`)}
+                            >
+                              Mark missed
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={busy}
+                              onClick={() => void patch(r, { ...NOT_BOOKED, call_cancelled_at: new Date().toISOString() }, `${r.company_name || r.slug} marked as cancelled`)}
+                            >
+                              Mark cancelled
                             </Button>
                           </>
                         )}
@@ -381,7 +477,7 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
                             size="sm"
                             disabled={busy}
                             onClick={() =>
-                              void patch(r, { call_completed_at: new Date().toISOString() }, `Call with ${r.company_name || r.slug} marked done`)
+                              void patch(r, { call_completed_at: new Date().toISOString(), ...NO_LOST_CALL }, `Call with ${r.company_name || r.slug} marked done`)
                             }
                           >
                             <Check className="mr-1.5 h-3.5 w-3.5" />

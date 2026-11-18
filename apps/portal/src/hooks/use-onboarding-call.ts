@@ -10,7 +10,7 @@ import { useTenant } from "@/contexts/TenantContext";
  * a tenant), so the card simply does not render for them. Writes go through
  * `mark_my_onboarding_call(step)` only: an operator can say they booked, that
  * they previewed their site, or hide the card — never that the call happened,
- * which is Brian's to record from the admin app.
+ * which is Bryan's to record from the admin app.
  *
  * Bookings normally arrive by themselves: LeadConnector calls the
  * `onboarding-call-booked` edge function, which marks the row booked with the
@@ -18,7 +18,7 @@ import { useTenant } from "@/contexts/TenantContext";
  * the card switches to the checklist as soon as that lands.
  */
 
-/** Brian's live booking calendar (LeadConnector). */
+/** Bryan's live booking calendar (LeadConnector). */
 export const ONBOARDING_CALL_BOOKING_URL =
   "https://api.leadconnectorhq.com/widget/bookings/drive247-onboarding-call";
 

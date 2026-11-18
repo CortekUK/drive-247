@@ -1,7 +1,7 @@
 // =============================================================================
-// onboarding-call-booked — LeadConnector tells us about Brian's calendar.
+// onboarding-call-booked — LeadConnector tells us about Bryan's calendar.
 //
-// Brian's onboarding calls are booked on a LeadConnector (GoHighLevel)
+// Bryan's onboarding calls are booked on a LeadConnector (GoHighLevel)
 // calendar, embedded in the Portal V2 home card. LeadConnector sends nothing
 // back on its own, so a LeadConnector workflow ("Customer Booked Appointment"
 // and "Appointment Status" triggers → Webhook action) POSTs here:
@@ -20,7 +20,7 @@
 //
 // Only tenants being offered the onboarding call (Portal V2) are touched; a
 // V1 customer booking on the shared Support calendar is logged and ignored.
-// Every request is kept in onboarding_call_events, matched or not, so Brian
+// Every request is kept in onboarding_call_events, matched or not, so Bryan
 // can place a booking we could not. Always 200 once authenticated —
 // LeadConnector retries anything else, and a retry would not match any better.
 //
@@ -30,8 +30,75 @@
 
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { sendResendEmail } from "../_shared/resend-service.ts";
+import { buildBookingNoticeHtml, callEventValues } from "../_shared/onboarding-call-journey.ts";
 
 const LOG = "[onboarding-call-booked]";
+
+/**
+ * Email Bryan the customer's account details for a new or moved booking. Never
+ * throws: the booking is already saved, and a failed notice must not undo that.
+ * Recipients come from the ONBOARDING_CALL_NOTIFY_EMAILS secret (comma separated).
+ */
+async function notifyBryan(
+  supabase: any,
+  tenantId: string,
+  booker: { name: string; email: string; startsAt: string; timezone: string },
+): Promise<void> {
+  const to = (Deno.env.get("ONBOARDING_CALL_NOTIFY_EMAILS") ?? "").split(",").map((e) => e.trim()).filter(Boolean);
+  if (to.length === 0) {
+    console.warn(`${LOG} ONBOARDING_CALL_NOTIFY_EMAILS is not set, no booking notice sent`);
+    return;
+  }
+  try {
+    const [{ data: t }, { data: sub }, { count }, { data: signup }] = await Promise.all([
+      supabase.from("tenants")
+        .select("slug, company_name, contact_phone, phone, created_at, logo_url, subscription_plan")
+        .eq("id", tenantId).maybeSingle(),
+      supabase.from("tenant_subscriptions").select("status, trial_end").eq("tenant_id", tenantId)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("vehicles").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
+      supabase.from("signup_attribution").select("heard_about, heard_about_other, phone").eq("tenant_id", tenantId)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    if (!t) return;
+    const companyName = t.company_name || t.slug;
+    const result = await sendResendEmail({
+      to,
+      subject: `New onboarding call: ${companyName}`,
+      html: buildBookingNoticeHtml({
+        companyName,
+        slug: t.slug,
+        bookerName: booker.name,
+        bookerEmail: booker.email,
+        phone: t.contact_phone || t.phone || signup?.phone,
+        startsAt: booker.startsAt,
+        timezone: booker.timezone,
+        subscriptionStatus: sub?.status,
+        trialEnd: sub?.trial_end,
+        plan: t.subscription_plan,
+        signedUpAt: t.created_at,
+        vehicleCount: count ?? 0,
+        hasLogo: !!String(t.logo_url ?? "").trim(),
+        heardAbout: signup?.heard_about_other || signup?.heard_about,
+      }),
+      fromName: "Drive247",
+      replyTo: booker.email,
+      tenantId,
+      source: "onboarding-call-booked",
+      idempotencyKey: `onboarding-call-notice-${tenantId}-${booker.startsAt}`,
+    });
+    if (!result.success) {
+      console.error(`${LOG} booking notice failed:`, result.error);
+      return;
+    }
+    const { error } = await supabase.from("tenant_onboarding_calls")
+      .update({ booking_notified_for: booker.startsAt }).eq("tenant_id", tenantId);
+    if (error) console.error(`${LOG} notice sent but not recorded:`, error.message);
+  } catch (e) {
+    console.error(`${LOG} booking notice threw:`, e);
+  }
+}
 
 type Kind = "booked" | "cancelled" | "noshow" | "showed" | "unknown";
 
@@ -159,35 +226,35 @@ Deno.serve(async (req) => {
 
     const { data: row } = await supabase
       .from("tenant_onboarding_calls")
-      .select("call_booked_at, call_booked_via, call_completed_at")
+      .select("call_booked_at, call_booked_via, call_completed_at, booking_notified_for")
       .eq("tenant_id", tenant.id)
       .maybeSingle();
 
-    let values: Record<string, unknown>;
     let outcome: string;
     if (kind === "booked") {
-      values = {
-        call_booked_at: row?.call_booked_at ?? new Date().toISOString(),
-        call_booked_via: "calendar",
-        call_scheduled_for: startsAt,
-      };
       outcome = row?.call_booked_at ? "booking updated" : "booked";
     } else if (kind === "showed") {
-      values = { call_completed_at: row?.call_completed_at ?? new Date().toISOString() };
       outcome = "call done";
     } else {
       // Cancelled or no-show: offer the calendar again. Never undo a call
-      // already marked done, and never a booking Brian entered by hand.
+      // already marked done, and never a booking Bryan entered by hand.
       if (row?.call_completed_at) return await record(`${kind} ignored: call already done`, tenant.id);
       if (row?.call_booked_via === "admin") return await record(`${kind} ignored: booking was entered in admin`, tenant.id);
-      values = { call_booked_at: null, call_booked_via: null, call_scheduled_for: null };
       outcome = kind === "noshow" ? "no-show: open to book again" : "cancelled: open to book again";
     }
 
     const { error } = await supabase
       .from("tenant_onboarding_calls")
-      .upsert({ tenant_id: tenant.id, ...values }, { onConflict: "tenant_id" });
+      .upsert({ tenant_id: tenant.id, ...callEventValues(kind, row, startsAt, new Date().toISOString()) }, { onConflict: "tenant_id" });
     if (error) throw error;
+
+    // A repeated webhook for the same call time must not email Bryan twice.
+    const alreadyTold =
+      !!row?.booking_notified_for && !!startsAt &&
+      new Date(row.booking_notified_for).getTime() === new Date(startsAt).getTime();
+    if (kind === "booked" && startsAt && !alreadyTold) {
+      await notifyBryan(supabase, tenant.id, { name, email, startsAt, timezone: str(cal.selectedTimezone) || str(payload.timezone) });
+    }
     return await record(outcome, tenant.id);
   } catch (e) {
     console.error(`${LOG} error`, e);

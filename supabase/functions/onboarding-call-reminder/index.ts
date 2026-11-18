@@ -1,22 +1,20 @@
 // =============================================================================
-// onboarding-call-reminder — "your free onboarding call is still waiting".
+// onboarding-call-reminder — the emails that invite a new customer to book
+// their free 30-minute onboarding call with Bryan.
 //
-// Step 3 of the Nov 2026 onboarding journey: a Portal V2 tenant that signed up
-// more than 24 hours ago and has not booked its free 30-minute call with Brian
-// gets ONE email about it. Brian's tracker (admin → Customer management →
-// Onboarding calls) shows the same people, so he can reach out personally too.
+//   welcome    right after signup
+//   reminder   24 hours after signup
+//   follow_up  48-72 hours after signup
 //
-// Who is due (all must hold):
-//   - portal_experience = 'v2'
-//   - created between 14 days and 24 hours ago
-//   - latest subscription is trialing or active (a canceled test signup is not)
-//   - not booked, not completed, card not hidden, never reminded
+// Booking the call stops them. The rules are in _shared/onboarding-call-journey.ts.
+// Bryan's tracker (admin → Customer management → Onboarding calls) shows the same
+// people, so he can reach out personally too.
 //
 // Body:
 //   { dry_run: true }        list who is due, send nothing
-//   {}                       send to everyone due (pg_cron)
-//   { tenant_id: "<uuid>" }  Brian's "Send reminder" for one tenant: skips the
-//                            time window and the once-only rule, nothing else
+//   {}                       send everything due (pg_cron, every 5 minutes)
+//   { tenant_id: "<uuid>" }  Bryan's "Send reminder" for one tenant: skips the
+//                            timing rules, nothing else
 //
 // Auth: verify_jwt = false. x-platform-secret (pg_cron) or a super-admin JWT,
 // the same scheme as onboarding-daily-digest. Everything else is 401.
@@ -25,45 +23,23 @@
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendResendEmail } from "../_shared/resend-service.ts";
+import {
+  buildJourneyHtml,
+  JOURNEY_ENDS_MS,
+  journeySubject,
+  nextJourneyEmail,
+  SENT_COLUMN,
+  type JourneyEmail,
+} from "../_shared/onboarding-call-journey.ts";
 
 const LOG = "[onboarding-call-reminder]";
-const BOOKING_URL = "https://api.leadconnectorhq.com/widget/bookings/drive247-onboarding-call";
-const DAY = 86_400_000;
-
-const esc = (s: unknown) =>
-  String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 
 interface Due {
   tenant_id: string;
   slug: string;
   company_name: string;
   email: string;
-}
-
-function buildHtml(t: Due): string {
-  const portal = `https://${t.slug}.portal.drive-247.com`;
-  return `<!doctype html><html><body style="margin:0;background:#f8fafc;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#080812;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px;">
-    <table role="presentation" width="100%" style="max-width:560px;background:#ffffff;border:1px solid #f1f5f9;border-radius:16px;" cellpadding="0" cellspacing="0">
-      <tr><td style="padding:32px;">
-        <p style="margin:0 0 8px;font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#6366f1;">Free onboarding call</p>
-        <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;">Let&rsquo;s get ${esc(t.company_name || "your rental business")} set up</h1>
-        <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#404040;">
-          Your Drive247 trial includes a complimentary 30-minute onboarding session with Brian. He&rsquo;ll walk you
-          through Drive247, configure the essentials with you and help get your business ready to take bookings.
-        </p>
-        <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#404040;">Pick any time that suits you:</p>
-        <p style="margin:0 0 24px;"><a href="${BOOKING_URL}" style="display:inline-block;background:#6366f1;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 22px;border-radius:10px;">Book Your Free Onboarding Call</a></p>
-        <p style="margin:0 0 6px;font-size:13px;line-height:1.6;color:#737373;">
-          To make the 30 minutes count, before the call: add your first vehicle, upload your business logo and
-          preview your rental website &mdash; all from <a href="${portal}" style="color:#6366f1;">your portal</a>.
-        </p>
-        <p style="margin:16px 0 0;font-size:12px;line-height:1.6;color:#737373;">
-          The call is optional &mdash; you can keep using Drive247 straight away.
-        </p>
-      </td></tr>
-    </table>
-  </td></tr></table></body></html>`;
+  step: JourneyEmail;
 }
 
 Deno.serve(async (req) => {
@@ -112,13 +88,7 @@ Deno.serve(async (req) => {
       .from("tenants")
       .select("id, slug, company_name, contact_email, created_at")
       .eq("portal_experience", "v2");
-    if (only) {
-      tq = tq.eq("id", only);
-    } else {
-      tq = tq
-        .lte("created_at", new Date(Date.now() - DAY).toISOString())
-        .gte("created_at", new Date(Date.now() - 14 * DAY).toISOString());
-    }
+    tq = only ? tq.eq("id", only) : tq.gte("created_at", new Date(Date.now() - JOURNEY_ENDS_MS).toISOString());
     const { data: tenants, error: tErr } = await tq;
     if (tErr) throw tErr;
     const ids = (tenants ?? []).map((t) => t.id);
@@ -150,16 +120,28 @@ Deno.serve(async (req) => {
       const c: any = callBy.get(t.id);
       const sub = subBy.get(t.id);
       const email = (t.contact_email || ownerBy.get(t.id) || "").trim();
+      const step: JourneyEmail | null = only
+        ? "reminder"
+        : nextJourneyEmail({
+            tenantCreatedAt: t.created_at,
+            subscriptionStatus: sub,
+            callBookedAt: c?.call_booked_at,
+            callCompletedAt: c?.call_completed_at,
+            dismissedAt: c?.dismissed_at,
+            welcomeSentAt: c?.welcome_sent_at,
+            reminderSentAt: c?.reminder_sent_at,
+            followUpSentAt: c?.follow_up_sent_at,
+          });
       const reason =
         c?.call_completed_at ? "call done"
         : c?.call_booked_at ? "already booked"
         : !only && c?.dismissed_at ? "card hidden"
-        : !only && c?.reminder_sent_at ? "already reminded"
         : !only && sub !== "trialing" && sub !== "active" ? `subscription ${sub ?? "none"}`
+        : !step ? "nothing due yet"
         : !email ? "no email address"
         : null;
-      if (reason) skipped.push({ slug: t.slug, reason });
-      else due.push({ tenant_id: t.id, slug: t.slug, company_name: t.company_name ?? t.slug, email });
+      if (reason || !step) skipped.push({ slug: t.slug, reason: reason ?? "nothing due yet" });
+      else due.push({ tenant_id: t.id, slug: t.slug, company_name: t.company_name ?? t.slug, email, step });
     }
 
     if (dryRun) return jsonResponse({ success: true, dry_run: true, due, skipped });
@@ -169,15 +151,17 @@ Deno.serve(async (req) => {
     for (const t of due) {
       const result = await sendResendEmail({
         to: t.email,
-        subject: "Your free onboarding call with Brian is waiting",
-        html: buildHtml(t),
+        subject: journeySubject(t.step),
+        html: buildJourneyHtml(t.step, { slug: t.slug, companyName: t.company_name, email: t.email }),
         fromName: "Drive247",
         tenantId: t.tenant_id,
         source: "onboarding-call-reminder",
-        // Once per tenant for the automatic run; a manual resend is its own send.
+        // Once per tenant per email for the automatic run; a manual resend is its own send.
         idempotencyKey: only
           ? `onboarding-call-reminder-${t.tenant_id}-${Date.now()}`
-          : `onboarding-call-reminder-${t.tenant_id}`,
+          : t.step === "reminder"
+            ? `onboarding-call-reminder-${t.tenant_id}`
+            : `onboarding-call-${t.step}-${t.tenant_id}`,
       });
       if (!result.success) {
         failed.push({ slug: t.slug, error: result.error || "unknown error" });
@@ -185,7 +169,7 @@ Deno.serve(async (req) => {
       }
       const { error: upErr } = await supabase
         .from("tenant_onboarding_calls")
-        .upsert({ tenant_id: t.tenant_id, reminder_sent_at: new Date().toISOString() }, { onConflict: "tenant_id" });
+        .upsert({ tenant_id: t.tenant_id, [SENT_COLUMN[t.step]]: new Date().toISOString() }, { onConflict: "tenant_id" });
       if (upErr) console.error(`${LOG} sent to ${t.slug} but could not record it:`, upErr.message);
       sent.push(t.slug);
     }

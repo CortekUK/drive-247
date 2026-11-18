@@ -5,13 +5,13 @@
  *
  * Two states, one card, above the bands:
  *   not booked  "Let's get your rental business set up." + Book Your Free
- *               Onboarding Call, which opens Brian's live calendar embedded
+ *               Onboarding Call, which opens Bryan's live calendar embedded
  *               in the portal. Optional — nothing is gated on it.
  *   booked      the pre-call checklist: add your first vehicle, upload your
  *               logo, preview your website. The first two tick themselves from
  *               the tenant's own data; the third ticks when the link is opened.
  *
- * Gone once Brian marks the call done (admin → Customer management →
+ * Gone once Bryan marks the call done (admin → Customer management →
  * Onboarding calls), once the operator hides it, or for any tenant
  * `onboarding_call_eligible()` does not cover (older than 30 days and not on a
  * trial). Only `DashboardV2` mounts it, so V1 tenants never see it.
@@ -100,16 +100,16 @@ export function OnboardingCallCard() {
               <CalendarDays className="size-3.5" aria-hidden="true" /> Free onboarding call
             </Eyebrow>
             <h2 className="mt-2 text-[18px] font-semibold leading-tight tracking-[-0.015em] text-[var(--pv-ink)]">
-              Let&rsquo;s get your rental business set up.
+              Welcome to Drive247! 🎉
             </h2>
             <p className="mt-1.5 max-w-3xl text-[13px] leading-relaxed text-[var(--pv-ink-2)]">
-              Book your complimentary 30-minute onboarding session with Brian. We&rsquo;ll walk you through
-              Drive247, configure the essentials and help get your business ready to take bookings.
+              Get set up faster with your complimentary 30-minute onboarding session. Bryan will walk you
+              through the platform and help get your business ready to take bookings.
             </p>
           </div>
           <div className="flex shrink-0 flex-col items-stretch gap-1.5 lg:w-[300px]">
             <Button className="h-10 rounded-xl px-5" onClick={() => setCalendarOpen(true)}>
-              Book Your Free Onboarding Call
+              Book My Free Onboarding Call
             </Button>
             <p className="text-center text-[11px] text-[var(--pv-ink-3)]">
               Optional &mdash; you can start using Drive247 immediately.
@@ -123,7 +123,7 @@ export function OnboardingCallCard() {
               <CalendarCheck className="size-3.5" aria-hidden="true" /> Onboarding call booked
             </Eyebrow>
             <h2 className="mt-2 text-[18px] font-semibold leading-tight tracking-[-0.015em] text-[var(--pv-ink)]">
-              {doneCount === steps.length ? "You're ready for your call" : "Before your call with Brian"}
+              {doneCount === steps.length ? "You're ready for your call" : "Before your call with Bryan"}
             </h2>
             {state.callScheduledFor && (
               <p className="mt-1 text-[12px] font-medium text-[var(--pv-ink)]">
@@ -132,7 +132,7 @@ export function OnboardingCallCard() {
             )}
             <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--pv-ink-2)]">
               {doneCount === steps.length
-                ? "Brian can spend the 30 minutes showing you how everything works together."
+                ? "Bryan can spend the 30 minutes showing you how everything works together."
                 : "Three quick steps make the 30 minutes count — so the call is about how it all works, not typing in basics."}
             </p>
             <p className="mt-2 text-[11px] text-[var(--pv-ink-3)]">
@@ -272,7 +272,7 @@ function ChecklistLink({
 }
 
 /**
- * Brian's live calendar, embedded and pre-filled with the operator's email.
+ * Bryan's live calendar, embedded and pre-filled with the operator's email.
  * The widget sends both sides the invitation and reminders itself, and
  * LeadConnector's workflow tells `onboarding-call-booked`, which marks the card
  * booked; the card polls while this is open. "I've booked my call" stays as a
@@ -299,7 +299,7 @@ function BookingDialog({
         <DialogHeader className="px-6 pb-4 pt-6 text-left">
           <DialogTitle className="text-xl font-semibold tracking-tight">Book your free onboarding call</DialogTitle>
           <DialogDescription>
-            Pick a 30-minute slot with Brian. You&rsquo;ll both get a calendar invitation and reminders, and this
+            Pick a 30-minute slot with Bryan. You&rsquo;ll both get a calendar invitation and reminders, and this
             page updates as soon as you&rsquo;ve booked.
           </DialogDescription>
         </DialogHeader>
@@ -307,7 +307,7 @@ function BookingDialog({
           {open && (
             <iframe
               src={bookingUrl}
-              title="Brian's booking calendar"
+              title="Bryan's booking calendar"
               className="block h-[min(640px,65vh)] w-full border-0"
               loading="eager"
             />
