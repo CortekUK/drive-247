@@ -33,25 +33,12 @@ interface HeardAboutFieldsProps {
  * The question and the optional phone number. Used on the first account page
  * and on the short screen Google and Apple signups see after signing in.
  *
- * On a phone (coarse pointer) a native select: the phone's own picker is the
- * quickest way to answer. On a laptop the native list is the operating
- * system's menu, which on a Mac in dark mode is a dark grey translucent panel
- * that looks nothing like the form ("please correct the design colour"), so
- * there it is a styled dropdown in the signup's own colours, raised above the
- * full-screen signup layer (z-[200]).
+ * A styled dropdown in the signup's own colours on every device, raised above
+ * the full-screen signup layer (z-[200]). The native select showed the
+ * device's own menu, a dark grey translucent panel on a Mac, iPad or iPhone in
+ * dark mode that looked nothing like the form; the owner asked for the
+ * dropdown to be part of the UI everywhere, phones included.
  */
-function useCoarsePointer(): boolean {
-  const [coarse, setCoarse] = React.useState(false);
-  React.useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(pointer: coarse)");
-    const update = () => setCoarse(mq.matches);
-    update();
-    mq.addEventListener?.("change", update);
-    return () => mq.removeEventListener?.("change", update);
-  }, []);
-  return coarse;
-}
 
 export function HeardAboutFields({
   value,
@@ -64,7 +51,6 @@ export function HeardAboutFields({
   otherRef,
   phoneRef,
 }: HeardAboutFieldsProps) {
-  const coarse = useCoarsePointer();
   const pick = (next: string) => {
     onChange({ heardAbout: next as AttributionDraft["heardAbout"] });
     onClearError("heardAbout");
@@ -76,7 +62,6 @@ export function HeardAboutFields({
         <Label htmlFor="signup-heard-about" className={SIGNUP_LABEL}>
           How did you hear about us?
         </Label>
-        {!coarse ? (
           <SelectPrimitive.Root name="heardAbout" value={value.heardAbout} onValueChange={pick} disabled={busy} required>
             <SelectPrimitive.Trigger
               ref={heardAboutRef as React.Ref<HTMLButtonElement>}
@@ -119,41 +104,6 @@ export function HeardAboutFields({
               </SelectPrimitive.Content>
             </SelectPrimitive.Portal>
           </SelectPrimitive.Root>
-        ) : (
-        <div className="relative mt-1.5">
-          <select
-            ref={heardAboutRef as React.Ref<HTMLSelectElement>}
-            id="signup-heard-about"
-            name="heardAbout"
-            required
-            autoFocus={autoFocus}
-            disabled={busy}
-            value={value.heardAbout}
-            aria-invalid={Boolean(errors.heardAbout)}
-            aria-describedby={errors.heardAbout ? "signup-heard-about-error" : undefined}
-            onChange={(e) => pick(e.target.value)}
-            className={cn(
-              SIGNUP_INPUT,
-              "w-full cursor-pointer appearance-none border pr-10 outline-none transition-[color,box-shadow] focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-red-500",
-              "dark:[&>option]:bg-[#17171f]",
-              value.heardAbout ? "text-foreground" : "text-muted-foreground",
-            )}
-          >
-            <option value="" disabled>
-              Choose one
-            </option>
-            {HEARD_ABOUT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value} className="text-foreground">
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDown
-            aria-hidden
-            className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-foreground"
-          />
-        </div>
-        )}
         {errors.heardAbout && <FieldError id="signup-heard-about-error">{errors.heardAbout}</FieldError>}
       </div>
 

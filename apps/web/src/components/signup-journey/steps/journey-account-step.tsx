@@ -277,7 +277,7 @@ export function JourneyAccountStep({
 
         <div>
           <Label htmlFor="journey-email">
-            Work email
+            Email
             <span className="text-indigo-600 dark:text-indigo-400">*</span>
           </Label>
           <Input

@@ -895,7 +895,7 @@ export function AccountStep({
 
             <div>
               <Label htmlFor="signup-email" className={SIGNUP_LABEL}>
-                Work email
+                Email
               </Label>
               <Input
                 ref={emailRef}
