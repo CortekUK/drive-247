@@ -10,10 +10,17 @@
  *   - iOS: the app's URL scheme (`googlegmail://`, `ms-outlook://`).
  *   - Android: an `intent:` URL for the app's package, which Chrome hands to the
  *     app (or to the Play Store when it is not installed) without leaving the page.
- *   - Anything else, or when the app did not take over within a moment: the web
- *     inbox in a NEW tab.
- * Whether a phone has the app installed cannot be read from a web page, so the
- * fallback is decided by whether the page was hidden shortly after the attempt.
+ *   - Anything else: the web inbox in a NEW tab, opened inside the tap.
+ *
+ * WHEN THE APP DOES NOT OPEN. Whether a phone has the app installed cannot be
+ * read from a web page. If the page is still visible a moment after the
+ * attempt, `onNoApp` is called so the screen can show a real "open in the
+ * browser" link. It used to call window.open() from that timer, and phone
+ * browsers silently block a new tab that is not opened by a tap, so on an
+ * iPhone without the app the button "did nothing" (an owner's test,
+ * 2026-11-20). The same happens inside in-app browsers (WhatsApp, Instagram)
+ * that refuse custom schemes. (No `S.browser_fallback_url` on Android: it
+ * would navigate the signup tab itself away from the code.)
  */
 
 export type MailProvider = "gmail" | "outlook";
@@ -52,11 +59,15 @@ export function mailAppUrl(provider: MailProvider, os: MailPlatform): string | n
   return null;
 }
 
-/** How long to wait for the app to take over before opening the web inbox. */
-const APP_HANDOFF_MS = 1500;
+/** How long to wait for the app to take over before offering the web inbox. */
+const APP_HANDOFF_MS = 1200;
 
-/** Call from a click handler. Never navigates the signup tab to the web inbox. */
-export function openMailApp(provider: MailProvider): void {
+/**
+ * Call from a click handler. Never navigates the signup tab to the web inbox.
+ * `onNoApp` runs when the app did not take over (iOS), so the screen can offer
+ * the web inbox as a link the person taps.
+ */
+export function openMailApp(provider: MailProvider, onNoApp?: (provider: MailProvider) => void): void {
   if (typeof window === "undefined") return;
   const web = MAIL_WEB_URL[provider];
   const os = mailPlatform(navigator.userAgent, navigator.maxTouchPoints, navigator.platform);
@@ -83,6 +94,8 @@ export function openMailApp(provider: MailProvider): void {
     window.removeEventListener("pagehide", onHide);
     window.removeEventListener("blur", onHide);
     if (left || document.visibilityState === "hidden") return;
-    window.open(web, "_blank", "noopener,noreferrer");
+    // A window.open() here is blocked (not inside a tap), so hand back to the
+    // screen, which shows a link to tap.
+    onNoApp?.(provider);
   }, APP_HANDOFF_MS);
 }

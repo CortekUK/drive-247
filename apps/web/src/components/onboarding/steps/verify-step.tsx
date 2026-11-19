@@ -28,7 +28,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { ScreenHead, SIGNUP_HIT, SIGNUP_PRIMARY, SIGNUP_QUIET } from "@/components/onboarding/signup-ui";
 import { resendCooldownSeconds } from "@/components/onboarding/pending-verify";
-import { openMailApp, type MailProvider } from "@/components/onboarding/mail-apps";
+import { MAIL_WEB_URL, openMailApp, type MailProvider } from "@/components/onboarding/mail-apps";
 
 /** Mirrors OTP_RESEND_COOLDOWN_MS in supabase/functions/_shared/signup-otp.ts. */
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -117,6 +117,9 @@ export function VerifyStep({
   const touchOnly = useTouchOnly();
   /* Only so the active box can show a caret — the real one is invisible. */
   const [focused, setFocused] = React.useState(true);
+  // Set when the mail app did not open (an iPhone without it, or an in-app
+  // browser): the web inbox is then offered as a link to tap.
+  const [mailFallback, setMailFallback] = React.useState<MailProvider | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
@@ -286,13 +289,30 @@ export function VerifyStep({
               key={provider}
               type="button"
               variant="outline"
-              onClick={() => openMailApp(provider)}
+              onClick={() => {
+                setMailFallback(null);
+                openMailApp(provider, setMailFallback);
+              }}
               className="h-11 gap-2 rounded-xl border-zinc-200 bg-white text-[14px] font-medium text-foreground shadow-none dark:border-white/10 dark:bg-white/[0.03]"
             >
               <Logo />
               {label}
             </Button>
           ))}
+          {mailFallback && (
+            <p className="col-span-2 text-center text-[13px] text-muted-foreground" role="status">
+              {mailFallback === "gmail" ? "Gmail" : "Outlook"} app didn&rsquo;t open.{" "}
+              <a
+                href={MAIL_WEB_URL[mailFallback]}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-indigo-600 underline-offset-2 hover:underline dark:text-indigo-400"
+                onClick={() => setMailFallback(null)}
+              >
+                Open it in your browser
+              </a>
+            </p>
+          )}
         </div>
       ) : null}
 

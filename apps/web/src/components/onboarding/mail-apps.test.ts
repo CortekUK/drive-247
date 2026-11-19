@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * "Open Gmail" / "Open Outlook" on the code screen.
  *
@@ -6,7 +7,7 @@
  * brief.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { MAIL_WEB_URL, mailAppUrl, mailPlatform } from "./mail-apps";
 
@@ -40,5 +41,26 @@ describe("where each button goes", () => {
     expect(mailAppUrl("gmail", "other")).toBeNull();
     expect(MAIL_WEB_URL.gmail).toBe("https://mail.google.com/");
     expect(MAIL_WEB_URL.outlook).toBe("https://outlook.live.com/mail/");
+  });
+});
+
+describe("when the app does not open", () => {
+  it("hands back to the screen instead of opening a tab from a timer (blocked on phones)", async () => {
+    const { openMailApp } = await import("./mail-apps");
+    const ua = Object.getOwnPropertyDescriptor(window.navigator, "userAgent");
+    Object.defineProperty(window.navigator, "userAgent", { value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", configurable: true });
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    vi.useFakeTimers();
+    const onNoApp = vi.fn();
+    try {
+      try { openMailApp("gmail", onNoApp); } catch { /* jsdom refuses the custom-scheme navigation */ }
+      vi.advanceTimersByTime(1300);
+      expect(onNoApp).toHaveBeenCalledWith("gmail");
+      expect(open).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      open.mockRestore();
+      if (ua) Object.defineProperty(window.navigator, "userAgent", ua);
+    }
   });
 });
