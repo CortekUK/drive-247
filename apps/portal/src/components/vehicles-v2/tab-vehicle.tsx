@@ -122,7 +122,9 @@ export function VehicleTab({
                   key={p.id}
                   className={cn(
                     "group relative overflow-hidden rounded-4xl bg-card shadow-md transition-all",
-                    isCover ? "ring-2 ring-primary/40" : "ring-1 ring-foreground/5",
+                    // Phones: the cover runs the full width, the rest pair up
+                    // under it. One half-width photo looked pushed to the left.
+                    isCover ? "ring-2 ring-primary/40 max-sm:col-span-2" : "ring-1 ring-foreground/5",
                   )}
                 >
                   <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
@@ -143,10 +145,15 @@ export function VehicleTab({
                     )}
                   </div>
                   {!readOnly && (
-                    <div className="flex items-center gap-2 px-4 py-2.5 max-sm:flex-wrap max-sm:gap-x-0 max-sm:gap-y-0 max-sm:px-2 max-sm:py-2">
+                    <div
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-2.5",
+                        !isCover && "max-sm:flex-wrap max-sm:gap-x-0 max-sm:gap-y-0 max-sm:px-2 max-sm:py-2",
+                      )}
+                    >
                       {/* Phones: the caption has its own line, or the buttons
                           beside it leave room for one letter of it. */}
-                      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground max-sm:basis-full max-sm:px-1">
+                      <span className={cn("min-w-0 flex-1 truncate text-xs text-muted-foreground", !isCover && "max-sm:basis-full max-sm:px-1")}>
                         Photo {i + 1}
                       </span>
                       {!isCover && (
@@ -161,7 +168,7 @@ export function VehicleTab({
                           Cover
                         </Button>
                       )}
-                      <span className="max-sm:ml-auto">
+                      <span className={cn(!isCover && "max-sm:ml-auto")}>
                         <IconButton title="Remove photo" onClick={() => onRemovePhoto(p.id)}>
                           <X className="size-3.5" />
                         </IconButton>

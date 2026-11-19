@@ -29,7 +29,7 @@
  * hour. `hourWindow()` decides the range from the week actually resolved.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { format, isSameDay } from 'date-fns';
 import { Ban, Clock } from 'lucide-react';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui-v2/popover';
@@ -79,6 +79,19 @@ export function WeekCalendar({ days, defaults, canEdit, onSet, now }: WeekCalend
   const axisHours: number[] = [];
   for (let h = startHour; h <= endHour; h += labelStep) axisHours.push(h);
 
+  // Phones show three days at a time and the week swipes sideways (below).
+  // Open each week on today when it is in view, else on its first day. On a
+  // wider screen the row does not overflow, so this does nothing.
+  const scroller = useRef<HTMLDivElement>(null);
+  const todayIndex = now ? days.findIndex((d) => isSameDay(d.date, now)) : -1;
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || el.scrollWidth <= el.clientWidth) return;
+    const col = el.querySelectorAll<HTMLElement>('[data-tour="availability-day"]')[Math.max(0, todayIndex)];
+    const axis = el.firstElementChild as HTMLElement | null;
+    el.scrollLeft = col ? col.offsetLeft - (axis?.offsetWidth ?? 0) : 0;
+  }, [days[0]?.iso, todayIndex]);
+
   return (
     // No card wrapper here on purpose. The screen puts this and the weekly
     // default strip inside ONE card so the two share an edge, and the strip
@@ -86,14 +99,20 @@ export function WeekCalendar({ days, defaults, canEdit, onSet, now }: WeekCalend
     // so each default cell sits directly under the dates it governs. That
     // alignment is the argument the screen is making; it must not be able to
     // drift, so the constant is exported rather than typed twice.
-    <div className="flex">
+    // Below `lg` the row scrolls sideways, snapping to a day, with the hour
+    // axis pinned on the left: three days to a phone screen, and on a tablet
+    // no day narrower than 96px.
+    <div
+      ref={scroller}
+      className="flex max-lg:snap-x max-lg:snap-mandatory max-lg:overflow-x-auto max-lg:scroll-pl-[58px] max-lg:overscroll-x-contain max-lg:[scrollbar-width:none]"
+    >
       {/* ── hour axis ───────────────────────────────────────────────── */}
       {/* The tab tour points HERE for "the week, drawn as hours" rather than at
           the seven columns: the grid runs the full content width at ~584px
           tall, which is past the point where a spotlight degrades to a wash.
           The axis is 58px wide, so the card stands beside it and the whole
           calendar stays visible. */}
-      <div data-tour="availability-hours" className={cn(AXIS_WIDTH, 'shrink-0 border-r border-border')}>
+      <div data-tour="availability-hours" className={cn(AXIS_WIDTH, 'shrink-0 border-r border-border max-lg:sticky max-lg:left-0 max-lg:z-30 max-lg:bg-card')}>
         <div style={{ height: HEADER_HEIGHT }} className="border-b border-border" />
         <div className="relative" style={{ height: GRID_HEIGHT }}>
           {axisHours.map((h) => (
@@ -109,7 +128,7 @@ export function WeekCalendar({ days, defaults, canEdit, onSet, now }: WeekCalend
       </div>
 
       {/* ── seven day columns ───────────────────────────────────────── */}
-      <div className="grid flex-1 grid-cols-7 gap-px bg-border">
+      <div className="grid flex-1 grid-cols-7 gap-px bg-border max-lg:flex-none max-sm:w-[calc((100%-58px)*7/3)] sm:max-lg:w-[max(calc(100%-58px),672px)]">
         {days.map((day) => (
           <DayColumn
             key={day.iso}
@@ -198,7 +217,7 @@ function DayColumn({
           data-tour="availability-day"
           aria-label={`${format(day.date, 'EEEE d MMMM')} — ${label}. Edit this day.`}
           className={cn(
-            'group relative flex flex-col bg-card text-left outline-none transition-colors',
+            'group relative flex min-w-0 flex-col bg-card text-left outline-none transition-colors max-lg:snap-start',
             'focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-primary/60',
             isToday && !isException && 'bg-primary/[0.035]',
             isException && 'bg-warning/[0.07]',
@@ -287,7 +306,7 @@ function DayColumn({
                   {/* One readable range beats "9am" over "to 5pm". */}
                   <span
                     className={cn(
-                      'truncate text-[11px] font-medium leading-tight',
+                      'truncate text-[11px] font-medium leading-tight max-sm:whitespace-normal',
                       isException ? 'text-foreground' : 'text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]',
                     )}
                   >
@@ -296,7 +315,7 @@ function DayColumn({
                       : formatTimeShort(day.from)}
                   </span>
                   {height > 58 && (
-                    <span className="truncate text-[11px] leading-tight text-muted-foreground">
+                    <span className="truncate text-[11px] leading-tight text-muted-foreground max-sm:whitespace-normal">
                       Available online
                     </span>
                   )}
@@ -377,7 +396,7 @@ function DayColumn({
       {/* `gap-0` because PopoverContent is a flex column with a base `gap-4`,
           which would push 16px between the panel's own bordered sections; and
           `overflow-hidden` so those sections are clipped to its rounded edge. */}
-      <PopoverContent side="bottom" align="center" sideOffset={6} className="w-[286px] gap-0 overflow-hidden p-0">
+      <PopoverContent side="bottom" align="center" sideOffset={6} collisionPadding={16} className="w-[286px] gap-0 overflow-hidden p-0">
         <DayEditorPanel
           day={day}
           defaults={defaults}
