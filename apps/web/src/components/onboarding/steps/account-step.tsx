@@ -286,7 +286,7 @@ export function AccountStep({
   const honeypotRef = React.useRef<HTMLInputElement>(null);
   const fullNameRef = React.useRef<HTMLInputElement>(null);
   const emailRef = React.useRef<HTMLInputElement>(null);
-  const heardAboutRef = React.useRef<HTMLSelectElement>(null);
+  const heardAboutRef = React.useRef<HTMLSelectElement | HTMLButtonElement>(null);
   const heardAboutOtherRef = React.useRef<HTMLInputElement>(null);
   const phoneRef = React.useRef<HTMLInputElement>(null);
   const passwordRef = React.useRef<HTMLInputElement>(null);
