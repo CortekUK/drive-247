@@ -332,8 +332,6 @@ interface OnboardingShellValue {
    * with a Supabase 400 is worse than no button.
    */
   googleEnabled: boolean;
-  /** Whether "Continue with Apple" is offered — `NEXT_PUBLIC_SIGNUP_APPLE_ENABLED`. */
-  appleEnabled: boolean;
 }
 
 /**
@@ -342,16 +340,12 @@ interface OnboardingShellValue {
  */
 const GOOGLE_ENABLED = process.env.NEXT_PUBLIC_SIGNUP_GOOGLE_ENABLED === "true";
 
-/** The same switch for "Continue with Apple" — `NEXT_PUBLIC_SIGNUP_APPLE_ENABLED`. */
-const APPLE_ENABLED = process.env.NEXT_PUBLIC_SIGNUP_APPLE_ENABLED === "true";
-
 const OnboardingShellContext = createContext<OnboardingShellValue>({
   resolving: false,
   planSwitchBlocked: null,
   plans: SIGNUP_PLANS,
   accountMode: "create",
   googleEnabled: GOOGLE_ENABLED,
-  appleEnabled: APPLE_ENABLED,
 });
 
 export function useOnboarding(): OnboardingContextValue {
@@ -557,7 +551,7 @@ async function reportAccountCreated(userId: string, method: "email" | "oauth"): 
  * the card. Tells Meta's pixel (`CompleteRegistration`) and PostHog, and ties
  * this browser's earlier page views to the account. Never in the dev mock.
  *
- * `holdPostHog` is for a Google or Apple signup that has not answered "How did
+ * `holdPostHog` is for a Google signup that has not answered "How did
  * you hear about us?" yet. Meta is told now; PostHog waits for the answer, so
  * `signup_account_created` carries `heard_about` (see `submitAttribution`).
  */
@@ -585,7 +579,7 @@ async function reportAttributionAnswered(): Promise<void> {
     const user = data.session?.user;
     if (!user) return;
     const provider = user.app_metadata?.provider;
-    if (provider === "google" || provider === "apple") {
+    if (provider === "google") {
       await reportAccountCreated(user.id, "oauth");
     } else {
       // A password account already reported its creation when it was made.
@@ -1587,10 +1581,8 @@ export function OnboardingProvider({
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    // `apple` returns here exactly like `google`: Supabase hands back the same
-    // single-use code whichever provider the operator picked.
     const marker = params.get("signup");
-    if (marker !== "google" && marker !== "apple") return;
+    if (marker !== "google") return;
 
     const code = params.get("code");
     const oauthError = params.get("error_description") ?? params.get("error");
@@ -2137,8 +2129,7 @@ export function OnboardingProvider({
       const redirectTo = `${window.location.origin}${window.location.pathname}?signup=${provider}`;
       const { error: oauthError } = await getBrowserSupabase().auth.signInWithOAuth({
         provider,
-        // The account picker is Google's; Apple always asks which Apple ID.
-        options: { redirectTo, ...(provider === "google" ? { queryParams: { prompt: "select_account" } } : {}) },
+        options: { redirectTo, queryParams: { prompt: "select_account" } },
       });
       if (oauthError) {
         // The commonest cause by far is that no Google provider is configured on
@@ -2563,7 +2554,6 @@ export function OnboardingProvider({
       plans,
       accountMode,
       googleEnabled: GOOGLE_ENABLED,
-      appleEnabled: APPLE_ENABLED,
     }),
     [resolving, planSwitchBlocked, plans, accountMode],
   );

@@ -183,7 +183,6 @@ export function AccountStep({
   busy,
   error,
   googleEnabled,
-  appleEnabled,
   onSubmit,
   onSubmitTenant,
   onSubmitAttribution,
@@ -616,7 +615,6 @@ export function AccountStep({
     // are not asked twice. Without one, the question comes straight after sign-in.
     onGoogle(tenantValues(), provider, attributionFromDraft(attribution));
   };
-  const oauthEnabled = googleEnabled || appleEnabled;
 
   const handleSignIn = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -787,7 +785,7 @@ export function AccountStep({
   }
 
   // -------------------------------------------------------------------------
-  // Branch: `attribution` mode — signed in with Google or Apple, so they never
+  // Branch: `attribution` mode — signed in with Google, so they never
   // saw the question on the create-account form.
   // -------------------------------------------------------------------------
   if (mode === "attribution") {
@@ -861,11 +859,11 @@ export function AccountStep({
       {page === 0 && (
         <div key="page-0" className={SIGNUP_ENTER}>
           <ScreenHead
-            art={oauthEnabled ? undefined : null}
+            art={googleEnabled ? undefined : null}
             title="Let's get you on the road"
           />
 
-          <div className={cn(oauthEnabled ? "mt-6 space-y-3.5" : "mt-9 space-y-5")}>
+          <div className={cn(googleEnabled ? "mt-6 space-y-3.5" : "mt-9 space-y-5")}>
             <div>
               <Label htmlFor="signup-full-name" className={SIGNUP_LABEL}>
                 Your name
@@ -888,7 +886,7 @@ export function AccountStep({
                   setErrors((prev) => ({ ...prev, fullName: undefined }));
                   markDirty();
                 }}
-                className={cn(SIGNUP_INPUT, "mt-1.5", !oauthEnabled && "mt-2 h-12")}
+                className={cn(SIGNUP_INPUT, "mt-1.5", !googleEnabled && "mt-2 h-12")}
               />
               {nameError && <FieldError id="signup-full-name-error">{nameError}</FieldError>}
             </div>
@@ -926,7 +924,7 @@ export function AccountStep({
                 // Suggest on blur, not on every keystroke: "did you mean gmail.com"
                 // while someone is still typing "gm" is noise.
                 onBlur={() => setEmailSuggestion(suggestEmailCorrection(email))}
-                className={cn(SIGNUP_INPUT, "mt-1.5", !oauthEnabled && "mt-2 h-12")}
+                className={cn(SIGNUP_INPUT, "mt-1.5", !googleEnabled && "mt-2 h-12")}
               />
               {emailError ? (
                 <FieldError id="signup-email-error">{emailError}</FieldError>
@@ -962,7 +960,7 @@ export function AccountStep({
 
           {/*
             Page 0 carries its own Continue so the email path comes first and
-            Google / Apple sit under it; the shell hides its footer button here.
+            Google sits under it; the shell hides its footer button here.
           */}
           <Button type="submit" disabled={busy} className={cn(SIGNUP_PRIMARY, "mt-6")}>
             {busy ? (
@@ -975,7 +973,7 @@ export function AccountStep({
             )}
           </Button>
 
-          {oauthEnabled && (
+          {googleEnabled && (
             <>
               <div className="mt-4 flex items-center gap-3">
                 <Separator className="flex-1" />
@@ -1002,23 +1000,6 @@ export function AccountStep({
                     Continue with Google
                   </Button>
                 )}
-                {/*
-                  Apple's guidelines: a black button with the white mark (white on
-                  dark). MOCK until Apple is configured on Supabase: always drawn
-                  beside Google, but it only does something once
-                  NEXT_PUBLIC_SIGNUP_APPLE_ENABLED is "true".
-                */}
-                <Button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    if (appleEnabled) handleOauth("apple");
-                  }}
-                  className="h-11 w-full rounded-xl bg-black text-[15px] font-medium text-white shadow-none transition-colors duration-200 hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-                >
-                  <AppleMark />
-                  Continue with Apple
-                </Button>
               </div>
             </>
           )}
@@ -1283,15 +1264,6 @@ export function AccountStep({
  * form on the site — one that fails silently behind a content blocker and leaves
  * an unlabelled button.
  */
-/** Apple's logo, inline for the same reason as Google's; takes the button's text colour. */
-function AppleMark() {
-  return (
-    <svg viewBox="0 0 17 20" aria-hidden="true" className="h-[18px] w-4 shrink-0 fill-current">
-      <path d="M14.06 10.62c-.02-2.25 1.84-3.33 1.92-3.38-1.05-1.53-2.68-1.74-3.26-1.76-1.39-.14-2.71.82-3.42.82-.7 0-1.79-.8-2.95-.78-1.52.02-2.92.88-3.7 2.24-1.58 2.74-.4 6.79 1.13 9.01.75 1.09 1.65 2.31 2.82 2.26 1.13-.04 1.56-.73 2.93-.73 1.37 0 1.75.73 2.95.71 1.22-.02 1.99-1.1 2.73-2.2.86-1.26 1.22-2.49 1.24-2.55-.03-.01-2.37-.91-2.39-3.64ZM11.8 3.94c.62-.76 1.05-1.81.93-2.86-.9.04-1.99.6-2.64 1.36-.58.67-1.09 1.75-.95 2.78 1 .08 2.03-.51 2.66-1.28Z" />
-    </svg>
-  );
-}
-
 function GoogleMark() {
   return (
     <svg viewBox="0 0 18 18" aria-hidden="true" className="size-[18px] shrink-0">

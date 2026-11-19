@@ -112,7 +112,7 @@ export function OnboardingScreen() {
     checkSlug,
     setError,
   } = useOnboarding();
-  const { resolving, planSwitchBlocked, accountMode, googleEnabled, appleEnabled } =
+  const { resolving, planSwitchBlocked, accountMode, googleEnabled } =
     useOnboardingShell();
 
   const contentRef = useRef<HTMLDivElement>(null);
@@ -253,7 +253,7 @@ export function OnboardingScreen() {
     (dialogStep === "account" && Boolean(state.signInPrompt)) ||
     (dialogStep === "account" && state.error?.code === "EMAIL_IS_STAFF") ||
     (dialogStep === "account" && accountReset.open) ||
-    // The first account page draws its own Continue above Google / Apple.
+    // The first account page draws its own Continue above Google.
     (paging && accountPage === 0 && !accountReset.open) ||
     (dialogStep === "payment" && state.error?.code === "CONFIG_MISSING");
 
@@ -427,7 +427,6 @@ export function OnboardingScreen() {
                           busy={state.busy}
                           error={state.error}
                           googleEnabled={googleEnabled}
-                          appleEnabled={appleEnabled}
                           onSubmit={(values) => void submitAccount(values)}
                           onSubmitTenant={(values) => void submitTenantDetails(values)}
                           onSubmitAttribution={(values) => void submitAttribution(values)}

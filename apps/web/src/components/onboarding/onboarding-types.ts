@@ -410,14 +410,14 @@ export interface TenantFormValues {
  * customer would be resumed onto a create-account form for an account they
  * already have.
  *
- * `attribution` — "How did you hear about us?" on its own. Google and Apple
+ * `attribution` — "How did you hear about us?" on its own. Google
  * signups skip the form that carries the question, so they answer here straight
  * after signing in. Anyone else who reaches the card with no answer sees it too.
  */
 export type AccountStepMode = "create" | "tenant" | "attribution";
 
 /** The identity providers a signup can start with. */
-export type OauthProvider = "google" | "apple";
+export type OauthProvider = "google";
 
 export interface AccountStepProps {
   plan: SignupPlan;
@@ -446,20 +446,13 @@ export interface AccountStepProps {
    * fails is worse than no button at all.
    */
   googleEnabled: boolean;
-  /**
-   * Whether "Continue with Apple" is offered. Off unless
-   * `NEXT_PUBLIC_SIGNUP_APPLE_ENABLED` is "true", for the same reason as Google:
-   * it needs an Apple provider on the Supabase project and a
-   * `signup-begin-oauth` that accepts `apple`.
-   */
-  appleEnabled: boolean;
   onSubmit(values: AccountFormValues): void;
   /** `tenant` mode's submit: the account already exists and is paid for. */
   onSubmitTenant(values: TenantFormValues): void;
   /** `attribution` mode's submit. */
   onSubmitAttribution(values: SignupAttribution): void;
   /**
-   * Leaves the page for Google or Apple, carrying these values across the
+   * Leaves the page for Google, carrying these values across the
    * redirect. `attribution` is null when the question has not been answered yet.
    */
   onGoogle(
@@ -548,7 +541,7 @@ export interface OnboardingContextValue {
   submitTenantDetails(values: TenantFormValues): Promise<void>;
   /** `attribution`-mode submit: save the answer and carry on to the next screen. */
   submitAttribution(values: SignupAttribution): Promise<void>;
-  /** Stash the tenant details, then hand the browser to Google or Apple. Never returns. */
+  /** Stash the tenant details, then hand the browser to Google. Never returns. */
   startGoogleSignup(
     values: TenantFormValues,
     provider?: OauthProvider,

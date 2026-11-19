@@ -92,7 +92,7 @@ interface BeginOauthRequest {
  * member — and stamping a signup onto it would be starting a purchase on an
  * account whose owner did not ask for one.
  */
-const ALLOWED_PROVIDERS = new Set(["google", "apple"]);
+const ALLOWED_PROVIDERS = new Set(["google"]);
 
 function providersOf(user: {
   app_metadata?: Record<string, unknown> | null;

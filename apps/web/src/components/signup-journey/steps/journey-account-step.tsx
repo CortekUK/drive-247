@@ -24,16 +24,11 @@
  * local state would mean someone who pressed Escape to re-read a plan came back
  * to an empty form. The tenant draft was already lifted for the same reason.
  *
- * THE SOCIAL BUTTONS lead the screen because that is the order operators expect
- * — Google, then Apple, then the form. Neither starts an OAuth round trip here
- * (`signup-begin-oauth` is never called from this route), but they are not the
- * same kind of unfinished:
- *
- * - Google is implemented in the LIVE flow (`steps/account-step.tsx` →
- *   `handleGoogle` → `signup-begin-oauth`) and is only waiting on a provider
- *   being configured, so it stays enabled here and says where it is up to.
- * - Apple exists NOWHERE in this codebase except this button. It is therefore
- *   disabled and greyed rather than pretending — see the comment on it.
+ * THE GOOGLE BUTTON leads the screen, then the form. It does not start an
+ * OAuth round trip here (`signup-begin-oauth` is never called from this route):
+ * Google is implemented in the LIVE flow (`steps/account-step.tsx` →
+ * `handleGoogle` → `signup-begin-oauth`), so here it says where it is up to.
+ * There is no Apple sign-up.
  */
 
 import * as React from "react";
@@ -191,8 +186,6 @@ export function JourneyAccountStep({
    * What the Google button does today. It never leaves the page, never calls
    * `signup-begin-oauth`, and never lands the operator on an error — it says
    * where that provider is up to and puts the cursor where they can carry on.
-   *
-   * Google only: Apple is disabled below, so it can never reach this.
    */
   const handleSocial = (provider: "Google") => {
     setSocialNote(
@@ -207,13 +200,8 @@ export function JourneyAccountStep({
 
   return (
     <form onSubmit={handleSubmit} noValidate>
-      {/* ── social first ───────────────────────────────────────────────────
-          Side by side from `sm`. Stacked they were two 48px rows plus a gap —
-          ~108px of a panel that had to lose ~375px to stop scrolling — for two
-          buttons that are alternatives to each other and read perfectly well as
-          a pair. They stack again on a phone, where a full-width tap target
-          matters more than the vertical room. */}
-      <div className="grid gap-3 sm:grid-cols-2">
+      {/* ── social first: Google only ── */}
+      <div className="grid gap-3">
         <Button
           type="button"
           variant="outline"
@@ -225,47 +213,6 @@ export function JourneyAccountStep({
           Sign up with Google
         </Button>
 
-        {/*
-          "DISABLE hi rakho … disable, grey out kar do" — the team lead, pointing
-          at this button.
-
-          It was a solid black button that could not sign anyone up: pressing it
-          only put a line of grey text under the pair saying Apple was "coming
-          shortly". That is the worst of both — it is the loudest control on the
-          step, it invites a press, and the press is answered with an apology.
-
-          Apple is not merely unconfigured, it is unbuilt — and not only on this
-          route. `signup-begin-oauth` gates on
-          `ALLOWED_PROVIDERS = new Set(["google"])`, so an Apple identity is
-          REFUSED there with EMAIL_EXISTS_SIGN_IN even if a provider were turned
-          on; and the live account step renders no Apple button at all. Wiring
-          this one up is a server job, not a front-end one.
-
-          The live account step already applies exactly this
-          judgement to Google — it renders that button only when
-          `NEXT_PUBLIC_SIGNUP_GOOGLE_ENABLED` is on, because "a sign-in button
-          that answers with a Supabase 400 is worse than no button". Shown but
-          plainly out of service is the same call, and it keeps the row the
-          shape operators expect rather than leaving one lonely button.
-
-          `variant="outline"` so it matches Google's shape, and the base
-          `disabled:opacity-50` does the greying. The mark is
-          `fill="currentColor"`, so it fades with the label instead of staying a
-          hard black glyph on a faded button.
-        */}
-        <Button
-          type="button"
-          variant="outline"
-          size="lg"
-          disabled
-          className="h-11 w-full justify-center gap-3 text-[15px] font-medium"
-        >
-          <AppleMark />
-          Sign up with Apple
-          {/* A disabled button takes no focus and shows no title, so the reason
-              travels in its accessible name instead. */}
-          <span className="sr-only"> — not available yet</span>
-        </Button>
       </div>
 
       <div aria-live="polite">
@@ -584,26 +531,6 @@ function GoogleMark() {
         fill="#EA4335"
         d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.59C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.96l2.99 2.33C4.66 5.16 6.65 3.58 9 3.58Z"
       />
-    </svg>
-  );
-}
-
-/**
- * Apple's mark, inline and monochrome.
- *
- * `fill="currentColor"` on purpose: Apple's guidelines require the logo to be a
- * single flat colour matching the button's text — which is what also lets it
- * grey out with the label now that the button is disabled.
- */
-function AppleMark() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      fill="currentColor"
-      className="h-5 w-5 shrink-0"
-    >
-      <path d="M17.05 12.04c-.03-2.6 2.12-3.85 2.22-3.91-1.21-1.77-3.09-2.01-3.76-2.04-1.6-.16-3.13.94-3.94.94-.82 0-2.07-.92-3.4-.9-1.75.03-3.36 1.02-4.26 2.58-1.82 3.16-.47 7.83 1.3 10.39.87 1.25 1.9 2.66 3.26 2.61 1.31-.05 1.8-.85 3.39-.85 1.58 0 2.03.85 3.41.82 1.41-.02 2.3-1.28 3.16-2.53.99-1.45 1.4-2.86 1.42-2.93-.03-.02-2.73-1.05-2.76-4.15zM14.6 4.42c.72-.87 1.2-2.08 1.07-3.29-1.03.04-2.29.69-3.03 1.56-.66.77-1.25 2.01-1.09 3.19 1.15.09 2.32-.59 3.05-1.46z" />
     </svg>
   );
 }
