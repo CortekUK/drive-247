@@ -6,7 +6,7 @@ import { requestSignupOpen, SIGNUP_START_HREF } from "@/lib/open-signup";
 /**
  * A "Start free trial" link that opens the signup form itself, not the plans.
  *
- * On the landing page the form opens in place on the recommended plan. Anywhere
+ * On the landing page the form opens in place on the entry plan. Anywhere
  * else, or before the page has loaded, it is a plain link to `/?signup=start`,
  * which opens the same form when the landing page loads. A new tab or window
  * still works, because the href is real.

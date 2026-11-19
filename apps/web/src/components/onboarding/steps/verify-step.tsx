@@ -20,16 +20,42 @@
  */
 
 import * as React from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Mail } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { ScreenHead, SIGNUP_HIT, SIGNUP_PRIMARY, SIGNUP_QUIET } from "@/components/onboarding/signup-ui";
+import { resendCooldownSeconds } from "@/components/onboarding/pending-verify";
+import { openMailApp, type MailProvider } from "@/components/onboarding/mail-apps";
 
 /** Mirrors OTP_RESEND_COOLDOWN_MS in supabase/functions/_shared/signup-otp.ts. */
 const RESEND_COOLDOWN_SECONDS = 60;
+
+/**
+ * True on a phone or tablet: a touch screen with no mouse. The mail-app
+ * buttons are for people who would otherwise have to leave the browser to find
+ * the code; on a laptop the inbox is one tab away and the buttons are noise.
+ * Read after mount, so the server render and the first client render agree.
+ */
+function useTouchOnly(): boolean {
+  const [touch, setTouch] = React.useState(false);
+  React.useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(hover: none) and (pointer: coarse)");
+    setTouch(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setTouch(e.matches);
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, []);
+  return touch;
+}
+
+const MAIL_BUTTONS: readonly { provider: MailProvider; label: string }[] = [
+  { provider: "gmail", label: "Open Gmail" },
+  { provider: "outlook", label: "Open Outlook" },
+];
 
 export interface VerifyStepProps {
   email: string;
@@ -41,6 +67,11 @@ export interface VerifyStepProps {
   onUseDifferentEmail(): void;
   error: string | null;
   onClearError(): void;
+  /**
+   * When the code on screen was sent (Date.now()). A code screen restored after
+   * a reload starts the resend countdown from here rather than from 60 again.
+   */
+  sentAt?: number | null;
 }
 
 export function VerifyStep({
@@ -51,10 +82,14 @@ export function VerifyStep({
   onUseDifferentEmail,
   error,
   onClearError,
+  sentAt = null,
 }: VerifyStepProps) {
   const [code, setCode] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
-  const [cooldown, setCooldown] = React.useState(RESEND_COOLDOWN_SECONDS);
+  const [cooldown, setCooldown] = React.useState(() =>
+    sentAt ? resendCooldownSeconds(sentAt) : RESEND_COOLDOWN_SECONDS,
+  );
+  const touchOnly = useTouchOnly();
   /* Only so the active box can show a caret — the real one is invisible. */
   const [focused, setFocused] = React.useState(true);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -160,9 +195,11 @@ export function VerifyStep({
             /* `inputMode` and `autoComplete` together are what make a phone
                offer the code from the notification instead of making them
                retype it. */
+            name="one-time-code"
             inputMode="numeric"
             autoComplete="one-time-code"
             pattern="[0-9]*"
+            enterKeyHint="done"
             /* No `maxLength`: the browser clips a paste to it BEFORE onChange
                sees it, so " 220465" arrived as " 22046". `onChange` keeps the
                first six digits itself. */
@@ -211,6 +248,28 @@ export function VerifyStep({
           </p>
         ) : null}
       </div>
+
+      {/*
+        Under the boxes, phones only. Leaving the browser to find the code is where phone
+        signups were lost; these open the mail app and leave this tab where it
+        is. Secondary on purpose: Verify stays the one primary action.
+      */}
+      {touchOnly ? (
+        <div className="-mt-2 grid grid-cols-2 gap-2.5">
+          {MAIL_BUTTONS.map(({ provider, label }) => (
+            <Button
+              key={provider}
+              type="button"
+              variant="outline"
+              onClick={() => openMailApp(provider)}
+              className="h-11 gap-2 rounded-xl border-zinc-200 bg-white text-[14px] font-medium text-foreground shadow-none dark:border-white/10 dark:bg-white/[0.03]"
+            >
+              <Mail className="size-4 text-muted-foreground" aria-hidden />
+              {label}
+            </Button>
+          ))}
+        </div>
+      ) : null}
 
       {/*
         The same indigo the dialog's own primary buttons use — "Continue to

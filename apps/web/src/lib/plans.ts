@@ -160,6 +160,23 @@ export function getSignupPlan(
 }
 
 /**
+ * The plan a signup opens on when nobody picked one: a "Start free trial"
+ * button outside the pricing grid (the navbar, the hero, `?signup=start`).
+ *
+ * The cheapest plan in the live catalogue, not the `highlighted` one. The
+ * highlight is a recommendation on the pricing grid, where the visitor sees
+ * every card and chooses; used as a silent default it signed every navbar
+ * signup up to Growth (2026-11-19). Ties keep catalogue order. The payment
+ * step's "Change plan" lets them move up before anything is charged.
+ */
+export function entryPlanId(catalogue: readonly SignupPlan[] = SIGNUP_PLANS): SignupPlanId {
+  const pool = catalogue.length ? catalogue : SIGNUP_PLANS;
+  let best = pool[0];
+  for (const p of pool) if (p.amountCents < best.amountCents) best = p;
+  return best.id;
+}
+
+/**
  * The price a customer reads on the card, derived from `amountCents` — the one
  * number the server also charges. `priceUsd` stays in the contract because B2's
  * dialog header and B3's order summary read it, but nothing renders it directly:

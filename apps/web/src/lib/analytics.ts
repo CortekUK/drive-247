@@ -36,6 +36,7 @@ export type SignupEvent =
   | "signup_opened"
   | "signup_account_submitted"
   | "signup_account_created"
+  | "signup_plan_changed"
   | "signup_trial_started";
 
 type PostHog = {

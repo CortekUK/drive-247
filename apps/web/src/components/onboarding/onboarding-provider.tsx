@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import {
+  entryPlanId,
   getSignupPlan,
   isSignupPlanId,
   SIGNUP_PLANS,
@@ -60,6 +61,7 @@ import {
   clearPendingOauth,
   clearTenantDraft,
   draftToBusiness,
+  readLocalTenantDraft,
   readPendingOauth,
   resolveTenantDraft,
   saveTenantDraft,
@@ -67,6 +69,11 @@ import {
   writePendingOauth,
 } from "./tenant-draft";
 import { isMockSignup, mockResetSignup } from "./mock-signup";
+import {
+  clearPendingVerify,
+  readPendingVerify,
+  writePendingVerify,
+} from "./pending-verify";
 import { OnboardingScreen } from "./onboarding-screen";
 
 /** This tab's open signup screen, so a refresh can reopen it. */
@@ -332,6 +339,18 @@ interface OnboardingShellValue {
    * with a Supabase 400 is worse than no button.
    */
   googleEnabled: boolean;
+  /**
+   * When the code on the code screen was sent (Date.now()), so a code screen
+   * restored after a reload resumes the resend countdown instead of restarting
+   * it. Null when unknown.
+   */
+  verifySentAt: number | null;
+  /**
+   * The payment step's "Change plan": switch the plan being bought before
+   * paying. A new intent is minted for it; the server cancels the old
+   * incomplete subscription.
+   */
+  changePlan(planId: SignupPlanId): void;
 }
 
 /**
@@ -346,6 +365,8 @@ const OnboardingShellContext = createContext<OnboardingShellValue>({
   plans: SIGNUP_PLANS,
   accountMode: "create",
   googleEnabled: GOOGLE_ENABLED,
+  verifySentAt: null,
+  changePlan: () => {},
 });
 
 export function useOnboarding(): OnboardingContextValue {
@@ -619,6 +640,21 @@ export function OnboardingProvider({
   const [resolving, setResolving] = useState(false);
   const [planSwitchBlocked, setPlanSwitchBlocked] = useState<SignupPlanId | null>(null);
   const [accountMode, setAccountMode] = useState<AccountStepMode>("create");
+  const [verifySentAt, setVerifySentAt] = useState<number | null>(null);
+
+  /**
+   * Remember the code screen in this browser (pending-verify.ts), so leaving to
+   * read the email, a reload or a closed tab comes back to the code for the
+   * same address rather than to an empty form. Called each time a code is sent.
+   */
+  const rememberCodeSent = useCallback(
+    (account: { fullName: string; email: string }, planId: SignupPlanId) => {
+      const sentAt = Date.now();
+      setVerifySentAt(sentAt);
+      writePendingVerify({ email: account.email, fullName: account.fullName, planId, sentAt });
+    },
+    [],
+  );
 
   /*
    * `submitTenantDetails` needs `startPayment`, which is declared further down
@@ -1443,11 +1479,7 @@ export function OnboardingProvider({
     // `isSignupPlanId` rather than a cast: the hint comes from app_metadata,
     // which is server-written but still just JSON, and `open()` types its
     // argument as the literal union.
-    const planId = isSignupPlanId(hinted)
-      ? hinted
-      : (plans.find((p) => p.highlighted)?.id ??
-        plans[0]?.id ??
-        SIGNUP_PLANS[0].id);
+    const planId = isSignupPlanId(hinted) ? hinted : entryPlanId(plans);
     open(planId);
   }, [hasResumableSignup, open, plans]);
 
@@ -1625,9 +1657,44 @@ export function OnboardingProvider({
       /* storage blocked: nothing to restore */
     }
     restoreCheckedRef.current = true;
-    if (!isSignupPlanId(planId)) return;
     // The Google and Stripe returns reopen the screen themselves.
     if (new URLSearchParams(window.location.search).get("signup")) return;
+
+    /*
+     * Back on the code screen for the same address, if a code was sent from
+     * this browser and is still good (pending-verify.ts). Checked BEFORE the
+     * tab's open plan: `open()` would route an account with no session through
+     * `signup-resume`, which cannot see an unconfirmed signup, and they would
+     * land on the sign-in panel instead of the code. A session (they finished
+     * the code in another tab) wins: that is the ordinary resume below.
+     */
+    const pending = readPendingVerify();
+    if (pending && isSignupPlanId(pending.planId)) {
+      void (resumeProbeRef.current ?? Promise.resolve()).finally(() => {
+        if (resumeHintRef.current) {
+          clearPendingVerify();
+          window.setTimeout(() => open(pending.planId), 0);
+          return;
+        }
+        const s = stateRef.current;
+        if (s.step !== "plan") return;
+        dispatch({ type: "setPlan", planId: pending.planId });
+        dispatch({ type: "setAccount", account: { fullName: pending.fullName, email: pending.email } });
+        const draft = readLocalTenantDraft();
+        if (draft) {
+          dispatch({ type: "business", patch: draftToBusiness(draft) });
+          pendingTenantRef.current = draft;
+        }
+        setVerifySentAt(pending.sentAt);
+        setHasResumableSignup(true);
+        setIsOpen(true);
+        dispatch({ type: "goto", step: "account" });
+        dispatch({ type: "goto", step: "verify" });
+      });
+      return;
+    }
+
+    if (!isSignupPlanId(planId)) return;
     const restorePlan = planId;
     void (resumeProbeRef.current ?? Promise.resolve()).finally(() => {
       window.setTimeout(() => open(restorePlan), 0);
@@ -1638,14 +1705,19 @@ export function OnboardingProvider({
 
   /**
    * "Start free trial" outside the pricing grid (the hero, the header, the demo
-   * form's thank-you screen): open the form straight away on the recommended
-   * plan, instead of scrolling to the cards. A button on this page asks with
-   * OPEN_SIGNUP_EVENT; one on another page sends the visitor to `?signup=start`.
-   * Choosing another card later still switches the plan before payment.
+   * form's thank-you screen): open the form straight away, instead of scrolling
+   * to the cards. A button on this page asks with OPEN_SIGNUP_EVENT; one on
+   * another page sends the visitor to `?signup=start`.
+   *
+   * It opens on the ENTRY plan (the cheapest in the live catalogue), not the
+   * highlighted one. It used to pick the highlighted tier, and nothing on the
+   * way to the card said so or offered another: every ad visitor who pressed
+   * the navbar button was signed up to Growth (2026-11-19). Nobody pressed a
+   * plan, so the honest default is the one that costs least, and the payment
+   * step now always shows "Change plan".
    */
   useEffect(() => {
-    const defaultPlan = (): SignupPlanId =>
-      plans.find((p) => p.highlighted)?.id ?? plans[0]?.id ?? SIGNUP_PLANS[0].id;
+    const defaultPlan = (): SignupPlanId => entryPlanId(plans);
 
     const onRequest = (event: Event) => {
       event.preventDefault();
@@ -1782,6 +1854,10 @@ export function OnboardingProvider({
           // The local half of the draft needs no session, and it is what makes
           // a reload during the code screen survivable.
           writeLocalTenantDraft(tenant);
+          rememberCodeSent(
+            { fullName: values.fullName.trim(), email: values.email.trim().toLowerCase() },
+            planId,
+          );
           setHasResumableSignup(true);
           if (!isMockSignup()) captureSignup("signup_account_submitted", { plan: planId });
           dispatch({ type: "goto", step: "verify" });
@@ -1874,6 +1950,8 @@ export function OnboardingProvider({
               // in the instant the address is confirmed.
               pendingPasswordRef.current = values.password;
               pendingTenantRef.current = tenant;
+              writeLocalTenantDraft(tenant);
+              rememberCodeSent({ fullName: values.fullName.trim(), email }, planId);
               dispatch({
                 type: "setAccount",
                 account: { fullName: values.fullName.trim(), email },
@@ -1903,7 +1981,7 @@ export function OnboardingProvider({
         if (!handedOff) dispatch({ type: "busy", busy: false });
       }
     },
-    [startPaymentInternal],
+    [rememberCodeSent, startPaymentInternal],
   );
 
   /**
@@ -1933,6 +2011,9 @@ export function OnboardingProvider({
           return false;
         }
         setVerifyError(null);
+        // The code is spent: a reload from here is the ordinary resume path.
+        clearPendingVerify();
+        setVerifySentAt(null);
 
         /*
          * THE SESSION IS MINTED HERE, NOT BEFORE.
@@ -1958,6 +2039,19 @@ export function OnboardingProvider({
             return true;
           }
           void reportRegistration("email");
+        } else if (!(await getBrowserSupabase().auth.getSession()).data.session) {
+          /*
+           * A CODE SCREEN RESTORED AFTER A RELOAD OR A CLOSED TAB.
+           *
+           * The password lived in memory only, so the address is confirmed but
+           * nothing can sign in for them. Ask for it once on the "pick up where
+           * you left off" panel; `signInExisting` then resumes onto the card,
+           * and the business they typed comes back from the local draft.
+           */
+          dispatch({ type: "signInPrompt", prompt: { email, reason: "EMAIL_IN_SIGNUP" } });
+          setAccountMode("create");
+          dispatch({ type: "resumeTo", step: "account" });
+          return true;
         }
 
         // Now that a session exists, the draft can reach the server copy — the
@@ -2002,11 +2096,15 @@ export function OnboardingProvider({
       // shows the countdown, so saying it twice is noise.
       if (!res.ok && res.code !== "OTP_COOLDOWN") {
         setVerifyError(res.error ?? "We could not send another code.");
+      } else if (res.ok) {
+        // A fresh code: the remembered screen lasts as long as this one does.
+        const s = stateRef.current;
+        if (s.account && s.planId) rememberCodeSent(s.account, s.planId);
       }
     } catch (e) {
       setVerifyError(toOnboardingError(e).message);
     }
-  }, []);
+  }, [rememberCodeSent]);
 
   const submitTenantDetails = useCallback(
     async (values: TenantFormValues) => {
@@ -2166,6 +2264,15 @@ export function OnboardingProvider({
           dispatch({ type: "error", error: err("SIGN_IN_FAILED") });
           return;
         }
+        // The business typed before a reload on the code screen: now that a
+        // session exists it can reach the copy that survives a device switch.
+        const pendingTenant = pendingTenantRef.current;
+        pendingTenantRef.current = null;
+        if (pendingTenant) {
+          await saveTenantDraft(pendingTenant).catch((e) =>
+            console.warn("[onboarding] could not save the business draft", e),
+          );
+        }
         // We now hold a session; the server decides where they belong.
         resumeHintRef.current = await fetchSignupMeta();
         dispatch({ type: "signInPrompt", prompt: null });
@@ -2188,6 +2295,16 @@ export function OnboardingProvider({
   );
 
   const useDifferentEmail = useCallback(() => {
+    // From the code screen: back to the form (name and email kept, so the
+    // address can be corrected), and the remembered code screen is forgotten.
+    if (stateRef.current.step === "verify") {
+      clearPendingVerify();
+      setVerifySentAt(null);
+      pendingPasswordRef.current = null;
+      setVerifyError(null);
+      setAccountMode("create");
+      dispatch({ type: "goto", step: "account" });
+    }
     dispatch({ type: "signInPrompt", prompt: null });
     dispatch({ type: "error", error: null });
   }, []);
@@ -2219,6 +2336,22 @@ export function OnboardingProvider({
   const startPayment = useCallback(async () => {
     await startPaymentInternal(stateRef.current.planId);
   }, [startPaymentInternal]);
+
+  /**
+   * "Change plan" on the payment step. Only before paying: once money has
+   * moved the plan is fixed (the same rule `open()` follows for edge case 28).
+   */
+  const changePlan = useCallback(
+    (planId: SignupPlanId) => {
+      const s = stateRef.current;
+      if (s.step !== "payment" || s.payment.paid || s.busy || s.planId === planId) return;
+      if (!getSignupPlan(planId, plans)) return;
+      if (!isMockSignup()) captureSignup("signup_plan_changed", { plan: planId, from: s.planId ?? undefined });
+      dispatch({ type: "setPlan", planId });
+      void startPaymentInternal(planId);
+    },
+    [plans, startPaymentInternal],
+  );
 
   const applyPromoCode = useCallback(
     async (raw: string | null): Promise<string | null> => {
@@ -2554,8 +2687,10 @@ export function OnboardingProvider({
       plans,
       accountMode,
       googleEnabled: GOOGLE_ENABLED,
+      verifySentAt,
+      changePlan,
     }),
-    [resolving, planSwitchBlocked, plans, accountMode],
+    [resolving, planSwitchBlocked, plans, accountMode, verifySentAt, changePlan],
   );
 
   const overlayMounted = state.step === "provisioning" || state.step === "done";

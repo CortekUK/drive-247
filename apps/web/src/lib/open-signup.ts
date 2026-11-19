@@ -11,7 +11,7 @@
 
 export const OPEN_SIGNUP_EVENT = "drive247:open-signup";
 
-/** The landing page with the signup form already open on the recommended plan. */
+/** The landing page with the signup form already open on the entry plan (see `entryPlanId`). */
 export const SIGNUP_START_HREF = "/?signup=start";
 
 /** Ask the signup on this page to open. True when it did. */

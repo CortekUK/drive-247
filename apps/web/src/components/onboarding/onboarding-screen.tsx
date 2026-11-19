@@ -112,7 +112,7 @@ export function OnboardingScreen() {
     checkSlug,
     setError,
   } = useOnboarding();
-  const { resolving, planSwitchBlocked, accountMode, googleEnabled } =
+  const { resolving, planSwitchBlocked, accountMode, googleEnabled, plans, verifySentAt, changePlan } =
     useOnboardingShell();
 
   const contentRef = useRef<HTMLDivElement>(null);
@@ -153,6 +153,11 @@ export function OnboardingScreen() {
   useEffect(() => {
     setAccountPage(0);
   }, [state.signInPrompt]);
+  // "Use a different email" on the code screen returns to the first page,
+  // where the address is, not to the business page the form was sent from.
+  useEffect(() => {
+    if (state.step === "verify") setAccountPage(0);
+  }, [state.step]);
 
   // The confirmation panel replaces the visible body, so focus follows it.
   useEffect(() => {
@@ -318,7 +323,10 @@ export function OnboardingScreen() {
           <SignupDoodles />
 
           {/* ── top bar ───────────────────────────────────────────────────── */}
-          <header className="relative flex h-14 shrink-0 items-center justify-between gap-4 px-5 max-sm:px-3 sm:h-16 sm:px-8">
+          {/* Short screens give the card the height: a slimmer bar, a closer
+              progress row and less air below (no step scrolls inside its card
+              at 1366x768 or 360x740). */}
+          <header className="relative flex h-14 shrink-0 items-center justify-between gap-4 px-5 max-sm:px-3 sm:h-16 sm:px-8 [@media(max-height:820px)]:h-12 sm:[@media(max-height:820px)]:h-12 [@media(max-height:700px)]:h-10 sm:[@media(max-height:700px)]:h-10">
             <div />
 
 
@@ -348,10 +356,10 @@ export function OnboardingScreen() {
           {/* ── the screen ────────────────────────────────────────────────── */}
           {/* Centred on every screen size (user, 2026-11-13). The page itself never
               scrolls: a card taller than the screen scrolls inside itself. */}
-          <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-3 pb-4 max-sm:pb-[max(24px,env(safe-area-inset-bottom))] sm:px-6 sm:pb-8">
+          <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-3 pb-4 max-sm:pb-[max(24px,env(safe-area-inset-bottom))] sm:px-6 sm:pb-8 sm:[@media(max-height:820px)]:pb-5 max-sm:[@media(max-height:820px)]:pb-[max(16px,env(safe-area-inset-bottom))] sm:[@media(max-height:700px)]:pb-3 max-sm:[@media(max-height:700px)]:pb-[max(12px,env(safe-area-inset-bottom))]">
             {/* Progress sits above the card, not on it. */}
             <ol
-              className="mb-5 flex shrink-0 items-center justify-center gap-1.5 max-sm:mb-4"
+              className="mb-5 flex shrink-0 items-center justify-center gap-1.5 max-sm:mb-4 [@media(max-height:820px)]:mb-3 [@media(max-height:700px)]:mb-2"
               aria-label={`Step ${progressIndex + 1} of ${PROGRESS_LABELS.length}: ${PROGRESS_LABELS[progressIndex]}`}
             >
               {PROGRESS_LABELS.map((label, i) => (
@@ -378,7 +386,9 @@ export function OnboardingScreen() {
               {/* Sized to fit: the picture shrinks, then steps aside, on short
                   screens (see ScreenHead), so the page itself never scrolls.
                   The overflow here is a last resort for a phone held sideways. */}
-              <div className="min-h-0 overflow-y-auto px-6 py-7 [scrollbar-width:none] overscroll-contain sm:px-10 sm:py-8 [&::-webkit-scrollbar]:hidden">
+              {/* Below 700px of height the picture is gone (ArtStage), so the card's
+                  own padding can tighten without un-cancelling its margins. */}
+              <div className="min-h-0 overflow-y-auto px-6 py-7 [scrollbar-width:none] overscroll-contain sm:px-10 sm:py-8 [@media(max-height:700px)]:py-5 sm:[@media(max-height:700px)]:py-5 [&::-webkit-scrollbar]:hidden">
                 <div ref={contentRef} className="w-full">
                 {closeConfirmOpen ? (
                   <div key="leave" className={SIGNUP_ENTER}>
@@ -451,6 +461,7 @@ export function OnboardingScreen() {
                           onUseDifferentEmail={useDifferentEmail}
                           error={verifyError}
                           onClearError={clearVerifyError}
+                          sentAt={verifySentAt}
                         />
                       ) : null}
 
@@ -476,14 +487,26 @@ export function OnboardingScreen() {
                           companyName={state.business.companyName}
                           portalSlug={state.business.slug}
                           onWideChange={setPaymentWide}
+                          plans={plans}
+                          onChangePlan={changePlan}
                         />
                       ) : null}
                     </div>
                   )}
 
                   {/* The Stripe line always sits directly under the Pay button.
-                      Two-column: both live in the right column, under the card form. */}
-                  <div className={cn(paymentColumns && "flex flex-col", paymentTwoCol && "lg:grid lg:grid-cols-2 lg:gap-x-10 lg:[&>*]:col-start-2")}>
+                      Two-column: both live in the right column, under the card form.
+                      Phones: the pair is pinned to the bottom of the card, so
+                      "Start my free trial" is on screen without scrolling however
+                      tall Stripe's card form is (owner, 2026-11-19: 390x844). */}
+                  <div
+                    className={cn(
+                      paymentColumns && "flex flex-col",
+                      paymentColumns &&
+                        "max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:-mx-6 max-sm:bg-white max-sm:px-6 max-sm:pb-3 dark:max-sm:bg-[#17171f]",
+                      paymentTwoCol && "lg:grid lg:grid-cols-2 lg:gap-x-10 lg:[&>*]:col-start-2",
+                    )}
+                  >
                   {paymentColumns && (
                     <p className="order-last mt-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
                       <Lock className="h-3 w-3 shrink-0" aria-hidden="true" />

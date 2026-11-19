@@ -24,7 +24,7 @@ import * as React from "react";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import type { Stripe, StripeElementsOptions } from "@stripe/stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
-import { CreditCard, Loader2, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Check, CreditCard, Loader2, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useTheme } from "next-themes";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -44,7 +44,7 @@ import {
   resolveTrialEnd,
   type ApplePayTerms,
 } from "@/components/onboarding/apple-pay-terms";
-import type { SignupPlan } from "@/lib/plans";
+import { formatPlanPriceUsd, type SignupPlan, type SignupPlanId } from "@/lib/plans";
 import type { PromoOffer } from "@/lib/promo-offer";
 import { readReferralCodeFromDocument } from "@/lib/referral-cookie";
 import { ScreenHead, SIGNUP_ENTER } from "@/components/onboarding/signup-ui";
@@ -240,7 +240,12 @@ export function PaymentStep({
   companyName = "",
   portalSlug = "",
   onWideChange,
+  plans = [],
+  onChangePlan,
 }: PaymentStepProps) {
+  const [planPickerOpen, setPlanPickerOpen] = React.useState(false);
+  // Plans you can switch to: the live catalogue, with the current plan in it.
+  const switchable = plans.length > 1 && onChangePlan ? plans : [];
   const wide = useWideFlag(onWideChange);
   const isTrial = intentType === "setup";
   const firstPayment = isTrial ? firstPaymentLabel(trialEndsAt, trialDays) : null;
@@ -449,7 +454,7 @@ export function PaymentStep({
       />
 
       {/* Order summary — the last place the price is shown before it is taken. */}
-      <div className="mt-5 flex items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-white px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]">
+      <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-white px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]">
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
             {plan.name}
@@ -462,6 +467,20 @@ export function PaymentStep({
           <p className="mt-0.5 text-xs text-muted-foreground max-sm:whitespace-nowrap">
             {plan.fleetBand}
           </p>
+          {/* Always offered before paying: a signup that started from a
+              button with no plan on it must be able to pick the right one. */}
+          {switchable.length > 0 && (
+            <button
+              type="button"
+              disabled={busy}
+              aria-expanded={planPickerOpen}
+              aria-controls="signup-plan-picker"
+              onClick={() => setPlanPickerOpen((v) => !v)}
+              className="relative mt-0.5 text-xs font-medium text-indigo-600 underline-offset-4 hover:underline disabled:opacity-50 max-sm:after:absolute max-sm:after:-inset-x-2 max-sm:after:-inset-y-2 max-sm:after:content-[''] dark:text-indigo-400"
+            >
+              {planPickerOpen ? "Keep this plan" : "Change plan"}
+            </button>
+          )}
         </div>
         {isTrial ? (
           // Free trial: nothing today. The price and the day it starts are said
@@ -492,16 +511,32 @@ export function PaymentStep({
         )}
       </div>
 
+      {planPickerOpen && switchable.length > 0 && (
+        <PlanPicker
+          plans={switchable}
+          currentId={plan.id}
+          busy={busy}
+          onPick={(id) => {
+            setPlanPickerOpen(false);
+            if (id !== plan.id) onChangePlan?.(id);
+          }}
+        />
+      )}
+
       {isTrial && (
         // Said right under the price, where people decide whether to give a
         // card: the trial really is free and they can leave without paying.
-        // No mention of reminder emails until we actually send them.
-        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-          <span className="font-medium text-foreground">No charge today.</span>{" "}
-          {firstPayment
-            ? `Your first payment is on ${firstPayment}. Cancel before then and you won't be charged.`
-            : "Cancel before your trial ends and you won't be charged."}
-        </p>
+        // The reminder line is the owner's call (2026-11-19); the email itself
+        // ships separately and must go out 3 days before `trial_end`.
+        <div className="mt-2 space-y-0.5 text-xs leading-relaxed text-muted-foreground">
+          <p>
+            <span className="font-medium text-foreground">No charge today.</span>{" "}
+            {firstPayment
+              ? `Your first payment is on ${firstPayment}. Cancel before then and you won't be charged.`
+              : "Cancel before your trial ends and you won't be charged."}
+          </p>
+          <p>We&apos;ll email you 3 days before your trial ends.</p>
+        </div>
       )}
 
       {/* No "applied" note: the code stays in its box with Remove beside it,
@@ -646,7 +681,21 @@ function PaymentForm({
   const stripe = useStripe();
   const elements = useElements();
   const paymentElementOptions = React.useMemo(
-    () => ({ layout: "tabs" as const, ...(applePayTerms ? { applePay: applePayTerms } : {}) }),
+    () => ({
+      layout: "tabs" as const,
+      /*
+       * No Link. A visitor whose email Stripe recognises was shown Link's saved
+       * card ("Visa Debit ... Confirm", "Change payment method") with Link's
+       * own black Confirm button, a second primary action beside "Start my
+       * free trial" that does not finish the signup. With Link off the form is
+       * always Card, Apple Pay and Google Pay, and the purple button below is
+       * the only way through. Client-side only: the subscription is created
+       * card-only (`payment_method_types: ["card"]`), and Link reached the form
+       * as card autofill, which this option controls.
+       */
+      wallets: { link: "never" as const },
+      ...(applePayTerms ? { applePay: applePayTerms } : {}),
+    }),
     [applePayTerms],
   );
 
@@ -1144,12 +1193,15 @@ function ConfigurationErrorPanel() {
 }
 
 /**
- * One field for a promo OR a referral code, always open.
+ * One field for a promo OR a referral code, behind a small "Have a code?" link.
  *
  * `promo-code-lookup` decides the kind from the code itself, so the box does
- * not need to ask. It was two labelled boxes behind a "Have a code?" link;
- * Ghulam asked for one box, always showing, named for both kinds so somebody
- * holding a friend's referral code can see it belongs here.
+ * not need to ask. It is one box named for both kinds, so somebody holding a
+ * friend's referral code can see it belongs here. Since 2026-11-19 it starts
+ * closed (the owner: the big empty box drew the eye away from the card on the
+ * last step), and opens on a tap. It starts OPEN, filled, whenever a code is
+ * already in play: one applied to the subscription, or one carried in by a
+ * referral link / ?ref= (the d247_ref cookie).
  *
  * The subscription carries a single discount, so applying a code REPLACES the
  * one on it, and the line under the box says which one went.
@@ -1168,22 +1220,39 @@ export function DiscountCodeFields({
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [replaced, setReplaced] = React.useState<string | null>(null);
+  const [open, setOpen] = React.useState(Boolean(applied));
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  /** Focus the box only when it was opened by a tap, never on arrival. */
+  const focusOnOpenRef = React.useRef(false);
 
   /*
    * A referral arriving by link is already APPLIED by the provider before this
-   * step renders. Showing the box empty under that reads as "we lost it", so
-   * the carried code is put back in it.
+   * step renders. Showing the box empty (or hidden) under that reads as "we
+   * lost it", so the carried code is put back in an open box.
    */
   React.useEffect(() => {
     const carried = readReferralCodeFromDocument();
-    if (carried) setValue((v) => v || carried);
+    if (carried) {
+      setValue((v) => v || carried);
+      setOpen(true);
+    }
   }, []);
 
   // The applied code lives in the box, so the box is where it is removed.
   const appliedCode = applied?.displayCode ?? null;
   React.useEffect(() => {
-    if (appliedCode) setValue(appliedCode);
+    if (appliedCode) {
+      setValue(appliedCode);
+      setOpen(true);
+    }
   }, [appliedCode]);
+
+  React.useEffect(() => {
+    if (open && focusOnOpenRef.current) {
+      focusOnOpenRef.current = false;
+      inputRef.current?.focus();
+    }
+  }, [open]);
   const showingApplied = !!appliedCode && value.trim().toUpperCase() === appliedCode.toUpperCase();
 
   const remove = async () => {
@@ -1221,6 +1290,25 @@ export function DiscountCodeFields({
     }
   };
 
+  if (!open) {
+    return (
+      <p className="mt-2 text-xs">
+        <button
+          type="button"
+          aria-expanded={false}
+          disabled={busy}
+          onClick={() => {
+            focusOnOpenRef.current = true;
+            setOpen(true);
+          }}
+          className="relative font-medium text-indigo-600 underline-offset-4 hover:underline disabled:opacity-50 max-sm:after:absolute max-sm:after:-inset-x-2 max-sm:after:-inset-y-3 max-sm:after:content-[''] dark:text-indigo-400"
+        >
+          Have a code?
+        </button>
+      </p>
+    );
+  }
+
   return (
     <form
       className="mt-3"
@@ -1234,6 +1322,7 @@ export function DiscountCodeFields({
       </label>
       <div className="flex gap-2">
         <Input
+          ref={inputRef}
           id="signup-discount-code"
           value={value}
           onChange={(e) => {
@@ -1283,5 +1372,73 @@ export function DiscountCodeFields({
         </p>
       )}
     </form>
+  );
+}
+
+/**
+ * "Change plan" on the payment step: every plan in the live catalogue, with
+ * the one being bought ticked. Picking another mints a new intent for it
+ * (the provider's `changePlan`; the server cancels the old incomplete
+ * subscription, so two can never be live). Names, bands and prices come from
+ * the catalogue the pricing cards were rendered from, never from copy here.
+ */
+export function PlanPicker({
+  plans,
+  currentId,
+  busy,
+  onPick,
+}: {
+  plans: readonly SignupPlan[];
+  currentId: SignupPlanId;
+  busy: boolean;
+  onPick(id: SignupPlanId): void;
+}) {
+  return (
+    <div
+      id="signup-plan-picker"
+      role="radiogroup"
+      aria-label="Choose a plan"
+      className={cn("mt-2 grid gap-1.5", SIGNUP_ENTER)}
+    >
+      {plans.map((p) => {
+        const selected = p.id === currentId;
+        return (
+          <button
+            key={p.id}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            disabled={busy}
+            onClick={() => onPick(p.id)}
+            className={cn(
+              "flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2 text-left transition-colors duration-200 ease-out disabled:opacity-60 motion-reduce:transition-none",
+              selected
+                ? "border-indigo-500 bg-indigo-50/60 dark:border-indigo-400 dark:bg-indigo-500/10"
+                : "border-zinc-200 bg-white hover:border-zinc-300 dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-white/20",
+            )}
+          >
+            <span className="min-w-0">
+              <span className="block text-sm font-medium">{p.name}</span>
+              <span className="block text-xs text-muted-foreground">{p.fleetBand}</span>
+            </span>
+            <span className="flex shrink-0 items-center gap-2 text-sm font-semibold tabular-nums">
+              {formatPlanPriceUsd(p)}
+              <span className="-ml-1.5 text-xs font-normal text-muted-foreground">/month</span>
+              <span
+                aria-hidden
+                className={cn(
+                  "flex size-[18px] items-center justify-center rounded-full border",
+                  selected
+                    ? "border-indigo-600 bg-indigo-600 text-white dark:border-indigo-400 dark:bg-indigo-400 dark:text-[#0e0e14]"
+                    : "border-zinc-300 text-transparent dark:border-white/20",
+                )}
+              >
+                <Check className="size-3" strokeWidth={3} />
+              </span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }

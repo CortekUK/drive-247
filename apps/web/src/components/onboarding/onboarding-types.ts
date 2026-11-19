@@ -511,6 +511,13 @@ export interface PaymentStepProps {
   companyName?: string;
   /** The chosen portal address, where Apple Wallet links to manage the plan. */
   portalSlug?: string;
+  /**
+   * The live plan catalogue, for "Change plan". The step offers the switch
+   * whenever there is more than one plan and `onChangePlan` is given.
+   */
+  plans?: readonly SignupPlan[];
+  /** Switch the plan being bought (a new intent is minted for it). */
+  onChangePlan?(planId: SignupPlanId): void;
 }
 
 // ---------------------------------------------------------------------------

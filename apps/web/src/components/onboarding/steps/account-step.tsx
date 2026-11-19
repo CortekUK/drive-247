@@ -863,7 +863,9 @@ export function AccountStep({
             title="Let's get you on the road"
           />
 
-          <div className={cn(googleEnabled ? "mt-6 space-y-3.5" : "mt-9 space-y-5")}>
+          {/* Spaced to fit with no inner scroll down to 1366x768 and 360x740
+              (owner, 2026-11-19): every field stays, the gaps tighten. */}
+          <div className={cn(googleEnabled ? "mt-5 space-y-3 [@media(max-height:700px)]:mt-4 [@media(max-height:700px)]:space-y-2" : "mt-9 space-y-5")}>
             <div>
               <Label htmlFor="signup-full-name" className={SIGNUP_LABEL}>
                 Your name
@@ -949,7 +951,7 @@ export function AccountStep({
                   ?
                 </p>
               ) : (
-                <p id="signup-email-help" className="mt-2 text-[13px] text-muted-foreground">
+                <p id="signup-email-help" className="mt-1.5 text-[13px] text-muted-foreground">
                   This becomes the owner login for your portal.
                 </p>
               )}
@@ -962,7 +964,7 @@ export function AccountStep({
             Page 0 carries its own Continue so the email path comes first and
             Google sits under it; the shell hides its footer button here.
           */}
-          <Button type="submit" disabled={busy} className={cn(SIGNUP_PRIMARY, "mt-6")}>
+          <Button type="submit" disabled={busy} className={cn(SIGNUP_PRIMARY, googleEnabled ? "mt-5 [@media(max-height:700px)]:mt-4" : "mt-6")}>
             {busy ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -975,13 +977,13 @@ export function AccountStep({
 
           {googleEnabled && (
             <>
-              <div className="mt-4 flex items-center gap-3">
+              <div className="mt-3 flex items-center gap-3 [@media(max-height:700px)]:mt-2">
                 <Separator className="flex-1" />
                 <span className="text-xs text-muted-foreground">or</span>
                 <Separator className="flex-1" />
               </div>
 
-              <div className="mt-4 space-y-2.5">
+              <div className="mt-3 space-y-2.5 [@media(max-height:700px)]:mt-2">
                 {googleEnabled && (
                   // Google's sign-in branding: white with a #747775 hairline and
                   // #1F1F1F Roboto Medium in light, #131314 / #8E918F / #E3E3E3
@@ -1014,7 +1016,7 @@ export function AccountStep({
             the wrong one, and taking it burned a throttle slot to be told something
             they already knew.
           */}
-          <p className="mt-5 text-center text-[13px] text-muted-foreground">
+          <p className="mt-4 text-center text-[13px] text-muted-foreground [@media(max-height:700px)]:mt-3">
             Already started?{" "}
             <button
               type="button"

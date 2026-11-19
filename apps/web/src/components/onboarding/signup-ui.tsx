@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 
 /** Inputs on these screens: taller, rounder and larger type than the site default. */
 export const SIGNUP_INPUT =
-  "h-11 rounded-xl border-zinc-200 bg-white px-4 text-[15px] shadow-none md:text-[15px] max-sm:text-base dark:border-white/10 dark:bg-white/[0.03] focus-visible:border-indigo-500 focus-visible:ring-indigo-500/20 dark:focus-visible:border-indigo-400";
+  "h-11 [@media(max-height:700px)]:h-10 rounded-xl border-zinc-200 bg-white px-4 text-[15px] shadow-none md:text-[15px] max-sm:text-base dark:border-white/10 dark:bg-white/[0.03] focus-visible:border-indigo-500 focus-visible:ring-indigo-500/20 dark:focus-visible:border-indigo-400";
 
 /** The one primary action per screen. */
 export const SIGNUP_PRIMARY =
@@ -89,7 +89,7 @@ export function ScreenHead({
       ) : art ? (
         <ArtStage className="-mx-6 -mt-7 mb-6 self-stretch sm:-mx-10 sm:-mt-8">{art}</ArtStage>
       ) : null}
-      <h2 id={titleId} className="text-[24px] leading-[1.2] font-semibold tracking-[-0.02em] text-balance sm:text-[26px]">
+      <h2 id={titleId} className="text-[24px] leading-[1.2] font-semibold tracking-[-0.02em] text-balance sm:text-[26px] [@media(max-height:700px)]:text-[22px] sm:[@media(max-height:700px)]:text-[23px]">
         {title}
       </h2>
       {lead ? (
