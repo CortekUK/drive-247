@@ -70,6 +70,7 @@ import {
   type HourCols,
 } from "../_shared/tenant-provisioning.ts";
 import { sendResendEmail } from "../_shared/resend-service.ts";
+import { emailLink, renderDrive247Email } from "../_shared/drive247-email.ts";
 import { buildCmsContent, seedTenantCmsContent } from "../_shared/tenant-cms-content.ts";
 import { readRehearsalFor, REHEARSAL_TENANT_SLUG } from "../_shared/signup-rehearsal.ts";
 import { isSecured, markTrialGrantUsed, savedPaymentMethodOf } from "../_shared/signup-trial.ts";
@@ -1663,28 +1664,36 @@ Deno.serve(async (req) => {
      * the client will retry. A failure is logged for support to pick up.
      */
     try {
-      const emailHtml = `
-<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;color:#0f172a">
-  <h1 style="font-size:22px;font-weight:600;margin:0 0 8px">Your Drive247 portal is ready</h1>
-  <p style="font-size:14px;line-height:1.6;color:#475569;margin:0 0 24px">
-    ${escapeHtml(companyName)} is set up on the ${escapeHtml(plan.name)} plan. Here is everything you need.
-  </p>
-  <table style="width:100%;border-collapse:collapse;font-size:14px">
-    <tr><td style="padding:10px 0;color:#64748b;width:130px">Your portal</td>
-        <td style="padding:10px 0"><a href="${portalUrl}" style="color:#4f46e5;font-weight:600">${portalUrl}</a></td></tr>
-    <tr><td style="padding:10px 0;color:#64748b">Booking site</td>
-        <td style="padding:10px 0"><a href="${bookingUrl}" style="color:#4f46e5;font-weight:600">${bookingUrl}</a></td></tr>
-    <tr><td style="padding:10px 0;color:#64748b">Sign in as</td>
-        <td style="padding:10px 0"><strong>${escapeHtml(meta.email)}</strong></td></tr>
-  </table>
-  <p style="font-size:13px;line-height:1.6;color:#64748b;margin:24px 0 0">
-    Sign in with the password you chose during signup. Your web address is fixed
-    and cannot be changed later, so keep this email.
-  </p>
-</div>`;
+      const company = escapeHtml(companyName);
+      const emailHtml = renderDrive247Email({
+        preheader: `${company} is set up on Drive247. Your portal and booking site addresses are inside.`,
+        eyebrow: "Welcome to Drive247",
+        title: `Welcome aboard, ${escapeHtml(firstName)}! Your portal is ready`,
+        intro: [
+          `${company} is set up on the ${escapeHtml(plan.name)} plan. Everything you need to start is below.`,
+        ],
+        cta: { label: "Open my portal", href: portalUrl },
+        details: {
+          heading: "Your account",
+          rows: [
+            { label: "Your portal", value: emailLink(portalUrl, portalUrl.replace(/^https:\/\//, "")) },
+            { label: "Booking site", value: emailLink(bookingUrl, bookingUrl.replace(/^https:\/\//, "")) },
+            { label: "Sign in as", value: `<strong>${escapeHtml(meta.email)}</strong>` },
+          ],
+        },
+        steps: {
+          heading: "Your first steps",
+          items: [
+            "<strong>Add your first vehicle</strong>, with photos and a daily price.",
+            "<strong>Connect payments</strong> so customers can pay when they book.",
+            "<strong>Share your booking site</strong> with your customers.",
+          ],
+        },
+        note: `${user?.app_metadata?.provider === "google" ? "Sign in with the same Google account you used to sign up." : "Sign in with the password you chose during signup."} Your web address is fixed and cannot be changed later, so keep this email.`,
+      });
       const sent = await sendResendEmail({
         to: meta.email,
-        subject: `Your Drive247 portal is ready — ${companyName}`,
+        subject: `Welcome to Drive247: your portal is ready`,
         html: emailHtml,
       });
       if (!sent?.success) {

@@ -84,13 +84,25 @@ describe('hero-row tour anchors: the steps point at them first', () => {
       sel('vehicles-chart'),
       sel('fleet-overview'),
       sel('fleet-stat-total-vehicles'),
+      '[data-slot="sidebar-inset"] [data-tour="page-header"]',
       '[data-slot="sidebar-inset"] h1',
     ]);
     expect(firstRunStep('customers').anchors).toEqual([
       sel('customers-chart'),
       sel('customers-stats'),
+      '[data-slot="sidebar-inset"] [data-tour="page-header"]',
       '[data-slot="sidebar-inset"] h1',
     ]);
+  });
+
+  it('an empty Vehicles or Customers tab lights the whole title block, not the h1 alone', () => {
+    // Neither overview is drawn on an empty tab, so a new tenant lands here.
+    for (const page of ['vehicles', 'customers']) {
+      const src = codeOnly(readPortalSource(`app/(dashboard)/${page}/page.tsx`));
+      expect(src, page).toContain('data-tour="page-header"');
+    }
+    expect(firstRunStep('vehicles').body).not.toMatch(/graph/i);
+    expect(firstRunStep('customers').body).not.toMatch(/graph/i);
   });
 
   it('Rentals: the calendar note still names the card that opens calendar view', () => {

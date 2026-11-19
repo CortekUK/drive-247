@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
+import { useFirstRunWizard } from "@/hooks/use-first-run-wizard";
+import { usePortalOnV2 } from "@/lib/v2-context";
 
 /**
  * Confirms a subscription the operator did not start from inside the portal.
@@ -36,6 +38,13 @@ import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
  *
  * The RECENT window stops an old subscription greeting someone months later on
  * a new laptop.
+ *
+ * V2 FIRST RUN: a new signup has just paid on drive-247.com, which already said
+ * so, and lands straight in the full-screen first-run wizard. This dialog used
+ * to open the moment billing loaded and then vanish behind the wizard a beat
+ * later, which the operator saw as a screen flashing up and disappearing. On
+ * v2 it now waits while the wizard is deciding, and is recorded as seen
+ * without showing when the wizard is about to take the screen.
  */
 const ACK_PREFIX = "d247.subActivated.";
 const RECENT_DAYS = 7;
@@ -45,9 +54,22 @@ export function SubscriptionActivatedDialog() {
   const [open, setOpen] = useState(false);
 
   const subId = subscription?.stripe_subscription_id ?? null;
+  const onV2 = usePortalOnV2();
+  const wizard = useFirstRunWizard();
+  const wizardPending = onV2 && wizard.isLoading;
+  const wizardTakesOver = onV2 && wizard.shouldShow;
 
   useEffect(() => {
     if (!isResolved || !isSubscribed || !subId) return;
+    if (wizardPending) return;
+    if (wizardTakesOver) {
+      try {
+        window.localStorage.setItem(`${ACK_PREFIX}${subId}`, new Date().toISOString());
+      } catch {
+        /* storage unavailable: nothing to record, and nothing is shown */
+      }
+      return;
+    }
 
     // Only greet a subscription that actually started recently.
     const startedAt = subscription?.current_period_start || subscription?.created_at;
@@ -63,7 +85,7 @@ export function SubscriptionActivatedDialog() {
       // silently swallowing the only confirmation they get.
     }
     setOpen(true);
-  }, [isResolved, isSubscribed, subId, subscription?.current_period_start, subscription?.created_at]);
+  }, [isResolved, isSubscribed, subId, subscription?.current_period_start, subscription?.created_at, wizardPending, wizardTakesOver]);
 
   const acknowledge = () => {
     try {

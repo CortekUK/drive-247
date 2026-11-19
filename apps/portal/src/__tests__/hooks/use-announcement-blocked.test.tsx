@@ -36,6 +36,13 @@ let wizard = { shouldShow: false, isLoading: false };
 vi.mock('@/hooks/use-migration-status', () => ({ useMigrationStatus: () => migration }));
 vi.mock('@/hooks/use-first-run-wizard', () => ({ useFirstRunWizard: () => wizard }));
 
+// The first-rental tour's "due" signal: off unless a test turns it on.
+let tour = { lean: false, chrome: false, pathname: '/', appUserId: 'user-1' as string | null };
+vi.mock('next/navigation', () => ({ usePathname: () => tour.pathname }));
+vi.mock('@/stores/auth-store', () => ({ useAuth: () => ({ appUser: tour.appUserId ? { id: tour.appUserId } : null }) }));
+vi.mock('@/lib/lean-context', () => ({ useIsLean: () => tour.lean }));
+vi.mock('@/lib/v2-context', () => ({ useV2: () => tour.chrome }));
+
 const MARKERS = [
   'data-first-rental-tour',
   'data-tour-transit',
@@ -58,6 +65,8 @@ async function flush() {
 beforeEach(() => {
   migration = { migrationPromptShowing: false, isLoading: false };
   wizard = { shouldShow: false, isLoading: false };
+  tour = { lean: false, chrome: false, pathname: '/', appUserId: 'user-1' };
+  window.localStorage.clear();
   useFeedbackStore.setState({ isOpen: false });
   window.history.replaceState(null, '', '/');
   document.body.removeAttribute('data-scroll-locked');
@@ -220,8 +229,11 @@ describe('useAnnouncementBlocked: onboarding blocks FEATURE dialogs; system dial
 });
 
 describe('readAnnouncementDomBlocked', () => {
-  it('lists exactly the five markers, and the system scope skips the ones that yield', () => {
-    expect(ANNOUNCEMENT_BLOCKING_MARKERS.split(',').map((s) => s.trim())).toEqual(MARKERS.map((m) => `[${m}]`));
+  it('lists exactly the five markers (plus the confetti for features), and the system scope skips the ones that yield', () => {
+    expect(ANNOUNCEMENT_BLOCKING_MARKERS.split(',').map((s) => s.trim())).toEqual([
+      ...MARKERS.map((m) => `[${m}]`),
+      '[data-first-run-confetti]',
+    ]);
     expect(SYSTEM_ANNOUNCEMENT_BLOCKING_MARKERS.split(',').map((s) => s.trim())).toEqual(
       MARKERS.map((m) => `[${m}]:not([data-yields-to-system])`),
     );
@@ -258,5 +270,34 @@ describe('readAnnouncementDomBlocked', () => {
     document.body.appendChild(popover);
     expect(readAnnouncementDomBlocked(false)).toBe(false);
     expect(readAnnouncementDomBlocked(false, 'system')).toBe(false);
+  });
+});
+
+describe('the first-rental tour is due: feature dialogs wait for it', () => {
+  it('holds a feature dialog for a v2 user on the dashboard who has not seen the tour', () => {
+    tour = { ...tour, lean: true, chrome: true };
+    expect(render().result.current).toEqual(FEATURE_ONLY);
+  });
+
+  it('lets it through once the tour has been seen, off the dashboard, or off v2', async () => {
+    const { markTourSeen } = await import('@/lib/first-rental-tour');
+    tour = { ...tour, lean: true, chrome: true, pathname: '/vehicles' };
+    expect(render().result.current).toEqual(CLEAR);
+    cleanup();
+    tour = { ...tour, pathname: '/', chrome: false };
+    expect(render().result.current).toEqual(CLEAR);
+    cleanup();
+    tour = { ...tour, chrome: true };
+    markTourSeen('user-1');
+    expect(render().result.current).toEqual(CLEAR);
+  });
+
+  it('holds a feature dialog, not a system one, while the first-run confetti is up', async () => {
+    const { result } = render();
+    const el = document.createElement('div');
+    el.setAttribute('data-first-run-confetti', '');
+    await act(async () => { document.body.appendChild(el); });
+    await flush();
+    expect(result.current).toEqual(FEATURE_ONLY);
   });
 });

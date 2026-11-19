@@ -824,7 +824,7 @@ const CustomersList = () => {
     <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0" data-tour="page-header">
           <h1 className="text-2xl sm:text-3xl font-bold">Customers</h1>
           <p className="text-muted-foreground text-sm sm:text-base">Manage customers and account balances</p>
         </div>

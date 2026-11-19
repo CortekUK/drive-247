@@ -1,6 +1,8 @@
 // The free onboarding call journey: which email is due, what it says, and what a
 // calendar event does to a tenant's row. Pure, so it can be tested without Deno.
 
+import { emailLink, renderDrive247Email } from "./drive247-email.ts";
+
 export const ONBOARDING_BOOKING_URL = "https://api.leadconnectorhq.com/widget/bookings/drive247-onboarding-call";
 
 const HOUR = 3_600_000;
@@ -61,19 +63,21 @@ export function bookingLink(email: string): string {
   return url.toString();
 }
 
-const COPY: Record<JourneyEmail, { eyebrow: string; subject: string; title: (company: string) => string; body: string[] }> = {
+const COPY: Record<JourneyEmail, { eyebrow: string; subject: string; preheader: string; title: (company: string) => string; body: string[] }> = {
   welcome: {
     eyebrow: "Welcome to Drive247",
     subject: "Welcome to Drive247: your 14-day free trial has started",
+    preheader: "Your trial includes a free 30-minute onboarding call with Bryan.",
     title: (company) => `Welcome aboard, ${company}`,
     body: [
       "Your 14-day free trial has started, and your account is ready to use right now.",
-      "Your trial includes a complimentary 30-minute onboarding session with Bryan. He will help you configure your account, add your vehicles, understand the booking system, set up payments and get the most out of the platform.",
+      "Your trial includes a complimentary 30-minute onboarding session with Bryan, so you get the most out of the platform from day one.",
     ],
   },
   reminder: {
     eyebrow: "Free onboarding call",
     subject: "Your free onboarding call with Bryan is waiting",
+    preheader: "Pick a time for your free 30-minute setup call.",
     title: (company) => `Let&rsquo;s get ${company} set up`,
     body: [
       "Your Drive247 trial includes a complimentary 30-minute onboarding session with Bryan. He will walk you through the platform and help get your business ready to take bookings.",
@@ -83,6 +87,7 @@ const COPY: Record<JourneyEmail, { eyebrow: string; subject: string; title: (com
   follow_up: {
     eyebrow: "Free onboarding call",
     subject: "Still time to book your free session with Bryan",
+    preheader: "Bryan can set up the essentials with you in 30 minutes.",
     title: (company) => `Make the most of your trial, ${company}`,
     body: [
       "You have not booked your complimentary onboarding session yet. In 30 minutes, Bryan can set up the essentials with you, so you can start taking bookings sooner.",
@@ -98,25 +103,23 @@ export function journeySubject(step: JourneyEmail): string {
 export function buildJourneyHtml(step: JourneyEmail, t: { slug: string; companyName: string; email: string }): string {
   const copy = COPY[step];
   const company = esc(t.companyName || "your rental business");
-  const link = esc(bookingLink(t.email));
   const portal = esc(`https://${t.slug}.portal.drive-247.com`);
-  const paragraphs = copy.body
-    .map((p) => `<p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#404040;">${p}</p>`)
-    .join("");
-  return `<!doctype html><html><body style="margin:0;background:#f8fafc;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#080812;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px;">
-    <table role="presentation" width="100%" style="max-width:560px;background:#ffffff;border:1px solid #f1f5f9;border-radius:16px;" cellpadding="0" cellspacing="0">
-      <tr><td style="padding:32px;">
-        <p style="margin:0 0 8px;font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#6366f1;">${copy.eyebrow}</p>
-        <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;">${copy.title(company)}</h1>
-        ${paragraphs}
-        <p style="margin:10px 0 24px;"><a href="${link}" style="display:inline-block;background:#6366f1;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 22px;border-radius:10px;">Book Your Free Onboarding Call</a></p>
-        <p style="margin:0;font-size:12px;line-height:1.6;color:#737373;">
-          The call is optional. You can start using Drive247 straight away from <a href="${portal}" style="color:#6366f1;">your portal</a>.
-        </p>
-      </td></tr>
-    </table>
-  </td></tr></table></body></html>`;
+  return renderDrive247Email({
+    preheader: copy.preheader,
+    eyebrow: copy.eyebrow,
+    title: copy.title(company),
+    intro: copy.body,
+    cta: { label: "Book Your Free Onboarding Call", href: esc(bookingLink(t.email)) },
+    steps: {
+      heading: "In 30 minutes, Bryan will help you",
+      items: [
+        "Configure your account and <strong>add your vehicles</strong>",
+        "See how bookings reach you from your booking site",
+        "Choose how you get paid and <strong>set up payments</strong>",
+      ],
+    },
+    note: `The call is optional and free. You can start using Drive247 straight away from ${emailLink(portal, "your portal")}.`,
+  });
 }
 
 export type CallEventKind = "booked" | "cancelled" | "noshow" | "showed";

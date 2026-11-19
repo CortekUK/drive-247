@@ -6,6 +6,11 @@ import { useFirstRunWizard } from '@/hooks/use-first-run-wizard';
 import { wantsFirstRun } from '@/lib/first-run-handoff';
 import { useFeedbackStore } from '@/stores/feedback-store';
 import { YIELDS_TO_SYSTEM_ATTR } from '@/lib/announcements/system-priority';
+import { usePathname } from 'next/navigation';
+import { useAuth } from '@/stores/auth-store';
+import { useV2 } from '@/lib/v2-context';
+import { useIsLean } from '@/lib/lean-context';
+import { hasSeenTour } from '@/lib/first-rental-tour';
 
 /**
  * Is something else on screen that an announcement dialog must wait for?
@@ -39,7 +44,13 @@ import { YIELDS_TO_SYSTEM_ATTR } from '@/lib/announcements/system-priority';
  * `feature`: all of the above, plus every onboarding surface, touched or not:
  *   first-run wizard  `useFirstRunWizard()`: will show, or is still deciding
  *   tours             DOM markers the first-rental tour, its transit pill, its resume
- *                     prompt, the wizard and the wizard's arrival veil render
+ *                     prompt, the wizard, the wizard's arrival veil and its confetti render
+ *   the tour, due     a v2 user on the dashboard who has not seen the first-rental
+ *                     tour yet: it autostarts a few seconds after the wizard (after
+ *                     the confetti), and a feature dialog opened in that gap was
+ *                     shut again by it, which a new signup saw as a screen flashing
+ *                     up and vanishing. Seen is written the moment the tour starts,
+ *                     and the tour's own marker blocks from then on.
  *
  * `ownDialogOpen`: while the announcement host's own dialog is open it holds one of
  * those locks itself, so the threshold becomes two.
@@ -57,8 +68,16 @@ const ONBOARDING_MARKERS = [
   'data-first-run-arrival',
 ] as const;
 
+/**
+ * The first-run confetti. Feature dialogs only: the tour autostarts once it
+ * has fallen, and a feature dialog opened under it was shut again by the tour.
+ */
+const FEATURE_ONLY_MARKERS = ['data-first-run-confetti'] as const;
+
 /** Every onboarding surface. Feature dialogs wait for all of them. */
-export const ANNOUNCEMENT_BLOCKING_MARKERS = ONBOARDING_MARKERS.map((m) => `[${m}]`).join(', ');
+export const ANNOUNCEMENT_BLOCKING_MARKERS = [...ONBOARDING_MARKERS, ...FEATURE_ONLY_MARKERS]
+  .map((m) => `[${m}]`)
+  .join(', ');
 
 /** Only the onboarding surfaces the operator is using. System dialogs wait for these. */
 export const SYSTEM_ANNOUNCEMENT_BLOCKING_MARKERS = ONBOARDING_MARKERS.map(
@@ -95,6 +114,12 @@ export function useAnnouncementBlocked(opts: { showGate: boolean; ownDialogOpen:
   const { shouldShow: wizardShows, isLoading: wizardLoading } = useFirstRunWizard();
   const feedbackOpen = useFeedbackStore((s) => s.isOpen);
   const handoffPending = typeof window !== 'undefined' && wantsFirstRun(window.location.search);
+  const pathname = usePathname();
+  const { appUser } = useAuth();
+  const isLean = useIsLean();
+  const hasV2Chrome = useV2('chrome');
+  const tourEligible = isLean && hasV2Chrome;
+  const tourDue = tourEligible && pathname === '/' && !!appUser?.id && !hasSeenTour(appUser.id);
 
   // Read through a ref inside the observer: a mutation record queued under the old
   // threshold must not report our own dialog's scroll lock as "someone else's modal"
@@ -125,6 +150,6 @@ export function useAnnouncementBlocked(opts: { showGate: boolean; ownDialogOpen:
 
   const system =
     showGate || migrationPromptShowing || migrationLoading || handoffPending || feedbackOpen || domSystem;
-  const feature = system || wizardShows || wizardLoading || domFeature;
+  const feature = system || wizardShows || wizardLoading || tourDue || domFeature;
   return { system, feature };
 }

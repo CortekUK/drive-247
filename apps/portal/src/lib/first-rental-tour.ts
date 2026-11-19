@@ -331,6 +331,14 @@ const SIDEBAR = '[data-sidebar="sidebar"]';
  */
 const PAGE_TITLE = '[data-slot="sidebar-inset"] h1';
 
+/**
+ * A page's title AND its subtitle, as one box. Tried before PAGE_TITLE where a
+ * page draws one: a spotlight padded round the <h1> alone ends halfway down
+ * the subtitle under it, so the top half of that line shows sharp and the
+ * bottom half blurred ("bits of text" in the tour).
+ */
+const PAGE_HEADER = '[data-slot="sidebar-inset"] [data-tour="page-header"]';
+
 /** One line each. These ride the rerouted rental step when the flow is gated. */
 const INSURANCE_NOTE = 'Insurance is offered in the same flow, priced per rental.';
 const AGREEMENT_NOTE = 'The rental agreement is drawn up and sent for signature as part of this.';
@@ -389,18 +397,18 @@ export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
     // The graph's label and headline number, never the whole hero row: the row
     // runs the width of the content column, and a card with nowhere clear of
     // the spotlight to stand degrades to a wash that teaches nothing. The
-    // overview is rendered above the empty-state branch and draws this anchor
-    // while its rentals are still loading, so it is on the page for a brand-new
-    // tenant with no cars at all — reading zero, which is the honest thing for
-    // it to say to them. Then the overview's root, then the stat tile this step
-    // used to name (v1 still draws it), then the title.
+    // overview is NOT drawn on an empty fleet (the teaching empty state takes
+    // its place), so a brand-new tenant lands on the page header. The body
+    // therefore says nothing about a graph. Then the overview's root, then the
+    // stat tile this step used to name (v1 still draws it), then the header.
     title: 'Your fleet',
-    body: 'Every car you rent out lives here, with its rates, its photos and whether it is free to book. The graph up top counts how many are out on rent.',
+    body: 'Every car you rent out lives here, with its rates, its photos and whether it is free to book.',
     route: '/vehicles',
     anchors: [
       '[data-tour="vehicles-chart"]',
       '[data-tour="fleet-overview"]',
       '[data-tour="fleet-stat-total-vehicles"]',
+      PAGE_HEADER,
       PAGE_TITLE,
     ],
     side: 'bottom',
@@ -409,13 +417,12 @@ export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
     id: 'customers',
     label: 'Customers',
     title: 'Everyone who rents from you',
-    body: 'Anyone who books on your site lands here on their own, and the graph up top counts each new customer. Their licence, history and what they owe sit on one page.',
+    body: 'Anyone who books on your site lands here on their own. Their licence, history and what they owe sit on one page.',
     route: '/customers',
-    // The graph's label and headline number. It renders at zero rather than not
-    // at all, so this is as present on a brand-new tenant's empty tab as on a
-    // busy one. Then the overview's root, `customers-stats` (the name the v1
-    // four-card grid still carries), then the title.
-    anchors: ['[data-tour="customers-chart"]', '[data-tour="customers-stats"]', PAGE_TITLE],
+    // The graph's label and headline number, then `customers-stats` (the name
+    // the v1 four-card grid still carries). Neither is drawn on an empty
+    // Customers tab, so a brand-new tenant lands on the page header.
+    anchors: ['[data-tour="customers-chart"]', '[data-tour="customers-stats"]', PAGE_HEADER, PAGE_TITLE],
     side: 'bottom',
   },
   {

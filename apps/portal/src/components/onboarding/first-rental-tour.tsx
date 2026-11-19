@@ -497,10 +497,26 @@ function TourLayer({
       onAnchorLost();
       return;
     }
-    const r = element.getBoundingClientRect();
+    const box = element.getBoundingClientRect();
+    const r = { top: box.top, left: box.left, right: box.right, bottom: box.bottom, width: box.width, height: box.height };
     if (r.width === 0 && r.height === 0) {
       onAnchorLost();
       return;
+    }
+    // A heading with its subtitle right under it is lit as ONE box. Padded
+    // round the heading alone, the hole ends partway down the subtitle and
+    // the tour shows half a line of text sharp and half blurred.
+    const subtitle = element.nextElementSibling;
+    if (/^H[1-6]$/.test(element.tagName) && subtitle?.tagName === 'P') {
+      const s = subtitle.getBoundingClientRect();
+      if (s.height > 0) {
+        r.top = Math.min(r.top, s.top);
+        r.left = Math.min(r.left, s.left);
+        r.right = Math.max(r.right, s.right);
+        r.bottom = Math.max(r.bottom, s.bottom);
+        r.width = r.right - r.left;
+        r.height = r.bottom - r.top;
+      }
     }
     setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
 
