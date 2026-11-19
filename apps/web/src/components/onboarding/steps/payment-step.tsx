@@ -391,7 +391,16 @@ export function PaymentStep({
     () =>
       // Localhost rehearsal: the real card form, in Stripe's deferred mode, with
       // no intent behind it. Folds away in every build. See mock-signup.ts.
-      clientSecret && isMockSignup()
+      //
+      // FREE TRIAL: deferred mode too, with the currency stated. A SetupIntent
+      // carries no currency, so a form built from its client secret let Apple
+      // Pay and Google Pay fall back to the Stripe ACCOUNT's default, and the
+      // signup bills through the UAE account: the wallet sheet read
+      // "Starter plan AED 129.00 per month". Built in deferred mode with
+      // currency "usd" the sheet reads $129.00, and PaymentForm then confirms
+      // the same SetupIntent by its client secret (elements.submit() first).
+      // Card only, like the subscription (`payment_method_types: ["card"]`).
+      clientSecret && (isMockSignup() || intentType === "setup")
         ? {
             mode: "setup",
             currency: "usd",
@@ -406,7 +415,7 @@ export function PaymentStep({
             fonts: STRIPE_ELEMENT_FONTS,
           }
         : null,
-    [clientSecret, appearance],
+    [clientSecret, appearance, intentType],
   );
 
   // A CONFIG_MISSING from the server means an env var is absent in Supabase —
@@ -632,6 +641,7 @@ export function PaymentStep({
             onPaid={onPaid}
             onError={onError}
             intentType={intentType}
+            clientSecret={clientSecret}
             onFormHeight={wide.measure}
             applePayTerms={applePayTerms}
           />
@@ -665,9 +675,12 @@ function PaymentForm({
   onPaid,
   onError,
   intentType = "payment",
+  clientSecret,
   onFormHeight,
   applePayTerms,
 }: {
+  /** The SetupIntent's secret: the trial form is deferred, so confirmSetup is told which intent. */
+  clientSecret?: string | null;
   /** What the Apple Pay sheet shows in place of "Amount Pending". */
   applePayTerms?: ApplePayTerms;
   busy: boolean;
@@ -790,8 +803,16 @@ function PaymentForm({
         // this saves the card (with 3-D Secure if the bank asks) and charges
         // nothing. signup-provision re-checks with Stripe that the card really
         // is on file before building the portal.
+        // The trial form is in deferred mode (see elementsOptions): Stripe
+        // wants the fields checked first, then the intent named.
+        const { error: submitError } = await elements.submit();
+        if (submitError) {
+          setMessage(submitError.message ?? SIGNUP_ERROR_COPY.CARD_DECLINED);
+          return;
+        }
         const { error: setupError, setupIntent } = await stripe.confirmSetup({
           elements,
+          ...(clientSecret ? { clientSecret } : {}),
           redirect: "if_required",
           confirmParams: { return_url: `${window.location.origin}/?signup=resume` },
         });
