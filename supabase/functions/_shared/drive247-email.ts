@@ -17,6 +17,23 @@ const FONT = "'DM Sans',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-ser
 const ACCENT = "#4f46e5";
 export const SUPPORT_EMAIL = "support@drive-247.com";
 
+/**
+ * Who Drive247's own emails come from. Not noreply@: these emails invite a
+ * reply, and replies must reach a person.
+ */
+export const DRIVE247_SENDER = { from: SUPPORT_EMAIL, fromName: "Drive247", replyTo: SUPPORT_EMAIL } as const;
+
+/**
+ * The logo <img> attributes. When a mail app blocks images (Outlook does until
+ * the sender is trusted) the alt text is drawn instead, so it is styled to read
+ * as the wordmark rather than as a broken image.
+ */
+const LOGO_ALT_STYLE = `font-family:${"'DM Sans',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"};font-size:24px;line-height:30px;font-weight:700;color:#4f46e5;`;
+export function logoImgs(): string {
+  return `<img class="l-logo" src="${LOGO_LIGHT}" width="132" height="30" alt="Drive247" style="display:block;border:0;width:132px;height:auto;${LOGO_ALT_STYLE}">
+            <img class="d-logo" src="${LOGO_DARK}" width="132" height="30" alt="Drive247" style="border:0;width:132px;height:auto;${LOGO_ALT_STYLE}">`;
+}
+
 export function escapeHtml(value: unknown): string {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -31,11 +48,17 @@ export interface Drive247Email {
   preheader: string;
   /** Small coloured line above the title. */
   eyebrow?: string;
-  title: string;
+  title?: string;
   /** Paragraphs under the title (HTML). */
-  intro: string[];
-  /** The one main button. */
+  intro?: string[];
+  /** A ready-made block of body HTML (with inline styles), after the intro. */
+  bodyHtml?: string;
+  /** The main button. */
   cta?: { label: string; href: string };
+  /** A second, outlined button beside the main one. */
+  secondaryCta?: { label: string; href: string };
+  /** A highlighted callout box after the steps (title + HTML text + optional link). */
+  callout?: { title: string; text: string; link?: { label: string; href: string } };
   /** A boxed list of label / value rows (values are HTML). */
   details?: { heading?: string; rows: Array<{ label: string; value: string }> };
   /** A numbered "what next" list (HTML items). */
@@ -46,7 +69,7 @@ export interface Drive247Email {
 
 /** Drive247-branded email HTML. */
 export function renderDrive247Email(e: Drive247Email): string {
-  const intro = e.intro
+  const intro = (e.intro ?? [])
     .map((p) => `<p class="d-body" style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#4a4a5c;">${p}</p>`)
     .join("");
 
@@ -54,6 +77,23 @@ export function renderDrive247Email(e: Drive247Email): string {
     ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:10px 0 4px;">
         <tr><td bgcolor="${ACCENT}" style="background-color:${ACCENT};border-radius:10px;">
           <a href="${e.cta.href}" style="display:inline-block;padding:13px 24px;font-family:${FONT};font-size:15px;font-weight:600;line-height:1;color:#ffffff;text-decoration:none;border-radius:10px;">${e.cta.label}</a>
+        </td>${
+          e.secondaryCta
+            ? `<td style="width:10px;font-size:0;">&nbsp;</td>
+        <td class="d-box" style="border:1px solid #d9d9e6;border-radius:10px;background:#ffffff;">
+          <a href="${e.secondaryCta.href}" class="d-link" style="display:inline-block;padding:12px 20px;font-family:${FONT};font-size:15px;font-weight:600;line-height:1;color:${ACCENT};text-decoration:none;border-radius:10px;">${e.secondaryCta.label}</a>
+        </td>`
+            : ""
+        }</tr>
+      </table>`
+    : "";
+
+  const callout = e.callout
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="d-num" style="margin:24px 0 0;background:#eef2ff;border-radius:12px;">
+        <tr><td style="padding:18px 20px;font-family:${FONT};">
+          <p class="d-ink" style="margin:0 0 6px;font-size:15px;font-weight:600;color:#0b0b1a;">${e.callout.title}</p>
+          <p class="d-body" style="margin:0;font-size:14px;line-height:1.55;color:#4a4a5c;">${e.callout.text}</p>
+          ${e.callout.link ? `<p style="margin:10px 0 0;font-size:14px;"><a href="${e.callout.link.href}" class="d-link" style="color:${ACCENT};font-weight:600;text-decoration:none;">${e.callout.link.label} &rarr;</a></p>` : ""}
         </td></tr>
       </table>`
     : "";
@@ -101,7 +141,7 @@ export function renderDrive247Email(e: Drive247Email): string {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta name="supported-color-schemes" content="light dark">
-<title>${e.title}</title>
+<title>${e.title ?? "Drive247"}</title>
 <style>
   :root { color-scheme: light dark; supported-color-schemes: light dark; }
   .d-logo { display:none; max-height:0; overflow:hidden; mso-hide:all; }
@@ -137,18 +177,19 @@ export function renderDrive247Email(e: Drive247Email): string {
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
         <tr>
           <td align="center" style="padding:0 0 24px;">
-            <img class="l-logo" src="${LOGO_LIGHT}" width="132" height="30" alt="Drive247" style="display:block;border:0;width:132px;height:auto;">
-            <img class="d-logo" src="${LOGO_DARK}" width="132" height="30" alt="Drive247" style="border:0;width:132px;height:auto;">
+            ${logoImgs()}
           </td>
         </tr>
         <tr>
           <td class="d-card" style="background:#ffffff;border:1px solid #e8e8f0;border-radius:16px;padding:36px 32px;font-family:${FONT};">
             ${e.eyebrow ? `<p style="margin:0 0 10px;font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:${ACCENT};" class="d-link">${e.eyebrow}</p>` : ""}
-            <h1 class="d-ink" style="margin:0 0 14px;font-size:24px;line-height:1.3;font-weight:600;color:#0b0b1a;">${e.title}</h1>
+            ${e.title ? `<h1 class="d-ink" style="margin:0 0 14px;font-size:24px;line-height:1.3;font-weight:600;color:#0b0b1a;">${e.title}</h1>` : ""}
             ${intro}
+            ${e.bodyHtml ?? ""}
             ${cta}
             ${details}
             ${steps}
+            ${callout}
             ${note}
           </td>
         </tr>

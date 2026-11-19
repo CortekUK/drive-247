@@ -23,6 +23,7 @@
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendResendEmail } from "../_shared/resend-service.ts";
+import { DRIVE247_SENDER } from "../_shared/drive247-email.ts";
 import {
   buildJourneyHtml,
   JOURNEY_ENDS_MS,
@@ -153,7 +154,7 @@ Deno.serve(async (req) => {
         to: t.email,
         subject: journeySubject(t.step),
         html: buildJourneyHtml(t.step, { slug: t.slug, companyName: t.company_name, email: t.email }),
-        fromName: "Drive247",
+        ...DRIVE247_SENDER,
         tenantId: t.tenant_id,
         source: "onboarding-call-reminder",
         // Once per tenant per email for the automatic run; a manual resend is its own send.

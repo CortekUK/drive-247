@@ -63,10 +63,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse } from '../_shared/cors.ts';
 import {
   emailBodyToPlainText,
-  renderNotificationEmailHtml,
+  inlineEmailStyles,
   sanitizeEmailBodyHtml,
   type EmailLayoutBrand,
 } from '../_shared/notification-email-layout-v2.ts';
+import { DRIVE247_SENDER, renderDrive247Email } from '../_shared/drive247-email.ts';
 import {
   compressOffsets,
   cycleKey,
@@ -94,12 +95,15 @@ import { renderBody } from './plain-text.ts';
  * which are themselves twins of DEFAULT_BRANDING in _shared/resend-service.ts.
  * Keep them in step or these mails stop looking like the rest of ours.
  */
-const PLATFORM_SENDER = 'Drive 247 <noreply@drive-247.com>';
+// Drive247's own design and sender (_shared/drive247-email.ts), the same as the
+// signup code and welcome emails: one look for every email we send operators,
+// from an address a reply reaches.
+const PLATFORM_SENDER = `${DRIVE247_SENDER.fromName} <${DRIVE247_SENDER.from}>`;
 const PLATFORM_EMAIL_BRAND: EmailLayoutBrand = {
-  companyName: 'Drive 247',
+  companyName: 'Drive247',
   logoUrl: null,
   primaryColor: '#1a1a1a',
-  accentColor: '#C5A572',
+  accentColor: '#4f46e5',
   contactEmail: 'support@drive-247.com',
   contactPhone: null,
 };
@@ -203,6 +207,7 @@ interface TenantRow {
   id: string;
   slug: string;
   company_name: string | null;
+  admin_name: string | null;
   admin_email: string | null;
   contact_email: string | null;
   notification_recipient_email: string | null;
@@ -425,7 +430,7 @@ async function handleRequest(req: Request): Promise<Response> {
   let tenantQuery = db
     .from('tenants')
     .select(
-      'id, slug, company_name, admin_email, contact_email, notification_recipient_email, created_at, stripe_onboarding_complete, stripe_account_status, own_stripe_account_id, own_stripe_test_account_id, integration_bonzah, bonzah_mode, bonzah_username',
+      'id, slug, company_name, admin_name, admin_email, contact_email, notification_recipient_email, created_at, stripe_onboarding_complete, stripe_account_status, own_stripe_account_id, own_stripe_test_account_id, integration_bonzah, bonzah_mode, bonzah_username',
     );
   // A rehearsal is always the scope tenant alone — see TEST MODE in the header.
   if (testMode || !settings.scope_all_tenants) {
@@ -672,10 +677,9 @@ async function handleRequest(req: Request): Promise<Response> {
     const bodyHtml = sanitizeEmailBodyHtml(
       renderBody(candidate.step.body_html, (text) => fill(text, vars)),
     );
-    const html = renderNotificationEmailHtml({
-      bodyHtml,
-      brand: PLATFORM_EMAIL_BRAND,
-      preheader: subject,
+    const html = renderDrive247Email({
+      preheader: escapeHtmlText(subject),
+      bodyHtml: inlineEmailStyles(bodyHtml, PLATFORM_EMAIL_BRAND),
     });
     const text = emailBodyToPlainText(bodyHtml);
 
@@ -1078,10 +1082,10 @@ function baseVars(tenant: TenantRow, recipient: string | null): Record<string, s
   return {
     tenant_name: tenant.company_name || tenant.slug,
     tenant_slug: tenant.slug,
-    // The operator's own name is not a column on tenants; the company reads
-    // correctly in "Hi {{tenant_admin_name}}" and is never blank, which a
-    // missing first name would be.
-    tenant_admin_name: tenant.company_name || tenant.slug,
+    // The owner's first name (tenants.admin_name, written at signup), so the
+    // mail says "Hi Neema" rather than "Hi Neemacar". The company name is the
+    // fallback: never blank, which a missing first name would be.
+    tenant_admin_name: tenant.admin_name?.trim().split(/\s+/)[0] || tenant.company_name || tenant.slug,
     tenant_contact_email: tenant.contact_email || '',
     sign_in_email: recipient || tenant.contact_email || '',
     portal_url: portalUrl(tenant.slug),
@@ -1164,6 +1168,7 @@ async function sendOne(
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         from: PLATFORM_SENDER,
+        reply_to: DRIVE247_SENDER.replyTo,
         to: [to],
         subject,
         html,
@@ -1185,4 +1190,9 @@ async function sendOne(
   }
 
   return { ok: true };
+}
+
+/** Plain text for an HTML text node (the inbox preview line). */
+function escapeHtmlText(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

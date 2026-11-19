@@ -23,9 +23,11 @@ import {
   checkOtp,
   mintOtp,
   otpEmailHtml,
+  otpSubject,
   OTP_MAX_ATTEMPTS,
 } from "../_shared/signup-otp.ts";
-import { sendEmail } from "../_shared/resend-service.ts";
+import { sendResendEmail } from "../_shared/resend-service.ts";
+import { DRIVE247_SENDER } from "../_shared/drive247-email.ts";
 import { sendCompleteRegistration, shouldTrackSignup } from "../_shared/meta-conversions.ts";
 import { phoneForMeta } from "../_shared/signup-attribution.ts";
 
@@ -88,7 +90,10 @@ Deno.serve(async (req) => {
       await supabase.auth.admin.updateUserById(user.id, {
         app_metadata: { d247_signup: { ...meta, otp, updatedAt: new Date().toISOString() } },
       });
-      const sent = await sendEmail(email, "Your Drive247 verification code", otpEmailHtml(fresh), supabase);
+      const sent = await sendResendEmail(
+        { to: email, subject: otpSubject(fresh), html: otpEmailHtml(fresh), ...DRIVE247_SENDER, source: "signup-verify-otp" },
+        supabase,
+      );
       if (!sent?.success) {
         console.error(`${LOG} resend failed to deliver for ${user.id}`);
         return errorResponse("We could not send the code. Please try again.", 502);

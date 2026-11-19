@@ -22,6 +22,8 @@
 // =============================================================================
 
 /** Six digits: short enough to read aloud, long enough with the attempt cap. */
+import { logoImgs } from "./drive247-email.ts";
+
 const CODE_LENGTH = 6;
 
 /** Long enough to find the email, short enough that a leaked code goes stale. */
@@ -128,8 +130,13 @@ export function canResend(otp: SignupOtp | undefined | null): boolean {
   return Date.now() - new Date(otp.sentAt).getTime() >= OTP_RESEND_COOLDOWN_MS;
 }
 
-const LOGO_LIGHT = "https://www.drive-247.com/logo-light.png";
-const LOGO_DARK = "https://www.drive-247.com/logo-dark.png";
+/**
+ * The code is in the subject so a phone's notification shows it: the operator
+ * can read it without leaving the signup to open the email.
+ */
+export function otpSubject(code: string): string {
+  return `${code} is your Drive247 code`;
+}
 
 /**
  * The email. Short, branded, and it never says who the account belongs to.
@@ -184,8 +191,7 @@ export function otpEmailHtml(code: string): string {
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
         <tr>
           <td align="center" style="padding:0 0 24px;">
-            <img class="l-logo" src="${LOGO_LIGHT}" width="132" height="30" alt="Drive247" style="display:block;border:0;width:132px;height:auto;">
-            <img class="d-logo" src="${LOGO_DARK}" width="132" height="30" alt="Drive247" style="border:0;width:132px;height:auto;">
+            ${logoImgs()}
           </td>
         </tr>
         <tr>

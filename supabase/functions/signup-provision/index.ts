@@ -70,7 +70,8 @@ import {
   type HourCols,
 } from "../_shared/tenant-provisioning.ts";
 import { sendResendEmail } from "../_shared/resend-service.ts";
-import { emailLink, renderDrive247Email } from "../_shared/drive247-email.ts";
+import { DRIVE247_SENDER, emailLink, renderDrive247Email } from "../_shared/drive247-email.ts";
+import { bookingLink as onboardingCallLink } from "../_shared/onboarding-call-journey.ts";
 import { buildCmsContent, seedTenantCmsContent } from "../_shared/tenant-cms-content.ts";
 import { readRehearsalFor, REHEARSAL_TENANT_SLUG } from "../_shared/signup-rehearsal.ts";
 import { isSecured, markTrialGrantUsed, savedPaymentMethodOf } from "../_shared/signup-trial.ts";
@@ -1147,6 +1148,27 @@ Deno.serve(async (req) => {
     }
     tenantId = tenant.id as string;
 
+    // ONE welcome email. This function sends it (below, with the trial and
+    // Bryan's call in it), so the Customer Management "Day 0 welcome" must not
+    // send a second one a minute later. Closing its slot here, straight after
+    // the insert, beats the 30-second cron to it. Its unique index on
+    // (tenant_id, automation, step_key, cycle_key) is what the run checks.
+    {
+      const { error: day0Err } = await supabase.from("customer_management_sends").insert({
+        tenant_id: tenantId,
+        automation: "signup",
+        step_key: "signup_day_0_welcome",
+        cycle_key: "once",
+        due_at: new Date().toISOString(),
+        status: "skipped",
+        to_email: meta.email,
+        detail: "welcome_sent_by_signup",
+      });
+      if (day0Err && day0Err.code !== "23505") {
+        console.error(`${LOG} could not close the day-0 welcome for ${tenantId}:`, day0Err.message);
+      }
+    }
+
     /*
      * Record the row's existence IMMEDIATELY — before the credits RPC, before
      * the owner account, before anything.
@@ -1665,37 +1687,70 @@ Deno.serve(async (req) => {
      */
     try {
       const company = escapeHtml(companyName);
+      const name = escapeHtml(firstName);
+      const trialEndUnix = typeof subscription?.trial_end === "number" ? subscription.trial_end : null;
+      const trialDays =
+        trialEndUnix && typeof subscription?.trial_start === "number"
+          ? Math.round((trialEndUnix - subscription.trial_start) / 86_400)
+          : 0;
+      let trialEndText = "";
+      if (trialEndUnix) {
+        try {
+          trialEndText = new Date(trialEndUnix * 1000).toLocaleDateString("en-US", {
+            month: "long",
+            day: "numeric",
+            timeZone: derivedTimezone || "UTC",
+          });
+        } catch {
+          trialEndText = new Date(trialEndUnix * 1000).toLocaleDateString("en-US", { month: "long", day: "numeric" });
+        }
+      }
+      const viaGoogle = user?.app_metadata?.provider === "google";
       const emailHtml = renderDrive247Email({
-        preheader: `${company} is set up on Drive247. Your portal and booking site addresses are inside.`,
+        preheader: trialEndText
+          ? `Your free trial is on. Nothing is charged until ${trialEndText}.`
+          : `${company} is set up on Drive247.`,
         eyebrow: "Welcome to Drive247",
-        title: `Welcome aboard, ${escapeHtml(firstName)}! Your portal is ready`,
+        title: `Hi ${name}, your portal is ready`,
         intro: [
-          `${company} is set up on the ${escapeHtml(plan.name)} plan. Everything you need to start is below.`,
+          trialEndText
+            ? `${company} is all set up. Your ${trialDays > 0 ? `${trialDays}-day ` : ""}free trial is on, and nothing is charged until <strong>${trialEndText}</strong>. We&rsquo;ll email you 3 days before your trial ends.`
+            : `${company} is all set up on the ${escapeHtml(plan.name)} plan.`,
         ],
-        cta: { label: "Open my portal", href: portalUrl },
-        details: {
-          heading: "Your account",
-          rows: [
-            { label: "Your portal", value: emailLink(portalUrl, portalUrl.replace(/^https:\/\//, "")) },
-            { label: "Booking site", value: emailLink(bookingUrl, bookingUrl.replace(/^https:\/\//, "")) },
-            { label: "Sign in as", value: `<strong>${escapeHtml(meta.email)}</strong>` },
-          ],
-        },
+        cta: { label: "Open your portal", href: portalUrl },
+        secondaryCta: { label: "See your booking site", href: bookingUrl },
         steps: {
-          heading: "Your first steps",
+          heading: "Get set up in four steps",
           items: [
-            "<strong>Add your first vehicle</strong>, with photos and a daily price.",
-            "<strong>Connect payments</strong> so customers can pay when they book.",
-            "<strong>Share your booking site</strong> with your customers.",
+            `${emailLink(`${portalUrl}/vehicles`, "Add your first car")}, with photos and a daily price.`,
+            `${emailLink(bookingUrl, "See your booking site live")}. This is where your customers book.`,
+            `${emailLink(`${portalUrl}/settings?tab=payments`, "Connect Stripe")} to take payments when customers book.`,
+            `${emailLink(`${portalUrl}/settings?tab=insurance`, "Turn on insurance with Bonzah")} so customers can add cover.`,
           ],
         },
-        note: `${user?.app_metadata?.provider === "google" ? "Sign in with the same Google account you used to sign up." : "Sign in with the password you chose during signup."} Your web address is fixed and cannot be changed later, so keep this email.`,
+        callout: {
+          title: "Free 30-minute onboarding call with Bryan",
+          text: "Bryan will set up the essentials with you, from your cars to payments, so you can take bookings sooner. It&rsquo;s free and optional.",
+          link: { label: "Book your free call", href: escapeHtml(onboardingCallLink(meta.email)) },
+        },
+        note: `You sign in with <strong>${escapeHtml(meta.email)}</strong>${viaGoogle ? " using Google" : " and the password you chose"}. Keep this email so you always have your links.`,
       });
       const sent = await sendResendEmail({
         to: meta.email,
-        subject: `Welcome to Drive247: your portal is ready`,
+        subject: `Welcome to Drive247, ${firstName}: your portal is ready`,
         html: emailHtml,
+        ...DRIVE247_SENDER,
+        tenantId,
+        source: "signup-provision",
       });
+      if (sent?.success && tenantId) {
+        // This was the onboarding call's welcome too: the call journey starts
+        // with its 24-hour reminder instead of sending a third welcome.
+        const { error: welcomeErr } = await supabase
+          .from("tenant_onboarding_calls")
+          .upsert({ tenant_id: tenantId, welcome_sent_at: new Date().toISOString() }, { onConflict: "tenant_id" });
+        if (welcomeErr) console.error(`${LOG} welcome sent but not recorded for the call journey:`, welcomeErr.message);
+      }
       if (!sent?.success) {
         console.error(`${LOG} welcome email failed for ${meta.email}:`, sent?.error);
       }
