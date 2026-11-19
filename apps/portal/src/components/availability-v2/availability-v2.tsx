@@ -69,7 +69,9 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  PHONE_SCREEN_DIALOG,
 } from '@/components/ui-v2/dialog';
+import { cn } from '@/lib/utils';
 import { useAvailabilitySource } from './use-availability-source';
 import { timezoneCountry, timezoneFlag } from './timezone-flags';
 import { AutoSkeleton } from '@/components/skeleton-v2/auto-skeleton';
@@ -343,7 +345,7 @@ export function AvailabilityV2() {
        = calc(100svh - 66px), the padding inside it (border-box). The old
        calc(100svh - 2rem) predates the 64px top bar and overflowed the document
        by 34px at md+ (measured). Below md both are unchanged. */
-    <div className="mx-auto flex h-[calc(100svh-2rem)] w-full max-w-[1560px] flex-col gap-3 overflow-hidden px-2 pb-2 md:h-[calc(100svh-66px)] md:pt-[27px]">
+    <div className="mx-auto flex h-[calc(100svh-2rem)] w-full max-w-[1560px] flex-col gap-3 overflow-hidden px-2 pb-2 max-sm:h-auto max-sm:overflow-visible max-sm:px-0 md:h-[calc(100svh-66px)] md:pt-[27px]">
       {/* ── header ───────────────────────────────────────────────────── */}
       <header className="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
@@ -368,7 +370,7 @@ export function AvailabilityV2() {
         <div
           // The tour's fallback for every control step.
           data-tour="availability-controls"
-          className={`flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-1 sm:justify-end ${HEADER_ACTIONS_V2}`}
+          className={`flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-1 sm:justify-end ${HEADER_ACTIONS_V2} sm:max-lg:h-auto sm:max-lg:basis-full sm:max-lg:justify-start`}
         >
           {/* The weekly pattern opens in its dialog; the tooltip carries the
               one-line summary the old pill showed. `availability-pattern` is
@@ -478,7 +480,7 @@ export function AvailabilityV2() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <span aria-hidden className="mx-1 h-5 w-px bg-border" />
+          <span aria-hidden className="mx-1 h-5 w-px bg-border max-lg:m-0 max-lg:h-0 max-lg:basis-full max-lg:bg-transparent" />
 
           <HeaderIconButton label="Previous week" onClick={() => setWeekStart((w) => addDays(w, -7))}>
             <ChevronLeft />
@@ -492,7 +494,7 @@ export function AvailabilityV2() {
                 type="button"
                 data-tour="availability-week"
                 aria-label="Choose a week"
-                className="min-w-[132px] rounded-full px-2.5 py-1 text-center text-[13px] font-medium tabular-nums transition-colors duration-200 ease-out hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-expanded:bg-primary/10 motion-reduce:transition-none dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))]"
+                className="min-w-[132px] rounded-full px-2.5 py-1 text-center text-[13px] max-sm:flex-1 font-medium tabular-nums transition-colors duration-200 ease-out hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-expanded:bg-primary/10 motion-reduce:transition-none dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))]"
               >
                 {format(weekStart, 'd MMM')} – {format(addDays(weekStart, 6), 'd MMM yyyy')}
               </button>
@@ -567,7 +569,7 @@ export function AvailabilityV2() {
           pattern is deliberate and occasional; it does not need to occupy a
           third of the workspace while somebody looks at next week. */}
       <Dialog open={hoursOpen} onOpenChange={setHoursOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto no-scrollbar sm:max-w-[520px]">
+        <DialogContent className={cn("max-h-[85vh] overflow-y-auto no-scrollbar sm:max-w-[520px]", PHONE_SCREEN_DIALOG, "max-sm:overflow-y-auto max-sm:px-4 max-sm:pt-[calc(env(safe-area-inset-top,0px)+1.5rem)] max-sm:pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)]")}>
           <DialogHeader>
             <DialogTitle>Weekly hours</DialogTitle>
           </DialogHeader>
