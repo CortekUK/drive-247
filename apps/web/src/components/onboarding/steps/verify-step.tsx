@@ -20,7 +20,7 @@
  */
 
 import * as React from "react";
-import { Loader2, Mail } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,9 +52,34 @@ function useTouchOnly(): boolean {
   return touch;
 }
 
-const MAIL_BUTTONS: readonly { provider: MailProvider; label: string }[] = [
-  { provider: "gmail", label: "Open Gmail" },
-  { provider: "outlook", label: "Open Outlook" },
+/** Gmail's mark, inline (no third-party image request on the signup). */
+function GmailLogo() {
+  return (
+    <svg viewBox="0 0 48 48" aria-hidden className="size-[18px] shrink-0">
+      <path fill="#4caf50" d="M45 16.2l-5 2.75-5 4.75V40h7c1.657 0 3-1.343 3-3V16.2z" />
+      <path fill="#1e88e5" d="M3 16.2l3.614 1.71L13 23.7V40H6c-1.657 0-3-1.343-3-3V16.2z" />
+      <path fill="#e53935" d="M35 11.2l-11 8.25-11-8.25-1 5.8 1 6.7 11 8.25 11-8.25 1-6.7z" />
+      <path fill="#c62828" d="M3 12.298V16.2l10 7.5V11.2L9.876 8.859A4.3 4.3 0 0 0 7.298 8C4.924 8 3 9.924 3 12.298z" />
+      <path fill="#fbc02d" d="M45 12.298V16.2l-10 7.5V11.2l3.124-2.341A4.3 4.3 0 0 1 40.702 8C43.076 8 45 9.924 45 12.298z" />
+    </svg>
+  );
+}
+
+/** Outlook's mark, simplified and inline: the blue envelope with the "O" tile. */
+function OutlookLogo() {
+  return (
+    <svg viewBox="0 0 48 48" aria-hidden className="size-[18px] shrink-0">
+      <rect x="18" y="9" width="27" height="30" rx="3" fill="#28a8ea" />
+      <path fill="#0078d4" d="M18 18l13.5 9L45 18v18a3 3 0 0 1-3 3H21a3 3 0 0 1-3-3z" />
+      <rect x="3" y="12" width="24" height="24" rx="3" fill="#0364b8" />
+      <ellipse cx="15" cy="24" rx="5.6" ry="6.6" fill="none" stroke="#ffffff" strokeWidth="3" />
+    </svg>
+  );
+}
+
+const MAIL_BUTTONS: readonly { provider: MailProvider; label: string; Logo: () => React.JSX.Element }[] = [
+  { provider: "gmail", label: "Open Gmail", Logo: GmailLogo },
+  { provider: "outlook", label: "Open Outlook", Logo: OutlookLogo },
 ];
 
 export interface VerifyStepProps {
@@ -256,7 +281,7 @@ export function VerifyStep({
       */}
       {touchOnly ? (
         <div className="-mt-2 grid grid-cols-2 gap-2.5">
-          {MAIL_BUTTONS.map(({ provider, label }) => (
+          {MAIL_BUTTONS.map(({ provider, label, Logo }) => (
             <Button
               key={provider}
               type="button"
@@ -264,7 +289,7 @@ export function VerifyStep({
               onClick={() => openMailApp(provider)}
               className="h-11 gap-2 rounded-xl border-zinc-200 bg-white text-[14px] font-medium text-foreground shadow-none dark:border-white/10 dark:bg-white/[0.03]"
             >
-              <Mail className="size-4 text-muted-foreground" aria-hidden />
+              <Logo />
               {label}
             </Button>
           ))}
