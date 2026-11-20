@@ -61,7 +61,14 @@ interface Row {
   admin_notes: string | null;
   vehicle_count: number;
   has_logo: boolean;
+  /** "How many cars do you rent out?" from the signup. Absent before 20261120120000. */
+  fleet_size?: string | null;
+  /** When the card step's one-time 20% offer was shown. */
+  exit_offer_seen_at?: string | null;
 }
+
+/** "6-20" -> "6–20 cars". */
+const fleetLabel = (f: string | null | undefined) => (f ? `${f.replace('-', '–')} cars` : null);
 
 type Stage = 'done' | 'booked' | 'missed' | 'cancelled' | 'nudge' | 'new';
 
@@ -398,7 +405,8 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
                       </p>
                       <p className="truncate text-xs text-muted-foreground">
                         {r.contact_email ?? 'no email'}
-                        {r.phone && ` · ${r.phone}`} · signed up {ago(r.tenant_created_at)}
+                        {r.phone && ` · ${r.phone}`}
+                        {fleetLabel(r.fleet_size) && ` · ${fleetLabel(r.fleet_size)}`} · signed up {ago(r.tenant_created_at)}
                         {r.subscription_status && ` · ${r.subscription_status}`}
                         {r.trial_end && r.subscription_status === 'trialing' && ` until ${fmtWhen(r.trial_end).split(',')[0]}`}
                       </p>
@@ -423,6 +431,14 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
                       <Tick ok={r.vehicle_count > 0} label={r.vehicle_count > 0 ? `${r.vehicle_count} vehicle${r.vehicle_count === 1 ? '' : 's'}` : 'No vehicle'} />
                       <Tick ok={r.has_logo} label="Logo" />
                       <Tick ok={!!r.site_previewed_at} label="Saw website" />
+                      {r.exit_offer_seen_at && (
+                        <span
+                          title={`Shown the 20% offer on the card step, ${fmtWhen(r.exit_offer_seen_at)}`}
+                          className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] text-amber-800 dark:bg-amber-500/10 dark:text-amber-300"
+                        >
+                          Offered 20%
+                        </span>
+                      )}
                       {r.admin_notes && (
                         <span className="inline-flex max-w-[16rem] items-center gap-1 truncate rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
                           <StickyNote className="h-3 w-3 shrink-0" />

@@ -97,8 +97,15 @@ export interface SignupMetadata {
   /** "How did you hear about us?" See _shared/signup-attribution.ts. */
   heardAbout?: string;
   heardAboutOther?: string;
+  /** "How many cars do you rent out?": "1-5" | "6-20" | "21+". Copied to tenants.fleet_size. */
+  fleetSize?: string;
   /** Optional, from the account step. `+` and digits when the country is known. */
   phone?: string;
+  /**
+   * When "Not ready just yet?" was first shown on the card step (ISO). It is
+   * shown once per person; see signup-finish-later.
+   */
+  exitOfferSeenAt?: string;
   /**
    * The in-flight email verification code — the HASH, never the code. Present
    * only between `signup-begin` and `signup-verify-otp`, and deleted the moment

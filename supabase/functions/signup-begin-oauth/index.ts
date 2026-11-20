@@ -80,6 +80,7 @@ interface BeginOauthRequest {
   /** Present only if they answered before pressing the Google button. */
   heardAbout?: string;
   heardAboutOther?: string;
+  fleetSize?: string;
   phone?: string;
 }
 

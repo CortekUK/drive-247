@@ -502,6 +502,14 @@ verify_jwt = true
 [functions.signup-password-reset]
 verify_jwt = false
 
+# The card step's "Email me a link to finish later". Public because the link is
+# opened on a device with no session (action "redeem"); the token is the gate
+# (random, hashed at rest, 7-day expiry, refused once the portal exists) plus an
+# IP throttle. The other two actions ("offer_seen", "send") call auth.getUser()
+# themselves, like every signup function.
+[functions.signup-finish-later]
+verify_jwt = false
+
 # Super-admin management of the three PUBLIC signup plans. JWT-verified, and the
 # function additionally requires app_users.is_super_admin — verify_jwt alone
 # would be satisfied by the public anon key, which would make platform pricing

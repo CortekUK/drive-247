@@ -16,6 +16,8 @@ import {
   type SignupStep,
 } from "./onboarding-types";
 import { ACCOUNT_PAGE_COUNT, AccountStep, type ResetShellState } from "./steps/account-step";
+import { EXIT_OFFER_CODE, isExitIntent, isPhoneLike, shouldShowExitOffer } from "./exit-offer";
+import { ExitOfferPanel, type FinishLaterState } from "./exit-offer-panel";
 import { PaymentStep } from "./steps/payment-step";
 import { VerifyStep } from "./steps/verify-step";
 import { SignupDoodles } from "./signup-doodles";
@@ -112,8 +114,20 @@ export function OnboardingScreen() {
     checkSlug,
     setError,
   } = useOnboarding();
-  const { resolving, planSwitchBlocked, accountMode, googleEnabled, plans, verifySentAt, changePlan } =
-    useOnboardingShell();
+  const {
+    resolving,
+    planSwitchBlocked,
+    accountMode,
+    googleEnabled,
+    plans,
+    verifySentAt,
+    changePlan,
+    chooseFleetSize,
+    exitOfferSeen,
+    noteExitOfferShown,
+    trackExitOffer,
+    sendFinishLaterLink,
+  } = useOnboardingShell();
 
   const contentRef = useRef<HTMLDivElement>(null);
   const keepGoingRef = useRef<HTMLButtonElement>(null);
@@ -163,6 +177,162 @@ export function OnboardingScreen() {
   useEffect(() => {
     if (closeConfirmOpen) keepGoingRef.current?.focus();
   }, [closeConfirmOpen]);
+
+  // -------------------------------------------------------------------------
+  // "Not ready just yet?" — the card step's one-time offer (exit-offer.ts)
+  // -------------------------------------------------------------------------
+
+  /** Which way they were leaving when it opened. Null = not on screen. */
+  const [exitOffer, setExitOffer] = useState<"exit_intent" | "close" | "back" | null>(null);
+  const [offerApplying, setOfferApplying] = useState(false);
+  const [finishLater, setFinishLater] = useState<FinishLaterState>("idle");
+  /** A quiet line on the card step when the code could not be applied. */
+  const [offerNotice, setOfferNotice] = useState<string | null>(null);
+  const offerPrimaryRef = useRef<HTMLButtonElement>(null);
+
+  /** Phones and tablets: X / back trigger, and the "Email me a link" button. */
+  const [phoneLike, setPhoneLike] = useState(false);
+  useEffect(() => {
+    const read = () => setPhoneLike(isPhoneLike(window));
+    read();
+    window.addEventListener("resize", read);
+    return () => window.removeEventListener("resize", read);
+  }, []);
+
+  const offerAllowed = shouldShowExitOffer({
+    step: state.step,
+    paid: state.payment.paid,
+    promoApplied: Boolean(state.payment.promo),
+    busy: state.busy,
+    seenLocally: exitOfferSeen,
+    seenOnAccount: false,
+    covered: closeConfirmOpen || exitOffer !== null || !isOpen,
+  });
+  const offerAllowedRef = useRef(offerAllowed);
+  useEffect(() => {
+    offerAllowedRef.current = offerAllowed;
+  });
+
+  const showExitOffer = useCallback(
+    (trigger: "exit_intent" | "close" | "back") => {
+      setFinishLater("idle");
+      setOfferNotice(null);
+      setExitOffer(trigger);
+      noteExitOfferShown(trigger);
+    },
+    [noteExitOfferShown],
+  );
+
+  useEffect(() => {
+    if (exitOffer) offerPrimaryRef.current?.focus();
+  }, [exitOffer]);
+
+  // Leaving the card step (paid, closed) takes the offer and its note with it.
+  useEffect(() => {
+    if (state.step !== "payment" || !isOpen) {
+      setExitOffer(null);
+      setOfferNotice(null);
+    }
+  }, [state.step, isOpen]);
+
+  /**
+   * Desktop: the mouse leaving through the top of the window. Armed a moment
+   * after the card step appears, so the pointer passing the tab strip on the
+   * way in does not count.
+   */
+  useEffect(() => {
+    if (!offerAllowed || phoneLike) return;
+    let armed = false;
+    const arm = window.setTimeout(() => {
+      armed = true;
+    }, 1500);
+    const onOut = (e: MouseEvent) => {
+      if (armed && isExitIntent(e)) showExitOffer("exit_intent");
+    };
+    document.addEventListener("mouseout", onOut);
+    return () => {
+      window.clearTimeout(arm);
+      document.removeEventListener("mouseout", onOut);
+    };
+  }, [offerAllowed, phoneLike, showExitOffer]);
+
+  /**
+   * Phones: the back button. One history entry is added while the offer is
+   * still to be shown; pressing back pops it, which opens the offer instead of
+   * leaving the page. Only the first press is caught: if the offer cannot be
+   * shown by then (busy, a code was applied), that press opens "Leave for
+   * now?" instead, and the next one leaves as normal.
+   */
+  const backGuardRef = useRef(false);
+  const guardWanted =
+    phoneLike && isOpen && state.step === "payment" && !state.payment.paid && !exitOfferSeen && !state.payment.promo;
+  useEffect(() => {
+    if (!guardWanted || backGuardRef.current) return;
+    try {
+      // Next.js keeps its router state in history.state, so it is carried over.
+      window.history.pushState({ ...(window.history.state ?? {}), d247ExitGuard: true }, "");
+      backGuardRef.current = true;
+    } catch {
+      /* history locked down: the X still shows the offer */
+    }
+  }, [guardWanted]);
+  useEffect(() => {
+    if (state.step !== "payment") return;
+    const onPop = () => {
+      if (!backGuardRef.current) return;
+      backGuardRef.current = false;
+      if (offerAllowedRef.current) showExitOffer("back");
+      else requestClose();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [state.step, showExitOffer, requestClose]);
+
+  /** The top-right X. On a phone, on the card step, the offer comes first. */
+  const onCloseButton = useCallback(() => {
+    if (exitOffer) {
+      // Closing over the offer is a "no thanks" on the way out.
+      trackExitOffer("exit_offer_dismissed");
+      setExitOffer(null);
+      requestClose();
+      return;
+    }
+    if (phoneLike && offerAllowedRef.current) {
+      showExitOffer("close");
+      return;
+    }
+    requestClose();
+  }, [exitOffer, phoneLike, requestClose, showExitOffer, trackExitOffer]);
+
+  const acceptExitOffer = useCallback(async () => {
+    trackExitOffer("exit_offer_accepted");
+    setOfferApplying(true);
+    let problem: string | null = null;
+    try {
+      problem = await applyPromoCode(EXIT_OFFER_CODE);
+    } catch {
+      problem = "unavailable";
+    }
+    setOfferApplying(false);
+    setExitOffer(null);
+    // The code is the owner's to create. Until it exists (or if it is
+    // switched off) they stay on the card step at the full price, told quietly.
+    setOfferNotice(problem ? "The 20% off couldn't be applied just now. You can still start your free trial." : null);
+  }, [applyPromoCode, trackExitOffer]);
+
+  const dismissExitOffer = useCallback(() => {
+    const trigger = exitOffer;
+    if (finishLater !== "sent") trackExitOffer("exit_offer_dismissed");
+    setExitOffer(null);
+    // They were closing the signup when it opened: carry on with that.
+    if (trigger === "close") requestClose();
+  }, [exitOffer, finishLater, requestClose, trackExitOffer]);
+
+  const requestFinishLater = useCallback(async () => {
+    trackExitOffer("finish_later_requested");
+    setFinishLater("sending");
+    setFinishLater((await sendFinishLaterLink()) ? "sent" : "failed");
+  }, [sendFinishLaterLink, trackExitOffer]);
 
   /**
    * Start pulling Stripe.js the moment the screen opens, not when the payment
@@ -216,7 +386,7 @@ export function OnboardingScreen() {
   if (!plan || !dialogStep) return null;
 
   /** The create-account pages are only in play on the plain create form. */
-  const paymentColumns = dialogStep === "payment" && !closeConfirmOpen;
+  const paymentColumns = dialogStep === "payment" && !closeConfirmOpen && !exitOffer;
   const paymentTwoCol = paymentColumns && paymentWide;
   const paging = dialogStep === "account" && step !== "verify" && !state.signInPrompt && accountMode === "create";
   const onBusinessPage = paging && accountPage === ACCOUNT_PAGE_COUNT - 1;
@@ -284,7 +454,7 @@ export function OnboardingScreen() {
   // Keyed per STEP only. The account pages animate inside AccountStep: keying
   // this wrapper by page would remount the step and throw away everything
   // typed on the pages before.
-  const screenKey = closeConfirmOpen ? "leave" : step;
+  const screenKey = closeConfirmOpen ? "leave" : exitOffer ? "offer" : step;
 
   return (
     <DialogPrimitive.Root
@@ -333,8 +503,8 @@ export function OnboardingScreen() {
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={requestClose}
-                disabled={state.busy || resolving || accountReset.busy}
+                onClick={onCloseButton}
+                disabled={state.busy || resolving || accountReset.busy || offerApplying}
                 aria-label={dialogStep === "account" ? "Close" : "Finish later"}
                 className="flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-out max-sm:size-11 hover:bg-zinc-100 hover:text-foreground disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none dark:hover:bg-white/10"
               >
@@ -348,6 +518,8 @@ export function OnboardingScreen() {
           <p className="sr-only" aria-live="polite">
             {closeConfirmOpen
               ? "Leave setup? Confirm or keep going."
+              : exitOffer
+                ? "Not ready just yet? Start your free trial today and get 20% off your first 3 months."
               : resolving
                 ? "Checking your setup."
                 : `${PROGRESS_LABELS[progressIndex]}.${state.busy ? " Working, please wait." : ""}`}
@@ -407,12 +579,26 @@ export function OnboardingScreen() {
                   </div>
                 ) : null}
 
+                {exitOffer && !closeConfirmOpen ? (
+                  <div key="offer">
+                    <ExitOfferPanel
+                      ref={offerPrimaryRef}
+                      applying={offerApplying}
+                      showFinishLater={phoneLike}
+                      finishLater={finishLater}
+                      onAccept={() => void acceptExitOffer()}
+                      onFinishLater={() => void requestFinishLater()}
+                      onDismiss={dismissExitOffer}
+                    />
+                  </div>
+                ) : null}
+
                 {/*
                   Kept mounted (merely hidden) behind the confirmation panel. The
                   payment step owns a Stripe iframe; unmounting it would throw
                   away a half-typed card number the moment someone clicks close.
                 */}
-                <div hidden={closeConfirmOpen}>
+                <div hidden={closeConfirmOpen || exitOffer !== null}>
                   {resolving ? (
                     <div className="flex flex-col items-center justify-center gap-3 py-24" aria-live="polite">
                       <Loader2 className="h-5 w-5 animate-spin text-indigo-600 dark:text-indigo-400" />
@@ -449,6 +635,7 @@ export function OnboardingScreen() {
                           onClearError={clearStepError}
                           page={accountPage}
                           onPageChange={setAccountPage}
+                          onFleetSizeChange={chooseFleetSize}
                         />
                       ) : null}
 
@@ -520,6 +707,12 @@ export function OnboardingScreen() {
                       <AlertDescription className="text-foreground">{n.text}</AlertDescription>
                     </Alert>
                   ))}
+
+                  {offerNotice && dialogStep === "payment" ? (
+                    <p role="status" className={cn("mt-4 text-center text-[13px] text-muted-foreground", SIGNUP_ENTER)}>
+                      {offerNotice}
+                    </p>
+                  ) : null}
 
                   {bannerError ? (
                     <Alert variant="destructive" className={cn("mt-5 rounded-xl text-left", SIGNUP_ENTER)}>

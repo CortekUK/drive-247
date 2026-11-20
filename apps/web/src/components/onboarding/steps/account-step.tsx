@@ -47,6 +47,7 @@ import {
   STRENGTH_BAR_CLASS,
 } from "@/components/onboarding/password-toggle";
 import { HeardAboutFields } from "@/components/onboarding/heard-about-fields";
+import type { FleetSize } from "@/lib/fleet-size";
 import {
   attributionFromDraft,
   EMPTY_ATTRIBUTION,
@@ -151,13 +152,18 @@ export interface AccountStepShellProps extends AccountStepProps {
    * active then.
    */
   paid?: boolean;
+  /**
+   * "How many cars do you rent out?" was answered. The provider moves the plan
+   * to match, unless the visitor picked one on the pricing grid.
+   */
+  onFleetSizeChange?(fleetSize: FleetSize): void;
 }
 
 /** The create-account form's pages, and which page owns each field. */
 export const ACCOUNT_PAGE_COUNT = 3;
 const LAST_ACCOUNT_PAGE = ACCOUNT_PAGE_COUNT - 1;
 const PAGE_FIELDS: readonly (readonly AccountField[])[] = [
-  ["fullName", "email", "heardAbout", "heardAboutOther", "phone"],
+  ["fullName", "email", "heardAbout", "heardAboutOther", "fleetSize", "phone"],
   ["password"],
   ["companyName", "slug", "acceptedTerms"],
 ];
@@ -196,6 +202,7 @@ export function AccountStep({
   page: pageProp,
   onPageChange,
   paid = true,
+  onFleetSizeChange,
 }: AccountStepShellProps) {
   const [ownPage, setOwnPage] = React.useState(0);
   const page = pageProp ?? ownPage;
@@ -288,6 +295,7 @@ export function AccountStep({
   const emailRef = React.useRef<HTMLInputElement>(null);
   const heardAboutRef = React.useRef<HTMLSelectElement | HTMLButtonElement>(null);
   const heardAboutOtherRef = React.useRef<HTMLInputElement>(null);
+  const fleetSizeRef = React.useRef<HTMLButtonElement>(null);
   const phoneRef = React.useRef<HTMLInputElement>(null);
   const passwordRef = React.useRef<HTMLInputElement>(null);
   const signInPasswordRef = React.useRef<HTMLInputElement>(null);
@@ -337,6 +345,8 @@ export function AccountStep({
           ? heardAboutRef.current
           : field === "heardAboutOther"
             ? heardAboutOtherRef.current
+            : field === "fleetSize"
+              ? fleetSizeRef.current
             : field === "phone"
               ? phoneRef.current
               : field === "password"
@@ -569,12 +579,14 @@ export function AccountStep({
     onSubmitAttribution(answered);
   };
 
-  const attributionFields = (autoFocus: boolean) => (
+  const attributionFields = (autoFocus: boolean, compact = false) => (
     <HeardAboutFields
+      compact={compact}
       value={attribution}
       errors={{
         heardAbout: fieldError("heardAbout"),
         heardAboutOther: fieldError("heardAboutOther"),
+        fleetSize: fieldError("fleetSize"),
         phone: fieldError("phone"),
       }}
       busy={busy}
@@ -587,6 +599,8 @@ export function AccountStep({
       heardAboutRef={heardAboutRef}
       otherRef={heardAboutOtherRef}
       phoneRef={phoneRef}
+      fleetRef={fleetSizeRef}
+      onFleetSizeChange={onFleetSizeChange}
     />
   );
 
@@ -791,7 +805,7 @@ export function AccountStep({
   if (mode === "attribution") {
     return (
       <form id="signup-account-form" onSubmit={handleAttributionSubmit} noValidate className={SIGNUP_ENTER}>
-        <ScreenHead title="One quick question" />
+        <ScreenHead title="Two quick questions" />
         <div className="mt-6 space-y-3.5">{attributionFields(true)}</div>
       </form>
     );
@@ -865,7 +879,9 @@ export function AccountStep({
 
           {/* Spaced to fit with no inner scroll down to 1366x768 and 360x740
               (owner, 2026-11-19): every field stays, the gaps tighten. */}
-          <div className={cn(googleEnabled ? "mt-5 space-y-3 [@media(max-height:700px)]:mt-4 [@media(max-height:700px)]:space-y-2" : "mt-9 space-y-5")}>
+          {/* Two questions now (2026-11-20): 40px fields and tighter gaps so it
+              still fits with no inner scroll at 1366x768 and 360x740. */}
+          <div className={cn(googleEnabled ? "mt-4 space-y-2.5 max-sm:space-y-2 [@media(max-height:700px)]:mt-3 [@media(max-height:700px)]:space-y-2" : "mt-6 space-y-3.5")}>
             <div>
               <Label htmlFor="signup-full-name" className={SIGNUP_LABEL}>
                 Your name
@@ -888,7 +904,7 @@ export function AccountStep({
                   setErrors((prev) => ({ ...prev, fullName: undefined }));
                   markDirty();
                 }}
-                className={cn(SIGNUP_INPUT, "mt-1.5", !googleEnabled && "mt-2 h-12")}
+                className={cn(SIGNUP_INPUT, "mt-1 h-10")}
               />
               {nameError && <FieldError id="signup-full-name-error">{nameError}</FieldError>}
             </div>
@@ -926,7 +942,7 @@ export function AccountStep({
                 // Suggest on blur, not on every keystroke: "did you mean gmail.com"
                 // while someone is still typing "gm" is noise.
                 onBlur={() => setEmailSuggestion(suggestEmailCorrection(email))}
-                className={cn(SIGNUP_INPUT, "mt-1.5", !googleEnabled && "mt-2 h-12")}
+                className={cn(SIGNUP_INPUT, "mt-1 h-10")}
               />
               {emailError ? (
                 <FieldError id="signup-email-error">{emailError}</FieldError>
@@ -957,14 +973,14 @@ export function AccountStep({
               )}
             </div>
 
-            {attributionFields(false)}
+            {attributionFields(false, true)}
           </div>
 
           {/*
             Page 0 carries its own Continue so the email path comes first and
             Google sits under it; the shell hides its footer button here.
           */}
-          <Button type="submit" disabled={busy} className={cn(SIGNUP_PRIMARY, googleEnabled ? "mt-5 [@media(max-height:700px)]:mt-4" : "mt-6")}>
+          <Button type="submit" disabled={busy} className={cn(SIGNUP_PRIMARY, googleEnabled ? "mt-4 [@media(max-height:700px)]:mt-3" : "mt-5")}>
             {busy ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />

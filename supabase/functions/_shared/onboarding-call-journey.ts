@@ -168,6 +168,16 @@ export interface BookingNotice {
   vehicleCount: number;
   hasLogo: boolean;
   heardAbout?: string | null;
+  /** "How many cars do you rent out?" from the signup: "1-5" | "6-20" | "21+". */
+  fleetSize?: string | null;
+  /** When the card step's "Not ready just yet?" 20% offer was shown, if it was. */
+  exitOfferSeenAt?: string | null;
+}
+
+/** "6-20" -> "6–20 cars", for people rather than databases. */
+export function fleetSizeLabel(fleetSize: string | null | undefined): string {
+  if (!fleetSize) return "Not answered";
+  return `${fleetSize.replace("-", "–")} cars`;
 }
 
 function formatCallTime(iso: string, timezone?: string | null): string {
@@ -198,6 +208,8 @@ export function buildBookingNoticeHtml(n: BookingNotice): string {
     ["Vehicles added", String(n.vehicleCount)],
     ["Logo uploaded", n.hasLogo ? "Yes" : "No"],
     ["Heard about us", n.heardAbout || "Not answered"],
+    ["Fleet size", fleetSizeLabel(n.fleetSize)],
+    ["20% offer", n.exitOfferSeenAt ? `Shown ${dateOnly(n.exitOfferSeenAt)}` : "Not shown"],
     ["Portal", `${n.slug}.portal.drive-247.com`],
   ];
   const cells = rows

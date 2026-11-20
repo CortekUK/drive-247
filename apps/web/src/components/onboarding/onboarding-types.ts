@@ -82,6 +82,9 @@ export type SignupErrorCode =
   | "RESET_CODE_INVALID"
   | "RESET_PASSWORD_WEAK"
   | "RESET_FAILED"
+  // --- "Email me a link to finish later" (signup-finish-later): the link is
+  // expired, used up, or not one we sent.
+  | "FINISH_LINK_INVALID"
   // --- infrastructure
   | "STRIPE_UNAVAILABLE"
   | "STRIPE_JS_UNAVAILABLE"
@@ -150,6 +153,8 @@ export const SIGNUP_ERROR_COPY: Record<SignupErrorCode, string> = {
     "Use at least 10 characters, including a letter and a number.",
   RESET_FAILED:
     "We couldn't set your new password. Request a new code and try again.",
+  FINISH_LINK_INVALID:
+    "That link has expired. Sign in below to pick up where you left off.",
   STRIPE_UNAVAILABLE:
     "We couldn't reach our payment provider. No charge was made. Please try again in a moment.",
   STRIPE_JS_UNAVAILABLE:

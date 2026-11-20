@@ -99,6 +99,20 @@ describe("the emails", () => {
       expect(html).toContain(text);
     }
   });
+
+  it("tells Bryan the fleet size and whether the 20% offer was shown", () => {
+    const base = {
+      companyName: "Acme", slug: "acme", bookerName: "Sam", bookerEmail: "sam@acme.test",
+      startsAt: "2026-11-20T15:00:00Z", signedUpAt: "2026-11-19T00:00:00Z", vehicleCount: 0, hasLogo: false,
+    };
+    const offered = buildBookingNoticeHtml({ ...base, fleetSize: "6-20", exitOfferSeenAt: "2026-11-19T10:00:00Z" });
+    expect(offered).toContain("Fleet size");
+    expect(offered).toContain("6–20 cars");
+    expect(offered).toContain("Shown Nov 19, 2026");
+    const plain = buildBookingNoticeHtml(base);
+    expect(plain).toContain("Not answered");
+    expect(plain).toContain("Not shown");
+  });
 });
 
 describe("what a calendar event records", () => {

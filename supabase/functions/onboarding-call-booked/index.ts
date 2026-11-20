@@ -58,7 +58,10 @@ async function notifyBryan(
       supabase.from("tenant_subscriptions").select("status, trial_end").eq("tenant_id", tenantId)
         .order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("vehicles").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
-      supabase.from("signup_attribution").select("heard_about, heard_about_other, phone").eq("tenant_id", tenantId)
+      // "*" rather than a column list: fleet_size and exit_offer_seen_at
+      // arrive with a migration, and naming them would fail the whole read
+      // (and the notice) until it is applied.
+      supabase.from("signup_attribution").select("*").eq("tenant_id", tenantId)
         .order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
     if (!t) return;
@@ -81,6 +84,8 @@ async function notifyBryan(
         vehicleCount: count ?? 0,
         hasLogo: !!String(t.logo_url ?? "").trim(),
         heardAbout: signup?.heard_about_other || signup?.heard_about,
+        fleetSize: signup?.fleet_size,
+        exitOfferSeenAt: signup?.exit_offer_seen_at,
       }),
       fromName: "Drive247",
       replyTo: booker.email,

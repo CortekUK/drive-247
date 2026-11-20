@@ -116,6 +116,8 @@ interface BeginRequest {
   /** "How did you hear about us?" See _shared/signup-attribution.ts. */
   heardAbout?: string;
   heardAboutOther?: string;
+  /** "How many cars do you rent out?" — "1-5" | "6-20" | "21+". */
+  fleetSize?: string;
   /** Optional. */
   phone?: string;
 }

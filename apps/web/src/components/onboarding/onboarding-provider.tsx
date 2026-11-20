@@ -21,7 +21,13 @@ import {
 } from "@/lib/plans";
 import { captureSignup, identifyAccount } from "@/lib/analytics";
 import { readMetaSignals, trackRegistration, trackStartTrial } from "@/lib/meta-tracking";
-import { isHeardAbout, type HeardAbout, type SignupAttribution } from "@/lib/signup-attribution";
+import {
+  hasCompleteAttribution,
+  isHeardAbout,
+  type HeardAbout,
+  type SignupAttribution,
+} from "@/lib/signup-attribution";
+import { isFleetSize, planForFleetSize, type FleetSize } from "@/lib/fleet-size";
 import { promoRejectionText, type PromoOffer } from "@/lib/promo-offer";
 import {
   clearReferralCodeInDocument,
@@ -43,6 +49,9 @@ import {
   lookupPromoCode,
   signupBegin,
   signupBeginOauth,
+  signupExitOfferSeen,
+  signupFinishLaterRedeem,
+  signupFinishLaterSend,
   signupSaveAttribution,
   signupVerifyOtp,
   signupPaymentIntent,
@@ -69,6 +78,7 @@ import {
   writePendingOauth,
 } from "./tenant-draft";
 import { isMockSignup, mockResetSignup } from "./mock-signup";
+import { EXIT_OFFER_CODE, readExitOfferSeen, writeExitOfferSeen } from "./exit-offer";
 import {
   clearPendingVerify,
   readPendingVerify,
@@ -78,6 +88,12 @@ import { OnboardingScreen } from "./onboarding-screen";
 
 /** This tab's open signup screen, so a refresh can reopen it. */
 const OPEN_PLAN_KEY = "d247.signup.openPlan";
+/**
+ * "1" when the plan in OPEN_PLAN_KEY was the visitor's own choice (a pricing
+ * card, or "Change plan"), so the fleet-size answer leaves it alone. Session
+ * storage, so it survives a refresh and the Google round trip in this tab.
+ */
+const PLAN_PICKED_KEY = "d247.signup.planPicked";
 import { ProvisioningScreen } from "./provisioning-screen";
 import {
   EMPTY_BUSINESS_DRAFT,
@@ -351,6 +367,23 @@ interface OnboardingShellValue {
    * incomplete subscription.
    */
   changePlan(planId: SignupPlanId): void;
+  /**
+   * "How many cars do you rent out?" was tapped. Moves the plan to match
+   * (1–5 Starter, 6–20 Growth, 21+ Scale) unless the visitor chose a plan on
+   * the pricing grid or with "Change plan".
+   */
+  chooseFleetSize(fleetSize: FleetSize): void;
+  /**
+   * The card step's one-time "Not ready just yet?" offer has been shown to
+   * this person already: in this browser, or on the account from any device.
+   */
+  exitOfferSeen: boolean;
+  /** The offer is on screen now: remember it here and on the account, and tell PostHog. */
+  noteExitOfferShown(trigger: "exit_intent" | "close" | "back"): void;
+  /** PostHog for the offer's buttons, with the plan and fleet size attached. */
+  trackExitOffer(event: "exit_offer_accepted" | "exit_offer_dismissed" | "finish_later_requested"): void;
+  /** "Email me a link to finish later". Resolves true once the email is on its way. */
+  sendFinishLaterLink(): Promise<boolean>;
 }
 
 /**
@@ -367,6 +400,11 @@ const OnboardingShellContext = createContext<OnboardingShellValue>({
   googleEnabled: GOOGLE_ENABLED,
   verifySentAt: null,
   changePlan: () => {},
+  chooseFleetSize: () => {},
+  exitOfferSeen: true,
+  noteExitOfferShown: () => {},
+  trackExitOffer: () => {},
+  sendFinishLaterLink: async () => false,
 });
 
 export function useOnboarding(): OnboardingContextValue {
@@ -552,12 +590,16 @@ async function reportStartTrial(res: ProvisionResponse): Promise<void> {
 }
 
 /**
- * The PostHog property for this account's answer, read from the server's record
- * so it is right on every path (a reload, another device, a Google return).
+ * The PostHog properties for this account's answers, read from the server's
+ * record so they are right on every path (a reload, another device, a Google
+ * return).
  */
-async function heardAboutProps(): Promise<{ heard_about?: HeardAbout }> {
-  const answer = (await fetchSignupMeta())?.heardAbout;
-  return isHeardAbout(answer) ? { heard_about: answer } : {};
+async function heardAboutProps(): Promise<{ heard_about?: HeardAbout; fleet_size?: FleetSize }> {
+  const meta = await fetchSignupMeta();
+  return {
+    ...(isHeardAbout(meta?.heardAbout) ? { heard_about: meta.heardAbout } : {}),
+    ...(isFleetSize(meta?.fleetSize) ? { fleet_size: meta.fleetSize } : {}),
+  };
 }
 
 /** Sets the answer on the PostHog person and records `signup_account_created`. */
@@ -641,6 +683,29 @@ export function OnboardingProvider({
   const [planSwitchBlocked, setPlanSwitchBlocked] = useState<SignupPlanId | null>(null);
   const [accountMode, setAccountMode] = useState<AccountStepMode>("create");
   const [verifySentAt, setVerifySentAt] = useState<number | null>(null);
+  /** See OnboardingShellValue.exitOfferSeen. Starts true so nothing flashes before the read. */
+  const [exitOfferSeen, setExitOfferSeen] = useState(true);
+  useEffect(() => {
+    setExitOfferSeen(readExitOfferSeen());
+  }, []);
+
+  /**
+   * The plan on screen was the visitor's own choice (a pricing card, "Change
+   * plan"), rather than the default a "Start free trial" button opens on. Only
+   * a default is moved by the fleet-size answer.
+   */
+  const planPickedRef = useRef(false);
+  const setPlanPicked = useCallback((picked: boolean) => {
+    planPickedRef.current = picked;
+    try {
+      if (picked) window.sessionStorage.setItem(PLAN_PICKED_KEY, "1");
+      else window.sessionStorage.removeItem(PLAN_PICKED_KEY);
+    } catch {
+      /* storage blocked: this page still knows */
+    }
+  }, []);
+  /** The fleet-size answer given on this page, for PostHog. */
+  const fleetSizeRef = useRef<FleetSize | null>(null);
 
   /**
    * Remember the code screen in this browser (pending-verify.ts), so leaving to
@@ -1274,11 +1339,14 @@ export function OnboardingProvider({
           signup.resumeStep === "payment" &&
           !signup.paid &&
           !attributionAnsweredRef.current &&
-          !(await fetchSignupMeta())?.heardAbout
+          !hasCompleteAttribution(await fetchSignupMeta())
         ) {
           dispatch({ type: "setAccount", account: { fullName: signup.fullName, email: signup.email } });
           dispatch({ type: "signInPrompt", prompt: null });
-          afterAttributionRef.current = () => hydrateFromResume(signup, requestedPlanId);
+          // The answer on that screen may move the plan (fleet size), so the
+          // plan is read when they carry on, not now.
+          afterAttributionRef.current = () =>
+            hydrateFromResume(signup, stateRef.current.planId ?? requestedPlanId);
           setAccountMode("attribution");
           dispatch({ type: "resumeTo", step: "account" });
           return;
@@ -1351,8 +1419,15 @@ export function OnboardingProvider({
   // Public actions
   // -------------------------------------------------------------------------
 
-  const open = useCallback(
-    (planId: SignupPlanId) => {
+  /**
+   * `picked` is false only for the "Start free trial" buttons outside the
+   * pricing grid, which open on the entry plan without anyone choosing it; the
+   * fleet-size answer may then move it. Everything else that opens the signup
+   * is a plan the visitor chose (or chose before a refresh).
+   */
+  const openSignup = useCallback(
+    (planId: SignupPlanId, picked: boolean) => {
+      if (stateRef.current.step === "plan") setPlanPicked(picked);
       setCloseConfirmOpen(false);
       setPlanSwitchBlocked(null);
       setIsOpen(true);
@@ -1439,8 +1514,10 @@ export function OnboardingProvider({
       }
       decide();
     },
-    [resolveResume, startPaymentInternal],
+    [resolveResume, setPlanPicked, startPaymentInternal],
   );
+
+  const open = useCallback((planId: SignupPlanId) => openSignup(planId, true), [openSignup]);
 
   /**
    * The other end of the `return_url` the payment step hands Stripe
@@ -1552,7 +1629,7 @@ export function OnboardingProvider({
         let meta = await fetchSignupMeta();
         // A returning Google user is not stamped again, so an answer they gave
         // before pressing the button still has to be saved.
-        if (!meta?.heardAbout && pending.attribution) {
+        if (!hasCompleteAttribution(meta) && pending.attribution) {
           await signupSaveAttribution(pending.attribution).catch((e) =>
             console.warn("[onboarding] could not save the signup answer", e),
           );
@@ -1561,7 +1638,7 @@ export function OnboardingProvider({
         resumeHintRef.current = meta;
         setHasResumableSignup(true);
 
-        const hasAnswer = Boolean(meta?.heardAbout);
+        const hasAnswer = hasCompleteAttribution(meta);
         void reportRegistration("oauth", { holdPostHog: !hasAnswer });
 
         const carryOn = async () => {
@@ -1587,7 +1664,8 @@ export function OnboardingProvider({
 
           // The server decides the step, exactly as it does for a password resume.
           // For a signup that has just been stamped that is always `payment`.
-          await resolveResume(pending.planId);
+          // The plan is read now: the fleet-size answer may have moved it.
+          await resolveResume(stateRef.current.planId ?? pending.planId);
         };
 
         // Google skips the form that carries the question, so it comes first.
@@ -1640,6 +1718,95 @@ export function OnboardingProvider({
   }, [completeGoogleReturn]);
 
   /**
+   * The other end of "Email me a link to finish later":
+   * `/?signup=finish&t=<token>&code=WELCOME20`, usually opened on a computer
+   * with no session.
+   *
+   * `signup-finish-later` checks the 7-day token and answers with a one-time
+   * Supabase sign-in for the account it was minted for, spent here at once.
+   * The code is carried exactly as a /r/{code} link carries one (the referral
+   * cookie), so the card step mints its intent with it; a code that is not
+   * live is dropped there with the usual "subscribing at the full price" line.
+   * A portal that is already built gets its portal instead.
+   */
+  const completeFinishLater = useCallback(
+    async (token: string, urlCode: string | null) => {
+      setIsOpen(true);
+      setResolving(true);
+      dispatch({ type: "goto", step: "account" });
+      try {
+        const res = await signupFinishLaterRedeem(token);
+        const { error: otpError } = await getBrowserSupabase().auth.verifyOtp({
+          token_hash: res.tokenHash,
+          type: "magiclink",
+        });
+        if (otpError) throw otpError;
+
+        const code = normalizeReferralCode(res.code ?? urlCode);
+        if (code) {
+          writeReferralCodeInDocument(code);
+          promoDroppedRef.current = false;
+        }
+        if (!isMockSignup()) captureSignup("finish_later_link_opened", { plan: res.planId ?? undefined });
+
+        const meta = await fetchSignupMeta();
+        resumeHintRef.current = meta;
+        setHasResumableSignup(true);
+        const planId = isSignupPlanId(meta?.planId)
+          ? meta.planId
+          : isSignupPlanId(res.planId)
+            ? res.planId
+            : entryPlanId(plans);
+        // Chosen before they left: the fleet answer is already behind them.
+        setPlanPicked(true);
+        dispatch({ type: "setPlan", planId });
+        await resolveResume(planId);
+      } catch (e) {
+        const error = toOnboardingError(e);
+        const portalUrl = error.detail?.portalUrl;
+        if (error.code === "ALREADY_PROVISIONED" && typeof portalUrl === "string" && /^https:\/\//.test(portalUrl)) {
+          window.location.assign(`${stripTrailingSlash(portalUrl)}/login`);
+          return;
+        }
+        console.warn("[onboarding] finish-later link could not be used", error);
+        setResolving(false);
+        dispatch({ type: "setPlan", planId: stateRef.current.planId ?? entryPlanId(plans) });
+        dispatch({ type: "goto", step: "account" });
+        // A blip or the rate limit says so; anything else about the link
+        // (expired, used up, a sign-in that would not take) reads as an
+        // expired link, with the sign-in way back in right under it.
+        dispatch({
+          type: "error",
+          error: error.code === "RATE_LIMITED" || error.code === "NETWORK" ? error : err("FINISH_LINK_INVALID"),
+        });
+      }
+    },
+    [plans, resolveResume, setPlanPicked],
+  );
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("signup") !== "finish") return;
+    const token = params.get("t");
+    const code = params.get("code");
+    // Out of the address bar before anything else: the token is a key to the
+    // account for a week and must not sit in history or the next Referer.
+    params.delete("signup");
+    params.delete("t");
+    params.delete("code");
+    const query = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+    );
+    if (!token) return;
+    void completeFinishLater(token, code);
+    // Mount only: the link is read once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
    * A refresh puts them back where they were.
    *
    * While the signup screen is open, this tab remembers the plan it is open
@@ -1653,6 +1820,9 @@ export function OnboardingProvider({
     let planId: string | null = null;
     try {
       planId = window.sessionStorage.getItem(OPEN_PLAN_KEY);
+      // Read before the storage effect below clears it for a closed screen:
+      // the Google return needs it as much as a refresh does.
+      planPickedRef.current = window.sessionStorage.getItem(PLAN_PICKED_KEY) === "1";
     } catch {
       /* storage blocked: nothing to restore */
     }
@@ -1696,8 +1866,14 @@ export function OnboardingProvider({
 
     if (!isSignupPlanId(planId)) return;
     const restorePlan = planId;
+    let picked = true;
+    try {
+      picked = window.sessionStorage.getItem(PLAN_PICKED_KEY) === "1";
+    } catch {
+      /* storage blocked: treat it as chosen, the safe direction */
+    }
     void (resumeProbeRef.current ?? Promise.resolve()).finally(() => {
-      window.setTimeout(() => open(restorePlan), 0);
+      window.setTimeout(() => openSignup(restorePlan, picked), 0);
     });
     // Mount only: `open` is stable enough for a one-shot restore.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1721,7 +1897,7 @@ export function OnboardingProvider({
 
     const onRequest = (event: Event) => {
       event.preventDefault();
-      open(defaultPlan());
+      openSignup(defaultPlan(), false);
     };
     window.addEventListener(OPEN_SIGNUP_EVENT, onRequest);
 
@@ -1734,17 +1910,23 @@ export function OnboardingProvider({
         "",
         `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
       );
-      window.setTimeout(() => open(defaultPlan()), 0);
+      window.setTimeout(() => openSignup(defaultPlan(), false), 0);
     }
 
     return () => window.removeEventListener(OPEN_SIGNUP_EVENT, onRequest);
-  }, [open, plans]);
+  }, [openSignup, plans]);
 
   useEffect(() => {
     if (!restoreCheckedRef.current) return;
     try {
-      if (isOpen && state.planId) window.sessionStorage.setItem(OPEN_PLAN_KEY, state.planId);
-      else if (!isOpen) window.sessionStorage.removeItem(OPEN_PLAN_KEY);
+      if (isOpen && state.planId) {
+        window.sessionStorage.setItem(OPEN_PLAN_KEY, state.planId);
+        if (planPickedRef.current) window.sessionStorage.setItem(PLAN_PICKED_KEY, "1");
+        else window.sessionStorage.removeItem(PLAN_PICKED_KEY);
+      } else if (!isOpen) {
+        window.sessionStorage.removeItem(OPEN_PLAN_KEY);
+        window.sessionStorage.removeItem(PLAN_PICKED_KEY);
+      }
     } catch {
       /* storage blocked: a refresh simply starts over */
     }
@@ -1799,7 +1981,20 @@ export function OnboardingProvider({
         console.warn("[onboarding] submitAccount ignored outside the account step");
         return;
       }
-      const planId = s.planId;
+      // The fleet answer normally moved the plan the moment it was tapped
+      // (`chooseFleetSize`); applied again here so the account is never
+      // created on a plan the answer should have replaced.
+      const fleet = values.attribution.fleetSize ?? null;
+      const fleetPlan = fleet
+        ? planForFleetSize(fleet, {
+          currentPlanId: s.planId,
+          planChosenByVisitor: planPickedRef.current,
+          catalogue: plans,
+        })
+        : null;
+      if (fleetPlan) dispatch({ type: "setPlan", planId: fleetPlan });
+      if (fleet) fleetSizeRef.current = fleet;
+      const planId = fleetPlan ?? s.planId;
       if (!planId) {
         dispatch({ type: "error", error: err("PLAN_UNKNOWN") });
         return;
@@ -1859,7 +2054,9 @@ export function OnboardingProvider({
             planId,
           );
           setHasResumableSignup(true);
-          if (!isMockSignup()) captureSignup("signup_account_submitted", { plan: planId });
+          if (!isMockSignup()) {
+            captureSignup("signup_account_submitted", { plan: planId, ...(fleet ? { fleet_size: fleet } : {}) });
+          }
           dispatch({ type: "goto", step: "verify" });
           return;
         }
@@ -1981,7 +2178,7 @@ export function OnboardingProvider({
         if (!handedOff) dispatch({ type: "busy", busy: false });
       }
     },
-    [rememberCodeSent, startPaymentInternal],
+    [plans, rememberCodeSent, startPaymentInternal],
   );
 
   /**
@@ -2346,12 +2543,90 @@ export function OnboardingProvider({
       const s = stateRef.current;
       if (s.step !== "payment" || s.payment.paid || s.busy || s.planId === planId) return;
       if (!getSignupPlan(planId, plans)) return;
-      if (!isMockSignup()) captureSignup("signup_plan_changed", { plan: planId, from: s.planId ?? undefined });
+      if (!isMockSignup()) {
+        captureSignup("signup_plan_changed", {
+          plan: planId,
+          from: s.planId ?? undefined,
+          ...(fleetSizeRef.current ? { fleet_size: fleetSizeRef.current } : {}),
+        });
+      }
+      // Their own choice from here on: a later fleet answer must not undo it.
+      setPlanPicked(true);
       dispatch({ type: "setPlan", planId });
       void startPaymentInternal(planId);
     },
-    [plans, startPaymentInternal],
+    [plans, setPlanPicked, startPaymentInternal],
   );
+
+  const chooseFleetSize = useCallback(
+    (fleetSize: FleetSize) => {
+      fleetSizeRef.current = fleetSize;
+      const s = stateRef.current;
+      // Before the card only: the plan is fixed once an intent exists for it,
+      // and "Change plan" is the way to move then.
+      if (s.step !== "account" || s.payment.paid) return;
+      const next = planForFleetSize(fleetSize, {
+        currentPlanId: s.planId,
+        planChosenByVisitor: planPickedRef.current,
+        catalogue: plans,
+      });
+      if (next) dispatch({ type: "setPlan", planId: next });
+    },
+    [plans],
+  );
+
+  // ---- the card step's one-time offer ------------------------------------
+
+  /** The account's own record of the offer, read whenever the card step opens. */
+  useEffect(() => {
+    if (state.step !== "payment" || exitOfferSeen || isMockSignup()) return;
+    let cancelled = false;
+    void fetchSignupMeta()
+      .then((meta) => {
+        if (!cancelled && meta?.exitOfferSeenAt) setExitOfferSeen(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [state.step, exitOfferSeen]);
+
+  const offerProps = useCallback(
+    () => ({
+      plan: stateRef.current.planId ?? undefined,
+      ...(fleetSizeRef.current ? { fleet_size: fleetSizeRef.current } : {}),
+    }),
+    [],
+  );
+
+  const noteExitOfferShown = useCallback(
+    (trigger: "exit_intent" | "close" | "back") => {
+      setExitOfferSeen(true);
+      writeExitOfferSeen();
+      if (!isMockSignup()) captureSignup("exit_offer_shown", { ...offerProps(), trigger });
+      void signupExitOfferSeen().catch((e) =>
+        console.warn("[onboarding] could not record the exit offer on the account", e),
+      );
+    },
+    [offerProps],
+  );
+
+  const trackExitOffer = useCallback(
+    (event: "exit_offer_accepted" | "exit_offer_dismissed" | "finish_later_requested") => {
+      if (!isMockSignup()) captureSignup(event, offerProps());
+    },
+    [offerProps],
+  );
+
+  const sendFinishLaterLink = useCallback(async (): Promise<boolean> => {
+    try {
+      await signupFinishLaterSend(EXIT_OFFER_CODE);
+      return true;
+    } catch (e) {
+      console.warn("[onboarding] could not send the finish-later link", toOnboardingError(e));
+      return false;
+    }
+  }, []);
 
   const applyPromoCode = useCallback(
     async (raw: string | null): Promise<string | null> => {
@@ -2689,8 +2964,25 @@ export function OnboardingProvider({
       googleEnabled: GOOGLE_ENABLED,
       verifySentAt,
       changePlan,
+      chooseFleetSize,
+      exitOfferSeen,
+      noteExitOfferShown,
+      trackExitOffer,
+      sendFinishLaterLink,
     }),
-    [resolving, planSwitchBlocked, plans, accountMode, verifySentAt, changePlan],
+    [
+      resolving,
+      planSwitchBlocked,
+      plans,
+      accountMode,
+      verifySentAt,
+      changePlan,
+      chooseFleetSize,
+      exitOfferSeen,
+      noteExitOfferShown,
+      trackExitOffer,
+      sendFinishLaterLink,
+    ],
   );
 
   const overlayMounted = state.step === "provisioning" || state.step === "done";

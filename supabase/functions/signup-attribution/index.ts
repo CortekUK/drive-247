@@ -1,5 +1,6 @@
 // =============================================================================
-// signup-attribution — saves "How did you hear about us?" for a signed-in signup.
+// signup-attribution — saves "How did you hear about us?" and "How many cars do
+// you rent out?" for a signed-in signup.
 //
 // The password path sends the answer with `signup-begin`. Google and Apple
 // signups never see that form, so they answer on a short screen straight after
@@ -85,6 +86,7 @@ Deno.serve(async (req) => {
     await writeSignupMeta(supabase, user.id, {
       heardAbout: attribution.heardAbout,
       heardAboutOther: attribution.heardAboutOther,
+      ...(attribution.fleetSize ? { fleetSize: attribution.fleetSize } : {}),
       ...(attribution.phone ? { phone: attribution.phone } : {}),
     });
 

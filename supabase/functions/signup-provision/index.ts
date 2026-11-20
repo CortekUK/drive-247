@@ -82,6 +82,7 @@ import {
   type MetaBrowserSignals,
 } from "../_shared/meta-conversions.ts";
 import {
+  isFleetSize,
   linkSignupAttributionTenant,
   phoneForMeta,
   stripeAttributionMetadata,
@@ -1460,6 +1461,18 @@ Deno.serve(async (req) => {
           error,
         );
       }
+    }
+
+    // ---- 7b'. "How many cars do you rent out?" on the tenant. Non-fatal. ---
+    // A write of its own, not a field on the update above: until the
+    // migration that adds `tenants.fleet_size` is applied this one fails, and
+    // it must not take the Stripe customer id down with it.
+    if (isFleetSize(meta.fleetSize)) {
+      const { error } = await supabase
+        .from("tenants")
+        .update({ fleet_size: meta.fleetSize })
+        .eq("id", tenantId);
+      if (error) console.warn(`${LOG} could not set fleet_size on tenant ${tenantId} (non-fatal):`, error);
     }
 
     // ---- 7c. Attach tenant_id to the Stripe objects. Non-fatal. ----------

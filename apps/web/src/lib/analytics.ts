@@ -13,8 +13,8 @@
  *
  * Nothing typed into a field is sent: PostHog never records input values, and
  * the card form is Stripe's own frame, which no script on this page can read.
- * The one signup answer sent on purpose is `heard_about`, a value from a fixed
- * list. A person is known by their account id only, never by email.
+ * The signup answers sent on purpose are `heard_about` and `fleet_size`,
+ * values from fixed lists. A person is known by their account id only, never by email.
  *
  * Browser-only, and never throws: analytics must not be able to break signup.
  */
@@ -37,7 +37,14 @@ export type SignupEvent =
   | "signup_account_submitted"
   | "signup_account_created"
   | "signup_plan_changed"
-  | "signup_trial_started";
+  | "signup_trial_started"
+  // The card step's one-time "Not ready just yet?" offer.
+  | "exit_offer_shown"
+  | "exit_offer_accepted"
+  | "exit_offer_dismissed"
+  // "Email me a link to finish later", and that link being opened.
+  | "finish_later_requested"
+  | "finish_later_link_opened";
 
 type PostHog = {
   capture: (event: string, properties?: Record<string, unknown>) => void;

@@ -1,6 +1,6 @@
 // =============================================================================
-// signup-attribution — "How did you hear about us?" and the optional phone number
-// from the signup's account step.
+// signup-attribution — "How did you hear about us?", "How many cars do you rent
+// out?" and the optional phone number from the signup's account step.
 //
 // People see an ad on their phone and sign up later on a laptop, so Meta and
 // PostHog record a "direct" visit. Asking is the only reliable answer.
@@ -8,7 +8,10 @@
 // The answer is kept in three places:
 //   app_metadata.d247_signup        what the later signup steps read
 //   public.signup_attribution       the record to report from (service role only)
-//   Stripe customer metadata        `heard_about`, next to the trial
+//   Stripe customer metadata        `heard_about` and `fleet_size`, next to the trial
+//
+// The fleet size also picks the plan in the browser (apps/web/src/lib/fleet-size.ts)
+// and is copied onto `tenants.fleet_size` when the portal is built.
 //
 // Nothing here may fail a signup. Bad input is dropped, not refused: the question
 // is required by the form, and an old browser tab that does not send it still has
@@ -30,10 +33,21 @@ export type HeardAbout = (typeof HEARD_ABOUT_VALUES)[number];
 
 export const HEARD_ABOUT_OTHER_MAX = 100;
 
+/** Keep in step with FLEET_SIZE_OPTIONS in apps/web/src/lib/fleet-size.ts. */
+export const FLEET_SIZE_VALUES = ["1-5", "6-20", "21+"] as const;
+
+export type FleetSize = (typeof FLEET_SIZE_VALUES)[number];
+
+export function isFleetSize(value: unknown): value is FleetSize {
+  return typeof value === "string" && (FLEET_SIZE_VALUES as readonly string[]).includes(value);
+}
+
 export interface SignupAttribution {
   heardAbout?: HeardAbout;
   /** Only ever set alongside `heardAbout: "other"`. */
   heardAboutOther?: string;
+  /** "How many cars do you rent out?" */
+  fleetSize?: FleetSize;
   /** `+` and digits when the country is known, otherwise the digits as typed. */
   phone?: string;
 }
@@ -84,18 +98,34 @@ export function readSignupAttribution(body: unknown): SignupAttribution {
     }
   }
 
+  if (isFleetSize(b.fleetSize)) out.fleetSize = b.fleetSize;
+
   const phone = normalizeSignupPhone(b.phone);
   if (phone) out.phone = phone;
   return out;
 }
 
-/** The Stripe customer metadata for an answer. Empty when there is no answer. */
+/** The Stripe customer metadata for the answers. Empty when there is none. */
 export function stripeAttributionMetadata(a: SignupAttribution): Record<string, string> {
-  if (!a.heardAbout) return {};
   return {
-    heard_about: a.heardAbout,
-    ...(a.heardAboutOther ? { heard_about_other: a.heardAboutOther } : {}),
+    ...(a.heardAbout
+      ? {
+        heard_about: a.heardAbout,
+        ...(a.heardAboutOther ? { heard_about_other: a.heardAboutOther } : {}),
+      }
+      : {}),
+    ...(isFleetSize(a.fleetSize) ? { fleet_size: a.fleetSize } : {}),
   };
+}
+
+/**
+ * PostgREST's "no such column" (PGRST204), i.e. the migration that adds
+ * `fleet_size` / `exit_offer_seen_at` has not been applied yet. The write is
+ * then retried without them, so the heard-about answer is never lost to it.
+ */
+function isMissingColumn(error: any): boolean {
+  const msg = String(error?.message ?? "");
+  return String(error?.code ?? "") === "PGRST204" || /column .* does not exist|could not find the .* column/i.test(msg);
 }
 
 /** Write the answers to `signup_attribution`. Logs and carries on if it cannot. */
@@ -103,23 +133,58 @@ export async function saveSignupAttribution(
   supabase: any,
   row: { authUserId: string; email: string; attribution: SignupAttribution; tenantId?: string | null },
 ): Promise<void> {
-  const { heardAbout, heardAboutOther, phone } = row.attribution;
-  if (!heardAbout && !phone) return;
+  const { heardAbout, heardAboutOther, phone, fleetSize } = row.attribution;
+  if (!heardAbout && !phone && !fleetSize) return;
   try {
-    const { error } = await supabase.from("signup_attribution").upsert(
-      {
-        auth_user_id: row.authUserId,
-        email: row.email,
-        ...(heardAbout ? { heard_about: heardAbout, heard_about_other: heardAboutOther ?? null } : {}),
-        ...(phone ? { phone } : {}),
-        ...(row.tenantId ? { tenant_id: row.tenantId } : {}),
-        updated_at: new Date().toISOString(),
-      },
+    const base = {
+      auth_user_id: row.authUserId,
+      email: row.email,
+      ...(heardAbout ? { heard_about: heardAbout, heard_about_other: heardAboutOther ?? null } : {}),
+      ...(phone ? { phone } : {}),
+      ...(row.tenantId ? { tenant_id: row.tenantId } : {}),
+      updated_at: new Date().toISOString(),
+    };
+    let { error } = await supabase.from("signup_attribution").upsert(
+      { ...base, ...(fleetSize ? { fleet_size: fleetSize } : {}) },
       { onConflict: "auth_user_id" },
     );
+    if (error && fleetSize && isMissingColumn(error)) {
+      console.warn("[signup-attribution] signup_attribution.fleet_size is missing; saved without it");
+      ({ error } = await supabase.from("signup_attribution").upsert(base, { onConflict: "auth_user_id" }));
+    }
     if (error) throw error;
   } catch (e) {
     console.error(`[signup-attribution] could not save the answer for ${row.authUserId} (non-fatal):`, e);
+  }
+}
+
+/**
+ * "Not ready just yet?" was shown to this account: kept so it is never shown
+ * again on another device, and so Bryan can see they were offered 20%.
+ * Only the first time is kept. Logs and carries on if it cannot.
+ */
+export async function markExitOfferSeen(
+  supabase: any,
+  row: { authUserId: string; email: string; at?: string },
+): Promise<void> {
+  const at = row.at ?? new Date().toISOString();
+  try {
+    const { data, error: readError } = await supabase
+      .from("signup_attribution")
+      .select("auth_user_id, exit_offer_seen_at")
+      .eq("auth_user_id", row.authUserId)
+      .maybeSingle();
+    if (readError) throw readError;
+    if (data?.exit_offer_seen_at) return;
+    const { error } = data
+      ? await supabase.from("signup_attribution")
+        .update({ exit_offer_seen_at: at, updated_at: at })
+        .eq("auth_user_id", row.authUserId)
+      : await supabase.from("signup_attribution")
+        .insert({ auth_user_id: row.authUserId, email: row.email, exit_offer_seen_at: at, updated_at: at });
+    if (error) throw error;
+  } catch (e) {
+    console.error(`[signup-attribution] could not record the exit offer for ${row.authUserId} (non-fatal):`, e);
   }
 }
 

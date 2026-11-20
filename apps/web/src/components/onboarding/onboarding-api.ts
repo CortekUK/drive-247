@@ -525,6 +525,48 @@ export function signupSaveAttribution(b: SignupAttribution): Promise<{ success: 
 }
 
 // ---------------------------------------------------------------------------
+// The card step's one-time offer, and "Email me a link to finish later"
+// (signup-finish-later)
+// ---------------------------------------------------------------------------
+
+/** "Not ready just yet?" was shown: remember it on the account. */
+export function signupExitOfferSeen(): Promise<{ success: true; exitOfferSeenAt: string }> {
+  return callFunction("signup-finish-later", { action: "offer_seen" }, {
+    auth: "session",
+    timeoutMs: 15_000,
+    dedupeKey: "signup-finish-later:offer_seen",
+  });
+}
+
+/** Email a link that opens the card step on another device. Not retried: a retry could send twice. */
+export function signupFinishLaterSend(code: string | null): Promise<{ success: true; sent: boolean }> {
+  return callFunction("signup-finish-later", { action: "send", code }, {
+    auth: "session",
+    timeoutMs: 20_000,
+    dedupeKey: "signup-finish-later:send",
+  });
+}
+
+export interface FinishLaterRedeemResponse {
+  success: true;
+  email: string;
+  /** A one-time Supabase sign-in, spent at once with verifyOtp. */
+  tokenHash: string;
+  planId: string | null;
+  /** The code the link was sent with, if it is still the offer's. */
+  code: string | null;
+}
+
+/** The emailed link was opened. Anon by definition: this device has no session. */
+export function signupFinishLaterRedeem(token: string): Promise<FinishLaterRedeemResponse> {
+  return callFunction("signup-finish-later", { action: "redeem", token }, {
+    auth: "anon",
+    timeoutMs: 20_000,
+    dedupeKey: "signup-finish-later:redeem",
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Slug availability without a session
 // ---------------------------------------------------------------------------
 
@@ -767,6 +809,10 @@ export interface ClientSignupMeta {
   email?: string;
   /** "How did you hear about us?" Absent until it has been answered. */
   heardAbout?: string;
+  /** "How many cars do you rent out?" Absent until it has been answered. */
+  fleetSize?: string;
+  /** When the card step's one-time offer was shown (ISO), on any device. */
+  exitOfferSeenAt?: string;
   mode?: "test" | "live";
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;

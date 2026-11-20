@@ -151,6 +151,10 @@ interface MockStore {
   provisionStartedAt: number | null;
   /** "How did you hear about us?" Absent until answered, as on the real server. */
   heardAbout?: string;
+  /** "How many cars do you rent out?" Absent until answered. */
+  fleetSize?: string;
+  /** When "Not ready just yet?" was shown (signup-finish-later "offer_seen"). */
+  exitOfferSeenAt?: string;
 }
 
 function readStore(): MockStore | null {
@@ -267,6 +271,7 @@ function seedAt(at: "payment" | "build" | "done" | "recover", planId: string): v
     userMetadata: at === "recover" ? {} : { d247_tenant_draft: { v: 1, ...SEED_BUSINESS } },
     provisionStartedAt: at === "done" ? Date.now() - 60_000 : null,
     heardAbout: "instagram",
+    fleetSize: "1-5",
   });
 }
 
@@ -310,6 +315,9 @@ function offer(
 /** Codes that work: one per shape of offer the payment step draws differently. */
 export const MOCK_PROMO_CODES: Record<string, PromoOffer> = {
   SAVE20: offer("SAVE20", "campaign", "percent", 20, "repeating", 3),
+  // The card step's "Not ready just yet?" offer (exit-offer.ts). Remove it to
+  // rehearse the code not existing yet: the quiet "couldn't be applied" line.
+  WELCOME20: offer("WELCOME20", "campaign", "percent", 20, "repeating", 3),
   SAVE15: offer("SAVE15", "campaign", "percent", 15, "repeating", 2),
   HALFOFF: offer("HALFOFF", "campaign", "percent", 50, "once", null),
   FLAT50: offer("FLAT50", "campaign", "fixed", 50, "once", null),
@@ -432,6 +440,8 @@ function metaOf(store: MockStore) {
     fullName: live.fullName,
     email: live.email,
     heardAbout: live.heardAbout,
+    fleetSize: live.fleetSize,
+    exitOfferSeenAt: live.exitOfferSeenAt,
     mode: "test" as const,
     stripeCustomerId: "cus_mock",
     stripeSubscriptionId: "sub_mock",
@@ -512,6 +522,7 @@ export async function mockFunction(name: string, body: unknown): Promise<unknown
         userMetadata: {},
         provisionStartedAt: null,
         heardAbout: typeof b.heardAbout === "string" ? b.heardAbout : undefined,
+        fleetSize: typeof b.fleetSize === "string" ? b.fleetSize : undefined,
       });
       return {
         success: true,
@@ -524,8 +535,28 @@ export async function mockFunction(name: string, body: unknown): Promise<unknown
 
     case "signup-attribution": {
       await beat();
-      patchStore({ heardAbout: String(b.heardAbout ?? "") });
+      patchStore({
+        heardAbout: String(b.heardAbout ?? ""),
+        ...(typeof b.fleetSize === "string" ? { fleetSize: b.fleetSize } : {}),
+      });
       return { success: true };
+    }
+
+    case "signup-finish-later": {
+      await beat();
+      if (b.action === "offer_seen") {
+        const at = new Date().toISOString();
+        patchStore({ exitOfferSeenAt: at });
+        return { success: true, exitOfferSeenAt: at };
+      }
+      if (b.action === "send") return { success: true, sent: true };
+      if (b.action === "redeem") {
+        // Any token opens the rehearsal's own signup, as a real link opens its account.
+        const store = readStore();
+        if (!store) throw new MockFunctionError("FINISH_LINK_INVALID", "That link has expired.");
+        return { success: true, email: store.email, tokenHash: "mock", planId: store.planId, code: b.code ?? "WELCOME20" };
+      }
+      return undefined;
     }
 
     case "signup-verify-otp": {
@@ -556,6 +587,7 @@ export async function mockFunction(name: string, body: unknown): Promise<unknown
         planId: String(b.planId ?? ""),
         status: "account_created",
         ...(typeof b.heardAbout === "string" ? { heardAbout: b.heardAbout } : {}),
+        ...(typeof b.fleetSize === "string" ? { fleetSize: b.fleetSize } : {}),
       });
       return {
         success: true,
@@ -814,6 +846,12 @@ export function createMockAuth(realAuth: object): object {
       const back = options?.redirectTo ?? window.location.href;
       window.location.assign(`${back}${back.includes("?") ? "&" : "?"}code=mock`);
       return { data: { provider: "google", url: back }, error: null };
+    },
+    async verifyOtp() {
+      // The finish-later link's sign-in (signup-finish-later "redeem").
+      const next = patchStore({ signedIn: true });
+      if (!next) return { data: { session: null, user: null }, error: noSession };
+      return { data: { session: mockSession(next), user: mockUser(next) }, error: null };
     },
     async exchangeCodeForSession() {
       const next = patchStore({ signedIn: true });
