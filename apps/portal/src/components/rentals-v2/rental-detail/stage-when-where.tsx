@@ -330,7 +330,7 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
         ) : null
       }
     >
-      <div className="flex h-full min-h-0 flex-col gap-4">
+      <div className="flex h-full min-h-0 flex-col gap-4 max-lg:h-auto">
         {/* ── picker one: the dates — the whole bar is the button ──────────── */}
         <DateBar
           editable={canEdit}
@@ -376,7 +376,7 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
             />
           </div>
 
-          <div className="relative min-h-40 flex-1 border-t border-foreground/5">
+          <div className="relative min-h-40 flex-1 border-t border-foreground/5 max-lg:h-72 max-lg:flex-none">
             <WhereMap places={mapPlaces} area={area} />
             <div className={cn("pointer-events-none absolute bottom-4 left-4 flex flex-wrap gap-1.5", canEdit && dirty && "hidden")}>
               <Legend dot="bg-primary" label="P pickup · R drop-off" />
@@ -457,9 +457,9 @@ function DateBar({
   const End = ({ label, at, hasTime }: { label: string; at: string; hasTime: boolean }) => (
     <div className="min-w-0">
       <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="mt-0.5 truncate font-heading text-lg font-semibold tracking-tight">
+      <p className="mt-0.5 truncate font-heading text-lg font-semibold tracking-tight max-lg:whitespace-normal">
         {at ? fmtDate(at.slice(0, 10)) : label === "Drop-off" ? "Open-ended" : "No date"}
-        <span className="ml-2 text-sm font-normal text-muted-foreground">
+        <span className="ml-2 text-sm font-normal text-muted-foreground max-lg:ml-0 max-lg:block">
           {at && hasTime ? fmtClock(at.slice(11, 16)) : "no time set"}
         </span>
       </p>
@@ -470,14 +470,14 @@ function DateBar({
       <End label="Pickup" at={pickup} hasTime={hasPickupTime} />
       <span className="text-muted-foreground">→</span>
       <End label="Drop-off" at={ret} hasTime={hasReturnTime} />
-      <span className="ml-auto shrink-0 text-right text-xs text-muted-foreground">
+      <span className="ml-auto shrink-0 text-right text-xs text-muted-foreground max-lg:ml-0 max-lg:basis-full max-lg:text-left">
         <span className="block font-medium text-foreground">{summary}</span>
         Times in {timezone}
       </span>
     </>
   );
   const cls =
-    "flex flex-none items-center gap-6 rounded-4xl bg-card px-5 py-4 text-left shadow-md ring-1 ring-foreground/5 dark:ring-foreground/10";
+    "flex flex-none items-center gap-6 rounded-4xl bg-card px-5 py-4 text-left max-lg:flex-wrap max-lg:gap-x-4 max-lg:gap-y-3 max-md:px-4 shadow-md ring-1 ring-foreground/5 dark:ring-foreground/10";
   return editable ? (
     <button
       type="button"
@@ -525,7 +525,7 @@ function PlaceRow({
             v2States
           />
         ) : (
-          <p className="truncate text-sm font-medium">
+          <p className="truncate text-sm font-medium max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere]">
             {end.address || <span className="font-normal text-muted-foreground">Not recorded</span>}
           </p>
         )}

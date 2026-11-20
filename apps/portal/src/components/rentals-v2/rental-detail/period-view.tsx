@@ -74,9 +74,9 @@ const addDays = (isoDay: string, n: number) => {
 /** The step's frame: facts on top, two cards filling the rest. */
 function Frame({ top, left, right }: { top: React.ReactNode; left: React.ReactNode; right: React.ReactNode }) {
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
-      <div className="grid shrink-0 grid-cols-3 gap-3">{top}</div>
-      <div className="grid min-h-0 flex-1 grid-cols-2 gap-4">
+    <div className="flex h-full min-h-0 flex-col gap-4 max-lg:h-auto">
+      <div className="grid shrink-0 grid-cols-3 gap-3 max-sm:grid-cols-1 max-sm:gap-2">{top}</div>
+      <div className="grid min-h-0 flex-1 grid-cols-2 gap-4 max-lg:grid-cols-1">
         {left}
         {right}
       </div>

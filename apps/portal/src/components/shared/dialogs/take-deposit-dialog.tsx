@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { PHONE_FORM_DIALOG } from "@/components/ui-v2/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -163,7 +164,7 @@ export function TakeDepositDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className={`sm:max-w-md ${PHONE_FORM_DIALOG}`}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Wallet className="h-5 w-5 text-primary shrink-0" />

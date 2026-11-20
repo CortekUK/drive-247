@@ -408,7 +408,7 @@ export function Panel({
       <div
         className={cn(
           "mt-7 min-h-0 flex-1 space-y-6 overflow-y-auto no-scrollbar",
-          fill ? "mt-5 -mr-3 pt-1.5 pb-3 pl-1.5 pr-3" : "pb-2 pr-1"
+          fill ? "mt-5 -mr-3 pt-1.5 pb-3 pl-1.5 pr-3 max-md:mr-0 max-md:pr-1.5" : "pb-2 pr-1"
         )}
       >
         {children}

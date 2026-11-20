@@ -175,7 +175,7 @@ function MoneyByPeriod({ segs }: { segs: Seg[] }) {
           <span className="flex items-center gap-1"><span className="size-2 rounded-[2px] bg-primary/25" />Still to come</span>
         </span>
       </div>
-      <ChartContainer config={chartConfig} className="mt-3 aspect-auto min-h-0 w-full flex-1">
+      <ChartContainer config={chartConfig} className="mt-3 aspect-auto min-h-0 w-full flex-1 max-lg:h-44 max-lg:flex-none">
         <BarChart data={data} margin={{ top: 6, right: 4, bottom: 0, left: 4 }} barCategoryGap="30%">
           <XAxis dataKey="label" {...AXIS} />
           <YAxis hide domain={[0, (max: number) => Math.max(1, max)]} />
@@ -203,7 +203,7 @@ function CashIn({ segs }: { segs: Seg[] }) {
         <p className={H}>Cash in</p>
         <p className="text-[11.5px] text-muted-foreground">{money(paid)} of {money(billed)}</p>
       </div>
-      <ChartContainer config={chartConfig} className="mt-3 aspect-auto min-h-0 w-full flex-1">
+      <ChartContainer config={chartConfig} className="mt-3 aspect-auto min-h-0 w-full flex-1 max-lg:h-44 max-lg:flex-none">
         <AreaChart data={data} margin={{ top: 6, right: 6, bottom: 0, left: 6 }}>
           <XAxis dataKey="label" {...AXIS} interval="preserveStartEnd" />
           <YAxis hide domain={[0, (max: number) => Math.max(1, max)]} />
@@ -272,8 +272,8 @@ export function RentalOverview({ detail }: { detail: RentalDetailV2 }) {
       {segs.length === 0 ? (
         <p className="text-sm text-muted-foreground">This rental has no dates yet, so there is nothing to overview.</p>
       ) : (
-        <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1.15fr)_minmax(0,1fr)] gap-4">
-          <div className="grid grid-cols-5 gap-3">
+        <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1.15fr)_minmax(0,1fr)] gap-4 max-lg:h-auto max-lg:grid-rows-none">
+          <div className="grid grid-cols-5 gap-3 max-lg:grid-cols-3 max-sm:grid-cols-2">
             <Kpi label="Billed so far" value={money(billed)} sub={`${all.filter((c) => c.status !== "scheduled").length} charges`} />
             <Kpi label="Paid" accent value={money(paid)} sub={billed ? `${Math.round((paid / billed) * 100)}% of billed` : "Nothing billed"} />
             <Kpi label="Outstanding" value={money(due)} sub={due ? "Due now" : "All settled"} />
@@ -281,12 +281,12 @@ export function RentalOverview({ detail }: { detail: RentalDetailV2 }) {
             <Kpi label="Length" value={`${fixedDays} days`} sub={ongoing ? "Then renewing weekly" : "Fixed end"} />
           </div>
 
-          <div className="grid min-h-0 grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-4">
+          <div className="grid min-h-0 grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-4 max-lg:grid-cols-1">
             <Timeline segs={segs} />
             <MoneyByPeriod segs={segs} />
           </div>
 
-          <div className="grid min-h-0 grid-cols-3 gap-4">
+          <div className="grid min-h-0 grid-cols-3 gap-4 max-lg:grid-cols-1">
             <CashIn segs={segs} />
             <ListCard
               title="Agreements"

@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui-v2/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, PHONE_FORM_DIALOG } from "@/components/ui-v2/dialog";
 import type { InsurancePolicy } from "@/hooks/use-rental-insurance-policies";
 import { fmtDate, insetCls, money, Surface } from "./_kit";
 
@@ -167,7 +167,7 @@ export function BonzahCoverCard({
       </div>
 
       {/* The policy at a glance — four facts, one row. */}
-      <div className={cn(insetCls, "mt-4 grid grid-cols-2 gap-y-3 px-5 py-4 sm:grid-cols-4")}>
+      <div className={cn(insetCls, "mt-4 grid grid-cols-2 gap-y-3 px-5 py-4 lg:grid-cols-4")}>
         <Fact label="Policy">{hasPolicy ? <span className="font-mono text-[13px]">{policyNo ?? "—"}</span> : "Not bought yet"}</Fact>
         <Fact label="Covers">
           {fmtDate(policy?.trip_start_date ?? rentalStart)} → {fmtDate(policy?.trip_end_date ?? rentalEnd)}
@@ -248,7 +248,7 @@ export function BonzahCoverCard({
 
       {/* ── documents ────────────────────────────────────────────────────── */}
       <Dialog open={docsOpen} onOpenChange={(o) => (setDocsOpen(o), !o && setViewing(null))}>
-        <DialogContent className="flex max-h-[90vh] flex-col gap-4 sm:max-w-3xl" aria-describedby={undefined}>
+        <DialogContent className={cn("flex max-h-[90vh] flex-col gap-4 sm:max-w-3xl", PHONE_FORM_DIALOG)} aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Bonzah documents</DialogTitle>
           </DialogHeader>
@@ -307,7 +307,7 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
   return (
     <div className="min-w-0">
       <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-      <div className="mt-1 truncate text-sm">{children}</div>
+      <div className="mt-1 truncate text-sm max-lg:whitespace-normal">{children}</div>
     </div>
   );
 }

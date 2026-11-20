@@ -38,7 +38,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { Button } from "@/components/ui-v2/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, PHONE_FORM_DIALOG } from "@/components/ui-v2/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { Pill } from "./_kit";
@@ -267,7 +267,7 @@ export function RentalDatesDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-3xl"
+        className={cn("sm:max-w-3xl", PHONE_FORM_DIALOG)}
         showCloseButton={false}
         onOpenAutoFocus={(e) => e.preventDefault()}
         aria-describedby={undefined}

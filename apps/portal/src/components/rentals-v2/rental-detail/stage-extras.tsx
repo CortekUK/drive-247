@@ -417,7 +417,7 @@ export function StageExtras({ detail }: StageProps) {
       {/* Island layout, the Customer stage's grammar: two full-width cards
           stacked down the pane, sharing its height. While the rental can
           still change, both are edited right here — no dialog. */}
-      <div className="flex h-full min-h-0 flex-col gap-4">
+      <div className="flex h-full min-h-0 flex-col gap-4 max-lg:h-auto">
         {/* ── add-ons ──────────────────────────────────────────────────────── */}
         <Surface className="relative flex min-h-0 flex-1 flex-col p-5">
           <div className="flex items-center gap-2.5">

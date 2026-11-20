@@ -507,10 +507,10 @@ export function RentalsListV2() {
   };
 
   return (
-    <div className={currentView === "calendar" ? "p-4 md:p-6 space-y-6" : "container mx-auto p-4 md:p-6 space-y-6"}>
+    <div className={currentView === "calendar" ? "p-4 md:p-6 space-y-6 max-sm:px-0" : "container mx-auto p-4 md:p-6 space-y-6"}>
       {/* Header. Not in the full-screen calendar from md up — the board carries
           its own way back to the list (ConnectedTimeline `onExit`). */}
-      <div className={`flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3${currentView === "calendar" ? " md:hidden" : ""}`}>
+      <div className={`flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 max-lg:sm:flex-col max-lg:sm:items-stretch${currentView === "calendar" ? " md:hidden" : ""}`}>
         <div className="min-w-0 shrink-0 flex items-start justify-between gap-3 sm:block">
           <div className="min-w-0" data-tour="rentals-header">
             <h1 className="text-2xl sm:text-3xl font-bold">Rentals</h1>
@@ -647,6 +647,7 @@ export function RentalsListV2() {
             sentinelRef={sentinelRef}
             hasMore={hasMore}
             maxHeight={tableFillCap}
+            phoneCards
           />
 
           {/* No pager — just how much of the set is on screen.
