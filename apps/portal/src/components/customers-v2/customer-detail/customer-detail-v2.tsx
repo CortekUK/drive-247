@@ -497,7 +497,10 @@ function blockingAlert(c: CustomerRecord): { title: string; body: string; sectio
  */
 function Frame({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-[calc(100svh-2rem)] min-h-0 w-full overflow-hidden">
+    // Phones: the top bar stays, so the frame is the space under it (`<main>`
+    // is a flex column, `flex-1` fills it) rather than 100svh, which ran past
+    // the bar and scrolled the page a little before the panel did.
+    <div className="flex h-[calc(100svh-2rem)] min-h-0 w-full overflow-hidden max-md:h-auto max-md:flex-1">
       {children}
     </div>
   );
