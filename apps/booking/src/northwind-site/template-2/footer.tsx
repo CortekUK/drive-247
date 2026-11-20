@@ -9,7 +9,7 @@ import { socialLinks } from '@nw/lib/cms/social';
 import { FOOTER_LINKS } from '@nw/lib/constants';
 import type { PageSections } from '@nw/lib/cms/types';
 import { cn } from '@nw/lib/utils';
-import { T2_HOME, t2Href } from '@nw/template-2/links';
+import { T2_HOME, t2CarHref, t2Href } from '@nw/template-2/links';
 
 /**
  * Template 2 ("Glass") — the footer, on every page (the layout hands it to the
@@ -91,7 +91,7 @@ export async function Template2Footer({
             <p className="mt-3 max-w-[290px] text-[14.5px] leading-relaxed text-[var(--g2-ink-soft)]">
               Book your car online, day or night. It is ready when you arrive.
             </p>
-            <Link href="/booking" className={cn('g2-cta mt-6 inline-flex h-11 items-center gap-1.5 rounded-full px-5 text-[14px] font-semibold', FOCUS)}>
+            <Link href={t2Href('/booking')} className={cn('g2-cta mt-6 inline-flex h-11 items-center gap-1.5 rounded-full px-5 text-[14px] font-semibold', FOCUS)}>
               Book a car
               <ArrowUpRight aria-hidden className="size-4" strokeWidth={2.25} />
             </Link>
@@ -118,7 +118,7 @@ export async function Template2Footer({
               <ul className="space-y-2.5">
                 {vehicles.map((vehicle) => (
                   <li key={vehicle.id} className="min-w-0">
-                    <Link href={`/booking/${vehicle.id}`} className={cn(LINK, 'truncate')}>
+                    <Link href={t2CarHref(`/booking/${vehicle.id}`)} className={cn(LINK, 'truncate')}>
                       {vehicle.name}
                     </Link>
                   </li>

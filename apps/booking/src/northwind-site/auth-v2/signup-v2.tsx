@@ -35,7 +35,7 @@ import {
   AuthSubmitV2,
   AuthTextFieldV2,
 } from './auth-fields-v2';
-import { AuthSplitShell, authLinkInk } from './auth-split-shell';
+import { AuthSplitShell, authLinkInk, useAuthHref } from './auth-split-shell';
 import { ContinueWithGoogle } from './google-sign-in';
 import { PolicyConsentLine } from './policy-consent-line';
 
@@ -53,6 +53,7 @@ export function SignupV2() {
   const { signUp } = useCustomerAuth();
   const { tenant, isLoading: tenantLoading } = useTenant();
   const next = useNextPath();
+  const authHref = useAuthHref();
   // Where a Google sign-up goes once it lands: where the form would go.
   const goNext = useCallback(() => router.replace(next), [router, next]);
   const [googleBusy, setGoogleBusy] = useState(false);
@@ -105,7 +106,7 @@ export function SignupV2() {
 
   const signInLink = (
     <Link
-      href={withNext('/login', next)}
+      href={withNext(authHref('/login'), next)}
       className="font-medium underline-offset-4 hover:underline"
       style={{ color: ink }}
     >

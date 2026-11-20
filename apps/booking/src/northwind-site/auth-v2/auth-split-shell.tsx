@@ -10,7 +10,8 @@
  */
 
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { createContext, useContext } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 
 import { useTenant } from '@nw/contexts/TenantContext';
 import { brandHslVars } from '@nw/portal-v2/brand';
@@ -29,7 +30,37 @@ export function authLinkInk(tenant: Tenant): string {
   return brandInk(tenant?.light_primary_color || tenant?.primary_color, false);
 }
 
+/**
+ * Another design's frame for these same screens. A site design that wants the
+ * sign-in pages in its own look (Template 2's glass) provides a `Shell` to
+ * draw instead of this split screen, and `href` to keep the links between the
+ * pages inside its own addresses. The forms, their rules and the redirect for
+ * a customer already signed in are unchanged either way.
+ */
+export const AuthFrameContext = createContext<{
+  Shell: ComponentType<{ children: ReactNode }>;
+  href: (path: string) => string;
+} | null>(null);
+
+/** A link between the auth pages (or to the policies), in the current design's addresses. */
+export function useAuthHref(): (path: string) => string {
+  return useContext(AuthFrameContext)?.href ?? ((path) => path);
+}
+
 export function AuthSplitShell({ children }: { children: ReactNode }) {
+  const frame = useContext(AuthFrameContext);
+  if (frame) {
+    return (
+      <>
+        <RedirectWhenSignedIn />
+        <frame.Shell>{children}</frame.Shell>
+      </>
+    );
+  }
+  return <SplitShell>{children}</SplitShell>;
+}
+
+function SplitShell({ children }: { children: ReactNode }) {
   const { tenant, isLoading: tenantLoading } = useTenant();
 
   const appName = tenant?.company_name || tenant?.app_name || 'your rental company';

@@ -1,6 +1,7 @@
 import { loadFleetSeed } from "@nw/components/fleet/fleet-seed";
 import { getTenantSlug } from "@nw/lib/cms/server";
 import { Template2FleetPage } from "@nw/template-2/fleet-page";
+import { Template2PageClosing } from "@nw/template-2/page-closing";
 
 /**
  * Template 2 ("Glass") — Fleet and Pricing, on the preview link beside the
@@ -13,5 +14,10 @@ export const metadata = { title: "Fleet and Pricing" };
 export default async function Template2FleetRoute() {
   const slug = await getTenantSlug();
   const seed = slug ? await loadFleetSeed(slug) : null;
-  return <Template2FleetPage seed={seed} />;
+  return (
+    <>
+      <Template2FleetPage seed={seed} />
+      <Template2PageClosing fleetLink={false} />
+    </>
+  );
 }
