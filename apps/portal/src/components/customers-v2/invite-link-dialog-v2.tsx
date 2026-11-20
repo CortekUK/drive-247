@@ -26,7 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui-v2/button";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui-v2/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle, PHONE_SCREEN_DIALOG } from "@/components/ui-v2/dialog";
 import { CONTROL, FORM_DIALOG_WASH, TWINKLE_CSS } from "@/components/shared/form-grid-v2";
 import { InviteLinkArt, InviteLinkReadyArt } from "@/components/illustrations-v2/scenes/add-customer";
 
@@ -81,7 +81,7 @@ export function InviteLinkDialogV2({ open, onOpenChange }: { open: boolean; onOp
 
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[600px]" style={FORM_DIALOG_WASH} showCloseButton={false}>
+      <DialogContent className={cn("gap-0 overflow-hidden p-0 sm:max-w-[600px]", PHONE_SCREEN_DIALOG)} style={FORM_DIALOG_WASH} showCloseButton={false}>
         <DialogTitle className="sr-only">Customer registration link</DialogTitle>
         <DialogDescription className="sr-only">
           {link ? "Your registration link is ready" : "Make a link customers use to sign themselves up"}
@@ -90,7 +90,7 @@ export function InviteLinkDialogV2({ open, onOpenChange }: { open: boolean; onOp
 
         <div
           key={link ? "ready" : "make"}
-          className="flex h-[400px] flex-col items-center justify-center px-10 text-center duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none"
+          className="flex h-[400px] flex-col items-center justify-center px-10 text-center max-sm:h-auto max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto max-sm:px-4 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none"
         >
           <Art className="max-w-[260px]" />
           <h3 className="mt-5 text-xl font-medium leading-snug text-foreground [text-wrap:balance]">
@@ -128,7 +128,7 @@ export function InviteLinkDialogV2({ open, onOpenChange }: { open: boolean; onOp
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-4 px-8 py-4">
+        <div className="flex items-center justify-between gap-4 px-8 py-4 max-sm:shrink-0 max-sm:px-4">
           {link ? (
             <>
               <Button variant="outline" className="h-10 rounded-full px-5" onClick={make} disabled={loading}>

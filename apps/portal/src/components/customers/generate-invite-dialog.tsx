@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PHONE_FORM_DIALOG } from "@/components/ui-v2/dialog";
 import { Button } from "@/components/ui/button";
 import { Link2, Copy, Check, Loader2, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -89,7 +90,7 @@ export function GenerateInviteDialog({ open, onOpenChange }: GenerateInviteDialo
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md p-4 sm:p-6 gap-3 sm:gap-4 max-h-[calc(100dvh-32px)] overflow-y-auto">
+      <DialogContent className={`sm:max-w-md p-4 sm:p-6 gap-3 sm:gap-4 max-h-[calc(100dvh-32px)] overflow-y-auto ${PHONE_FORM_DIALOG}`}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
             <Link2 className="h-5 w-5 text-primary shrink-0" />

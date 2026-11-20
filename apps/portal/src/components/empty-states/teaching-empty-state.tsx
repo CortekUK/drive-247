@@ -102,7 +102,7 @@ function TileHint({ label, hint, children }: { label: string; hint?: string; chi
 const TILE_BASE = "flex items-center justify-center rounded-2xl transition-colors";
 const TILE_SIZE = {
   2: "h-[100px] w-[120px] [&>svg]:size-14",
-  3: "h-[88px] w-[104px] [&>svg]:size-12",
+  3: "h-[88px] w-[104px] [&>svg]:size-12 max-sm:h-20 max-sm:w-[clamp(72px,22vw,88px)] max-sm:[&>svg]:size-10",
 } as const;
 
 export function TeachingEmptyState({

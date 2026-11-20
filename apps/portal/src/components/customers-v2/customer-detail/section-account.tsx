@@ -106,7 +106,7 @@ export function SectionAccount({ c, set, onJump, canEdit }: SectionProps) {
         title="Status"
         description="Inactive keeps the history and stops the account being used. Rejected is a decision with a reason attached."
       >
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 lg:grid-cols-3">
           <OptionCard
             selected={c.account.status === "Active"}
             disabled={!canEdit}
@@ -217,10 +217,10 @@ export function SectionAccount({ c, set, onJump, canEdit }: SectionProps) {
                   <Globe className="size-4 text-destructive" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
+                  <p className="truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-sm font-medium">
                     {BLOCK_KINDS.find((k) => k.kind === b.kind)?.label ?? b.kind} · {b.value}
                   </p>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                  <p className="mt-0.5 truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-xs text-muted-foreground">
                     {b.reason || "No reason recorded"} · added {fmtDate(b.addedAt)}
                   </p>
                 </div>
@@ -244,7 +244,7 @@ export function SectionAccount({ c, set, onJump, canEdit }: SectionProps) {
         {canEdit && (
           <div className="mt-5 rounded-3xl bg-card p-5 ring-1 ring-foreground/5">
             <p className="mb-4 text-xs font-medium">Add an entry</p>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 lg:grid-cols-3">
               {BLOCK_KINDS.map((k) => (
                 <OptionCard
                   key={k.kind}

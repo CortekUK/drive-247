@@ -99,22 +99,22 @@ export function SectionRentals({ c, onJump, currency }: SectionProps) {
             <Section>
               <div className={listCls}>
                 {c.rentals.map((r) => (
-                  <div key={r.id} className="flex items-center gap-4 px-5 py-4">
+                  <div key={r.id} className="flex items-center gap-4 px-5 py-4 max-lg:flex-wrap max-lg:gap-x-3 max-lg:gap-y-3 max-sm:px-4">
                     <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-card ring-1 ring-foreground/5">
                       <Car className="size-4 text-muted-foreground" />
                     </span>
 
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
+                    <div className="min-w-0 flex-1 max-lg:basis-[calc(100%-3.25rem)]">
+                      <p className="truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-sm font-medium">
                         {r.vehicle} <span className="text-muted-foreground">· {r.reg}</span>
                       </p>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      <p className="mt-0.5 truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-xs text-muted-foreground">
                         {r.ref} · {fmtDate(r.start)} → {fmtDate(r.end)}
                         {r.end && ` · ${dayCount(r.start, r.end)} days`}
                       </p>
                     </div>
 
-                    <div className="shrink-0 text-right">
+                    <div className="shrink-0 text-right max-lg:ml-[3.25rem] max-lg:mr-auto max-lg:text-left">
                       <p className="text-sm font-semibold tabular-nums">{money(r.total)}</p>
                       {/* "Settled" is only true of a rental that has actually
                           run. A Pending booking with nothing owed has not been
@@ -151,18 +151,18 @@ export function SectionRentals({ c, onJump, currency }: SectionProps) {
             >
               <div className={listCls}>
                 {Object.entries(byCar).map(([name, v]) => (
-                  <div key={name} className="flex items-center gap-4 px-5 py-4">
+                  <div key={name} className="flex items-center gap-4 px-5 py-4 max-sm:flex-wrap max-sm:gap-x-3 max-sm:gap-y-3 max-sm:px-4">
                     <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-card ring-1 ring-foreground/5">
                       <Car className="size-4 text-muted-foreground" />
                     </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{name}</p>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{v.reg}</p>
+                    <div className="min-w-0 flex-1 max-sm:basis-[calc(100%-3.25rem)]">
+                      <p className="truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-sm font-medium">{name}</p>
+                      <p className="mt-0.5 truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-xs text-muted-foreground">{v.reg}</p>
                     </div>
-                    <p className="shrink-0 text-xs text-muted-foreground">
+                    <p className="shrink-0 text-xs text-muted-foreground max-sm:ml-[3.25rem] max-sm:mr-auto">
                       {v.times}× · {v.days} days
                     </p>
-                    <p className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">{money(v.spend)}</p>
+                    <p className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums max-sm:w-auto">{money(v.spend)}</p>
                   </div>
                 ))}
               </div>

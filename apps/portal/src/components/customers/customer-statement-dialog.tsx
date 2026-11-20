@@ -3,6 +3,7 @@
 import { useMemo, useRef } from "react";
 import { format, parseISO } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PHONE_FORM_DIALOG } from "@/components/ui-v2/dialog";
 import { Button } from "@/components/ui/button";
 import { FileText, Download, Loader2, AlertCircle } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
@@ -291,7 +292,7 @@ export function CustomerStatementDialog({ open, onOpenChange, customerId }: Prop
       )}
 
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto">
+        <DialogContent className={`max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto ${PHONE_FORM_DIALOG}`}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PHONE_FORM_DIALOG } from "@/components/ui-v2/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -275,7 +276,7 @@ export const CollectPaymentDialog = ({ open, onOpenChange, customerId }: Collect
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!busy) onOpenChange(v); }}>
-      <DialogContent className="sm:max-w-[440px]">
+      <DialogContent className={`sm:max-w-[440px] ${PHONE_FORM_DIALOG}`}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Banknote className="h-5 w-5 text-primary" />

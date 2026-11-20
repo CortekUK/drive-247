@@ -21,6 +21,16 @@ const PHONE_SCREEN_DIALOG =
   "max-sm:data-[state=open]:slide-in-from-left-0 max-sm:data-[state=open]:slide-in-from-bottom-0 max-sm:data-[state=closed]:slide-out-to-left-0 max-sm:data-[state=closed]:slide-out-to-bottom-0 " +
   "max-sm:data-[state=open]:zoom-in-100 max-sm:data-[state=closed]:zoom-out-100"
 
+/**
+ * PHONE_SCREEN_DIALOG for a plain header / fields / footer dialog: the whole
+ * screen scrolls, the 16px page gutter applies, and the footer rests at the
+ * bottom of the screen. From `sm` up nothing changes.
+ */
+const PHONE_FORM_DIALOG =
+  PHONE_SCREEN_DIALOG +
+  " max-sm:overflow-y-auto max-sm:px-4 max-sm:pt-[calc(env(safe-area-inset-top,0px)+1.5rem)] max-sm:pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)]" +
+  " max-sm:[&>div:last-of-type]:mt-auto max-sm:[&>button.absolute]:top-[calc(env(safe-area-inset-top,0px)+0.5rem)] max-sm:[&>button.absolute]:right-2 max-sm:[&>button.absolute]:p-2"
+
 function Dialog({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -182,6 +192,7 @@ function DialogDescription({
 }
 
 export {
+  PHONE_FORM_DIALOG,
   PHONE_SCREEN_DIALOG,
   Dialog,
   DialogClose,

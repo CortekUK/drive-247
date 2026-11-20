@@ -325,7 +325,7 @@ export function CustomerDetailV2() {
 
         {/* One stretched grid cell, so the AutoSkeleton wrapper hands the
             panel the full height its own scroll container needs. */}
-        <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)]">
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]">
           <AutoSkeleton loading={isLoading} className="h-full min-h-0">
           {View ? (
             <View {...props} />
@@ -367,7 +367,7 @@ export function CustomerDetailV2() {
               className="pointer-events-none absolute -bottom-4 -left-6 -top-4 right-0 [mask-image:linear-gradient(to_right,transparent,black_3.5rem)] [background:linear-gradient(hsl(var(--chart-3)/0.09),hsl(var(--chart-3)/0.09)),hsl(var(--card))] dark:hidden"
             />
           {/* Same stretched-cell trick as the middle column. */}
-          <div className="relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)]">
+          <div className="relative grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]">
             <AutoSkeleton loading={isLoading} className="flex h-full min-h-0 flex-col">
               <OverviewRail
                 key={phase}

@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PHONE_FORM_DIALOG } from "@/components/ui-v2/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -797,7 +798,8 @@ const BlockedCustomers = () => {
           setCustomerComboboxOpen(false);
         }
       }}>
-        <DialogContent className="w-[calc(100%-2rem)] max-w-[425px] max-h-[90vh] flex flex-col rounded-lg mx-auto p-4">
+        <DialogContent className={`w-[calc(100%-2rem)] max-w-[425px] max-h-[90vh] flex flex-col rounded-lg mx-auto p-4 ${PHONE_FORM_DIALOG}`}
+          onOpenAutoFocus={(e) => { if (window.matchMedia("(max-width: 639px)").matches) e.preventDefault(); }}>
           <DialogHeader className="pb-1">
             <DialogTitle className="text-base">Add to Blocklist</DialogTitle>
           </DialogHeader>

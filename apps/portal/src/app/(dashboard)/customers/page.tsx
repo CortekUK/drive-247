@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PHONE_FORM_DIALOG } from "@/components/ui-v2/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -823,7 +824,7 @@ const CustomersList = () => {
   return (
     <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 max-lg:sm:flex-col max-lg:sm:items-stretch">
         <div className="min-w-0" data-tour="page-header">
           <h1 className="text-2xl sm:text-3xl font-bold">Customers</h1>
           <p className="text-muted-foreground text-sm sm:text-base">Manage customers and account balances</p>
@@ -831,7 +832,7 @@ const CustomersList = () => {
         {/* v2: every control here is 32px and the cluster sits on the subtitle line
             (HEADER_ACTIONS_V2 / HEADER_PRIMARY_V2, team lead Sep 16 2026). v1 keeps
             "flex items-center gap-2" byte for byte. */}
-        <div className={`flex items-center gap-2${v2Chrome ? ` ${HEADER_ACTIONS_V2}` : ""}`}>
+        <div className={`flex items-center gap-2${v2Chrome ? ` ${HEADER_ACTIONS_V2} max-sm:flex-wrap` : ""}`}>
           {/*
             Blocked customers used to be its own sidebar entry, under a second
             "Customers" group. It belongs here instead: it is a view OF this
@@ -1090,7 +1091,7 @@ const CustomersList = () => {
                           )}
                         </div>
                       </ListCell>
-                      <ListCell>
+                      <ListCell className="max-lg:col-span-2">
                         {customer.email ? (
                           <span className={`block truncate ${LIST_CLASSES.text}`} title={customer.email}>
                             {customer.email}
@@ -1456,7 +1457,7 @@ const CustomersList = () => {
 
       {/* Block Customer Dialog */}
       <Dialog open={blockDialogOpen} onOpenChange={setBlockDialogOpen}>
-        <DialogContent>
+        <DialogContent className={PHONE_FORM_DIALOG}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-orange-600">
               <Ban className="h-5 w-5" />
