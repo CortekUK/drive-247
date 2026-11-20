@@ -787,10 +787,13 @@ export async function createSquareCardPayment(
       return failed("square_payment_row_not_found", 404, { paymentRowId });
     }
     if (existingRow.square_payment_id || (existingRow.status && existingRow.status !== "Pending")) {
+      const paid = !!existingRow.square_payment_id || existingRow.status === "Completed"; // Reversed never took money
       return failed("square_payment_already_settled", 409, {
         paymentRowId,
         status: existingRow.status,
-        hint: "This payment has already been made.",
+        hint: paid
+          ? "This payment has already been made."
+          : "This payment link is no longer active. Please ask the rental company for a new link.",
       });
     }
   }
@@ -890,7 +893,17 @@ export async function createSquareCardPayment(
       receiptUrl: payment.receipt_url ?? null,
     });
   } catch (err) {
-    if (paymentRowId) {
+    // A DECLINED card on an emailed payment link must leave that link payable.
+    // The renter's next move is to try another card on the same link, and a
+    // row marked Reversed here answered that retry with 409 "This payment has
+    // already been made" (Luxurious Car Rentals, 2026-11-19: a decline, then
+    // four refused retries) and set off a "Refund processed" notice for money
+    // that never moved. Square rejected the charge outright (4xx), nothing was
+    // taken, so the row stays Pending. A row this call created is still marked
+    // dead: the next attempt brings a new card token and gets its own row.
+    const declinedOnLink =
+      !!spec.existingPaymentRowId && err instanceof SquareError && err.httpStatus < 500;
+    if (paymentRowId && !declinedOnLink) {
       await markSquareRowDead(supabase, paymentRowId);
     }
     if (err instanceof SquareError) {

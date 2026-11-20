@@ -23,32 +23,25 @@ const root = (p: string) => resolve(__dirname, "../../../", p);
 const ADAPTER = readFileSync(root("supabase/functions/_shared/payments/square-adapter.ts"), "utf8");
 const SCHEDULED_REFUND = readFileSync(root("supabase/functions/process-scheduled-refund/index.ts"), "utf8");
 
-// @usecase A renter's card is declined, or Square times out, and the operator's
-// payment link is silently killed. The debt is real and now unpayable, and
-// nothing tells anyone.
+// @usecase A renter's card is declined on an emailed payment link. The link must
+// stay payable so they can try another card (fixed 2026-11-20 after Luxurious
+// Car Rentals' renters hit "This payment has already been made" on retries).
 describe("square card payment — what happens to the row when the charge fails", () => {
-  it("marks the payment row dead before it has looked at why the call failed", () => {
-    /**
-     * DEFECT, square-adapter.ts:892-895. The catch block runs
-     *     if (paymentRowId) await markSquareRowDead(supabase, paymentRowId);
-     * FIRST, and only then inspects `err instanceof SquareError` to decide the
-     * HTTP response. So the row is killed for every cause without distinction:
-     * a card decline (a 400 SquareError), a Square 5xx, and a network timeout all
-     * take the same branch.
-     *
-     * markSquareRowDead (:376-384) writes status 'Reversed' and capture_status
-     * 'cancelled'. On an emailed-link debt that is terminal — the renter's link
-     * stops working and the money is still owed. A decline is the ONE case where
-     * the row must survive, because the renter will simply try another card.
-     */
-    const catchAt = ADAPTER.indexOf("} catch (err) {", ADAPTER.indexOf("receiptUrl: payment.receipt_url"));
+  const catchAt = ADAPTER.indexOf("} catch (err) {", ADAPTER.indexOf("receiptUrl: payment.receipt_url"));
+  const tail = ADAPTER.slice(catchAt, catchAt + 2000);
+
+  it("looks at why the call failed before it marks the row dead", () => {
     expect(catchAt, "the card-payment catch block moved").toBeGreaterThan(-1);
-    const tail = ADAPTER.slice(catchAt, catchAt + 600);
     const deadAt = tail.indexOf("markSquareRowDead");
     const kindAt = tail.indexOf("err instanceof SquareError");
     expect(deadAt).toBeGreaterThan(-1);
     expect(kindAt).toBeGreaterThan(-1);
-    expect(deadAt, "the row is killed before the cause is examined").toBeLessThan(kindAt);
+    expect(kindAt, "the cause is examined first").toBeLessThan(deadAt);
+  });
+
+  it("keeps an emailed link payable after a decline (a Square 4xx)", () => {
+    expect(tail).toMatch(/declinedOnLink\s*=\s*!!spec\.existingPaymentRowId && err instanceof SquareError && err\.httpStatus < 500/);
+    expect(tail).toMatch(/if \(paymentRowId && !declinedOnLink\)\s*\{\s*await markSquareRowDead/);
   });
 
   it("writes Reversed and cancelled, which is terminal for a payable link", () => {
@@ -56,13 +49,8 @@ describe("square card payment — what happens to the row when the charge fails"
     expect(ADAPTER).toMatch(/capture_status:\s*"cancelled"/);
   });
 
-  it.fails("should leave the row payable when the failure was a decline or a timeout", () => {
-    // Remove the `.fails` marker once the catch inspects the cause before calling
-    // markSquareRowDead — only an unambiguous, non-retryable rejection should kill
-    // the row. A decline and a timeout must both leave the debt collectable.
-    const catchAt = ADAPTER.indexOf("} catch (err) {", ADAPTER.indexOf("receiptUrl: payment.receipt_url"));
-    const tail = ADAPTER.slice(catchAt, catchAt + 600);
-    expect(tail.indexOf("err instanceof SquareError")).toBeLessThan(tail.indexOf("markSquareRowDead"));
+  it("does not tell a renter a never-paid link 'has already been made'", () => {
+    expect(ADAPTER).toContain("This payment link is no longer active. Please ask the rental company for a new link.");
   });
 });
 
