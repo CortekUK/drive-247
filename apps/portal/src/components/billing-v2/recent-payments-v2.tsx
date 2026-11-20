@@ -225,18 +225,19 @@ export function RecentPaymentsV2({
                 : "px-4 py-2.5"
             }`}
           >
-            <span className="min-w-0 whitespace-nowrap text-sm">
+            <span className="min-w-0 whitespace-nowrap text-sm max-sm:order-1 max-sm:whitespace-normal">
               <span className={r.featured ? "font-semibold" : "font-medium"}>{r.title}</span>
               {r.note && <span className={`ml-2 ${r.featured ? "opacity-70" : "text-muted-foreground"}`}>{r.note}</span>}
               {/* Below xl the date column is hidden; the next bill still says when. */}
               {r.featured && <span className="ml-2 opacity-70">· {r.date}</span>}
             </span>
-            <span className={`hidden text-sm font-medium sm:block ${LIST_TONES[r.tone]}`}>{r.status}</span>
-            <span className={`text-right tabular-nums ${r.featured ? "text-base font-bold" : "text-sm font-semibold"}`}>{r.amount}</span>
+            {/* Phones: status and actions on a second line under the title and amount, not dropped. */}
+            <span className={`hidden text-sm font-medium sm:block max-sm:order-3 max-sm:mt-1 max-sm:block max-sm:text-xs ${LIST_TONES[r.tone]}`}>{r.status}</span>
+            <span className={`text-right tabular-nums max-sm:order-2 ${r.featured ? "text-base font-bold" : "text-sm font-semibold"}`}>{r.amount}</span>
             {/* Right-aligned on every row: "Price breakdown", "View receipt" and
                 "View invoice" all END at the same point, just before the
                 download icon. */}
-            <span className="hidden items-center justify-end gap-3 self-center sm:flex">{r.actions}</span>
+            <span className="hidden items-center justify-end gap-3 self-center sm:flex max-sm:order-4 max-sm:mt-1 max-sm:flex max-sm:[&>*]:mr-0">{r.actions}</span>
           </li>
         ))}
       </ul>

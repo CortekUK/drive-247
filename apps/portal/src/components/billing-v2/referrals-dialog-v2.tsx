@@ -74,11 +74,11 @@ function CopyField({ label, value, mono }: { label: string; value: string; mono?
     <div className="flex items-center justify-between gap-4 rounded-xl bg-muted/50 px-4 py-3">
       <div className="min-w-0">
         <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</p>
-        <p className={`truncate ${mono ? "font-mono text-lg font-semibold tracking-wider" : "text-sm"}`} title={value}>
+        <p className={`truncate ${mono ? "font-mono text-lg font-semibold tracking-wider" : "text-sm max-sm:whitespace-normal max-sm:break-all"}`} title={value}>
           {value}
         </p>
       </div>
-      <button type="button" onClick={copy} className={LINK}>
+      <button type="button" onClick={copy} className={`${LINK} shrink-0`}>
         {copied ? "Copied" : "Copy"}
       </button>
     </div>
@@ -100,14 +100,14 @@ export function ReferralsDialogV2({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
-        <DialogHeader className="shrink-0 px-8 pb-2 pt-8 text-left">
+        <DialogHeader className="shrink-0 px-8 pb-2 pt-8 text-left max-sm:px-5 max-sm:pr-14 max-sm:pt-6">
           <DialogTitle>Referrals</DialogTitle>
           <DialogDescription>
             Tell another rental operator about Drive247. They save on their subscription, and you save on yours.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="overflow-y-auto px-8 pb-8 pt-5">
+        <div className="overflow-y-auto px-8 pb-8 pt-5 max-sm:px-5 max-sm:pb-6">
           {isLoading ? (
             // The real body over a placeholder programme, as its own skeleton.
             <AutoSkeleton loading>
@@ -154,7 +154,7 @@ function Body({ data, readOnly }: { data: ReferralsData; readOnly: boolean }) {
         </p>
       )}
 
-      <div className="grid gap-8 md:grid-cols-2">
+      <div className="grid gap-8 md:grid-cols-2 [&>*]:min-w-0">
         {/* ── share ─────────────────────────────────────────────── */}
         <section>
           <Caption>Your code</Caption>
@@ -219,12 +219,12 @@ function Body({ data, readOnly }: { data: ReferralsData; readOnly: boolean }) {
               const nextMin = standing.tiers[i + 1]?.min;
               const on = standing.activeReferrals >= t.min && (nextMin === undefined || standing.activeReferrals < nextMin);
               return (
-                <div key={t.min} className={`flex items-center justify-between py-2 text-sm ${on ? "font-medium" : "text-muted-foreground"}`}>
+                <div key={t.min} className={`flex items-center justify-between gap-4 py-2 text-sm ${on ? "font-medium" : "text-muted-foreground"}`}>
                   <span>
                     {tierRange(t.min, nextMin)}
                     {on && <span className="ml-2 text-xs font-normal text-muted-foreground">You&apos;re here</span>}
                   </span>
-                  <span>{t.reward}</span>
+                  <span className="text-right">{t.reward}</span>
                 </div>
               );
             })}
@@ -242,7 +242,7 @@ function Body({ data, readOnly }: { data: ReferralsData; readOnly: boolean }) {
           { label: "Operators referred", value: String(standing.totalReferrals) },
           { label: "Saved so far", value: money(data.savedCents) },
         ].map((st) => (
-          <div key={st.label} className="px-5 py-4">
+          <div key={st.label} className="px-5 py-4 max-sm:px-3">
             <p className="text-2xl font-semibold tabular-nums">{st.value}</p>
             <p className="text-xs text-muted-foreground">{st.label}</p>
           </div>

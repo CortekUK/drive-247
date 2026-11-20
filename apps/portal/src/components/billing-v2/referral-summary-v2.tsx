@@ -139,7 +139,7 @@ function Ladder({
       <div className="flex min-h-0 flex-1 flex-col gap-6 md:flex-row md:items-stretch">
         {/* the levels — the only part that scrolls */}
         <div
-          className="flex shrink-0 flex-col items-start md:min-h-0 md:overflow-y-auto md:pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex shrink-0 flex-col items-start max-md:items-stretch md:min-h-0 md:overflow-y-auto md:pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           onMouseLeave={() => setHover(null)}
         >
           {tiers.map((tier, i) => {
@@ -147,7 +147,7 @@ function Ladder({
             const passed = i < current;
             const active = i === shownIdx;
             return (
-              <div key={tier.min} className="flex flex-col items-start">
+              <div key={tier.min} className="flex flex-col items-start max-md:items-stretch">
                 {i > 0 && <span aria-hidden className={`ml-[26px] h-5 w-0.5 ${i <= current ? "bg-primary/30" : "bg-border"}`} />}
                 <button
                   type="button"
@@ -155,7 +155,7 @@ function Ladder({
                   onFocus={() => setHover(i)}
                   onBlur={() => setHover(null)}
                   aria-label={`${tier.reward}, from ${tier.min} subscribed referral${tier.min === 1 ? "" : "s"}${on ? " — your level" : ""}`}
-                  className={`flex w-44 items-baseline justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 motion-reduce:transition-none ${
+                  className={`flex w-44 items-baseline justify-between gap-3 rounded-xl border px-4 py-3 max-md:w-auto text-left transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 motion-reduce:transition-none ${
                     on
                       ? "border-primary/25 bg-primary/[0.07] text-foreground"
                       : passed
@@ -175,7 +175,7 @@ function Ladder({
           {Array.from({ length: HINTED }, (_, k) => {
             const i = tiers.length + k;
             return (
-              <div key={`hint-${k}`} className="flex flex-col items-start" style={{ opacity: k === 0 ? 0.6 : 0.35 }}>
+              <div key={`hint-${k}`} className="flex flex-col items-start max-md:items-stretch" style={{ opacity: k === 0 ? 0.6 : 0.35 }}>
                 <span aria-hidden className="ml-[26px] h-5 w-0 border-l-2 border-dashed border-border" />
                 <button
                   type="button"
@@ -183,7 +183,7 @@ function Ladder({
                   onFocus={() => setHover(i)}
                   onBlur={() => setHover(null)}
                   aria-label="More levels may come"
-                  className="flex w-44 items-center justify-between rounded-xl border border-dashed px-4 py-3 text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  className="flex w-44 items-center justify-between rounded-xl border border-dashed px-4 py-3 max-md:w-auto text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 >
                   <span className="h-2.5 w-10 rounded-full bg-muted" />
                   <span className="h-2 w-12 rounded-full bg-muted" />
