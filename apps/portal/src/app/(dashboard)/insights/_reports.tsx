@@ -154,21 +154,26 @@ export function ReportsView({
       </div>
 
       <Dialog open={!!viewing} onOpenChange={(open) => !open && setViewing(null)}>
-        <DialogContent className="sm:max-w-4xl">
+        {/* Phones: a floating card no taller than the screen that scrolls inside.
+            Taller than the screen and centred, its top (title, close) sat
+            above the screen where nothing could scroll to it. */}
+        <DialogContent className="sm:max-w-4xl max-sm:max-h-[calc(100dvh-2rem)] max-sm:overflow-y-auto max-sm:overscroll-contain">
           {viewed && opened ? (
             <>
               <DialogHeader>
-                <div className="flex items-center gap-4">
+                {/* Phones: the picture, then the title and line at full width,
+                    then the downloads — side by side the line got one word a row. */}
+                <div className="flex items-center gap-4 max-sm:flex-wrap max-sm:gap-3 max-sm:text-left">
                   <div className="h-16 w-28 shrink-0 rounded-2xl bg-muted/40 p-1.5">
                     <ReportArt id={opened.id} />
                   </div>
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 max-sm:basis-full">
                     <DialogTitle>{viewed.title}</DialogTitle>
                     <DialogDescription>{opened.description}</DialogDescription>
                   </div>
                   {/* The downloads sit with the title — the reason most people
                       open a report. `mr-10` clears the dialog's close button. */}
-                  <div className="mr-10 flex shrink-0 flex-wrap items-center gap-1.5">
+                  <div className="mr-10 flex shrink-0 flex-wrap items-center gap-1.5 max-sm:mr-0 max-sm:basis-full max-sm:[&>button]:h-9 max-sm:[&>button]:flex-1">
                     <Button size="sm" variant="outline" className="h-7 gap-1 px-2.5 text-xs [&_svg]:size-3.5" onClick={() => actions.pdf(opened.id)} disabled={busyPdf}>
                       {busyPdf ? (
                           <Loader2 data-icon="inline-start" className="animate-spin" />
@@ -185,7 +190,7 @@ export function ReportsView({
               </DialogHeader>
 
               {/* What this copy of the report is, and every action on it. */}
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-muted/40 px-4 py-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-muted/40 px-4 py-2.5 max-sm:gap-1 max-sm:py-2">
                 <p className="text-[13px] text-muted-foreground tabular-nums">
                   {viewed.subtitle}
                   {' · '}
@@ -218,6 +223,19 @@ export function ReportsView({
   );
 }
 
+/*
+ * Below `sm` each row is a card (Nov 20 2026: on a phone every cell wrapped a
+ * word a line, and the wider reports had nowhere to go). The first column on
+ * top, the rest two to a row under their own small labels (`data-label`), a
+ * note across the full width. The dialog scrolls, so the table's own 50vh box
+ * goes away there.
+ */
+const PHONE_CELL =
+  'max-sm:min-w-0 max-sm:p-0 max-sm:text-left max-sm:whitespace-normal max-sm:break-words ' +
+  'max-sm:before:mb-0.5 max-sm:before:block max-sm:before:text-[10px] max-sm:before:font-semibold max-sm:before:leading-4 max-sm:before:uppercase max-sm:before:tracking-[0.06em] max-sm:before:text-muted-foreground max-sm:before:content-[attr(data-label)] ' +
+  'max-sm:first:col-span-2 max-sm:first:text-[15px] max-sm:first:font-medium max-sm:first:before:hidden max-sm:empty:hidden';
+const PHONE_ROW = 'max-sm:grid max-sm:grid-cols-2 max-sm:gap-x-4 max-sm:gap-y-2.5 max-sm:px-4 max-sm:py-3.5';
+
 /** The portal's table pattern: indigo-tinted header, hairline rows, text-only figures. */
 function ReportTableView({ table, money }: { table: ReportTable; money: (n: number) => string }) {
   const cell = (value: string | number | null | undefined, isMoney?: boolean) => {
@@ -234,9 +252,9 @@ function ReportTableView({ table, money }: { table: ReportTable; money: (n: numb
   }
 
   return (
-    <div className="max-h-[50vh] overflow-auto rounded-3xl ring-1 ring-foreground/5">
-      <table className="w-full text-sm">
-        <thead className="sticky top-0 bg-primary/[0.07] backdrop-blur">
+    <div className="max-h-[50vh] overflow-auto rounded-3xl ring-1 ring-foreground/5 max-sm:max-h-none max-sm:overflow-visible">
+      <table className="w-full text-sm max-sm:block">
+        <thead className="sticky top-0 bg-primary/[0.07] backdrop-blur max-sm:hidden">
           <tr>
             {table.columns.map((c) => (
               <th
@@ -251,16 +269,18 @@ function ReportTableView({ table, money }: { table: ReportTable; money: (n: numb
             ))}
           </tr>
         </thead>
-        <tbody>
+        <tbody className="max-sm:block">
           {table.rows.map((row, i) => (
-            <tr key={i} className="border-t border-foreground/5">
+            <tr key={i} className={cn('border-t border-foreground/5 max-sm:first:border-t-0', PHONE_ROW)}>
               {table.columns.map((c) => (
                 <td
                   key={c.key}
+                  data-label={c.label}
                   className={cn(
                     'px-4 py-2 align-top',
                     (c.money || c.align === 'right') && 'text-right tabular-nums whitespace-nowrap',
-                    c.key === 'note' && 'text-xs text-muted-foreground',
+                    c.key === 'note' && 'text-xs text-muted-foreground max-sm:col-span-2',
+                    PHONE_CELL,
                   )}
                 >
                   {cell(row[c.key], c.money)}
@@ -270,12 +290,17 @@ function ReportTableView({ table, money }: { table: ReportTable; money: (n: numb
           ))}
         </tbody>
         {table.totals ? (
-          <tfoot>
-            <tr className="border-t-2 border-foreground/10 font-medium">
+          <tfoot className="max-sm:block">
+            <tr className={cn('border-t-2 border-foreground/10 font-medium max-sm:bg-primary/[0.05]', PHONE_ROW)}>
               {table.columns.map((c) => (
                 <td
                   key={c.key}
-                  className={cn('px-4 py-2.5', (c.money || c.align === 'right') && 'text-right tabular-nums whitespace-nowrap')}
+                  data-label={c.label}
+                  className={cn(
+                    'px-4 py-2.5',
+                    (c.money || c.align === 'right') && 'text-right tabular-nums whitespace-nowrap',
+                    PHONE_CELL,
+                  )}
                 >
                   {cell(table.totals![c.key], c.money)}
                 </td>

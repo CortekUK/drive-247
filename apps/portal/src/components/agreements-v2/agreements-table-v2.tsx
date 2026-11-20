@@ -180,6 +180,7 @@ export function AgreementsListTableV2({
           title: (row) => (row.title ? `${row.customerName} · ${row.title}` : row.customerName),
         }}
         onOpen={onView}
+        phoneCards
         rowProps={(row) => ({
           "data-agreement-kind": row.kind,
           "data-agreement-status": row.status,

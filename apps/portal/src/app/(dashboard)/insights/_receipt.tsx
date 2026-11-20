@@ -112,8 +112,8 @@ function EquationRow({
         {op}
       </span>
       <span className="min-w-0">
-        <span className="block truncate text-[15px] font-medium">{label}</span>
-        <span className="mt-0.5 block truncate text-[12.5px] text-muted-foreground">{sub}</span>
+        <span className="block truncate text-[15px] font-medium max-sm:whitespace-normal">{label}</span>
+        <span className="mt-0.5 block truncate text-[12.5px] text-muted-foreground max-sm:whitespace-normal">{sub}</span>
       </span>
       {loading ? (
         <Skeleton className="h-6 w-24" />
@@ -140,7 +140,7 @@ function EquationRow({
     </>
   );
   const shell = cn(
-    'grid w-full grid-cols-[28px_minmax(0,1fr)_auto_16px] items-center gap-x-4 rounded-2xl px-4 py-3.5 text-left [@media(max-height:860px)]:py-2.5',
+    'grid w-full grid-cols-[28px_minmax(0,1fr)_auto_16px] items-center gap-x-4 rounded-2xl px-4 py-3.5 max-sm:gap-x-3 max-sm:px-3 text-left [@media(max-height:860px)]:py-2.5',
     // Owed sits on a light red wash; its text stays ink, like every line.
     tone === 'owed' && 'mt-2 bg-destructive/[0.06]',
   );
@@ -287,7 +287,7 @@ export function MoneyReceipt({
                 wash (light red for a loss) — the tint marks it, not the type. */}
             <div
               className={cn(
-                'mt-1 grid grid-cols-[28px_minmax(0,1fr)_auto_16px] items-center gap-x-4 rounded-2xl px-4 py-3.5 [@media(max-height:860px)]:py-2.5',
+                'mt-1 grid grid-cols-[28px_minmax(0,1fr)_auto_16px] items-center gap-x-4 rounded-2xl px-4 py-3.5 max-sm:gap-x-3 max-sm:px-3 [@media(max-height:860px)]:py-2.5',
                 kept < 0 ? 'bg-destructive/[0.07]' : 'bg-success/[0.09]',
               )}
             >
@@ -301,8 +301,8 @@ export function MoneyReceipt({
                 =
               </span>
               <span className="min-w-0">
-                <span className="block truncate text-[15px] font-medium">Money you kept</span>
-                <span className="mt-0.5 block truncate text-[12.5px] text-muted-foreground">
+                <span className="block truncate text-[15px] font-medium max-sm:whitespace-normal">Money you kept</span>
+                <span className="mt-0.5 block truncate text-[12.5px] text-muted-foreground max-sm:whitespace-normal">
                   {loading ? '' : shareKept == null ? 'Nothing came in this period' : `${shareKept.toFixed(0)}% of what you took in`}
                 </span>
               </span>

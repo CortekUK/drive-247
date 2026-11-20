@@ -61,6 +61,12 @@ export function ViewSwitch({ value, onChange }: { value: InsightsViewId; onChang
       const el = tabs.current[index];
       if (el) setPill({ x: el.offsetLeft, w: el.offsetWidth });
     };
+    // On a phone narrower than the five tabs the bar scrolls; keep the chosen one in view.
+    const el = tabs.current[index];
+    const bar = el?.parentElement;
+    if (el && bar && bar.scrollWidth > bar.clientWidth) {
+      bar.scrollTo({ left: Math.max(0, el.offsetLeft - (bar.clientWidth - el.offsetWidth) / 2) });
+    }
     measure();
     const ro = new ResizeObserver(measure);
     tabs.current.forEach((el) => el && ro.observe(el));
@@ -68,7 +74,7 @@ export function ViewSwitch({ value, onChange }: { value: InsightsViewId; onChang
   }, [index]);
 
   return (
-    <div role="tablist" aria-label="Insights view" className="relative flex rounded-full bg-muted p-0.5">
+    <div role="tablist" aria-label="Insights view" className="no-scrollbar relative flex rounded-full bg-muted p-0.5 max-md:max-w-full max-md:overflow-x-auto">
       {pill ? (
         <span
           aria-hidden
@@ -89,7 +95,7 @@ export function ViewSwitch({ value, onChange }: { value: InsightsViewId; onChang
             aria-selected={active}
             onClick={() => onChange(v.id)}
             className={cn(
-              'relative z-10 flex h-7 cursor-pointer items-center rounded-full px-3 text-[13px] font-medium whitespace-nowrap transition-colors duration-200 motion-reduce:transition-none',
+              'relative z-10 flex h-7 shrink-0 cursor-pointer items-center rounded-full px-3 text-[13px] font-medium whitespace-nowrap max-sm:px-2 max-sm:text-[12px] transition-colors duration-200 motion-reduce:transition-none',
               'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
               // Chosen: white on the solid accent pill (primary-foreground, so it
               // stays legible on every brand colour in both modes). The rest:

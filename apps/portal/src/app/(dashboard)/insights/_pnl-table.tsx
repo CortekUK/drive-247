@@ -169,7 +169,7 @@ export function PnlTable({
   const head = (key: SortKey, label: string, align: 'left' | 'right' = 'right') => {
     const active = sort.key === key;
     return (
-      <th className={cn('px-4 py-3 font-medium whitespace-nowrap', align === 'right' ? 'text-right' : 'text-left')}>
+      <th className={cn('px-4 py-3 font-medium whitespace-nowrap max-md:shrink-0 max-md:px-3', align === 'right' ? 'text-right' : 'text-left')}>
         <button
           type="button"
           onClick={() => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === 'name' ? 1 : -1 }))}
@@ -203,12 +203,12 @@ export function PnlTable({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-4xl ring-1 ring-foreground/5">
-      <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full min-w-[1080px] border-separate border-spacing-0 text-sm">
-          <thead className="sticky top-0 z-10 bg-[color-mix(in_srgb,hsl(var(--primary))_7%,hsl(var(--background)))] text-xs text-muted-foreground">
-            <tr>
+      <div className="min-h-0 flex-1 overflow-auto max-md:overflow-visible">
+        <table className="w-full min-w-[1080px] border-separate border-spacing-0 text-sm max-md:block max-md:min-w-0">
+          <thead className="sticky top-0 z-10 bg-[color-mix(in_srgb,hsl(var(--primary))_7%,hsl(var(--background)))] text-xs text-muted-foreground max-md:static max-md:block">
+            <tr className="no-scrollbar max-md:flex max-md:overflow-x-auto max-md:px-1">
               {head('name', 'Car', 'left')}
-              <th className="px-4 py-3 text-left font-medium whitespace-nowrap">
+              <th className="px-4 py-3 text-left font-medium whitespace-nowrap max-md:hidden">
                 Kept, month by month
                 <span className="ml-1.5 font-normal opacity-70 tabular-nums">
                   {monthLabels[0]} – {monthLabels.at(-1)}
@@ -223,7 +223,7 @@ export function PnlTable({
               {head('perDay', 'Per day out')}
             </tr>
           </thead>
-          <tbody>
+          <tbody className="max-md:block">
             {sorted.map((r) => (
               <Line key={r.id} row={r} money={money} signed={signed} />
             ))}
@@ -233,18 +233,19 @@ export function PnlTable({
                out — but as a soft accent wash with an accent rule above it,
                not the solid accent (too bright across a full-width row). Size
                and weight carry the rest. Pinned to the bottom of the table. */
-            <tfoot className="sticky bottom-0 z-10">
-              <tr className="bg-[color-mix(in_srgb,hsl(var(--primary))_11%,hsl(var(--background)))] [&>td]:border-t-2 [&>td]:border-primary/30 [&>td]:py-4">
-                <td className="px-4">
+            <tfoot className="sticky bottom-0 z-10 max-md:static max-md:block">
+              <tr className={cn('bg-[color-mix(in_srgb,hsl(var(--primary))_11%,hsl(var(--background)))] [&>td]:border-t-2 [&>td]:border-primary/30 [&>td]:py-4 max-md:border-t-2 max-md:border-primary/30 max-md:[&>td]:border-t-0 max-md:[&>td]:py-0', PHONE_ROW)}>
+                <td className="px-4 max-md:col-span-3 max-md:p-0">
                   <p className="font-heading text-base font-semibold">Whole fleet</p>
                   <p className="text-xs text-muted-foreground">{rows.length} cars</p>
                 </td>
-                <td className="px-4">
+                <td className="px-4 max-md:col-span-3 max-md:flex max-md:justify-end max-md:overflow-hidden max-md:p-0">
                   <Spark values={fleet.series} strong />
                 </td>
-                <Num className="text-[15px] font-medium">{money(fleet.moneyIn)}</Num>
-                <Num className="text-[15px] text-muted-foreground">{money(fleet.spent)}</Num>
+                <Num label="Money in" className="text-[15px] font-medium">{money(fleet.moneyIn)}</Num>
+                <Num label="Spent" className="text-[15px] text-muted-foreground">{money(fleet.spent)}</Num>
                 <Num
+                  label="Kept"
                   className={cn(
                     'font-heading text-lg font-semibold',
                     fleet.kept < 0 ? 'text-destructive' : 'text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]',
@@ -252,14 +253,14 @@ export function PnlTable({
                 >
                   {signed(fleet.kept)}
                 </Num>
-                <Num>
+                <Num label="vs last month">
                   <Change value={fleet.change} />
                 </Num>
-                <Num>
+                <Num label="Margin">
                   <Margin value={fleet.margin} />
                 </Num>
-                <Num className="font-medium">{fleet.utilisation.toFixed(0)}%</Num>
-                <Num className="font-medium">{fleet.perDay == null ? '—' : money(fleet.perDay)}</Num>
+                <Num label="Out" className="font-medium">{fleet.utilisation.toFixed(0)}%</Num>
+                <Num label="Per day out" className="font-medium">{fleet.perDay == null ? '—' : money(fleet.perDay)}</Num>
               </tr>
             </tfoot>
           ) : null}
@@ -269,16 +270,38 @@ export function PnlTable({
   );
 }
 
-function Num({ children, className }: { children: ReactNode; className?: string }) {
-  return <td className={cn('px-4 py-3 text-right whitespace-nowrap tabular-nums', className)}>{children}</td>;
+/*
+ * Below `md` the 1080px table becomes one card per car (Nov 20 2026: on a phone
+ * every money column sat off-screen to the right). A six-column grid: the car
+ * and its sparkline share the top line, then the seven numbers three to a row,
+ * each under its own small label (`data-label`, the column's heading). The
+ * heading row stays as a sideways strip of sort buttons, so sorting is kept.
+ */
+const PHONE_ROW = 'max-md:grid max-md:grid-cols-6 max-md:items-start max-md:gap-x-3 max-md:gap-y-3 max-md:px-4 max-md:py-3.5';
+const PHONE_LABEL =
+  'max-md:before:mb-0.5 max-md:before:block max-md:before:text-[10px] max-md:before:leading-4 max-md:before:font-semibold max-md:before:uppercase max-md:before:tracking-[0.06em] max-md:before:text-muted-foreground max-md:before:content-[attr(data-label)]';
+
+function Num({ children, className, label }: { children: ReactNode; className?: string; label?: string }) {
+  return (
+    <td
+      data-label={label}
+      className={cn(
+        'px-4 py-3 text-right whitespace-nowrap tabular-nums max-md:col-span-2 max-md:min-w-0 max-md:p-0 max-md:text-left',
+        PHONE_LABEL,
+        className,
+      )}
+    >
+      {children}
+    </td>
+  );
 }
 
 /** One car — a ticker row. */
 function Line({ row: r, money, signed }: { row: CarRow; money: (n: number) => string; signed: (n: number) => string }) {
   return (
-    <tr className="group transition-colors duration-200 hover:bg-primary/[0.04] motion-reduce:transition-none [&>td]:border-b [&>td]:border-foreground/5">
-      <td className="min-w-[200px] px-4 py-3">
-        <p className="max-w-[240px] truncate font-medium">{r.name}</p>
+    <tr className={cn('group transition-colors duration-200 hover:bg-primary/[0.04] motion-reduce:transition-none [&>td]:border-b [&>td]:border-foreground/5 max-md:border-b max-md:border-foreground/5 max-md:[&>td]:border-b-0', PHONE_ROW)}>
+      <td className="min-w-[200px] px-4 py-3 max-md:col-span-3 max-md:min-w-0 max-md:p-0">
+        <p className="max-w-[240px] truncate font-medium max-md:max-w-none">{r.name}</p>
         {/* One quiet line: the plate, then the car's share of the fleet's
             money in. Never wraps; the full wording is on hover. */}
         <p
@@ -288,23 +311,23 @@ function Line({ row: r, money, signed }: { row: CarRow; money: (n: number) => st
           {[r.plate, `${r.share.toFixed(0)}% of fleet`].filter(Boolean).join(' · ')}
         </p>
       </td>
-      <td className="px-4 py-2">
+      <td className="px-4 py-2 max-md:col-span-3 max-md:flex max-md:justify-end max-md:overflow-hidden max-md:p-0">
         <Spark values={r.series} />
       </td>
-      <Num>{money(r.moneyIn)}</Num>
-      <Num className="text-muted-foreground">{money(r.spent)}</Num>
-      <Num className={cn('text-[15px] font-semibold', r.kept < 0 && 'text-destructive')}>{signed(r.kept)}</Num>
-      <Num>
+      <Num label="Money in">{money(r.moneyIn)}</Num>
+      <Num label="Spent" className="text-muted-foreground">{money(r.spent)}</Num>
+      <Num label="Kept" className={cn('text-[15px] font-semibold', r.kept < 0 && 'text-destructive')}>{signed(r.kept)}</Num>
+      <Num label="vs last month">
         <Change value={r.change} />
       </Num>
-      <Num>
+      <Num label="Margin">
         <Margin value={r.margin} />
       </Num>
-      <Num>
+      <Num label="Out">
         <span>{r.utilisation.toFixed(0)}%</span>
         <span className="ml-1.5 text-xs text-muted-foreground">{r.daysOut}d</span>
       </Num>
-      <Num>{r.perDay == null ? <span className="text-muted-foreground">—</span> : money(r.perDay)}</Num>
+      <Num label="Per day out">{r.perDay == null ? <span className="text-muted-foreground">—</span> : money(r.perDay)}</Num>
     </tr>
   );
 }
@@ -333,7 +356,7 @@ function Margin({ value, inverse }: { value: number | null; inverse?: boolean })
   if (value == null) return <span className={inverse ? 'opacity-75' : 'text-muted-foreground'}>—</span>;
   const w = Math.max(0, Math.min(100, value));
   return (
-    <span className="inline-flex w-20 flex-col items-end gap-1">
+    <span className="inline-flex w-20 flex-col items-end gap-1 max-md:items-start">
       <span className={cn(inverse ? 'font-medium' : value < 0 && 'text-destructive')}>{value.toFixed(0)}%</span>
       <span className={cn('h-1 w-full overflow-hidden rounded-full', inverse ? 'bg-primary-foreground/25' : 'bg-foreground/[0.07]')}>
         <span
@@ -373,7 +396,7 @@ function Spark({ values, strong, inverse }: { values: number[]; strong?: boolean
   const flat = values.every((v) => Math.abs(v) < 0.5);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="block" aria-hidden>
+    <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="block max-md:h-auto max-md:w-full max-md:max-w-[168px]" aria-hidden>
       <defs>
         <linearGradient id={`${id}-f`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={ink} stopOpacity={strong ? 0.3 : 0.2} />

@@ -45,6 +45,7 @@ export function AgreementsTable<T extends AgreementListRow>({
   party,
   onOpen,
   rowProps,
+  phoneCards = false,
 }: {
   /** The page's progressive rows over every filtered agreement. */
   rows: ProgressiveRows<T>;
@@ -52,13 +53,19 @@ export function AgreementsTable<T extends AgreementListRow>({
   onOpen: (row: T) => void;
   /** Extra attributes per row (the operator's data markers and busy state). */
   rowProps?: (row: T) => HTMLAttributes<HTMLTableRowElement> & Record<`data-${string}`, string | undefined>;
+  /**
+   * Below `md`, each row as a card: the party's name on top and the other
+   * columns as small labelled values. Off by default: only the operator
+   * portal ships that CSS (`[data-phone-cards]` in its v2-theme.css).
+   */
+  phoneCards?: boolean;
 }) {
   const now = new Date();
   return (
     // Not `fillViewport`: the kit's 520px box, as on the operator's list. The
     // first column takes the most room and truncates with a title; the email
     // truncates too. Sent holds "Sep 21, 2025, 12:45 PM" whole.
-    <ListTable rows={rows} minWidth="min-w-[920px]">
+    <ListTable rows={rows} minWidth="min-w-[920px]" phoneCards={phoneCards}>
       <ListTableHeader>
         <ListHead className="w-[20%]">{party.label}</ListHead>
         <ListHead className="w-[25%]">{party.emailLabel ?? "Email"}</ListHead>
@@ -93,7 +100,9 @@ export function AgreementsTable<T extends AgreementListRow>({
                   {name || <Blank />}
                 </span>
               </ListCell>
-              <ListCell>
+              {/* Phone cards: the email takes the card's full width, so it is
+                  not broken mid-word in half a card. */}
+              <ListCell className="max-md:col-span-2">
                 {email ? (
                   <span className={`block truncate ${V2_LIST_CLASSES.text}`} title={email}>
                     {email}
