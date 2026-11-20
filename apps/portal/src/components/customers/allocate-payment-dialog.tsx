@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PHONE_FORM_DIALOG } from "@/components/ui-v2/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -194,7 +195,7 @@ export const AllocatePaymentDialog = ({ open, onOpenChange, payment, customerId 
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!loading) onOpenChange(v); }}>
-      <DialogContent className="sm:max-w-[460px]">
+      <DialogContent className={`sm:max-w-[460px] ${PHONE_FORM_DIALOG}`}>
         <DialogHeader>
           <DialogTitle>Allocate Payment</DialogTitle>
           <DialogDescription>

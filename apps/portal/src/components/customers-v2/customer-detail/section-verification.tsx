@@ -470,7 +470,7 @@ function ComparisonRow({ label, was, now }: { label: string; was: string; now: s
       <span className="text-xs text-muted-foreground">{label}</span>
       <span
         className={cn(
-          "min-w-0 truncate text-[13px]",
+          "min-w-0 truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-[13px]",
           changed ? "text-muted-foreground line-through decoration-muted-foreground/50" : "font-medium"
         )}
       >
@@ -485,7 +485,7 @@ function ComparisonRow({ label, was, now }: { label: string; was: string; now: s
       )}
       <span
         className={cn(
-          "min-w-0 truncate text-right text-[13px]",
+          "min-w-0 truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-right text-[13px]",
           changed ? "font-semibold text-warning" : "text-muted-foreground"
         )}
       >

@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { PHONE_FORM_DIALOG } from "@/components/ui-v2/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -105,7 +106,7 @@ export default function GigDriverUploadDialog({ open, onOpenChange, customerId }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className={`sm:max-w-[600px] ${PHONE_FORM_DIALOG}`}>
         <DialogHeader>
           <DialogTitle>Upload Gig Driver Proof</DialogTitle>
           <DialogDescription>

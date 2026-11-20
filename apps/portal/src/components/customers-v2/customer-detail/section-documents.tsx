@@ -149,12 +149,12 @@ export function SectionDocuments({ c, onJump, canEdit }: SectionProps) {
               const exp = expiryOf(d.until);
               return (
                 <div key={d.id} className={cn(listCls, "divide-y-0")}>
-                  <div className="flex items-start gap-4 px-5 py-4">
+                  <div className="flex items-start gap-4 px-5 py-4 max-lg:flex-wrap max-lg:gap-3 max-sm:px-4">
                     <Thumb className="h-12 w-16 shrink-0" filled />
 
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1 max-lg:basis-[calc(100%-5rem)] max-sm:basis-[calc(100%-4.75rem)]">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-medium">{d.name}</p>
+                        <p className="truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-sm font-medium">{d.name}</p>
                         {d.verified && (
                           <Pill tone="success">
                             <Check className="size-3" />
@@ -179,7 +179,7 @@ export function SectionDocuments({ c, onJump, canEdit }: SectionProps) {
                       </div>
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-1.5">
+                    <div className="flex shrink-0 items-center gap-1.5 max-lg:ml-[5rem] max-sm:ml-[4.75rem]">
                       {d.fileUrl && (
                         <Button
                           variant="outline"

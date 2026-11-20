@@ -59,7 +59,8 @@ function stackTitle(title: string) {
   if (trimmed.length <= STACK_AFTER_CHARS || space === -1) return trimmed;
   return (
     <>
-      {trimmed.slice(0, space)}
+      {/* The space keeps two words apart where a phone hides the break. */}
+      {trimmed.slice(0, space)}{" "}
       <br />
       {trimmed.slice(space + 1)}
     </>

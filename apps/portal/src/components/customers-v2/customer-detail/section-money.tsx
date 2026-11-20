@@ -139,7 +139,7 @@ export function SectionMoney({ c, onJump, canEdit, currency }: SectionProps) {
                   <CreditCard className="size-4 text-muted-foreground" />
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">
+                  <p className="truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-sm font-medium">
                     {c.billing.methodsUsed.length
                       ? `Has paid by ${c.billing.methodsUsed.join(", ")}`
                       : "No payment taken yet"}
@@ -159,17 +159,17 @@ export function SectionMoney({ c, onJump, canEdit, currency }: SectionProps) {
           <Section title="Ledger" description="Oldest first, with the balance after every row.">
             {/* Two bare number columns are unreadable without a key — the
                 right-hand one is the running balance, not a second amount. */}
-            <div className="mb-2 flex items-center gap-4 px-5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="mb-2 flex items-center gap-4 px-5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground max-lg:hidden">
               <span className="min-w-0 flex-1">Entry</span>
               <span className="w-24 shrink-0 text-right">Amount</span>
               <span className="w-24 shrink-0 text-right">Balance</span>
             </div>
             <div className={listCls}>
               {running.map((row) => (
-                <div key={row.id} className="flex items-center gap-4 px-5 py-3.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{row.label}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                <div key={row.id} className="flex items-center gap-4 px-5 py-3.5 max-lg:flex-wrap max-lg:gap-x-3 max-lg:gap-y-2 max-sm:px-4">
+                  <div className="min-w-0 flex-1 max-lg:basis-full">
+                    <p className="truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-sm font-medium">{row.label}</p>
+                    <p className="mt-0.5 truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-xs text-muted-foreground">
                       {fmtDate(row.date)}
                       {row.ref && ` · ${row.ref}`}
                     </p>
@@ -177,13 +177,15 @@ export function SectionMoney({ c, onJump, canEdit, currency }: SectionProps) {
                   {!!row.unallocated && <Pill tone="warning">Unapplied</Pill>}
                   <p
                     className={cn(
-                      "w-24 shrink-0 text-right text-sm font-semibold tabular-nums",
+                      "w-24 shrink-0 text-right text-sm font-semibold tabular-nums max-lg:w-auto max-lg:flex-1 max-lg:text-left",
                       row.amount < 0 ? "text-success" : "text-foreground"
                     )}
                   >
+                    <span className="mr-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground lg:hidden">Amount</span>
                     {signedMoney(row.amount, money)}
                   </p>
-                  <p className="w-24 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                  <p className="w-24 shrink-0 text-right text-xs tabular-nums text-muted-foreground max-lg:w-auto">
+                    <span className="mr-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground lg:hidden">Balance</span>
                     {money(row.balance)}
                   </p>
                 </div>
@@ -207,15 +209,15 @@ export function SectionMoney({ c, onJump, canEdit, currency }: SectionProps) {
             ) : (
               <div className={listCls}>
                 {c.links.map((l) => (
-                  <div key={l.id} className="flex items-center gap-4 px-5 py-4">
+                  <div key={l.id} className="flex items-center gap-4 px-5 py-4 max-sm:flex-wrap max-sm:gap-x-3 max-sm:gap-y-3 max-sm:px-4">
                     <span className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-card ring-1 ring-foreground/5">
                       <Receipt className="size-4 text-muted-foreground" />
                     </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{l.label}</p>
+                    <div className="min-w-0 flex-1 max-sm:basis-[calc(100%-3.25rem)]">
+                      <p className="truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-sm font-medium">{l.label}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">Sent {fmtDate(l.sentAt)}</p>
                     </div>
-                    <p className="shrink-0 text-sm font-semibold tabular-nums">{money(l.amount)}</p>
+                    <p className="shrink-0 text-sm font-semibold tabular-nums max-sm:ml-12 max-sm:mr-auto">{money(l.amount)}</p>
                     <Pill tone={l.status === "Paid" ? "success" : l.status === "Void" ? "neutral" : "primary"}>
                       {l.status}
                     </Pill>

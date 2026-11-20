@@ -123,7 +123,7 @@ export function BlockedCustomersTableV2<T extends BlockedCustomerRowV2>({
                     {customer.name}
                   </button>
                 </ListCell>
-                <ListCell>
+                <ListCell className="max-lg:col-span-2">
                   {contact ? (
                     <span
                       className={`block truncate ${customer.email ? "" : "tabular-nums "}${LIST_CLASSES.text}`}
@@ -181,7 +181,7 @@ export function BlockedCustomersTableV2<T extends BlockedCustomerRowV2>({
                         <Button
                           variant="ghost"
                           size="icon"
-                          className={LIST_ROW_ACTION}
+                          className={`v2-phone-hit ${LIST_ROW_ACTION}`}
                           aria-label={`Actions for ${customer.name}`}
                         >
                           <MoreHorizontal className="h-4 w-4" />
@@ -297,7 +297,7 @@ export function BlockedIdentitiesTableV2<T extends BlockedIdentity>({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className={LIST_ROW_ACTION}
+                        className={`v2-phone-hit ${LIST_ROW_ACTION}`}
                         aria-label={`Actions for ${identity.identity_number}`}
                       >
                         <MoreHorizontal className="h-4 w-4" />

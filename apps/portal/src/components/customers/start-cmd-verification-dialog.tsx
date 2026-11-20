@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { PHONE_SCREEN_DIALOG } from "@/components/ui-v2/dialog";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -170,7 +171,7 @@ export function StartCmdVerificationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl p-0 overflow-hidden">
+      <DialogContent className={`max-w-xl p-0 overflow-hidden ${PHONE_SCREEN_DIALOG} max-sm:overflow-y-auto`}>
         {/* ── Header ──────────────────────────────────────────────────────── */}
         <div className="border-b border-border bg-gradient-to-br from-indigo-50 via-white to-indigo-50/40 dark:from-indigo-950/40 dark:via-background dark:to-indigo-950/20 px-6 py-5">
           <DialogHeader className="space-y-2">

@@ -171,14 +171,14 @@ function OutOfDate({
               <div key={d.label} className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-5 py-3">
                 <span className="min-w-0 text-xs">
                   <span className="block text-muted-foreground">Written from</span>
-                  <span className="block truncate font-medium line-through decoration-muted-foreground/50">
+                  <span className="block truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] font-medium line-through decoration-muted-foreground/50">
                     {d.was}
                   </span>
                 </span>
                 <span className="text-muted-foreground/60">→</span>
                 <span className="min-w-0 text-xs">
                   <span className="block text-muted-foreground">{d.label} now</span>
-                  <span className="block truncate font-semibold text-foreground">{d.now}</span>
+                  <span className="block truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] font-semibold text-foreground">{d.now}</span>
                 </span>
               </div>
             ))}

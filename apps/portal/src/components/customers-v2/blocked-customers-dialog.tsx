@@ -29,7 +29,7 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useBlockedIdentities, useCustomerBlockingActions } from "@/hooks/use-customer-blocking";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui-v2/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, PHONE_SCREEN_DIALOG } from "@/components/ui-v2/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -121,14 +121,14 @@ export function BlockedCustomersDialog({ open, onOpenChange }: { open: boolean; 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="flex max-h-[86vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
-          <DialogHeader className="space-y-1 px-6 pb-4 pt-6">
+        <DialogContent className={`flex max-h-[86vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl ${PHONE_SCREEN_DIALOG}`}>
+          <DialogHeader className="space-y-1 px-6 pb-4 pt-6 max-sm:px-4 max-sm:pr-14">
             <DialogTitle className="text-xl font-medium">Blocked customers</DialogTitle>
             <DialogDescription>People and IDs you won&rsquo;t rent to. Unblock anyone to let them book again.</DialogDescription>
           </DialogHeader>
 
           {/* Tabs + search */}
-          <div className="flex flex-wrap items-center gap-2 border-b px-6 pb-3">
+          <div className="flex flex-wrap items-center gap-2 border-b px-6 pb-3 max-sm:px-4">
             <div className="inline-flex rounded-full bg-muted/60 p-1">
               {(
                 [
@@ -165,7 +165,7 @@ export function BlockedCustomersDialog({ open, onOpenChange }: { open: boolean; 
           </div>
 
           {/* The list */}
-          <div className="no-scrollbar min-h-[280px] flex-1 overflow-y-auto px-3 py-2">
+          <div className="no-scrollbar min-h-[280px] flex-1 overflow-y-auto px-3 py-2 max-sm:min-h-0 max-sm:px-1">
             {loading ? (
               <div className="space-y-2 p-3">
                 {[0, 1, 2].map((i) => (
@@ -204,11 +204,11 @@ export function BlockedCustomersDialog({ open, onOpenChange }: { open: boolean; 
                       <Link
                         href={`/customers/${c.id}`}
                         onClick={() => onOpenChange(false)}
-                        className="block truncate text-sm font-medium text-foreground hover:underline"
+                        className="block truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-sm font-medium text-foreground hover:underline"
                       >
                         {c.name}
                       </Link>
-                      <p className="truncate text-xs text-muted-foreground">
+                      <p className="truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-xs text-muted-foreground">
                         {c.blocked_reason || "No reason given"}
                         {ago(c.blocked_at) ? ` · blocked ${ago(c.blocked_at)}` : ""}
                       </p>
@@ -244,7 +244,7 @@ export function BlockedCustomersDialog({ open, onOpenChange }: { open: boolean; 
                             {ID_LABEL[i.identity_type] ?? i.identity_type}
                           </span>
                         </p>
-                        <p className="truncate text-xs text-muted-foreground">
+                        <p className="truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-xs text-muted-foreground">
                           {[i.customer_name, i.reason].filter(Boolean).join(" · ") || "No reason given"}
                         </p>
                       </div>

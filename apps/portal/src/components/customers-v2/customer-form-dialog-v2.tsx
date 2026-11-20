@@ -54,7 +54,7 @@ import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { cn } from "@/lib/utils";
 import { customerFormModalSchema, type CustomerFormModalFormValues } from "@/client-schemas/customers/customer-form-modal";
 import { Button } from "@/components/ui-v2/button";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui-v2/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle, PHONE_SCREEN_DIALOG } from "@/components/ui-v2/dialog";
 import { Cell, CONTROL, FORM_DIALOG_WASH, Segmented, StepFooter, ToggleTile, TWINKLE_CSS } from "@/components/shared/form-grid-v2";
 import {
   AddCustomerAddedArt,
@@ -555,7 +555,7 @@ export function CustomerFormDialogV2({
           onEscapeKeyDown below, and with it went the live tracker (sheet C4.8). */}
       <Dialog open={open} onOpenChange={(o) => { if (!o && qr) return; close(o); }}>
         <DialogContent
-          className="gap-0 overflow-hidden p-0 sm:max-w-[720px]"
+          className={cn("gap-0 overflow-hidden p-0 sm:max-w-[720px]", PHONE_SCREEN_DIALOG)}
           style={FORM_DIALOG_WASH}
           showCloseButton={false}
           // The ID check is waiting on the customer's phone: a stray click
@@ -591,8 +591,8 @@ export function CustomerFormDialogV2({
             /* The follow-up after a create: two ways to verify, side by side
                (a choice between two peers — the one place cards sit side by
                side), and "later" as a quiet link. */
-            <div className="flex flex-col">
-              <div className="flex h-[500px] flex-col items-center justify-center px-10 text-center duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none">
+            <div className="flex flex-col max-sm:min-h-0 max-sm:flex-1">
+              <div className="flex h-[500px] flex-col items-center justify-center px-10 text-center max-sm:h-auto max-sm:min-h-0 max-sm:flex-1 max-sm:justify-start max-sm:overflow-y-auto max-sm:px-4 max-sm:pt-8 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none">
                 <style>{TWINKLE_CSS}</style>
                 <AddCustomerAddedArt className="max-w-[230px]" />
                 <h3 className="mt-5 text-2xl font-medium text-foreground [text-wrap:balance]">{created.name} is in.</h3>
@@ -600,7 +600,7 @@ export function CustomerFormDialogV2({
                   How should I check their ID? Either way they photograph their licence and take a selfie.
                 </p>
 
-                <div className="mt-6 grid w-full max-w-[520px] grid-cols-2 gap-3">
+                <div className="mt-6 grid w-full max-w-[520px] grid-cols-2 gap-3 max-[359px]:grid-cols-1">
                   {(
                     [
                       { mode: "qr", icon: QrCode, title: "Show the QR code", line: "They're here with you", disabled: false },
@@ -635,7 +635,7 @@ export function CustomerFormDialogV2({
                   })}
                 </div>
               </div>
-              <div className="flex items-center justify-center px-8 py-4">
+              <div className="flex items-center justify-center px-8 py-4 max-sm:shrink-0 max-sm:px-4">
                 <button
                   type="button"
                   onClick={() => close(false)}
@@ -655,14 +655,14 @@ export function CustomerFormDialogV2({
                 else if (blocked && (screen.fields as readonly string[]).includes("license_number")) return;
                 else void form.trigger(screen.fields).then((ok) => ok && (step !== 0 || dobOk(form.getValues("date_of_birth"))) && setStep(step + 1));
               }}
-              className="flex flex-col"
+              className="flex flex-col max-sm:min-h-0 max-sm:flex-1"
             >
               {!isEditing && <DevAutofillButton onFill={autofill} />}
               {/* One screen: picture, what Trax is asking, a few fields. Same
                   height on every step, so nothing jumps and nothing scrolls. */}
               <div
                 key={step}
-                className="flex h-[500px] flex-col items-center overflow-hidden px-10 pt-8 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none"
+                className="flex h-[500px] flex-col items-center overflow-hidden px-10 pt-8 max-sm:h-auto max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto max-sm:px-4 max-sm:pt-6 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none"
               >
                 <screen.art className="max-w-[280px]" />
                 <h3 className="mt-4 text-center text-xl font-medium leading-snug text-foreground [text-wrap:balance]">
@@ -746,10 +746,10 @@ export function CustomerFormDialogV2({
 
                   {step === 5 && (
                     <>
-                      <Cell label="Phone" error={err("nok_phone")}>
+                      <Cell label="Phone" className="max-sm:col-span-2" error={err("nok_phone")}>
                         {text("nok_phone", "+1 555 123 4567", { type: "tel", inputMode: "tel", filter: phoneFilter })}
                       </Cell>
-                      <Cell label="Email" error={err("nok_email")}>
+                      <Cell label="Email" className="max-sm:col-span-2" error={err("nok_email")}>
                         {text("nok_email", "name@example.com", { type: "email", inputMode: "email" })}
                       </Cell>
                       <Cell label="Address" className="col-span-2" error={err("nok_address")}>

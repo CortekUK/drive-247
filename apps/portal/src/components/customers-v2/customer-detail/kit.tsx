@@ -383,8 +383,8 @@ export function OptionCard({
       )}
     >
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-heading text-sm font-medium">{title}</span>
-        {subtitle && <span className="mt-0.5 block truncate text-xs text-muted-foreground">{subtitle}</span>}
+        <span className="block truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] font-heading text-sm font-medium">{title}</span>
+        {subtitle && <span className="mt-0.5 block truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-xs text-muted-foreground">{subtitle}</span>}
         {meta}
       </span>
       {right}
@@ -418,7 +418,7 @@ export function Row({
       <span className="shrink-0 text-xs text-muted-foreground">{label}</span>
       <span
         className={cn(
-          "min-w-0 truncate text-right text-[13px] font-medium",
+          "min-w-0 truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-right text-[13px] font-medium",
           mono && "font-mono text-xs",
           tone === "muted" && "font-normal text-muted-foreground",
           tone === "warning" && "text-warning",
@@ -463,7 +463,7 @@ export function Meta({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="mt-0.5 truncate text-xs font-medium">{value}</p>
+      <p className="mt-0.5 truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-xs font-medium">{value}</p>
     </div>
   );
 }
@@ -546,7 +546,7 @@ export function Thumb({
           <ImageIcon className={cn("size-4", filled ? "text-muted-foreground" : "text-muted-foreground/40")} />
         )}
       </div>
-      {caption && <p className="mt-2 truncate text-xs text-muted-foreground">{caption}</p>}
+      {caption && <p className="mt-2 truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-xs text-muted-foreground">{caption}</p>}
     </div>
   );
 }
@@ -628,14 +628,14 @@ export function OutOfDateBanner({
               <div key={d.label} className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-5 py-3">
                 <span className="min-w-0 text-xs">
                   <span className="block text-muted-foreground">Was checked as</span>
-                  <span className="block truncate font-medium line-through decoration-muted-foreground/50">
+                  <span className="block truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] font-medium line-through decoration-muted-foreground/50">
                     {d.was}
                   </span>
                 </span>
                 <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/60" />
                 <span className="min-w-0 text-xs">
                   <span className="block text-muted-foreground">{d.label} now</span>
-                  <span className="block truncate font-semibold text-foreground">{d.now}</span>
+                  <span className="block truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] font-semibold text-foreground">{d.now}</span>
                 </span>
               </div>
             ))}

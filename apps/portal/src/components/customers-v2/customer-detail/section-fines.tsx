@@ -57,22 +57,22 @@ export function SectionFines({ c, onJump, canEdit, currency }: SectionProps) {
             <div className="space-y-3">
               {c.fines.map((f) => (
                 <div key={f.id} className={cn(listCls, "divide-y-0")}>
-                  <div className="flex items-center gap-4 px-5 py-4">
+                  <div className="flex items-center gap-4 px-5 py-4 max-sm:flex-wrap max-sm:gap-x-3 max-sm:gap-y-3 max-sm:px-4">
                     <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-card ring-1 ring-foreground/5">
                       <Gavel className="size-4 text-muted-foreground" />
                     </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{f.type}</p>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    <div className="min-w-0 flex-1 max-sm:basis-[calc(100%-3.25rem)]">
+                      <p className="truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-sm font-medium">{f.type}</p>
+                      <p className="mt-0.5 truncate max-lg:overflow-visible max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere] text-xs text-muted-foreground">
                         {f.reference} · {f.vehicle}
                       </p>
                     </div>
-                    <p className="shrink-0 text-sm font-semibold tabular-nums">{money(f.amount)}</p>
+                    <p className="shrink-0 text-sm font-semibold tabular-nums max-sm:ml-[3.25rem] max-sm:mr-auto">{money(f.amount)}</p>
                     <Pill tone={f.status === "Open" ? "warning" : f.status === "Paid" ? "success" : "neutral"}>
                       {f.status}
                     </Pill>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 border-t border-foreground/5 px-5 py-3 sm:grid-cols-3">
+                  <div className="grid grid-cols-2 gap-3 border-t border-foreground/5 px-5 py-3 max-sm:px-4 sm:grid-cols-3">
                     <Meta label="Issued" value={fmtDate(f.issuedOn)} />
                     <Meta label="Due" value={fmtDate(f.dueOn)} />
                     <Meta label="Liability" value={f.liability} />

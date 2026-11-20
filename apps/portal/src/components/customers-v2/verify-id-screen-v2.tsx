@@ -328,8 +328,8 @@ export function VerifyIdScreenV2({
     const Icon = r.icon;
     const canRetry = outcome === "RED" || outcome === "EXPIRED";
     return (
-      <div className="flex flex-col">
-        <div className="flex h-[500px] flex-col items-center justify-center px-10 text-center">
+      <div className="flex flex-col max-sm:min-h-0 max-sm:flex-1">
+        <div className="flex h-[500px] flex-col items-center justify-center px-10 text-center max-sm:h-auto max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto max-sm:px-4">
           <span
             className={cn(
               "flex size-20 items-center justify-center rounded-full duration-200 ease-out animate-in fade-in-0 zoom-in-90 motion-reduce:animate-none",
@@ -343,7 +343,7 @@ export function VerifyIdScreenV2({
             <p className="mx-auto mt-2 max-w-[24rem] text-sm leading-relaxed text-muted-foreground [text-wrap:balance]">{r.line}</p>
           </div>
         </div>
-        <div className="flex items-center justify-between gap-4 px-8 py-4">
+        <div className="flex items-center justify-between gap-4 px-8 py-4 max-sm:shrink-0 max-sm:px-4">
           {canRetry ? (
             <Button variant="outline" className="h-10 rounded-full px-5" onClick={onRetry} disabled={retrying}>
               {retrying ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
@@ -370,11 +370,11 @@ export function VerifyIdScreenV2({
   const Now = NODES[current].icon;
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col max-sm:min-h-0 max-sm:flex-1">
       {/* The scan line's travel. Scoped name; a loader. */}
       <style>{`@keyframes v2-verify-scan{0%{transform:translateY(0);opacity:0}12%{opacity:1}88%{opacity:1}100%{transform:translateY(204px);opacity:0}}`}</style>
 
-      <div className="flex h-[500px] flex-col items-center justify-center px-10">
+      <div className="flex h-[500px] flex-col items-center justify-center px-10 max-sm:h-auto max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto max-sm:px-4">
         {/* The code, in a viewfinder. Everything this screen says lives here. */}
         <div className="group relative p-4 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none">
           {(["left-0 top-0 border-l-2 border-t-2 rounded-tl-2xl", "right-0 top-0 border-r-2 border-t-2 rounded-tr-2xl", "left-0 bottom-0 border-l-2 border-b-2 rounded-bl-2xl", "right-0 bottom-0 border-r-2 border-b-2 rounded-br-2xl"] as const).map((c) => (
@@ -464,7 +464,7 @@ export function VerifyIdScreenV2({
 
       {/* Three equal tracks, so the expiry line sits at the true centre
           whatever is on either side of it. */}
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-8 py-4">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-8 py-4 max-sm:shrink-0 max-sm:gap-2 max-sm:px-4">
         <Button variant="outline" className="h-10 justify-self-start rounded-full px-5" onClick={onDone}>
           Later
         </Button>
