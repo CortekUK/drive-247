@@ -1,0 +1,14 @@
+-- QA I4.13 - THE SWITCH. NOT APPLIED. Run only AFTER the portal, booking site and admin built from a
+-- branch containing the signed-link changes (lib/document-url.ts in each app) are LIVE in production,
+-- and the edge functions listed in the I4.13 commit are deployed.
+--
+-- Effect: the public endpoint (/storage/v1/object/public/customer-documents/...) stops serving files;
+-- every file is opened through a short-lived signed link, issued only to staff of the owning tenant,
+-- the customer it belongs to, an open ID-check session or an open booking-documents link
+-- (storage policies cd_staff_select / cd_customer_select / cd_verify_select / cd_booking_docs_select).
+-- Stored values (public URLs or paths) need no rewrite: storage_cd_file_matches accepts both, and the
+-- apps' toDocumentPath() turns a stored public URL back into a path before signing.
+--
+-- Rollback: UPDATE storage.buckets SET public = true WHERE id = 'customer-documents';
+
+UPDATE storage.buckets SET public = false WHERE id = 'customer-documents';

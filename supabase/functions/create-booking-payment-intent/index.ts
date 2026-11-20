@@ -13,10 +13,10 @@
 //                                               commit a PaymentIntent the card
 //                                               form just confirmed
 //
-// Ported from origin/haseeb/staging/booking-side (2026-11-13, R3 QA) without
-// the post-payment documents link: its table (booking_document_links) and the
-// booking-documents-link function are not on main or live, so documentsToken /
-// documentsUrl are always null here (the client treats them as optional).
+// Ported from origin/haseeb/staging/booking-side (2026-11-13, R3 QA). The
+// post-payment documents link (booking_document_links + booking-documents-link)
+// was added on 2026-11-14 (QA I2): a new booking's response now carries
+// documentsToken / documentsUrl.
 //
 // ── WHICH STRIPE ACCOUNT ───────────────────────────────────────────────────
 // Exactly the resolution create-checkout-session uses, so the embedded card and
@@ -59,6 +59,7 @@ import {
 } from '../_shared/stripe-client.ts'
 import { getCustomerIdForAccount, setCustomerIdForAccount, CUSTOMER_ACCOUNT_COLUMNS } from '../_shared/customer-account.ts'
 import { formatCurrency } from '../_shared/format-utils.ts'
+import { buildDocumentsUrl, deriveBookingOrigin } from '../_shared/booking-origin.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -323,6 +324,42 @@ async function mint(supabase: SupabaseClient, body: Record<string, any>, req: Re
   if (installmentId) metadata.installment_id = String(installmentId)
   if (holdDeposit) metadata.place_deposit_hold = 'true'
 
+  // ---- Durable documents link (QA I2, 2026-11-14) --------------------------
+  // The payment screen told customers "we are sending the link to your email"
+  // and no link existed. A new booking now gets one booking_document_links row
+  // (UNIQUE rental_id, 7 days, slides on use), and the panel routes the customer
+  // straight to /booking/documents/<token> after paying. Same shape as the
+  // staging build (haseeb/staging/booking-side). The tenant is the RENTAL's
+  // (loaded from it above), so a token can never point into another company.
+  // Never fails the payment.
+  let documentsToken: string | null = null
+  let documentsUrl: string | null = null
+  if (isNewBooking) {
+    try {
+      const token = `${crypto.randomUUID()}-${Date.now().toString(36)}`
+      const nowIso = new Date().toISOString()
+      const ttl = 7 * 24 * 60 * 60 * 1000
+      await supabase.from('booking_document_links').upsert(
+        { tenant_id: rentalRow.tenant_id, rental_id: rentalId, token, expires_at: new Date(Date.now() + ttl).toISOString(), updated_at: nowIso },
+        { onConflict: 'rental_id', ignoreDuplicates: true },
+      )
+      const { data: link } = await supabase
+        .from('booking_document_links')
+        .select('token, expires_at')
+        .eq('rental_id', rentalId)
+        .maybeSingle()
+      if (link?.expires_at && new Date(link.expires_at).getTime() <= Date.now()) {
+        await supabase.from('booking_document_links')
+          .update({ expires_at: new Date(Date.now() + ttl).toISOString(), updated_at: nowIso })
+          .eq('rental_id', rentalId)
+      }
+      documentsToken = link?.token ?? null
+      documentsUrl = documentsToken ? buildDocumentsUrl(deriveBookingOrigin(slug || tenant.slug || null, req), documentsToken) : null
+    } catch (linkErr) {
+      console.error('Documents link minting failed, continuing without it:', linkErr)
+    }
+  }
+
   const respond = (clientSecret: string | null, paymentIntentId: string, reused: boolean) =>
     jsonOk({
       clientSecret,
@@ -337,8 +374,8 @@ async function mint(supabase: SupabaseClient, body: Record<string, any>, req: Re
       companyName,
       depositNotice: depositNoticeText,
       reused,
-      documentsToken: null,
-      documentsUrl: null,
+      documentsToken,
+      documentsUrl,
     })
 
   // ---- Reuse an in-flight PaymentIntent (Back, refresh, declined card) ----

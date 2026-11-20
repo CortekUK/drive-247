@@ -18,7 +18,6 @@ import { useTenant } from "@/contexts/TenantContext";
 import { rentalOccupiesWindow, todayStr } from "@/lib/vehicle-availability";
 import { toast } from "sonner";
 import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, AlertTriangle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Briefcase, ExternalLink, Mail, Phone as PhoneIcon, Maximize2 } from "lucide-react";
-import { BlurredImage } from "@/components/ui/blurred-image";
 import { format, differenceInHours } from "date-fns";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { cn } from "@/lib/utils";
@@ -62,6 +61,7 @@ import { getMileageTier, getTierMileage, calculateTotalMileageAllowance, isUnlim
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 import { calculateRentalPriceBreakdown, parseDateString as parseDateStringSafe } from "@/lib/calculate-rental-price";
 import { parseDateOnly } from "@/lib/date-utils";
+import { SignedBlurredImage } from "@/components/signed-document-image";
 import { calcExtrasTotal } from "@/lib/calculate-extras-total";
 import { clampToBonzahStart, bonzahRentalHasStarted, bonzahOriginalBlockedReason, BONZAH_MIN_MINUTES_BEFORE_PICKUP } from "@/lib/bonzah-dates";
 import {
@@ -6232,7 +6232,8 @@ const MultiStepBookingWidget = ({
                               <div className="flex flex-col items-center">
                                 <div className={`w-full aspect-[3/4] rounded-md overflow-hidden border bg-muted/30 ${verificationImages.document_front_url ? 'border-green-500/30' : 'border-muted'}`}>
                                   {verificationImages.document_front_url ? (
-                                    <BlurredImage
+                                    // QA I4.13: signed link (bucket going private)
+                                    <SignedBlurredImage
                                       src={verificationImages.document_front_url}
                                       alt="ID Front"
                                     />
@@ -6249,7 +6250,8 @@ const MultiStepBookingWidget = ({
                               <div className="flex flex-col items-center">
                                 <div className={`w-full aspect-[3/4] rounded-md overflow-hidden border bg-muted/30 ${verificationImages.document_back_url ? 'border-green-500/30' : 'border-muted'}`}>
                                   {verificationImages.document_back_url ? (
-                                    <BlurredImage
+                                    // QA I4.13: signed link (bucket going private)
+                                    <SignedBlurredImage
                                       src={verificationImages.document_back_url}
                                       alt="ID Back"
                                     />
@@ -6266,7 +6268,8 @@ const MultiStepBookingWidget = ({
                               <div className="flex flex-col items-center">
                                 <div className={`w-full aspect-[3/4] rounded-md overflow-hidden border bg-muted/30 ${verificationImages.selfie_image_url ? 'border-green-500/30' : 'border-muted'}`}>
                                   {verificationImages.selfie_image_url ? (
-                                    <BlurredImage
+                                    // QA I4.13: signed link (bucket going private)
+                                    <SignedBlurredImage
                                       src={verificationImages.selfie_image_url}
                                       alt="Selfie"
                                     />

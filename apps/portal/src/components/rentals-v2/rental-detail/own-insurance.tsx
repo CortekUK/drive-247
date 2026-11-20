@@ -33,6 +33,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Check, Loader2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { openDocument } from "@/lib/document-url";
 import type { InsuranceVerification } from "@/hooks/use-insurance-verifications";
 import { fmtDate, listCls } from "./_kit";
 
@@ -226,7 +227,17 @@ export function OwnInsuranceList({
               <div className="min-w-0 flex-1">
                 <p className="flex min-w-0 items-center gap-2 text-sm font-medium">
                   {c.href ? (
-                    <a href={c.href} target="_blank" rel="noreferrer" className="truncate underline-offset-2 hover:underline">
+                    <a
+                      href={c.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      // QA I4.13: opened through a signed link, ready for the bucket going private.
+                      onClick={(e) => {
+                        e.preventDefault();
+                        void openDocument(c.href);
+                      }}
+                      className="truncate underline-offset-2 hover:underline"
+                    >
                       {c.read.insurer || c.fileName}
                     </a>
                   ) : (

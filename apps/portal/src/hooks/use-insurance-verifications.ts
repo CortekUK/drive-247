@@ -46,6 +46,12 @@ export interface InsuranceVerification {
   attached_at: string | null;
   created_at: string;
   updated_at: string;
+  /** QA I3.9/I3.10: a staff member's Approve / Reject, stamped by the database. */
+  review_decision?: "approved" | "rejected" | null;
+  review_reason?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  reviewer?: { name: string | null; email: string | null } | null;
   rentals?: {
     id: string;
     rental_number?: string | null;
@@ -63,7 +69,7 @@ export function useInsuranceVerifications() {
       const { data, error } = await supabase
         .from("insurance_verifications")
         .select(
-          `*, rentals!insurance_verifications_rental_id_fkey ( id, rental_number, customers!rentals_customer_id_fkey ( name ) )`,
+          `*, reviewer:app_users!insurance_verifications_reviewed_by_fkey ( name, email ), rentals!insurance_verifications_rental_id_fkey ( id, rental_number, customers!rentals_customer_id_fkey ( name ) )`,
         )
         .eq("tenant_id", tenant!.id)
         .order("created_at", { ascending: false });
@@ -71,13 +77,17 @@ export function useInsuranceVerifications() {
       return (data || []) as unknown as InsuranceVerification[];
     },
     enabled: !!tenant,
+    // QA I3.1: checks also arrive from the booking site (a customer sending a
+    // certificate), which this screen did not start, so look every 20 s and on
+    // returning to the tab, not only while one of ours is analysing.
+    refetchOnWindowFocus: true,
     refetchInterval: (q) => {
       const rows = (q.state.data || []) as InsuranceVerification[];
       return rows.some(
         (r) => r.status === "pending" || r.status === "processing",
       )
         ? 2500
-        : false;
+        : 20_000;
     },
   });
 }
@@ -217,6 +227,12 @@ export function useAttachInsuranceVerification() {
         })
         .eq("id", verificationId);
       if (error) throw error;
+      // QA I3.4/I3.5: now that there is a customer and rental dates, check the
+      // name on the policy and the cover dates against them (no new AI call).
+      const { error: recheckError } = await supabase.functions.invoke("verify-insurance-document", {
+        body: { verificationId, recheck: true },
+      });
+      if (recheckError) console.error("[insurance] recheck after attach failed", recheckError);
     },
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({
@@ -230,6 +246,43 @@ export function useAttachInsuranceVerification() {
           queryKey: ["insurance-verifications", "by-rental", vars.rentalId],
         });
       }
+    },
+  });
+}
+
+/**
+ * QA I3.9/I3.10: staff Approve or Reject a check. Only the decision and reason
+ * are sent; the database stamps who and when and sets the status
+ * (migration 20261114170000), and refuses viewers and a reject with no reason.
+ */
+export function useReviewInsuranceVerification() {
+  const { tenant } = useTenant();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      verificationId,
+      decision,
+      reason,
+    }: {
+      verificationId: string;
+      decision: "approved" | "rejected" | null;
+      reason?: string;
+    }) => {
+      const { data, error } = await supabase
+        .from("insurance_verifications")
+        .update({ review_decision: decision, review_reason: decision ? reason?.trim() || null : null } as never)
+        .eq("id", verificationId)
+        .select("id");
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error("You do not have permission to review insurance checks.");
+      // Undo: put back the status the AI and the plain checks gave.
+      if (decision === null) {
+        await supabase.functions.invoke("verify-insurance-document", { body: { verificationId, recheck: true } });
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["insurance-verifications", tenant?.id] });
+      qc.invalidateQueries({ queryKey: ["insurance-verifications", "by-rental"] });
     },
   });
 }

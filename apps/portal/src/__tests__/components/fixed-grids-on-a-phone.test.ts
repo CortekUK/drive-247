@@ -76,7 +76,7 @@ const KEPT: Record<string, string> = {
   "app/(dashboard)/integrations/_panels/xero.tsx:566": "four counts",
   "components/customers/customer-csv-import-dialog.tsx:226": "three counts",
   "components/settings/accounting-backfill-wizard.tsx:283": "three counts, text-xs",
-  "components/insurance/rental-insurance-verifications-card.tsx:74": "three, text-xs",
+  "components/insurance/rental-insurance-verifications-card.tsx:75": "three, text-xs",
   "components/availability-v2/weekly-hours-card.tsx:109": "a three-way segmented control",
   "components/customers/start-cmd-verification-dialog.tsx:268": "three channel buttons",
 
@@ -84,7 +84,7 @@ const KEPT: Record<string, string> = {
   "app/(dashboard)/vehicles/page.tsx:896": "grid-cols-4 IS the phone layout; sm: goes to flex",
   "components/vehicle-owners/create-payout-dialog.tsx:142": "each child is col-span-3 sm:col-span-1",
   "components/settings/extras-settings.tsx:1024": "responsive already, behind v2Chrome",
-  "components/insurance/verification-detail-sheet.tsx:40": "a 1/3 + 2/3 split, not three cells",
+  "components/insurance/verification-detail-sheet.tsx:42": "a 1/3 + 2/3 split, not three cells",
 
   // Signed off as stable by the product owner on Sep 24 2026; left alone.
   "components/dashboard/action-items.tsx:309": "dashboard, kept as is",

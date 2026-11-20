@@ -76,6 +76,9 @@ export type Doc = {
   vehicle: string | null;
   from: string | null;
   until: string | null;
+  /** Insurance certificates: the insurer and policy number as filed. */
+  provider: string | null;
+  policyNumber: string | null;
   verified: boolean;
   uploadedAt: string;
   fileUrl: string | null;
