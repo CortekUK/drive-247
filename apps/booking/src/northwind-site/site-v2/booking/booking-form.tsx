@@ -12,6 +12,7 @@ import {
 } from "@nw/components/booking/booking-form-logic";
 import type { BookingRules, DeliveryModeAvailability } from "@nw/components/booking/booking-rules";
 import type { UsePromoCodeResult } from "@nw/components/booking/use-promo-code";
+import type { DurationDiscount } from "@nw/components/booking/use-duration-discount";
 import type { BookingField } from "@nw/components/booking/validation";
 import { Button } from "@nw/components/ui/button";
 import { Input } from "@nw/components/ui/input";
@@ -89,6 +90,8 @@ export interface BookingFormProps {
   /** True when this tenant prices area delivery by distance and we cannot yet. */
   areaFeePending: boolean;
   promo: UsePromoCodeResult;
+  /** The automatic long-rental discount; null promo when none applies. */
+  durationDiscount?: DurationDiscount;
   rentalDays: number | null;
   className?: string;
 }
@@ -106,6 +109,7 @@ export function BookingForm({
   areaFeeHint,
   areaFeePending,
   promo,
+  durationDiscount,
   rentalDays,
   className,
 }: BookingFormProps) {
@@ -448,6 +452,14 @@ export function BookingForm({
             {promo.promo.code} applied —{" "}
             {describePromoDiscount(promo.promo, formatCurrency)}{" "}
             the rental.
+          </p>
+        ) : durationDiscount?.promo ? (
+          <p className="flex items-center gap-2 rounded-[10px] bg-pv-success-light px-3 py-2 text-xs font-medium text-pv-success">
+            <Ticket aria-hidden strokeWidth={1.75} className="size-3.5 shrink-0" />
+            Long-rental discount applied —{" "}
+            {describePromoDiscount(durationDiscount.promo, formatCurrency)} the rental
+            {durationDiscount.minDays ? ` for ${durationDiscount.minDays} days or more` : ""}. A code you
+            enter replaces it.
           </p>
         ) : null}
         <FieldError message={promo.error ?? undefined} />

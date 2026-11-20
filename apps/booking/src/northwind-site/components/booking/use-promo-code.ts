@@ -6,6 +6,8 @@ import { useTenant } from "@nw/contexts/TenantContext";
 import { supabase } from "@nw/integrations/supabase/client";
 import type { QuotePromo } from "@nw/lib/quote/types";
 
+import { isPromoExpiredOn, isPromoOff, isPromoUsedUp, todayIsoIn } from "./promo-rules";
+
 /**
  * Applying a promo code.
  *
@@ -22,7 +24,7 @@ import type { QuotePromo } from "@nw/lib/quote/types";
  *    the tenant's first promo code and applies a discount nobody was given.
  */
 
-const PROMO_SELECT = "id, code, type, value, expires_at, min_duration_days";
+const PROMO_SELECT = "id, code, type, value, expires_at, min_duration_days, max_users, is_active";
 
 /** `%` and `_` are LIKE wildcards; a customer's literal input must not be one. */
 function escapeLikePattern(raw: string): string {
@@ -102,13 +104,39 @@ export function usePromoCode(): UsePromoCodeResult {
           return;
         }
 
-        if (new Date(data.expires_at).getTime() < Date.now()) {
+        const row = data as typeof data & { max_users?: number | null; is_active?: boolean | null };
+
+        if (isPromoOff(row)) {
+          setError("That promo code is not available any more.");
+          return;
+        }
+
+        // Live through its whole expiry day on the operator's clock, as the
+        // portal shows it (see promo-rules.ts).
+        const timeZone = (tenant as { timezone?: string | null } | null)?.timezone ?? null;
+        if (isPromoExpiredOn(data.expires_at, todayIsoIn(timeZone))) {
           setError("That promo code has expired.");
           return;
         }
 
+        // The use limit, counted where redemptions are recorded: paid, live
+        // rentals carrying the code (`promo_code_use_count`, which customers
+        // may call; they cannot read rentals). A failed count does not block.
+        if (row.max_users && row.max_users > 0) {
+          const { data: uses, error: countError } = await supabase.rpc("promo_code_use_count" as never, {
+            p_tenant_id: tenant.id,
+            p_code: data.code,
+          } as never);
+          if (countError) {
+            console.error("[usePromoCode] Use count failed", { message: countError.message });
+          } else if (isPromoUsedUp(row, typeof uses === "number" ? uses : null)) {
+            setError("That promo code has been used the maximum number of times.");
+            return;
+          }
+        }
+
         /*
-         * `max_users` IS NOT CHECKED HERE, and that is not an omission.
+         * (History) `max_users` was once deliberately not checked here:
          *
          * v1 counts prior uses with
          *   supabase.from('invoices').select('*', { count: 'exact', head: true })
@@ -120,9 +148,9 @@ export function usePromoCode(): UsePromoCodeResult {
          * once fired in production.
          *
          * Reproducing a check that cannot work would be worse than not having
-         * one: it would read as enforced. A usage cap has to be counted where
-         * the redemption is recorded, which is the server-side checkout — see
-         * the handoff.
+         * one: it would read as enforced. It is now counted where the
+         * redemption is recorded — `rentals.promo_code`, which the v2 booking
+         * writes — through `promo_code_use_count` above.
          */
 
         setPromo({

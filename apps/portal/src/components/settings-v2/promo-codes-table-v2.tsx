@@ -44,7 +44,7 @@
  */
 
 import { format } from "date-fns";
-import { Copy, MoreHorizontal, Pencil, Trash2, type LucideIcon } from "lucide-react";
+import { Copy, MoreHorizontal, Pencil, Power, Trash2, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import {
   DropdownMenu,
@@ -89,6 +89,13 @@ export interface PromoCodeRowV2 {
   min_duration_days: number | null;
   /** Upper bound; null = no ceiling, i.e. "min or more". */
   max_duration_days?: number | null;
+  /** false = turned off: the booking site refuses it and never auto-applies it. */
+  is_active?: boolean | null;
+}
+
+/** A code is off only when it was turned off explicitly; older rows have no flag. */
+export function isPromoOff(promo: Pick<PromoCodeRowV2, "is_active">): boolean {
+  return promo.is_active === false;
 }
 
 const Blank = () => <span className="text-muted-foreground">—</span>;
@@ -123,8 +130,19 @@ function promoDateLabel(value: string | null | undefined): string | null {
   return Number.isNaN(date.getTime()) ? null : format(date, "PP");
 }
 
-function PromoDate({ value, expiry }: { value: string | null | undefined; expiry?: boolean }) {
+function PromoDate({ value, expiry, off }: { value: string | null | undefined; expiry?: boolean; off?: boolean }) {
   const label = promoDateLabel(value);
+  if (expiry && off && label) {
+    // Turned off wins over the date: the code does nothing whatever its expiry.
+    return (
+      <span className="block">
+        <span className="whitespace-nowrap text-muted-foreground">{label}</span>{" "}
+        <span className="whitespace-nowrap">
+          <ListStatusText tone="muted">Off</ListStatusText>
+        </span>
+      </span>
+    );
+  }
   if (!label) {
     return value ? (
       <span className="text-muted-foreground" title={value}>
@@ -160,9 +178,11 @@ interface PromoMenuProps<T> {
   promo: T;
   onEdit: (promo: T) => void;
   onDelete: (promo: T) => void;
+  /** Turns the code off (or back on) without deleting it. */
+  onToggleActive?: (promo: T) => void;
 }
 
-function PromoRowMenu<T extends PromoCodeRowV2>({ promo, onEdit, onDelete }: PromoMenuProps<T>) {
+function PromoRowMenu<T extends PromoCodeRowV2>({ promo, onEdit, onDelete, onToggleActive }: PromoMenuProps<T>) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -184,6 +204,12 @@ function PromoRowMenu<T extends PromoCodeRowV2>({ promo, onEdit, onDelete }: Pro
           <Pencil className="h-3.5 w-3.5" />
           Edit
         </DropdownMenuItem>
+        {onToggleActive && (
+          <DropdownMenuItem onClick={() => onToggleActive(promo)}>
+            <Power className="h-3.5 w-3.5" />
+            {isPromoOff(promo) ? "Turn on" : "Turn off"}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(promo)}>
           <Trash2 className="h-3.5 w-3.5" />
           Delete
@@ -240,10 +266,19 @@ function IconAction({
  * "open a document" rather than "edit this row". Everything else about the two
  * buttons is already the same `IconAction` shape, so the icon was the drift.
  */
-function PromoRowActions<T extends PromoCodeRowV2>({ promo, onEdit, onDelete }: PromoMenuProps<T>) {
+function PromoRowActions<T extends PromoCodeRowV2>({ promo, onEdit, onDelete, onToggleActive }: PromoMenuProps<T>) {
+  const off = isPromoOff(promo);
   return (
     <div className="flex justify-end gap-0.5">
       <IconAction icon={Pencil} tooltip="Edit" label={`Edit promo code ${promo.code}`} onClick={() => onEdit(promo)} />
+      {onToggleActive && (
+        <IconAction
+          icon={Power}
+          tooltip={off ? "Turn on" : "Turn off"}
+          label={`${off ? "Turn on" : "Turn off"} promo code ${promo.code}`}
+          onClick={() => onToggleActive(promo)}
+        />
+      )}
       <IconAction
         icon={Trash2}
         tooltip="Delete"
@@ -278,6 +313,7 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
   onCopy,
   onEdit,
   onDelete,
+  onToggleActive,
 }: {
   /** Every promo code the page's query returned, in its order. */
   promos: T[];
@@ -292,6 +328,8 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
   onEdit: (promo: T) => void;
   /** The v1 Delete button's handler. */
   onDelete: (promo: T) => void;
+  /** Turn a code off or back on (v2 only; v1 has no such control). */
+  onToggleActive?: (promo: T) => void;
 }) {
   const promoRows = useProgressiveRows(promos, resetKey);
 
@@ -315,7 +353,7 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
                   {promoValueLabel(promo, currencyCode)}
                 </span>
                 <span className={cn("tabular-nums", SETTINGS_PHONE_FACTS.afterDot)}>
-                  <PromoDate value={promo.expires_at} expiry />
+                  <PromoDate value={promo.expires_at} expiry off={isPromoOff(promo)} />
                 </span>
               </p>
               <p className={cn(SETTINGS_PHONE_FACTS.line, "text-xs text-muted-foreground tabular-nums")}>
@@ -327,7 +365,7 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
                 </span>
               </p>
             </div>
-            {canEdit && <PromoRowMenu promo={promo} onEdit={onEdit} onDelete={onDelete} />}
+            {canEdit && <PromoRowMenu promo={promo} onEdit={onEdit} onDelete={onDelete} onToggleActive={onToggleActive} />}
           </li>
         ))}
       </ul>
@@ -390,7 +428,7 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
                     <PromoDate value={promo.created_at} />
                   </ListCell>
                   <ListCell className="tabular-nums whitespace-normal">
-                    <PromoDate value={promo.expires_at} expiry />
+                    <PromoDate value={promo.expires_at} expiry off={isPromoOff(promo)} />
                   </ListCell>
                   <ListCell className="tabular-nums">
                     <span className={`block [overflow-wrap:anywhere] ${LIST_CLASSES.text}`}>
@@ -408,7 +446,7 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
                   {/* Edit and Delete, v1's two buttons, in the row. Clicks stop here. */}
                   {canEdit && (
                     <ListCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                      <PromoRowActions promo={promo} onEdit={onEdit} onDelete={onDelete} />
+                      <PromoRowActions promo={promo} onEdit={onEdit} onDelete={onDelete} onToggleActive={onToggleActive} />
                     </ListCell>
                   )}
                 </ListRow>

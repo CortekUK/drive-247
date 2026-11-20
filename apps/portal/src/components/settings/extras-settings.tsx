@@ -14,7 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Loader2, ImageIcon, GripVertical, Star, X, MoreHorizontal, Pencil, Trash2, Power, AlertTriangle, PackagePlus, Car } from 'lucide-react';
-import { useRentalExtras, type RentalExtra } from '@/hooks/use-rental-extras';
+import { useRentalExtras, isExtraInUseError, type RentalExtra } from '@/hooks/use-rental-extras';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -528,6 +528,10 @@ export function ExtrasSettings() {
     }
   };
 
+  // v2: the delete failed because the extra is on bookings — retrying cannot
+  // work, so the dialog says why and offers to deactivate it instead.
+  const deleteInUseV2 = v2Chrome && !!deleteErrorV2 && isExtraInUseError(deleteErrorV2);
+
   const handleDeleteV2 = async () => {
     if (!deleteTarget || isDeleting) return;
     setDeleteErrorV2(null);
@@ -889,13 +893,28 @@ export function ExtrasSettings() {
             </ui.AlertDialogDescription>
           </ui.AlertDialogHeader>
           {v2Chrome && deleteErrorV2 ? (
-            <p role="alert" className="text-sm text-destructive">
-              Couldn&apos;t delete this extra. Nothing was deleted. Try again, or deactivate it instead.
+            <p role="alert" className="text-sm text-destructive [overflow-wrap:anywhere]">
+              {deleteInUseV2
+                ? `"${deleteTarget?.name}" is on existing bookings, so it can't be deleted. Nothing was deleted. ${deleteTarget?.is_active ? 'Deactivate it to stop offering it; those bookings keep it.' : "It is already off, so customers can't add it."}`
+                : "Couldn't delete this extra. Nothing was deleted. Try again, or deactivate it instead."}
             </p>
           ) : null}
           <ui.AlertDialogFooter>
-            <ui.AlertDialogCancel>Cancel</ui.AlertDialogCancel>
-            {v2Chrome ? (
+            <ui.AlertDialogCancel>{deleteInUseV2 ? 'Close' : 'Cancel'}</ui.AlertDialogCancel>
+            {v2Chrome && deleteInUseV2 ? (
+              deleteTarget?.is_active ? (
+                <ui.AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    const target = deleteTarget;
+                    void handleToggleActiveV2(target).then(() => setDeleteTarget(null));
+                  }}
+                  disabled={!!togglingIdV2}
+                >
+                  {togglingIdV2 ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Deactivating…</> : 'Deactivate instead'}
+                </ui.AlertDialogAction>
+              ) : null
+            ) : v2Chrome ? (
               <ui.AlertDialogAction
                 onClick={(e) => {
                   // Stay open until the delete lands, so a failure is seen here.

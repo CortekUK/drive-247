@@ -90,6 +90,7 @@ import {
 import { Button } from "@/components/ui-v2/button";
 import type { StageProps } from "./stages";
 import { insetCls, listCls, Panel, Pill, StageAction, Surface } from "./_kit";
+import { priceCatalogueForCar, type CatalogueExtraRow, type PricedCatalogueExtra } from "./extras-catalogue-price";
 
 /* ══════════════════════════════════════════════════════════════════════════
    Add-ons
@@ -216,27 +217,10 @@ function signPill(status: RentalAdditionalDriver["signing_status"]) {
    The stage
    ══════════════════════════════════════════════════════════════════════════ */
 
-/** The tenant's own extras catalogue — what can be put on a rental. */
-type CatalogueExtra = {
-  id: string;
-  name: string;
-  description: string | null;
-  price: number;
-  billing_type: "per_trip" | "per_day" | null;
-  max_quantity: number | null;
-  image_urls: string[] | null;
-  /** A per-car extra with no price set for THIS rental's car (QA R2.9). */
-  noPrice?: boolean;
-};
+// `noPrice` stays optional for the row markup; the shared pricer never offers an unpriced per-car extra.
+type CatalogueExtra = PricedCatalogueExtra & { noPrice?: boolean };
+type CatalogueRow = CatalogueExtraRow;
 
-/**
- * The catalogue priced for this rental's car. A `per_vehicle` extra costs its
- * price for the car (rental_extras_vehicle_pricing); `rental_extras.price` is
- * only a placeholder for it. Showing that placeholder offered a price that
- * update_rental_extras_v2 then refused ("has no price for this car"), so an
- * extra with no price for the car is shown as such and cannot be added — the
- * booking site does not offer it either (QA R2.9).
- */
 function useExtrasCatalogue(vehicleId: string | null) {
   const { tenant } = useTenant();
   return useQuery({
@@ -244,30 +228,12 @@ function useExtrasCatalogue(vehicleId: string | null) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("rental_extras")
-        .select("id, name, description, price, pricing_type, billing_type, max_quantity, image_urls")
+        .select("id, name, description, price, pricing_type, billing_type, max_quantity, image_urls, rental_extras_vehicle_pricing(vehicle_id, price)")
         .eq("tenant_id", tenant!.id)
         .eq("is_active", true)
         .order("sort_order", { ascending: true });
       if (error) throw error;
-      const rows = (data ?? []) as (CatalogueExtra & { pricing_type?: string | null })[];
-      const perCar = rows.filter((e) => e.pricing_type === "per_vehicle").map((e) => e.id);
-      const carPrice = new Map<string, number>();
-      if (perCar.length && vehicleId) {
-        const { data: vp, error: vpErr } = await (supabase as any)
-          .from("rental_extras_vehicle_pricing")
-          .select("extra_id, price")
-          .eq("vehicle_id", vehicleId)
-          .in("extra_id", perCar);
-        if (vpErr) throw vpErr;
-        for (const p of vp ?? []) carPrice.set(p.extra_id, Number(p.price));
-      }
-      return rows.map((e) =>
-        e.pricing_type === "per_vehicle"
-          ? carPrice.has(e.id)
-            ? { ...e, price: carPrice.get(e.id)! }
-            : { ...e, price: 0, noPrice: true }
-          : e
-      ) as CatalogueExtra[];
+      return priceCatalogueForCar((data ?? []) as unknown as CatalogueRow[], vehicleId);
     },
     enabled: !!tenant?.id,
   });

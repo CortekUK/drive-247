@@ -2313,6 +2313,35 @@ const Settings = () => {
     },
   });
 
+  // v2: turn a code off (or back on) without deleting it. The booking site
+  // refuses an off code and never auto-applies one (promocodes.is_active).
+  const togglePromoActiveMutation = useMutation({
+    mutationFn: async (promo: { id: string; code: string; is_active?: boolean | null }) => {
+      if (!tenant?.id) throw new Error('Tenant ID not found');
+      const next = promo.is_active === false;
+      const { error } = await (supabase as any)
+        .from('promocodes')
+        .update({ is_active: next })
+        .eq('id', promo.id)
+        .eq('tenant_id', tenant.id);
+      if (error) throw error;
+      return { ...promo, is_active: next };
+    },
+    onSuccess: (promo) => {
+      toast({
+        title: promo.is_active ? "Code turned on" : "Code turned off",
+        description: promo.is_active
+          ? `${promo.code} works on the booking site again.`
+          : `${promo.code} is refused on the booking site until you turn it back on.`,
+      });
+      logAction({ action: "promotion_updated", entityType: "promotion", entityId: promo.id, details: { section: "promo_codes", is_active: promo.is_active } });
+      refetchPromos();
+    },
+    onError: () => {
+      toast({ title: "Couldn't change this code", description: "Nothing was changed. Try again.", variant: "destructive" });
+    },
+  });
+
   const handleUpdatePromo = () => {
     if (!editingPromo.name || !editingPromo.value || !editingPromo.max_users) {
       toast({
@@ -3551,6 +3580,7 @@ const Settings = () => {
                     deletePromoMutation.reset();
                     setDeletingPromo(promo);
                   }}
+                  onToggleActive={(promo) => togglePromoActiveMutation.mutate(promo)}
                 />
               </div>
 

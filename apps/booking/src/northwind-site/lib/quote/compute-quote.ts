@@ -31,8 +31,12 @@
  *                             deposits; otherwise reported as an uncharged hold
  *   9. grand total            the sum of the above
  *
- * Amounts are major units (dollars) and intermediate values are NOT rounded,
- * matching v1 exactly. `grandTotalCents` is the one rounded figure.
+ * Amounts are major units (dollars). Every line the bill shows (discount,
+ * delivery, extras, tax, service fee, mileage upgrade, cover, charged deposit)
+ * is rounded to the cent with `toCents` BEFORE the grand total adds them, so the
+ * shown lines always add up to the shown total. v1 summed the unrounded values,
+ * which could leave the total a cent off its own lines (QA P5, 2026-11-11:
+ * $317.15 + $31.72 + $20.00 shown, total $368.86).
  *
  * No React. No Supabase. No `next/*`. Inputs in, numbers out.
  */
@@ -194,6 +198,15 @@ function computePromoDiscount(
   return { discount: 0, blockedReason: null };
 }
 
+/**
+ * A money amount to the cent, half up. `toPrecision(12)` first strips the float
+ * noise that makes 31.715 * 100 come out as 3171.4999999999995.
+ */
+export function toCents(amount: number): number {
+  if (!Number.isFinite(amount)) return 0;
+  return Math.round(Number((amount * 100).toPrecision(12))) / 100;
+}
+
 /** Tax, on the discounted vehicle total. Never on extras, delivery or fees. */
 function computeTax(tenant: QuoteTenantConfig, discountedVehicleTotal: number): {
   amount: number;
@@ -232,19 +245,33 @@ function computeServiceFee(tenant: QuoteTenantConfig, discountedVehicleTotal: nu
 }
 
 /**
- * The deposit figure, whether or not it is billed.
+ * The deposit figure, whether or not it is billed, and whether it is the car's
+ * own figure.
  *
  * Order matters: the master switch wins over everything, and the per-vehicle
  * amount is consulted ONLY on the hold path. Charged deposits are a single
  * global amount by design — per-vehicle charged deposits were dropped
  * deliberately, so that column must not be read on the charged path.
+ *
+ * A car with NO deposit of its own (NULL) uses the tenant amount, which is
+ * what the portal tells the operator ("Cars without one use the amount
+ * below") and what the hold-placing edge functions do. An explicit 0 on the
+ * car means "no deposit for this car" and is kept.
  */
-function computeSecurityDeposit(tenant: QuoteTenantConfig, vehicle: QuoteVehicle): number {
-  if (tenant.security_deposit_enabled === false) return 0;
-  if (tenant.deposit_charge_enabled !== true && tenant.deposit_mode === 'per_vehicle') {
-    return num(vehicle.security_deposit);
+function computeSecurityDeposit(
+  tenant: QuoteTenantConfig,
+  vehicle: QuoteVehicle,
+): { amount: number; fromVehicle: boolean } {
+  if (tenant.security_deposit_enabled === false) return { amount: 0, fromVehicle: false };
+  if (
+    tenant.deposit_charge_enabled !== true &&
+    tenant.deposit_mode === 'per_vehicle' &&
+    vehicle.security_deposit !== null &&
+    vehicle.security_deposit !== undefined
+  ) {
+    return { amount: num(vehicle.security_deposit), fromVehicle: true };
   }
-  return num(tenant.global_deposit_amount);
+  return { amount: num(tenant.global_deposit_amount), fromVehicle: false };
 }
 
 /**
@@ -457,6 +484,7 @@ export const EMPTY_QUOTE: QuoteResult = {
   depositIsCharged: false,
   chargedSecurityDeposit: 0,
   depositHeldAmount: 0,
+  depositFromVehicle: false,
   grandTotal: 0,
   grandTotalCents: 0,
   payableNow: 0,
@@ -519,6 +547,7 @@ export function computeQuote(input: QuoteInput): QuoteResult {
     false, // skipSurcharges — customer-facing quotes always honour surcharges
     false, // stackSurcharges — resolved from the weekend config, as v1 does
     input.dailyPrices,
+    true, // weekend/holiday surcharges only under 7 days (QA P5, 2026-11-11)
   );
 
   const rentalDays = priced.rentalDays;
@@ -526,40 +555,45 @@ export function computeQuote(input: QuoteInput): QuoteResult {
   const vehicleTotal = priced.rentalPrice;
 
   // ── 2. Promo (vehicle total only) ─────────────────────────────────────────
-  const { discount: promoDiscount, blockedReason: promoBlockedReason } = computePromoDiscount(
+  const { discount: rawPromoDiscount, blockedReason: promoBlockedReason } = computePromoDiscount(
     input,
     vehicleTotal,
   );
-  const discountedVehicleTotal = vehicleTotal - promoDiscount;
+  const promoDiscount = toCents(rawPromoDiscount);
+  const discountedVehicleTotal = toCents(vehicleTotal - promoDiscount);
 
   // ── 3. Delivery ───────────────────────────────────────────────────────────
   const pickupDelivery = resolveLeg(input.pickupDelivery, tenant);
   const returnDelivery = resolveLeg(input.returnDelivery, tenant);
-  const deliveryFees = pickupDelivery.fee + returnDelivery.fee;
+  const deliveryFees = toCents(pickupDelivery.fee + returnDelivery.fee);
 
   // ── 4. Extras ─────────────────────────────────────────────────────────────
   const extraLines = buildExtraLines(input, rentalDays);
-  const extrasTotal = calcExtrasTotal(input.selectedExtras, input.extras, rentalDays);
+  const extrasTotal = toCents(calcExtrasTotal(input.selectedExtras, input.extras, rentalDays));
 
   // ── 5. Tax (discounted vehicle total) ─────────────────────────────────────
-  const tax = computeTax(tenant, discountedVehicleTotal);
+  const rawTax = computeTax(tenant, discountedVehicleTotal);
+  const tax = { ...rawTax, amount: toCents(rawTax.amount) };
 
   // ── 6. Service fee (fixed, or % of the discounted vehicle total) ──────────
-  const service = computeServiceFee(tenant, discountedVehicleTotal);
+  const rawService = computeServiceFee(tenant, discountedVehicleTotal);
+  const service = { ...rawService, amount: toCents(rawService.amount) };
 
   // ── 7. Unlimited-mileage upgrade ──────────────────────────────────────────
-  const unlimitedMileage = computeUnlimitedMileage(vehicle, pricingTier, input.addUnlimitedMileage);
+  const rawUnlimitedMileage = computeUnlimitedMileage(vehicle, pricingTier, input.addUnlimitedMileage);
+  const unlimitedMileage = { ...rawUnlimitedMileage, amount: toCents(rawUnlimitedMileage.amount) };
 
   // ── 8. Security deposit ───────────────────────────────────────────────────
-  const securityDeposit = computeSecurityDeposit(tenant, vehicle);
+  const deposit = computeSecurityDeposit(tenant, vehicle);
+  const securityDeposit = deposit.amount;
   const depositIsCharged = tenant.deposit_charge_enabled === true;
-  const chargedSecurityDeposit = depositIsCharged ? securityDeposit : 0;
+  const chargedSecurityDeposit = depositIsCharged ? toCents(securityDeposit) : 0;
   const depositHeldAmount = depositIsCharged ? 0 : securityDeposit;
 
-  const insurancePremium = num(input.insurancePremium);
+  const insurancePremium = toCents(num(input.insurancePremium));
 
   // ── 9. Grand total ────────────────────────────────────────────────────────
-  const grandTotal =
+  const grandTotal = toCents(
     discountedVehicleTotal +
     deliveryFees +
     extrasTotal +
@@ -567,7 +601,8 @@ export function computeQuote(input: QuoteInput): QuoteResult {
     service.amount +
     insurancePremium +
     unlimitedMileage.amount +
-    chargedSecurityDeposit;
+    chargedSecurityDeposit,
+  );
 
   return {
     ready: true,
@@ -612,6 +647,7 @@ export function computeQuote(input: QuoteInput): QuoteResult {
     depositIsCharged,
     chargedSecurityDeposit,
     depositHeldAmount,
+    depositFromVehicle: deposit.fromVehicle,
 
     grandTotal,
     grandTotalCents: Math.round(grandTotal * 100),

@@ -21,13 +21,39 @@ export function showsRentalGroups(quote: QuoteResult): boolean {
   );
 }
 
-/** "3 days × $40.00", or "9 days at the weekly rate" for a part-week. */
+/**
+ * The caption under "Vehicle rental". It must never show a sum that differs
+ * from the amount beside it.
+ *
+ *  - No surcharge: the tier's rate, "3 days × $50.00" or "1 week × $300.00"
+ *    ("9 days at the weekly rate" for a part-week).
+ *  - Surcharged, every day the same price: that day price, "3 days × $65.00".
+ *  - Surcharged, prices differ: just "3 days"; the day lines below give each rate.
+ *
+ * Before (P6, 2026-11-11) a 30% holiday read "3 days × $50.00" beside $195.00,
+ * because the caption always used the car's base rate.
+ */
 export function rentalCaption(quote: QuoteResult, formatCurrency: Format): string {
-  const { rentalSummary } = quote;
-  const unitPlural = rentalSummary.quantity === 1 ? "" : "s";
-  return rentalSummary.quantityIsWhole
-    ? `${rentalSummary.quantity} ${rentalSummary.unitLabel}${unitPlural} × ${formatCurrency(rentalSummary.unitRate)}`
-    : `${rentalSummary.rentalDays} day${rentalSummary.rentalDays === 1 ? "" : "s"} at the ${rentalSummary.tier} rate`;
+  const { rentalSummary, vehicleTotal } = quote;
+  const days = rentalSummary.rentalDays;
+  const dayWord = `day${days === 1 ? "" : "s"}`;
+  const matches = (amount: number) => Math.abs(amount - vehicleTotal) < 0.005;
+
+  if (rentalSummary.kind !== "dynamic") {
+    const unitPlural = rentalSummary.quantity === 1 ? "" : "s";
+    if (rentalSummary.quantityIsWhole && matches(rentalSummary.quantity * rentalSummary.unitRate)) {
+      return `${rentalSummary.quantity} ${rentalSummary.unitLabel}${unitPlural} × ${formatCurrency(rentalSummary.unitRate)}`;
+    }
+    if (!rentalSummary.quantityIsWhole) return `${days} ${dayWord} at the ${rentalSummary.tier} rate`;
+    return `${days} ${dayWord}`;
+  }
+
+  const rates = new Set(rentalSummary.groups.map((g) => Math.round(g.rate * 100)));
+  if (rates.size === 1 && rentalSummary.groups.length > 0) {
+    const rate = rentalSummary.groups[0].rate;
+    if (matches(days * rate)) return `${days} ${dayWord} × ${formatCurrency(rate)}`;
+  }
+  return `${days} ${dayWord}`;
 }
 
 /** A breakdown group's dates: one day, or a range. */

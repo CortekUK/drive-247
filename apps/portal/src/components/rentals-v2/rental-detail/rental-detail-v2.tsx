@@ -70,6 +70,7 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { RightRail, rentalRailTabs } from "./right-rail";
 import { ContextColumn, DOCK_CLEARANCE, RecordDock, RecordDockNav, contextTabPanels, useWiderThan } from "@/components/ui-v2/record-dock";
 import { EmptyHint, Panel } from "./_kit";
+import { useDiscardUntouchedDraftOnLeave } from "../rental-drafts";
 
 /**
  * Which component draws which stage.
@@ -171,6 +172,8 @@ export function RentalDetailV2() {
 
   const { detail: loadedDetail, isLoading: detailLoading, notFound, error, refetch } = useRentalDetailV2(id);
   const isLoading = useSkeletonLoading(detailLoading);
+  // An untouched draft is thrown away when the operator leaves it (QA P8.12).
+  useDiscardUntouchedDraftOnLeave(loadedDetail?.rental as never, !readOnly);
 
   // While the rental loads, the real screen renders a placeholder rental and
   // <AutoSkeleton> turns it into the skeleton.
