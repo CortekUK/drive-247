@@ -47,6 +47,14 @@ export interface EnhancedRental {
   promo_code: string | null;
   protection_cost: number;
   total_amount: number;
+  /**
+   * What the rental has actually been charged: its Charge ledger entries,
+   * refundable deposit left out. Null before any charge exists. Use this for a
+   * "Total" column: `total_amount` (monthly_amount) is the grand total on a
+   * booking-site rental but only the rental price on one made in the portal,
+   * where tax, fees and extras are separate charges (QA R2.12).
+   */
+  billed_total: number | null;
   status: string;
   computed_status: string;
   approval_status?: string;
@@ -198,7 +206,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
       // Get initial payments and bonzah policies for these rentals
       const rentalIds = rentalsData?.map((r: any) => r.id) || [];
 
-      const [{ data: initialPayments }, { data: bonzahPolicies }, { data: rentalReviews }] = await Promise.all([
+      const [{ data: initialPayments }, { data: bonzahPolicies }, { data: rentalReviews }, { data: charges }] = await Promise.all([
         supabase
           .from("payments")
           .select("rental_id, amount, capture_status")
@@ -215,7 +223,19 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           .select("rental_id, rating, is_skipped")
           .eq("tenant_id", tenant.id)
           .in("rental_id", rentalIds),
+        (supabase as any)
+          .from("ledger_entries")
+          .select("rental_id, amount")
+          .eq("tenant_id", tenant.id)
+          .eq("type", "Charge")
+          .neq("category", "Security Deposit")
+          .in("rental_id", rentalIds),
       ]);
+
+      const billedMap = new Map<string, number>();
+      for (const c of (charges ?? []) as { rental_id: string; amount: number }[]) {
+        billedMap.set(c.rental_id, Math.round(((billedMap.get(c.rental_id) ?? 0) + Number(c.amount || 0)) * 100) / 100);
+      }
 
       const initialPaymentMap = new Map(
         initialPayments?.map(p => [p.rental_id, { amount: p.amount, capture_status: p.capture_status }]) || []
@@ -259,6 +279,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
             promo_code: rental.promo_code ?? null,
             protection_cost: protectionCost,
             total_amount: totalAmount,
+            billed_total: billedMap.get(rental.id) ?? null,
             status: rental.status,
             computed_status: computedStatus,
             approval_status: rental.approval_status,

@@ -574,3 +574,6 @@ verify_jwt = false
 
 [functions.lead-webhook-meta]
 verify_jwt = false
+
+[functions.push-operator-notification]
+verify_jwt = false

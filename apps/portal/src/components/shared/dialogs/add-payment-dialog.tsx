@@ -744,6 +744,8 @@ export const AddPaymentDialog = ({
           remaining_amount: data.amount,
           tenant_id: tenant?.id,
           verification_status: 'approved',
+          // QA R13.1: who recorded it, so the rental's Activity can say so.
+          ...(appUser?.id ? { created_by: appUser.id } : {}),
           ...(targetCategories && targetCategories.length > 0 ? { target_categories: targetCategories } : {}),
           ...(extensionId ? { extension_id: extensionId } : {}),
         })

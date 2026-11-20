@@ -509,6 +509,19 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
     };
 
     let result = template;
+    // Conditional blocks, exactly as the portal preview resolves them
+    // (lib/template-variables.ts replaceVariables). Without this pass the send
+    // printed "{{#if is_gig_driver}}" and "{{/if}}" into the contract and kept
+    // the gig-driver clause for a renter who is not one, so the preview the
+    // operator approved was not the document the customer signed (QA R6.8).
+    result = result.replace(
+        /\{\{#if is_gig_driver\}\}([\s\S]*?)\{\{\/if\}\}/g,
+        (_m: string, inner: string) => ((variables as any).is_gig_driver === 'Yes' ? inner : ''),
+    );
+    result = result.replace(
+        /\{\{#if is_payg\}\}([\s\S]*?)\{\{\/if\}\}/g,
+        (_m: string, inner: string) => ((variables as any).payg_period_label ? inner : ''),
+    );
     for (const [key, value] of Object.entries(variables)) {
         // Tolerate 2-3 braces on each side. `{{{customer_name}}}` is Mustache /
         // Handlebars syntax for "insert unescaped", so operators type it by
@@ -952,7 +965,17 @@ function drawWrappedRuns(ctx: PdfCtx, runs: TextRun[], fontSize: number, lineHei
     ctx.y -= lineHeight;
 }
 
+/**
+ * BoldSign draws the signature field (Size.Height 50 below) DOWNWARD from where
+ * the {{@sig1}} tag sits, but the tag's line is only one body line tall. The
+ * next line ("Date signed: {{@date1}}" in most templates) used to land inside
+ * the field, so the signed PDF printed the signature over the date (QA R6.7).
+ * The line holding the tag now keeps the rest of the field's height clear.
+ * (Declared inside each renderer: tests lift these functions out on their own.)
+ */
 async function renderBlocksToPdf(ctx: PdfCtx, blocks: PdfBlock[]) {
+    const SIG_TAG_RE = /\{\{@sig1\}\}/;
+    const SIG_FIELD_CLEARANCE = 40;
     const S = { h1: 16, h2: 13, h3: 11, body: 10 };
     const LH = { h1: 22, h2: 18, h3: 15, body: 14 };
 
@@ -985,9 +1008,11 @@ async function renderBlocksToPdf(ctx: PdfCtx, blocks: PdfBlock[]) {
                 break;
             }
             case 'paragraph': {
-                ensureSpace(ctx, LH.body);
+                const holdsSignature = SIG_TAG_RE.test((block.runs || []).map((r) => r.text).join(''));
+                ensureSpace(ctx, holdsSignature ? LH.body + SIG_FIELD_CLEARANCE : LH.body);
                 drawWrappedRuns(ctx, block.runs || [], S.body, LH.body, false, 0, block.align || 'left');
                 ctx.y -= 2;
+                if (holdsSignature) ctx.y -= SIG_FIELD_CLEARANCE;
                 break;
             }
             case 'table': {
@@ -1124,6 +1149,8 @@ async function renderBlocksToPdf(ctx: PdfCtx, blocks: PdfBlock[]) {
 // ============================================================================
 
 function renderTextToPdf(ctx: PdfCtx, text: string) {
+    const SIG_TAG_RE = /\{\{@sig1\}\}/; // see renderBlocksToPdf
+    const SIG_FIELD_CLEARANCE = 40;
     const fontSize = 10;
     const lineHeight = 14;
     const maxWidth = CONTENT_W;
@@ -1156,6 +1183,7 @@ function renderTextToPdf(ctx: PdfCtx, text: string) {
             drawText(ctx, currentLine, MARGIN, fontSize, isHeader ? ctx.boldFont : ctx.font);
         }
         ctx.y -= lineHeight;
+        if (SIG_TAG_RE.test(line)) ctx.y -= SIG_FIELD_CLEARANCE;
     }
 }
 

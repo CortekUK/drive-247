@@ -29,6 +29,7 @@ import { FilePen, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { tenantToday } from "@/components/timeline-v2/model";
 
 type DraftRow = { id: string; rental_number: string | null; created_at: string | null };
@@ -66,7 +67,10 @@ export function useCreateDraftRental({ replace = false }: { replace?: boolean } 
   const router = useRouter();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  return useMutation({
+  // A double click on New Rental fired two inserts before `isPending` could
+  // disable the button, leaving two drafts (QA R2.11). One start at a time.
+  const inFlight = useRef(false);
+  const mutation = useMutation({
     mutationFn: async () => {
       if (!tenant?.id) throw new Error("No tenant");
       const { data, error } = await supabase
@@ -98,11 +102,26 @@ export function useCreateDraftRental({ replace = false }: { replace?: boolean } 
         variant: "destructive",
       }),
   });
+  return {
+    ...mutation,
+    mutate: () => {
+      if (inFlight.current) return;
+      inFlight.current = true;
+      mutation.mutate(undefined, {
+        onSettled: () => {
+          inFlight.current = false;
+        },
+      });
+    },
+  };
 }
 
 /** The drafts, as one quiet row above the list. Nothing when there are none. */
 export function RentalDrafts() {
   const { tenant } = useTenant();
+  // Viewers and read-only managers see the drafts but cannot throw them away (QA R1.11).
+  const { canEdit } = useManagerPermissions();
+  const canWrite = canEdit("rentals");
   const queryClient = useQueryClient();
   const { data: drafts = [] } = useRentalDrafts();
 
@@ -141,6 +160,7 @@ export function RentalDrafts() {
               · {formatDistanceToNow(new Date(d.created_at), { addSuffix: true })}
             </span>
           )}
+          {canWrite && (
           <button
             type="button"
             aria-label={`Discard draft ${d.rental_number ?? ""}`}
@@ -151,6 +171,7 @@ export function RentalDrafts() {
           >
             <X className="size-3" />
           </button>
+          )}
         </span>
       ))}
     </div>

@@ -65,8 +65,11 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui-v
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { useCustomerReviews } from "@/hooks/use-customer-reviews";
 import { useCustomerReviewSummary } from "@/hooks/use-customer-review-summary";
+import { useRentalReview } from "@/hooks/use-rental-review";
+import { RentalReviewDialog } from "@/components/reviews/rental-review-dialog";
 import type { StageProps } from "./stages";
 import { CustomerPicker, useCustomerSwitchable } from "./customer-picker";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import {
   StageAction,
   cardCls,
@@ -380,6 +383,9 @@ const ratingTone = (n: number) => (n >= 8 ? RATING_TONE.good : n >= 5 ? RATING_T
 
 export function StageCustomer({ detail, refetch }: StageProps) {
   const { tenantSlug } = useTenant();
+  // Re-running the ID check and sending a new link change the rental: not for read-only roles (QA R1.11).
+  const { canEdit } = useManagerPermissions();
+  const canWrite = canEdit("rentals");
   const customer = detail.customer;
   const customerId = customer?.id ?? null;
 
@@ -421,6 +427,11 @@ export function StageCustomer({ detail, refetch }: StageProps) {
   );
   const { data: reviews } = useCustomerReviews(customerId ?? undefined);
   const { data: reviewSummary } = useCustomerReviewSummary(customerId ?? undefined);
+  // Rating the hire once it is over (QA R14.1): v2 had no way to rate at all,
+  // while this card told staff "when this rental closes and your team rates it".
+  const rentalClosed = ["completed", "closed"].includes(String(detail.rental.status ?? "").toLowerCase());
+  const { data: thisReview } = useRentalReview(rentalClosed ? detail.rental.id : undefined);
+  const [rateOpen, setRateOpen] = useState(false);
 
   const { data: cmdCheck } = useCmdCheck(customerId);
   const hasDocs = !!(verification?.document_front_url && (verification?.selfie_image_url || verification?.face_image_url));
@@ -589,6 +600,16 @@ export function StageCustomer({ detail, refetch }: StageProps) {
         <Surface className="flex flex-none flex-col p-5">
           <div className="flex items-center gap-2.5">
             <h3 className="flex-1 font-heading text-sm font-semibold">Reviews summary</h3>
+            {rentalClosed && customerId && (
+              <Button size="sm" variant={thisReview ? "ghost" : "outline"} onClick={() => setRateOpen(true)}>
+                <Star />
+                {!thisReview
+                  ? "Rate this rental"
+                  : thisReview.is_skipped
+                    ? "Skipped · Rate it"
+                    : `Rated ${thisReview.rating}/10 · Edit`}
+              </Button>
+            )}
             {!!reviews?.length && (
               <button
                 type="button"
@@ -619,6 +640,17 @@ export function StageCustomer({ detail, refetch }: StageProps) {
             )}
           </div>
         </Surface>
+
+        {rentalClosed && customerId && (
+          <RentalReviewDialog
+            open={rateOpen}
+            onOpenChange={setRateOpen}
+            rentalId={detail.rental.id}
+            customerId={customerId}
+            customerName={customer?.name ?? undefined}
+            rentalNumber={detail.rentalNumber ?? undefined}
+          />
+        )}
 
         {/* ── verification — a full-width row ──────────────────────────────
             Left: the state and its history. Right: the documents at their
@@ -665,7 +697,7 @@ export function StageCustomer({ detail, refetch }: StageProps) {
             {/* Quick actions, quiet until hovered. They stop the click so the
                 card's own "open the check" does not fire underneath them. */}
             <span onClick={(e) => e.stopPropagation()} className="flex items-center gap-0.5">
-              {traxActions.onRescan && (
+              {canWrite && traxActions.onRescan && (
                 <IconAction
                   label={traxActions.rescanning ? "Scanning again…" : "Run Trax ID again"}
                   onClick={traxActions.onRescan}
@@ -674,9 +706,11 @@ export function StageCustomer({ detail, refetch }: StageProps) {
                   <RotateCw className={cn(traxActions.rescanning && "animate-spin motion-reduce:animate-none")} />
                 </IconAction>
               )}
-              <IconAction label="Send a new verification link" onClick={traxActions.onNewLink}>
-                <Link2 />
-              </IconAction>
+              {canWrite && (
+                <IconAction label="Send a new verification link" onClick={traxActions.onNewLink}>
+                  <Link2 />
+                </IconAction>
+              )}
             </span>
             {verification && (
               <ExternalLink

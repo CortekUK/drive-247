@@ -42,6 +42,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { Pill } from "./_kit";
+import { useRentalSettings } from "@/hooks/use-rental-settings";
+import { checkBookingRules } from "./booking-rules";
 
 type Taken = { kind: "booked" | "maintenance" | "blocked" | "closed"; label: string };
 
@@ -158,6 +160,7 @@ export function RentalDatesDialog({
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
   const [hover, setHover] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const { settings: rentalSettings } = useRentalSettings();
 
   // Seed from what the stage holds, every time the dialog opens.
   const [seeded, setSeeded] = useState(false);
@@ -192,6 +195,16 @@ export function RentalDatesDialog({
     if (t) return setProblem(`${format(fromYmd(k), "EEE d MMM")} is taken — ${t.label}.`);
     if (k < today) return setProblem("That day has already gone.");
     if (!start || (start && end) || k <= start) {
+      // Picking the return BEFORE the pickup cannot make a rental: that day
+      // becomes the new pickup, and the screen says so rather than silently
+      // moving the pickup (QA R2.8).
+      if (start && !end && k < start) {
+        setProblem(
+          `The return cannot be before the pickup (${format(fromYmd(start), "EEE d MMM")}), so ${format(fromYmd(k), "EEE d MMM")} is now the pickup. Pick the return day.`
+        );
+      } else if (start && !end && k === start) {
+        return setProblem("The return has to be on a later day than the pickup.");
+      }
       setStart(k);
       setEnd(null);
       return;
@@ -206,6 +219,9 @@ export function RentalDatesDialog({
   };
 
   const preview = start && !end && hover && hover > start ? hover : end;
+  // The tenant's booking rules (QA R2.7): too short / too long refuses, too
+  // soon warns. See booking-rules.ts.
+  const rules = checkBookingRules({ start, startTime, end, endTime }, rentalSettings, new Date());
   const days = start && end ? differenceInCalendarDays(fromYmd(end), fromYmd(start)) : null;
 
   const Month = ({ base }: { base: Date }) => {
@@ -285,7 +301,11 @@ export function RentalDatesDialog({
           </Button>
           <div className={cn("flex min-w-0 flex-1 gap-6", isLoading && "opacity-50")}>
             <Month base={month} />
-            <Month base={addMonths(month, 1)} />
+            {/* One month on a phone, two side by side from sm up: two at 390px
+                ran the day numbers together (QA R5.12). */}
+            <div className="hidden min-w-0 flex-1 sm:flex">
+              <Month base={addMonths(month, 1)} />
+            </div>
           </div>
           <Button variant="ghost" size="icon-sm" aria-label="Later months" onClick={() => setMonth((m) => addMonths(m, 1))}>
             <ChevronRight />
@@ -301,9 +321,15 @@ export function RentalDatesDialog({
         </div>
 
         {problem && <p className="rounded-2xl bg-destructive/[0.07] px-4 py-2.5 text-xs text-destructive">{problem}</p>}
+        {!problem && rules.refuse && (
+          <p role="alert" className="rounded-2xl bg-destructive/[0.07] px-4 py-2.5 text-xs text-destructive">{rules.refuse}</p>
+        )}
+        {rules.warn && (
+          <p className="rounded-2xl bg-amber-500/10 px-4 py-2.5 text-xs text-amber-700 dark:text-amber-300">{rules.warn}</p>
+        )}
 
         {/* the two ends, each with its time */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <End label="Pickup" day={start} time={startTime} setTime={setStartTime} active={!start || !!end} />
           <End label="Return" day={end} time={endTime} setTime={setEndTime} active={!!start && !end} />
         </div>
@@ -313,7 +339,7 @@ export function RentalDatesDialog({
             Cancel
           </Button>
           <Button
-            disabled={!start || !end}
+            disabled={!start || !end || !!rules.refuse}
             onClick={() => {
               onApply(`${start}T${startTime}`, `${end}T${endTime}`);
               onOpenChange(false);
@@ -359,7 +385,7 @@ function End({
     >
       <div className="min-w-0 flex-1">
         <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-        <p className={cn("mt-1 truncate font-heading text-lg font-semibold tracking-tight", !day && "text-base font-normal text-muted-foreground")}>
+        <p className={cn("mt-1 truncate font-heading text-lg font-semibold tracking-tight max-sm:text-base", !day && "text-base font-normal text-muted-foreground")}>
           {day ? format(fromYmd(day), "EEE d MMM yyyy") : `Pick the ${label.toLowerCase()} day`}
         </p>
       </div>

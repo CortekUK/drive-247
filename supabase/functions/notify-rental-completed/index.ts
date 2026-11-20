@@ -267,10 +267,15 @@ serve(async (req) => {
     // 422 that reads like an outage, when the real cause is a missing address --
     // say which, so the next person is not hunting a phantom mail problem.
     if (resolvedCustomerEmail) {
+      // QA R15.9: without the tenant, resend-service fell back to the platform
+      // sender, so this email arrived from "Drive 247 <noreply@drive-247.com>"
+      // instead of the operator (notify-booking-pending already passes it).
       results.customerEmail = await sendEmail(
         resolvedCustomerEmail,
         customerSubject,
-        customerHtml
+        customerHtml,
+        supabase,
+        data.tenantId
       );
       console.log('Customer email result:', results.customerEmail);
     } else {

@@ -24,7 +24,11 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const { rentalId, tenantId, amount, reason } = await req.json();
+    const { rentalId, tenantId, amount, reason, releaseRemainder } = await req.json();
+    // releaseRemainder (QA R9.4): settle the deposit at the END of a rental —
+    // capture only `amount` and let Stripe release the rest to the customer.
+    // No multicapture, no rollover hold. Without it, a partial capture keeps
+    // the remainder held (mid-rental charge), as before.
 
     if (!rentalId || !amount) {
       return errorResponse("Missing required fields: rentalId, amount");
@@ -65,7 +69,7 @@ Deno.serve(async (req) => {
       .from("rentals")
       .select(
         "deposit_hold_payment_intent_id, deposit_hold_status, deposit_hold_amount, deposit_hold_payment_method_id, deposit_hold_stripe_customer_id, tenant_id, customer_id, vehicle_id, auto_extend_enabled, platform_account, " +
-          "deposit_hold_stripe_mode, deposit_hold_connect_account_id, deposit_hold_platform_account"
+          "deposit_hold_stripe_mode, deposit_hold_connect_account_id, deposit_hold_platform_account, deposit_hold_attempt_seq, deposit_hold_currency"
       )
       .eq("id", rentalId)
       .single();
@@ -180,7 +184,8 @@ Deno.serve(async (req) => {
     //      automatically — we fall back to creating a fresh rollover PI below.
     let capturedIntent;
     let usedMulticapture = false;
-    if (multicaptureAvailable && remainder > 0) {
+    const settleAndRelease = releaseRemainder === true;
+    if (multicaptureAvailable && remainder > 0 && !settleAndRelease) {
       try {
         capturedIntent = await stripe.paymentIntents.capture(
           rental.deposit_hold_payment_intent_id,
@@ -226,7 +231,7 @@ Deno.serve(async (req) => {
     // rollover after a staff-initiated partial capture is a one-time, deliberate
     // operation, not the RevTek/Fabri auto-retry loop.
     const isLongRunning = (rental as any).auto_extend_enabled === true;
-    if (!usedMulticapture && remainder > 0 && !isLongRunning && rental.deposit_hold_payment_method_id && rental.deposit_hold_stripe_customer_id) {
+    if (!settleAndRelease && !usedMulticapture && remainder > 0 && !isLongRunning && rental.deposit_hold_payment_method_id && rental.deposit_hold_stripe_customer_id) {
       try {
         // Ask for extended authorization + multicapture on the rollover PI so it
         // lasts as long as the card allows and future captures can stay on this
@@ -511,11 +516,42 @@ Deno.serve(async (req) => {
       }
     }
 
+    // The hold's own history (QA R9.4): the capture, and the release of the
+    // rest when it went back to the card. The Payments stage reads these for
+    // "kept" and "released"; without them it could only say "Captured".
+    // Non-fatal — the money has moved and is recorded above.
+    try {
+      const released = usedMulticapture || newHoldPiId ? 0 : remainder;
+      const base = {
+        rental_id: rentalId,
+        tenant_id: effectiveTenantId,
+        attempt_seq: (rental as any).deposit_hold_attempt_seq ?? 0,
+        platform_account: platformAccount,
+        connect_account_id: connectAccountId,
+        stripe_mode: stripeMode,
+        currency: (rental as any).deposit_hold_currency ?? currency,
+        outcome: "succeeded",
+        actor: auth.caller.actor,
+        completed_at: new Date().toISOString(),
+      };
+      const rows: Record<string, unknown>[] = [
+        { ...base, action: "capture", payment_intent_id: rental.deposit_hold_payment_intent_id, amount_cents: capturedInCents, error_message: reason || "Deposit captured" },
+      ];
+      if (released > 0) {
+        rows.push({ ...base, action: "release", superseded_pi_id: rental.deposit_hold_payment_intent_id, amount_cents: Math.round(released * 100), error_message: "Rest of the deposit released with the capture" });
+      }
+      const { error: linkErr } = await supabase.from("deposit_hold_links").insert(rows);
+      if (linkErr) console.error("[DEPOSIT-CAPTURE] Could not record the hold history:", linkErr);
+    } catch (err) {
+      console.error("[DEPOSIT-CAPTURE] Could not record the hold history:", err);
+    }
+
     return jsonResponse({
       success: true,
       capturedAmount: amount,
       holdAmount: originalHold,
       remainingHeldAmount: usedMulticapture || newHoldPiId ? remainder : 0,
+      releasedAmount: usedMulticapture || newHoldPiId ? 0 : remainder,
       newHoldPiId,
       usedMulticapture,
       reason,

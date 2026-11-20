@@ -61,6 +61,8 @@ export type RentalVehicle = {
   monthly_rent: number | null;
   lockbox_code: string | null;
   lockbox_instructions: string | null;
+  /** The car's recorded odometer: the floor for a pickup reading (QA R10.4). */
+  current_mileage?: number | null;
 };
 
 /** The rental row as it comes back, with its two joins. */
@@ -241,7 +243,7 @@ export function useRentalDetailV2(rentalId: string | null | undefined) {
           vehicles!rentals_vehicle_id_fkey(
             id, reg, make, model, year, status,
             daily_rent, weekly_rent, monthly_rent,
-            lockbox_code, lockbox_instructions
+            lockbox_code, lockbox_instructions, current_mileage
           )
         `
         )

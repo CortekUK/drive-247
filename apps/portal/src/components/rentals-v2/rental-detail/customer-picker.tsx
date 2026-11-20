@@ -239,9 +239,17 @@ export function CustomerPicker({
                           {c.name}
                           {c.is_blocked && <Ban className="size-3.5 shrink-0 text-destructive" />}
                         </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {[c.email, c.phone].filter(Boolean).join(" · ") || "No contact details"}
-                        </p>
+                        {c.is_blocked ? (
+                          // Said on the row, not only in a hover title: a blocked
+                          // customer cannot be picked, and staff must see why (QA R2.2).
+                          <p className="truncate text-xs font-medium text-destructive">
+                            Blocked — cannot rent{c.blocked_reason ? `: ${c.blocked_reason}` : ""}
+                          </p>
+                        ) : (
+                          <p className="truncate text-xs text-muted-foreground">
+                            {[c.email, c.phone].filter(Boolean).join(" · ") || "No contact details"}
+                          </p>
+                        )}
                       </div>
                     </div>
 
