@@ -24,6 +24,8 @@ export interface SignupBeginRequest extends SignupAttribution {
   planId: SignupPlanId;
   companyWebsite?: string;
   formStartedAt?: number;
+  /** "City and state" from the business page. Kept with the answers, not on the tenant. */
+  cityState?: string;
   /** Meta's browser cookies, so the server's CompleteRegistration is tied to the ad click. */
   tracking?: MetaBrowserSignals;
 }
@@ -88,6 +90,8 @@ export interface SignupBeginResponse {
 }
 export interface SignupBeginOauthRequest extends Partial<SignupAttribution> {
   planId: SignupPlanId;
+  /** Only when it was typed before pressing the Google button. */
+  cityState?: string;
   /** Meta's browser cookies, so the server's CompleteRegistration is tied to the ad click. */
   tracking?: MetaBrowserSignals;
 }
@@ -524,6 +528,19 @@ export function signupSaveAttribution(b: SignupAttribution): Promise<{ success: 
   });
 }
 
+/**
+ * Saves "City and state" for someone who is already signed in: the Google path,
+ * and anyone who names the business on its own screen. Same function as the
+ * answers above; it takes the city on its own.
+ */
+export function signupSaveCityState(cityState: string): Promise<{ success: true }> {
+  return callFunction<{ success: true }>("signup-attribution", { cityState }, {
+    auth: "session",
+    timeoutMs: 15_000,
+    dedupeKey: "signup-attribution:city-state",
+  });
+}
+
 // ---------------------------------------------------------------------------
 // The card step's one-time offer, and "Email me a link to finish later"
 // (signup-finish-later)
@@ -811,6 +828,8 @@ export interface ClientSignupMeta {
   heardAbout?: string;
   /** "How many cars do you rent out?" Absent until it has been answered. */
   fleetSize?: string;
+  /** "City and state" from the business page. Absent until it has been given. */
+  cityState?: string;
   /** When the card step's one-time offer was shown (ISO), on any device. */
   exitOfferSeenAt?: string;
   mode?: "test" | "live";

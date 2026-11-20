@@ -60,6 +60,27 @@ function whoArt(dark: boolean): string {
  ${ground(132, 124, 110, dark)}`;
 }
 
+/* The business: a shop front under an awning, with a map pin beside it. */
+function businessArt(dark: boolean): string {
+  const p = pal(dark);
+  const scallops = Array.from({ length: 7 }, () => "q9.71 9 19.43 0").join(" ");
+  return `
+ <g transform="translate(62 24)">
+  <rect x="0" y="22" width="124" height="70" rx="8" fill="${p.card}" ${stroke(p)}/>
+  <path d="M-6 22 H130 L122 5 Q120 0 115 0 H9 Q4 0 2 5 Z" fill="${p.ink}"/>
+  <path d="M-6 22 ${scallops} Z" fill="${p.acc}"/>
+  <rect x="12" y="42" width="46" height="34" rx="6" fill="${p.soft}" ${stroke(p, 2)}/>
+  <rect x="20" y="52" width="26" height="5" rx="2.5" fill="${p.ink}" opacity=".8"/>
+  <rect x="20" y="62" width="18" height="4" rx="2" fill="${p.mut}"/>
+  <rect x="74" y="42" width="36" height="50" rx="6" fill="${p.lite}" ${stroke(p, 2)}/>
+  <circle cx="102" cy="68" r="2.4" fill="${p.ink}"/>
+ </g>
+ <path d="M220 58 C208 44 206 38 206 32 A14 14 0 0 1 234 32 C234 38 232 44 220 58 Z" fill="${p.acc}"/>
+ <circle cx="220" cy="32" r="5" fill="${p.onAcc}"/>
+ ${sparkle(40, 36, 6, p.acc)}
+ ${ground(132, 124, 108, dark)}`;
+}
+
 /* The fleet, from above: three cars in their bays and one bay still free. */
 function fleetArt(dark: boolean): string {
   const p = pal(dark);
@@ -154,6 +175,7 @@ function make(art: (dark: boolean) => string) {
 }
 
 export const DemoWhoArt = make(whoArt);
+export const DemoBusinessArt = make(businessArt);
 export const DemoFleetArt = make(fleetArt);
 export const DemoBookingsArt = make(bookingsArt);
 export const DemoLaunchArt = make(launchArt);

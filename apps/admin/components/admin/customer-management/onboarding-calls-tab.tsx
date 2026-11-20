@@ -20,7 +20,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarCheck, CalendarDays, Check, ExternalLink, Loader2, Mail, RefreshCw, StickyNote } from 'lucide-react';
+import { CalendarCheck, CalendarDays, Check, ExternalLink, Loader2, Mail, RefreshCw, Search, StickyNote } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
@@ -65,10 +65,16 @@ interface Row {
   fleet_size?: string | null;
   /** When the card step's one-time 20% offer was shown. */
   exit_offer_seen_at?: string | null;
+  /** "City and state" from the signup. Absent before 20261121090000. */
+  city_state?: string | null;
 }
 
 /** "6-20" -> "6–20 cars". */
 const fleetLabel = (f: string | null | undefined) => (f ? `${f.replace('-', '–')} cars` : null);
+
+/** A web search for the business, to find another number when the first one does not answer. */
+const searchUrl = (r: Pick<Row, 'company_name' | 'slug' | 'city_state'>) =>
+  `https://www.google.com/search?q=${encodeURIComponent([r.company_name || r.slug, r.city_state].filter(Boolean).join(' '))}`;
 
 type Stage = 'done' | 'booked' | 'missed' | 'cancelled' | 'nudge' | 'new';
 
@@ -314,7 +320,7 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
                 <li key={r.tenant_id} className="flex flex-wrap items-center justify-between gap-2 px-6 py-3 text-sm">
                   <span className="min-w-0">
                     <span className="font-medium">{r.company_name || r.slug}</span>
-                    <span className="text-muted-foreground"> · {[r.contact_email, r.phone].filter(Boolean).join(' · ')}</span>
+                    <span className="text-muted-foreground"> · {[r.city_state, r.contact_email, r.phone].filter(Boolean).join(' · ')}</span>
                   </span>
                   <span className="text-xs font-medium text-indigo-700 dark:text-indigo-400">{fmtWhen(r.call_scheduled_for)}</span>
                 </li>
@@ -399,11 +405,22 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
                 return (
                   <li key={r.tenant_id} className="flex flex-col gap-3 px-6 py-4 lg:flex-row lg:items-center lg:gap-6">
                     <div className="min-w-0 lg:w-[30%]">
-                      <p className="truncate text-sm font-medium">
-                        {r.company_name || r.slug}
-                        <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">{r.slug}</span>
+                      <p className="flex min-w-0 items-center text-sm font-medium">
+                        <span className="truncate">{r.company_name || r.slug}</span>
+                        <span className="ml-1.5 shrink-0 text-[11px] font-normal text-muted-foreground">{r.slug}</span>
+                        <a
+                          href={searchUrl(r)}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={`Search the web for ${[r.company_name || r.slug, r.city_state].filter(Boolean).join(', ')}`}
+                          className="ml-1.5 inline-flex shrink-0 items-center gap-0.5 text-[11px] font-normal text-indigo-700 hover:underline dark:text-indigo-400"
+                        >
+                          <Search className="h-3 w-3" aria-hidden />
+                          Search online
+                        </a>
                       </p>
                       <p className="truncate text-xs text-muted-foreground">
+                        {r.city_state && `${r.city_state} · `}
                         {r.contact_email ?? 'no email'}
                         {r.phone && ` · ${r.phone}`}
                         {fleetLabel(r.fleet_size) && ` · ${fleetLabel(r.fleet_size)}`} · signed up {ago(r.tenant_created_at)}

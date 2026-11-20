@@ -82,6 +82,8 @@ interface BeginOauthRequest {
   heardAboutOther?: string;
   fleetSize?: string;
   phone?: string;
+  /** "City and state", when it was typed before pressing the button. */
+  cityState?: string;
 }
 
 /**

@@ -120,6 +120,8 @@ interface BeginRequest {
   fleetSize?: string;
   /** Optional. */
   phone?: string;
+  /** "City and state" from the business page. Kept with the answers, never as the tenant's address. */
+  cityState?: string;
 }
 
 /**

@@ -14,7 +14,8 @@
  * Nothing typed into a field is sent: PostHog never records input values, and
  * the card form is Stripe's own frame, which no script on this page can read.
  * The signup answers sent on purpose are `heard_about` and `fleet_size`,
- * values from fixed lists. A person is known by their account id only, never by email.
+ * values from fixed lists, and `city_state` ("Houston, TX"), a place rather
+ * than a person. A person is known by their account id only, never by email.
  *
  * Browser-only, and never throws: analytics must not be able to break signup.
  */

@@ -153,6 +153,8 @@ interface MockStore {
   heardAbout?: string;
   /** "How many cars do you rent out?" Absent until answered. */
   fleetSize?: string;
+  /** "City and state" from the business page. Absent until given. */
+  cityState?: string;
   /** When "Not ready just yet?" was shown (signup-finish-later "offer_seen"). */
   exitOfferSeenAt?: string;
 }
@@ -272,6 +274,7 @@ function seedAt(at: "payment" | "build" | "done" | "recover", planId: string): v
     provisionStartedAt: at === "done" ? Date.now() - 60_000 : null,
     heardAbout: "instagram",
     fleetSize: "1-5",
+    cityState: "Tampa, FL",
   });
 }
 
@@ -441,6 +444,7 @@ function metaOf(store: MockStore) {
     email: live.email,
     heardAbout: live.heardAbout,
     fleetSize: live.fleetSize,
+    cityState: live.cityState,
     exitOfferSeenAt: live.exitOfferSeenAt,
     mode: "test" as const,
     stripeCustomerId: "cus_mock",
@@ -523,6 +527,7 @@ export async function mockFunction(name: string, body: unknown): Promise<unknown
         provisionStartedAt: null,
         heardAbout: typeof b.heardAbout === "string" ? b.heardAbout : undefined,
         fleetSize: typeof b.fleetSize === "string" ? b.fleetSize : undefined,
+        cityState: typeof b.cityState === "string" ? b.cityState : undefined,
       });
       return {
         success: true,
@@ -535,9 +540,14 @@ export async function mockFunction(name: string, body: unknown): Promise<unknown
 
     case "signup-attribution": {
       await beat();
+      // As on the server: either the answers, or "City and state" on its own.
+      if (typeof b.heardAbout !== "string" && typeof b.cityState !== "string") {
+        throw new MockFunctionError("VALIDATION_FAILED", "Please choose an answer", { field: "heardAbout" });
+      }
       patchStore({
-        heardAbout: String(b.heardAbout ?? ""),
+        ...(typeof b.heardAbout === "string" ? { heardAbout: b.heardAbout } : {}),
         ...(typeof b.fleetSize === "string" ? { fleetSize: b.fleetSize } : {}),
+        ...(typeof b.cityState === "string" ? { cityState: b.cityState } : {}),
       });
       return { success: true };
     }
@@ -588,6 +598,7 @@ export async function mockFunction(name: string, body: unknown): Promise<unknown
         status: "account_created",
         ...(typeof b.heardAbout === "string" ? { heardAbout: b.heardAbout } : {}),
         ...(typeof b.fleetSize === "string" ? { fleetSize: b.fleetSize } : {}),
+        ...(typeof b.cityState === "string" ? { cityState: b.cityState } : {}),
       });
       return {
         success: true,

@@ -13,6 +13,12 @@
 // The fleet size also picks the plan in the browser (apps/web/src/lib/fleet-size.ts)
 // and is copied onto `tenants.fleet_size` when the portal is built.
 //
+// "City and state" (free text, asked under the business name) rides with the
+// answers too: `cityState` in the metadata, `signup_attribution.city_state`,
+// Stripe `city_state`. It is for the team to look the business up and find
+// another number to call. It is NOT the tenant's address (`tenants.address` is
+// the booking site's real address) and is never written there.
+//
 // Nothing here may fail a signup. Bad input is dropped, not refused: the question
 // is required by the form, and an old browser tab that does not send it still has
 // to be able to sign up. The form asks again before the card if no answer arrived.
@@ -42,6 +48,21 @@ export function isFleetSize(value: unknown): value is FleetSize {
   return typeof value === "string" && (FLEET_SIZE_VALUES as readonly string[]).includes(value);
 }
 
+/** Keep in step with FIELD_MAX.cityState in apps/web/src/lib/signup-validation.ts. */
+export const CITY_STATE_MAX = 80;
+
+/**
+ * "City and state" as typed, made safe to store: control characters out, runs
+ * of spaces folded, trimmed, capped. Undefined when nothing usable is left.
+ */
+export function normalizeCityState(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  // deno-lint-ignore no-control-regex
+  const text = raw.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim()
+    .slice(0, CITY_STATE_MAX).trim();
+  return text.length >= 2 ? text : undefined;
+}
+
 export interface SignupAttribution {
   heardAbout?: HeardAbout;
   /** Only ever set alongside `heardAbout: "other"`. */
@@ -50,6 +71,8 @@ export interface SignupAttribution {
   fleetSize?: FleetSize;
   /** `+` and digits when the country is known, otherwise the digits as typed. */
   phone?: string;
+  /** "City and state", free text. See `normalizeCityState`. */
+  cityState?: string;
 }
 
 export function isHeardAbout(value: unknown): value is HeardAbout {
@@ -102,11 +125,15 @@ export function readSignupAttribution(body: unknown): SignupAttribution {
 
   const phone = normalizeSignupPhone(b.phone);
   if (phone) out.phone = phone;
+
+  const cityState = normalizeCityState(b.cityState);
+  if (cityState) out.cityState = cityState;
   return out;
 }
 
 /** The Stripe customer metadata for the answers. Empty when there is none. */
 export function stripeAttributionMetadata(a: SignupAttribution): Record<string, string> {
+  const cityState = normalizeCityState(a.cityState);
   return {
     ...(a.heardAbout
       ? {
@@ -115,13 +142,15 @@ export function stripeAttributionMetadata(a: SignupAttribution): Record<string, 
       }
       : {}),
     ...(isFleetSize(a.fleetSize) ? { fleet_size: a.fleetSize } : {}),
+    ...(cityState ? { city_state: cityState } : {}),
   };
 }
 
 /**
  * PostgREST's "no such column" (PGRST204), i.e. the migration that adds
- * `fleet_size` / `exit_offer_seen_at` has not been applied yet. The write is
- * then retried without them, so the heard-about answer is never lost to it.
+ * `fleet_size` / `exit_offer_seen_at` (20261120120000) or `city_state`
+ * (20261121090000) has not been applied yet. The write is then retried without
+ * them, so the heard-about answer is never lost to it.
  */
 function isMissingColumn(error: any): boolean {
   const msg = String(error?.message ?? "");
@@ -134,7 +163,8 @@ export async function saveSignupAttribution(
   row: { authUserId: string; email: string; attribution: SignupAttribution; tenantId?: string | null },
 ): Promise<void> {
   const { heardAbout, heardAboutOther, phone, fleetSize } = row.attribution;
-  if (!heardAbout && !phone && !fleetSize) return;
+  const cityState = normalizeCityState(row.attribution.cityState);
+  if (!heardAbout && !phone && !fleetSize && !cityState) return;
   try {
     const base = {
       auth_user_id: row.authUserId,
@@ -144,13 +174,21 @@ export async function saveSignupAttribution(
       ...(row.tenantId ? { tenant_id: row.tenantId } : {}),
       updated_at: new Date().toISOString(),
     };
-    let { error } = await supabase.from("signup_attribution").upsert(
-      { ...base, ...(fleetSize ? { fleet_size: fleetSize } : {}) },
-      { onConflict: "auth_user_id" },
-    );
-    if (error && fleetSize && isMissingColumn(error)) {
-      console.warn("[signup-attribution] signup_attribution.fleet_size is missing; saved without it");
-      ({ error } = await supabase.from("signup_attribution").upsert(base, { onConflict: "auth_user_id" }));
+    const withFleet = { ...base, ...(fleetSize ? { fleet_size: fleetSize } : {}) };
+    // Newest column first: each retry drops the column a pending migration
+    // adds, so whatever the database already has is still saved.
+    const attempts: { row: Record<string, unknown>; drops: string | null }[] = [
+      { row: { ...withFleet, ...(cityState ? { city_state: cityState } : {}) }, drops: null },
+      ...(cityState ? [{ row: withFleet, drops: "city_state" }] : []),
+      ...(fleetSize ? [{ row: base, drops: "fleet_size" }] : []),
+    ];
+    let error: any = null;
+    for (const attempt of attempts) {
+      if (attempt.drops) {
+        console.warn(`[signup-attribution] a signup_attribution column is missing; retrying without ${attempt.drops}`);
+      }
+      ({ error } = await supabase.from("signup_attribution").upsert(attempt.row, { onConflict: "auth_user_id" }));
+      if (!error || !isMissingColumn(error)) break;
     }
     if (error) throw error;
   } catch (e) {

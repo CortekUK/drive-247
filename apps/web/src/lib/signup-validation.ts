@@ -52,6 +52,7 @@ export type AccountField =
   | "phone"
   | "password"
   | "companyName"
+  | "cityState"
   | "slug"
   | "acceptedTerms";
 
@@ -70,6 +71,8 @@ export const FIELD_MAX = {
   phone: 40,
   colours: 300,
   url: 2048,
+  /** "City and state". Same cap as CITY_STATE_MAX in _shared/signup-attribution.ts. */
+  cityState: 80,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -517,6 +520,37 @@ export function validateTenant(values: TenantInput): FieldErrors<AccountField> {
 }
 
 /**
+ * "City and state", as it is sent: control characters out, runs of spaces
+ * folded to one, trimmed. Free text on purpose: businesses are not all in the
+ * US, and the team only needs enough to look the business up.
+ */
+export function normalizeCityState(raw: string | null | undefined): string {
+  return (raw ?? "")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Required on the business page and on the business-only screen. Kept apart
+ * from `validateTenant` so the other callers of that (the signup preview) are
+ * not suddenly refused for a field they never render.
+ */
+export function validateCityState(raw: string | null | undefined): string | undefined {
+  const value = normalizeCityState(raw);
+  // A letter in any script: one with case, or one past the punctuation blocks
+  // (CJK and the like). "12345" or "--" is not a place.
+  const hasLetter = Array.from(value).some(
+    (c) => c.toLowerCase() !== c.toUpperCase() || c.charCodeAt(0) > 0x2e7f,
+  );
+  if (value.length < 2 || !hasLetter) return "Please enter your city and state.";
+  if (value.length > FIELD_MAX.cityState) {
+    return `Please keep this to ${FIELD_MAX.cityState} characters or fewer.`;
+  }
+  return undefined;
+}
+
+/**
  * The whole account step.
  *
  * `requireCredentials` is false on the Google path: the name, the address and
@@ -564,6 +598,7 @@ export const ACCOUNT_FIELD_ORDER: readonly AccountField[] = [
   "phone",
   "password",
   "companyName",
+  "cityState",
   "slug",
   "acceptedTerms",
 ];
@@ -571,6 +606,7 @@ export const ACCOUNT_FIELD_ORDER: readonly AccountField[] = [
 /** `tenant` mode renders a subset, so it needs its own order. */
 export const TENANT_FIELD_ORDER: readonly AccountField[] = [
   "companyName",
+  "cityState",
   "slug",
   "acceptedTerms",
 ];

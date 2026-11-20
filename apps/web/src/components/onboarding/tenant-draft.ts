@@ -57,6 +57,8 @@ interface StoredDraft {
   companyName: string;
   slug: string;
   acceptedTerms: boolean;
+  /** Absent on drafts saved before "City and state" was asked. */
+  cityState?: string;
 }
 
 /**
@@ -107,6 +109,7 @@ function toDraft(raw: unknown): TenantFormValues | null {
     // Only ever `true` when it was literally stored as `true`. A draft that
     // cannot prove the box was ticked is a draft that has to ask again.
     acceptedTerms: blob.acceptedTerms === true,
+    ...(typeof blob.cityState === "string" && blob.cityState.trim() ? { cityState: blob.cityState } : {}),
   };
 }
 
@@ -281,6 +284,7 @@ export function readPendingOauth():
       companyName: typeof blob.companyName === "string" ? blob.companyName : "",
       slug: typeof blob.slug === "string" ? blob.slug : "",
       acceptedTerms: blob.acceptedTerms === true,
+      cityState: typeof blob.cityState === "string" ? blob.cityState : "",
     },
     attribution: isHeardAbout(blob.attribution?.heardAbout) ? blob.attribution ?? null : null,
   };
@@ -308,5 +312,6 @@ export function draftToBusiness(values: TenantFormValues): BusinessDraft {
     slug: values.slug,
     slugTouched: true,
     acceptedTerms: values.acceptedTerms,
+    cityState: values.cityState ?? "",
   };
 }

@@ -18,6 +18,33 @@ export type StrategyCallState =
   | { success: true; message: string; sessionId: string }
   | null;
 
+/**
+ * contact_requests.company_name and .city_state for a new lead. Never throws.
+ * Until 20261121090000 adds city_state, the company name is saved on its own.
+ */
+async function saveBusinessDetails(
+  supabase: ReturnType<typeof getStrategyCallAdminClient>,
+  contactRequestId: string,
+  companyName: string | null,
+  cityState: string | null,
+): Promise<void> {
+  const company = companyName ? { company_name: companyName } : {};
+  try {
+    let { error } = await supabase
+      .from("contact_requests")
+      .update({ ...company, ...(cityState ? { city_state: cityState } : {}) })
+      .eq("id", contactRequestId);
+    if (error && cityState && /city_state/.test(error.message ?? "") && companyName) {
+      ({ error } = await supabase.from("contact_requests").update(company).eq("id", contactRequestId));
+    }
+    if (error) {
+      console.warn("Strategy-call company and city not saved (non-fatal)", { code: error.code });
+    }
+  } catch {
+    console.warn("Strategy-call company and city not saved (non-fatal)");
+  }
+}
+
 export async function submitStrategyCallAction(
   _prev: StrategyCallState,
   formData: FormData
@@ -112,6 +139,14 @@ export async function submitStrategyCallAction(
       if (promoError) {
         console.warn("Strategy-call promo code not saved (non-fatal)", { code: promoError.code });
       }
+    }
+
+    // The rental company and its city and state, so the team can look the
+    // business up. Written after the RPC (which stores company_name as
+    // "Unknown") rather than through it, so the live RPC is left as it is.
+    // Best effort, like the promo code: the lead is saved either way.
+    if (created.contact_request_id && (input.companyName || input.cityState)) {
+      await saveBusinessDetails(supabase, created.contact_request_id, input.companyName, input.cityState);
     }
 
     cookieStore.set(STRATEGY_CALL_SESSION_COOKIE, rawToken, {

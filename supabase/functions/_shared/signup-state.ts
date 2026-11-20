@@ -102,6 +102,11 @@ export interface SignupMetadata {
   /** Optional, from the account step. `+` and digits when the country is known. */
   phone?: string;
   /**
+   * "City and state" from the business page, free text. For the team (the
+   * Onboarding calls tab and Bryan's booking notice); never the tenant's address.
+   */
+  cityState?: string;
+  /**
    * When "Not ready just yet?" was first shown on the card step (ISO). It is
    * shown once per person; see signup-finish-later.
    */

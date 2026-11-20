@@ -1,6 +1,7 @@
 // =============================================================================
 // signup-attribution — saves "How did you hear about us?" and "How many cars do
-// you rent out?" for a signed-in signup.
+// you rent out?" for a signed-in signup, and "City and state" (which may come
+// on its own, from the business screen after a Google sign-in).
 //
 // The password path sends the answer with `signup-begin`. Google and Apple
 // signups never see that form, so they answer on a short screen straight after
@@ -65,7 +66,9 @@ Deno.serve(async (req) => {
     }
 
     const attribution = readSignupAttribution(body);
-    if (!attribution.heardAbout) {
+    // Either the answers, or "City and state" on its own (the Google path names
+    // the business on a screen after the questions).
+    if (!attribution.heardAbout && !attribution.cityState) {
       return signupError("VALIDATION_FAILED", "Please choose an answer", 400, { field: "heardAbout" });
     }
 
@@ -83,11 +86,15 @@ Deno.serve(async (req) => {
     });
     if (!allowed) return signupError("RATE_LIMITED", "Too many attempts. Please try again later.", 429);
 
+    // Only what this request carries: a city-only save must not blank the
+    // heard-about answer already on record.
     await writeSignupMeta(supabase, user.id, {
-      heardAbout: attribution.heardAbout,
-      heardAboutOther: attribution.heardAboutOther,
+      ...(attribution.heardAbout
+        ? { heardAbout: attribution.heardAbout, heardAboutOther: attribution.heardAboutOther }
+        : {}),
       ...(attribution.fleetSize ? { fleetSize: attribution.fleetSize } : {}),
       ...(attribution.phone ? { phone: attribution.phone } : {}),
+      ...(attribution.cityState ? { cityState: attribution.cityState } : {}),
     });
 
     await saveSignupAttribution(supabase, {

@@ -58,8 +58,8 @@ async function notifyBryan(
       supabase.from("tenant_subscriptions").select("status, trial_end").eq("tenant_id", tenantId)
         .order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("vehicles").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
-      // "*" rather than a column list: fleet_size and exit_offer_seen_at
-      // arrive with a migration, and naming them would fail the whole read
+      // "*" rather than a column list: fleet_size, exit_offer_seen_at and
+      // city_state arrive with migrations, and naming them would fail the whole read
       // (and the notice) until it is applied.
       supabase.from("signup_attribution").select("*").eq("tenant_id", tenantId)
         .order("created_at", { ascending: false }).limit(1).maybeSingle(),
@@ -71,6 +71,7 @@ async function notifyBryan(
       subject: `New onboarding call: ${companyName}`,
       html: buildBookingNoticeHtml({
         companyName,
+        cityState: signup?.city_state,
         slug: t.slug,
         bookerName: booker.name,
         bookerEmail: booker.email,

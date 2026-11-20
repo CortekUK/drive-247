@@ -6,6 +6,8 @@
 export interface ContactRequest {
   id: string;
   company_name: string;
+  /** "City and state" from Book a demo. Null before 20261121090000 and on older rows. */
+  city_state: string | null;
   contact_name: string;
   email: string;
   phone: string | null;
@@ -28,7 +30,17 @@ export interface ContactRequest {
 }
 
 export const CONTACT_COLUMNS =
-  'id,company_name,contact_name,email,phone,message,status,notes,source,fleet_size,current_platform,main_booking_source,budget,readiness,challenge,promo_code,is_favorite,source_detail,is_test,created_at,updated_at';
+  'id,company_name,city_state,contact_name,email,phone,message,status,notes,source,fleet_size,current_platform,main_booking_source,budget,readiness,challenge,promo_code,is_favorite,source_detail,is_test,created_at,updated_at';
+
+/**
+ * The same list without `city_state`, for a database the 20261121090000
+ * migration has not reached yet: the page still loads, with no city shown.
+ */
+export const CONTACT_COLUMNS_WITHOUT_CITY = CONTACT_COLUMNS.replace(',city_state', '');
+
+/** PostgREST's answer to a select that names a column the table does not have. */
+export const isMissingCityColumn = (error: { code?: string; message?: string } | null | undefined) =>
+  !!error && (error.code === '42703' || error.code === 'PGRST204') && /city_state/.test(error.message ?? '');
 
 export const CONTACT_STATUSES = ['pending', 'contacted', 'converted', 'rejected'] as const;
 export type ContactStatus = (typeof CONTACT_STATUSES)[number];
@@ -78,7 +90,7 @@ export const SOURCE_DOT: Record<string, string> = {
 
 export const sourceLabel = (s: string | null) => (s ? (SOURCE_LABEL[s] ?? s) : '—');
 
-/** The strategy-call form has no company field, so its rows say "Unknown". */
+/** Book a demo rows from before it asked for the company say "Unknown". */
 export const companyOf = (r: Pick<ContactRequest, 'company_name'>) =>
   r.company_name && r.company_name.trim().toLowerCase() !== 'unknown' ? r.company_name : null;
 
@@ -88,6 +100,7 @@ export const EDITABLE_FIELDS = [
   { key: 'email', label: 'Email', required: true },
   { key: 'phone', label: 'Phone' },
   { key: 'company_name', label: 'Company' },
+  { key: 'city_state', label: 'City and state' },
   { key: 'fleet_size', label: 'Fleet size' },
   { key: 'current_platform', label: 'Current platform' },
   { key: 'main_booking_source', label: 'Main booking source' },
@@ -106,6 +119,7 @@ export const EMPTY_DRAFT: ContactDraft = {
   email: '',
   phone: '',
   company_name: '',
+  city_state: '',
   fleet_size: '',
   current_platform: '',
   main_booking_source: '',
@@ -145,6 +159,7 @@ const CSV_COLUMNS: { header: string; get: (r: ContactRequest) => string }[] = [
   { header: 'Email', get: (r) => r.email },
   { header: 'Phone', get: (r) => r.phone ?? '' },
   { header: 'Company', get: (r) => companyOf(r) ?? '' },
+  { header: 'City and state', get: (r) => r.city_state ?? '' },
   { header: 'Status', get: (r) => STATUS_LABEL[r.status] ?? r.status },
   { header: 'Source', get: (r) => sourceLabel(r.source) },
   { header: 'Fleet size', get: (r) => r.fleet_size ?? '' },
@@ -215,6 +230,11 @@ const HEADER_ALIASES: Record<string, EditableKey | 'status'> = {
   company: 'company_name',
   'company name': 'company_name',
   business: 'company_name',
+  'city and state': 'city_state',
+  'city, state': 'city_state',
+  'city/state': 'city_state',
+  city: 'city_state',
+  location: 'city_state',
   status: 'status',
   'fleet size': 'fleet_size',
   fleet: 'fleet_size',

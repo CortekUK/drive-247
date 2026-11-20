@@ -1,10 +1,13 @@
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
+  CITY_STATE_MAX,
   HEARD_ABOUT_VALUES,
+  normalizeCityState,
   normalizeSignupPhone,
   phoneForMeta,
   readSignupAttribution,
+  saveSignupAttribution,
   stampStripeCustomer,
   stripeAttributionMetadata,
 } from "../../../supabase/functions/_shared/signup-attribution";
@@ -125,6 +128,122 @@ describe("signup attribution: the server", () => {
     const update = vi.fn();
     await stampStripeCustomer({ customers: { update } }, "cus_1", {});
     expect(update).not.toHaveBeenCalled();
+  });
+});
+
+describe("city and state: the server", () => {
+  it("keeps it tidy: one line, single spaces, capped", () => {
+    expect(readSignupAttribution({ cityState: "  Houston,\n  TX " })).toEqual({ cityState: "Houston, TX" });
+    expect(normalizeCityState("x".repeat(500))).toHaveLength(CITY_STATE_MAX);
+    expect(CITY_STATE_MAX).toBe(80);
+  });
+
+  it("drops what is not a place, without refusing the signup", () => {
+    expect(readSignupAttribution({ cityState: " x " })).toEqual({});
+    expect(readSignupAttribution({ cityState: 42 })).toEqual({});
+  });
+
+  it("travels with the answers and goes on the Stripe customer as city_state", () => {
+    expect(readSignupAttribution({ heardAbout: "instagram", fleetSize: "6-20", cityState: "Miami, FL" })).toEqual({
+      heardAbout: "instagram",
+      fleetSize: "6-20",
+      cityState: "Miami, FL",
+    });
+    expect(stripeAttributionMetadata({ heardAbout: "instagram", cityState: "Miami, FL" })).toEqual({
+      heard_about: "instagram",
+      city_state: "Miami, FL",
+    });
+  });
+
+  /** A signup_attribution table that refuses the columns a pending migration adds. */
+  const table = (missing: string[]) => {
+    const writes: Record<string, unknown>[] = [];
+    const supabase = {
+      from: () => ({
+        upsert: async (row: Record<string, unknown>) => {
+          writes.push(row);
+          const absent = missing.find((c) => c in row);
+          return absent
+            ? { error: { code: "PGRST204", message: `Could not find the '${absent}' column of 'signup_attribution'` } }
+            : { error: null };
+        },
+      }),
+    };
+    return { supabase, writes };
+  };
+
+  it("is saved to signup_attribution.city_state", async () => {
+    const { supabase, writes } = table([]);
+    await saveSignupAttribution(supabase, {
+      authUserId: "u1",
+      email: "a@b.test",
+      attribution: { heardAbout: "youtube", fleetSize: "1-5", cityState: "Austin, TX" },
+    });
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ heard_about: "youtube", fleet_size: "1-5", city_state: "Austin, TX" });
+  });
+
+  it("is saved on its own (the Google path) without touching the heard-about answer", async () => {
+    const { supabase, writes } = table([]);
+    await saveSignupAttribution(supabase, { authUserId: "u1", email: "a@b.test", attribution: { cityState: "Austin, TX" } });
+    expect(writes[0]).toMatchObject({ auth_user_id: "u1", city_state: "Austin, TX" });
+    expect(writes[0]).not.toHaveProperty("heard_about");
+  });
+
+  it("before the migration, the other answers are still saved", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { supabase, writes } = table(["city_state"]);
+    await saveSignupAttribution(supabase, {
+      authUserId: "u1",
+      email: "a@b.test",
+      attribution: { heardAbout: "youtube", fleetSize: "1-5", cityState: "Austin, TX" },
+    });
+    expect(writes).toHaveLength(2);
+    expect(writes[1]).toMatchObject({ heard_about: "youtube", fleet_size: "1-5" });
+    expect(writes[1]).not.toHaveProperty("city_state");
+
+    const older = table(["city_state", "fleet_size"]);
+    await saveSignupAttribution(older.supabase, {
+      authUserId: "u1",
+      email: "a@b.test",
+      attribution: { heardAbout: "youtube", fleetSize: "1-5", cityState: "Austin, TX" },
+    });
+    expect(older.writes).toHaveLength(3);
+    expect(older.writes[2]).toMatchObject({ heard_about: "youtube" });
+    expect(older.writes[2]).not.toHaveProperty("fleet_size");
+  });
+});
+
+describe("city and state: wiring", () => {
+  it("signup-attribution takes it on its own and never blanks the earlier answer", () => {
+    const source = read("supabase/functions/signup-attribution/index.ts");
+    expect(source).toContain("if (!attribution.heardAbout && !attribution.cityState)");
+    expect(source).toMatch(/\.\.\.\(attribution\.heardAbout\s*\?\s*\{ heardAbout: attribution\.heardAbout/);
+    expect(source).toContain("...(attribution.cityState ? { cityState: attribution.cityState } : {})");
+  });
+
+  it("is never written as the tenant's address", () => {
+    const provision = read("supabase/functions/signup-provision/index.ts");
+    expect(provision).not.toMatch(/cityState|city_state/);
+    expect(provision).toContain("address: location,");
+  });
+
+  it("is in the Onboarding calls list, appended at the end, behind the super-admin guard", () => {
+    const sql = read("supabase/migrations/20261121090000_signup_company_city.sql");
+    expect(sql).toContain("ADD COLUMN IF NOT EXISTS city_state text");
+    expect(sql).toMatch(/fleet_size text, exit_offer_seen_at timestamptz,\s*city_state text\s*\)/);
+    expect(sql).toContain("IF NOT public.is_super_admin() THEN");
+    expect(sql).toContain("REVOKE ALL ON FUNCTION public.admin_onboarding_calls() FROM PUBLIC, anon;");
+    expect(sql).toContain("GRANT EXECUTE ON FUNCTION public.admin_onboarding_calls() TO authenticated;");
+    expect(sql).not.toMatch(/ALTER TABLE public\.tenants/);
+  });
+
+  it("is shown in the admin Onboarding calls tab and Bryan's booking notice", () => {
+    const tab = read("apps/admin/components/admin/customer-management/onboarding-calls-tab.tsx");
+    expect(tab).toContain("city_state?: string | null;");
+    expect(tab).toContain("{r.city_state && `${r.city_state} · `}");
+    const booked = read("supabase/functions/onboarding-call-booked/index.ts");
+    expect(booked).toContain("cityState: signup?.city_state,");
   });
 });
 

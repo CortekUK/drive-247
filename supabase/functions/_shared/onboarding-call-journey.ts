@@ -155,6 +155,8 @@ export function callEventValues(
 
 export interface BookingNotice {
   companyName: string;
+  /** "City and state" from the signup, so the business can be looked up online. */
+  cityState?: string | null;
   slug: string;
   bookerName: string;
   bookerEmail: string;
@@ -200,6 +202,7 @@ export function buildBookingNoticeHtml(n: BookingNotice): string {
   const rows: [string, string][] = [
     ["Call time", formatCallTime(n.startsAt, n.timezone)],
     ["Company", n.companyName],
+    ["City and state", n.cityState?.trim() || "Not given"],
     ["Booked by", [n.bookerName, n.bookerEmail].filter(Boolean).join(" · ")],
     ["Phone", n.phone || "Not given"],
     ["Plan", [n.plan, n.subscriptionStatus].filter(Boolean).join(" · ") || "Unknown"],

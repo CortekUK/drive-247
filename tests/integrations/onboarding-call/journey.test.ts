@@ -100,6 +100,22 @@ describe("the emails", () => {
     }
   });
 
+  it("tells Bryan the company and its city and state, so he can look it up", () => {
+    const base = {
+      companyName: "Harbor Car Rentals", slug: "harbor", bookerName: "Sam", bookerEmail: "sam@harbor.test",
+      startsAt: "2026-11-20T15:00:00Z", signedUpAt: "2026-11-19T00:00:00Z", vehicleCount: 0, hasLogo: false,
+    };
+    const html = buildBookingNoticeHtml({ ...base, cityState: "Houston, TX" });
+    expect(html).toContain("Harbor Car Rentals");
+    expect(html).toContain("City and state");
+    expect(html).toContain("Houston, TX");
+    // Straight after the company, where he reads it first.
+    expect(html.indexOf("City and state")).toBeGreaterThan(html.indexOf(">Company<"));
+    expect(html.indexOf("City and state")).toBeLessThan(html.indexOf("Booked by"));
+    expect(buildBookingNoticeHtml({ ...base, cityState: "<b>x</b>" })).toContain("&lt;b&gt;x&lt;/b&gt;");
+    expect(buildBookingNoticeHtml(base)).toMatch(/City and state<\/td><td[^>]*>Not given/);
+  });
+
   it("tells Bryan the fleet size and whether the 20% offer was shown", () => {
     const base = {
       companyName: "Acme", slug: "acme", bookerName: "Sam", bookerEmail: "sam@acme.test",

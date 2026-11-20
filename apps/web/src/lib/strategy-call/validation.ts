@@ -38,9 +38,19 @@ export const READINESS_OPTIONS = [
   "Just researching",
 ] as const;
 
+/** "Rental company name" and "City and state" on Book a demo. */
+export const COMPANY_NAME_MAX = 100;
+export const CITY_STATE_MAX = 80;
+
 export type StrategyCallSubmission = {
   name: string;
   email: string;
+  /**
+   * Null only for a post from a page loaded before the form asked (an old tab
+   * still open across a deploy): the form itself requires both.
+   */
+  companyName: string | null;
+  cityState: string | null;
   phone: string | null;
   fleetSize: (typeof FLEET_SIZE_OPTIONS)[number];
   currentPlatform: (typeof PLATFORM_OPTIONS)[number];
@@ -83,6 +93,13 @@ export function validateStrategyCallSubmission(
 
   const name = readString(formData, "name").replace(/\s+/g, " ");
   const email = readString(formData, "email").toLowerCase();
+  const oneLine = (key: string) => readString(formData, key).replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+  const companyName = oneLine("company_name");
+  const cityState = oneLine("city_state");
+  // A post that carries the fields must fill them. One that does not carry
+  // them at all is a page from before they were asked, and is kept rather
+  // than refused: a lead without a city beats no lead.
+  const asksBusiness = formData.has("company_name") || formData.has("city_state");
   const phone = readString(formData, "phone");
   const fleetSize = readString(formData, "fleet_size");
   const currentPlatform = readString(formData, "current_platform");
@@ -100,6 +117,12 @@ export function validateStrategyCallSubmission(
   }
   if (email.length > 254 || !EMAIL_PATTERN.test(email)) {
     return { ok: false, message: "Please enter a valid email address." };
+  }
+  if (asksBusiness && (companyName.length < 2 || companyName.length > COMPANY_NAME_MAX)) {
+    return { ok: false, message: "Please enter your rental company name." };
+  }
+  if (asksBusiness && (cityState.length < 2 || cityState.length > CITY_STATE_MAX)) {
+    return { ok: false, message: "Please enter your city and state." };
   }
   if (phone && !PHONE_PATTERN.test(phone)) {
     return { ok: false, message: "Please enter a valid phone number." };
@@ -133,6 +156,8 @@ export function validateStrategyCallSubmission(
     value: {
       name,
       email,
+      companyName: companyName || null,
+      cityState: cityState || null,
       phone: phone || null,
       fleetSize,
       currentPlatform,

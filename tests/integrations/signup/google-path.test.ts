@@ -50,8 +50,24 @@ describe('1. the handoff survives an empty business draft', () => {
 
 describe('2. the return asks for the business when it has none', () => {
   it('switches the account step to the tenant-only fields', () => {
-    expect(provider).toMatch(/if \(!pending\.values\.companyName\.trim\(\) \|\| !pending\.values\.slug\.trim\(\)\) \{/);
+    expect(provider).toMatch(/if \(!pending\.values\.companyName\.trim\(\) \|\| !pending\.values\.slug\.trim\(\) \|\| !cityStateKnown\) \{/);
     expect(provider).toMatch(/setAccountMode\("tenant"\)/);
+  });
+
+  it('also asks there when the city and state is missing', () => {
+    // Typed before the button, or already on the account: either counts.
+    expect(provider).toMatch(/const cityStateKnown = Boolean\(typedCityState \|\| normalizeCityState\(meta\?\.cityState\)\);/);
+    // What was typed before the button crosses the redirect and reaches the server.
+    expect(provider).toMatch(/\.\.\.\(typedCityState \? \{ cityState: typedCityState \} : \{\}\),/);
+    expect(draft).toMatch(/cityState: typeof blob\.cityState === "string" \? blob\.cityState : ""/);
+  });
+
+  it('asks it on that screen, under the business name, and requires it', () => {
+    const tenantBranch = account.slice(account.indexOf('if (mode === "tenant")'), account.indexOf('// Default: create the account'));
+    expect(tenantBranch).toMatch(/askCityState/);
+    expect(tenantBranch).toMatch(/cityState: fieldError\("cityState"\)/);
+    const errors = account.slice(account.indexOf('const tenantErrors'), account.indexOf('const refFor'));
+    expect(errors).toMatch(/const cityError = validateCityState\(tenant\.cityState\);/);
   });
 
   it('does not fall through to the server-chosen step in that case', () => {
@@ -74,6 +90,11 @@ describe('3. the tenant step pays before it provisions', () => {
   it('routes to payment when nothing has been charged', () => {
     expect(fn).toMatch(/if \(!s\.payment\.paid\) \{/);
     expect(fn).toMatch(/dispatch\(\{ type: "goto", step: "payment" \}\)/);
+  });
+
+  it('saves the city and state for the team before moving on, and a failed save never stops it', () => {
+    expect(fn).toMatch(/await signupSaveCityState\(cityState\)\.catch\(/);
+    expect(fn.indexOf('signupSaveCityState')).toBeLessThan(fn.indexOf('if (!s.payment.paid)'));
   });
 
   it('still provisions directly when the money is already in', () => {

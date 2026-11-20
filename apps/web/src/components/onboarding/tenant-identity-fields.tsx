@@ -2,7 +2,9 @@
 
 /**
  * Business name + web address + terms — the three answers `signup-provision`
- * actually requires from the operator.
+ * actually requires from the operator. With `askCityState`, "City and state"
+ * sits under the business name: a signup answer for the team, not part of the
+ * tenant (see `BusinessDraft.cityState`).
  *
  * They live in their own component because two places render them: the account
  * step (the normal path, before any money moves) and the boot screen's "that
@@ -47,6 +49,12 @@ import { FieldError, SIGNUP_INPUT, SIGNUP_LABEL } from "./signup-ui";
  */
 const SLUG_DEBOUNCE_MS = 450;
 
+/**
+ * 40px fields on phones when "City and state" is on the screen, as the first
+ * page does, so the business page still fits at 360x740 with no inner scroll.
+ */
+const COMPACT_ON_PHONES = "max-sm:h-10";
+
 /** The visible half of the hostname. Purely presentational — never sent. */
 const SLUG_SUFFIX = ".drive-247.com";
 
@@ -73,6 +81,13 @@ export interface TenantIdentityFieldsProps {
   termsRef?: React.RefObject<HTMLButtonElement | null>;
   /** Autofocus the business name. False when this sits below other fields. */
   autoFocusCompanyName?: boolean;
+  /**
+   * Ask "City and state" under the business name. On wherever the signup asks
+   * for the business; off on the build screen's "pick another address" panel,
+   * which is only about the web address.
+   */
+  askCityState?: boolean;
+  cityStateRef?: React.RefObject<HTMLInputElement | null>;
 }
 
 export function TenantIdentityFields({
@@ -87,6 +102,8 @@ export function TenantIdentityFields({
   slugRef,
   termsRef,
   autoFocusCompanyName = false,
+  askCityState = false,
+  cityStateRef,
 }: TenantIdentityFieldsProps) {
   const [slugState, setSlugState] = React.useState<SlugState>({ kind: "idle" });
 
@@ -203,7 +220,7 @@ export function TenantIdentityFields({
             errors.companyName ? "signup-company-name-error" : "signup-company-name-help"
           }
           onChange={(e) => setCompanyName(e.target.value)}
-          className={cn(SIGNUP_INPUT, "mt-1.5")}
+          className={cn(SIGNUP_INPUT, "mt-1.5", askCityState && COMPACT_ON_PHONES)}
         />
         {errors.companyName ? (
           <FieldError id="signup-company-name-error">{errors.companyName}</FieldError>
@@ -213,6 +230,37 @@ export function TenantIdentityFields({
           </p>
         )}
       </div>
+
+      {askCityState && (
+        <div>
+          <Label htmlFor="signup-city-state" className={SIGNUP_LABEL}>
+            City and state
+          </Label>
+          {/* `off`, not `address-level2`: that autofills the city alone and
+              leaves the state out without anyone noticing. */}
+          <Input
+            ref={cityStateRef}
+            id="signup-city-state"
+            name="cityState"
+            type="text"
+            autoComplete="off"
+            placeholder="Houston, TX"
+            value={value.cityState ?? ""}
+            disabled={busy}
+            maxLength={FIELD_MAX.cityState}
+            aria-invalid={Boolean(errors.cityState)}
+            aria-describedby={errors.cityState ? "signup-city-state-error" : undefined}
+            onChange={(e) => {
+              onClearError("cityState");
+              onChange({ cityState: e.target.value });
+            }}
+            className={cn(SIGNUP_INPUT, "mt-1.5", COMPACT_ON_PHONES)}
+          />
+          {errors.cityState && (
+            <FieldError id="signup-city-state-error">{errors.cityState}</FieldError>
+          )}
+        </div>
+      )}
 
       <div>
         <Label htmlFor="signup-slug" className={SIGNUP_LABEL}>
@@ -232,6 +280,7 @@ export function TenantIdentityFields({
             (slugError || slugState.kind === "unavailable") &&
               "border-destructive focus-within:border-destructive focus-within:ring-destructive/20",
             busy && "opacity-50",
+            askCityState && COMPACT_ON_PHONES,
           )}
         >
           <input

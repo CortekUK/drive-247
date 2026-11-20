@@ -59,6 +59,7 @@ export function ContactDetailDialog({
     ['Email', r.email],
     ['Phone', r.phone],
     ['Company', companyOf(r)],
+    ['City and state', r.city_state ?? null],
     ['Fleet size', r.fleet_size],
     ['Current platform', r.current_platform],
     ['Main booking source', r.main_booking_source],

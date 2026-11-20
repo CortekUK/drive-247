@@ -38,6 +38,7 @@ import {
 import {
   checkSlugShape,
   deriveSlugFromCompanyName,
+  normalizeCityState,
   normalizeSlugClient,
 } from "@/lib/signup-validation";
 import { OPEN_SIGNUP_EVENT } from "@/lib/open-signup";
@@ -53,6 +54,7 @@ import {
   signupFinishLaterRedeem,
   signupFinishLaterSend,
   signupSaveAttribution,
+  signupSaveCityState,
   signupVerifyOtp,
   signupPaymentIntent,
   signupProvision,
@@ -525,6 +527,8 @@ function draftFromSnapshot(b: NonNullable<ResumeSignupDTO["business"]>): Busines
     // A snapshot only exists because a submit carrying acceptedTerms === true
     // reached the server. Making them re-tick it would be theatre.
     acceptedTerms: true,
+    // Not part of the snapshot: it is a signup answer, saved on its own.
+    cityState: "",
   };
 }
 
@@ -542,7 +546,10 @@ function tenantValuesFrom(d: BusinessDraft): TenantFormValues | null {
   if (companyName.length < 2) return null;
   if (!checkSlugShape(slug).ok) return null;
   if (!d.acceptedTerms) return null;
-  return { companyName, slug, acceptedTerms: true };
+  // "City and state" rides along when it is there, but never holds up a build:
+  // a signup that started before the question existed has none.
+  const cityState = normalizeCityState(d.cityState);
+  return { companyName, slug, acceptedTerms: true, ...(cityState ? { cityState } : {}) };
 }
 
 /**
@@ -594,11 +601,13 @@ async function reportStartTrial(res: ProvisionResponse): Promise<void> {
  * record so they are right on every path (a reload, another device, a Google
  * return).
  */
-async function heardAboutProps(): Promise<{ heard_about?: HeardAbout; fleet_size?: FleetSize }> {
+async function heardAboutProps(): Promise<{ heard_about?: HeardAbout; fleet_size?: FleetSize; city_state?: string }> {
   const meta = await fetchSignupMeta();
+  const cityState = normalizeCityState(meta?.cityState);
   return {
     ...(isHeardAbout(meta?.heardAbout) ? { heard_about: meta.heardAbout } : {}),
     ...(isFleetSize(meta?.fleetSize) ? { fleet_size: meta.fleetSize } : {}),
+    ...(cityState ? { city_state: cityState } : {}),
   };
 }
 
@@ -1614,10 +1623,12 @@ export function OnboardingProvider({
         dispatch({ type: "setPlan", planId: pending.planId });
         dispatch({ type: "business", patch: draftToBusiness(pending.values) });
 
+        const typedCityState = normalizeCityState(pending.values.cityState);
         await signupBeginOauth({
           planId: pending.planId,
           tracking: readMetaSignals(),
           ...(pending.attribution ?? {}),
+          ...(typedCityState ? { cityState: typedCityState } : {}),
         });
         // Only now — the draft is worth keeping only against a signup that
         // actually exists.
@@ -1653,8 +1664,13 @@ export function OnboardingProvider({
            * mode the post-payment recovery path uses; the difference is only that
            * nothing has been charged yet, and `submitTenantDetails` branches on
            * that.
+           *
+           * "City and state" is asked on that same screen, so someone who typed
+           * the business before pressing the button but not the city still
+           * sees it once.
            */
-          if (!pending.values.companyName.trim() || !pending.values.slug.trim()) {
+          const cityStateKnown = Boolean(typedCityState || normalizeCityState(meta?.cityState));
+          if (!pending.values.companyName.trim() || !pending.values.slug.trim() || !cityStateKnown) {
             setAccountMode("tenant");
             dispatch({ type: "resumeTo", step: "account" });
             return;
@@ -1988,10 +2004,12 @@ export function OnboardingProvider({
         return;
       }
 
+      const cityState = normalizeCityState(values.cityState);
       const tenant: TenantFormValues = {
         companyName: values.companyName.trim(),
         slug: normalizeSlugClient(values.slug),
         acceptedTerms: values.acceptedTerms,
+        cityState,
       };
 
       dispatch({ type: "busy", busy: true });
@@ -2011,6 +2029,9 @@ export function OnboardingProvider({
           formStartedAt: values.formStartedAt,
           tracking: readMetaSignals(),
           ...values.attribution,
+          // Saved with the answers (signup_attribution.city_state), so the team
+          // has it even if the card is never filled in.
+          ...(cityState ? { cityState } : {}),
         });
 
         /*
@@ -2043,7 +2064,11 @@ export function OnboardingProvider({
           );
           setHasResumableSignup(true);
           if (!isMockSignup()) {
-            captureSignup("signup_account_submitted", { plan: planId, ...(fleet ? { fleet_size: fleet } : {}) });
+            captureSignup("signup_account_submitted", {
+              plan: planId,
+              ...(fleet ? { fleet_size: fleet } : {}),
+              ...(cityState ? { city_state: cityState } : {}),
+            });
           }
           dispatch({ type: "goto", step: "verify" });
           return;
@@ -2295,16 +2320,26 @@ export function OnboardingProvider({
     async (values: TenantFormValues) => {
       const s = stateRef.current;
       if (s.busy) return;
+      const cityState = normalizeCityState(values.cityState);
       const tenant: TenantFormValues = {
         companyName: values.companyName.trim(),
         slug: normalizeSlugClient(values.slug),
         acceptedTerms: values.acceptedTerms,
+        cityState,
       };
       dispatch({ type: "busy", busy: true });
       dispatch({ type: "error", error: null });
       try {
         dispatch({ type: "business", patch: draftToBusiness(tenant) });
         await saveTenantDraft(tenant);
+        // "City and state" reaches the team's record here on the Google path
+        // (the password path sent it with signup-begin). A failed save never
+        // stops the signup.
+        if (cityState) {
+          await signupSaveCityState(cityState).catch((e) =>
+            console.warn("[onboarding] could not save the city and state", e),
+          );
+        }
         setAccountMode("create");
 
         /*
@@ -2403,6 +2438,7 @@ export function OnboardingProvider({
       companyName: values.companyName.trim(),
       slug: normalizeSlugClient(values.slug),
       acceptedTerms: values.acceptedTerms,
+      cityState: normalizeCityState(values.cityState),
     };
     dispatch({ type: "busy", busy: true });
     dispatch({ type: "error", error: null });

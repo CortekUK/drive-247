@@ -13,12 +13,15 @@ import {
   isTrustedGhlCompletionMessage,
 } from "@/lib/strategy-call/ghl-message";
 import type { StrategyCallState } from "@/actions/strategy-call";
-import { DemoBookingsArt, DemoFleetArt, DemoLaunchArt, DemoWhoArt } from "./demo-art";
+import { CITY_STATE_MAX, COMPANY_NAME_MAX } from "@/lib/strategy-call/validation";
+import { DemoBookingsArt, DemoBusinessArt, DemoFleetArt, DemoLaunchArt, DemoWhoArt } from "./demo-art";
 
 /*
  * Booking a demo: a short form about the fleet, then the calendar. This is the flow that
  * used to be the /strategy-call page; the same eight questions reach the same save, the calendar is the same embed, and a finished booking still lands on
- * /strategy-call/confirmation.
+ * /strategy-call/confirmation. Since 2026-11-21 it also asks the rental company's name and its
+ * city and state (contact_requests.company_name / city_state), so the team can look the
+ * business up when the number given does not answer.
  *
  * LAID OUT LIKE THE OPERATOR PORTAL'S "ADD A CUSTOMER" DIALOG (Ghulam, 2026-11-10: "exactly
  * that"; apps/portal/src/components/customers-v2/customer-form-dialog-v2.tsx and
@@ -243,10 +246,31 @@ function Pick({ value, onChange, placeholder, options, invalid, disabled }: { va
 
 /* ─── The screens ─── */
 
-type Field = "name" | "email" | "phone" | "fleet_size" | "current_platform" | "main_booking_source" | "budget" | "readiness";
+type Field =
+  | "name"
+  | "email"
+  | "company_name"
+  | "city_state"
+  | "phone"
+  | "fleet_size"
+  | "current_platform"
+  | "main_booking_source"
+  | "budget"
+  | "readiness";
 type Values = Record<Field, string>;
 
-const EMPTY: Values = { name: "", email: "", phone: "", fleet_size: "", current_platform: "", main_booking_source: "", budget: "", readiness: "" };
+const EMPTY: Values = {
+  name: "",
+  email: "",
+  company_name: "",
+  city_state: "",
+  phone: "",
+  fleet_size: "",
+  current_platform: "",
+  main_booking_source: "",
+  budget: "",
+  readiness: "",
+};
 
 const STEPS: { name: string; art: ComponentType<{ className?: string }>; title: string; line: string; fields: Field[] }[] = [
   {
@@ -255,6 +279,15 @@ const STEPS: { name: string; art: ComponentType<{ className?: string }>; title: 
     title: "Book your free launch plan call",
     line: "Takes 60 seconds, so we can tailor the call to your fleet, booking setup and launch goals.",
     fields: ["name", "email"],
+  },
+  {
+    // Asked so the team can look the business up and find another number
+    // to try when the first one does not answer (Neema, 2026-11-21).
+    name: "Your business",
+    art: DemoBusinessArt,
+    title: "Tell us about your business",
+    line: "Your rental company's name and where it is based.",
+    fields: ["company_name", "city_state"],
   },
   {
     name: "Your fleet",
@@ -284,6 +317,8 @@ function problem(field: Field, v: Values): string {
   const value = v[field].trim();
   if (field === "name") return value ? "" : "Add your name";
   if (field === "email") return !value ? "Add your email" : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? "" : "That email doesn't look right";
+  if (field === "company_name") return value.length >= 2 ? "" : "Add your company name";
+  if (field === "city_state") return value.length >= 2 ? "" : "Add your city and state";
   if (field === "fleet_size") return value ? "" : "Pick a fleet size";
   if (field === "current_platform") return value ? "" : "Pick a platform";
   if (field === "budget") return value ? "" : "Pick a launch budget";
@@ -440,6 +475,16 @@ export function BookDemoFlow({ onClose }: { onClose?(): void }) {
           )}
           {step === 1 && (
             <>
+              <Cell label="Rental company name" required error={err("company_name")}>
+                <input value={values.company_name} onChange={(e) => set("company_name")(e.target.value)} placeholder="Acme Car Rentals" autoComplete="organization" maxLength={COMPANY_NAME_MAX} aria-invalid={!!err("company_name") || undefined} disabled={isPending} className={CONTROL} />
+              </Cell>
+              <Cell label="City and state" required error={err("city_state")}>
+                <input value={values.city_state} onChange={(e) => set("city_state")(e.target.value)} placeholder="Houston, TX" autoComplete="off" maxLength={CITY_STATE_MAX} aria-invalid={!!err("city_state") || undefined} disabled={isPending} className={CONTROL} />
+              </Cell>
+            </>
+          )}
+          {step === 2 && (
+            <>
               <Cell label="Phone number">
                 <input value={values.phone} onChange={(e) => set("phone")(e.target.value)} type="tel" placeholder="(555) 123-4567" autoComplete="tel" disabled={isPending} className={CONTROL} />
               </Cell>
@@ -448,7 +493,7 @@ export function BookDemoFlow({ onClose }: { onClose?(): void }) {
               </Cell>
             </>
           )}
-          {step === 2 && (
+          {step === 3 && (
             <>
               <Cell label="Current platform" required error={err("current_platform")}>
                 <Pick value={values.current_platform} onChange={set("current_platform")} placeholder="Select platform" options={PLATFORM_OPTIONS} invalid={!!err("current_platform")} disabled={isPending} />
@@ -458,7 +503,7 @@ export function BookDemoFlow({ onClose }: { onClose?(): void }) {
               </Cell>
             </>
           )}
-          {step === 3 && (
+          {step === 4 && (
             <>
               <Cell label="Launch budget" required error={err("budget")}>
                 <Pick value={values.budget} onChange={set("budget")} placeholder="Select launch budget" options={BUDGET_OPTIONS} invalid={!!err("budget")} disabled={isPending} />

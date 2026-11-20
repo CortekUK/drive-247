@@ -24,7 +24,9 @@ import { ContactDetailDialog, ContactFormDialog, ImportDialog } from '@/componen
 import { LeadSourcesDialog, MetaReturnHandler, useLeadConnections } from '@/components/admin/contacts/lead-sources';
 import {
   CONTACT_COLUMNS,
+  CONTACT_COLUMNS_WITHOUT_CITY,
   CONTACT_STATUSES,
+  isMissingCityColumn,
   SOURCE_DOT,
   SOURCE_GROUPS,
   STATUS_LABEL,
@@ -64,12 +66,22 @@ export default function ContactRequestsPage() {
   const load = useCallback(async () => {
     // Paged reads: PostgREST stops at 1,000 rows a request.
     const all: ContactRequest[] = [];
+    let columns = CONTACT_COLUMNS;
     for (let from = 0; ; from += 1000) {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('contact_requests')
-        .select(CONTACT_COLUMNS)
+        .select(columns)
         .order('created_at', { ascending: false })
         .range(from, from + 999);
+      // Before 20261121090000 there is no city_state column: load without it.
+      if (isMissingCityColumn(error) && columns !== CONTACT_COLUMNS_WITHOUT_CITY) {
+        columns = CONTACT_COLUMNS_WITHOUT_CITY;
+        ({ data, error } = await supabase
+          .from('contact_requests')
+          .select(columns)
+          .order('created_at', { ascending: false })
+          .range(from, from + 999));
+      }
       if (error) {
         toast.error(`Could not load requests: ${error.message}`);
         break;
@@ -92,10 +104,19 @@ export default function ContactRequestsPage() {
   const update = async (r: ContactRequest, next: Partial<ContactRequest>, success?: string) => {
     const before = { ...r };
     patch(r.id, next);
-    const { error } = await supabase
+    let { error } = await supabase
       .from('contact_requests')
       .update({ ...next, updated_at: new Date().toISOString() })
       .eq('id', r.id);
+    if (isMissingCityColumn(error) && 'city_state' in next) {
+      // Before 20261121090000: save everything else.
+      const { city_state: _city, ...rest } = next;
+      void _city;
+      ({ error } = await supabase
+        .from('contact_requests')
+        .update({ ...rest, updated_at: new Date().toISOString() })
+        .eq('id', r.id));
+    }
     if (error) {
       patch(r.id, before);
       toast.error(`Could not save: ${error.message}`);
@@ -133,11 +154,21 @@ export default function ContactRequestsPage() {
     if (editing && editing !== 'new') {
       return update(editing, row as Partial<ContactRequest>, 'Request saved');
     }
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('contact_requests')
       .insert({ ...row, source: 'manual' })
       .select(CONTACT_COLUMNS)
       .single();
+    if (isMissingCityColumn(error)) {
+      // Before 20261121090000: add it without the city.
+      const { city_state: _city, ...rest } = row;
+      void _city;
+      ({ data, error } = await supabase
+        .from('contact_requests')
+        .insert({ ...rest, source: 'manual' })
+        .select(CONTACT_COLUMNS_WITHOUT_CITY)
+        .single());
+    }
     if (error || !data) {
       toast.error(`Could not add: ${error?.message ?? 'no row came back'}`);
       return false;
@@ -189,7 +220,7 @@ export default function ContactRequestsPage() {
         (!group || (group.sources as readonly string[]).includes(r.source ?? '')) &&
         (!favOnly || r.is_favorite) &&
         (!q ||
-          [r.contact_name, r.email, r.phone, companyOf(r), r.fleet_size, r.current_platform, r.message, r.notes]
+          [r.contact_name, r.email, r.phone, companyOf(r), r.city_state, r.fleet_size, r.current_platform, r.message, r.notes]
             .filter(Boolean)
             .some((v) => (v as string).toLowerCase().includes(q))),
     );
@@ -347,7 +378,9 @@ export default function ContactRequestsPage() {
                       </td>
                       <td className="max-w-[220px] px-3 py-3">
                         <p className="truncate font-medium text-foreground">{r.contact_name}</p>
-                        {companyOf(r) && <p className="truncate text-xs text-muted-foreground">{companyOf(r)}</p>}
+                        {(companyOf(r) || r.city_state) && (
+                          <p className="truncate text-xs text-muted-foreground">{[companyOf(r), r.city_state].filter(Boolean).join(' · ')}</p>
+                        )}
                       </td>
                       <td className="max-w-[240px] truncate px-3 py-3 text-muted-foreground">{r.email}</td>
                       <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">{r.phone || '—'}</td>

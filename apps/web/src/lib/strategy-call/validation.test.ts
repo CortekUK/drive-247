@@ -5,6 +5,8 @@ function validSubmission(overrides: Record<string, string> = {}): FormData {
   const values = {
     name: "  Haris   Khan  ",
     email: " HARIS@example.com ",
+    company_name: "  Harbor   Car Rentals ",
+    city_state: " Houston,  TX ",
     phone: "+44 7376 700583",
     fleet_size: "5–10 vehicles",
     current_platform: "Turo",
@@ -27,6 +29,8 @@ describe("strategy-call qualifier validation", () => {
       value: {
         name: "Haris Khan",
         email: "haris@example.com",
+        companyName: "Harbor Car Rentals",
+        cityState: "Houston, TX",
         phone: "+44 7376 700583",
         fleetSize: "5–10 vehicles",
         currentPlatform: "Turo",
@@ -99,6 +103,27 @@ describe("strategy-call qualifier validation", () => {
     if (result.ok) {
       expect(result.value.phone).toBeNull();
       expect(result.value.mainBookingSource).toBeNull();
+    }
+  });
+
+  it("requires the rental company name and the city and state", () => {
+    for (const field of ["company_name", "city_state"]) {
+      expect(validateStrategyCallSubmission(validSubmission({ [field]: "" })).ok).toBe(false);
+      expect(validateStrategyCallSubmission(validSubmission({ [field]: " x " })).ok).toBe(false);
+    }
+    expect(validateStrategyCallSubmission(validSubmission({ company_name: "x".repeat(101) })).ok).toBe(false);
+    expect(validateStrategyCallSubmission(validSubmission({ city_state: "x".repeat(81) })).ok).toBe(false);
+  });
+
+  it("still keeps a lead from a page loaded before the form asked for the business", () => {
+    const data = validSubmission();
+    data.delete("company_name");
+    data.delete("city_state");
+    const result = validateStrategyCallSubmission(data);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.companyName).toBeNull();
+      expect(result.value.cityState).toBeNull();
     }
   });
 

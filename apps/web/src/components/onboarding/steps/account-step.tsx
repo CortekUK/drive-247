@@ -59,6 +59,7 @@ import {
   ACCOUNT_FIELD_ORDER,
   FIELD_MAX,
   firstErrorField,
+  normalizeCityState,
   normalizeEmail,
   normalizeSlugClient,
   passwordRuleState,
@@ -66,6 +67,7 @@ import {
   suggestEmailCorrection,
   TENANT_FIELD_ORDER,
   validateAccount,
+  validateCityState,
   validateTenant,
   type AccountField,
   type FieldErrors,
@@ -165,7 +167,7 @@ const LAST_ACCOUNT_PAGE = ACCOUNT_PAGE_COUNT - 1;
 const PAGE_FIELDS: readonly (readonly AccountField[])[] = [
   ["fullName", "email", "heardAbout", "heardAboutOther", "fleetSize", "phone"],
   ["password"],
-  ["companyName", "slug", "acceptedTerms"],
+  ["companyName", "cityState", "slug", "acceptedTerms"],
 ];
 /** The honeypot's value, or "" when it only repeats a field the person filled. */
 function honeypotValue(raw: string | undefined, typed: readonly (string | undefined)[]): string {
@@ -300,6 +302,7 @@ export function AccountStep({
   const passwordRef = React.useRef<HTMLInputElement>(null);
   const signInPasswordRef = React.useRef<HTMLInputElement>(null);
   const companyNameRef = React.useRef<HTMLInputElement>(null);
+  const cityStateRef = React.useRef<HTMLInputElement>(null);
   const slugRef = React.useRef<HTMLInputElement>(null);
   const termsRef = React.useRef<HTMLButtonElement>(null);
 
@@ -311,11 +314,12 @@ export function AccountStep({
    */
   const [slugState, setSlugState] = React.useState<SlugState>({ kind: "idle" });
 
-  /** The three tenant answers, normalised the way the provider will send them. */
+  /** The tenant answers, normalised the way the provider will send them. */
   const tenantValues = (): TenantFormValues => ({
     companyName: tenant.companyName.trim(),
     slug: normalizeSlugClient(tenant.slug),
     acceptedTerms: tenant.acceptedTerms,
+    cityState: normalizeCityState(tenant.cityState),
   });
 
   /**
@@ -325,6 +329,10 @@ export function AccountStep({
    */
   const tenantErrors = (): FieldErrors<AccountField> | null => {
     const found = validateTenant(tenantValues());
+    // Required wherever the business is asked: the page before the card, and
+    // the business-only screen after a Google sign-in.
+    const cityError = validateCityState(tenant.cityState);
+    if (cityError) found.cityState = cityError;
     if (slugState.kind === "unavailable" && !found.slug) {
       found.slug =
         slugState.reason === "reserved"
@@ -353,6 +361,8 @@ export function AccountStep({
                 ? passwordRef.current
                 : field === "companyName"
                   ? companyNameRef.current
+                  : field === "cityState"
+                    ? cityStateRef.current
                   : field === "slug"
                     ? slugRef.current
                     : termsRef.current;
@@ -542,7 +552,7 @@ export function AccountStep({
       // sets `.value` directly never fires React's onChange.
       // A browser autofill that slipped past the attributes copies what the
       // person typed; a bot writes its own value. Only the latter is a trip.
-      companyWebsite: honeypotValue(honeypotRef.current?.value, [fullName, email, attribution.phone, tenantValue.companyName]),
+      companyWebsite: honeypotValue(honeypotRef.current?.value, [fullName, email, attribution.phone, tenantValue.companyName, tenantValue.cityState]),
       // 0 only if the mount effect somehow has not run; falling back to "now"
       // is the safe direction (a zero would read as an implausibly old form).
       formStartedAt: formStartedAtRef.current || Date.now(),
@@ -828,12 +838,14 @@ export function AccountStep({
           }
         />
 
-        <div className="mt-6 space-y-4">
+        {/* Tighter on phones so "City and state" fits with no inner scroll at 360x740. */}
+        <div className="mt-6 space-y-4 max-sm:mt-4 max-sm:space-y-3">
           <TenantIdentityFields
             value={tenant}
             busy={busy}
             errors={{
               companyName: fieldError("companyName"),
+              cityState: fieldError("cityState"),
               slug: fieldError("slug"),
               acceptedTerms: fieldError("acceptedTerms"),
             }}
@@ -845,6 +857,8 @@ export function AccountStep({
             slugRef={slugRef}
             termsRef={termsRef}
             autoFocusCompanyName
+            askCityState
+            cityStateRef={cityStateRef}
           />
         </div>
       </form>
@@ -856,7 +870,7 @@ export function AccountStep({
   //
   //   0  who you are   (Google, or name + email)
   //   1  a password
-  //   2  the business  (name, web address, terms)
+  //   2  the business  (name, city and state, web address, terms)
   //
   // Only page 2 submits to the server; pages 0 and 1 check their own fields
   // and move on. The values live in this component, so going Back loses
@@ -1210,15 +1224,25 @@ export function AccountStep({
           */}
           <ScreenHead
             title="What's your business called?"
-            lead="I'll build your booking site under this name. The web address is yours for good."
+            lead={
+              <>
+                I&apos;ll build your booking site under this name.
+                {/* Phones drop the second sentence (the web address field says
+                    it too) so the page fits at 360x740 with City and state. */}
+                <span className="max-sm:hidden"> The web address is yours for good.</span>
+              </>
+            }
           />
 
-          <div className="mt-6 space-y-4">
+          {/* Tighter on phones so "City and state" fits with no inner scroll at
+              360x740 (2026-11-21). Desktop keeps its spacing. */}
+          <div className="mt-6 space-y-4 max-sm:mt-4 max-sm:space-y-3">
             <TenantIdentityFields
               value={tenant}
               busy={busy}
               errors={{
                 companyName: fieldError("companyName"),
+                cityState: fieldError("cityState"),
                 slug: fieldError("slug"),
                 acceptedTerms: fieldError("acceptedTerms"),
               }}
@@ -1230,6 +1254,8 @@ export function AccountStep({
               slugRef={slugRef}
               termsRef={termsRef}
               autoFocusCompanyName
+              askCityState
+              cityStateRef={cityStateRef}
             />
           </div>
         </div>

@@ -267,6 +267,13 @@ export interface BusinessDraft {
    */
   slugTouched: boolean;
   acceptedTerms: boolean;
+  /**
+   * "City and state", free text ("Houston, TX"). Asked under the business name
+   * so the team can look the business up and find another number to call.
+   * Saved as a signup answer (`signup_attribution.city_state`), never as the
+   * tenant's address: that one is the booking site's real address.
+   */
+  cityState: string;
 }
 
 export const EMPTY_BUSINESS_DRAFT: BusinessDraft = {
@@ -274,6 +281,7 @@ export const EMPTY_BUSINESS_DRAFT: BusinessDraft = {
   slug: "",
   slugTouched: false,
   acceptedTerms: false,
+  cityState: "",
 };
 
 // ---------------------------------------------------------------------------
@@ -382,6 +390,8 @@ export interface AccountFormValues {
   /** Already normalised by the step — lowercase, `[a-z0-9-]`, no edge hyphens. */
   slug: string;
   acceptedTerms: boolean;
+  /** "City and state", normalised. Sent to `signup-begin` with the answers. */
+  cityState?: string;
   /** "How did you hear about us?" and the optional phone number. */
   attribution: SignupAttribution;
   /** Honeypot. Always posted; a non-empty value means bot. */
@@ -401,6 +411,11 @@ export interface TenantFormValues {
   companyName: string;
   slug: string;
   acceptedTerms: boolean;
+  /**
+   * "City and state". Optional here: a draft saved before the question existed
+   * has none, and the build must not stop for it. The forms require it.
+   */
+  cityState?: string;
 }
 
 /**

@@ -5,6 +5,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const navigation = vi.hoisted(() => ({ replace: vi.fn() }));
+/** What the form's action state is: sent (the default here), or null for the form itself. */
+const action = vi.hoisted(() => ({
+  state: { success: true, sessionId: "b72f37a2-b391-4b2a-943f-f43bdd613420" } as unknown,
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: navigation.replace }),
@@ -14,14 +18,7 @@ vi.mock("react", async () => {
   const react = await vi.importActual<typeof import("react")>("react");
   return {
     ...react,
-    useActionState: () => [
-      {
-        success: true,
-        sessionId: "b72f37a2-b391-4b2a-943f-f43bdd613420",
-      },
-      vi.fn(),
-      false,
-    ],
+    useActionState: () => [action.state, vi.fn(), false],
   };
 });
 
@@ -76,6 +73,62 @@ describe("book a demo: calendar handoff", () => {
     expect(navigation.replace).toHaveBeenCalledWith(
       "/strategy-call/confirmation",
     );
+  });
+});
+
+describe("book a demo: the business screen", () => {
+  const sent = action.state;
+  beforeEach(() => {
+    action.state = null;
+  });
+  afterEach(() => {
+    action.state = sent;
+  });
+
+  /** Types into an input the way a person does, so React's onChange fires. */
+  const type = (input: HTMLInputElement, value: string) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const next = () =>
+    act(() => {
+      container.querySelector<HTMLFormElement>("form")!.requestSubmit();
+    });
+  const hidden = (name: string) =>
+    container.querySelector<HTMLInputElement>(`input[type=hidden][name=${name}]`)?.value;
+
+  it("asks for the rental company name and the city and state, both required, and sends them", async () => {
+    await act(async () => root.render(<BookDemoFlow />));
+    const [name, email] = Array.from(container.querySelectorAll<HTMLInputElement>("input:not([type=hidden]):not([name=website])"));
+    act(() => {
+      type(name, "Sam Lee");
+      type(email, "sam@harbor.test");
+    });
+    next();
+
+    expect(container.textContent).toContain("Tell us about your business");
+    expect(container.textContent).toContain("Rental company name");
+    expect(container.textContent).toContain("City and state");
+
+    // Empty: the screen does not let go.
+    next();
+    expect(container.textContent).toContain("Add your company name");
+    expect(container.textContent).toContain("Add your city and state");
+    expect(container.textContent).toContain("Tell us about your business");
+
+    const company = container.querySelector<HTMLInputElement>('input[placeholder="Acme Car Rentals"]')!;
+    const city = container.querySelector<HTMLInputElement>('input[placeholder="Houston, TX"]')!;
+    act(() => {
+      type(company, "  Harbor Car Rentals ");
+      type(city, "Houston, TX");
+    });
+    next();
+    expect(container.textContent).toContain("Tell us about your fleet");
+
+    // Both travel with the form, trimmed, to /api/strategy-call/submit.
+    expect(hidden("company_name")).toBe("Harbor Car Rentals");
+    expect(hidden("city_state")).toBe("Houston, TX");
   });
 });
 
