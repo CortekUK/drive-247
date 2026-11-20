@@ -14,6 +14,8 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import { SIGNUP_PLANS } from "@/lib/plans";
 import { FLEET_SIZE_OPTIONS, FLEET_SIZE_PLAN, fleetSizePlanId, isFleetSize, planForFleetSize } from "@/lib/fleet-size";
@@ -189,5 +191,32 @@ describe("fleet size: on the form", () => {
     expect(hasCompleteAttribution({ heardAbout: "youtube" })).toBe(false);
     expect(hasCompleteAttribution({ fleetSize: "1-5" })).toBe(false);
     expect(hasCompleteAttribution(null)).toBe(false);
+  });
+});
+
+// Owner, 2026-11-20: after "No thanks" a second "Leave for now? / Keep going /
+// Leave" box appeared, and PostHog recorded frustrated repeated taps. The offer
+// is now the only box on the way out of the card step.
+describe("only one box on the way out", () => {
+  const read = (f: string) => readFileSync(resolve(__dirname, f), "utf8");
+  const screen = read("onboarding-screen.tsx");
+  const provider = read("onboarding-provider.tsx");
+
+  it("has no Leave for now / Keep going panel", () => {
+    expect(screen).not.toContain('title="Leave for now?"');
+    expect(screen).not.toMatch(/>\s*Keep going\s*</);
+    expect(provider).not.toContain("setCloseConfirmOpen");
+  });
+
+  it("closes straight away from the card step once the offer is used up", () => {
+    const at = provider.indexOf("const requestClose = useCallback(");
+    const body = provider.slice(at, provider.indexOf("}, [closeNow]);", at));
+    expect(body).not.toMatch(/step === "payment"/);
+    expect(body).toContain("closeNow();");
+  });
+
+  it("offers first on the X and Escape, on every device", () => {
+    expect(screen).toMatch(/if \(offerAllowedRef\.current\) \{\s*showExitOffer\("close"\)/);
+    expect(screen).toContain("if (!next) onCloseButton();");
   });
 });

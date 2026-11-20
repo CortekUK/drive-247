@@ -29,7 +29,7 @@ export interface ExitOfferGate {
   seenLocally: boolean;
   /** The account says it was shown before (on any device). */
   seenOnAccount: boolean;
-  /** Something else already covers the card (the "Leave for now?" panel). */
+  /** Something else already covers the card (the offer itself, or the signup is closed). */
   covered: boolean;
 }
 

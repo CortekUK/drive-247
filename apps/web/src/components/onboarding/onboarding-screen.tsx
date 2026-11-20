@@ -21,7 +21,7 @@ import { ExitOfferPanel, type FinishLaterState } from "./exit-offer-panel";
 import { PaymentStep } from "./steps/payment-step";
 import { VerifyStep } from "./steps/verify-step";
 import { SignupDoodles } from "./signup-doodles";
-import { ScreenHead, SignupWash, SIGNUP_CARD, SIGNUP_ENTER, SIGNUP_HIT, SIGNUP_PRIMARY, SIGNUP_QUIET } from "./signup-ui";
+import { SignupWash, SIGNUP_CARD, SIGNUP_ENTER, SIGNUP_HIT, SIGNUP_PRIMARY, SIGNUP_QUIET } from "./signup-ui";
 
 /**
  * The self-serve signup, full screen.
@@ -92,10 +92,7 @@ export function OnboardingScreen() {
     state,
     plan,
     isOpen,
-    closeConfirmOpen,
     requestClose,
-    confirmClose,
-    cancelClose,
     submitAccount,
     signInExisting,
     useDifferentEmail,
@@ -130,7 +127,6 @@ export function OnboardingScreen() {
   } = useOnboardingShell();
 
   const contentRef = useRef<HTMLDivElement>(null);
-  const keepGoingRef = useRef<HTMLButtonElement>(null);
 
   /**
    * The account step's password-reset detour, mirrored up here because the two
@@ -173,11 +169,6 @@ export function OnboardingScreen() {
     if (state.step === "verify") setAccountPage(0);
   }, [state.step]);
 
-  // The confirmation panel replaces the visible body, so focus follows it.
-  useEffect(() => {
-    if (closeConfirmOpen) keepGoingRef.current?.focus();
-  }, [closeConfirmOpen]);
-
   // -------------------------------------------------------------------------
   // "Not ready just yet?" — the card step's one-time offer (exit-offer.ts)
   // -------------------------------------------------------------------------
@@ -206,7 +197,7 @@ export function OnboardingScreen() {
     busy: state.busy,
     seenLocally: exitOfferSeen,
     seenOnAccount: false,
-    covered: closeConfirmOpen || exitOffer !== null || !isOpen,
+    covered: exitOffer !== null || !isOpen,
   });
   const offerAllowedRef = useRef(offerAllowed);
   useEffect(() => {
@@ -260,8 +251,8 @@ export function OnboardingScreen() {
    * Phones: the back button. One history entry is added while the offer is
    * still to be shown; pressing back pops it, which opens the offer instead of
    * leaving the page. Only the first press is caught: if the offer cannot be
-   * shown by then (busy, a code was applied), that press opens "Leave for
-   * now?" instead, and the next one leaves as normal.
+   * shown by then (busy, a code was applied), that press closes the signup
+   * instead, and the next one leaves as normal.
    */
   const backGuardRef = useRef(false);
   const guardWanted =
@@ -288,7 +279,12 @@ export function OnboardingScreen() {
     return () => window.removeEventListener("popstate", onPop);
   }, [state.step, showExitOffer, requestClose]);
 
-  /** The top-right X. On a phone, on the card step, the offer comes first. */
+  /**
+   * The top-right X (and Escape). On the card step the one-time offer comes
+   * first, on every device; once it has been seen, or when it cannot show, the
+   * signup simply closes. There is no second "Leave for now?" box any more:
+   * after "No thanks" a second box read as a trap (owner, 2026-11-20).
+   */
   const onCloseButton = useCallback(() => {
     if (exitOffer) {
       // Closing over the offer is a "no thanks" on the way out.
@@ -297,12 +293,12 @@ export function OnboardingScreen() {
       requestClose();
       return;
     }
-    if (phoneLike && offerAllowedRef.current) {
+    if (offerAllowedRef.current) {
       showExitOffer("close");
       return;
     }
     requestClose();
-  }, [exitOffer, phoneLike, requestClose, showExitOffer, trackExitOffer]);
+  }, [exitOffer, requestClose, showExitOffer, trackExitOffer]);
 
   const acceptExitOffer = useCallback(async () => {
     trackExitOffer("exit_offer_accepted");
@@ -352,7 +348,6 @@ export function OnboardingScreen() {
     step === "account" &&
     !state.busy &&
     !accountReset.busy &&
-    !closeConfirmOpen &&
     !resolving;
 
   const bannerError =
@@ -386,7 +381,7 @@ export function OnboardingScreen() {
   if (!plan || !dialogStep) return null;
 
   /** The create-account pages are only in play on the plain create form. */
-  const paymentColumns = dialogStep === "payment" && !closeConfirmOpen && !exitOffer;
+  const paymentColumns = dialogStep === "payment" && !exitOffer;
   const paymentTwoCol = paymentColumns && paymentWide;
   const paging = dialogStep === "account" && step !== "verify" && !state.signInPrompt && accountMode === "create";
   const onBusinessPage = paging && accountPage === ACCOUNT_PAGE_COUNT - 1;
@@ -450,17 +445,17 @@ export function OnboardingScreen() {
     // Nothing to submit until the PaymentElement has an intent to confirm.
     (dialogStep === "payment" && !state.payment.clientSecret);
 
-  const canGoBack = paging && accountPage > 0 && !closeConfirmOpen;
+  const canGoBack = paging && accountPage > 0;
   // Keyed per STEP only. The account pages animate inside AccountStep: keying
   // this wrapper by page would remount the step and throw away everything
   // typed on the pages before.
-  const screenKey = closeConfirmOpen ? "leave" : exitOffer ? "offer" : step;
+  const screenKey = exitOffer ? "offer" : step;
 
   return (
     <DialogPrimitive.Root
       open={open}
       onOpenChange={(next) => {
-        if (!next) requestClose();
+        if (!next) onCloseButton();
       }}
     >
       <DialogPrimitive.Portal>
@@ -516,9 +511,7 @@ export function OnboardingScreen() {
           {/* The title a screen reader announces for the whole takeover. */}
           <DialogPrimitive.Title className="sr-only">Set up your Drive247 portal</DialogPrimitive.Title>
           <p className="sr-only" aria-live="polite">
-            {closeConfirmOpen
-              ? "Leave setup? Confirm or keep going."
-              : exitOffer
+            {exitOffer
                 ? "Not ready just yet? Start your free trial today and get 20% off your first 3 months."
               : resolving
                 ? "Checking your setup."
@@ -562,24 +555,7 @@ export function OnboardingScreen() {
                   own padding can tighten without un-cancelling its margins. */}
               <div className="min-h-0 overflow-y-auto px-6 py-7 [scrollbar-width:none] overscroll-contain sm:px-10 sm:py-8 [@media(max-height:700px)]:py-5 sm:[@media(max-height:700px)]:py-5 [&::-webkit-scrollbar]:hidden">
                 <div ref={contentRef} className="w-full">
-                {closeConfirmOpen ? (
-                  <div key="leave" className={SIGNUP_ENTER}>
-                    <ScreenHead
-                      title="Leave for now?"
-                      lead="Your account is saved. Come back to drive-247.com and I'll pick up right here. Nothing has been charged yet."
-                    />
-                    <div className="mt-6 space-y-3">
-                      <Button ref={keepGoingRef} type="button" onClick={cancelClose} className={SIGNUP_PRIMARY}>
-                        Keep going
-                      </Button>
-                      <button type="button" onClick={confirmClose} className={cn(SIGNUP_QUIET, SIGNUP_HIT, "block w-full text-center")}>
-                        Leave
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-
-                {exitOffer && !closeConfirmOpen ? (
+                {exitOffer ? (
                   <div key="offer">
                     <ExitOfferPanel
                       ref={offerPrimaryRef}
@@ -598,7 +574,7 @@ export function OnboardingScreen() {
                   payment step owns a Stripe iframe; unmounting it would throw
                   away a half-typed card number the moment someone clicks close.
                 */}
-                <div hidden={closeConfirmOpen || exitOffer !== null}>
+                <div hidden={exitOffer !== null}>
                   {resolving ? (
                     <div className="flex flex-col items-center justify-center gap-3 py-24" aria-live="polite">
                       <Loader2 className="h-5 w-5 animate-spin text-indigo-600 dark:text-indigo-400" />

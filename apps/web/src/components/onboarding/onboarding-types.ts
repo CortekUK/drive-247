@@ -539,14 +539,11 @@ export interface OnboardingContextValue {
   state: OnboardingState;
   plan: SignupPlan | null;
   isOpen: boolean;
-  closeConfirmOpen: boolean;
   /** True when app_metadata showed an unfinished signup on mount. */
   hasResumableSignup: boolean;
 
   open(planId: SignupPlanId): void;
   requestClose(): void;
-  confirmClose(): void;
-  cancelClose(): void;
 
   submitAccount(values: AccountFormValues): Promise<void>;
   /** `tenant`-mode submit: store the details and start provisioning straight away. */

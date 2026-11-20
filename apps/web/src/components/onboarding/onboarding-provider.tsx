@@ -677,7 +677,6 @@ export function OnboardingProvider({
 }: OnboardingProviderProps) {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
   const [isOpen, setIsOpen] = useState(false);
-  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const [hasResumableSignup, setHasResumableSignup] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [planSwitchBlocked, setPlanSwitchBlocked] = useState<SignupPlanId | null>(null);
@@ -1428,7 +1427,6 @@ export function OnboardingProvider({
   const openSignup = useCallback(
     (planId: SignupPlanId, picked: boolean) => {
       if (stateRef.current.step === "plan") setPlanPicked(picked);
-      setCloseConfirmOpen(false);
       setPlanSwitchBlocked(null);
       setIsOpen(true);
       if (!isMockSignup()) captureSignup("signup_opened", { plan: planId });
@@ -1933,7 +1931,6 @@ export function OnboardingProvider({
   }, [isOpen, state.planId]);
 
   const closeNow = useCallback(() => {
-    setCloseConfirmOpen(false);
     setIsOpen(false);
     setPlanSwitchBlocked(null);
     const step = stateRef.current.step;
@@ -1958,20 +1955,11 @@ export function OnboardingProvider({
     // Writes are in flight. Abandoning here is what creates orphans, so the
     // request is ignored outright rather than confirmed away.
     if (s.step === "provisioning" && s.provisioning.phase === "running") return;
-    if (s.step === "payment") {
-      setCloseConfirmOpen(true);
-      return;
-    }
+    // The card step used to ask "Leave for now?" first. It no longer does: the
+    // one-time "Not ready just yet?" offer is the only box on the way out, and
+    // a second box after "No thanks" read as a trap (owner, 2026-11-20).
     closeNow();
   }, [closeNow]);
-
-  const confirmClose = useCallback(() => {
-    closeNow();
-  }, [closeNow]);
-
-  const cancelClose = useCallback(() => {
-    setCloseConfirmOpen(false);
-  }, []);
 
   const submitAccount = useCallback(
     async (values: AccountFormValues) => {
@@ -2895,12 +2883,9 @@ export function OnboardingProvider({
       state,
       plan,
       isOpen,
-      closeConfirmOpen,
       hasResumableSignup,
       open,
       requestClose,
-      confirmClose,
-      cancelClose,
       submitAccount,
       submitTenantDetails,
       submitAttribution,
@@ -2925,12 +2910,9 @@ export function OnboardingProvider({
       state,
       plan,
       isOpen,
-      closeConfirmOpen,
       hasResumableSignup,
       open,
       requestClose,
-      confirmClose,
-      cancelClose,
       submitAccount,
       submitTenantDetails,
       startGoogleSignup,
