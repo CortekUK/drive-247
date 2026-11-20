@@ -7,13 +7,20 @@ import { useQuery } from "@tanstack/react-query";
 import { deriveBookingRules } from "@nw/components/booking/booking-rules";
 import {
   addDaysIso,
+  formatHourSpan,
+  formatIsoDateLabel,
   isIsoDate,
   localDateToIso,
   resolveBrowserTimezone,
   todayIso,
   zonedWallClockToInstant,
 } from "@nw/components/booking/time-utils";
-import { firstLegalPickup, firstLegalReturn } from "@nw/components/booking/trip-window";
+import {
+  firstLegalPickup,
+  firstLegalReturnDay,
+  firstLegalReturnSlot,
+  isReturnSlotLegal,
+} from "@nw/components/booking/trip-window";
 import { formatMoney } from "@nw/components/fleet/format";
 import {
   EMPTY_FILTERS,
@@ -219,17 +226,25 @@ export function useBookingFlow() {
   /* ── the trip ────────────────────────────────────────────────────────── */
 
   const first = useMemo(() => firstLegalPickup(rules), [rules]);
-  const seededTrip = useMemo<Trip>(
-    () => ({
+  const seededTrip = useMemo<Trip>(() => {
+    // The return floor follows the clock: a 10:00 pickup under a 1 day 2 hours
+    // minimum opens on tomorrow from 12:00, not the day after.
+    const dropoffDate = firstLegalReturnDay(first.date, first.slot, rules);
+    return {
       pickupDate: first.date,
       pickupTime: first.slot,
-      dropoffDate: firstLegalReturn(first.date, rules),
-      dropoffTime: first.preferredSlot,
-    }),
-    [first, rules],
-  );
+      dropoffDate,
+      dropoffTime: firstLegalReturnSlot(first.date, first.slot, dropoffDate, rules, first.preferredSlot) ?? first.preferredSlot,
+    };
+  }, [first, rules]);
   const current = trip ?? seededTrip;
   const tripTouched = trip !== null;
+  /**
+   * The last time the calendar pulled the return back inside the shortest or
+   * longest rental — said in the calendar's hint, so a moved date is never a
+   * silent one. Replaced by the next range the customer picks.
+   */
+  const [moved, setMoved] = useState<{ rule: "minimum" | "maximum"; to: string } | null>(null);
 
   const minPickupIso = addDaysIso(todayIso(), Math.max(0, Math.ceil(rules.leadTimeHours / 24)));
   const isPickupDateDisabled = useCallback((date: Date) => localDateToIso(date) < minPickupIso, [minPickupIso]);
@@ -243,22 +258,49 @@ export function useBookingFlow() {
     [rules.leadTimeHours, rules.operatorTimezone],
   );
 
+  /** A return slot is open when it is at least the shortest rental after the pickup on screen. */
+  const isReturnSlotOpen = useCallback(
+    (date: string, slot: string) => isReturnSlotLegal(current.pickupDate, current.pickupTime, date, slot, rules),
+    [current.pickupDate, current.pickupTime, rules],
+  );
+
+  /**
+   * Puts a draft trip inside the rules: the pickup slot clears the lead time,
+   * and the return sits at least the shortest rental after it — first the day
+   * (when no slot on it is far enough), then the slot. Says when the day moved.
+   */
+  const settle = useCallback(
+    (draft: Trip): { trip: Trip; dayMoved: boolean } => {
+      const next = { ...draft };
+      let dayMoved = false;
+      // A pickup moved past the return drags the return to the first legal one.
+      if (next.dropoffDate <= next.pickupDate) {
+        next.dropoffDate = firstLegalReturnDay(next.pickupDate, next.pickupTime, rules);
+      }
+      // A pickup day whose chosen time is now too soon takes its first open slot.
+      if (!isPickupSlotOpen(next.pickupDate, next.pickupTime)) {
+        next.pickupTime = rules.timeSlots.find((slot) => isPickupSlotOpen(next.pickupDate, slot)) ?? next.pickupTime;
+      }
+      const latest = rules.timeSlots[rules.timeSlots.length - 1] ?? next.dropoffTime;
+      if (!isReturnSlotLegal(next.pickupDate, next.pickupTime, next.dropoffDate, latest, rules)) {
+        const day = firstLegalReturnDay(next.pickupDate, next.pickupTime, rules);
+        dayMoved = day !== next.dropoffDate;
+        next.dropoffDate = day;
+      }
+      next.dropoffTime =
+        firstLegalReturnSlot(next.pickupDate, next.pickupTime, next.dropoffDate, rules, next.dropoffTime) ?? next.dropoffTime;
+      return { trip: next, dayMoved };
+    },
+    [rules, isPickupSlotOpen],
+  );
+
   const updateTrip = useCallback(
     (patch: Partial<Trip>) => {
-      setTrip((previous) => {
-        const next = { ...(previous ?? seededTrip), ...patch };
-        // A pickup moved past the return drags the return to the first legal one.
-        if (patch.pickupDate && next.dropoffDate <= next.pickupDate) {
-          next.dropoffDate = firstLegalReturn(next.pickupDate, rules);
-        }
-        // A pickup day whose chosen time is now too soon takes its first open slot.
-        if (!isPickupSlotOpen(next.pickupDate, next.pickupTime)) {
-          next.pickupTime = rules.timeSlots.find((slot) => isPickupSlotOpen(next.pickupDate, slot)) ?? next.pickupTime;
-        }
-        return next;
-      });
+      const { trip: next, dayMoved } = settle({ ...current, ...patch });
+      setTrip(next);
+      if (dayMoved) setMoved({ rule: "minimum", to: next.dropoffDate });
     },
-    [seededTrip, rules, isPickupSlotOpen],
+    [current, settle],
   );
 
   /** Whole days between pickup and return, at least 1. */
@@ -269,11 +311,18 @@ export function useBookingFlow() {
     (a: string, b: string) => {
       const pickupDate = a <= b ? a : b;
       const wanted = a <= b ? b : a;
-      const floor = firstLegalReturn(pickupDate, rules);
+      // The pickup slot this trip will have — a new pickup day may move it.
+      const pickupTime = isPickupSlotOpen(pickupDate, current.pickupTime)
+        ? current.pickupTime
+        : (rules.timeSlots.find((slot) => isPickupSlotOpen(pickupDate, slot)) ?? current.pickupTime);
+      const floor = firstLegalReturnDay(pickupDate, pickupTime, rules);
       const ceiling = addDaysIso(pickupDate, rules.maxRentalDays);
-      updateTrip({ pickupDate, dropoffDate: wanted < floor ? floor : wanted > ceiling ? ceiling : wanted });
+      const dropoffDate = wanted < floor ? floor : wanted > ceiling ? ceiling : wanted;
+      // A return pulled inside the rules is said in the hint, not slipped in.
+      setMoved(dropoffDate === wanted ? null : { rule: wanted < floor ? "minimum" : "maximum", to: dropoffDate });
+      updateTrip({ pickupDate, pickupTime, dropoffDate });
     },
-    [rules, updateTrip],
+    [rules, current.pickupTime, isPickupSlotOpen, updateTrip],
   );
 
   /** A single tap: the trip starts that day and keeps its length. */
@@ -291,7 +340,17 @@ export function useBookingFlow() {
     current.dropoffDate > current.pickupDate &&
     current.pickupTime !== "" &&
     current.dropoffTime !== "" &&
-    isPickupSlotOpen(current.pickupDate, current.pickupTime);
+    isPickupSlotOpen(current.pickupDate, current.pickupTime) &&
+    isReturnSlotOpen(current.dropoffDate, current.dropoffTime);
+
+  /** Why the calendar moved the return, for its hint. */
+  const tripNote = useMemo(() => {
+    if (!moved) return null;
+    const to = formatIsoDateLabel(moved.to);
+    return moved.rule === "minimum"
+      ? `The shortest rental is ${formatHourSpan(rules.minRentalHours)}, so your return moved to ${to}.`
+      : `The longest rental is ${rules.maxRentalDays} days, so your return moved to ${to}.`;
+  }, [moved, rules.minRentalHours, rules.maxRentalDays]);
 
   /* ── time zones ──────────────────────────────────────────────────────── */
 
@@ -312,6 +371,9 @@ export function useBookingFlow() {
   const availability = useVehicleAvailability({
     startDate: datesForQuery?.pickupDate ?? null,
     endDate: datesForQuery?.dropoffDate ?? null,
+    // With the times, a car back at 10:00 is offered again from 10:00 plus the buffer.
+    pickupTime: datesForQuery?.pickupTime ?? null,
+    dropoffTime: datesForQuery?.dropoffTime ?? null,
     enabled: datesForQuery !== null,
   });
 
@@ -413,6 +475,7 @@ export function useBookingFlow() {
 
   const startOver = useCallback(() => {
     setTrip(null);
+    setMoved(null);
     setVehicleId(null);
     setFilters(EMPTY_FILTERS);
     setSort("price_low");
@@ -435,6 +498,8 @@ export function useBookingFlow() {
     tripValid,
     isPickupDateDisabled,
     isPickupSlotOpen,
+    isReturnSlotOpen,
+    tripNote,
     operatorZone,
     viewerZone,
     viewerDiffers,

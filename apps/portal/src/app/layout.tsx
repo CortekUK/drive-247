@@ -14,6 +14,7 @@ import "@/styles/v2-theme.css";
 import "@/styles/auto-skeleton.css";
 import { V2Provider } from "@/lib/v2-context";
 import { readPortalTenant } from "@/lib/portal-tenant";
+import { pwaIconPath, pwaIconVersion } from "@/lib/pwa-manifest";
 import { resolvePortalGates } from "@/lib/v2-server";
 import { PWA_INSTALL_PROMPT_STASH_SCRIPT } from "@/lib/pwa-install-stash";
 
@@ -117,7 +118,10 @@ export async function generateMetadata(): Promise<Metadata> {
         // must be opaque — a transparent PNG gets flattened onto black. The
         // route draws the operator's favicon on an opaque square, or their
         // initial on their brand colour; it was Drive247's icon for everyone.
-        apple: "/pwa-icon/180.png",
+        // Versioned (lib/pwa-manifest): the route is CDN-cached for a day, so
+        // a replaced icon has to be a new URL to reach a newly added Home
+        // Screen icon.
+        apple: pwaIconPath("180.png", pwaIconVersion([tenant.favicon_url, tenant.primary_color, brandName])),
       },
     };
   } catch (error) {

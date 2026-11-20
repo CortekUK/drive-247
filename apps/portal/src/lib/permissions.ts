@@ -182,6 +182,12 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   '/payments': 'payments',
   '/invoices': 'invoices',
   '/fines': 'fines',
+  // Finances (the v2 rail's one money row) IS the Invoices screen: `FinancesView`
+  // renders InvoicesTab and tells anyone without the invoices grant they have no
+  // access. Mapping it here keeps the rail and the route guard in step with that
+  // screen — a manager without `invoices` neither sees the row nor opens the
+  // page, instead of being shown a row that leads to a refusal (QA B8.5).
+  '/finances': 'invoices',
   '/expenses': 'expenses',
   '/insurances': 'insurances',
   '/agreements': 'agreements',

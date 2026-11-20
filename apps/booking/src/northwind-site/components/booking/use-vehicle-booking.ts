@@ -61,7 +61,7 @@ import {
   resolveBrowserTimezone,
   todayIso,
 } from "./time-utils";
-import { firstLegalPickup, firstLegalReturn } from "./trip-window";
+import { firstLegalPickup, firstLegalReturnDay, firstLegalReturnSlot } from "./trip-window";
 import { calendarDaysBetween } from "./promo-rules";
 import { useDurationDiscount } from "./use-duration-discount";
 import { usePromoCode } from "./use-promo-code";
@@ -329,14 +329,20 @@ export function useVehicleBooking(vehicleId: string) {
       patch.pickupDate = firstPickup;
     }
     const pickupDate = patch.pickupDate ?? state.pickupDate;
+    if (state.pickupTime === "") patch.pickupTime = firstSlot;
+    const pickupTime = patch.pickupTime ?? state.pickupTime;
 
-    const firstReturn = firstLegalReturn(pickupDate, rules);
+    // The return floor follows the clock, as the booking flow's does: under a
+    // 1 day 2 hours minimum a 10:00 pickup seeds tomorrow from 12:00.
+    const firstReturn = firstLegalReturnDay(pickupDate, pickupTime, rules);
     if (!isIsoDate(state.dropoffDate) || state.dropoffDate < firstReturn) {
       patch.dropoffDate = firstReturn;
     }
+    const dropoffDate = patch.dropoffDate ?? state.dropoffDate;
 
-    if (state.pickupTime === "") patch.pickupTime = firstSlot;
-    if (state.dropoffTime === "") patch.dropoffTime = preferredSlot;
+    if (state.dropoffTime === "") {
+      patch.dropoffTime = firstLegalReturnSlot(pickupDate, pickupTime, dropoffDate, rules, preferredSlot) ?? preferredSlot;
+    }
 
     if (Object.keys(patch).length > 0) form.patch(patch);
     // `form` is a fresh object on every store write; depending on it would make
@@ -430,14 +436,17 @@ export function useVehicleBooking(vehicleId: string) {
   const quoteStart = rangeReady ? form.pickupDate : null;
   const quoteEnd = rangeReady ? form.dropoffDate : null;
 
+  // Judged by the clock once both times are picked (a car back at 10:00 is
+  // free again from 10:00 plus the turnaround buffer); by whole days before.
   const unavailableReason = useMemo<UnavailableReason | null>(() => {
     if (!quoteStart || !quoteEnd) return null;
-    const clash = bookedDates.ranges.find(
-      (range) => range.startDate <= quoteEnd && range.endDate >= quoteStart,
-    );
-    if (!clash) return null;
-    return clash.type === "blocked" ? "blocked" : "rented";
-  }, [bookedDates.ranges, quoteStart, quoteEnd]);
+    return bookedDates.clashFor({
+      pickupDate: quoteStart,
+      pickupTime: form.pickupTime,
+      dropoffDate: quoteEnd,
+      dropoffTime: form.dropoffTime,
+    });
+  }, [bookedDates.clashFor, quoteStart, quoteEnd, form.pickupTime, form.dropoffTime]);
 
   const minPickupIso = useMemo(
     () => addDaysIso(todayIso(), Math.max(0, Math.ceil(rules.leadTimeHours / 24))),
@@ -541,6 +550,26 @@ export function useVehicleBooking(vehicleId: string) {
     const flat = tenant?.area_delivery_fee ?? 0;
     return flat > 0 ? `+${formatCurrency(flat)}` : "Free";
   }, [mode, tiersActive, tierRange, tenant?.area_delivery_fee, formatCurrency]);
+
+  /**
+   * A plain-language note of how far we deliver, shown under the delivery
+   * address. v2 has no geocoder, so a typed address is not measured against the
+   * radius; this says the coverage out loud and promises we confirm an
+   * out-of-area address before any charge, so a far address is explained rather
+   * than silently accepted.
+   */
+  const areaCoverageHint = useMemo(() => {
+    if (mode !== "area") return null;
+    const rawKm = tenant?.pickup_area_radius_km ?? tenant?.return_area_radius_km ?? null;
+    const km = rawKm == null ? null : Number(rawKm);
+    if (km == null || !Number.isFinite(km) || km <= 0) {
+      return "We deliver within our local area. If your address is outside it, we'll confirm we can reach it before you pay — you won't be charged until we do.";
+    }
+    const miles = (tenant?.distance_unit ?? "km") === "mi";
+    const value = miles ? Math.round(km * 0.621371) : Math.round(km);
+    const unit = miles ? "miles" : "km";
+    return `We deliver within about ${value} ${unit} of our base. If your address is outside that, we'll confirm we can reach it before you pay — you won't be charged until we do.`;
+  }, [mode, tenant?.pickup_area_radius_km, tenant?.return_area_radius_km, tenant?.distance_unit]);
 
   const pickupDelivery = useMemo<QuoteDeliverySelection>(
     () =>
@@ -1203,6 +1232,7 @@ export function useVehicleBooking(vehicleId: string) {
     isReturnDateDisabled,
     areaFeeHint,
     areaFeePending,
+    areaCoverageHint,
     promo,
     durationDiscount,
     rentalDays: validation.rentalDays,

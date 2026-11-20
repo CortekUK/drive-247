@@ -89,6 +89,8 @@ export interface BookingFormProps {
   areaFeeHint: string | null;
   /** True when this tenant prices area delivery by distance and we cannot yet. */
   areaFeePending: boolean;
+  /** Plain-language note of how far we deliver (shown under the address). */
+  areaCoverageHint: string | null;
   promo: UsePromoCodeResult;
   /** The automatic long-rental discount; null promo when none applies. */
   durationDiscount?: DurationDiscount;
@@ -108,6 +110,7 @@ export function BookingForm({
   isReturnDateDisabled,
   areaFeeHint,
   areaFeePending,
+  areaCoverageHint,
   promo,
   durationDiscount,
   rentalDays,
@@ -323,6 +326,10 @@ export function BookingForm({
           {pickupControl}
           {returnControl}
         </FieldGrid>
+
+        {mode === "area" && areaCoverageHint ? (
+          <FieldHint>{areaCoverageHint}</FieldHint>
+        ) : null}
 
         {mode === "area" && areaFeePending ? (
           <FieldHint>

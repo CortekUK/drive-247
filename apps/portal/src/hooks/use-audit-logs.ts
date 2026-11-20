@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useV2 } from "@/lib/v2-context";
+import { fromZonedTime } from "date-fns-tz";
 
 export interface AuditLog {
   id: string;
@@ -32,6 +33,24 @@ export interface AuditLogsFilters {
  * maximum; v1 keeps its own 500.
  */
 export const AUDIT_LOGS_V2_LIMIT = 1000;
+
+/**
+ * The instants a day filter covers on the tenant's own calendar (QA B9.7,
+ * 2026-11-11). "From Nov 10" for a New York tenant starts at 05:00 UTC; the
+ * bare date used before started at midnight UTC and let in the evening before,
+ * while the table shows those entries dated the 9th.
+ */
+export function auditDayBounds(
+  dateFrom: string | undefined,
+  dateTo: string | undefined,
+  timeZone: string | null | undefined,
+): { from?: string; to?: string } {
+  const tz = timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return {
+    from: dateFrom ? fromZonedTime(`${dateFrom}T00:00:00`, tz).toISOString() : undefined,
+    to: dateTo ? fromZonedTime(`${dateTo}T23:59:59.999`, tz).toISOString() : undefined,
+  };
+}
 
 export function useAuditLogs(filters?: AuditLogsFilters) {
   const { tenant } = useTenant();
@@ -81,12 +100,15 @@ export function useAuditLogs(filters?: AuditLogsFilters) {
         query = query.eq("actor_id", filters.actorId);
       }
 
-      if (filters?.dateFrom) {
-        query = query.gte("created_at", filters.dateFrom);
+      // A day filter covers the tenant's own calendar day (QA B9.7).
+      const day = auditDayBounds(filters?.dateFrom, filters?.dateTo, tenant?.timezone);
+
+      if (day.from) {
+        query = query.gte("created_at", day.from);
       }
 
-      if (filters?.dateTo) {
-        query = query.lte("created_at", filters.dateTo + "T23:59:59");
+      if (day.to) {
+        query = query.lte("created_at", day.to);
       }
 
       // v2 (northwind): its table has no pager and grows as it scrolls, so it
@@ -157,12 +179,15 @@ export function useAuditLogsServerCount(filters: AuditLogsFilters | undefined, e
         query = query.eq("actor_id", filters.actorId);
       }
 
-      if (filters?.dateFrom) {
-        query = query.gte("created_at", filters.dateFrom);
+      // A day filter covers the tenant's own calendar day (QA B9.7).
+      const day = auditDayBounds(filters?.dateFrom, filters?.dateTo, tenant?.timezone);
+
+      if (day.from) {
+        query = query.gte("created_at", day.from);
       }
 
-      if (filters?.dateTo) {
-        query = query.lte("created_at", filters.dateTo + "T23:59:59");
+      if (day.to) {
+        query = query.lte("created_at", day.to);
       }
 
       // supabase-js returns {error}; it never throws.

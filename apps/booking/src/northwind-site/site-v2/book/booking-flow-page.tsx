@@ -239,7 +239,12 @@ function TripStep({ flow, active, setActive }: { flow: BookingFlow; active: Trip
       <TripCalendar
         flow={flow}
         onPicked={setActive}
-        notice={flow.tripValid && !flow.carsLoading && !flow.carsError && flow.cars.length === 0 ? "Every car is booked on those days. Try moving them." : null}
+        notice={
+          flow.tripNote ??
+          (flow.tripValid && !flow.carsLoading && !flow.carsError && flow.cars.length === 0
+            ? "Every car is booked on those days. Try moving them."
+            : null)
+        }
       />
 
       <div className="space-y-3">
@@ -263,7 +268,7 @@ function TripStep({ flow, active, setActive }: { flow: BookingFlow; active: Trip
           date={flow.trip.dropoffDate}
           value={flow.trip.dropoffTime}
           slots={flow.rules.timeSlots}
-          isOpen={RETURN_ALWAYS_OPEN}
+          isOpen={(slot) => flow.isReturnSlotOpen(flow.trip.dropoffDate, slot)}
           onChange={(dropoffTime) => flow.updateTrip({ dropoffTime })}
           operatorZone={flow.rules.operatorTimezone}
           viewerZone={flow.viewerZone}
@@ -281,9 +286,6 @@ function TripStep({ flow, active, setActive }: { flow: BookingFlow; active: Trip
     </div>
   );
 }
-
-/** The return is always at least a day after a legal pickup, so every slot is open. */
-const RETURN_ALWAYS_OPEN = () => true;
 
 /* ── 2. the car ────────────────────────────────────────────────────────── */
 

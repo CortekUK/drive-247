@@ -68,7 +68,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { RentalRow } from "./use-rental-detail-v2";
 import type { StageProps } from "./stages";
 import { WhereMap, type MapPlace } from "./where-map";
-import { RentalDatesDialog } from "./rental-dates-dialog";
+import { BookingRuleNotes, RentalDatesDialog, tenantClock } from "./rental-dates-dialog";
+import { bookingRuleNotes } from "@/lib/booking-rule-notes";
 import { fmtDate, Panel, Pill, StageAction, Surface } from "./_kit";
 import {
   calendarDaysBetween,
@@ -270,6 +271,17 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
     ...centre,
   };
 
+  /* ── the booking site's rules, against the dates about to be saved ─────
+     Shown once the admin has changed something, right under the dates, so
+     the Save a moment later is taken knowingly. Notes, not a refusal. */
+  const ruleNotes = useMemo(
+    () =>
+      canEdit && dirty && pickupAt
+        ? bookingRuleNotes({ pickupAt, returnAt, now: tenantClock(timezone), settings: rentalSettings ?? null })
+        : [],
+    [canEdit, dirty, pickupAt, returnAt, timezone, rentalSettings]
+  );
+
   /* ── the re-price, only when the dates move ───────────────────────────── */
   const newStart = pickupAt.slice(0, 10);
   const newEnd = returnAt.slice(0, 10);
@@ -466,6 +478,7 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
           summary={canEdit && reprice ? `${reprice.days} days · ${reprice.tier}` : period}
           timezone={timezone}
         />
+        <BookingRuleNotes notes={ruleNotes} className="shrink-0" />
         <RentalDatesDialog
           open={datesOpen}
           onOpenChange={setDatesOpen}

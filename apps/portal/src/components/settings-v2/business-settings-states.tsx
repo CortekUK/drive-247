@@ -37,11 +37,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui-v2/alert-dialog";
+import Link from "next/link";
+import { Textarea } from "@/components/ui-v2/textarea";
+import { isValidEmail } from "@/components/settings-v2/message-rules";
+import type { CompanySiteOverrideV2 } from "@/hooks/use-company-site-override-v2";
 import {
   SETTINGS_PANEL_FLUSH,
   SettingsPanel,
   SettingsRow,
   SettingsRowAlignProvider,
+  settingsSaveIssue,
   useSettingsPageSave,
 } from "@/components/settings-v2/settings-kit";
 import type { RegisterSectionSave } from "@/components/settings-v2/pricing-money-parts";
@@ -565,6 +570,392 @@ export function BusinessRegionalPanel({
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* General: Company details                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The company's own details on the v2 General page: `tenants.company_name`,
+ * `contact_email`, `contact_phone` and `address`. These are what the booking
+ * site's header, footer and Contact page, every email's sender name and
+ * footer, and the agreement variables (company_name, company_email,
+ * company_phone, company_address) read. Until this section existed a v2
+ * tenant had no way to change them from the portal (QA B1, 2026-11-10).
+ */
+export interface CompanyValues {
+  company_name: string;
+  contact_email: string;
+  contact_phone: string;
+  address: string;
+}
+
+export const COMPANY_NAME_MAX = 120;
+export const COMPANY_ADDRESS_MAX = 200;
+
+/** What the panel shows as saved: the tenant row, with blanks for nulls. */
+export function savedCompanyV2(
+  tenant:
+    | { company_name?: string | null; contact_email?: string | null; contact_phone?: string | null; phone?: string | null; address?: string | null }
+    | null
+    | undefined,
+): CompanyValues {
+  return {
+    company_name: tenant?.company_name ?? "",
+    contact_email: tenant?.contact_email ?? "",
+    // Two phone columns exist: `contact_phone` (agreements, the super admin's
+    // editor) and `phone` (the booking site). Show whichever is set; the save
+    // writes both, so every surface agrees.
+    contact_phone: tenant?.contact_phone ?? tenant?.phone ?? "",
+    address: tenant?.address ?? "",
+  };
+}
+
+const COMPANY_FIELDS: readonly (keyof CompanyValues)[] = ["company_name", "contact_email", "contact_phone", "address"];
+
+/** Whitespace-only edits are not changes. */
+export function isCompanyDirty(form: CompanyValues, saved: CompanyValues): boolean {
+  return COMPANY_FIELDS.some((key) => (form[key] ?? "").trim() !== (saved[key] ?? "").trim());
+}
+
+export type CompanyFieldErrors = Partial<Record<keyof CompanyValues, string>>;
+
+/** The DOM id of a Company details input, the target of the save bar's "fix this" focus. */
+export const companyFieldId = (field: keyof CompanyValues) => `v2_company_${field}`;
+
+/** A phone may carry spaces, dots, dashes, brackets and a leading +, and must have 7 to 15 digits. */
+const PHONE_CHARS = /^\+?[0-9().\-\s]+$/;
+
+export function validateCompanyV2(form: CompanyValues): CompanyFieldErrors {
+  const out: CompanyFieldErrors = {};
+  const name = form.company_name.trim();
+  if (!name) out.company_name = "Enter your company name.";
+  else if (name.length > COMPANY_NAME_MAX) out.company_name = `Keep the name to ${COMPANY_NAME_MAX} characters.`;
+  const email = form.contact_email.trim();
+  if (!email) out.contact_email = "Enter a contact email address.";
+  else if (!isValidEmail(email)) out.contact_email = "Enter a valid email address, like name@company.com.";
+  const phone = form.contact_phone.trim();
+  if (phone) {
+    const digits = phone.replace(/\D/g, "").length;
+    if (!PHONE_CHARS.test(phone) || digits < 7 || digits > 15) {
+      out.contact_phone = "Enter a valid phone number, like +1 415 555 0142.";
+    }
+  }
+  if (form.address.trim().length > COMPANY_ADDRESS_MAX) out.address = `Keep the address to ${COMPANY_ADDRESS_MAX} characters.`;
+  return out;
+}
+
+/** The first problem, as the error the page's save bar understands (it scrolls to and focuses the field). */
+export function companySaveIssue(errors: CompanyFieldErrors): Error | null {
+  const field = COMPANY_FIELDS.find((key) => errors[key]);
+  return field ? settingsSaveIssue(errors[field] as string, companyFieldId(field)) : null;
+}
+
+export interface CompanySaveDeps {
+  tenantId: string | null | undefined;
+  values: CompanyValues;
+  /** `tenants` update ending in `.select('id')`, so a zero-row (RLS) write is not read as success. */
+  writeTenant: (patch: {
+    company_name: string;
+    contact_email: string;
+    contact_phone: string | null;
+    phone: string | null;
+    address: string | null;
+  }) => PromiseLike<{ data: unknown[] | null; error: unknown }>;
+}
+
+/**
+ * Saves the company details to the tenant's own row. Checked first, so an
+ * invalid form never reaches the database, and a refused or zero-row write
+ * throws before anything reports success.
+ */
+export async function saveCompanyV2({ tenantId, values, writeTenant }: CompanySaveDeps): Promise<void> {
+  if (!tenantId) {
+    throw new Error("Your business details haven't loaded yet. Reload the page and try again.");
+  }
+  const issue = companySaveIssue(validateCompanyV2(values));
+  if (issue) throw issue;
+  const phone = values.contact_phone.trim() || null;
+  const { data, error } = await writeTenant({
+    company_name: values.company_name.trim(),
+    contact_email: values.contact_email.trim(),
+    contact_phone: phone,
+    phone,
+    address: values.address.trim() || null,
+  });
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error("You don't have permission to change these settings.");
+  }
+}
+
+export interface BusinessCompanyPanelProps {
+  form: CompanyValues;
+  onFormChange: (patch: Partial<CompanyValues>) => void;
+  saved: CompanyValues;
+  canEdit: boolean;
+  /** The tenant row has arrived. */
+  ready: boolean;
+  /** Persist. Throws on failure (see `saveCompanyV2`). */
+  onSave: () => Promise<void>;
+  onDiscard: () => void;
+  /** The settings page's section registry; registered under `general-company`. */
+  registerSave?: RegisterSectionSave;
+  /**
+   * What the booking site shows instead of these details, from its published
+   * Site settings > Contact (`useCompanySiteOverrideV2`): null when it shows
+   * these, undefined while unknown (the row is then left out).
+   */
+  siteOverride?: CompanySiteOverrideV2 | null;
+}
+
+const COMPANY_INPUT_WIDTH = "w-full sm:w-80";
+
+/** Where the booking site's own contact details are edited. */
+export const SITE_SETTINGS_HREF = "/cms/site-settings";
+
+/** The Booking site row's sentence: what visitors see, and where to change it when it is not this section. */
+export function companySiteOverrideCopy(override: CompanySiteOverrideV2 | null): { lead: string; values: string[]; action: string | null } {
+  if (!override) {
+    return { lead: "Your booking site shows the name and contact details above.", values: [], action: null };
+  }
+  const values = [override.email, override.phone, override.address].filter((v): v is string => !!v);
+  return {
+    lead: "Your booking site shows its own contact details, set in Site settings, instead of the ones above:",
+    values,
+    action: "Clear them in Site settings to show the details above.",
+  };
+}
+
+export function BusinessCompanyPanel({
+  form,
+  onFormChange,
+  saved,
+  canEdit,
+  ready,
+  onSave,
+  onDiscard,
+  registerSave,
+  siteOverride,
+}: BusinessCompanyPanelProps) {
+  const pageSave = useSettingsPageSave();
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<unknown>(null);
+  const [showAllErrors, setShowAllErrors] = useState(false);
+  const isDirty = isCompanyDirty(form, saved);
+  const errors = validateCompanyV2(form);
+  const invalid = COMPANY_FIELDS.some((key) => errors[key]);
+  const status = useSettingsSaveStatus({ isDirty, isPending: saving, error: saveError });
+
+  // Discarding (or a later successful save) clears a stale failure.
+  useEffect(() => {
+    if (!isDirty) {
+      setSaveError(null);
+      setShowAllErrors(false);
+    }
+  }, [isDirty]);
+
+  /** A field's error shows once it differs from what is saved, or after a save was attempted. */
+  const errorFor = (key: keyof CompanyValues): string | undefined =>
+    errors[key] && (showAllErrors || (form[key] ?? "").trim() !== (saved[key] ?? "").trim()) ? errors[key] : undefined;
+
+  const runSave = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onSave();
+    } catch (error) {
+      setSaveError(error);
+      if (!isAlreadyToasted(error)) {
+        toast({ title: "Couldn't save company details", description: describeSaveError(error), variant: "destructive" });
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const requestSave = () => {
+    if (saving) return;
+    if (invalid) {
+      setShowAllErrors(true);
+      return;
+    }
+    void runSave();
+  };
+
+  // The page's Save changes: refuses an invalid form by naming the box to fix
+  // (the page scrolls to and focuses it), otherwise the same save. Rejects when
+  // it did not save, so the page reports it and stays.
+  const latestPageSave = useRef<() => Promise<void>>(async () => undefined);
+  latestPageSave.current = async () => {
+    const issue = companySaveIssue(errors);
+    if (issue) {
+      setShowAllErrors(true);
+      throw issue;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onSave();
+    } catch (error) {
+      setSaveError(error);
+      throw error;
+    } finally {
+      setSaving(false);
+    }
+  };
+  const stablePageSave = useCallback(() => latestPageSave.current(), []);
+  const latestDiscard = useRef(onDiscard);
+  latestDiscard.current = onDiscard;
+  const stableDiscard = useCallback(() => latestDiscard.current(), []);
+  const registered = pageSave && canEdit && ready ? registerSave : undefined;
+  useEffect(() => {
+    if (isDirty) registered?.("general-company", stablePageSave, stableDiscard);
+    else registered?.("general-company", null);
+  }, [registered, isDirty, stablePageSave, stableDiscard]);
+  useEffect(() => () => registered?.("general-company", null), [registered]);
+
+  if (!ready) {
+    return <SettingsPanelSkeleton rows={4} footer={canEdit && !pageSave} label="Loading company details" />;
+  }
+
+  const row = (
+    key: keyof CompanyValues,
+    label: string,
+    description: string,
+    control: (id: string, bad: boolean, describedBy: string | undefined) => ReactNode,
+  ) => {
+    const id = companyFieldId(key);
+    const error = errorFor(key);
+    return (
+      <SettingsRow
+        label={label}
+        description={description}
+        htmlFor={id}
+        note={
+          error ? (
+            <p id={`${id}_error`} className="text-destructive">
+              {error}
+            </p>
+          ) : undefined
+        }
+      >
+        {control(id, !!error, error ? `${id}_error` : undefined)}
+      </SettingsRow>
+    );
+  };
+  const disabled = !canEdit || saving;
+
+  return (
+    <SettingsRowAlignProvider align="end">
+      <SettingsPanel
+        footer={
+          canEdit && pageSave ? (
+            status === "error" ? <SettingsSaveState status="error" error={saveError} /> : null
+          ) : canEdit ? (
+            <>
+              <SettingsSaveState
+                status={status}
+                error={saveError}
+                onRetry={status === "error" ? requestSave : undefined}
+                onDiscard={status === "dirty" ? onDiscard : undefined}
+                className="mr-auto"
+              />
+              <Button size="sm" onClick={requestSave} disabled={saving || !isDirty || invalid} className="min-w-[88px]">
+                {saving && <Loader2 className="animate-spin" data-icon="inline-start" />}
+                {saving ? "Saving…" : "Save"}
+              </Button>
+            </>
+          ) : undefined
+        }
+      >
+        {row("company_name", "Company name", "On your booking site, in every email and on agreements.", (id, bad, describedBy) => (
+          <Input
+            id={id}
+            type="text"
+            autoComplete="organization"
+            value={form.company_name}
+            onChange={(e) => onFormChange({ company_name: e.target.value })}
+            disabled={disabled}
+            aria-invalid={bad || undefined}
+            aria-describedby={describedBy}
+            placeholder="Your company"
+            className={COMPANY_INPUT_WIDTH}
+          />
+        ))}
+        {row("contact_email", "Contact email", "Where customers can reach you. Shown in email footers and on your booking site.", (id, bad, describedBy) => (
+          <Input
+            id={id}
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            value={form.contact_email}
+            onChange={(e) => onFormChange({ contact_email: e.target.value })}
+            disabled={disabled}
+            aria-invalid={bad || undefined}
+            aria-describedby={describedBy}
+            placeholder="name@company.com"
+            className={COMPANY_INPUT_WIDTH}
+          />
+        ))}
+        {row("contact_phone", "Contact phone", "Optional. Shown on your booking site and filled into agreements.", (id, bad, describedBy) => (
+          <Input
+            id={id}
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            value={form.contact_phone}
+            onChange={(e) => onFormChange({ contact_phone: e.target.value })}
+            disabled={disabled}
+            aria-invalid={bad || undefined}
+            aria-describedby={describedBy}
+            placeholder="+1 415 555 0142"
+            className={COMPANY_INPUT_WIDTH}
+          />
+        ))}
+        {row("address", "Address", "Optional. Your office address, for the booking site's Contact page and agreements.", (id, bad, describedBy) => (
+          <Textarea
+            id={id}
+            rows={2}
+            autoComplete="street-address"
+            value={form.address}
+            onChange={(e) => onFormChange({ address: e.target.value })}
+            disabled={disabled}
+            aria-invalid={bad || undefined}
+            aria-describedby={describedBy}
+            placeholder="Street, city, state and ZIP"
+            className={cn(COMPANY_INPUT_WIDTH, "min-h-[3.5rem] resize-y")}
+          />
+        ))}
+        {siteOverride !== undefined && (() => {
+          const copy = companySiteOverrideCopy(siteOverride);
+          return (
+            <SettingsRow label="Booking site" description="What visitors see on your booking site and its Contact page." align="start">
+              <div data-company-site-override={siteOverride ? "own" : "general"} className="max-w-xl text-sm text-muted-foreground">
+                <p>{copy.lead}</p>
+                {copy.values.length > 0 && (
+                  <ul className="mt-1 list-disc pl-5 text-foreground">
+                    {copy.values.map((v) => (
+                      <li key={v}>{v}</li>
+                    ))}
+                  </ul>
+                )}
+                {copy.action && (
+                  <p className="mt-1">
+                    {copy.action}{" "}
+                    <Link href={SITE_SETTINGS_HREF} className="font-medium text-foreground underline underline-offset-4">
+                      Open Site settings
+                    </Link>
+                  </p>
+                )}
+              </div>
+            </SettingsRow>
+          );
+        })()}
+      </SettingsPanel>
+    </SettingsRowAlignProvider>
   );
 }
 

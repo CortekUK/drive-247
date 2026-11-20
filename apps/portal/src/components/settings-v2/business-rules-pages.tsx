@@ -115,9 +115,16 @@ export type SaveBusinessRules = (values: Rec, withTenant?: boolean) => Promise<u
 export function makeBusinessSave(
   update: (values: any) => Promise<unknown>,
   refetchTenant?: () => unknown,
+  /** Runs once the write has succeeded: the page uses it to put the save in the audit log (QA B9.2). */
+  afterSave?: (values: Rec) => void,
 ): SaveBusinessRules {
   return async (values, withTenant = false) => {
     await update(values);
+    try {
+      afterSave?.(values);
+    } catch {
+      // The log is a record of the save, never a reason to fail it.
+    }
     if (withTenant && refetchTenant) {
       try {
         await refetchTenant();

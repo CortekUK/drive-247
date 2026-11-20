@@ -1,5 +1,5 @@
 import type { BookingRules } from "./booking-rules";
-import { addDaysIso, todayIso, zonedWallClockToInstant } from "./time-utils";
+import { addDaysIso, hoursBetween, isClockTime, todayIso, zonedWallClockToInstant } from "./time-utils";
 
 /**
  * The earliest trip a customer may legally book, as the booking page seeds it.
@@ -54,8 +54,78 @@ export function firstLegalPickup(rules: BookingRules): {
   return { date: firstPickup, slot: firstSlot, preferredSlot };
 }
 
-/** The first return date the tenant's minimum rental allows after `pickupDate`. */
+/**
+ * The first return date the tenant's minimum rental allows after `pickupDate`,
+ * counted in whole days. Prefer `firstLegalReturnDay` when the pickup time is
+ * known: a 1 day 2 hours minimum is two whole days here, but only "tomorrow
+ * from 12:00" on the clock.
+ */
 export function firstLegalReturn(pickupDate: string, rules: BookingRules): string {
   const minSpanDays = Math.max(1, Math.ceil(rules.minRentalHours / 24));
   return addDaysIso(pickupDate, minSpanDays);
+}
+
+/** Whole hours from a pickup to a return, both read on the operator's clock; null when either is malformed. */
+export function tripHours(
+  pickupDate: string,
+  pickupTime: string,
+  returnDate: string,
+  returnTime: string,
+  rules: BookingRules,
+): number | null {
+  const start = zonedWallClockToInstant(pickupDate, pickupTime, rules.operatorTimezone);
+  const end = zonedWallClockToInstant(returnDate, returnTime, rules.operatorTimezone);
+  return start && end ? hoursBetween(start, end) : null;
+}
+
+/**
+ * Can the car come back at `slot` on `returnDate`? Only when that is at least
+ * the shortest rental after the pickup — the same whole-hour comparison the
+ * checkout's validator makes, so the flow never offers a return the next page
+ * would refuse.
+ */
+export function isReturnSlotLegal(
+  pickupDate: string,
+  pickupTime: string,
+  returnDate: string,
+  slot: string,
+  rules: BookingRules,
+): boolean {
+  const hours = tripHours(pickupDate, pickupTime, returnDate, slot, rules);
+  return hours !== null && hours >= rules.minRentalHours;
+}
+
+/**
+ * The earliest return DAY after this pickup with at least one slot that clears
+ * the shortest rental. Looks at the latest slot of each day in turn, so a
+ * 10:00 pickup under a 1 day 2 hours minimum may come back tomorrow (from
+ * 12:00), while a 16:45 pickup under the same rule must wait a day more when
+ * the operator closes at 17:00.
+ */
+export function firstLegalReturnDay(pickupDate: string, pickupTime: string, rules: BookingRules): string {
+  if (!isClockTime(pickupTime)) return firstLegalReturn(pickupDate, rules);
+  const slots = rules.timeSlots.length > 0 ? rules.timeSlots : ["23:45"];
+  const latest = slots[slots.length - 1];
+  for (let dayOffset = 1; dayOffset <= 366; dayOffset += 1) {
+    const candidate = addDaysIso(pickupDate, dayOffset);
+    if (isReturnSlotLegal(pickupDate, pickupTime, candidate, latest, rules)) return candidate;
+  }
+  return firstLegalReturn(pickupDate, rules);
+}
+
+/**
+ * The return slot to offer on `returnDate`: `preferred` when it clears the
+ * shortest rental, else the first slot of the day that does, else null (no
+ * slot that day is far enough from the pickup — move the day).
+ */
+export function firstLegalReturnSlot(
+  pickupDate: string,
+  pickupTime: string,
+  returnDate: string,
+  rules: BookingRules,
+  preferred?: string,
+): string | null {
+  if (preferred && isReturnSlotLegal(pickupDate, pickupTime, returnDate, preferred, rules)) return preferred;
+  const slots = rules.timeSlots.length > 0 ? rules.timeSlots : preferred ? [preferred] : [];
+  return slots.find((slot) => isReturnSlotLegal(pickupDate, pickupTime, returnDate, slot, rules)) ?? null;
 }

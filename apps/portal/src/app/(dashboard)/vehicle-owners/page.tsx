@@ -40,7 +40,15 @@ export default function VehicleOwnersPage() {
   // 15 live owner_payouts rows -- keep the page during the first-paint tick
   // before TenantContext resolves.
   const ownersHidden = useIsAreaHidden("owners");
-  if (ownersHidden) notFound();
+  // Optional module (QA B7.1): on a lean tenant the per-tenant flag gates the
+  // whole page, not just the nav link, so a typed link to a turned-off module
+  // 404s instead of opening an empty page. `tenant != null` keeps the fail-open
+  // first-paint tick; non-lean tenants never enter this clause.
+  const ownersOffForLean =
+    useIsLean() &&
+    tenant != null &&
+    (tenant as { vehicle_owners_enabled?: boolean }).vehicle_owners_enabled !== true;
+  if (ownersHidden || ownersOffForLean) notFound();
   const [includeInactive, setIncludeInactive] = useState(false);
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);

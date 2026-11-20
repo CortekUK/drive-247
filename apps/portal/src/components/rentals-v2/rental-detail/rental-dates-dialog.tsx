@@ -44,6 +44,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tool
 import { Pill } from "./_kit";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { checkBookingRules } from "./booking-rules";
+import { AlertTriangle } from "lucide-react";
+import { formatInTimeZone } from "date-fns-tz";
+import type { BookingRuleNote } from "@/lib/booking-rule-notes";
 
 type Taken = { kind: "booked" | "maintenance" | "blocked" | "closed"; label: string };
 
@@ -359,6 +362,41 @@ function Key({ className, label }: { className: string; label: string }) {
       <span className={cn("size-2.5 rounded-sm", className)} />
       {label}
     </span>
+  );
+}
+
+/** "yyyy-MM-ddTHH:mm" right now on the tenant's own clock (the admin may be elsewhere). */
+export function tenantClock(timezone: string | undefined): string {
+  const pattern = "yyyy-MM-dd'T'HH:mm";
+  try {
+    return formatInTimeZone(new Date(), timezone || "UTC", pattern);
+  } catch {
+    return format(new Date(), pattern);
+  }
+}
+
+/**
+ * The booking rules a rental's SAVED dates break — shown on the stage. New
+ * dates that are too short or too long are refused in the dialog (R2.7), so
+ * this only flags dates saved before the rules, or before a rule changed.
+ */
+export function BookingRuleNotes({ notes, className }: { notes: BookingRuleNote[]; className?: string }) {
+  if (notes.length === 0) return null;
+  return (
+    <div role="status" className={cn("rounded-2xl bg-warning/10 px-4 py-2.5 text-xs ring-1 ring-warning/30", className)}>
+      <p className="flex items-center gap-1.5 font-semibold text-foreground">
+        <AlertTriangle aria-hidden className="size-3.5 text-warning" />
+        Outside your booking rules
+      </p>
+      <ul className="mt-1 list-disc space-y-0.5 pl-5 text-foreground">
+        {notes.map((n) => (
+          <li key={n.rule}>{n.text}</li>
+        ))}
+      </ul>
+      <p className="mt-1 text-muted-foreground">
+        The booking site would refuse these dates. Pick new ones to keep to the rules.
+      </p>
+    </div>
   );
 }
 

@@ -115,7 +115,7 @@ import { useSoftSubscriptionBlock } from "@/hooks/use-soft-subscription-block";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useCMSPages } from "@/hooks/use-cms-pages";
 import { useCmsOutline } from "@/stores/cms-outline-store";
-import { ROUTE_TO_TAB } from "@/lib/permissions";
+import { getTabKeysForRoute } from "@/lib/permissions";
 import { UserMenuV2, SettingsLinkV2 } from "@/components/shared/layout/user-menu-v2";
 import { OrgSwitcher } from "@/components/shared/layout/org-switcher";
 import { SidebarPromo } from "@/components/shared/layout/sidebar-promo";
@@ -616,20 +616,30 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
    *
    * This is v1's filter, restated as a predicate instead of a `.map().filter()`
    * chain. All three rules are carried across unchanged: `superAdminOnly`,
-   * `headAdminOnly`, and the `ROUTE_TO_TAB` → `canView` lookup that decides
-   * what a manager may see. A route missing from ROUTE_TO_TAB is allowed for
-   * everyone, exactly as `getTabKeyForRoute` treats it.
+   * `headAdminOnly`, and the route → grant lookup that decides what a manager
+   * may see. A route missing from ROUTE_TO_TAB is allowed for everyone, exactly
+   * as `getTabKeyForRoute` treats it.
+   *
+   * The lookup is `getTabKeysForRoute`, the same one `canAccessRoute` uses, so
+   * the rail and the route guard cannot disagree: a row is shown exactly when
+   * the page behind it opens. (`/integrations` opens for `settings.payments`
+   * as well as `settings.integrations`; a primary-key-only lookup hid the row
+   * from the payments manager the route lets in.)
    */
   const filterItem = (item: NavItem) => {
     if (item.superAdminOnly && !appUser?.is_super_admin) return false;
     if (item.headAdminOnly && appUser?.role !== "head_admin") return false;
     if (isManager) {
-      const tabKey = ROUTE_TO_TAB[item.href];
-      if (tabKey && !canView(tabKey)) return false;
+      const tabKeys = getTabKeysForRoute(item.href);
+      if (tabKeys.length > 0 && !tabKeys.some((key) => canView(key))) return false;
     }
     return true;
   };
   const canSeeRewards = filterItem({ name: "Rewards", href: "/rewards", icon: Gift });
+  // Integrations is a fixed row in the JSX below, not one of the lists, so it
+  // goes through the same filter by hand. Without this every manager saw the
+  // row and was bounced to the dashboard on clicking it (QA B8.5, 2026-11-10).
+  const canSeeIntegrations = filterItem({ name: "Integrations", href: "/integrations", icon: NavIntegrations });
 
   // --- Section 2: the daily work ---
   //
@@ -651,10 +661,11 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     // Agreements is an ordinary row: individual agreements are sent from it and
     // the agreement templates live on it.
     { name: "Agreements", href: "/agreements", icon: NavAgreements },
-    // Finances — Payments, Invoices and Fines as one row opening one tabbed
-    // screen (`/finances`), behind its own area gate. Tenants outside it keep
-    // the three separate rows. `/finances` has no ROUTE_TO_TAB entry: the
-    // screen itself shows a manager only the tabs they hold a grant for.
+    // Finances — Payments, Invoices and Fines as one row opening one screen
+    // (`/finances`), behind its own area gate. Tenants outside it keep the
+    // three separate rows. `/finances` is the Invoices screen and sits under
+    // the `invoices` grant in ROUTE_TO_TAB, so `filterItem` hides the row from
+    // a manager the screen would refuse.
     ...(financesV2
       ? [{ name: "Finances", href: "/finances", icon: NavFinances }]
       : [
@@ -1760,9 +1771,11 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     )}
                   <SidebarGroupContent>
                     <SidebarMenu>
-                      {/* Integrations — from the source worktree. Not in
-                          ROUTE_TO_TAB, so unmapped means allowed for every role,
-                          exactly as `getTabKeyForRoute` treats it. */}
+                      {/* Integrations — from the source worktree. `/integrations`
+                          is in ROUTE_TO_TAB (settings.integrations, or
+                          settings.payments on v2), so a manager sees the row only
+                          when the route would let them in (QA B8.5). */}
+                      {canSeeIntegrations && (
                       <SidebarMenuItem>
                         <SidebarMenuButton
                           asChild
@@ -1776,6 +1789,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                           </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
+                      )}
 
                       {/* Billing — one row for the tenant's whole account with
                           Drive247: the plan, its invoices, and the credit wallet.

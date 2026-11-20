@@ -305,9 +305,11 @@ function StatusLine({ qb, pending, dragging }: { qb: QuickBook; pending: boolean
     ? "Let go on your return day."
     : pending
       ? "Now tap your return day."
-      : !qb.carsLoading && qb.cars.length === 0
-        ? "Nothing is free those days. Try moving them."
-        : null;
+      : qb.tripNote
+        ? qb.tripNote
+        : !qb.carsLoading && qb.cars.length === 0
+          ? "Nothing is free those days. Try moving them."
+          : null;
   return (
     <p key={text ?? "none"} className="qb-rise-in h-5 text-center text-[13px] text-pv-muted-fg">
       {text}

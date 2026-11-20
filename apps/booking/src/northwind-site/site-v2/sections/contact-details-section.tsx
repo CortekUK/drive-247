@@ -1,10 +1,10 @@
 import { ArrowRight, Mail, MapPin, MessageCircle, Phone } from 'lucide-react-nw';
 import type { LucideIcon } from 'lucide-react-nw';
 
-import { DEFAULT_CONTACT_INFO, DEFAULT_SITE_CONTACT, DEFAULT_TRUST_BADGES } from '@nw/lib/cms/defaults';
+import { DEFAULT_CONTACT_INFO, DEFAULT_TRUST_BADGES } from '@nw/lib/cms/defaults';
 import { Editable, cmsSection } from '@nw/lib/cms/editable';
 import { resolveIcon } from '@nw/lib/cms/icons';
-import { loadSection } from '@nw/lib/cms/server';
+import { loadSection, loadSiteContact } from '@nw/lib/cms/server';
 import { cn } from '@nw/lib/utils';
 import { SITE_WIDE } from '@nw/site-v2/kit';
 
@@ -43,7 +43,7 @@ function joinAddress(parts: readonly string[]): string {
 export async function ContactDetailsSection() {
   const [info, site, trust] = await Promise.all([
     loadSection('contact', 'contact_info', DEFAULT_CONTACT_INFO),
-    loadSection('site-settings', 'contact', DEFAULT_SITE_CONTACT),
+    loadSiteContact(),
     loadSection('contact', 'trust_badges', DEFAULT_TRUST_BADGES),
   ]);
 
