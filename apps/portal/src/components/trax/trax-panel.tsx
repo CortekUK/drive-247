@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { ArrowLeft, History, LifeBuoy, Maximize2, Minimize2, Plus, SquarePen, X } from "lucide-react";
@@ -213,14 +213,31 @@ export function TraxPanel() {
      keyboard. Following `visualViewport` keeps the composer on screen; on a
      desktop this is simply the window height, which the CSS size already fits
      inside. */
-  const [visualHeight, setVisualHeight] = useState<number | null>(null);
+  /* Phones (Nov 20 2026): the panel no longer SHRINKS to the visual viewport.
+     Some Android keyboards report a visual viewport ~30px shorter than the
+     space really left above them, so a shrunken panel left a strip of the page
+     showing between it and the keyboard. The panel now stays full screen and
+     pads its bottom by the keyboard's height instead: the composer still sits
+     on the keyboard, and any mismatch shows the panel's own background. */
+  const [fit, setFit] = useState<CSSProperties | undefined>(undefined);
   useEffect(() => {
     const viewport = typeof window === "undefined" ? null : window.visualViewport;
     if (!viewport) return;
-    const read = () => setVisualHeight(viewport.height);
+    const read = () => {
+      if (window.innerWidth < 768) {
+        const keyboard = Math.round(window.innerHeight - viewport.height - viewport.offsetTop);
+        setFit(keyboard > 40 ? { paddingBottom: `${keyboard}px` } : undefined);
+      } else {
+        setFit({ maxHeight: `${Math.round(viewport.height)}px` });
+      }
+    };
     read();
     viewport.addEventListener("resize", read);
-    return () => viewport.removeEventListener("resize", read);
+    viewport.addEventListener("scroll", read);
+    return () => {
+      viewport.removeEventListener("resize", read);
+      viewport.removeEventListener("scroll", read);
+    };
   }, []);
 
   /* Hand focus back to the page when the panel closes with focus inside it.
@@ -334,8 +351,8 @@ export function TraxPanel() {
         data-state={shown ? "open" : "closed"}
         data-size={expanded ? "expanded" : "floating"}
         onKeyDown={onKeyDown}
-        /* Never taller than the visible viewport, keyboard included. */
-        style={visualHeight ? { maxHeight: `${Math.round(visualHeight)}px` } : undefined}
+        /* Never taller than the visible viewport (desktop); clear of the keyboard (phone). */
+        style={fit}
         className={[
           "fixed z-40 flex flex-col overflow-hidden text-foreground",
           /* A card that floats: its own ground, a defined edge, and elevation
@@ -457,6 +474,9 @@ export function TraxPanel() {
               <>
               {/* Bigger, over the same page — not a route, so the page underneath
                   keeps its layout and its scroll position. */}
+              {/* Not on a phone: the panel is already the whole screen there,
+                  so the button had nothing to do. */}
+              <span className="contents max-md:hidden">
               <PanelAction
                 label={expanded ? "Restore panel size" : "Expand panel"}
                 tip={expanded ? "Restore size" : "Expand"}
@@ -464,6 +484,7 @@ export function TraxPanel() {
                 active={expanded}
                 onClick={() => setExpanded((previous) => !previous)}
               />
+              </span>
               </>
             )}
             {tab === "support" && !supportNav.creating && (
