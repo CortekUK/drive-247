@@ -534,6 +534,21 @@
   background-repeat: no-repeat;
 }
 
+/* The phone menu (shell.tsx PhoneMenu): the operator's (v2-theme.css,
+   `[data-slot="sidebar"][data-mobile="true"]`, boss: "too white"). It renders
+   on <body>, outside `.pv2`, so it carries the page colour and the same
+   brand-derived wash itself, a little stronger, laid on the sheet (it is not
+   the viewport, so no fixed layer). */
+.pv2-phone-menu {
+  background-color: var(--pv-bg);
+  background-image:
+    radial-gradient(28rem 22rem at 110% -6%, color-mix(in srgb, var(--pv-wash) 30%, transparent), transparent 62%),
+    radial-gradient(26rem 22rem at -12% 0%, color-mix(in srgb, var(--pv-chart-3) 24%, transparent), transparent 60%),
+    radial-gradient(30rem 24rem at 40% 112%, color-mix(in srgb, var(--pv-wash) 20%, transparent), transparent 62%),
+    linear-gradient(180deg, color-mix(in srgb, var(--pv-wash) 10%, transparent) 0%, transparent 55%);
+  background-repeat: no-repeat;
+}
+
 /* Trax motion: a screen arrives with opacity + a 12px lift, 200ms ease-out. */
 /* Trax (customer portal Help): the operator's v2-theme.css keyframes for the
    mark's turning fill and breathing halo. */

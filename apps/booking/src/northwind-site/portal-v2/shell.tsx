@@ -33,6 +33,7 @@ import {
   CornerDownLeft,
   ExternalLink,
   LogOut,
+  Menu,
   MessageCircle,
   Moon,
   Plus,
@@ -46,6 +47,7 @@ import {
 import { PortalBoot } from '@nw/components/portal/portal-boot';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@nw/components/ui/dialog';
 import { MOTION_ANCHORED, MOTION_TOOLTIP } from '@nw/components/ui/motion';
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from '@nw/components/ui/sheet';
 import { Switch } from '@nw/components/ui/switch';
 import { MessagesSheet, NotificationsSheet } from '@nw/portal-v2/top-bar-sheets';
 import { useCustomerAuth } from '@nw/contexts/CustomerAuthContext';
@@ -75,7 +77,7 @@ import {
   isPortalV2Active,
   type PortalV2NavItem,
 } from './nav';
-import { MobileTabBar } from './mobile-tab-bar';
+import { MobileTabBar, OPEN_PHONE_SEARCH_EVENT } from './mobile-tab-bar';
 import { SidebarCustomizerDialog, usePortalV2NavPreferences } from './sidebar-customizer';
 import { useRecordPolicyConsent } from './policy-consent';
 import { PortalThemeContext, usePortalThemeRoot, type PortalTheme } from './theme';
@@ -203,6 +205,13 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
   const [searchOpen, setSearchOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [customizerOpen, setCustomizerOpen] = useState(false);
+  // Opened from the phone menu: closing the customiser lands back on the menu.
+  const customizeFromMenu = useRef(false);
+  // Phones: the menu, opened from the top bar's burger (PhoneMenu).
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
   const { theme, setTheme } = usePortalThemeRoot();
   useRecordPolicyConsent();
   // A fresh portal (signing in, coming back, signing out and in) shows every
@@ -342,14 +351,16 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
               <>
                 <TopBar
                   counts={counts}
+                  onOpenMenu={() => setMenuOpen(true)}
                   onOpenSearch={() => setSearchOpen(true)}
                   onOpenMessages={() => setMessagesOpen(true)}
                   onOpenNotifications={() => setNotificationsOpen(true)}
                 />
                 {/* On a phone the bottom tab bar (mobile-tab-bar.tsx) overlays the
                     foot of the window: the scroll reserves its height plus the
-                    home indicator so the last row clears it. */}
-                <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-10 pt-2 outline-none max-md:pb-[calc(env(safe-area-inset-bottom,0px)+4.5rem)] md:pl-4">
+                    home indicator so the last row clears it. Content sits 16px
+                    from the screen edge on a phone, the operator's gutter. */}
+                <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-10 pt-2 outline-none max-md:px-4 max-md:pb-[calc(env(safe-area-inset-bottom,0px)+4.5rem)] md:pl-4">
                   {/* Keyed on the path so every screen arrives with the Trax lift. */}
                   <div key={pathname} className="pv2-enter mx-auto w-full max-w-[1200px]">
                     {children}
@@ -362,7 +373,30 @@ function PortalV2Shell({ fontClass, children }: { fontClass: string; children: R
           </PageSearchProvider>
 
           <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
-          <SidebarCustomizerDialog open={customizerOpen} onOpenChange={setCustomizerOpen} />
+          {onMessages ? null : (
+            <PhoneMenu
+              open={menuOpen}
+              onOpenChange={setMenuOpen}
+              pathname={pathname}
+              theme={theme}
+              onThemeChange={setTheme}
+              onCustomize={() => {
+                customizeFromMenu.current = true;
+                setMenuOpen(false);
+                setCustomizerOpen(true);
+              }}
+            />
+          )}
+          <SidebarCustomizerDialog
+            open={customizerOpen}
+            onOpenChange={(open) => {
+              setCustomizerOpen(open);
+              if (!open && customizeFromMenu.current) {
+                customizeFromMenu.current = false;
+                setMenuOpen(true);
+              }
+            }}
+          />
           <NotificationsSheet open={notificationsOpen} onOpenChange={setNotificationsOpen} />
           <MessagesSheet open={messagesOpen} onOpenChange={setMessagesOpen} unread={counts.messages} />
           <CustomerTraxPanel />
@@ -432,6 +466,68 @@ function Rail({
         <ProfileRow collapsed={collapsed} theme={theme} onThemeChange={onThemeChange} onNavigate={onNavigate} />
       </div>
     </>
+  );
+}
+
+/**
+ * The phone menu — the operator's (ui-v2/sidebar.tsx below `md`), as the boss
+ * set it (Nov 2026): the burger at the TOP LEFT opens the menu FULL SCREEN from
+ * the left, and the menu is the desktop rail itself, so its order, the tenant
+ * row, the customiser, Book a car and the profile row are the desktop's. Full
+ * screen leaves no page strip to tap away, so it closes from an ✕ on the exact
+ * spot of the burger (a 48px row, so the tenant row sits close under it): the
+ * same tap opens and closes it. Any navigation closes it too.
+ *
+ * Phone only: the burger is `md:hidden`, and the sheet hides itself from `md`
+ * in case the window is widened while it is open.
+ */
+function PhoneMenu({
+  open,
+  onOpenChange,
+  pathname,
+  theme,
+  onThemeChange,
+  onCustomize,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  pathname: string | null;
+  theme: PortalTheme;
+  onThemeChange: (theme: PortalTheme) => void;
+  onCustomize: () => void;
+}) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="left"
+        showCloseButton={false}
+        data-phone-menu=""
+        className="pv2-phone-menu w-screen max-w-none gap-0 border-0 p-0 pt-[env(safe-area-inset-top,0px)] text-pv-sidebar-fg shadow-none sm:max-w-none md:hidden"
+      >
+        <SheetTitle className="sr-only">Menu</SheetTitle>
+        <SheetDescription className="sr-only">Every page of your portal, your account and settings.</SheetDescription>
+        <div className="flex h-12 shrink-0 items-center px-4">
+          <SheetClose
+            aria-label="Close menu"
+            className="-ml-2 inline-flex size-9 cursor-pointer items-center justify-center rounded-full text-pv-fg outline-none transition-colors hover:bg-pv-primary/10 focus-visible:ring-2 focus-visible:ring-pv-ring/50 active:bg-pv-primary/10"
+          >
+            <X aria-hidden className="size-[22px]" strokeWidth={2} />
+          </SheetClose>
+        </div>
+        {/* The rail's own top padding is dropped here: the ✕ row gives the
+            tenant row its room. */}
+        <div className="flex min-h-0 w-full flex-1 flex-col pb-[env(safe-area-inset-bottom,0px)] [&>div:first-child]:pt-0">
+          <Rail
+            pathname={pathname}
+            collapsed={false}
+            theme={theme}
+            onThemeChange={onThemeChange}
+            onCustomize={onCustomize}
+            onNavigate={() => onOpenChange(false)}
+          />
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -779,11 +875,13 @@ const FIELD =
 
 function TopBar({
   counts,
+  onOpenMenu,
   onOpenSearch,
   onOpenMessages,
   onOpenNotifications,
 }: {
   counts: Counts;
+  onOpenMenu: () => void;
   onOpenSearch: () => void;
   onOpenMessages: () => void;
   onOpenNotifications: () => void;
@@ -803,12 +901,36 @@ function TopBar({
   useEffect(() => {
     if (phoneField) fieldRef.current?.querySelector('input')?.focus();
   }, [phoneField]);
+  // The phone tab bar's Search (mobile-tab-bar.tsx): the page's own field when
+  // the page lends one, as this bar's round button did; otherwise the dialog.
+  useEffect(() => {
+    const onPhoneSearch = () => {
+      if (slot) setPhoneField(true);
+      else onOpenSearch();
+    };
+    window.addEventListener(OPEN_PHONE_SEARCH_EVENT, onPhoneSearch);
+    return () => window.removeEventListener(OPEN_PHONE_SEARCH_EVENT, onPhoneSearch);
+  }, [slot, onOpenSearch]);
 
   // No title here: every page carries its own big heading, as on the operator portal v2.
   return (
     // On a phone the app runs under the status bar (black-translucent), so the
     // bar starts below the safe area.
-    <header className="flex h-16 shrink-0 items-center gap-2 bg-transparent px-3 max-md:h-[calc(4rem+env(safe-area-inset-top,0px))] max-md:pt-[env(safe-area-inset-top,0px)] sm:px-4">
+    <header className="flex h-16 shrink-0 items-center gap-2 bg-transparent px-3 max-md:h-[calc(4rem+env(safe-area-inset-top,0px))] max-md:px-4 max-md:pt-[env(safe-area-inset-top,0px)] sm:px-4">
+      {/* Phones (boss, Nov 2026, the operator's top-bar-v2): the burger at the
+          TOP LEFT opens the menu full screen from the left (PhoneMenu); its ✕
+          sits on this exact spot. `-ml-2` puts the glyph on the content's edge.
+          Out of the way while the phone's search field is open. */}
+      {phoneField ? null : (
+        <button
+          type="button"
+          onClick={onOpenMenu}
+          aria-label="Open menu"
+          className="-ml-2 inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-pv-fg transition-colors hover:bg-pv-primary/10 active:bg-pv-primary/10 md:hidden"
+        >
+          <Menu aria-hidden className="size-[22px]" strokeWidth={2} />
+        </button>
+      )}
       {slot ? (
         <div ref={fieldRef} className={cn('relative w-full min-w-0 max-w-[440px]', phoneField ? 'block' : 'hidden sm:block')}>
           <SearchField slot={slot} onSearchEverywhere={onOpenSearch} />
@@ -839,7 +961,9 @@ function TopBar({
           type="button"
           onClick={slot ? () => setPhoneField(true) : onOpenSearch}
           aria-label="Search"
-          className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-pv-primary/25 bg-pv-primary/[0.07] text-pv-primary sm:hidden"
+          // Search lives in the phone tab bar; this button is only for record
+          // screens, where the tab bar gives way to the record dock.
+          className="[body:has([data-mobile-tab-bar]):not(:has([data-record-dock]))_&]:hidden inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-pv-primary/25 bg-pv-primary/[0.07] text-pv-primary sm:hidden"
         >
           <Search aria-hidden className="size-4" />
         </button>
