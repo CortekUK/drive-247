@@ -810,7 +810,7 @@ function TopBar({
     // bar starts below the safe area.
     <header className="flex h-16 shrink-0 items-center gap-2 bg-transparent px-3 max-md:h-[calc(4rem+env(safe-area-inset-top,0px))] max-md:pt-[env(safe-area-inset-top,0px)] sm:px-4">
       {slot ? (
-        <div ref={fieldRef} className={cn('relative w-full max-w-[440px]', phoneField ? 'block' : 'hidden sm:block')}>
+        <div ref={fieldRef} className={cn('relative w-full min-w-0 max-w-[440px]', phoneField ? 'block' : 'hidden sm:block')}>
           <SearchField slot={slot} onSearchEverywhere={onOpenSearch} />
         </div>
       ) : (

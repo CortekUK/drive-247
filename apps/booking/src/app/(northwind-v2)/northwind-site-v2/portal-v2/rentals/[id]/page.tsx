@@ -552,7 +552,9 @@ function PaymentCard({ rental }: { rental: CustomerRentalDetail }) {
             {facts.map((fact) => (
               <div key={fact.label} className="min-w-0">
                 <dt className="text-[12px] text-pv-muted-fg">{fact.label}</dt>
-                <dd className="truncate text-sm font-medium tabular-nums text-pv-fg" title={fact.value}>
+                {/* Below lg the facts sit two to a half-width row, where a full
+                    invoice number does not fit: it wraps there instead of being cut. */}
+                <dd className="truncate text-sm font-medium tabular-nums text-pv-fg max-lg:whitespace-normal max-lg:break-all" title={fact.value}>
                   {fact.value}
                 </dd>
               </div>

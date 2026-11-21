@@ -423,7 +423,7 @@ function BalanceDetailDialog({
                 <li key={row.rentalId} className="flex items-center gap-3 px-8 py-3.5">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-pv-fg">{row.rental?.vehicle?.displayName ?? 'Booking'}</p>
-                    <p className="truncate text-[12px] text-pv-muted-fg">
+                    <p className="truncate text-[12px] text-pv-muted-fg max-sm:whitespace-normal">
                       {[
                         row.rental?.reference,
                         row.nextDueDate ? `${row.isOverdue ? 'was due' : 'due'} ${formatDate(row.nextDueDate)}` : null,
@@ -670,7 +670,7 @@ function InvoiceTable({
 
   return (
     <div className="flex flex-col gap-3">
-      <ListTable rows={rows} minWidth="min-w-[960px]">
+      <ListTable rows={rows} minWidth="min-w-[960px]" phoneCards>
         <ListTableHeader>
           <ListHead className="w-[20%]">Invoice #</ListHead>
           {/* What the invoice is FOR, and WHICH one: the rental (R-1041). */}
@@ -763,10 +763,20 @@ function InvoiceTable({
                     <Blank />
                   )}
                 </ListCell>
-                <ListCell className="text-right">
+                {/* Phone cards: the sum takes the card's full width. */}
+                <ListCell className="text-right max-lg:col-span-2">
                   <AmountSum figures={f} money={money} widths={sumWidths} />
                 </ListCell>
-                <ListCell className={cn(ROW_OPEN_CELL, 'text-right')}>
+                {/* Phone cards: Pay on its own line at the foot of the card, not
+                    in the ⋯ corner where it covered the invoice number; and no
+                    empty line when there is nothing to pay. */}
+                <ListCell
+                  className={cn(
+                    ROW_OPEN_CELL,
+                    'text-right',
+                    !f.cancelled && f.owes > EPS ? 'max-lg:static! max-lg:col-span-2 max-lg:flex! max-lg:justify-start' : 'max-lg:hidden!',
+                  )}
+                >
                   {/* Pay — on every invoice that still owes money (not cancelled).
                       It renders nothing when nothing on the booking is payable here. */}
                   {!f.cancelled && f.owes > EPS ? (
@@ -789,7 +799,7 @@ function PaymentTable({ payments }: { payments: readonly CustomerPayment[] }) {
   const rows = useProgressiveRows(payments, 'payments');
   return (
     <div className="flex flex-col gap-3">
-      <ListTable rows={rows} minWidth="min-w-[760px]">
+      <ListTable rows={rows} minWidth="min-w-[760px]" phoneCards>
         <ListTableHeader>
           <ListHead className="w-[26%]">Payment</ListHead>
           <ListHead className="w-[16%]">Date</ListHead>

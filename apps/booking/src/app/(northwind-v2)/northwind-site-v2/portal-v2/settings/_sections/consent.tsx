@@ -210,7 +210,7 @@ export function ConsentSettings() {
                 body="When you rent with us, each rental's agreement and what you agreed to at checkout appear here."
               />
             ) : (
-              <ListTable rows={progressive} minWidth="min-w-[780px]" surface="settings">
+              <ListTable rows={progressive} minWidth="min-w-[780px]" surface="settings" phoneCards>
                 <ListTableHeader>
                   <ListHead className="w-[26%]">Rental</ListHead>
                   <ListHead className="w-[22%]">Dates</ListHead>

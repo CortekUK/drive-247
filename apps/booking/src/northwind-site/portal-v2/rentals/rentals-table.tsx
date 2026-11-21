@@ -76,6 +76,7 @@ export function CustomerRentalsTable({
         sentinelRef={rows.sentinelRef}
         hasMore={rows.hasMore}
         maxHeight={maxHeight}
+        phoneCards
       />
       {footer ? (
       <div className={V2_LIST_CLASSES.footer}>

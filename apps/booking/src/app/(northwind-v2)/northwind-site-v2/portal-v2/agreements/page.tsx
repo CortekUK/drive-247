@@ -141,6 +141,7 @@ export default function PortalAgreementsPage() {
           ) : (
             <section className="flex flex-col gap-3" aria-label="Your agreements">
               <AgreementsTable
+                phoneCards
                   rows={progressive}
                   party={{ label: 'Company', name: () => companyName, email: () => companyEmail, emailLabel: 'Company email' }}
                   onOpen={setViewRow}
