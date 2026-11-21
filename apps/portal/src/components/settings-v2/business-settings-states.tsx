@@ -1037,7 +1037,9 @@ export function LocationsListV2({
         // rendered through `ListTable` because the body scrolls under the
         // sticky header past ~8 rows, which `ListTable` does not do.
         <div data-list-surface="settings" className={LIST_SETTINGS_SURFACE}>
-          <div className={LOCATION_SCROLL_ROOT}>
+          {/* Below lg each row is a card (`data-phone-cards`, v2-theme.css),
+              like every other v2 list; the labels are written per cell. */}
+          <div className={LOCATION_SCROLL_ROOT} data-phone-cards="">
             <Table aria-label={listName} className={cn("table-fixed", readOnly ? "min-w-[520px]" : "min-w-[680px]")}>
               <ListTableHeader>
                 <ListHead className="w-[20%]">Name</ListHead>
@@ -1059,22 +1061,22 @@ export function LocationsListV2({
                           {location.name}
                         </span>
                       </ListCell>
-                      <ListCell>
+                      <ListCell data-label="Address" className="max-lg:col-span-2">
                         <span title={location.address} className="block truncate text-muted-foreground">
                           {location.address}
                         </span>
                       </ListCell>
-                      <ListCell className="text-right">
+                      <ListCell data-label="Fee" className="text-right">
                         <TabularValue negative={fee < 0}>{locationFeeLabel(location.delivery_fee, currencyCode)}</TabularValue>
                       </ListCell>
-                      <ListCell>
+                      <ListCell data-label="Available">
                         <ListStatusText tone={location.is_active ? "success" : "muted"}>
                           {location.is_active ? "Available" : "Off"}
                         </ListStatusText>
                       </ListCell>
                       {!readOnly && (
-                        <ListCell>
-                          <div className="flex items-center justify-end gap-1">
+                        <ListCell data-label="Actions" className="max-lg:col-span-2">
+                          <div className="flex items-center justify-end gap-1 max-lg:-ml-2 max-lg:justify-start">
                             <Button
                               type="button"
                               variant="ghost"

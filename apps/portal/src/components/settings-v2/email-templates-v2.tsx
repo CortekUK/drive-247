@@ -203,10 +203,10 @@ export function EmailTemplatesListV2() {
                         <p className="text-sm font-medium text-foreground">{type.name}</p>
                         <EditorChip tone={customized ? "primary" : "muted"}>{customized ? "Customized" : "Default"}</EditorChip>
                       </div>
-                      <p className="line-clamp-2 text-sm text-muted-foreground">{type.description}</p>
+                      <p className="line-clamp-2 max-sm:line-clamp-none text-sm text-muted-foreground">{type.description}</p>
                       <p className="flex min-w-0 gap-1 text-xs text-muted-foreground">
                         <span className="shrink-0">Subject:</span>
-                        <TruncatedText text={subject} className="font-medium text-foreground" />
+                        <TruncatedText text={subject} className="font-medium text-foreground max-sm:whitespace-normal max-sm:[overflow-wrap:anywhere]" />
                       </p>
                     </div>
                   </div>

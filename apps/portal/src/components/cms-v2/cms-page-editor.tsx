@@ -305,7 +305,7 @@ function CmsFieldEditor({
     return (
       /* Switch row alignment: this h1 is text-2xl with no leading class, a 32px
          line box, so at md+ 50 + 26 + 16 = 92 centres it on the sidebar switch. */
-      <div className="mx-auto max-w-3xl px-6 py-10 md:px-12 md:pt-[26px]">
+      <div className="mx-auto max-w-3xl px-0 pb-10 pt-2 md:px-12 md:pt-[26px]">
         <h1 className="font-heading text-2xl font-medium">Unknown page</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           “{slug}” is not one of the pages on your website.
@@ -315,13 +315,15 @@ function CmsFieldEditor({
   }
 
   return (
-    <div className="relative min-h-full">
+    <div className="relative min-h-full max-md:shrink-0">
       {/* Switch row alignment: at md+ the h1 (text-[28px] leading-tight, a 35px
           line box) is centred on the sidebar's Portal / Website switch at
           y=92: 50 + 24.5 + 17.5. PageStatus stays on the same row (items-start).
-          pt-10 put it at 107.5. Below md it keeps pt-10. */}
-      <div className="mx-auto max-w-3xl px-6 pb-40 pt-10 md:px-12 md:pt-[24.5px]">
-        <div className="flex items-start justify-between gap-6">
+          pt-10 put it at 107.5. Below md the page sits in main's own 16px
+          gutter, and on a phone the status goes under the title instead of
+          squeezing it into a column a word wide. */}
+      <div className="mx-auto max-w-3xl px-0 pb-40 pt-2 max-md:pb-4 md:px-12 md:pt-[24.5px]">
+        <div className="flex items-start justify-between gap-6 max-sm:flex-col max-sm:gap-3">
           <div className="min-w-0">
             {/* The tenant's OWN name for the page, not the spec's. The sidebar
                 renders `cms_pages.name` — "About Us", "Our Fleet", "Terms &
@@ -416,9 +418,9 @@ function PageStatus({
   const [menu, setMenu] = useState(false);
 
   return (
-    <div className="flex shrink-0 items-start gap-1">
-      <div className="text-right">
-        <p className="flex items-center justify-end gap-1.5 text-[13px] font-medium">
+    <div className="flex shrink-0 items-start gap-1 max-sm:-mr-2 max-sm:w-full max-sm:justify-between">
+      <div className="text-right max-sm:text-left">
+        <p className="flex items-center justify-end gap-1.5 text-[13px] font-medium max-sm:justify-start">
           <span
             className={cn(
               "size-1.5 rounded-full",
@@ -430,7 +432,7 @@ function PageStatus({
         {/* The honest second line. On a live page an edit really is live, and
             saying "saved as draft" — as v1 does — is both wrong and the exact
             opposite of what its write path actually did to the page. */}
-        <p className="mt-0.5 flex items-center justify-end gap-1.5 text-[11px] text-muted-foreground">
+        <p className="mt-0.5 flex items-center justify-end gap-1.5 text-[11px] text-muted-foreground max-sm:justify-start">
           {saveState === "saving" && <Loader2 className="size-3 animate-spin" />}
           {saveState === "error"
             ? "Last change not saved"
@@ -523,8 +525,8 @@ function OffSiteBar({
   onPublish: () => void;
 }) {
   return (
-    <div className="pointer-events-none sticky bottom-0 z-30 flex justify-center px-6 pb-6 md:px-12">
-      <div className={cn(cardCls, "pointer-events-auto flex w-full max-w-3xl items-center gap-4 py-3 pl-5 pr-3")}>
+    <div className="pointer-events-none sticky bottom-0 z-30 flex justify-center px-0 pb-6 md:px-12">
+      <div className={cn(cardCls, "pointer-events-auto flex w-full max-w-3xl items-center gap-4 py-3 pl-5 pr-3 max-sm:flex-wrap max-sm:gap-3 max-sm:pr-5 max-sm:[&>button]:w-full")}>
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-medium">This page is not on your website</p>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -582,7 +584,7 @@ function SectionBlock({
           <span className="block font-heading text-[15px] font-semibold tracking-tight">
             {spec.title}
           </span>
-          <span className="mt-0.5 block truncate text-[13px] text-muted-foreground">
+          <span className="mt-0.5 block truncate text-[13px] text-muted-foreground max-sm:whitespace-normal">
             {open ? (spec.blurb ?? "") : filled ? summarise(content, spec) : "Not set"}
           </span>
         </span>
@@ -628,8 +630,8 @@ function FieldRow({
     spec.type === "richtext" || spec.type === "list" || spec.type === "gallery" || spec.type === "lines";
 
   return (
-    <div className={cn("gap-6 py-2.5", wide ? "block" : "grid grid-cols-[152px_minmax(0,1fr)] items-start")}>
-      <label className={cn("block text-[13px] leading-snug text-muted-foreground", wide ? "mb-2" : "pt-2")}>
+    <div className={cn("gap-6 py-2.5", wide ? "block" : "grid grid-cols-[152px_minmax(0,1fr)] items-start max-sm:grid-cols-1 max-sm:gap-1.5")}>
+      <label className={cn("block text-[13px] leading-snug text-muted-foreground", wide ? "mb-2" : "pt-2 max-sm:pt-0")}>
         {spec.label}
       </label>
       <div className={cn("min-w-0", !wide && "max-w-md")}>

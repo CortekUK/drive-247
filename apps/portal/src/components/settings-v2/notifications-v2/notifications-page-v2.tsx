@@ -468,7 +468,7 @@ export function NotificationsPageV2({ canEdit, registerSave, todaySettings, scro
                   // setup's steps. Shared settings components are untouched.
                   className={cn(
                     // pt-3: level with the search box at the top of the list.
-                    "w-full flex-1 px-8 pb-6 pt-3",
+                    "w-full flex-1 px-8 pb-6 pt-3 max-md:px-4",
                     "[&_ol[aria-label='Push_setup_steps']>li+li]:border-t [&_ol[aria-label='Push_setup_steps']>li+li]:border-border/70",
                   )}
                 >
@@ -490,13 +490,17 @@ export function NotificationsPageV2({ canEdit, registerSave, todaySettings, scro
                 {/* Bottom of the setup: Back to Settings on the left, the settings
                     pages' own save bar (settings-kit) on the right, both floating
                     at the foot of the view (Ghulam, Oct 1 2026). */}
-                <div className="pointer-events-none sticky bottom-4 z-30 flex items-end justify-between gap-3 px-8 pb-1 pt-2">
+                {/* Phones: the header row above already carries Back, so this one is
+                    its icon alone (named for screen readers) and the save bar keeps
+                    its one line. */}
+                <div className="pointer-events-none sticky bottom-4 z-30 flex items-end justify-between gap-3 px-8 pb-1 pt-2 max-md:px-4">
                   <Link
                     href="/settings"
-                    className="pointer-events-auto inline-flex h-11 items-center gap-1.5 rounded-full border bg-card px-4 text-[13px] font-medium text-foreground shadow-lg transition-colors duration-200 ease-out hover:bg-muted motion-reduce:transition-none"
+                    aria-label="Back to settings"
+                    className="pointer-events-auto inline-flex h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border bg-card px-4 text-[13px] font-medium text-foreground shadow-lg transition-colors duration-200 ease-out hover:bg-muted motion-reduce:transition-none max-sm:w-11 max-sm:justify-center max-sm:px-0"
                   >
                     <ArrowLeft className="size-4" aria-hidden="true" />
-                    Back to settings
+                    <span className="max-sm:sr-only">Back to settings</span>
                   </Link>
                   {canEdit && (
                     <SettingsStickySaveBar
@@ -756,7 +760,7 @@ function NotificationWorkspace({
                         title="Cancel changes"
                         onClick={saveBar.onCancel}
                         disabled={!saveBar.dirty || saveBar.saving}
-                        className="flex size-6 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-out hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none"
+                        className="v2-phone-hit flex size-6 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-out hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none"
                       >
                         <X className="size-3.5" strokeWidth={3} aria-hidden="true" />
                       </button>
@@ -767,7 +771,7 @@ function NotificationWorkspace({
                         title={saveBar.saving ? "Saving…" : "Save changes"}
                         onClick={saveBar.onSave}
                         disabled={!saveBar.dirty || saveBar.saving}
-                        className="flex size-6 items-center justify-center rounded-full text-primary transition-colors duration-200 ease-out hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none dark:text-[hsl(var(--v2-link,var(--primary)))]"
+                        className="v2-phone-hit flex size-6 items-center justify-center rounded-full text-primary transition-colors duration-200 ease-out hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none dark:text-[hsl(var(--v2-link,var(--primary)))]"
                       >
                         {saveBar.saving ? (
                           <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
