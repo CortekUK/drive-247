@@ -136,7 +136,12 @@ function useFollowStored<T>(stored: T | null, equals: (a: T, b: T) => boolean) {
 
 function Block({ title, description, aside, children }: { title: string; description?: string; aside?: ReactNode; children: ReactNode }) {
   return (
-    <div className="space-y-3 rounded-xl border bg-card p-4 sm:p-5">
+    /* `relative` anchors the sr-only field labels inside. Without it their
+       containing block was the app's outer <main>, outside the page's scroll
+       box, so they made the overflow-hidden frame scrollable: scrolling to a
+       field shifted the whole frame up, hiding the top bar and lifting the
+       sticky Save bar off the bottom on phones. */
+    <div className="relative space-y-3 rounded-xl border bg-card p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 space-y-0.5">
           <p className="text-sm font-medium text-foreground">{title}</p>

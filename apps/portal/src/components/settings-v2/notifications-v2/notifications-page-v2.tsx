@@ -651,9 +651,10 @@ function NotificationWorkspace({
         : null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col lg:flex-row" data-notification-item={item.key}>
-        {/* MAIN: which message, its switches and Send test, then the preview. */}
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col" data-notification-main="" aria-label={`${item.name}: preview`}>
+    <div className="flex h-full min-h-0 flex-col max-lg:h-auto lg:flex-row" data-notification-item={item.key}>
+        {/* MAIN: which message, its switches and Send test, then the preview.
+            Below lg it takes its content's height and the page scrolls on to Trax. */}
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col max-lg:flex-none" data-notification-main="" aria-label={`${item.name}: preview`}>
           {/* No top row (Ghulam, Oct 1 2026): its switches and Send test live in
               the row under the preview. The left list shows which message is open. */}
           <h2 className="sr-only">{message === "app" ? "App message" : "Email"}</h2>
@@ -870,6 +871,21 @@ function FitToBox({
     const fit = () => {
       const h = i.offsetHeight;
       const room = o.clientHeight;
+      /* Below lg the workspace stacks and scrolls, so the box has no height of
+         its own to fit into: the Trax rail takes a fixed 70vh and the preview
+         got the ~80px left over (scale 0.14, a speck). There, the width sets
+         the scale and the box takes the height that comes out of it. */
+      if (grow && stacked.matches) {
+        const w = i.offsetWidth;
+        const roomW = o.clientWidth;
+        const fitW = h > 0 && w > 0 && roomW > 0 ? Math.min(1.8, roomW / w) : 1;
+        o.style.height = h > 0 ? `${Math.ceil(h * fitW)}px` : "";
+        setScale(fitW);
+        setTop(0);
+        measureRef.current?.(h, h * fitW);
+        return;
+      }
+      o.style.height = "";
       let next = h > 0 && room > 0 ? Math.min(1, room / h) : 1;
       if (grow && h > 0 && room > 0) {
         const w = i.offsetWidth;
@@ -880,14 +896,19 @@ function FitToBox({
       setTop(grow && h > 0 ? Math.max(0, (room - h * next) / 2) : 0);
       measureRef.current?.(h, room);
     };
+    const stacked = window.matchMedia("(max-width: 1023.98px)");
     const observer = new ResizeObserver(fit);
     observer.observe(o);
     observer.observe(i);
+    stacked.addEventListener("change", fit);
     fit();
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      stacked.removeEventListener("change", fit);
+    };
   }, [grow]);
   return (
-    <div ref={outer} className="relative min-h-0 flex-1 overflow-hidden" data-fit-to-box="">
+    <div ref={outer} className={cn("relative min-h-0 flex-1 overflow-hidden", grow && "max-lg:flex-none")} data-fit-to-box="">
       <div
         ref={inner}
         className={cn("absolute left-1/2 top-0 origin-top", grow ? "w-max" : "w-full")}

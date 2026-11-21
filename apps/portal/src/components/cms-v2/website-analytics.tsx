@@ -169,7 +169,7 @@ function Panel({
   return (
     <section
       className={cn(
-        "flex min-w-0 flex-col rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)] p-5",
+        "flex min-w-0 flex-col rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)] p-5 max-sm:p-4",
         "animate-in fade-in-0 slide-in-from-bottom-3 fill-mode-both duration-200 ease-out",
         className,
       )}
@@ -311,15 +311,15 @@ export function WebsiteAnalytics() {
       </div>
 
       {/* Headline numbers */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 max-sm:gap-3 lg:grid-cols-4">
         {kpis.map((k, i) => (
           <section
             key={k.label}
-            className="animate-in fade-in-0 slide-in-from-bottom-3 fill-mode-both rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)] p-5 duration-200 ease-out"
+            className="animate-in fade-in-0 slide-in-from-bottom-3 fill-mode-both rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)] p-5 duration-200 ease-out max-sm:p-4"
             style={{ animationDelay: `${i * 40}ms` }}
           >
             <p className="text-[12px] text-[var(--pv-ink-3)]">{k.label}</p>
-            <div className="mt-2 flex items-baseline gap-2">
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <span className="text-[26px] font-semibold leading-none tracking-[-0.03em] tabular-nums text-[var(--pv-ink)]">
                 {k.value}
               </span>
@@ -549,10 +549,10 @@ export function WebsiteAnalytics() {
           <table className="w-full text-[12.5px]">
             <thead>
               <tr className="text-left text-[11px] text-[var(--pv-ink-3)]">
-                <th className="pb-2 font-medium">Page</th>
-                <th className="w-[40%] pb-2 font-medium" />
+                <th className="pb-2 font-medium max-sm:w-[44%]">Page</th>
+                <th className="w-[40%] pb-2 font-medium max-sm:w-[22%]" />
                 <th className="pb-2 text-right font-medium">Views</th>
-                <th className="pb-2 pl-4 text-right font-medium">Time on page</th>
+                <th className="pb-2 pl-4 text-right font-medium max-sm:pl-3">Time on page</th>
               </tr>
             </thead>
             <tbody>
@@ -560,13 +560,13 @@ export function WebsiteAnalytics() {
                 <tr key={p.path} className="border-t border-[var(--pv-line)]">
                   <td className="py-2.5">
                     <span className="font-medium text-[var(--pv-ink)]">{p.name}</span>
-                    <span className="ml-2 text-[11px] text-[var(--pv-ink-3)]">{p.path}</span>
+                    <span className="ml-2 text-[11px] text-[var(--pv-ink-3)] max-sm:ml-0 max-sm:block">{p.path}</span>
                   </td>
                   <td className="py-2.5 pr-2">
                     <MagnitudeBar value={p.views} max={pageMax} />
                   </td>
                   <td className="py-2.5 text-right font-semibold tabular-nums text-[var(--pv-ink)]">{num(p.views)}</td>
-                  <td className="py-2.5 pl-4 text-right tabular-nums text-[var(--pv-ink-2)]">{p.avgTime}</td>
+                  <td className="py-2.5 pl-4 text-right tabular-nums text-[var(--pv-ink-2)] max-sm:pl-3">{p.avgTime}</td>
                 </tr>
               ))}
             </tbody>

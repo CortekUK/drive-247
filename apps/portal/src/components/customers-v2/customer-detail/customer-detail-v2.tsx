@@ -50,7 +50,7 @@
  *                       column rather than being restated on every section.
  */
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft } from "lucide-react";
@@ -256,6 +256,22 @@ export function CustomerDetailV2() {
   const overviewFits = useWiderThan(1400);
   const docked = !railFits || !overviewFits;
 
+  /* Phones scroll the page (`<main>`), not the panel, and `<main>` outlives a
+     section change: without this a jump from the dock lands as far down the
+     new section as the reader had scrolled the old one. */
+  const sectionRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (railFits) return;
+    let el = sectionRef.current?.parentElement ?? null;
+    while (el && el !== document.body) {
+      if (/(auto|scroll)/.test(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight) {
+        el.scrollTop = 0;
+        return;
+      }
+      el = el.parentElement;
+    }
+  }, [section, railFits]);
+
   /* ── the states before a section can mount ──────────────────────────── */
 
   if (!record || (!isLoading && notFound)) {
@@ -296,7 +312,8 @@ export function CustomerDetailV2() {
           you land halfway down a screen you have never seen. */}
       <div
         key={`${section}-${phase}`}
-        className={`flex min-w-0 flex-1 flex-col overflow-hidden md:pr-6${docked ? " " + DOCK_CLEARANCE : ""}`}
+        ref={sectionRef}
+        className={`flex min-w-0 flex-1 flex-col overflow-hidden max-md:overflow-visible md:pr-6${docked ? " " + DOCK_CLEARANCE : ""}`}
       >
         {/* The one fact that changes what every other section means, so it
             follows the reader to all of them. Deliberately short: the right
@@ -325,7 +342,7 @@ export function CustomerDetailV2() {
 
         {/* One stretched grid cell, so the AutoSkeleton wrapper hands the
             panel the full height its own scroll container needs. */}
-        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]">
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] max-md:grid-rows-[auto]">
           <AutoSkeleton loading={isLoading} className="h-full min-h-0">
           {View ? (
             <View {...props} />
@@ -500,7 +517,9 @@ function Frame({ children }: { children: React.ReactNode }) {
     // Phones: the top bar stays, so the frame is the space under it (`<main>`
     // is a flex column, `flex-1` fills it) rather than 100svh, which ran past
     // the bar and scrolled the page a little before the panel did.
-    <div className="flex h-[calc(100svh-2rem)] min-h-0 w-full overflow-hidden max-md:h-auto max-md:flex-1">
+    // Below `md` the frame grows with the record (`shrink-0`, overflow visible)
+    // so `<main>` scrolls the whole section, title included.
+    <div className="flex h-[calc(100svh-2rem)] min-h-0 w-full overflow-hidden max-md:h-auto max-md:flex-1 max-md:shrink-0 max-md:overflow-visible">
       {children}
     </div>
   );

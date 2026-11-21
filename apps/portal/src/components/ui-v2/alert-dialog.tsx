@@ -4,6 +4,7 @@ import * as React from "react"
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog"
 
 import { cn } from "@/lib/utils"
+import { PHONE_FIT } from "@/components/ui-v2/dialog"
 import { MOTION_DIALOG, MOTION_FADE } from "@/lib/motion"
 import { Button } from "@/components/ui-v2/button"
 
@@ -66,6 +67,7 @@ function AlertDialogContent({
         data-size={size}
         className={cn(
           "group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-1/2 gap-6 rounded-4xl bg-popover p-6 text-popover-foreground shadow-xl ring-1 ring-foreground/5 outline-none data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-md dark:ring-foreground/10",
+          PHONE_FIT,
           MOTION_DIALOG,
           className
         )}
