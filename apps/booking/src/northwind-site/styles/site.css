@@ -1454,6 +1454,122 @@
   }
 }
 
+/* Every customer list on a phone (user, Nov 2026: "too messy"). The generic
+   card above put the status in whichever column it fell in, and long values
+   (emails, date ranges, policy numbers) broke mid-word in half a card. So:
+
+     Car insurance certificate        Verified ⋯   ← title, status top right
+     PROVIDER           POLICY NUMBER               ← the rest, two columns
+     Progressive        PGR-4471-2209
+     COVERAGE DATES                                 ← long values: full width
+     Aug 9, 2026 – Aug 9, 2027
+
+   The status needs no label: the coloured word says what it is. Same cells,
+   reflowed; nothing dropped. Rentals have their own layout below. */
+@media (max-width: 767px) {
+  .pv2 [data-phone-cards] tbody tr:has(> td[data-label="Status"]) > td:first-child {
+    grid-column: 1;
+    align-self: center;
+  }
+  .pv2 [data-phone-cards] tbody td[data-label="Status"] {
+    grid-row: 1;
+    grid-column: 2;
+    align-self: center;
+    justify-self: end;
+    text-align: right;
+  }
+  .pv2 [data-phone-cards] tbody td[data-label="Status"]::before {
+    content: none;
+  }
+  .pv2 [data-phone-cards] tbody td[data-label="Status"] > div {
+    justify-content: flex-end;
+  }
+  /* With a ⋯ in the corner, the status steps left of it and the title no
+     longer needs the room. */
+  .pv2 [data-phone-cards] tbody tr:has(> td[data-label=""]:last-child) > td[data-label="Status"] {
+    padding-right: 32px;
+  }
+  .pv2 [data-phone-cards] tbody tr:has(> td[data-label="Status"]) > td:first-child:has(~ td[data-label=""]:last-child) {
+    padding-right: 0;
+  }
+  /* The title wraps rather than cutting off ("Car insurance certific…"). */
+  .pv2 [data-phone-cards] tbody td:first-child .truncate {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+  }
+  /* Invoices: the "Total − Paid = Remaining" sum. Its header reads as one
+     run of words when used as a label, and its figures keep the fixed widths
+     that line the desktop columns up, which indent them in a card. */
+  .pv2 [data-phone-cards] tbody td[data-label^="Total"] {
+    grid-column: 1 / -1;
+  }
+  .pv2 [data-phone-cards] tbody td[data-label^="Total"]::before {
+    content: "Total \2212  Paid = Remaining";
+  }
+  .pv2 [data-phone-cards] tbody td[data-label^="Total"] span[style] {
+    min-width: 0 !important;
+  }
+  /* Values that are one long run of text get the whole width. */
+  .pv2 [data-phone-cards] tbody td[data-label*="mail" i],
+  .pv2 [data-phone-cards] tbody td[data-label*="dates" i],
+  .pv2 [data-phone-cards] tbody td[data-label="Policy number"] {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Rental cards (customer portal rentals list, `data-rental-cards` in
+   portal-v2/rentals/rentals-table.tsx). On a phone the generic two-column
+   card zig-zagged — reference, car, dates and status each under a label in
+   alternating columns. A rental reads as one:
+
+     R-a4d848                     Completed   ← reference, status on the right
+     [photo] Nissan Versa                     ← the car, the full width
+             NWD-5190
+     PICKUP            RETURN                 ← the two dates side by side
+     Oct 24            Oct 31
+
+   The same five cells, reflowed. The car and the status keep no label: the
+   photo and the coloured word say what they are. */
+@media (max-width: 767px) {
+  .pv2 [data-rental-cards] [data-phone-cards] tbody tr {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "ref status"
+      "car car"
+      "pickup return";
+    row-gap: 12px;
+    padding: 14px 16px;
+  }
+  .pv2 [data-rental-cards] [data-phone-cards] tbody td:nth-child(1) { grid-area: ref; align-self: center; }
+  .pv2 [data-rental-cards] [data-phone-cards] tbody td:nth-child(2) { grid-area: car; }
+  .pv2 [data-rental-cards] [data-phone-cards] tbody td:nth-child(3) { grid-area: pickup; }
+  .pv2 [data-rental-cards] [data-phone-cards] tbody td:nth-child(4) { grid-area: return; }
+  .pv2 [data-rental-cards] [data-phone-cards] tbody td:nth-child(5) {
+    grid-area: status;
+    align-self: center;
+    justify-self: end;
+    text-align: right;
+  }
+  .pv2 [data-rental-cards] [data-phone-cards] tbody td:nth-child(2)::before,
+  .pv2 [data-rental-cards] [data-phone-cards] tbody td:nth-child(5)::before {
+    content: none;
+  }
+  .pv2 [data-rental-cards] [data-phone-cards] tbody td:nth-child(5) > div {
+    justify-content: flex-end;
+  }
+  /* The car: a larger photo, name over plate, on one line with it. */
+  .pv2 [data-rental-cards] [data-phone-cards] tbody td:nth-child(2) img {
+    width: 64px;
+    height: 44px;
+    border-radius: 10px;
+  }
+  .pv2 [data-rental-cards] [data-phone-cards] tbody td:nth-child(2) span:first-child {
+    font-size: 14px;
+    font-weight: 500;
+  }
+}
+
 /* Tablets beside the sidebar: the table's columns ran off the side, so they get
    the same cards with every field on one line. */
 @media (min-width: 768px) and (max-width: 1023px) {
