@@ -381,8 +381,9 @@ function PhoneBar({ flow, primary }: { flow: BookingFlow; primary: PrimaryAction
       <div className="sticky bottom-0 z-20 -mx-4 mt-8 border-t border-pv-border bg-pv-bg px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:-mx-6 md:px-6 lg:hidden">
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => setSummaryOpen(true)} className="min-w-0 flex-1 cursor-pointer rounded-2xl px-1 py-1 text-left">
-            <span className="block truncate text-[12px] text-pv-muted-fg">
-              {prettyDate(flow.trip.pickupDate)} – {prettyDate(flow.trip.dropoffDate)} · {flow.days}d
+            <span className="block text-[12px] leading-snug text-pv-muted-fg">
+              <span className="whitespace-nowrap">{prettyDate(flow.trip.pickupDate)} –</span>{" "}
+              <span className="whitespace-nowrap">{prettyDate(flow.trip.dropoffDate)} · {flow.days}d</span>
             </span>
             <span className="block truncate text-[14px] font-semibold text-pv-fg underline decoration-pv-border underline-offset-4">
               {total !== null ? formatCurrency(total) : "Trip summary"}

@@ -298,7 +298,7 @@ function PenLoop() {
     <svg
       aria-hidden
       viewBox="0 0 100 70"
-      className="qb-pen pointer-events-none absolute left-1/2 top-1/2 h-[30px] w-[44px] -translate-x-1/2 -translate-y-[54%] -rotate-6 overflow-visible"
+      className="qb-pen pointer-events-none absolute left-1/2 top-1/2 h-[26px] w-[37px] -translate-x-1/2 sm:h-[30px] sm:w-[44px] -translate-y-[54%] -rotate-6 overflow-visible"
     >
       <path {...pass} strokeWidth="4.6" d="M97 22 Q 93 17 88 14 C 74 2, 30 0, 12 14 C -4 27, 2 54, 26 63 C 50 72, 86 65, 96 46 C 104 30, 92 11, 68 6 C 54 3, 40 5, 26 12" />
       <path {...pass} strokeWidth="2.8" opacity=".6" d="M10 26 C 18 8, 60 -3, 86 10 C 103 20, 100 50, 78 61 C 55 71, 17 67, 5 49 C -3 36, 3 21, 21 13 L 30 9" transform="rotate(-5 50 35)" />
