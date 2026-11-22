@@ -52,6 +52,8 @@ import { BrandSwatches } from '@/components/settings/appearance/brand-swatches';
 import { BrandColorField } from '@/components/settings/appearance/brand-color-field';
 import { LogoStudio } from '@/components/settings/appearance/logo-studio';
 import { LogosV2 } from '@/components/settings/appearance/logos-v2';
+import { PortalThemeSectionV2 } from '@/components/settings-v2/portal-theme-section-v2';
+import { usePortalLook, type PortalLook } from '@/lib/appearance/portal-look';
 
 import { LOGO_PREVIEW_HEIGHT, PortalNamePreview, portalTabTitle } from '@/components/settings/appearance/branding-previews';
 
@@ -638,7 +640,15 @@ function AppearanceFormV2({
   // Reset remounts the logo cards, dropping a pending "Fit into a square" or an inline error.
   const [logosVersion, setLogosVersion] = useState(0);
 
-  const dirty = !readOnly && appearanceFormDiffers(form, savedRef.current);
+  // Theme (Standard / Glass): picked here and saved by Save changes like the
+  // rest of the page, but kept in this browser rather than on the branding
+  // row (lib/appearance/portal-look.ts). `pendingLook` is the unsaved pick.
+  const [savedLook, saveLook] = usePortalLook(tenantId);
+  const [pendingLook, setPendingLook] = useState<PortalLook | null>(null);
+  const look = pendingLook ?? savedLook;
+  const lookDirty = !readOnly && pendingLook !== null && pendingLook !== savedLook;
+  const brandingDirty = !readOnly && appearanceFormDiffers(form, savedRef.current);
+  const dirty = brandingDirty || lookDirty;
   const hexInvalid = !isHexColor6(form.light_primary_color);
   /**
    * A finished colour the v2 theme cannot carry: near-black, near-white or grey
@@ -716,12 +726,31 @@ function AppearanceFormV2({
     queryClient.setQueryData(tenantDarkIconKey(tenantId), savedRef.current.dark_favicon_url ?? null);
     triedPalette.current = null;
     setForm(savedRef.current);
+    setPendingLook(null);
     setSaveError(null);
     setLogosVersion((v) => v + 1);
   };
 
+  /** Keep the picked theme. Only ever called by a save. */
+  const commitLook = () => {
+    if (pendingLook !== null) saveLook(pendingLook);
+    setPendingLook(null);
+  };
+
   const handleSave = async (): Promise<boolean> => {
     if (readOnly) return false;
+    // Only the theme changed: nothing to write to the branding row.
+    if (!brandingDirty) {
+      const next = pendingLook;
+      commitLook();
+      if (next) {
+        toast({
+          title: 'Theme saved',
+          description: `Your dashboard now uses the ${next === 'glass' ? 'Glass' : 'Standard'} look on this device.`,
+        });
+      }
+      return true;
+    }
     if (!isHexColor6(form.light_primary_color)) {
       toast({
         title: 'Finish the brand colour first',
@@ -773,6 +802,7 @@ function AppearanceFormV2({
       setSavedVersion((v) => v + 1);
       triedPalette.current = null;
       commitTheme();
+      commitLook();
       toast({
         title: 'Branding saved',
         description: 'Your portal has been updated for everyone on your team.',
@@ -908,6 +938,11 @@ function AppearanceFormV2({
               disabled={readOnly}
               onBusyChange={setLogosBusy}
             />
+
+            {/* Standard or Glass. Saved by Save changes with the rest of the
+                page, kept in this browser. Last on the page, so the skeleton
+                above needs no extra section. */}
+            <PortalThemeSectionV2 value={look} onChange={setPendingLook} disabled={readOnly} />
           </div>
         </SettingsReadOnlyFieldset>
       </SettingsPageSaveProvider>

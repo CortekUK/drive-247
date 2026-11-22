@@ -138,7 +138,7 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
         description: "Your portal name, square icon, full logo and brand colour, shown in this portal and on your customer booking site.",
         href: "/settings/appearance",
         tab: "branding",
-        keywords: "logo full logo square icon colour color theme appearance name favicon",
+        keywords: "logo full logo square icon colour color theme appearance name favicon glass standard look",
         tourAnchor: "settings-tab-branding",
       },
       {

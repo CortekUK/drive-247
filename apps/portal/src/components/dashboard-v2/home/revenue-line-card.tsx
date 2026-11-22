@@ -423,6 +423,9 @@ export function RevenueLineCard({ className }: { className?: string }) {
        block, and a stretched grid item gives it the card's full height so the
        chart's flex-1 still has something to fill. */
     <div
+      // The Glass look (dashboard-v2/glass-look.ts) gives the chart a pane of
+      // its own; the Standard look draws nothing for this attribute.
+      data-pv-pane=""
       className={cn(
         // Shorter on a phone (boss, Nov 2026: compact, not in your face).
         'grid h-[196px] min-w-0 grid-rows-[minmax(0,1fr)] md:h-[240px]',
