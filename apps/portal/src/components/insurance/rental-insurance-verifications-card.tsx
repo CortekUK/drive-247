@@ -1,4 +1,5 @@
 "use client";
+import { openDocument } from "@/lib/document-url"; // QA I4.13: signed link (bucket going private)
 
 import Link from "next/link";
 import { format } from "date-fns";
@@ -121,7 +122,8 @@ export function RentalInsuranceVerificationsCard({
                 <div className="flex gap-1">
                   {v.file_url && (
                     <Button size="sm" variant="ghost" className="h-7" asChild>
-                      <a href={v.file_url} target="_blank" rel="noreferrer">
+                      {/* QA I4.13: signed link (bucket going private) */}
+                      <a href={v.file_url} target="_blank" rel="noreferrer" onClick={(e) => { e.preventDefault(); openDocument(v.file_url); }}>
                         <ExternalLink className="h-3.5 w-3.5 mr-1" />
                         View
                       </a>

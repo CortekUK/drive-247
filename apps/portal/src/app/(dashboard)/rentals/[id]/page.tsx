@@ -18,6 +18,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, AlertCircle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, CalendarClock, CalendarMinus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge, Briefcase, Bell, Eye, EyeOff, Pencil, MoreHorizontal } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { BlurredImage } from "@/components/ui/blurred-image";
+import { openDocument, signedDocumentUrl } from "@/lib/document-url"; // QA I4.13: signed link (bucket going private)
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
@@ -2481,13 +2482,9 @@ const RentalDetail = () => {
     try {
       // If we have a signed document, open it directly
       if (signedDocument?.file_url) {
-        let documentUrl = signedDocument.file_url;
-        if (!documentUrl.startsWith('http')) {
-          const { data } = supabase.storage
-            .from('customer-documents')
-            .getPublicUrl(signedDocument.file_url);
-          documentUrl = data.publicUrl;
-        }
+        // QA I4.13: signed link (bucket going private)
+        const documentUrl = await signedDocumentUrl(signedDocument.file_url);
+        if (!documentUrl) throw new Error('The signed document could not be opened.');
         if (newWindow) {
           newWindow.location.href = documentUrl;
         }
@@ -2563,13 +2560,9 @@ const RentalDetail = () => {
     try {
       // If signed document URL provided, open directly
       if (signedDocFileUrl) {
-        let documentUrl = signedDocFileUrl;
-        if (!documentUrl.startsWith('http')) {
-          const { data } = supabase.storage
-            .from('customer-documents')
-            .getPublicUrl(signedDocFileUrl);
-          documentUrl = data.publicUrl;
-        }
+        // QA I4.13: signed link (bucket going private)
+        const documentUrl = await signedDocumentUrl(signedDocFileUrl);
+        if (!documentUrl) throw new Error('The signed document could not be opened.');
         if (newWindow) newWindow.location.href = documentUrl;
         return;
       }
@@ -6664,14 +6657,8 @@ const RentalDetail = () => {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            let url = doc.file_url;
-                            if (!url.startsWith('http')) {
-                              const { data } = supabase.storage
-                                .from('customer-documents')
-                                .getPublicUrl(doc.file_url);
-                              url = data.publicUrl;
-                            }
-                            window.open(url, '_blank');
+                            // QA I4.13: signed link (bucket going private)
+                            openDocument(doc.file_url);
                           }}
                         >
                           <ExternalLink className="h-3 w-3 mr-1" />
@@ -7046,7 +7033,7 @@ const RentalDetail = () => {
                           variant="outline"
                           size="sm"
                           className="w-full"
-                          onClick={() => window.open(identityVerification.document_front_url, '_blank')}
+                          onClick={() => openDocument(identityVerification.document_front_url)} // QA I4.13: signed link (bucket going private)
                         >
                           <ExternalLink className="h-3 w-3 mr-1" />
                           View Full Size
@@ -7070,7 +7057,7 @@ const RentalDetail = () => {
                           variant="outline"
                           size="sm"
                           className="w-full"
-                          onClick={() => window.open(identityVerification.document_back_url, '_blank')}
+                          onClick={() => openDocument(identityVerification.document_back_url)} // QA I4.13: signed link (bucket going private)
                         >
                           <ExternalLink className="h-3 w-3 mr-1" />
                           View Full Size
@@ -7094,7 +7081,7 @@ const RentalDetail = () => {
                           variant="outline"
                           size="sm"
                           className="w-full"
-                          onClick={() => window.open(identityVerification.selfie_image_url, '_blank')}
+                          onClick={() => openDocument(identityVerification.selfie_image_url)} // QA I4.13: signed link (bucket going private)
                         >
                           <ExternalLink className="h-3 w-3 mr-1" />
                           View Full Size

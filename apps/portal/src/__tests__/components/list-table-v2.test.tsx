@@ -83,6 +83,21 @@ describe('list table kit matches the rentals list', () => {
     expect(rentalsSource).toContain('partyLabel="Customer"');
   });
 
+  it('operator list: car under the customer and a Total column before Status (QA R1.2)', () => {
+    const { container, getByText } = render(
+      <RentalsTable
+        partyLabel="Customer"
+        showAmount
+        onOpen={() => {}}
+        rows={[{ id: 'r1', reference: 'R-b7cc13', party: 'Ali', partySub: 'Honda Civic · LEY2121', amount: '$441.44', start: '2026-11-11', end: '2026-11-21', status: 'Pending' }]}
+      />,
+    );
+    expect([...container.querySelectorAll('th')].map((th) => th.textContent)).toEqual(['Rental #', 'Customer', 'Pickup', 'Return', 'Total', 'Status']);
+    expect(container.querySelectorAll('tbody td')).toHaveLength(6);
+    expect(getByText('Honda Civic · LEY2121')).toBeTruthy();
+    expect(getByText('$441.44')).toBeTruthy();
+  });
+
   it('left-aligns all five headings and every cell, like the kit', () => {
     const { container } = render(
       <RentalsTable

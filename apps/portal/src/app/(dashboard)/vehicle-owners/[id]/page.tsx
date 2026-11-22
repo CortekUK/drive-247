@@ -22,7 +22,7 @@ import { AssignVehicleDialog } from "@/components/vehicle-owners/assign-vehicle-
 import { CreatePayoutDialog } from "@/components/vehicle-owners/create-payout-dialog";
 import { RecordPaymentDialog } from "@/components/vehicle-owners/record-payment-dialog";
 import { useTenant } from "@/contexts/TenantContext";
-import { useIsAreaHidden } from "@/lib/lean-context";
+import { useIsAreaHidden, useIsLean } from "@/lib/lean-context";
 import { formatCurrency } from "@/lib/format-utils";
 import { PAYOUT_STATUS_LABEL, type OwnerPayout } from "@/types/vehicle-owners";
 
@@ -43,7 +43,14 @@ export default function VehicleOwnerDetailPage() {
   // 15 live owner_payouts rows -- keep the page during the first-paint tick
   // before TenantContext resolves.
   const ownersHidden = useIsAreaHidden("owners");
-  if (ownersHidden) notFound();
+  // Optional module (QA B7.1): on a lean tenant the per-tenant flag gates the
+  // whole page, so a typed /vehicle-owners/{id} link to a turned-off module
+  // 404s. Non-lean tenants never enter this clause.
+  const ownersOffForLean =
+    useIsLean() &&
+    tenant != null &&
+    (tenant as { vehicle_owners_enabled?: boolean }).vehicle_owners_enabled !== true;
+  if (ownersHidden || ownersOffForLean) notFound();
 
   const currency = tenant?.currency_code || "USD";
 

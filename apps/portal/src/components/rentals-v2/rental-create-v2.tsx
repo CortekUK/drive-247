@@ -1313,6 +1313,7 @@ export const RentalCreateV2 = () => {
       isAutoExtend,
       false, // stackSurcharges is also resolved from weekendConfig.stack_surcharges
       vehicleDailyPrices, // Turo-style per-day manual prices (ignored when isAutoExtend)
+      true, // v2: weekend/holiday surcharges only under 7 days (QA P5)
     );
     const amount = breakdown.rentalPrice;
 
@@ -4571,6 +4572,7 @@ export const RentalCreateV2 = () => {
                                   false, // skipSurcharges — show full breakdown
                                   false, // stackSurcharges resolved from weekendConfig
                                   vehicleDailyPrices, // Turo-style per-day manual prices
+                                  true, // v2: weekend/holiday surcharges only under 7 days (QA P5)
                                 )
                               : null;
                             const perDayBase = tier === 'monthly' ? (ratesForTier.monthly_rent / mtd)

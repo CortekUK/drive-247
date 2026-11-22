@@ -47,6 +47,7 @@ import { useTenant } from '@nw/contexts/TenantContext';
 import { useCustomer } from '@nw/hooks/use-customer';
 import { useCustomerRentals } from '@nw/hooks/use-customer-rentals';
 import { supabase } from '@nw/integrations/supabase/client';
+import { signedDocumentUrl, toDocumentPath } from '@nw/lib/document-url';
 import type { Database } from '@nw/integrations/supabase/types';
 
 /* ────────────────────────────── row shapes ─────────────────────────────── */
@@ -502,8 +503,9 @@ const SIGNED_DOCUMENT_BUCKET = 'customer-documents';
 export async function downloadSignedAgreement(
   document_: AgreementDocument,
 ): Promise<void> {
+  // QA I4.13: signed link (bucket going private)
   const blob = document_.url.startsWith('http')
-    ? await fetchRemoteBlob(document_.url)
+    ? await fetchRemoteBlob(await signedOrThrow(document_.url))
     : await downloadFromStorage(document_.url);
 
   const objectUrl = URL.createObjectURL(blob);
@@ -522,6 +524,15 @@ export async function downloadSignedAgreement(
   }
 }
 
+/** QA I4.13: signed link (bucket going private) — a stored public URL stops working once the bucket is private. */
+async function signedOrThrow(url: string): Promise<string> {
+  const signed = await signedDocumentUrl(url);
+  if (!signed) {
+    throw new Error('We could not fetch your signed agreement. Try opening it instead.');
+  }
+  return signed;
+}
+
 async function fetchRemoteBlob(url: string): Promise<Blob> {
   const response = await fetch(url);
   if (!response.ok) {
@@ -533,7 +544,8 @@ async function fetchRemoteBlob(url: string): Promise<Blob> {
 }
 
 async function downloadFromStorage(path: string): Promise<Blob> {
-  const objectPath = path.replace(`${SIGNED_DOCUMENT_BUCKET}/`, '');
+  // QA I4.13: signed link (bucket going private) — same path parsing as the signed-link helper
+  const objectPath = toDocumentPath(path) ?? path;
   const { data, error } = await supabase.storage
     .from(SIGNED_DOCUMENT_BUCKET)
     .download(objectPath);

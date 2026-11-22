@@ -391,8 +391,13 @@ export function AgreementTemplateRowV2({ rental, choice, mileage, canEdit, busy,
   );
 
   const name = selected ? selected.name || "Untitled template" : "The built-in agreement";
+  /* QA R6.1: a tenant can have templates and still no default (none is set as
+     the default in Settings → Agreements). Saying "no template yet" then was
+     false, and hid the one step that fixes it. */
   const detail = !selected
-    ? "You have no agreement template yet, so the built-in agreement is sent."
+    ? pickable.length > 0
+      ? "None of your templates is set as the default, so the built-in agreement is sent. Pick one with Change, or set a default in Settings → Agreements."
+      : "You have no agreement template yet, so the built-in agreement is sent."
     : !isRouteChoice
       ? "Chosen for this rental's next send, instead of your default."
       : selected.category === category

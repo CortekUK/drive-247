@@ -22,6 +22,21 @@ import type { Notification } from "@/hooks/use-notifications";
 /** Below this many real activity events, the preview is added. */
 export const MIN_REAL = 3;
 
+/**
+ * QA R13: the preview used to be on for every rental on the v2 chrome, so a
+ * real, closed two-day rental showed "4 plans ... $6,562" of made-up
+ * extensions in Payment Plan. It now needs an explicit opt-in in the viewer's
+ * own browser (localStorage "d247.dev.railPreview" = "1"); real rentals show
+ * only their own data by default.
+ */
+export function railPreviewEnabled(): boolean {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem("d247.dev.railPreview") === "1";
+  } catch {
+    return false;
+  }
+}
+
 const H = 3_600_000;
 const ago = (hours: number) => new Date(Date.now() - hours * H).toISOString();
 

@@ -28,7 +28,7 @@ import { useNextPath, withNext } from '@/app/(northwind)/northwind-site/(auth)/_
 import { isClean, validateEmail, validateExistingPassword } from '@/app/(northwind)/northwind-site/(auth)/_components/validation';
 
 import { AUTH_FIELD_CLASS as FIELD_CLASS, AUTH_FIELD_ERROR_CLASS as FIELD_ERROR_CLASS } from './auth-fields-v2';
-import { AuthSplitShell, authLinkInk } from './auth-split-shell';
+import { AuthSplitShell, authLinkInk, useAuthHref } from './auth-split-shell';
 import { ContinueWithGoogle } from './google-sign-in';
 import { PolicyConsentLine } from './policy-consent-line';
 
@@ -44,6 +44,7 @@ export function LoginV2() {
   const { signIn } = useCustomerAuth();
   const { tenant, isLoading: tenantLoading } = useTenant();
   const next = useNextPath();
+  const authHref = useAuthHref();
   // Where a Google sign-in goes once it lands: where the form would go.
   const goNext = useCallback(() => router.replace(next), [router, next]);
   const [googleBusy, setGoogleBusy] = useState(false);
@@ -105,7 +106,7 @@ export function LoginV2() {
               {failure.kind === 'no-account-for-tenant' ? (
                 <>
                   {' '}
-                  <Link href={withNext('/signup', next)} className="font-medium underline underline-offset-4">
+                  <Link href={withNext(authHref('/signup'), next)} className="font-medium underline underline-offset-4">
                     Create an account
                   </Link>
                 </>
@@ -182,7 +183,7 @@ export function LoginV2() {
 
         <div className="flex justify-end">
           <Link
-            href="/forgot-password"
+            href={authHref('/forgot-password')}
             className="-my-2 inline-block py-3 text-sm font-medium underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-pv-primary/25"
             style={{ color: ink }}
           >
@@ -219,7 +220,7 @@ export function LoginV2() {
       <p className="mt-6 text-center text-sm text-pv-muted-fg">
         New here?{' '}
         <Link
-          href={withNext('/signup', next)}
+          href={withNext(authHref('/signup'), next)}
           className="font-medium underline-offset-4 hover:underline"
           style={{ color: ink }}
         >

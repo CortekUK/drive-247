@@ -50,6 +50,7 @@ import { useCustomer } from '@nw/hooks/use-customer';
 import { useTenant } from '@nw/contexts/TenantContext';
 import { supabase } from '@nw/integrations/supabase/client';
 import { parseDateOnly, todayDateString } from '@nw/lib/domain';
+import { toDocumentPath } from '@/lib/document-path';
 import type { Database } from '@nw/integrations/supabase/types';
 
 /* ─────────────────────────── storage constraints ───────────────────────── */
@@ -265,10 +266,12 @@ export function toStoragePath(fileUrl: string | null): string | null {
   const trimmed = fileUrl.trim();
   if (trimmed === '') return null;
 
-  const marker = `/${DOCUMENT_BUCKET}/`;
-  const markerAt = trimmed.indexOf(marker);
-  if (trimmed.startsWith('http') && markerAt !== -1) {
-    return trimmed.slice(markerAt + marker.length);
+  // QA I4.13: signed link (bucket going private) — parse a stored storage URL
+  // (public, sign or authenticated form) the same way the signed-link helper
+  // does, so View/Download always sign or download by the object path. Any
+  // other absolute URL stays as it is (`externalFileUrl` relies on that).
+  if (/^https?:/i.test(trimmed)) {
+    return toDocumentPath(trimmed) ?? trimmed;
   }
 
   const prefix = `${DOCUMENT_BUCKET}/`;
@@ -817,6 +820,40 @@ export function useDeleteCustomerDocument() {
         devtools call away from being skipped — and with RLS off on this table,
         the query IS the enforcement.
       */
+      const notDeletable = new Error(
+        'That document is attached to a booking, so it cannot be removed here. Contact us if you need it changed.',
+      );
+
+      // 1. Is it ours, and not filed against a booking? Same filters as the DELETE.
+      const { data: deletable, error: checkError } = await supabase
+        .from('customer_documents')
+        .select('id')
+        .eq('id', doc.id)
+        .eq('customer_id', customerId)
+        .eq('tenant_id', tenantId)
+        .is('rental_id', null)
+        .is('extension_id', null);
+      if (checkError) {
+        console.error('[useDeleteCustomerDocument] Check failed', checkError);
+        throw new Error(checkError.message || 'We could not remove that document.');
+      }
+      if (!deletable || deletable.length === 0) throw notDeletable;
+
+      // 2. The file, BEFORE the row. The bucket's customer DELETE policy
+      //    (`storage_cd_customer_can_access`) only lets a customer remove a file
+      //    while a customer_documents row of theirs still points at it. Removing
+      //    the row first made storage silently delete nothing, so every
+      //    customer-deleted certificate stayed in the bucket (I4 QA, 2026-11-12).
+      if (doc.storagePath) {
+        const { data: removed, error: storageError } = await supabase.storage
+          .from(DOCUMENT_BUCKET)
+          .remove([doc.storagePath]);
+        if (storageError || !removed || removed.length === 0) {
+          console.warn('[useDeleteCustomerDocument] File not removed from storage', storageError ?? 'no object removed');
+        }
+      }
+
+      // 3. The row.
       const { data: deleted, error } = await supabase
         .from('customer_documents')
         .delete()
@@ -832,27 +869,7 @@ export function useDeleteCustomerDocument() {
         throw new Error(error.message || 'We could not remove that document.');
       }
 
-      if (!deleted || deleted.length === 0) {
-        throw new Error(
-          'That document is attached to a booking, so it cannot be removed here. Contact us if you need it changed.',
-        );
-      }
-
-      // Storage last, and only once the row is definitely gone. The other
-      // order leaves a row pointing at a file that no longer exists, which is
-      // a broken download button; this order can at worst leave an unreferenced
-      // object, which nobody sees.
-      if (doc.storagePath) {
-        const { error: storageError } = await supabase.storage
-          .from(DOCUMENT_BUCKET)
-          .remove([doc.storagePath]);
-        if (storageError) {
-          console.warn(
-            '[useDeleteCustomerDocument] Row deleted, file left behind',
-            storageError,
-          );
-        }
-      }
+      if (!deleted || deleted.length === 0) throw notDeletable;
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({

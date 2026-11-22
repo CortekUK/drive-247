@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { formatInTimeZone } from "date-fns-tz";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { useV2 } from "@/lib/v2-context";
 import {
   buildFleetQuote,
   shiftLocalDate,
@@ -77,6 +78,7 @@ async function fetchForVehicleChunks<T>(
 export async function loadFleetQuote(
   tenantId: string,
   search: FleetQuoteSearch,
+  options: { surchargesUnder7DaysOnly?: boolean } = {},
 ): Promise<FleetQuoteResult> {
   const holdingStatuses = [
     "Pending", "Active", "Upcoming", "Confirmed", "Started",
@@ -184,6 +186,7 @@ export async function loadFleetQuote(
     securityDepositEnabled: settings.security_deposit_enabled !== false,
     depositMode: settings.deposit_mode === "per_vehicle" ? "per_vehicle" : "global",
     globalSecurityDeposit: nonNegativeNumber(settings.global_deposit_amount),
+    surchargesUnder7DaysOnly: options.surchargesUnder7DaysOnly === true,
     weekendConfig: surcharge > 0
       ? {
           weekend_surcharge_percent: surcharge,
@@ -208,10 +211,13 @@ export async function loadFleetQuote(
 
 export function useFleetQuote() {
   const { tenant } = useTenant();
+  // v2 (Northwind): weekend/holiday surcharges only under 7 days, like its
+  // booking site and new-rental screen. Every other tenant is unchanged.
+  const v2 = useV2("chrome");
   const mutation = useMutation({
     mutationFn: async (search: FleetQuoteSearch) => {
       if (!tenant?.id) throw new Error("Your tenant could not be loaded. Refresh and try again.");
-      return loadFleetQuote(tenant.id, search);
+      return loadFleetQuote(tenant.id, search, { surchargesUnder7DaysOnly: v2 });
     },
   });
 

@@ -55,6 +55,8 @@ import { cn } from "@/lib/utils";
 import { useGigDriverImages, useDeleteGigDriverImage } from "@/hooks/use-gig-driver-images";
 import GigDriverUploadDialog from "@/components/customers/gig-driver-upload-dialog";
 import { BlurredImage } from "@/components/ui/blurred-image";
+import { SignedDocumentImage } from "@/components/shared/signed-document-image"; // QA I4.13: signed link (bucket going private)
+import { openDocument, signedDocumentUrl } from "@/lib/document-url"; // QA I4.13: signed link (bucket going private)
 import {
   AlertDialog,
   AlertDialogAction,
@@ -884,7 +886,8 @@ const CustomerDetail = () => {
           </DialogHeader>
           {previewImage && (
             <div className="px-4 pb-4">
-              <img src={previewImage.url} alt={previewImage.label} className="w-full rounded-lg" />
+              {/* QA I4.13: signed link (bucket going private) */}
+              <SignedDocumentImage src={previewImage.url} alt={previewImage.label} className="w-full rounded-lg" />
             </div>
           )}
         </DialogContent>
@@ -1563,7 +1566,7 @@ const CustomerDetail = () => {
                                           size="sm"
                                           className="h-8 w-8 p-0"
                                           title="View signed document"
-                                          onClick={() => window.open(rental.signed_document.file_url, '_blank')}
+                                          onClick={() => openDocument(rental.signed_document.file_url)} // QA I4.13: signed link (bucket going private)
                                         >
                                           <Eye className="h-3 w-3" />
                                         </Button>
@@ -1572,11 +1575,15 @@ const CustomerDetail = () => {
                                           size="sm"
                                           className="h-8 w-8 p-0"
                                           title="Download signed document"
-                                          onClick={() => {
+                                          onClick={async () => {
                                             console.log('Downloading signed document...');
+                                            // QA I4.13: signed link (bucket going private)
+                                            const fileName = rental.signed_document.document_name || 'rental-agreement.pdf';
+                                            const href = await signedDocumentUrl(rental.signed_document.file_url, { download: fileName });
+                                            if (!href) return;
                                             const link = document.createElement('a');
-                                            link.href = rental.signed_document.file_url;
-                                            link.download = rental.signed_document.document_name || 'rental-agreement.pdf';
+                                            link.href = href;
+                                            link.download = fileName;
                                             link.click();
                                           }}
                                         >

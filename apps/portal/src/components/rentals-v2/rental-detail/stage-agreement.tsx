@@ -74,6 +74,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { signedDocumentUrl } from "@/lib/document-url"; // QA I4.13: signed link (bucket going private)
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui-v2/badge";
@@ -571,9 +572,12 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
       const win = window.open("about:blank", "_blank");
       try {
         if (agreement.signed_document?.file_url) {
-          let url = agreement.signed_document.file_url;
-          if (!url.startsWith("http")) {
-            url = supabase.storage.from("customer-documents").getPublicUrl(url).data.publicUrl;
+          // QA I4.13: signed link (bucket going private)
+          const url = await signedDocumentUrl(agreement.signed_document.file_url);
+          if (!url) {
+            win?.close();
+            toast({ title: "Could not open it", description: "The signed document could not be opened.", variant: "destructive" });
+            return;
           }
           if (win) win.location.href = url;
           return;

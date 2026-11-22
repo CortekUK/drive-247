@@ -36,11 +36,17 @@
  * regenerates the still-unpaid charges in one transaction. The new total is on
  * screen before Save. When only times or places change, the rental price is
  * left exactly as it is — only the delivery and collection fees move.
+ *
+ * Each end picks its how again here, with the fee that goes with it (QA R5.6,
+ * Nov 13 2026 — staff could only retype the address, so a switch to delivery
+ * was never charged). Fees are not taxed, as on the booking site and in the
+ * create flow; `update_rental_terms_v2` writes them and rebuilds the
+ * Delivery Fee / Collection Fee charges with the rest.
  */
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Lock, MapPin, Truck } from "lucide-react";
+import { AlertTriangle, Building2, Lock, MapPin, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
@@ -55,15 +61,52 @@ import { calculateRentalPriceBreakdown } from "@/lib/calculate-rental-price";
 import { formatCurrency, type DistanceUnit } from "@/lib/format-utils";
 import { resolveAgreementTimeZone } from "@/lib/agreement-datetime";
 import { LocationAutocomplete } from "@/components/ui/location-autocomplete";
+import { LocationAutocompleteWithRadius } from "@/components/ui/location-autocomplete-with-radius";
+import { resolveDeliveryFee, type DeliveryTierConfig } from "@/lib/delivery-tiers";
 import { Button } from "@/components/ui-v2/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import type { RentalRow } from "./use-rental-detail-v2";
 import type { StageProps } from "./stages";
 import { WhereMap, type MapPlace } from "./where-map";
-import { RentalDatesDialog } from "./rental-dates-dialog";
+import { BookingRuleNotes, RentalDatesDialog, tenantClock } from "./rental-dates-dialog";
+import { bookingRuleNotes } from "@/lib/booking-rule-notes";
 import { fmtDate, Panel, Pill, StageAction, Surface } from "./_kit";
+import {
+  calendarDaysBetween,
+  checkTypedCode,
+  promoDiscount,
+  useDurationDiscount,
+  useStoredTypedCode,
+  type RentalPromo,
+} from "./rental-promo";
 
 type How = "fixed" | "location" | "area";
-type End = { how: How; address: string; locationId: string | null; fee: number; outOfRadius?: boolean };
+type End = {
+  how: How;
+  address: string;
+  locationId: string | null;
+  fee: number;
+  /** Area only: the address is outside the delivery radius (allowed, warned). */
+  outOfRadius?: boolean;
+  /** Area only: beyond the furthest distance band — not deliverable. */
+  blocked?: boolean;
+};
+
+/** What one end can choose from: Settings → Locations, for pickup or return. */
+type EndChoices = {
+  fixedAddress: string | null;
+  locations: PickupLocation[];
+  tierCfg: DeliveryTierConfig;
+  radiusKm: number;
+  centerLat: number | null;
+  centerLon: number | null;
+};
+
+/** The area fee for an address this far away — the create flow's LocationPicker rule. */
+function areaFee(c: EndChoices, distanceKm?: number): { fee: number; blocked: boolean } {
+  const r = resolveDeliveryFee(distanceKm, c.tierCfg);
+  return { fee: Number(r.fee) || 0, blocked: r.blocked };
+}
 
 const HOW_LABEL: Record<How, { out: string; back: string; icon: typeof Building2 }> = {
   fixed: { out: "Collects from us", back: "Returns to us", icon: Building2 },
@@ -171,6 +214,15 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
   const [returnAt, setReturnAt] = useState("");
   const [out, setOut] = useState<End>(current.out);
   const [back, setBack] = useState<End>(current.back);
+  // A promo code typed here, as on the booking page (QA P8.4). `undefined` =
+  // untouched (the code already on the rental stands), `null` = removed.
+  const storedCode = useStoredTypedCode(tenant?.id, rental.promo_code);
+  const [typedPromo, setTypedPromo] = useState<RentalPromo | null | undefined>(undefined);
+  const [promoInput, setPromoInput] = useState("");
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [promoChecking, setPromoChecking] = useState(false);
+  const activeTyped = typedPromo === undefined ? storedCode.data ?? null : typedPromo;
+  const promoChanged = typedPromo !== undefined && (typedPromo?.code ?? null) !== (storedCode.data?.code ?? null);
   const origPickup = joinAt(rental.start_date, rental.pickup_time);
   const origReturn = joinAt(rental.end_date, rental.return_time);
   const reset = () => {
@@ -178,13 +230,57 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
     setReturnAt(origReturn);
     setOut(current.out);
     setBack(current.back);
+    setTypedPromo(undefined);
+    setPromoInput("");
+    setPromoError(null);
   };
   // Re-seed from the rental whenever it (or the settings it is read with) changes.
   useEffect(reset, [origPickup, origReturn, current]); // eslint-disable-line react-hooks/exhaustive-deps
   const sameEnd = (a: End, b: End) => a.how === b.how && a.address === b.address && a.locationId === b.locationId && a.fee === b.fee;
   const dirty =
-    pickupAt !== origPickup || returnAt !== origReturn || !sameEnd(out, current.out) || !sameEnd(back, current.back);
+    pickupAt !== origPickup ||
+    returnAt !== origReturn ||
+    !sameEnd(out, current.out) ||
+    !sameEnd(back, current.back) ||
+    (canEdit && promoChanged);
   const backEnd: End = back;
+  const placesMoved = !sameEnd(out, current.out) || !sameEnd(back, current.back);
+
+  /* ── what each end can choose from (Settings → Locations) ─────────────── */
+  const tierCfg: DeliveryTierConfig = {
+    delivery_tiers_enabled: ls.delivery_tiers_enabled,
+    delivery_distance_tiers: ls.delivery_distance_tiers,
+    area_delivery_fee: ls.area_delivery_fee,
+  };
+  const centre = {
+    centerLat: ls.area_center_lat != null ? Number(ls.area_center_lat) : null,
+    centerLon: ls.area_center_lon != null ? Number(ls.area_center_lon) : null,
+  };
+  const outChoices: EndChoices = {
+    fixedAddress: ls.fixed_pickup_address,
+    locations: pickupLocations,
+    tierCfg,
+    radiusKm: Number(ls.pickup_area_radius_km) || 25,
+    ...centre,
+  };
+  const backChoices: EndChoices = {
+    fixedAddress: ls.fixed_return_address || ls.fixed_pickup_address,
+    locations: returnLocations,
+    tierCfg,
+    radiusKm: Number(ls.return_area_radius_km) || 25,
+    ...centre,
+  };
+
+  /* ── the booking site's rules, against the dates about to be saved ─────
+     Shown once the admin has changed something, right under the dates, so
+     the Save a moment later is taken knowingly. Notes, not a refusal. */
+  const ruleNotes = useMemo(
+    () =>
+      canEdit && dirty && pickupAt
+        ? bookingRuleNotes({ pickupAt, returnAt, now: tenantClock(timezone), settings: rentalSettings ?? null })
+        : [],
+    [canEdit, dirty, pickupAt, returnAt, timezone, rentalSettings]
+  );
 
   /* ── the re-price, only when the dates move ───────────────────────────── */
   const newStart = pickupAt.slice(0, 10);
@@ -192,8 +288,11 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
   const datesMoved =
     canEdit &&
     (newStart !== String(rental.start_date ?? "").slice(0, 10) || newEnd !== String(rental.end_date ?? "").slice(0, 10));
+  // The long-rental discount for the new length, worked out the booking page's
+  // way; a typed code replaces it, they never stack (QA P8.8, P4.14).
+  const durationDiscount = useDurationDiscount(tenant?.id, timezone, calendarDaysBetween(newStart, newEnd));
   const reprice = useMemo(() => {
-    if (!datesMoved || !newStart || !newEnd || newEnd <= newStart || !detail.vehicle) return null;
+    if (!(datesMoved || (canEdit && promoChanged)) || !newStart || !newEnd || newEnd <= newStart || !detail.vehicle) return null;
     const breakdown = calculateRentalPriceBreakdown(
       newStart,
       newEnd,
@@ -209,10 +308,14 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
       mtd,
       rental.auto_extend_enabled === true,
       false,
-      dayPrices as never
+      dayPrices as never,
+      true // v2: weekend/holiday surcharges only under 7 days (QA P5)
     );
     const price = Math.round(breakdown.rentalPrice * 100) / 100;
-    const discounted = price - (Number(rental.discount_applied) || 0);
+    // The discount comes off the rental only; tax and the fee follow what is left.
+    const promo = activeTyped ?? durationDiscount.data ?? null;
+    const discount = promoDiscount(promo, price);
+    const discounted = Math.round((price - discount) * 100) / 100;
     const rs = rentalSettings as any;
     const tax =
       rs?.tax_enabled && rs?.tax_percentage ? Math.round(discounted * (rs.tax_percentage / 100) * 100) / 100 : 0;
@@ -221,15 +324,31 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
       const v = Number(rs.service_fee_value ?? rs.service_fee_amount ?? 0) || 0;
       service = rs.service_fee_type === "percentage" ? Math.round(((discounted * v) / 100) * 100) / 100 : v;
     }
-    return { price, tax, service, days: breakdown.rentalDays, tier: breakdown.pricingTier };
-  }, [datesMoved, newStart, newEnd, detail.vehicle, weekend, holidays, overrides, vehicleId, mtd, rental, dayPrices, rentalSettings]);
+    return { price, promo, discount, tax, service, days: breakdown.rentalDays, tier: breakdown.pricingTier };
+  }, [datesMoved, canEdit, promoChanged, activeTyped, durationDiscount.data, newStart, newEnd, detail.vehicle, weekend, holidays, overrides, vehicleId, mtd, rental, dayPrices, rentalSettings]);
+
+  const applyPromo = async () => {
+    if (!tenant?.id) return;
+    setPromoChecking(true);
+    const { promo, error } = await checkTypedCode(tenant.id, timezone, promoInput);
+    setPromoChecking(false);
+    setPromoError(error);
+    if (promo) {
+      setTypedPromo(promo);
+      setPromoInput("");
+    }
+  };
 
   const save = useMutation({
     mutationFn: async () => {
       if (!pickupAt || !returnAt) throw new Error("Both a pickup and a return date are needed.");
       if (newEnd <= newStart) throw new Error("The return has to be after the pickup.");
-      if (!out.address.trim()) throw new Error("Say where the car goes out.");
-      if (!backEnd.address.trim()) throw new Error("Say where the car comes back.");
+      if (out.how === "location" && !out.locationId) throw new Error("Pick which of your locations the car goes out from.");
+      if (backEnd.how === "location" && !backEnd.locationId) throw new Error("Pick which of your locations the car comes back to.");
+      if (!out.address.trim()) throw new Error(out.how === "area" ? "Type the address we deliver to." : "Say where the car goes out.");
+      if (!backEnd.address.trim()) throw new Error(backEnd.how === "area" ? "Type the address we collect from." : "Say where the car comes back.");
+      if (out.blocked) throw new Error("That delivery address is further than you deliver.");
+      if (backEnd.blocked) throw new Error("That collection address is further than you collect from.");
       const terms: Record<string, unknown> = {
         start_date: newStart,
         end_date: newEnd,
@@ -238,10 +357,27 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
         pickup_location: out.address.trim(),
         return_location: backEnd.address.trim(),
       };
-      // A changed address no longer points at a saved location.
-      if (out.address !== current.out.address) terms.pickup_location_id = "";
-      if (backEnd.address !== current.back.address) terms.return_location_id = "";
-      if (reprice) Object.assign(terms, { monthly_amount: reprice.price, tax_amount: reprice.tax, service_fee: reprice.service });
+      // How each end changes hands, and its fee (QA R5.6). Sent only when a
+      // place changed, so a dates-only save leaves older rentals' fields alone.
+      if (placesMoved) {
+        Object.assign(terms, {
+          delivery_option: out.how,
+          pickup_location_id: out.how === "location" ? (out.locationId ?? "") : "",
+          return_location_id: backEnd.how === "location" ? (backEnd.locationId ?? "") : "",
+          uses_delivery_service: out.how === "area" || backEnd.how === "area",
+          delivery_fee: out.fee,
+          collection_fee: backEnd.fee,
+        });
+      }
+      if (reprice)
+        Object.assign(terms, {
+          monthly_amount: reprice.price,
+          tax_amount: reprice.tax,
+          service_fee: reprice.service,
+          // The code and its discount travel with the price (QA P8.4, P8.8).
+          discount_applied: reprice.discount,
+          promo_code: reprice.promo?.code ?? "",
+        });
       const { data, error } = await (supabase as any).rpc("update_rental_terms_v2", {
         p_rental_id: rental.id,
         p_terms: terms,
@@ -342,6 +478,7 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
           summary={canEdit && reprice ? `${reprice.days} days · ${reprice.tier}` : period}
           timezone={timezone}
         />
+        <BookingRuleNotes notes={ruleNotes} className="shrink-0" />
         <RentalDatesDialog
           open={datesOpen}
           onOpenChange={setDatesOpen}
@@ -364,7 +501,11 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
               title="Pickup"
               editable={canEdit}
               end={shownOut}
+              original={current.out}
               setEnd={setOut}
+              choices={outChoices}
+              currency={currency}
+              unit={unit}
             />
             <div className="h-px bg-foreground/5" />
             <PlaceRow
@@ -372,7 +513,33 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
               title="Drop-off"
               editable={canEdit}
               end={shownBack}
+              original={current.back}
               setEnd={setBack}
+              choices={backChoices}
+              currency={currency}
+              unit={unit}
+            />
+            <div className="h-px bg-foreground/5" />
+            {/* A promo code, and the long-rental discount, as on the booking page (QA P8.4, P8.8). */}
+            <PromoRow
+              editable={canEdit}
+              typed={activeTyped}
+              duration={reprice ? (reprice.promo?.source === "duration" ? reprice.promo : null) : null}
+              storedDiscount={Number(rental.discount_applied) || 0}
+              storedCode={rental.promo_code ?? null}
+              input={promoInput}
+              setInput={(v) => {
+                setPromoInput(v);
+                setPromoError(null);
+              }}
+              error={promoError}
+              checking={promoChecking}
+              onApply={applyPromo}
+              onRemove={() => {
+                setTypedPromo(null);
+                setPromoError(null);
+              }}
+              currency={currency}
             />
           </div>
 
@@ -394,11 +561,35 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
                   <span className="font-semibold text-foreground">
                     {formatCurrency(Number(rental.monthly_amount) || 0, currency)} → {formatCurrency(reprice.price, currency)}
                   </span>
+                  {reprice.discount > 0 && (
+                    <>
+                      {" "}
+                      · {reprice.promo?.source === "duration" ? "Long-rental discount" : `Discount (${reprice.promo?.code})`} −
+                      {formatCurrency(reprice.discount, currency)}
+                    </>
+                  )}
                   {reprice.tax > 0 && <> · Tax {formatCurrency(reprice.tax, currency)}</>}
                   {reprice.service > 0 && <> · Service {formatCurrency(reprice.service, currency)}</>}
                 </span>
               ) : (
                 <span className="text-xs text-muted-foreground">Same dates — the rental price stays as it is.</span>
+              )}
+              {/* A new how or place moves its fee — say so before Save (QA R5.6). */}
+              {out.fee !== current.out.fee && (
+                <span className="text-xs text-muted-foreground">
+                  Delivery{" "}
+                  <span className="font-semibold text-foreground">
+                    {formatCurrency(current.out.fee, currency)} → {formatCurrency(out.fee, currency)}
+                  </span>
+                </span>
+              )}
+              {back.fee !== current.back.fee && (
+                <span className="text-xs text-muted-foreground">
+                  Collection{" "}
+                  <span className="font-semibold text-foreground">
+                    {formatCurrency(current.back.fee, currency)} → {formatCurrency(back.fee, currency)}
+                  </span>
+                </span>
               )}
               <span className="ml-auto flex items-center gap-2">
                 <Button size="sm" variant="ghost" onClick={reset}>
@@ -419,6 +610,90 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
 /* ══════════════════════════════════════════════════════════════════════════
    Pieces
    ══════════════════════════════════════════════════════════════════════════ */
+
+/** Promo code: type one, see it applied, or see the long-rental discount that applies by itself. */
+function PromoRow({
+  editable,
+  typed,
+  duration,
+  storedDiscount,
+  storedCode,
+  input,
+  setInput,
+  error,
+  checking,
+  onApply,
+  onRemove,
+  currency,
+}: {
+  editable: boolean;
+  typed: RentalPromo | null;
+  duration: RentalPromo | null;
+  storedDiscount: number;
+  storedCode: string | null;
+  input: string;
+  setInput: (v: string) => void;
+  error: string | null;
+  checking: boolean;
+  onApply: () => void;
+  onRemove: () => void;
+  currency: string;
+}) {
+  const describe = (p: RentalPromo) => (p.type === "percentage" ? `${p.value}% off the rental` : `${formatCurrency(p.value, currency)} off the rental`);
+  if (!editable) {
+    if (!storedCode && storedDiscount <= 0) return null;
+    return (
+      <div className="flex items-baseline justify-between gap-3 text-sm">
+        <span className="text-muted-foreground">Discount</span>
+        <span className="font-medium">
+          {storedCode ? `${storedCode} · ` : ""}−{formatCurrency(storedDiscount, currency)}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium">Promo code</span>
+        {typed ? (
+          <span className="flex items-center gap-2 text-sm">
+            <span className="font-medium text-[#16a34a]">
+              {typed.code} applied — {describe(typed)}
+            </span>
+            <Button size="sm" variant="ghost" onClick={onRemove}>
+              Remove
+            </Button>
+          </span>
+        ) : (
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              onApply();
+            }}
+          >
+            <input
+              aria-label="Promo code"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Code"
+              className="h-8 w-36 rounded-full border border-foreground/10 bg-background px-3 text-sm uppercase outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            <Button size="sm" variant="outline" type="submit" disabled={checking || !input.trim()}>
+              {checking ? "Checking…" : "Apply"}
+            </Button>
+          </form>
+        )}
+      </div>
+      {error && <p className="text-xs text-[#dc2626]">{error}</p>}
+      {!typed && duration && (
+        <p className="text-xs text-muted-foreground">
+          Long-rental discount applies by itself: {describe(duration)} ({duration.minDays}+ days). A code typed here replaces it.
+        </p>
+      )}
+    </div>
+  );
+}
 
 function Legend({ dot, label }: { dot: string; label: string }) {
   return (
@@ -457,9 +732,11 @@ function DateBar({
   const End = ({ label, at, hasTime }: { label: string; at: string; hasTime: boolean }) => (
     <div className="min-w-0">
       <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="mt-0.5 truncate font-heading text-lg font-semibold tracking-tight">
+      {/* On a phone the date and time each get their own line instead of
+          truncating to "Fe…" (QA R5.12). */}
+      <p className="mt-0.5 font-heading text-lg font-semibold tracking-tight sm:truncate">
         {at ? fmtDate(at.slice(0, 10)) : label === "Drop-off" ? "Open-ended" : "No date"}
-        <span className="ml-2 text-sm font-normal text-muted-foreground">
+        <span className="text-sm font-normal text-muted-foreground max-sm:block sm:ml-2">
           {at && hasTime ? fmtClock(at.slice(11, 16)) : "no time set"}
         </span>
       </p>
@@ -470,14 +747,14 @@ function DateBar({
       <End label="Pickup" at={pickup} hasTime={hasPickupTime} />
       <span className="text-muted-foreground">→</span>
       <End label="Drop-off" at={ret} hasTime={hasReturnTime} />
-      <span className="ml-auto shrink-0 text-right text-xs text-muted-foreground">
+      <span className="ml-auto shrink-0 text-right text-xs text-muted-foreground max-sm:ml-0 max-sm:w-full max-sm:text-left">
         <span className="block font-medium text-foreground">{summary}</span>
         Times in {timezone}
       </span>
     </>
   );
   const cls =
-    "flex flex-none items-center gap-6 rounded-4xl bg-card px-5 py-4 text-left shadow-md ring-1 ring-foreground/5 dark:ring-foreground/10";
+    "flex flex-none flex-wrap items-center gap-x-6 gap-y-3 rounded-4xl bg-card px-5 py-4 text-left shadow-md ring-1 ring-foreground/5 dark:ring-foreground/10";
   return editable ? (
     <button
       type="button"
@@ -491,43 +768,188 @@ function DateBar({
   );
 }
 
+/** Short labels for the three-way choice; HOW_LABEL carries the long ones. */
+const HOW_CHOICE: Record<How, { out: string; back: string }> = {
+  fixed: { out: "Collects from us", back: "Returns to us" },
+  location: { out: "Our location", back: "Our location" },
+  area: { out: "We deliver", back: "We collect" },
+};
+
 /**
- * One row of picker two: just the address this end happens at — typed with the
- * app's Google address search. No "how", no fee (Ghulam, Oct 2 2026: "just the
- * pickup and drop-off address"); the rental's existing delivery fees are left
- * exactly as they are.
+ * One row of picker two: HOW this end changes hands, WHERE, and its fee — the
+ * same three "how"s and fees as the create flow (QA R5.6, which replaced the
+ * address-only row of Oct 2 2026):
+ *
+ *   Collects from us / Returns to us   the tenant's fixed address, free
+ *   Our location                       a saved location, that location's fee
+ *   We deliver / We collect            the customer's address, the area fee
+ *                                      (flat, or by distance band)
+ *
+ * Choosing the end's original how again puts back what it had, fee included.
  */
 function PlaceRow({
   side,
   title,
   editable,
   end,
+  original,
   setEnd,
+  choices,
+  currency,
+  unit,
 }: {
   side: "out" | "back";
   title: string;
   editable: boolean;
   end: End;
+  original: End;
   setEnd: (e: End) => void;
+  choices: EndChoices;
+  currency: string;
+  unit: DistanceUnit;
 }) {
+  const pick = (how: How) => {
+    if (how === end.how) return;
+    if (how === original.how) return setEnd(original);
+    if (how === "fixed") return setEnd({ how, address: choices.fixedAddress ?? "", locationId: null, fee: 0 });
+    if (how === "location") {
+      const only = choices.locations.length === 1 ? choices.locations[0] : null;
+      return setEnd({
+        how,
+        address: only?.address ?? "",
+        locationId: only?.id ?? null,
+        fee: Number(only?.delivery_fee) || 0,
+      });
+    }
+    setEnd({ how, address: "", locationId: null, fee: areaFee(choices).fee });
+  };
+
+  const feeName = side === "out" ? "Delivery fee" : "Collection fee";
+  const feeText =
+    end.fee > 0
+      ? `${end.how === "area" && !end.address ? "From " : ""}${formatCurrency(end.fee, currency)}`
+      : "Free";
+  const loc = end.locationId ? choices.locations.find((l) => l.id === end.locationId) : null;
+
   return (
-    <div className="flex items-center gap-x-5">
-      <h3 className="w-16 shrink-0 font-heading text-sm font-semibold">{title}</h3>
-      <div className="min-w-0 flex-1">
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <h3 className="w-16 shrink-0 font-heading text-sm font-semibold">{title}</h3>
         {editable ? (
-          <LocationAutocomplete
-            id={`${side}-address`}
-            value={end.address}
-            // A typed address replaces any saved location — v1's dialog clears
-            // the FK the same way.
-            onChange={(address) => setEnd({ ...end, address, locationId: null })}
-            placeholder={side === "out" ? "Pickup address" : "Drop-off address"}
-            v2States
-          />
+          <div role="radiogroup" aria-label={`${title}: how`} className="flex flex-wrap gap-1 rounded-full bg-muted/60 p-1">
+            {(["fixed", "location", "area"] as How[]).map((how) => {
+              const Icon = HOW_LABEL[how].icon;
+              const on = end.how === how;
+              return (
+                <button
+                  key={how}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  onClick={() => pick(how)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                    on
+                      ? "bg-card text-foreground shadow-sm ring-1 ring-foreground/10"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Icon className="size-3.5" />
+                  {HOW_CHOICE[how][side]}
+                </button>
+              );
+            })}
+          </div>
         ) : (
+          <span className="text-xs font-medium text-muted-foreground">
+            {loc ? `At ${loc.name}` : HOW_LABEL[end.how][side]}
+          </span>
+        )}
+        <span className="ml-auto text-xs text-muted-foreground">
+          {feeName} <span className="font-semibold text-foreground">{feeText}</span>
+        </span>
+      </div>
+
+      <div className="min-w-0 sm:pl-20">
+        {!editable ? (
           <p className="truncate text-sm font-medium">
             {end.address || <span className="font-normal text-muted-foreground">Not recorded</span>}
           </p>
+        ) : end.how === "fixed" ? (
+          choices.fixedAddress || end.address ? (
+            <p className="flex min-w-0 items-center gap-2 text-sm font-medium">
+              <Building2 className="size-4 shrink-0 text-muted-foreground" />
+              <span className="truncate">{end.address || choices.fixedAddress}</span>
+            </p>
+          ) : (
+            // No fixed address in Settings → Locations: type the one to use.
+            <LocationAutocomplete
+              id={`${side}-address`}
+              value={end.address}
+              onChange={(address) => setEnd({ ...end, address, locationId: null })}
+              placeholder="Your address"
+              v2States
+            />
+          )
+        ) : end.how === "location" ? (
+          choices.locations.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No saved locations yet. Add them in Settings → Locations.</p>
+          ) : (
+            <Select
+              value={end.locationId ?? ""}
+              onValueChange={(id) => {
+                const l = choices.locations.find((x) => x.id === id);
+                if (l) setEnd({ how: "location", address: l.address, locationId: l.id, fee: Number(l.delivery_fee) || 0 });
+              }}
+            >
+              <SelectTrigger id={`${side}-location`} className="w-full">
+                <SelectValue placeholder="Choose one of your locations">{loc?.name}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {choices.locations.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    <span className="flex w-full items-center gap-4">
+                      <span className="flex min-w-0 flex-col">
+                        <span className="font-medium">{l.name}</span>
+                        <span className="truncate text-xs text-muted-foreground">{l.address}</span>
+                      </span>
+                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                        {Number(l.delivery_fee) > 0 ? formatCurrency(Number(l.delivery_fee), currency) : "Free"}
+                      </span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )
+        ) : (
+          <div className="space-y-1.5">
+            <LocationAutocompleteWithRadius
+              id={`${side}-address`}
+              value={end.address}
+              onChange={(address, _lat, _lon, outOfRadius, distanceKm) => {
+                // Typing leaves the distance unknown (the fee reads "From"); a
+                // picked address sets it, and with it the distance band's fee.
+                const f = areaFee(choices, distanceKm);
+                setEnd({ how: "area", address, locationId: null, fee: f.fee, outOfRadius: !!outOfRadius, blocked: f.blocked });
+              }}
+              placeholder={side === "out" ? "Address we deliver to" : "Address we collect from"}
+              radiusKm={choices.radiusKm}
+              centerLat={choices.centerLat}
+              centerLon={choices.centerLon}
+              distanceUnit={unit}
+              allowOutOfRadius
+            />
+            {end.blocked ? (
+              <p className="flex items-center gap-1.5 text-xs text-destructive">
+                <AlertTriangle className="size-3.5" /> Further than you {side === "out" ? "deliver" : "collect from"}.
+              </p>
+            ) : end.outOfRadius ? (
+              <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="size-3.5" /> Outside your delivery area. You can still save it for this rental.
+              </p>
+            ) : null}
+          </div>
         )}
       </div>
     </div>

@@ -1301,11 +1301,49 @@
   border-radius: 24px;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95);
 }
+/* Drop-downs and pop-overs (the sort, the filters, a form's choices) open in a
+   portal on <body>, which wears .g2 while the template is mounted: round them
+   like the glass, and their options to match. */
+body.g2 [data-slot="select-content"],
+body.g2 [data-slot="popover-content"] {
+  border-radius: 20px;
+}
+body.g2 [data-slot="select-content"] { padding: 4px; }
+body.g2 [data-slot="select-item"] { border-radius: 14px; }
 /* The phone's pinned total: frosted like the navbar. */
 .g2-skin .fixed.bg-pv-card\/95 {
   background: rgb(255 255 255 / 0.72);
   -webkit-backdrop-filter: blur(24px) saturate(140%);
   backdrop-filter: blur(24px) saturate(140%);
+}
+
+/* ── Promotions (template-2/promotions-page.tsx) ──────────────────────────
+   An offer is a ticket: the picture's part and the stub meet at a tear, both
+   cut with a half-circle notch at each side (a 12px circle masked out at the
+   seam), and a dashed perforation runs across between the notches. */
+.g2-ticket-top {
+  -webkit-mask:
+    radial-gradient(circle 12px at 0 100%, #0000 98%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle 12px at 100% 100%, #0000 98%, #000) right / 51% 100% no-repeat;
+  mask:
+    radial-gradient(circle 12px at 0 100%, #0000 98%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle 12px at 100% 100%, #0000 98%, #000) right / 51% 100% no-repeat;
+}
+.g2-ticket-stub {
+  -webkit-mask:
+    radial-gradient(circle 12px at 0 0, #0000 98%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle 12px at 100% 0, #0000 98%, #000) right / 51% 100% no-repeat;
+  mask:
+    radial-gradient(circle 12px at 0 0, #0000 98%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle 12px at 100% 0, #0000 98%, #000) right / 51% 100% no-repeat;
+}
+.g2-ticket-stub::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 20px;
+  border-top: 2px dashed rgb(13 12 29 / 0.14);
 }
 
 /* ── Questions (template-2/questions.tsx) ────────────────────────────────

@@ -1,4 +1,4 @@
-import { applyCheckoutOverlap } from '@nw/lib/vehicles/availability-rules';
+import { overlapsLikeTrigger } from '@nw/lib/vehicles/availability-time';
 /**
  * The booking WRITE path: customer → rental → extras → invoice → ledger.
  *
@@ -387,6 +387,14 @@ export async function createBooking(
     sms_consent: form.smsConsent,
     sms_consent_at: smsConsentAt,
     tenant_id: tenantId,
+    // A per-car deposit is written on the rental so the hold placed at pickup
+    // is the amount the customer was shown. `resolveDepositAmount` (edge) reads
+    // an override first, including an explicit 0; without it a tenant outside
+    // PER_VEHICLE_DEPOSIT_TENANT_IDS would be held the tenant amount instead.
+    ...(quote.depositFromVehicle ? { deposit_amount_override: quote.depositHeldAmount } : {}),
+    // The code that took money off, typed or automatic. `promo_code_use_count`
+    // counts paid rentals carrying it against the code's use limit.
+    ...(params.promoCode ? { promo_code: params.promoCode } : {}),
   } as const;
 
   /* ── 4. Reuse an unpaid draft, or replace it ───────────────────────────── */
@@ -449,15 +457,21 @@ export async function createBooking(
 
   // Mirrors the DB trigger, so a clash reads as a sentence rather than a raw
   // Postgres exception. It is a courtesy, not the guard — the trigger is.
-  const clash = await applyCheckoutOverlap(
-    supabase.from("rentals").select("id")
-      .eq("vehicle_id", vehicleId).eq("tenant_id", tenantId),
-    form.pickupDate,
-    form.dropoffDate,
-  ).limit(1);
-
+  // Since 2026-10-30 the trigger compares pickup and return TIMES, so a car
+  // back at 10:00 may go out again at 15:00 the same day. The date filter only
+  // narrows the read; the clock decides, exactly as the trigger decides.
+  const clash = await supabase
+    .from("rentals")
+    .select("id, start_date, pickup_time, end_date, return_time, status")
+    .eq("vehicle_id", vehicleId)
+    .eq("tenant_id", tenantId)
+    .not("status", "in", "(Cancelled,Rejected,Closed)")
+    .lte("start_date", form.dropoffDate)
+    .or(`end_date.gte.${form.pickupDate},end_date.is.null`);
   if (clash.error) return writeFailed("overlap pre-check", describe(clash.error));
-  if ((clash.data ?? []).length > 0) return taken("a live rental already covers these dates");
+  if ((clash.data ?? []).some((row) => overlapsLikeTrigger(row, form))) {
+    return taken("a live rental already covers these dates");
+  }
 
   const inserted = await supabase
     .from("rentals")

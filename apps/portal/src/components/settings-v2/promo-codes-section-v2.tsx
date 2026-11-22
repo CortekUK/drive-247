@@ -84,6 +84,7 @@ export function PromoCodesSectionV2<T extends PromoCodeRowV2>({
   resetKey,
   onEdit,
   onDelete,
+  onToggleActive,
   onCreateFirst = () => focusPromoCreateForm(),
   action,
 }: {
@@ -97,6 +98,8 @@ export function PromoCodesSectionV2<T extends PromoCodeRowV2>({
   resetKey: string;
   onEdit: (promo: T) => void;
   onDelete: (promo: T) => void;
+  /** Turns a code off or back on without deleting it. */
+  onToggleActive?: (promo: T) => void;
   /** Opens the create dialog: the empty state's button, and `action`'s. */
   onCreateFirst?: () => void;
   /** The page's "Add promo code" button, shown beside the heading. */
@@ -148,6 +151,7 @@ export function PromoCodesSectionV2<T extends PromoCodeRowV2>({
         onCopy={(code) => void copyPromoCode(code)}
         onEdit={onEdit}
         onDelete={onDelete}
+        onToggleActive={onToggleActive}
       />
     );
   }

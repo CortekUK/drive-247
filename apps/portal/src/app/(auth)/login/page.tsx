@@ -36,6 +36,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useTheme } from "next-themes";
 import { useV2 } from "@/lib/v2-context";
 import { LoginV2 } from "@/components/auth-v2/login-v2";
+import { WRONG_PORTAL_MESSAGE, flagWrongPortal, isWrongPortal, takeWrongPortal } from "@/lib/wrong-portal";
 
 import { PLATFORM_PRIVACY_URL, PLATFORM_TERMS_URL } from "@/lib/legal/urls";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hviqoaokxvlancmftwuo.supabase.co";
@@ -103,6 +104,21 @@ function LoginPageContent() {
 
   const from = searchParams.get("from") || getRedirectPath();
 
+  // A login from another company on this company's address (QA R1.12, lib/wrong-portal.ts).
+  const wrongPortal = isWrongPortal(appUser, tenant?.id);
+
+  useEffect(() => {
+    if (takeWrongPortal() || searchParams.get("error") === "wrong_portal") setError(WRONG_PORTAL_MESSAGE);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (user && wrongPortal && !loading) {
+      setError(WRONG_PORTAL_MESSAGE);
+      flagWrongPortal();
+      void supabase.auth.signOut({ scope: "local" }).finally(() => router.replace("/login?error=wrong_portal"));
+    }
+  }, [user, wrongPortal, loading, router]);
+
   // If already authenticated, redirect to dashboard.
   //
   // `appUser` is required here, not just `user`. The dashboard refuses to render
@@ -113,10 +129,10 @@ function LoginPageContent() {
   // users back here, so redirecting them in without checking it produced its own
   // endless loop.
   useEffect(() => {
-    if (user && appUser && appUser.is_active && !loading) {
+    if (user && appUser && appUser.is_active && !loading && !wrongPortal) {
       router.replace(from);
     }
-  }, [user, appUser, loading, router, from]);
+  }, [user, appUser, loading, router, from, wrongPortal]);
 
   // Show loading screen while checking auth
   if (loading) {
@@ -228,6 +244,16 @@ function LoginPageContent() {
         // `appUser`, otherwise the login audit row has no tenant/actor and
         // cannot be used as real tenant engagement by Health Score.
         const signedInAppUser = useAuthStore.getState().appUser;
+
+        if (isWrongPortal(signedInAppUser, tenant?.id)) {
+          flagWrongPortal();
+          // "local": end THIS browser's session only. The default (global)
+          // would also sign this person out of their own company's portal.
+          await supabase.auth.signOut({ scope: "local" });
+          setError(WRONG_PORTAL_MESSAGE);
+          router.replace("/login?error=wrong_portal");
+          return;
+        }
 
         // Record policy acceptance via edge function (captures IP server-side)
         if (requiresPolicyAcceptance && data.acceptPolicies && tenant?.id) {

@@ -34,8 +34,9 @@ import {
 } from "lucide-react";
 
 import { useFleetHealth, useFleetHealthStats, useRecomputeFleetHealth } from "@/hooks/use-fleet-health";
+import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { useTenant } from "@/contexts/TenantContext";
-import { useIsAreaHidden } from "@/lib/lean-context";
+import { useIsAreaHidden, useIsLean } from "@/lib/lean-context";
 import { useV2 } from "@/lib/v2-context";
 import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 // The column below renders vehicles.current_mileage, which Fleet Health stores
@@ -160,7 +161,19 @@ export default function FleetHealthPage() {
       : null,
   );
 
-  if (fleetHealthHidden) notFound();
+  // Optional module (QA B7.2): on a lean tenant the per-tenant flag gates the
+  // whole page, so a typed /fleet-health link to a turned-off module 404s
+  // instead of opening. The flag rides the rental-settings row, whose `settings`
+  // falls back to a defaults object (never null) while loading — so gate on
+  // `hasLoaded`, not a null check, or the default (which has no
+  // `fleet_health_enabled`) would 404 the page on every first paint. Non-lean
+  // tenants never enter this clause.
+  const { settings: fhSettings, hasLoaded: fhLoaded } = useRentalSettings();
+  const fleetHealthOffForLean =
+    useIsLean() &&
+    fhLoaded &&
+    (fhSettings as { fleet_health_enabled?: boolean }).fleet_health_enabled !== true;
+  if (fleetHealthHidden || fleetHealthOffForLean) notFound();
 
   return (
     <div className="container mx-auto space-y-6 p-6">

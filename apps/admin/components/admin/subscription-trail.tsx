@@ -55,25 +55,6 @@ export function InvoiceStatusBadge({ invoice }: { invoice: TrailInvoice }) {
 
 const ROW_H = 44;
 
-const MOCK_INVOICES: TrailInvoice[] = [
-  ['2026-10-01', 'paid', 0, 0], ['2026-09-01', 'open', 2, 0], ['2026-08-01', 'paid', 0, 0],
-  ['2026-07-01', 'paid', 0, 4900], ['2026-06-01', 'paid', 0, 0], ['2026-05-01', 'paid', 0, 0],
-  ['2026-04-01', 'void', 0, 0], ['2026-03-01', 'paid', 0, 0], ['2026-02-01', 'paid', 0, 0],
-  ['2026-01-01', 'paid', 0, 0], ['2025-12-01', 'paid', 0, 0], ['2025-11-01', 'paid', 0, 0],
-].map(([date, status, attempts, refunded], i) => ({
-  id: `mock-${i}`,
-  invoice_number: `D247-${String(1012 - i).padStart(4, '0')}`,
-  invoice_date: date as string,
-  created_at: date as string,
-  amount_due: 19900,
-  amount_refunded: refunded as number,
-  currency: 'usd',
-  status: status as string,
-  attempt_count: attempts as number,
-  stripe_hosted_invoice_url: 'https://dashboard.stripe.com/test/invoices',
-  stripe_invoice_pdf: 'https://dashboard.stripe.com/test/invoices',
-}));
-
 const ROW_ICON =
   'inline-flex size-8 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors ' +
   'hover:bg-primary/10 hover:text-primary focus-visible:ring-3 focus-visible:ring-primary/30';
@@ -144,9 +125,10 @@ export function SubscriptionTrail({
   formatCurrency: (amount: number, currency: string) => string;
   formatDate: (date: string | null) => string;
 }) {
-  // MOCK (Ghulam, Oct 18 2026): a tenant with no invoices shows sample lines
-  // so the trail can be reviewed. Delete with MOCK_INVOICES once signed off.
-  const trail = invoices.length > 0 ? invoices : MOCK_INVOICES;
+  // Real invoices only (QA R17.4/R17.5, Nov 14 2026). The review mock (Oct 18)
+  // gave every tenant without invoices the same made-up $199 history, so a
+  // brand-new tenant showed seven months of payments it never made.
+  const trail = invoices;
 
   return (
     <section className="mt-4 flex min-h-0 flex-1 flex-col gap-1.5">

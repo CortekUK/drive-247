@@ -55,12 +55,16 @@
  */
 
 import { useMemo, useState } from "react";
-import { ChevronRight, CornerDownRight, CreditCard, ExternalLink, Loader2, Lock, Plus, ReceiptText, ShieldAlert, Undo2 } from "lucide-react";
+import { Ban, ChevronRight, CornerDownRight, CreditCard, ExternalLink, Loader2, Lock, Plus, ReceiptText, ShieldAlert, Trash2, Undo2 } from "lucide-react";
+import { CancelRentalDialog } from "@/components/shared/dialogs/cancel-rental-dialog";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui-v2/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
 import { useTenant } from "@/contexts/TenantContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useRentalPaymentLinks } from "@/hooks/use-payment-links";
 import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
 import { useRentalTotals } from "@/hooks/use-rental-ledger-data";
@@ -100,6 +104,7 @@ const when = (iso: string | null | undefined) => (iso ? fmtDateTime(parseAt(Stri
 
 export function StagePayments({ detail, refetch }: StageProps) {
   const rentalId = detail.rental.id;
+  const [cancelOpen, setCancelOpen] = useState(false);
 
   /* Reused v1 reads. The links query is only asked for the STATE it resolves —
      expiry and supersession — which the `payments` row does not carry on its
@@ -124,7 +129,16 @@ export function StagePayments({ detail, refetch }: StageProps) {
   );
 
   const { tenant } = useTenant();
+  const { toast } = useToast();
+  /* Read-only roles: the stage itself sits in a disabled fieldset, but the
+     Charges list is a dialog (a portal, outside it), so its money buttons are
+     gated here too (QA R8.11). */
+  const { canEdit } = useManagerPermissions();
+  const mayEdit = canEdit("rentals");
   const [request, setRequest] = useState<ActionRequest | null>(null);
+  /* A charge added by mistake, waiting for the operator to confirm its removal (QA R8.7). */
+  const [removing, setRemoving] = useState<Charge | null>(null);
+  const [removingBusy, setRemovingBusy] = useState(false);
   /* Which charges show their payments. Null until touched: every charge that
      has a payment starts open, like a receipt you can read top to bottom. */
   const [expanded, setExpanded] = useState<Set<string> | null>(null);
@@ -186,17 +200,31 @@ export function StagePayments({ detail, refetch }: StageProps) {
     t.outstanding === 0 ? "text-success" : overdue ? "text-destructive" : "text-warning";
   const paidShare = t.charged > 0 ? Math.min(1, t.applied / t.charged) : 0;
 
+  // What the deposit came to (QA R9.4): kept from the hold, and handed back.
+  const depositKept =
+    deposit.deductions.reduce((n, d) => n + d.amountCents, 0) || (deposit.status === "captured" ? deposit.charged : 0);
+  const depositReleased = deposit.events
+    .filter((e) => e.action === "release" && e.outcome === "succeeded")
+    .reduce((n, e) => n + e.amountCents, 0);
   const depositWord =
     deposit.status === "held"
       ? `${usd(held)} held`
       : deposit.status === "not_held"
         ? deposit.charged > 0
-          ? `${usd(deposit.charged)} billed`
+          ? // A charged deposit is the customer's money held, not revenue: say it
+            // goes back, and how much already has (QA R9.7).
+            deposit.refunded >= deposit.charged
+            ? `${usd(deposit.charged)} charged · refunded`
+            : deposit.refunded > 0
+              ? `${usd(deposit.charged)} charged · ${usd(deposit.refunded)} refunded`
+              : `${usd(deposit.charged)} charged · refundable`
           : "No deposit"
         : deposit.status === "released"
-          ? "Released"
+          ? depositReleased > 0 ? `${usd(depositReleased)} released` : "Released"
           : deposit.status === "captured"
-            ? "Captured"
+            ? depositKept > 0
+              ? `${usd(depositKept)} kept${depositReleased > 0 ? ` · ${usd(depositReleased)} released` : ""}`
+              : "Captured"
             : deposit.status === "needs_review"
               ? "Needs review"
               : deposit.status === "failed"
@@ -204,6 +232,17 @@ export function StagePayments({ detail, refetch }: StageProps) {
                 : "Expired";
 
   const openReceipt = receiptOpen ? ledger.payments.find((p) => p.id === receiptOpen) ?? null : null;
+
+  /* ── cancelling (QA R12, Nov 14 2026) ───────────────────────────────────
+     The v2 screen had no way to cancel a paid booking at all. Only before
+     handover: a Pending rental can be cancelled; an Active one shows why not.
+     The dialog refunds the NEWEST payment (cancel-rental-refund's rule), so
+     its ceiling is what that payment still holds, not the rental price. */
+  const statusLc = String(detail.rental.status ?? "").toLowerCase();
+  const showCancel = statusLc === "pending" || statusLc === "active";
+  const newestPaid = [...ledger.payments]
+    .filter((p) => p.amountCents - p.refundedCents > 0)
+    .sort((a, b) => (a.at < b.at ? 1 : -1))[0];
 
   return (
     <AccountingSyncMarks paymentIds={syncPaymentIds}>
@@ -220,6 +259,18 @@ export function StagePayments({ detail, refetch }: StageProps) {
             disabledReason={t.outstanding === 0 ? "Nothing is owed on this rental." : null}
           />
           <StageAction icon={Plus} label="Add a charge" onClick={() => setRequest({ kind: "fine" })} />
+          {showCancel && (
+            <StageAction
+              icon={Ban}
+              label="Cancel rental"
+              onClick={() => setCancelOpen(true)}
+              disabledReason={
+                statusLc === "active"
+                  ? "The car is already out. A rental can only be cancelled before handover: end it instead, and refund here if money is owed back."
+                  : null
+              }
+            />
+          )}
         </span>
       }
     >
@@ -350,6 +401,56 @@ export function StagePayments({ detail, refetch }: StageProps) {
 
       {/* Dialogs only — `contents` keeps them out of the column's spacing. */}
       <div className="contents">
+      {/* ── remove a charge added by mistake (QA R8.7) ─────────────────────── */}
+      <Dialog open={!!removing} onOpenChange={(o) => !o && !removingBusy && setRemoving(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Remove this charge?</DialogTitle>
+            <DialogDescription>
+              {removing ? `${removing.label}${removing.note ? ` (${removing.note})` : ""} · ${usd(removing.amountCents)}` : ""} will no
+              longer be owed on {detail.rentalNumber ?? "this rental"}. Only for a charge added by mistake: nothing has been paid
+              against it.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" disabled={removingBusy} onClick={() => setRemoving(null)}>
+              Keep it
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={removingBusy}
+              onClick={async () => {
+                if (!removing || !tenant?.id) return;
+                setRemovingBusy(true);
+                try {
+                  // Only an untouched hand-added charge: category Other, nothing applied.
+                  const { data, error: delErr } = await supabase
+                    .from("ledger_entries")
+                    .delete()
+                    .eq("id", removing.id)
+                    .eq("tenant_id", tenant.id)
+                    .eq("rental_id", rentalId)
+                    .eq("type", "Charge")
+                    .eq("category", "Other")
+                    .eq("remaining_amount", removing.amountCents / 100)
+                    .select("id");
+                  if (delErr) throw delErr;
+                  if (!data?.length) throw new Error("It has a payment against it now, or it is not a charge added by hand.");
+                  toast({ title: "Charge removed", description: `${usd(removing.amountCents)} is no longer owed on ${detail.rentalNumber ?? "this rental"}.` });
+                  setRemoving(null);
+                  onChanged();
+                } catch (e: any) {
+                  toast({ title: "I couldn't remove that charge", description: e?.message, variant: "destructive" });
+                } finally {
+                  setRemovingBusy(false);
+                }
+              }}
+            >
+              {removingBusy ? "Removing…" : removing ? `Remove ${usd(removing.amountCents)} charge` : "Remove"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       {/* ── every charge, in full ─────────────────────────────────────────── */}
       <Dialog open={listOpen === "charges"} onOpenChange={(o) => !o && setListOpen(null)}>
         <DialogContent showCloseButton={false} className="flex max-h-[88vh] flex-col gap-0 bg-white p-0 sm:max-w-3xl dark:bg-card">
@@ -358,11 +459,13 @@ export function StagePayments({ detail, refetch }: StageProps) {
             sub={`${detail.rentalNumber ?? "This rental"} · ${ledger.charges.length} charge${ledger.charges.length === 1 ? "" : "s"}`}
             onClose={() => setListOpen(null)}
           >
+            {mayEdit && (
             <Button size="sm" variant="outline" onClick={() => (setListOpen(null), setRequest({ kind: "fine" }))}>
               <Plus />
               Add a charge
             </Button>
-            {t.outstanding > 0 && (
+            )}
+            {mayEdit && t.outstanding > 0 && (
               <Button size="sm" onClick={() => (setListOpen(null), setRequest({ kind: "take" }))}>
                 <CreditCard />
                 Take a payment
@@ -397,7 +500,8 @@ export function StagePayments({ detail, refetch }: StageProps) {
               isOpen={(id, has) => (expanded === null ? has : expanded.has(id))}
               onToggle={toggle}
               onReceipt={(id) => setReceiptOpen(id)}
-              onPay={() => (setListOpen(null), setRequest({ kind: "take" }))}
+              onPay={mayEdit ? () => (setListOpen(null), setRequest({ kind: "take" })) : undefined}
+              onRemove={mayEdit ? (c) => (setListOpen(null), setRemoving(c)) : undefined}
             />
           </div>
         </DialogContent>
@@ -474,6 +578,26 @@ export function StagePayments({ detail, refetch }: StageProps) {
         request={request}
         onClose={() => setRequest(null)}
         refetch={onChanged}
+      />
+      {/* Cancel and refund — the v1 dialog (full / partial / none, reason,
+          confirm), calling cancel-rental-refund and the cancellation email. */}
+      <CancelRentalDialog
+        open={cancelOpen}
+        onOpenChange={(v) => {
+          setCancelOpen(v);
+          if (!v) onChanged();
+        }}
+        rental={{
+          id: rentalId,
+          customer: { name: detail.customerName ?? undefined, email: detail.customer?.email ?? undefined },
+          vehicle: { make: detail.vehicle?.make ?? undefined, model: detail.vehicle?.model ?? undefined },
+          monthly_amount: Number(detail.rental.monthly_amount) || 0,
+        }}
+        payment={
+          newestPaid
+            ? { id: newestPaid.id, amount: Math.round(newestPaid.amountCents - newestPaid.refundedCents) / 100 }
+            : undefined
+        }
       />
       </div>
     </Panel>
@@ -741,6 +865,7 @@ function ChargesTree({
   detailed,
   onReceipt,
   onPay,
+  onRemove,
 }: {
   ledger: Ledger;
   charges: Charge[];
@@ -750,6 +875,8 @@ function ChargesTree({
   detailed?: boolean;
   onReceipt?: (paymentId: string) => void;
   onPay?: () => void;
+  /** Offered only for a charge added by hand (category Other) with nothing paid against it. */
+  onRemove?: (c: Charge) => void;
 }) {
   return (
     <ul className="pl-1">
@@ -811,6 +938,18 @@ function ChargesTree({
                   onClick={(e) => (e.stopPropagation(), onPay())}
                 >
                   Pay
+                </Button>
+              )}
+              {onRemove && c.category === "Other" && paid === 0 && allocs.length === 0 && (
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label="Remove this charge"
+                  title="Remove this charge (added by mistake, nothing paid)"
+                  className="rounded-full text-destructive opacity-0 transition-opacity duration-200 ease-out group-hover/charge:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none"
+                  onClick={(e) => (e.stopPropagation(), onRemove(c))}
+                >
+                  <Trash2 />
                 </Button>
               )}
               <span className="inline-flex items-baseline whitespace-nowrap tabular-nums">

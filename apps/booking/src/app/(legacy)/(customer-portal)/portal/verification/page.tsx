@@ -11,7 +11,7 @@ import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BlurredImage } from '@/components/ui/blurred-image';
+import { SignedBlurredImage, SignedImg } from '@/components/signed-document-image';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -584,7 +584,8 @@ export default function VerificationPage() {
                       <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">Document Front</p>
                         <div className="aspect-[3/2] rounded-lg overflow-hidden border bg-muted">
-                          <BlurredImage
+                          {/* QA I4.13: signed link (bucket going private) */}
+                          <SignedBlurredImage
                             src={currentVerification.document_front_url}
                             alt="Document Front"
                             label="Document Front"
@@ -596,7 +597,8 @@ export default function VerificationPage() {
                       <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">Document Back</p>
                         <div className="aspect-[3/2] rounded-lg overflow-hidden border bg-muted">
-                          <BlurredImage
+                          {/* QA I4.13: signed link (bucket going private) */}
+                          <SignedBlurredImage
                             src={currentVerification.document_back_url}
                             alt="Document Back"
                             label="Document Back"
@@ -608,7 +610,8 @@ export default function VerificationPage() {
                       <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">Selfie</p>
                         <div className="aspect-[3/2] sm:aspect-[3/4] rounded-lg overflow-hidden border bg-muted">
-                          <BlurredImage
+                          {/* QA I4.13: signed link (bucket going private) */}
+                          <SignedBlurredImage
                             src={currentVerification.selfie_image_url}
                             alt="Selfie"
                             label="Selfie"
@@ -751,7 +754,8 @@ export default function VerificationPage() {
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground font-medium">Reference document:</p>
                 <div className="aspect-[3/2] max-h-40 rounded-lg overflow-hidden border bg-muted">
-                  <img
+                  {/* QA I4.13: signed link (bucket going private) */}
+                  <SignedImg
                     src={currentVerification.document_front_url}
                     alt="Document"
                     className="w-full h-full object-contain"

@@ -1,4 +1,5 @@
 "use client";
+import { openDocument } from "@/lib/document-url"; // QA I4.13: signed link (bucket going private)
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -365,6 +366,7 @@ export function InsurancePolicyDrawer({
                               href={doc.file_url} 
                               target="_blank" 
                               rel="noopener noreferrer"
+                              onClick={(e) => { e.preventDefault(); openDocument(doc.file_url); }} // QA I4.13: signed link (bucket going private)
                             >
                               View
                             </a>

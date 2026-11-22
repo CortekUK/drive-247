@@ -27,6 +27,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui-v2/button";
 import { RentalsTable, type RentalsTableRow } from "../../../../../shared/portal-v2/rentals-table";
+import { formatCurrency } from "@/lib/format-utils";
 import {
   FileText,
   Plus,
@@ -123,6 +124,7 @@ const SKELETON_RENTALS: EnhancedRental[] = skeletonRows(8, (f) => ({
   promo_code: null,
   protection_cost: 0,
   total_amount: f.money(),
+  billed_total: null,
   status: "active",
   computed_status: f.pick(["Active", "Upcoming", "Completed", "Pending"]),
   duration_months: 1,
@@ -430,7 +432,7 @@ export function RentalsListV2() {
         csvDate(r.start_date),
         csvDate(r.end_date),
         r.computed_status,
-        Number(r.total_amount) || 0,
+        Number(r.billed_total ?? r.total_amount) || 0,
         currency,
         csvDate(r.created_at),
       ]),
@@ -467,6 +469,11 @@ export function RentalsListV2() {
       reference: rental.rental_number,
       // The FULL name: the first name alone turned every Smith into one row.
       party: rental.customer.name,
+      // The car, so a row says which one went out without opening it (R1.2).
+      partySub: rental.vehicle
+        ? [[rental.vehicle.make, rental.vehicle.model].filter(Boolean).join(" "), rental.vehicle.reg].filter(Boolean).join(" · ")
+        : null,
+      amount: formatCurrency(Number(rental.billed_total ?? rental.total_amount) || 0, tenant?.currency_code || "USD"),
       start: rental.start_date,
       end: rental.end_date,
       ongoing: rental.is_pay_as_you_go,
@@ -626,7 +633,10 @@ export function RentalsListV2() {
       )}
 
       {/* Rentals started with New Rental and not yet given a customer. */}
-      {currentView !== "calendar" && <RentalDrafts />}
+      {/* Drafts are half-made rentals: only someone who may edit rentals can
+          open or discard one. A viewer, or a manager given Rentals as view
+          only, had Discard buttons here (QA B8.6, 2026-11-10). */}
+      {currentView !== "calendar" && canEdit('rentals') && <RentalDrafts />}
 
       {/* Calendar View */}
       {currentView === "calendar" ? (
@@ -641,6 +651,7 @@ export function RentalsListV2() {
               replaces the 520px from md up. */}
           <RentalsTable
             partyLabel="Customer"
+            showAmount
             rows={visibleRentals.map(toTableRow)}
             onOpen={(id) => router.push(`/rentals/${id}`)}
             scrollRootRef={scrollRootRef}

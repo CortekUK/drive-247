@@ -25,7 +25,7 @@ import { TestimonialCard } from '@nw/site-v2/sections/testimonial-card';
  * place of an empty wall (`/reviews?sample=0` shows the real empty state).
  * Never in a production build, never stored.
  */
-const SAMPLE_REVIEWS: readonly TestimonialItem[] = [
+export const SAMPLE_REVIEWS: readonly TestimonialItem[] = [
   { id: 's1', author: 'Maria G.', source: 'Google', stars: 5, quote: 'Picked the car up at 7am, keys were ready and the price was exactly what the site said. No upsell at the counter at all.' },
   { id: 's2', author: 'James T.', source: 'Weekly rental', stars: 5, quote: 'Rented a Telluride for a week in the mountains. Spotless, full tank, and they answered the phone on a Sunday when I had a question about the tolls.' },
   { id: 's3', author: 'Priya S.', source: 'Google', stars: 4, quote: 'Easy booking and a fair deposit. Return took two minutes. Only wish they opened a bit earlier on weekends.' },

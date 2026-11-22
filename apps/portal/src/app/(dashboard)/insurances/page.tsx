@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { openDocument, signedDocumentUrl } from "@/lib/document-url"; // QA I4.13: signed link (bucket going private)
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ import {
   InshurStatusBadge,
 } from "@/components/rentals/inshur-coverage-block";
 import { useV2 } from "@/lib/v2-context";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { InsurancePoliciesTableV2 } from "@/components/insurance-v2/insurance-policies-table-v2";
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
@@ -61,6 +63,9 @@ interface InsuranceDoc {
   customers?: { name: string };
   provider: InsuranceProviderKey;
   insurance_provider?: string | null;
+  policy_number?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
   rental_id?: string | null;
   status?: string;
   bonzah_policy_id?: string | null;
@@ -121,6 +126,10 @@ export default function InsurancesList() {
   // v2 (northwind) swaps only the populated Policies table and its pager for the
   // rentals list's table. Above the `isLoading` return, so it runs every render.
   const v2Chrome = useV2("chrome");
+  // Insurances is view-only for managers and a viewer may never write: Generate
+  // Insurance and Add Payment are drawn only for editors.
+  const { canEdit } = useManagerPermissions();
+  const canWrite = canEdit("insurances");
 
   // Fetch insurance documents from customer_documents table
   const { data: insuranceDocuments = [], isLoading: isLoadingDocs } = useQuery({
@@ -303,6 +312,8 @@ export default function InsurancesList() {
         provider: 'bonzah' as InsuranceProviderKey,
         rental_id: policy.rental_id,
         bonzah_policy_id: policy.policy_id,
+        start_date: policy.trip_start_date || null,
+        end_date: policy.trip_end_date || null,
         bonzah_db_id: policy.id,
         bonzah_pdf_ids: policy.coverage_types?.pdf_ids || null,
         premium_amount: policy.premium_amount != null ? Number(policy.premium_amount) : null,
@@ -326,6 +337,8 @@ export default function InsurancesList() {
     const needle = searchQuery.toLowerCase();
     const matchesSearch = doc.document_name.toLowerCase().includes(needle) ||
                          doc.customers?.name?.toLowerCase().includes(needle) ||
+                         (doc.insurance_provider?.toLowerCase().includes(needle) ?? false) ||
+                         (doc.policy_number?.toLowerCase().includes(needle) ?? false) ||
                          (doc.inshur?.vin?.toLowerCase().includes(needle) ?? false);
     const matchesProvider = !providerFilter || doc.provider === providerFilter;
     return matchesSearch && matchesProvider;
@@ -343,20 +356,12 @@ export default function InsurancesList() {
     setCurrentPage(1);
   };
 
-  const getPublicUrl = (filePath: string) => {
-    if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-      return filePath;
-    }
-    const { data } = supabase.storage
-      .from('customer-documents')
-      .getPublicUrl(filePath);
-    return data.publicUrl;
-  };
-
   const handleDownload = async (fileUrl: string, fileName: string) => {
     try {
-      const publicUrl = getPublicUrl(fileUrl);
-      const response = await fetch(publicUrl);
+      // QA I4.13: signed link (bucket going private)
+      const signedUrl = await signedDocumentUrl(fileUrl);
+      if (!signedUrl) throw new Error('Could not sign the document link');
+      const response = await fetch(signedUrl);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -373,8 +378,8 @@ export default function InsurancesList() {
   };
 
   const handleView = (fileUrl: string) => {
-    const publicUrl = getPublicUrl(fileUrl);
-    window.open(publicUrl, "_blank");
+    // QA I4.13: signed link (bucket going private)
+    openDocument(fileUrl);
   };
 
   const handleBonzahDownload = async (doc: InsuranceDoc) => {
@@ -675,7 +680,7 @@ export default function InsurancesList() {
             scopeLabel: "Verifications",
           }
         : {
-            placeholder: "Search by document name or customer…",
+            placeholder: "Search by customer, provider or policy number…",
             value: searchQuery,
             onChange: (next) => handleSearchChange(next),
             scopeLabel: "Policies",
@@ -760,6 +765,7 @@ export default function InsurancesList() {
           )}
           {/* Selling is blocked in Bonzah test mode — a sandbox policy is not real
               cover. Existing policies below stay fully viewable/downloadable. */}
+          {canWrite && (
           <span title={bonzahBlocked ?? undefined} className={bonzahBlocked ? 'cursor-not-allowed' : undefined}>
             <Button
               onClick={() => setGenerateOpen(true)}
@@ -770,6 +776,7 @@ export default function InsurancesList() {
               Generate Insurance
             </Button>
           </span>
+          )}
         </div>
         )}
       </div>
@@ -850,7 +857,7 @@ export default function InsurancesList() {
         <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20">
           <CardContent className="p-3 sm:p-4">
             <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Active Policies</p>
-            <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{allInsurances.filter(d => d.status === 'active' || d.status === 'confirmed').length}</p>
+            <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{allInsurances.filter(d => isActiveStatus(d.status)).length}</p>
             <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">Currently active</p>
           </CardContent>
         </Card>
@@ -879,7 +886,7 @@ export default function InsurancesList() {
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
-            placeholder="Search by document name or customer..."
+            placeholder="Search by customer, provider or policy number..."
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
             className="pl-10 h-8 text-sm"
@@ -967,7 +974,7 @@ export default function InsurancesList() {
             onDownload={handleDownload}
             onView={handleView}
             onBonzahDownload={handleBonzahDownload}
-            onAddPayment={setPaymentDoc}
+            onAddPayment={canWrite ? setPaymentDoc : undefined}
             onViewRental={(doc) => router.push(`/rentals/${doc.rental_id}`)}
           />
           </AutoSkeleton>
@@ -1084,7 +1091,7 @@ export default function InsurancesList() {
                             </>
                           ) : doc.provider === 'inshur' ? (
                             <div className="flex items-center gap-2">
-                              {(doc.payment_status === "unpaid" || doc.payment_status === "partial") && doc.rental_id && (
+                              {canWrite && (doc.payment_status === "unpaid" || doc.payment_status === "partial") && doc.rental_id && (
                                 <Button
                                   size="sm"
                                   onClick={() => setPaymentDoc(doc)}
@@ -1111,7 +1118,7 @@ export default function InsurancesList() {
                             </div>
                           ) : doc.provider === 'bonzah' ? (
                             <div className="flex items-center gap-2">
-                              {(doc.payment_status === "unpaid" || doc.payment_status === "partial") && doc.rental_id && (
+                              {canWrite && (doc.payment_status === "unpaid" || doc.payment_status === "partial") && doc.rental_id && (
                                 <Button
                                   size="sm"
                                   onClick={() => setPaymentDoc(doc)}
@@ -1230,6 +1237,12 @@ export default function InsurancesList() {
       )}
     </div>
   );
+}
+
+/** Bonzah writes "active", an uploaded certificate "Active": compare without case. */
+function isActiveStatus(status?: string | null): boolean {
+  const s = (status || "").toLowerCase();
+  return s === "active" || s === "confirmed";
 }
 
 function PolicyStatusBadge({ status }: { status?: string | null }) {

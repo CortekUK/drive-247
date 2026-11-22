@@ -1,12 +1,8 @@
 import { CornerUpRight } from "lucide-react-nw";
 import Link from "next/link";
 
-import {
-  DEFAULT_SITE_CONTACT,
-  DEFAULT_SITE_LOGO,
-  EMPTY_CONTACT_INFO,
-} from "@nw/lib/cms/defaults";
-import { loadSection } from "@nw/lib/cms/server";
+import { DEFAULT_SITE_LOGO, EMPTY_CONTACT_INFO } from "@nw/lib/cms/defaults";
+import { loadSection, loadSiteContact } from "@nw/lib/cms/server";
 import { Editable, cmsSection } from "@nw/lib/cms/editable";
 
 /**
@@ -37,7 +33,9 @@ function joinAddress(parts: readonly string[]): string {
 
 export async function ContactMapSection() {
   const [site, logo, info] = await Promise.all([
-    loadSection("site-settings", "contact", DEFAULT_SITE_CONTACT),
+    // Site settings > Contact, with the company's own address (Settings >
+    // General) when Site settings has none: that one is a real address too.
+    loadSiteContact(),
     loadSection("site-settings", "logo", DEFAULT_SITE_LOGO),
     // EMPTY, not the default: this section has to know whether the operator
     // actually supplied an address, because a fallback address must not become

@@ -364,6 +364,12 @@ interface TenantStats {
   agreementsSent: number;
   agreementsSigned: number;
   completedRentals: number;
+  /** Every rental, by its real status (QA R17.1). */
+  totalRentals: number;
+  rentalsByStatus: Record<string, number>;
+  /** Rental money the tenant took, in cents (QA R17.2/R17.3). */
+  paymentsReceivedCents: number;
+  refundedCents: number;
 }
 
 
@@ -969,10 +975,40 @@ export default function TenantDetailsPage() {
   const loadStats = async (tenantId: string) => {
     setStatsLoading(true);
     try {
+      // Rental statuses are capitalised in the data ('Pending', 'Active', 'Closed'...).
+      // The old count asked for 'active' / 'completed' and always got 0 (QA R17.1).
+      const statusCount = (status: string) =>
+        supabase.from('rentals').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('status', status);
+      const RENTAL_STATUSES = ['Pending', 'Active', 'Closed', 'Completed', 'Cancelled', 'Rejected'];
+      const statusCounts = Promise.all(RENTAL_STATUSES.map((st) => statusCount(st))).then((rs) =>
+        Object.fromEntries(RENTAL_STATUSES.map((st, i) => [st, rs[i].count || 0])),
+      );
+      const totalRentalsP = supabase.from('rentals').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId);
+      // Money taken and given back, paged (a busy tenant has thousands of rows).
+      const moneyP = (async () => {
+        let received = 0, refunded = 0;
+        for (let from = 0; from < 50000; from += 1000) {
+          const { data, error } = await (supabase as any)
+            .from('payments')
+            .select('amount, refund_amount, status, capture_status')
+            .eq('tenant_id', tenantId)
+            .range(from, from + 999);
+          if (error) throw error;
+          for (const p of data ?? []) {
+            const st = String(p.status ?? '').toLowerCase();
+            // Not money: an unpaid card attempt, a failed or cancelled one, an open hold.
+            if (['pending', 'failed', 'cancelled', 'reversed'].includes(st) || p.capture_status === 'requires_capture') continue;
+            received += Math.round(Number(p.amount || 0) * 100);
+            refunded += Math.round(Number(p.refund_amount || 0) * 100);
+          }
+          if (!data || data.length < 1000) break;
+        }
+        return { received, refunded };
+      })();
       const [vehiclesRes, activeRentalsRes, completedRentalsRes, customersRes, staffRes, fleet, rentalAgreementsRes, individualAgreementsRes] = await Promise.all([
         supabase.from('vehicles').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
-        supabase.from('rentals').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).in('status', ['active', 'in_progress', 'confirmed']),
-        supabase.from('rentals').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('status', 'completed'),
+        statusCount('Active'),
+        supabase.from('rentals').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).in('status', ['Closed', 'Completed']),
         supabase.from('customers').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
         supabase.from('app_users').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId),
         loadFleetCounts(tenantId),
@@ -986,7 +1022,12 @@ export default function TenantDetailsPage() {
         .map((r: { document_status: string | null }) => (r.document_status || '').trim().toLowerCase())
         .filter((st) => st !== 'voided' && st !== 'revoked');
 
+      const [byStatus, totalRentalsRes, money] = await Promise.all([statusCounts, totalRentalsP, moneyP]);
       setStats({
+        totalRentals: totalRentalsRes.count || 0,
+        rentalsByStatus: byStatus,
+        paymentsReceivedCents: money.received,
+        refundedCents: money.refunded,
         totalVehicles: vehiclesRes.count || 0,
         fleet,
         activeRentals: activeRentalsRes.count || 0,
@@ -1615,23 +1656,9 @@ export default function TenantDetailsPage() {
       status={<IntegrationStatus tone={boldsignIsLive(tenant) ? 'success' : 'info'} label={boldsignIsLive(tenant) ? 'Production' : 'Sandbox'} />}
       onOpen={() => setOpenIntegration('boldsign')}
     />,
-    // MOCK (Ghulam, Oct 18 2026): placeholder tiles to preview See all with
-    // more than one row. Delete this block once reviewed.
-    ...[
-      { key: 'mock-xero', domain: 'xero.com', name: 'Xero', label: 'Connected', tone: 'success' as const },
-      { key: 'mock-twilio', domain: 'twilio.com', name: 'Twilio', label: 'Enabled', tone: 'success' as const },
-      { key: 'mock-turo', domain: 'turo.com', name: 'Turo', label: 'Not connected', tone: 'neutral' as const },
-      { key: 'mock-zoho', domain: 'zoho.com', name: 'Zoho Books', label: 'Not connected', tone: 'neutral' as const },
-    ].map((m) => (
-      <IntegrationTile
-        key={m.key}
-        logo={<IntegrationLogo src={brandLogo(m.domain)} alt={m.name} />}
-        name={m.name}
-        description="Mock tile."
-        status={<IntegrationStatus tone={m.tone} label={m.label} />}
-        onOpen={() => {}}
-      />
-    )),
+    // The Oct 18 review mock tiles (Xero "Connected", Twilio "Enabled", Turo,
+    // Zoho) are gone: they showed on every tenant whatever was really set up
+    // (QA R17.4).
   ].filter(Boolean);
 
   return (
@@ -1765,6 +1792,23 @@ export default function TenantDetailsPage() {
                     {
                       label: 'Customers',
                       value: statsLoading ? '…' : stats ? stats.totalCustomers.toLocaleString('en-US') : '—',
+                    },
+                    // Rentals and their money were never on this page (QA R17.1-17.3).
+                    {
+                      label: 'Rentals',
+                      value: statsLoading
+                        ? '…'
+                        : stats
+                          ? `${stats.totalRentals.toLocaleString('en-US')} · ${(stats.rentalsByStatus.Active ?? 0).toLocaleString('en-US')} active · ${(stats.rentalsByStatus.Pending ?? 0).toLocaleString('en-US')} pending · ${((stats.rentalsByStatus.Closed ?? 0) + (stats.rentalsByStatus.Completed ?? 0)).toLocaleString('en-US')} closed · ${(stats.rentalsByStatus.Cancelled ?? 0).toLocaleString('en-US')} cancelled`
+                          : '—',
+                    },
+                    {
+                      label: 'Rental payments',
+                      value: statsLoading
+                        ? '…'
+                        : stats
+                          ? `${formatCurrency(stats.paymentsReceivedCents, (tenant as any).currency_code || 'usd')} taken · ${formatCurrency(stats.refundedCents, (tenant as any).currency_code || 'usd')} refunded`
+                          : '—',
                     },
                     {
                       label: 'Agreements',

@@ -726,6 +726,8 @@ export interface EmailTemplateData {
   vehicle_monthly_rent?: string;
   // Rental
   rental_number?: string;
+  /** Booking email: what happened to the card (charged vs held). QA R15.1. */
+  payment_note?: string;
   rental_start_date?: string;
   rental_end_date?: string;
   rental_days?: string;
@@ -1021,6 +1023,8 @@ export async function resolveEmailData(
 
   // Start with empty data
   const result: EmailTemplateData = {};
+  /** The rental's own number (e.g. "R-72b553"), once read. See the merge below. */
+  let realRentalNumber: string | null = null;
   // Always defined, so an unreplaced {{vehicle_reg_row}} never ships as literal text.
   result.vehicle_reg_suffix = '';
   result.vehicle_reg_row = '';
@@ -1140,6 +1144,7 @@ export async function resolveEmailData(
 
         // Rental fields
         result.rental_number = rental.rental_number || rental.id?.substring(0, 8)?.toUpperCase() || '';
+        realRentalNumber = rental.rental_number || null;
         result.rental_start_date = formatEmailDate(rental.start_date);
         result.rental_end_date = rental.end_date ? formatEmailDate(rental.end_date) : 'Ongoing';
         result.rental_amount = rental.monthly_amount ? formatCurrency(rental.monthly_amount, currencyCode) : '';
@@ -1186,6 +1191,12 @@ export async function resolveEmailData(
     result.vehicle_vin = '';
   }
 
+  // QA R15.8: callers pass their own short reference ("72B55387", "RNT-0959A460")
+  // as rental_number, so one rental reached the customer under three different
+  // references, none of them the "R-72b553" the booking site and portal show.
+  // When the rental has a real number, every email uses it.
+  if (realRentalNumber) result.rental_number = realRentalNumber;
+
   return result;
 }
 
@@ -1210,9 +1221,25 @@ export async function renderEmail(
   // Get template (custom or default)
   const template = await getEmailTemplate(supabaseClient, tenantId, templateKey);
 
+  let body = template.content;
+  // QA R15.8: a tenant with no phone number got "Phone:" and nothing after it in
+  // every email. Drop the line when there is no number to show.
+  if (!String(data.company_phone ?? '').trim()) {
+    body = body.replace(/[ \t]*<li>\s*<strong>\s*Phone:\s*<\/strong>\s*\{\{company_phone\}\}\s*<\/li>\s*\n?/gi, '');
+  }
+  // QA R15.1: the booking email said "A temporary hold has been placed on your
+  // payment card. This will only be charged once your booking is confirmed." to
+  // customers whose card had been CHARGED. The caller now says which is true.
+  if (data.payment_note) {
+    body = body.replace(
+      /<p>\s*<strong>\s*Please Note:\s*<\/strong>\s*A temporary hold has been placed on your payment card\.[^<]*<\/p>/i,
+      `<p><strong>Please Note:</strong> ${data.payment_note}</p>`,
+    );
+  }
+
   // Replace variables in subject and content
   const subject = replaceTemplateVariables(template.subject, data);
-  const content = replaceTemplateVariables(template.content, data);
+  const content = replaceTemplateVariables(body, data);
 
   // Wrap in standard email HTML layout with tenant branding
   const html = wrapEmailHtml(content, {

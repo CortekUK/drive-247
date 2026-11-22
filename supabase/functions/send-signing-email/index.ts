@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
       customerName,
       documentId,
       companyName,
-      rentalRef,
+      rentalRef: callerRentalRef,
       vehicleInfo,
       tenantId,
       boldsignMode = 'test',
@@ -46,6 +46,15 @@ Deno.serve(async (req) => {
 
     if (!customerEmail || !documentId || !tenantId) {
       return errorResponse('Missing required fields: customerEmail, documentId, tenantId', 400);
+    }
+
+    // QA R15.8: both /api/esign routes pass the first 8 characters of the rental
+    // id ("72B55387") while the booking site, the portal and every other email
+    // call the rental "R-72b553". Use the rental's own number when there is one.
+    let rentalRef = callerRentalRef;
+    if (rentalId) {
+      const { data: r } = await supabase.from('rentals').select('rental_number').eq('id', rentalId).maybeSingle();
+      if (r?.rental_number) rentalRef = r.rental_number;
     }
 
     console.log('Sending signing email to:', customerEmail, 'for document:', documentId);

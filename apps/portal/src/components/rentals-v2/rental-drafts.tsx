@@ -29,6 +29,7 @@ import { FilePen, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { tenantToday } from "@/components/timeline-v2/model";
 
 type DraftRow = { id: string; rental_number: string | null; created_at: string | null };
@@ -66,7 +67,10 @@ export function useCreateDraftRental({ replace = false }: { replace?: boolean } 
   const router = useRouter();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  return useMutation({
+  // A double click on New Rental fired two inserts before `isPending` could
+  // disable the button, leaving two drafts (QA R2.11). One start at a time.
+  const inFlight = useRef(false);
+  const mutation = useMutation({
     mutationFn: async () => {
       if (!tenant?.id) throw new Error("No tenant");
       const { data, error } = await supabase
@@ -98,11 +102,103 @@ export function useCreateDraftRental({ replace = false }: { replace?: boolean } 
         variant: "destructive",
       }),
   });
+  return {
+    ...mutation,
+    mutate: () => {
+      if (inFlight.current) return;
+      inFlight.current = true;
+      mutation.mutate(undefined, {
+        onSettled: () => {
+          inFlight.current = false;
+        },
+      });
+    },
+  };
+}
+
+/**
+ * Leaving a draft nobody touched removes it (QA P8.12: "Leave without saving"
+ * must create no rental). Untouched = still Pending with no customer, no car and
+ * no return date. The delete repeats those conditions, so a draft that was
+ * filled in a moment ago (and not yet re-read here) is never removed.
+ *
+ * The delete waits a beat and is cancelled if the same rental mounts again:
+ * React's strict mode unmounts and remounts every effect once in development,
+ * and that must not throw the draft away while it is being looked at. Closing
+ * the tab or loading another page unmounts nothing, so `pagehide` sends the
+ * same delete as a keepalive request, which the browser finishes after the
+ * page is gone.
+ */
+const pendingDiscards = new Map<string, ReturnType<typeof setTimeout>>();
+
+type DraftLike = { id: string; status?: string | null; customer_id?: string | null; vehicle_id?: string | null; end_date?: string | null };
+
+export function useDiscardUntouchedDraftOnLeave(rental: DraftLike | null | undefined, enabled: boolean) {
+  const { tenant } = useTenant();
+  const queryClient = useQueryClient();
+  const latest = useRef(rental);
+  latest.current = rental;
+  const rid = rental?.id ?? null;
+  const tenantId = tenant?.id ?? null;
+  useEffect(() => {
+    if (!enabled || !rid || !tenantId) return;
+    const queued = pendingDiscards.get(rid);
+    if (queued) {
+      clearTimeout(queued);
+      pendingDiscards.delete(rid);
+    }
+    let token: string | null = null;
+    void supabase.auth.getSession().then(({ data }) => {
+      token = data.session?.access_token ?? null;
+    });
+    const untouched = () => {
+      const r = latest.current;
+      return !!r && r.id === rid && r.status === "Pending" && !r.customer_id && !r.vehicle_id && !r.end_date;
+    };
+    const discardNow = () => {
+      if (!untouched()) return;
+      void supabase
+        .from("rentals")
+        .delete()
+        .eq("id", rid)
+        .eq("tenant_id", tenantId)
+        .eq("status", "Pending")
+        .is("customer_id", null)
+        .is("vehicle_id", null)
+        .is("end_date", null)
+        .then(() => queryClient.invalidateQueries({ queryKey: draftsKey(tenantId) }));
+    };
+    const discardOnUnload = () => {
+      if (!untouched() || !token) return;
+      const base = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hviqoaokxvlancmftwuo.supabase.co";
+      const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+      const q = `id=eq.${rid}&tenant_id=eq.${tenantId}&status=eq.Pending&customer_id=is.null&vehicle_id=is.null&end_date=is.null`;
+      void fetch(`${base}/rest/v1/rentals?${q}`, {
+        method: "DELETE",
+        keepalive: true,
+        headers: { apikey: key, Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    };
+    window.addEventListener("pagehide", discardOnUnload);
+    return () => {
+      window.removeEventListener("pagehide", discardOnUnload);
+      pendingDiscards.set(
+        rid,
+        setTimeout(() => {
+          pendingDiscards.delete(rid);
+          discardNow();
+        }, 400)
+      );
+    };
+  }, [enabled, rid, tenantId, queryClient]);
 }
 
 /** The drafts, as one quiet row above the list. Nothing when there are none. */
 export function RentalDrafts() {
   const { tenant } = useTenant();
+  // Viewers and read-only managers see the drafts but cannot throw them away (QA R1.11).
+  const { canEdit } = useManagerPermissions();
+  const canWrite = canEdit("rentals");
   const queryClient = useQueryClient();
   const { data: drafts = [] } = useRentalDrafts();
 
@@ -141,6 +237,7 @@ export function RentalDrafts() {
               · {formatDistanceToNow(new Date(d.created_at), { addSuffix: true })}
             </span>
           )}
+          {canWrite && (
           <button
             type="button"
             aria-label={`Discard draft ${d.rental_number ?? ""}`}
@@ -151,6 +248,7 @@ export function RentalDrafts() {
           >
             <X className="size-3" />
           </button>
+          )}
         </span>
       ))}
     </div>

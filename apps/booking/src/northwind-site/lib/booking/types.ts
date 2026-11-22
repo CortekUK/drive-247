@@ -48,6 +48,8 @@ export interface CreateBookingParams {
   selectedExtras: Record<string, number>;
   pickupLocation: BookingLocationLeg;
   returnLocation: BookingLocationLeg;
+  /** The code that took money off this booking (typed or automatic), written to `rentals.promo_code`. */
+  promoCode?: string | null;
 }
 
 /* ─────────────────────────────── the outcome ─────────────────────────────── */

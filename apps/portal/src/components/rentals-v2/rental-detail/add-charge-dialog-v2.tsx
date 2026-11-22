@@ -106,7 +106,18 @@ export function AddChargeDialogV2({
   const due =
     preset === "date" ? dueDate : format(addDays(new Date(), preset === "receipt" ? 0 : Number(preset)), "yyyy-MM-dd");
   const label = kind === "fine" ? violation : KINDS.find((k) => k.key === kind)!.label;
-  const canNext = value > 0;
+  /** Said under the box, so a refused amount says why instead of just greying Next (QA R8.6). */
+  const amountProblem =
+    amount.trim() === ""
+      ? null
+      : !Number.isFinite(value) || amount.includes("-")
+        ? amount.includes("-")
+          ? "A charge can't be negative. Nothing is added; to take money off, refund a payment instead."
+          : "That isn't an amount. Type it like 25 or 25.50."
+        : value <= 0
+          ? "A charge has to be more than $0.00."
+          : null;
+  const canNext = value > 0 && !amountProblem;
   const canSave = canNext && (kind === "fine" || what.trim().length > 0);
 
   const save = async () => {
@@ -241,8 +252,15 @@ export function AddChargeDialogV2({
                   placeholder="0.00"
                   autoFocus
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+                  aria-label="Amount"
+                  aria-invalid={amountProblem ? true : undefined}
+                  // The minus sign is kept so it can be REFUSED: stripping it
+                  // silently turned "-10" into a $10.00 charge (QA R8.6).
+                  onChange={(e) => setAmount(e.target.value.replace(/[^0-9.\-]/g, ""))}
                 />
+                <p className={amountProblem ? "mt-1.5 text-xs font-medium text-destructive" : "mt-1.5 text-xs text-muted-foreground"} role={amountProblem ? "alert" : undefined}>
+                  {amountProblem ?? "Enter how much the renter owes for this."}
+                </p>
               </div>
 
               <div>

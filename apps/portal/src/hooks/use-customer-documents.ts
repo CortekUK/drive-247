@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuditLog } from "@/hooks/use-audit-log";
+import { toDocumentPath } from "@/lib/document-url"; // QA I4.13: signed link (bucket going private)
 
 export interface CustomerDocument {
   id: string;
@@ -133,7 +134,9 @@ export function useDownloadDocument() {
         throw new Error("No file URL available");
       }
 
-      const filePath = document.file_url.replace(`customer-documents/`, '');
+      // QA I4.13: signed link (bucket going private): an authenticated download, which works on a private bucket;
+      // toDocumentPath also accepts a stored public URL, not only a bare path.
+      const filePath = toDocumentPath(document.file_url) ?? document.file_url.replace(`customer-documents/`, '');
       const { data, error } = await supabase.storage
         .from("customer-documents")
         .download(filePath);

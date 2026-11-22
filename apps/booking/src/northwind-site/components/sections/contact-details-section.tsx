@@ -2,13 +2,9 @@ import { Mail, MapPin, MessageCircle, Phone } from "lucide-react-nw";
 import type { LucideIcon } from "lucide-react-nw";
 
 import { ContactForm } from "@nw/components/forms/contact-form";
-import {
-  DEFAULT_CONTACT_INFO,
-  DEFAULT_SITE_CONTACT,
-  DEFAULT_TRUST_BADGES,
-} from "@nw/lib/cms/defaults";
+import { DEFAULT_CONTACT_INFO, DEFAULT_TRUST_BADGES } from "@nw/lib/cms/defaults";
 import { resolveIcon } from "@nw/lib/cms/icons";
-import { loadSection } from "@nw/lib/cms/server";
+import { loadSection, loadSiteContact } from "@nw/lib/cms/server";
 import { Editable, cmsSection } from "@nw/lib/cms/editable";
 
 type DetailRow = {
@@ -62,7 +58,7 @@ export async function ContactDetailsSection() {
      * page-level throughout — they are copy about this page, not business
      * facts.
      */
-    loadSection("site-settings", "contact", DEFAULT_SITE_CONTACT),
+    loadSiteContact(),
     loadSection("contact", "trust_badges", DEFAULT_TRUST_BADGES),
   ]);
 

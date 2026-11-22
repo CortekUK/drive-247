@@ -48,6 +48,7 @@ import {
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui-v2/avatar";
 import { Button } from "@/components/ui-v2/button";
@@ -292,6 +293,10 @@ type RailCustomer = NonNullable<RentalDetailV2["customer"]>;
 
 function RailConversation({ customer }: { customer: RailCustomer }) {
   const { tenant } = useTenant();
+  /* QA R13.7: a viewer or a read-only manager could message and call the
+     customer from here. Reading stays open; writing follows the Messages grant. */
+  const { canEdit } = useManagerPermissions();
+  const mayMessage = canEdit("messages");
   const { toast } = useToast();
   const customerId = customer.id;
   const name = customer.name || "Customer";
@@ -557,7 +562,7 @@ function RailConversation({ customer }: { customer: RailCustomer }) {
           <p className="mt-0.5 truncate text-[11.5px] text-muted-foreground">{contactLine}</p>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
-          {phone && (
+          {phone && mayMessage && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -660,7 +665,12 @@ function RailConversation({ customer }: { customer: RailCustomer }) {
       {/* ── composer ──────────────────────────────────────────────────────
           The workspace's one raised surface: what you write on top, how it is
           sent along its bottom edge. */}
-      <div className="shrink-0 space-y-2">
+      {!mayMessage && (
+        <p className="shrink-0 rounded-2xl bg-muted px-3 py-2.5 text-[12.5px] text-muted-foreground">
+          View only. Your role can read these messages but not send them.
+        </p>
+      )}
+      <div className={mayMessage ? "shrink-0 space-y-2" : "hidden"}>
         <div className={COMPOSER}>
           {disabled[mode] ? (
             <p className="mx-2.5 mt-2.5 rounded-2xl bg-amber-500/10 px-3 py-2.5 text-[12.5px] text-amber-700 dark:text-amber-300">

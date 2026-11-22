@@ -333,6 +333,13 @@ export interface QuoteResult {
   chargedSecurityDeposit: number;
   /** Ring-fenced on the card instead of billed; report it, never add it. */
   depositHeldAmount: number;
+  /**
+   * The held figure is the car's own `security_deposit` (per-vehicle mode).
+   * The booking then records it as the rental's deposit, because the
+   * hold-placing edge functions only read per-vehicle amounts for a short
+   * allow-list of tenants and would otherwise hold the tenant amount.
+   */
+  depositFromVehicle: boolean;
 
   // ── 9. Totals ─────────────────────────────────────────────────────────────
   grandTotal: number;

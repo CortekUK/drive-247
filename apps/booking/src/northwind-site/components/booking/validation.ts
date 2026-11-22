@@ -41,8 +41,12 @@ export interface BookingValidationInput {
   rules: BookingRules;
   modes: DeliveryModeAvailability;
   vehicle: Vehicle | null;
-  /** From `useVehicleBookedDates`. Returns true when every day in the range is free. */
-  isRangeAvailable: (startDate: string, endDate: string) => boolean;
+  /**
+   * From `useVehicleBookedDates`. True when nothing holds the car across the
+   * trip. Given the times it judges by the clock (a car back at 10:00 is free
+   * from 10:00 plus the turnaround buffer); without them, by whole days.
+   */
+  isRangeAvailable: (startDate: string, endDate: string, startTime?: string, endTime?: string) => boolean;
   /** Why the vehicle is spoken for, when it is. Rendered verbatim if present. */
   unavailableReason?: UnavailableReason | null;
   now: Date;
@@ -141,7 +145,7 @@ export function validateBooking(input: BookingValidationInput): BookingValidatio
     !errors.pickupDate &&
     !errors.dropoffDate &&
     hasRange &&
-    !isRangeAvailable(form.pickupDate, form.dropoffDate)
+    !isRangeAvailable(form.pickupDate, form.dropoffDate, form.pickupTime, form.dropoffTime)
   ) {
     errors.dropoffDate = input.unavailableReason
       ? UNAVAILABLE_COPY[input.unavailableReason]

@@ -123,7 +123,11 @@ export function TripOverview({
               <Line label={`Tax (${chosen.quote.taxPercentage}%)`} value={formatCurrency(chosen.quote.taxAmount)} />
             ) : null}
             {chosen.quote.depositIsCharged && chosen.quote.chargedSecurityDeposit > 0 ? (
-              <Line label="Security deposit" value={formatCurrency(chosen.quote.chargedSecurityDeposit)} />
+              <Line
+                label="Security deposit"
+                caption="Charged now, refunded after you return the car"
+                value={formatCurrency(chosen.quote.chargedSecurityDeposit)}
+              />
             ) : null}
           </dl>
           <div className="mt-3 flex items-baseline justify-between border-t border-pv-border pt-3">
@@ -134,7 +138,7 @@ export function TripOverview({
           </div>
           <p className="mt-1.5 text-[11.5px] leading-snug text-pv-muted-fg">
             {!chosen.quote.depositIsCharged && chosen.quote.depositHeldAmount > 0
-              ? `A refundable ${formatCurrency(chosen.quote.depositHeldAmount)} deposit is held on your card. `
+              ? `A refundable ${formatCurrency(chosen.quote.depositHeldAmount)} deposit is held on your card at pickup and released after you return the car. `
               : ""}
             Extras and cover can be added at checkout.
           </p>

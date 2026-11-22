@@ -119,13 +119,14 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
     items: [
       {
         title: "General",
-        // Three stacked sections: Regional, Driver requirements, Monthly rate.
+        // Four stacked sections: Company details, Regional, Driver requirements, Monthly rate.
         description:
-          "Your currency and distance unit, the minimum driver age and ID checks, and when your monthly rate starts.",
+          "Your company details, currency and distance unit, the minimum driver age and ID checks, and your monthly rate.",
         href: "/settings?tab=general",
         tab: "general",
         anyOfTabs: V2_GENERAL_PERM_TABS,
         keywords:
+          "company name contact email phone address business details " +
           "regional currency dollar distance miles kilometres km " +
           "driver requirements age licence license passport id verification waiver " +
           "monthly rate monthly tier monthly pricing 30 31 days",

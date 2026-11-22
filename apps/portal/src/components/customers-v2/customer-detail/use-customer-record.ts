@@ -336,9 +336,20 @@ const s = (v: unknown) => (v == null ? "" : String(v));
  * screen cares about most — it is the only one that needs a human.
  */
 function scanOf(d: CustomerRow): Doc["scan"] {
-  const reasons: string[] = Array.isArray(d.review_reasons) ? d.review_reasons.filter(Boolean) : [];
+  // scan-insurance-document writes its objections into ai_extracted_data
+  // (reviewReasons + needsManualReview), not the review_reasons column, so
+  // read both or a flagged scan shows as passed (I4 QA, 2026-11-12).
+  const extracted = d.ai_extracted_data && typeof d.ai_extracted_data === "object" ? d.ai_extracted_data : null;
+  const columnReasons: string[] = Array.isArray(d.review_reasons) ? d.review_reasons.filter(Boolean) : [];
+  const scanReasons: string[] =
+    extracted?.needsManualReview && Array.isArray(extracted.reviewReasons)
+      ? extracted.reviewReasons.filter(Boolean).map(String)
+      : [];
+  const reasons = Array.from(new Set([...columnReasons, ...scanReasons]));
   const raw = s(d.ai_scan_status).toLowerCase();
-  const confidence = d.ai_confidence_score == null ? null : Math.round(Number(d.ai_confidence_score));
+  // ai_confidence_score is 0–1 (CHECK constraint); show it as a percentage.
+  const score = d.ai_confidence_score == null ? null : Number(d.ai_confidence_score);
+  const confidence = score == null || Number.isNaN(score) ? null : Math.round(score <= 1 ? score * 100 : score);
   if (raw === "processing") return { status: "scanning", confidence, reasons: [] };
   if (raw === "failed") return { status: "flagged", confidence, reasons: reasons.length ? reasons : ["The scan could not be completed."] };
   if (raw === "completed") return reasons.length ? { status: "flagged", confidence, reasons } : { status: "passed", confidence, reasons: [] };
@@ -397,6 +408,8 @@ export function useCustomerRecord(id: string) {
       vehicle: d.vehicles ? `${d.vehicles.make} ${d.vehicles.model} · ${d.vehicles.reg}` : null,
       from: d.start_date ?? d.policy_start_date ?? null,
       until: d.end_date ?? d.policy_end_date ?? null,
+      provider: s(d.insurance_provider) || null,
+      policyNumber: s(d.policy_number) || null,
       verified: !!d.verified,
       uploadedAt: d.created_at,
       fileUrl: d.file_url ?? null,

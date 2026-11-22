@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toDocumentPath, useSignedDocumentUrl } from "@/lib/document-url"; // QA I4.13: signed link (bucket going private)
 
 interface BlurredImageProps {
   src: string;
@@ -22,6 +23,10 @@ export function BlurredImage({
   onError,
 }: BlurredImageProps) {
   const [revealed, setRevealed] = useState(false);
+  // QA I4.13: signed link (bucket going private). ID-check photos live in customer-documents;
+  // any other address (other buckets, external hosts) is used as given.
+  const signedSrc = useSignedDocumentUrl(src);
+  const shownSrc = toDocumentPath(src) ? signedSrc : src;
 
   return (
     <div
@@ -30,7 +35,7 @@ export function BlurredImage({
       title={revealed ? "Click to blur" : "Click to reveal"}
     >
       <img
-        src={src}
+        src={shownSrc || undefined}
         alt={alt}
         className={cn(
           "w-full h-full object-cover transition-all duration-300",

@@ -11,17 +11,20 @@ import Link from 'next/link';
 
 import { useTenant } from '@nw/contexts/TenantContext';
 
+import { useAuthHref } from './auth-split-shell';
+
 export function PolicyConsentLine({ ink }: { ink?: string }) {
   const { tenant } = useTenant();
+  const authHref = useAuthHref();
   const company = tenant?.company_name ?? tenant?.app_name ?? 'the rental company';
   return (
     <p className="mt-4 text-center text-xs leading-relaxed text-pv-muted-fg">
       By continuing, you agree to {company}&apos;s{' '}
-      <Link href="/terms" target="_blank" className="font-medium underline-offset-4 hover:underline" style={{ color: ink }}>
+      <Link href={authHref('/terms')} target="_blank" className="font-medium underline-offset-4 hover:underline" style={{ color: ink }}>
         Terms of Service
       </Link>{' '}
       and{' '}
-      <Link href="/privacy" target="_blank" className="font-medium underline-offset-4 hover:underline" style={{ color: ink }}>
+      <Link href={authHref('/privacy')} target="_blank" className="font-medium underline-offset-4 hover:underline" style={{ color: ink }}>
         Privacy Policy
       </Link>
       .

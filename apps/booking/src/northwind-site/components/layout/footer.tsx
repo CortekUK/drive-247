@@ -2,8 +2,7 @@ import { Facebook, Instagram, Twitter, Youtube } from "lucide-react-nw";
 import Link from "next/link";
 
 import { FOOTER_LINKS } from "@nw/lib/constants";
-import { DEFAULT_SITE_CONTACT } from "@nw/lib/cms/defaults";
-import { loadSection, getTenantSlug } from "@nw/lib/cms/server";
+import { loadSiteContact, getTenantSlug } from "@nw/lib/cms/server";
 import { loadFleetSeed } from "@nw/components/fleet/fleet-seed";
 
 const SOCIALS = [
@@ -32,7 +31,9 @@ const FOOTER_VEHICLES = 5;
 export async function Footer() {
   const slug = await getTenantSlug();
   const [site, fleet] = await Promise.all([
-    loadSection("site-settings", "contact", DEFAULT_SITE_CONTACT),
+    // Site settings > Contact, with the company's own details (Settings >
+    // General) filling what it leaves blank.
+    loadSiteContact(),
     /* The operator's real cars, for the column that used to invent five. Same
        loader the /fleet page uses, so the same filters apply — hidden, paused
        and disposed vehicles are already excluded, and a car that reaches this

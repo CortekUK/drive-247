@@ -27,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { openDocument } from "@/lib/document-url"; // QA I4.13: signed link (bucket going private)
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
@@ -265,25 +266,25 @@ export function SectionVerification({ c, onJump, canEdit, drift }: SectionProps 
                   className="aspect-[3/4] w-full"
                   src={c.ai.photos.face}
                   caption="Face"
-                  onClick={() => c.ai.photos.face && window.open(c.ai.photos.face, "_blank")}
+                  onClick={() => c.ai.photos.face && openDocument(c.ai.photos.face)} // QA I4.13: signed link (bucket going private)
                 />
                 <Thumb
                   className="aspect-[3/4] w-full"
                   src={c.ai.photos.selfie}
                   caption="Selfie"
-                  onClick={() => c.ai.photos.selfie && window.open(c.ai.photos.selfie, "_blank")}
+                  onClick={() => c.ai.photos.selfie && openDocument(c.ai.photos.selfie)} // QA I4.13: signed link (bucket going private)
                 />
                 <Thumb
                   className="aspect-[3/4] w-full"
                   src={c.ai.photos.docFront}
                   caption="Licence front"
-                  onClick={() => c.ai.photos.docFront && window.open(c.ai.photos.docFront, "_blank")}
+                  onClick={() => c.ai.photos.docFront && openDocument(c.ai.photos.docFront)} // QA I4.13: signed link (bucket going private)
                 />
                 <Thumb
                   className="aspect-[3/4] w-full"
                   src={c.ai.photos.docBack}
                   caption="Licence back"
-                  onClick={() => c.ai.photos.docBack && window.open(c.ai.photos.docBack, "_blank")}
+                  onClick={() => c.ai.photos.docBack && openDocument(c.ai.photos.docBack)} // QA I4.13: signed link (bucket going private)
                 />
               </div>
             )}
@@ -377,7 +378,7 @@ export function SectionVerification({ c, onJump, canEdit, drift }: SectionProps 
                     className="aspect-[3/4] w-full"
                     src={url}
                     caption={`Document ${i + 1}`}
-                    onClick={() => window.open(url, "_blank")}
+                    onClick={() => openDocument(url)} // QA I4.13: signed link (bucket going private)
                   />
                 ))}
               </div>

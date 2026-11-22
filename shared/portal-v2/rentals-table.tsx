@@ -9,7 +9,9 @@
  *
  * Five columns, all reading left: Rental # (the row's identifier, weighted) ·
  * the party (Customer on the operator side, Vehicle on the customer's) ·
- * Pickup · Return · Status. Status is coloured TEXT, never a pill (the list
+ * Pickup · Return · Status. The operator list adds a sixth, Total, before
+ * Status (`showAmount`), and the car under the customer's name, so a row
+ * answers "who, which car, when, how much" without opening it (QA R1.2). Status is coloured TEXT, never a pill (the list
  * kit's tones). Headings are plain text in the kit's micro-type: v2 lists
  * cannot be re-ordered (team lead, Sep 2026), so a heading has no sort control,
  * no hover tint and no pointer.
@@ -65,6 +67,8 @@ export const RENTAL_STATUS_TONE: Record<string, V2ListTone> = {
 
 /** Column widths, in order. `table-fixed`, so no column takes every spare pixel. */
 const WIDTHS = ["w-[20%]", "w-[28%]", "w-[16%]", "w-[16%]", "w-[20%]"] as const;
+/** The same columns with Total before Status (`showAmount`). */
+const WIDTHS_WITH_AMOUNT = ["w-[16%]", "w-[28%]", "w-[13%]", "w-[13%]", "w-[12%]", "w-[18%]"] as const;
 
 export interface RentalsTableRow {
   id: string;
@@ -72,7 +76,7 @@ export interface RentalsTableRow {
   reference: string;
   /** The second column's value: the customer's full name, or the vehicle. */
   party: string;
-  /** Optional line under it, e.g. the car's plate. The operator list leaves it out. */
+  /** Optional line under it: the car on the operator list. */
   partySub?: string | null;
   /** Optional thumbnail beside it, e.g. the car's cover photo. */
   partyImage?: string | null;
@@ -87,6 +91,8 @@ export interface RentalsTableRow {
   note?: ReactNode;
   /** The row's tint and rail when it carries a flag. */
   tint?: string;
+  /** What the rental was written for, already formatted. Drawn only with `showAmount`. */
+  amount?: string | null;
   /** Quiet chips after the status (the operator's PAYG, Auto-extend). */
   meta?: readonly string[];
   /** Inert attributes on the row (tour anchors). */
@@ -97,6 +103,8 @@ export interface RentalsTableProps {
   rows: readonly RentalsTableRow[];
   /** The second column's heading: "Customer" (operator) or "Vehicle" (customer). */
   partyLabel: string;
+  /** Adds a Total column before Status (the operator list). */
+  showAmount?: boolean;
   onOpen: (id: string) => void;
   /** The scroll box the page's infinite scroll observes. */
   scrollRootRef?: RefObject<HTMLDivElement>;
@@ -107,9 +115,9 @@ export interface RentalsTableProps {
   maxHeight?: number;
 }
 
-export function RentalsTable({ rows, partyLabel, onOpen, scrollRootRef, sentinelRef, hasMore = false, maxHeight }: RentalsTableProps) {
+export function RentalsTable({ rows, partyLabel, showAmount = false, onOpen, scrollRootRef, sentinelRef, hasMore = false, maxHeight }: RentalsTableProps) {
   return (
-    <RentalsTableFrame scrollRootRef={scrollRootRef} maxHeight={maxHeight} partyLabel={partyLabel} footer={
+    <RentalsTableFrame scrollRootRef={scrollRootRef} maxHeight={maxHeight} partyLabel={partyLabel} showAmount={showAmount} footer={
       // The sentinel, inside the scroll container after the last row. The bars
       // read as "more coming" on a slow frame; `aria-hidden` because the count
       // line under the card says the same thing in words.
@@ -127,7 +135,7 @@ export function RentalsTable({ rows, partyLabel, onOpen, scrollRootRef, sentinel
       )
     }>
       {rows.map((row) => (
-        <RentalRow key={row.id} row={row} onOpen={onOpen} />
+        <RentalRow key={row.id} row={row} onOpen={onOpen} showAmount={showAmount} />
       ))}
     </RentalsTableFrame>
   );
@@ -154,18 +162,23 @@ export function RentalsTableSkeleton({ partyLabel, rows = 4 }: { partyLabel: str
 
 function RentalsTableFrame({
   partyLabel,
+  showAmount = false,
   scrollRootRef,
   maxHeight,
   footer,
   children,
 }: {
   partyLabel: string;
+  showAmount?: boolean;
   scrollRootRef?: RefObject<HTMLDivElement>;
   maxHeight?: number;
   footer?: ReactNode;
   children: ReactNode;
 }) {
-  const headings = ["Rental #", partyLabel, "Pickup", "Return", "Status"];
+  const headings = showAmount
+    ? ["Rental #", partyLabel, "Pickup", "Return", "Total", "Status"]
+    : ["Rental #", partyLabel, "Pickup", "Return", "Status"];
+  const widths = showAmount ? WIDTHS_WITH_AMOUNT : WIDTHS;
   const style: CSSProperties | undefined = maxHeight !== undefined ? { maxHeight } : undefined;
   return (
     <Card>
@@ -180,7 +193,7 @@ function RentalsTableFrame({
           <TableHeader className={V2_LIST_CLASSES.header}>
             <TableRow className={V2_LIST_CLASSES.headerRow}>
               {headings.map((heading, index) => (
-                <TableHead key={index} className={cn(V2_LIST_CLASSES.head, WIDTHS[index])}>
+                <TableHead key={index} className={cn(V2_LIST_CLASSES.head, widths[index])}>
                   {heading}
                 </TableHead>
               ))}
@@ -194,7 +207,7 @@ function RentalsTableFrame({
   );
 }
 
-function RentalRow({ row, onOpen }: { row: RentalsTableRow; onOpen: (id: string) => void }) {
+function RentalRow({ row, onOpen, showAmount = false }: { row: RentalsTableRow; onOpen: (id: string) => void; showAmount?: boolean }) {
   const open = () => {
     // Letting go of a drag-select inside the row fires a click on the row: that
     // is someone copying a reference, not asking to open the rental.
@@ -257,6 +270,12 @@ function RentalRow({ row, onOpen }: { row: RentalsTableRow; onOpen: (id: string)
           <span className="text-v2-muted-fg">—</span>
         )}
       </TableCell>
+
+      {showAmount && (
+        <TableCell className={cn(V2_LIST_CLASSES.cell, "tabular-nums")}>
+          <span className={V2_LIST_CLASSES.text}>{row.amount ?? "—"}</span>
+        </TableCell>
+      )}
 
       {/* Status — one treatment for every value, hue the only thing that
           changes. The open indicator (row-open.tsx) sits at the row's end, in

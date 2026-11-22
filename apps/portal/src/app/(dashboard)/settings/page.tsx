@@ -88,6 +88,7 @@ import { isV2 } from '@/lib/v2';
 import { PromoCodesTableV2 } from '@/components/settings-v2/promo-codes-table-v2';
 import { SettingsIndexV2 } from '@/components/settings-v2/settings-index';
 import * as BusinessV2 from '@/components/settings-v2/business-settings-states';
+import { useCompanySiteOverrideV2 } from '@/hooks/use-company-site-override-v2';
 import { BusinessRentalGate, DurationPageV2, LockboxPageV2, RequirementsPageV2, ReturnReminderPanelV2, makeBusinessSave } from '@/components/settings-v2/business-rules-pages';
 import { keepUnsavedBusinessEdits, rentalEditsCoveredBySections, rentalFormDiffers } from '@/components/settings-v2/business-rules-logic';
 import { SETTINGS_COLUMN_BESIDE_TRAX, SettingsField, SettingsPageHeader, SettingsPageHeaderSkeleton, SettingsPageSaveProvider, SettingsPanel, SettingsRow, SettingsRowAlignProvider, SettingsSection, SettingsStickySaveBar, SettingsTabPanel, SettingsTabs, Unit, useScrollToSection } from '@/components/settings-v2/settings-kit';
@@ -238,7 +239,7 @@ const MovedToWebsite = ({
  * V2_HIDDEN_SETTINGS_PAGES, which is empty now).
  */
 const V2_SETTINGS_PAGES: Record<string, { section: string; title: string; description: string; permTab: string }> = {
-  general: { section: 'Business', title: 'General', description: 'Your currency and distance unit, the rules a driver must meet, and when your monthly rate starts.', permTab: 'general' },
+  general: { section: 'Business', title: 'General', description: 'Your company details, currency and distance unit, the rules a driver must meet, and when your monthly rate starts.', permTab: 'general' },
   locations: { section: 'Business', title: 'Locations', description: 'Where customers pick up and return cars, and where you deliver.', permTab: 'locations' },
   duration: { section: 'Business', title: 'Booking rules', description: 'How far ahead customers book, how long a rental can be, and the gap between rentals.', permTab: 'duration' },
   lockbox: { section: 'Business', title: 'Lockbox', description: 'Leave the keys in a lockbox and email the code to the customer.', permTab: 'lockbox' },
@@ -896,6 +897,20 @@ const Settings = () => {
     updateSettings: updateRentalSettings,
     isUpdating: isUpdatingRentalSettings
   } = useRentalSettings();
+  /**
+   * v2: one audit entry per settings save, naming the section and each field
+   * that changed (from → to). The v2 pages saved through makeBusinessSave
+   * without writing to the log at all (QA B9.2, 2026-11-11).
+   */
+  const logSettingsSave = useCallback((section: string) => (values: Record<string, unknown>) => {
+    const saved = (rentalSettings ?? {}) as Record<string, unknown>;
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const [key, value] of Object.entries(values)) {
+      const prev = saved[key];
+      if (JSON.stringify(prev ?? null) !== JSON.stringify(value ?? null)) changes[key] = { from: prev ?? null, to: value ?? null };
+    }
+    logAction({ action: "settings_updated", entityType: "settings", entityId: tenant?.id || "unknown", details: { section, changes } });
+  }, [rentalSettings, logAction, tenant?.id]);
   // v2: the spinner on a settings page's "Try again" (see resolveSettingsPageData).
   const v2SettingsFetching =
     useIsFetching({ predicate: (q) => q.queryKey[0] === 'org-settings' || q.queryKey[0] === 'rental-settings' }) > 0;
@@ -1326,6 +1341,23 @@ const Settings = () => {
       terms_version: tenant?.terms_version || '1.0',
     });
   }, [settings, tenant, v2Chrome]);
+
+  // v2 (northwind) General > Company details: the tenant's own name, contact
+  // email, phone and address (BusinessV2.BusinessCompanyPanel). Kept apart
+  // from generalForm, which v1 shares. Reset from the tenant row whenever it
+  // reloads, unless the form holds unsaved edits: a save refetches the tenant,
+  // and that reload must not wipe what the user is still typing elsewhere.
+  const companySaved = useMemo(() => BusinessV2.savedCompanyV2(tenant), [tenant]);
+  const [companyForm, setCompanyForm] = useState<BusinessV2.CompanyValues>(companySaved);
+  const companySavedRef = React.useRef(companySaved);
+  useEffect(() => {
+    const previous = companySavedRef.current;
+    companySavedRef.current = companySaved;
+    setCompanyForm((prev) => (BusinessV2.isCompanyDirty(prev, previous) ? prev : companySaved));
+  }, [companySaved]);
+  // What the booking site shows instead of these details, if its own Site
+  // settings fill them; v2 only, the v1 page has no Company details section.
+  const companySiteOverride = useCompanySiteOverrideV2(v2Chrome ? tenant?.id : null);
 
   // Branding form state
   const [brandingForm, setBrandingForm] = useState({
@@ -2313,6 +2345,35 @@ const Settings = () => {
     },
   });
 
+  // v2: turn a code off (or back on) without deleting it. The booking site
+  // refuses an off code and never auto-applies one (promocodes.is_active).
+  const togglePromoActiveMutation = useMutation({
+    mutationFn: async (promo: { id: string; code: string; is_active?: boolean | null }) => {
+      if (!tenant?.id) throw new Error('Tenant ID not found');
+      const next = promo.is_active === false;
+      const { error } = await (supabase as any)
+        .from('promocodes')
+        .update({ is_active: next })
+        .eq('id', promo.id)
+        .eq('tenant_id', tenant.id);
+      if (error) throw error;
+      return { ...promo, is_active: next };
+    },
+    onSuccess: (promo) => {
+      toast({
+        title: promo.is_active ? "Code turned on" : "Code turned off",
+        description: promo.is_active
+          ? `${promo.code} works on the booking site again.`
+          : `${promo.code} is refused on the booking site until you turn it back on.`,
+      });
+      logAction({ action: "promotion_updated", entityType: "promotion", entityId: promo.id, details: { section: "promo_codes", is_active: promo.is_active } });
+      refetchPromos();
+    },
+    onError: () => {
+      toast({ title: "Couldn't change this code", description: "Nothing was changed. Try again.", variant: "destructive" });
+    },
+  });
+
   const handleUpdatePromo = () => {
     if (!editingPromo.name || !editingPromo.value || !editingPromo.max_users) {
       toast({
@@ -3105,11 +3166,12 @@ const Settings = () => {
     const renderBody = (page: string): React.ReactNode => {
       switch (page) {
         case 'general': {
-          // Three stacked sections (V2_GENERAL_SECTIONS): Regional, Driver
-          // requirements, Monthly rate. Each is shown and edited under its own
-          // permission and loads and fails on its own, so a failed org-settings
-          // read no longer hides Driver requirements. All three are on the page
-          // at once, and the page's one save bar saves whichever are dirty.
+          // Four stacked sections (V2_GENERAL_SECTIONS): Company details,
+          // Regional, Driver requirements, Monthly rate. Each is shown and
+          // edited under its own permission and loads and fails on its own, so
+          // a failed org-settings read no longer hides Driver requirements. All
+          // four are on the page at once, and the page's one save bar saves
+          // whichever are dirty.
           const canEditGeneral = canEditSettings('general');
           // Regional: nothing editable until the real org settings and tenant
           // are in (the placeholder is USD / miles), a relabel confirm, and an
@@ -3119,6 +3181,34 @@ const Settings = () => {
 
           const sectionBody = (anchor: string): React.ReactNode => {
             switch (anchor) {
+              // Company details: the tenant's own row (company_name,
+              // contact_email, contact_phone + phone, address). Checked in the
+              // panel, written here, then TenantContext is refetched so the
+              // sidebar, emails and previews pick the new values up at once.
+              case 'company':
+                return (
+                  <BusinessV2.BusinessCompanyPanel
+                    form={companyForm}
+                    onFormChange={(patch) => setCompanyForm((prev) => ({ ...prev, ...patch }))}
+                    saved={companySaved}
+                    canEdit={canEditGeneral}
+                    ready={!!tenant}
+                    onSave={async () => {
+                      await BusinessV2.saveCompanyV2({
+                        tenantId: tenant?.id,
+                        values: companyForm,
+                        writeTenant: async (patch) =>
+                          await supabase.from('tenants').update(patch as never).eq('id', tenant?.id as string).select('id'),
+                      });
+                      await refetchTenant();
+                      logAction({ action: "settings_updated", entityType: "settings", entityId: tenant?.id || "unknown", details: { section: "company" } });
+                    }}
+                    onDiscard={() => setCompanyForm(companySaved)}
+                    registerSave={registerV2SectionSave}
+                    siteOverride={companySiteOverride.isSuccess ? companySiteOverride.data : undefined}
+                  />
+                );
+
               case 'regional':
                 return (
                   <BusinessV2.BusinessRegionalPanel
@@ -3161,7 +3251,7 @@ const Settings = () => {
                       setForm={setRentalForm}
                       saved={rentalSettings}
                       canEdit={canEditSettings('requirements')}
-                      onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+                      onSave={makeBusinessSave(updateRentalSettings, refetchTenant, logSettingsSave("general"))}
                       registerSave={registerV2SectionSave}
                       idWaiver={{
                         enabled: idWaiverEnabled,
@@ -3221,7 +3311,7 @@ const Settings = () => {
                 setForm={setRentalForm}
                 saved={rentalSettings}
                 canEdit={canEditSettings('duration')}
-                onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+                onSave={makeBusinessSave(updateRentalSettings, refetchTenant, logSettingsSave("booking-rules"))}
                 registerSave={registerV2SectionSave}
               />
             </BusinessRentalGate>
@@ -3235,7 +3325,7 @@ const Settings = () => {
                 setForm={setRentalForm}
                 saved={rentalSettings}
                 canEdit={canEditSettings('lockbox')}
-                onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+                onSave={makeBusinessSave(updateRentalSettings, refetchTenant, logSettingsSave("lockbox"))}
                 registerSave={registerV2SectionSave}
                 vehiclesHref="/vehicles"
                 templatesHref={V2_LOCKBOX_MESSAGES_HREF}
@@ -3316,17 +3406,14 @@ const Settings = () => {
                     aria-label="Toggle Gig Driver booking option"
                   />
                 </SettingsRow>
-                <SettingsRow
-                  label="Show the average daily price"
-                  description="Vehicle cards show the price per day for the chosen dates, instead of the base rate."
-                >
-                  <SwitchV2
-                    checked={avgDailyEnabled}
-                    onCheckedChange={(next) => savePricingFlag('show_effective_daily_rate', next, avgDailyEnabled, persistedAvgDaily, setPendingAvgDaily, setSavingAvgDaily, next ? 'Showing effective average daily price' : 'Showing base rate on vehicle cards')}
-                    disabled={savingAvgDaily || !canEditGeneral}
-                    aria-label="Toggle effective daily price on vehicle cards"
-                  />
-                </SettingsRow>
+                {/* "Show the average daily price" is intentionally omitted on the
+                    v2 Booking-site page. It drives `show_effective_daily_rate`,
+                    which only the legacy booking site (MultiStepBookingWidget)
+                    reads; the v2 / new-design storefront (northwind-site) never
+                    consumes it, so here the toggle would be a no-op. Hidden so
+                    operators aren't shown a control that does nothing. The v1
+                    settings path below still exposes it for tenants on the legacy
+                    storefront. (QA B6.1, branch Business-Setting.) */}
                 <SettingsRow
                   label="Hide the price breakdown at checkout"
                   description="Checkout shows only the rental total, tax and grand total."
@@ -3551,6 +3638,7 @@ const Settings = () => {
                     deletePromoMutation.reset();
                     setDeletingPromo(promo);
                   }}
+                  onToggleActive={(promo) => togglePromoActiveMutation.mutate(promo)}
                 />
               </div>
 
@@ -3724,7 +3812,7 @@ const Settings = () => {
                   setForm={setRentalForm}
                   saved={rentalSettings}
                   canEdit={canEditTemplates}
-                  onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+                  onSave={makeBusinessSave(updateRentalSettings, refetchTenant, logSettingsSave("return-reminders"))}
                   registerSave={registerV2SectionSave}
                   smsReady={!!tenant?.integration_twilio_sms}
                   emailTemplateHref="/settings/email-templates/rental_reminder"
@@ -3777,7 +3865,7 @@ const Settings = () => {
               {/* The lockbox code email, moved here from Key handover (now the
                   Lockbox page, whose Templates link targets this id). Email only: the code is
                   never texted, so the text-message template is not shown. */}
-              {v2ShowLockboxMessages && (
+              {v2ShowLockboxMessages && rentalForm.lockbox_enabled && (
                 <div id={settingsSectionId('lockbox-messages')} className="scroll-mt-24">
                   <LockboxTemplatesSectionV2
                     defaults={{ instructions: DEFAULT_LOCKBOX_INSTRUCTIONS, email: DEFAULT_LOCKBOX_EMAIL, sms: DEFAULT_LOCKBOX_SMS }}

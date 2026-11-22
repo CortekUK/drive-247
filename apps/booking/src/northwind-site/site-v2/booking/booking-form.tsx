@@ -12,6 +12,7 @@ import {
 } from "@nw/components/booking/booking-form-logic";
 import type { BookingRules, DeliveryModeAvailability } from "@nw/components/booking/booking-rules";
 import type { UsePromoCodeResult } from "@nw/components/booking/use-promo-code";
+import type { DurationDiscount } from "@nw/components/booking/use-duration-discount";
 import type { BookingField } from "@nw/components/booking/validation";
 import { Button } from "@nw/components/ui/button";
 import { Input } from "@nw/components/ui/input";
@@ -88,7 +89,11 @@ export interface BookingFormProps {
   areaFeeHint: string | null;
   /** True when this tenant prices area delivery by distance and we cannot yet. */
   areaFeePending: boolean;
+  /** Plain-language note of how far we deliver (shown under the address). */
+  areaCoverageHint: string | null;
   promo: UsePromoCodeResult;
+  /** The automatic long-rental discount; null promo when none applies. */
+  durationDiscount?: DurationDiscount;
   rentalDays: number | null;
   className?: string;
 }
@@ -105,7 +110,9 @@ export function BookingForm({
   isReturnDateDisabled,
   areaFeeHint,
   areaFeePending,
+  areaCoverageHint,
   promo,
+  durationDiscount,
   rentalDays,
   className,
 }: BookingFormProps) {
@@ -208,9 +215,11 @@ export function BookingForm({
       >
         {/*
           A date and its time stay two-up even on a phone (v1's reasoning: they
-          read as one answer, and a time picker has no use for the full width).
+          read as one answer, and a time picker has no use for the full width),
+          until the phone is too narrow to show "10:00 AM" whole: below 380px
+          they stack.
         */}
-        <FieldGrid className="grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        <FieldGrid className="grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] max-[379px]:grid-cols-1">
           <DateField
             id="pickup-date"
             label="Pickup date"
@@ -319,6 +328,10 @@ export function BookingForm({
           {pickupControl}
           {returnControl}
         </FieldGrid>
+
+        {mode === "area" && areaCoverageHint ? (
+          <FieldHint>{areaCoverageHint}</FieldHint>
+        ) : null}
 
         {mode === "area" && areaFeePending ? (
           <FieldHint>
@@ -448,6 +461,14 @@ export function BookingForm({
             {promo.promo.code} applied —{" "}
             {describePromoDiscount(promo.promo, formatCurrency)}{" "}
             the rental.
+          </p>
+        ) : durationDiscount?.promo ? (
+          <p className="flex items-center gap-2 rounded-[10px] bg-pv-success-light px-3 py-2 text-xs font-medium text-pv-success">
+            <Ticket aria-hidden strokeWidth={1.75} className="size-3.5 shrink-0" />
+            Long-rental discount applied —{" "}
+            {describePromoDiscount(durationDiscount.promo, formatCurrency)} the rental
+            {durationDiscount.minDays ? ` for ${durationDiscount.minDays} days or more` : ""}. A code you
+            enter replaces it.
           </p>
         ) : null}
         <FieldError message={promo.error ?? undefined} />

@@ -1,4 +1,5 @@
 "use client";
+import { openDocument } from "@/lib/document-url"; // QA I4.13: signed link (bucket going private)
 
 /**
  * v2 (northwind): the /insurances AI Verifications tab's table, built from the
@@ -78,9 +79,11 @@ export function InsuranceVerificationsTableV2({
   /** v1's row click: the detail sheet. */
   onOpen: (verification: InsuranceVerification) => void;
   /** v1's Attach button. */
-  onAttach: (verificationId: string) => void;
+  /** Left out for a read-only user: no Attach button. */
+  onAttach?: (verificationId: string) => void;
   /** v1's Delete button, which confirms before deleting. */
-  onDelete: (verificationId: string) => void;
+  /** Left out for a read-only user: no Delete button. */
+  onDelete?: (verificationId: string) => void;
 }) {
   const verificationRows = useProgressiveRows(verifications, resetKey);
 
@@ -106,7 +109,13 @@ export function InsuranceVerificationsTableV2({
         <ListBody>
           {verificationRows.visible.map((v) => {
             const ex = v.extracted_fields;
-            const result = aiResultV2(v.status, v.ai_score);
+            // QA I3.9/I3.10: a staff decision outranks the AI's word.
+            const result =
+              v.review_decision === "approved"
+                ? { label: "Approved by staff", tone: "success" as ListTone }
+                : v.review_decision === "rejected"
+                  ? { label: "Rejected by staff", tone: "danger" as ListTone }
+                  : aiResultV2(v.status, v.ai_score);
             const rentalLabel = v.rental_id ? v.rentals?.rental_number || v.rental_id.slice(0, 8) : null;
 
             return (
@@ -147,6 +156,8 @@ export function InsuranceVerificationsTableV2({
                     >
                       {rentalLabel}
                     </Link>
+                  ) : !onAttach ? (
+                    <Blank />
                   ) : (
                     <Button
                       size="xs"
@@ -170,11 +181,13 @@ export function InsuranceVerificationsTableV2({
                   <div className="flex items-center justify-end gap-1">
                     {v.file_url && (
                       <Button size="icon-sm" variant="ghost" className={LIST_ROW_ACTION} asChild>
-                        <a href={v.file_url} target="_blank" rel="noreferrer" aria-label={`Open ${v.file_name}`}>
+                        {/* QA I4.13: signed link (bucket going private) */}
+                        <a href={v.file_url} target="_blank" rel="noreferrer" aria-label={`Open ${v.file_name}`} onClick={(e) => { e.preventDefault(); openDocument(v.file_url); }}>
                           <ExternalLink className="h-4 w-4" />
                         </a>
                       </Button>
                     )}
+                    {onDelete && (
                     <Button
                       size="icon-sm"
                       variant="ghost"
@@ -184,6 +197,7 @@ export function InsuranceVerificationsTableV2({
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
+                    )}
                   </div>
                 </ListCell>
               </ListRow>

@@ -36,6 +36,7 @@ import { BookingForm } from '@nw/site-v2/booking/booking-form';
 import { PaymentPanel } from '@nw/site-v2/booking/payment-panel';
 import { PaidBookingNotice } from '@nw/site-v2/booking/vehicle-booking-page';
 import { t2Href } from '@nw/template-2/links';
+import { CarSkeleton } from '@nw/template-2/skeletons';
 
 const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--g2-accent)]/50';
 const PAGE = 'mx-auto w-full max-w-[1320px] px-3 sm:px-5';
@@ -65,7 +66,7 @@ export function Template2CarPage({ vehicleId }: { vehicleId: string }) {
   if (tenantError) {
     return <State icon={TriangleAlert} title="This site is not available" body={tenantError} />;
   }
-  if (vehicleLoading || tenantLoading || !hydrated) return <Skeleton />;
+  if (vehicleLoading || tenantLoading || !hydrated) return <CarSkeleton />;
   if (notFound) {
     return (
       <State icon={CarFront} title="We could not find that car" body="It may have been taken out of the fleet, or the link may be wrong.">
@@ -401,21 +402,3 @@ function State({
 }
 
 /** Laid out like the page it precedes, so nothing jumps when the car arrives. */
-function Skeleton() {
-  const bar = 'animate-pulse rounded-full bg-white/60 motion-reduce:animate-none';
-  return (
-    <div aria-busy className={cn(PAGE, 'pb-3 pt-[84px] sm:pt-[96px]')}>
-      <div className="g2-glass rounded-[32px] p-3 sm:rounded-[44px] sm:p-5">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:gap-6">
-          <div className="aspect-[16/10] animate-pulse rounded-[28px] bg-white/50 motion-reduce:animate-none" />
-          <div className="space-y-4 px-3 py-4">
-            <div className={cn(bar, 'h-5 w-24')} />
-            <div className={cn(bar, 'h-11 w-3/4')} />
-            <div className={cn(bar, 'h-8 w-1/2')} />
-            <div className="h-20 animate-pulse rounded-[24px] bg-white/50 motion-reduce:animate-none" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
