@@ -11,6 +11,10 @@
  * clicks by itself. The functions here add the named signup steps, so the path
  * from "opened signup" to "trial started" can be read as one funnel.
  *
+ * `capture_exceptions` sends uncaught errors and promise rejections to PostHog
+ * Error tracking. Without it the project only had console lines inside session
+ * replays, which cannot be grouped, counted or alerted on.
+ *
  * Nothing typed into a field is sent: PostHog never records input values, and
  * the card form is Stripe's own frame, which no script on this page can read.
  * The signup answers sent on purpose are `heard_about` and `fleet_size`,
@@ -29,7 +33,7 @@ export const POSTHOG_HOST = "https://us.i.posthog.com";
 /** PostHog's standard loader: a queue that fills until their script arrives. */
 export const POSTHOG_SCRIPT = POSTHOG_KEY
   ? `!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once unregister identify alias set_config reset opt_in_capturing opt_out_capturing has_opted_out_capturing has_opted_in_capturing get_distinct_id group setPersonProperties".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
-posthog.init(${JSON.stringify(POSTHOG_KEY)},{api_host:${JSON.stringify(POSTHOG_HOST)},person_profiles:"identified_only",defaults:"2025-05-24"});`
+posthog.init(${JSON.stringify(POSTHOG_KEY)},{api_host:${JSON.stringify(POSTHOG_HOST)},person_profiles:"identified_only",defaults:"2025-05-24",capture_exceptions:true});`
   : "";
 
 /** The signup steps, in the order a visitor meets them. */

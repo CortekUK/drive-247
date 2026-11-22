@@ -30,6 +30,13 @@ export const metadata: Metadata = {
   title: SITE_META.title,
   description: SITE_META.description,
   metadataBase: new URL(SITE_URL),
+  // The landing page's demo screens are full of sample phone numbers. iPhone
+  // Safari turns those into tap-to-call links before React hydrates, so the
+  // page React finds no longer matches the HTML it sent, and it throws React
+  // error #418 and re-renders the whole page in the browser (PostHog replays,
+  // Nov 2026: only Mobile Safari, about one iPhone visit in five). Telling
+  // Safari not to rewrite the page stops it.
+  formatDetection: { telephone: false, date: false, address: false, email: false, url: false },
   openGraph: {
     title: SITE_META.title,
     description: SITE_META.description,
