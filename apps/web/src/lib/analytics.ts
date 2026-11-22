@@ -45,7 +45,11 @@ export type SignupEvent =
   | "exit_offer_dismissed"
   // "Email me a link to finish later", and that link being opened.
   | "finish_later_requested"
-  | "finish_later_link_opened";
+  | "finish_later_link_opened"
+  // The end of every step, and every error a visitor is shown (Neema,
+  // 2026-11-22: step 3 broke on a Saturday and the funnel could not show where).
+  | "signup_step_completed"
+  | "signup_validation_error";
 
 type PostHog = {
   capture: (event: string, properties?: Record<string, unknown>) => void;
@@ -63,6 +67,38 @@ export function captureSignup(event: SignupEvent, properties?: Record<string, un
     posthog()?.capture(event, properties);
   } catch {
     /* analytics never gets in the way */
+  }
+}
+
+/**
+ * The signup's steps as the funnel counts them. Step 3 is the business page on
+ * the password path and the business-only screen after a Google sign-in.
+ */
+export const SIGNUP_STEP_NAMES = {
+  1: "details",
+  2: "password",
+  3: "business",
+  4: "email_code",
+  5: "card",
+} as const;
+export type SignupStep = keyof typeof SIGNUP_STEP_NAMES;
+
+/** `signup_step_completed`, once a step's answers are accepted. */
+export function captureStepCompleted(step: SignupStep, properties?: Record<string, unknown>): void {
+  captureSignup("signup_step_completed", { step, step_name: SIGNUP_STEP_NAMES[step], ...properties });
+}
+
+/**
+ * One `signup_validation_error` per field the visitor is shown an error under.
+ * The message is our own copy, never anything they typed.
+ */
+export function captureValidationErrors(
+  step: SignupStep,
+  errors: Readonly<Record<string, string | undefined>>,
+): void {
+  for (const [field, message] of Object.entries(errors)) {
+    if (!message) continue;
+    captureSignup("signup_validation_error", { step, step_name: SIGNUP_STEP_NAMES[step], field, message });
   }
 }
 

@@ -47,6 +47,11 @@ import {
   STRENGTH_BAR_CLASS,
 } from "@/components/onboarding/password-toggle";
 import { HeardAboutFields } from "@/components/onboarding/heard-about-fields";
+import {
+  captureStepCompleted,
+  captureValidationErrors,
+  type SignupStep,
+} from "@/lib/analytics";
 import type { FleetSize } from "@/lib/fleet-size";
 import {
   attributionFromDraft,
@@ -64,6 +69,7 @@ import {
   normalizeSlugClient,
   passwordRuleState,
   passwordStrength,
+  repairSlug,
   suggestEmailCorrection,
   TENANT_FIELD_ORDER,
   validateAccount,
@@ -293,6 +299,8 @@ export function AccountStep({
   };
 
   const honeypotRef = React.useRef<HTMLInputElement>(null);
+  /** The trap was written by something that fired an input event: autofill. */
+  const honeypotAutofilledRef = React.useRef(false);
   const fullNameRef = React.useRef<HTMLInputElement>(null);
   const emailRef = React.useRef<HTMLInputElement>(null);
   const heardAboutRef = React.useRef<HTMLSelectElement | HTMLButtonElement>(null);
@@ -314,26 +322,46 @@ export function AccountStep({
    */
   const [slugState, setSlugState] = React.useState<SlugState>({ kind: "idle" });
 
-  /** The tenant answers, normalised the way the provider will send them. */
-  const tenantValues = (): TenantFormValues => ({
+  /**
+   * The tenant answers, normalised the way the provider will send them.
+   * `slug` overrides the box: an address `repairSlug` rebuilt this submit,
+   * which the provider's draft only receives on the next render.
+   */
+  const tenantValues = (slug?: string): TenantFormValues => ({
     companyName: tenant.companyName.trim(),
-    slug: normalizeSlugClient(tenant.slug),
+    slug: normalizeSlugClient(slug ?? tenant.slug),
     acceptedTerms: tenant.acceptedTerms,
     cityState: normalizeCityState(tenant.cityState),
   });
+
+  /**
+   * "Convert, don't reject": an address autofill spoiled, or one left empty,
+   * is rebuilt from the business name before anything is checked (see
+   * `repairSlug`). The box shows the rebuilt address from the next render.
+   * Returns the address to check and send, or undefined to use the box.
+   */
+  const repairAddress = (): string | undefined => {
+    const repaired = repairSlug(tenant);
+    if (!repaired) return undefined;
+    onTenantChange({ slug: repaired, slugTouched: false });
+    clearFieldError("slug");
+    return repaired;
+  };
 
   /**
    * Validate the tenant half and, if it passes, refuse a slug the field has
    * already reported unavailable. Returns the errors to render, or null when it
    * is safe to submit.
    */
-  const tenantErrors = (): FieldErrors<AccountField> | null => {
-    const found = validateTenant(tenantValues());
+  const tenantErrors = (repairedSlug?: string): FieldErrors<AccountField> | null => {
+    const found = validateTenant(tenantValues(repairedSlug));
     // Required wherever the business is asked: the page before the card, and
     // the business-only screen after a Google sign-in.
     const cityError = validateCityState(tenant.cityState);
     if (cityError) found.cityState = cityError;
-    if (slugState.kind === "unavailable" && !found.slug) {
+    // The field's verdict is about the address in the box; a rebuilt one has
+    // not been looked at yet (the build re-checks it either way).
+    if (repairedSlug === undefined && slugState.kind === "unavailable" && !found.slug) {
       found.slug =
         slugState.reason === "reserved"
           ? SIGNUP_ERROR_COPY.SLUG_RESERVED
@@ -377,10 +405,20 @@ export function AccountStep({
     const field = pendingFocusRef.current;
     if (!field) return;
     pendingFocusRef.current = null;
-    refFor(field)?.focus();
+    focusAndReveal(refFor(field));
     // refFor reads refs only; the page is what makes the target exist.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
+
+  /**
+   * Put the caret in a field and bring it to the middle of the screen, so the
+   * error under it is not left behind the phone keyboard (Neema, 2026-11-22).
+   */
+  function focusAndReveal(el: HTMLElement | null) {
+    if (!el) return;
+    el.focus();
+    el.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  }
 
   /** Focus whichever field the first error belongs to, changing page if needed. */
   const focusFirst = (
@@ -394,7 +432,22 @@ export function AccountStep({
       setPage(pageOf(first));
       return;
     }
-    refFor(first)?.focus();
+    focusAndReveal(refFor(first));
+  };
+
+  /**
+   * Every error the visitor is shown, to PostHog, each under the step its
+   * field lives on (the last page can report a page-1 field the server
+   * refused). Field names and our own copy only, never a typed value.
+   */
+  const reportErrors = (found: FieldErrors<AccountField>) => {
+    const byStep = new Map<SignupStep, Record<string, string | undefined>>();
+    for (const [field, message] of Object.entries(found)) {
+      if (!message) continue;
+      const step = (pageOf(field as AccountField) + 1) as SignupStep;
+      byStep.set(step, { ...(byStep.get(step) ?? {}), [field]: message });
+    }
+    byStep.forEach((errs, step) => captureValidationErrors(step, errs));
   };
 
   const clearFieldError = React.useCallback((field: AccountField) => {
@@ -501,7 +554,9 @@ export function AccountStep({
     // even on a fast double-click or an Enter key held down.
     if (busy) return;
 
-    const tenantValue = tenantValues();
+    // Only the business page sends the address, so only it repairs it.
+    const repairedSlug = page === LAST_ACCOUNT_PAGE ? repairAddress() : undefined;
+    const tenantValue = tenantValues(repairedSlug);
 
     // Pages 0 and 1 check only their own fields, then move on. Nothing is sent.
     if (page < LAST_ACCOUNT_PAGE) {
@@ -515,15 +570,19 @@ export function AccountStep({
       }
       setErrors(pageErrors);
       if (Object.keys(pageErrors).length > 0) {
+        reportErrors(pageErrors);
         focusFirst(pageErrors, ACCOUNT_FIELD_ORDER);
         return;
       }
       // The second copy of the password, checked only here.
       if (page === 1 && confirmPassword !== password) {
-        setConfirmError(confirmPassword ? "These passwords don't match." : "Type your password again to confirm it.");
-        confirmRef.current?.focus();
+        const message = confirmPassword ? "These passwords don't match." : "Type your password again to confirm it.";
+        setConfirmError(message);
+        captureValidationErrors(2, { passwordConfirm: message });
+        focusAndReveal(confirmRef.current);
         return;
       }
+      captureStepCompleted((page + 1) as SignupStep);
       setPage(page + 1);
       return;
     }
@@ -531,15 +590,18 @@ export function AccountStep({
     const nextErrors: FieldErrors<AccountField> = {
       ...validateAccount({ fullName, email, password, ...tenantValue }),
       ...validateAttribution(attribution),
-      ...(tenantErrors() ?? {}),
+      ...(tenantErrors(repairedSlug) ?? {}),
     };
     setErrors(nextErrors);
 
     const answered = attributionFromDraft(attribution);
     if (Object.keys(nextErrors).length > 0 || !answered) {
+      reportErrors(nextErrors);
       focusFirst(nextErrors, ACCOUNT_FIELD_ORDER);
       return;
     }
+
+    captureStepCompleted(3);
 
     onSubmit({
       fullName: fullName.trim(),
@@ -552,7 +614,13 @@ export function AccountStep({
       // sets `.value` directly never fires React's onChange.
       // A browser autofill that slipped past the attributes copies what the
       // person typed; a bot writes its own value. Only the latter is a trip.
-      companyWebsite: honeypotValue(honeypotRef.current?.value, [fullName, email, attribution.phone, tenantValue.companyName, tenantValue.cityState]),
+      // Autofill fires an input event when it writes the trap (Fresno's phone
+      // did, 21 Nov); a bot writing `.value` fires none. Only the bot counts:
+      // the server answers a filled trap with a silent fake success, which a
+      // real person would read as an email code that never arrives.
+      companyWebsite: honeypotAutofilledRef.current
+        ? ""
+        : honeypotValue(honeypotRef.current?.value, [fullName, email, attribution.phone, tenantValue.companyName, tenantValue.cityState]),
       // 0 only if the mount effect somehow has not run; falling back to "now"
       // is the safe direction (a zero would read as an implausibly old form).
       formStartedAt: formStartedAtRef.current || Date.now(),
@@ -566,13 +634,16 @@ export function AccountStep({
   const handleTenantSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (busy) return;
-    const found = tenantErrors();
+    const repairedSlug = repairAddress();
+    const found = tenantErrors(repairedSlug);
     setErrors(found ?? {});
     if (found) {
+      captureValidationErrors(3, found);
       focusFirst(found, TENANT_FIELD_ORDER);
       return;
     }
-    onSubmitTenant(tenantValues());
+    captureStepCompleted(3, { screen: "business_only" });
+    onSubmitTenant(tenantValues(repairedSlug));
   };
 
   /** `attribution` mode's submit: the question on its own. */
@@ -1282,6 +1353,9 @@ export function AccountStep({
         ref={honeypotRef}
         type="text"
         name="hp_x7"
+        onInput={() => {
+          honeypotAutofilledRef.current = true;
+        }}
         tabIndex={-1}
         autoComplete="off"
         data-lpignore="true"

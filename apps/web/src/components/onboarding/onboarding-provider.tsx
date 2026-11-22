@@ -19,7 +19,7 @@ import {
   type SignupPlan,
   type SignupPlanId,
 } from "@/lib/plans";
-import { captureSignup, identifyAccount } from "@/lib/analytics";
+import { captureSignup, captureStepCompleted, identifyAccount } from "@/lib/analytics";
 import { readMetaSignals, trackRegistration, trackStartTrial } from "@/lib/meta-tracking";
 import {
   hasCompleteAttribution,
@@ -2221,6 +2221,7 @@ export function OnboardingProvider({
           return false;
         }
         setVerifyError(null);
+        if (!isMockSignup()) captureStepCompleted(4);
         // The code is spent: a reload from here is the ordinary resume path.
         clearPendingVerify();
         setVerifySentAt(null);
@@ -2738,6 +2739,9 @@ export function OnboardingProvider({
         dispatch({ type: "business", patch: draftFromSnapshot(dto.business) });
       }
       dispatch({ type: "payment", patch: { paid: Boolean(dto?.paid) } });
+      // The card went through on Stripe's side. `confirmed` is whether our
+      // server had seen the subscription go active by now (see the loop above).
+      if (!isMockSignup()) captureStepCompleted(5, { confirmed: Boolean(dto?.paid) });
 
       // Advance even when the server could not confirm yet: an async payment
       // method sits in `processing` for minutes, and holding a paying customer

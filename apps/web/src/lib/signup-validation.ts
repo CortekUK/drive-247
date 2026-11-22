@@ -471,6 +471,30 @@ export function checkSlugShape(raw: string): SlugVerdict {
   return { slug, ok: true, problem: null, message: null };
 }
 
+/**
+ * The address to send instead of the one in the box, or null to send the box.
+ *
+ * "Convert, don't reject" (Neema, 2026-11-22). The address normally follows
+ * the business name; two things broke that on phones:
+ *   - autofill writes into the box without a keystroke (Fresno, 21 Nov: twice,
+ *     once with a phone number), leaving something that is not an address;
+ *   - a visitor empties the box and presses Continue.
+ * Both are rebuilt from the business name rather than refused. An address the
+ * visitor TYPED is theirs: it is never replaced, and if it needs fixing the
+ * field says so with their text still in it.
+ */
+export function repairSlug(draft: {
+  companyName: string;
+  slug: string;
+  slugTouched: boolean;
+}): string | null {
+  const current = normalizeSlugClient(draft.slug);
+  if (current && (draft.slugTouched || checkSlugShape(current).ok)) return null;
+  const derived = deriveSlugFromCompanyName(draft.companyName);
+  if (!checkSlugShape(derived).ok || derived === current) return null;
+  return derived;
+}
+
 // ---------------------------------------------------------------------------
 // The one form
 // ---------------------------------------------------------------------------
@@ -543,7 +567,10 @@ export function validateCityState(raw: string | null | undefined): string | unde
   const hasLetter = Array.from(value).some(
     (c) => c.toLowerCase() !== c.toUpperCase() || c.charCodeAt(0) > 0x2e7f,
   );
-  if (value.length < 2 || !hasLetter) return "Please enter your city and state.";
+  // A US ZIP code names a place too, and it is what phone autofill often puts
+  // in an address-looking box (2026-11-22). The team can look it up.
+  const isZip = /^\d{5}(-\d{4})?$/.test(value);
+  if (value.length < 2 || !(hasLetter || isZip)) return "Please enter your city and state.";
   if (value.length > FIELD_MAX.cityState) {
     return `Please keep this to ${FIELD_MAX.cityState} characters or fewer.`;
   }

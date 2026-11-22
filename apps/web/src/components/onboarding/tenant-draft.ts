@@ -301,16 +301,19 @@ export function clearPendingOauth(): void {
 /**
  * Fold a recovered draft onto the reducer's draft shape.
  *
- * `slugTouched` is set to true unconditionally: the operator chose this address
- * once already, and leaving it false would let the account step re-derive it
- * from the business name the next time that field changed — silently replacing a
- * deliberate choice with a generated one.
+ * `slugTouched` is true whenever there IS an address: the operator chose it once
+ * already, and leaving it false would let the account step re-derive it from
+ * the business name the next time that field changed — silently replacing a
+ * deliberate choice with a generated one. An empty address was never chosen.
  */
 export function draftToBusiness(values: TenantFormValues): BusinessDraft {
   return {
     companyName: values.companyName,
     slug: values.slug,
-    slugTouched: true,
+    // Only an address that exists is "theirs". The Google return carries an
+    // empty one, and marking that as chosen stopped the address following the
+    // business name for every Google signup (Fresno, 2026-11-21).
+    slugTouched: Boolean(values.slug),
     acceptedTerms: values.acceptedTerms,
     cityState: values.cityState ?? "",
   };

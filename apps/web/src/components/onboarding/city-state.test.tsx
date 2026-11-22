@@ -47,7 +47,10 @@ describe("city and state: the rule", () => {
   });
 
   it("must name a place, in any script", () => {
-    expect(validateCityState("12345")).toBeTruthy();
+    // A bare number is not a place, but a US ZIP code is (2026-11-22: phone
+    // autofill puts one there, and the team can look it up).
+    expect(validateCityState("123")).toBeTruthy();
+    expect(validateCityState("12345")).toBeUndefined();
     expect(validateCityState("--")).toBeTruthy();
     expect(validateCityState("Houston, TX")).toBeUndefined();
     expect(validateCityState("Toronto, ON")).toBeUndefined();
@@ -110,7 +113,8 @@ describe("city and state: on the business page", () => {
     expect(ids.indexOf("signup-city-state")).toBe(ids.indexOf("signup-company-name") + 1);
     const city = container.querySelector<HTMLInputElement>("#signup-city-state")!;
     const company = container.querySelector<HTMLInputElement>("#signup-company-name")!;
-    expect(city.placeholder).toBe("Houston, TX");
+    // An example, marked as one, so an empty box never reads as filled (2026-11-22).
+    expect(city.placeholder).toBe("e.g. Houston, TX");
     expect(city.maxLength).toBe(80);
     expect(city.className).toBe(company.className);
     expect(container.querySelector('label[for="signup-city-state"]')?.textContent).toBe("City and state");
@@ -152,8 +156,9 @@ describe("city and state: wherever the business is asked", () => {
     expect(account.match(/cityState: fieldError\("cityState"\)/g)).toHaveLength(2);
     // One check, used by the page before the card AND the tenant-only screen.
     expect(account).toMatch(/const cityError = validateCityState\(tenant\.cityState\);/);
-    expect(account).toMatch(/const found = tenantErrors\(\);/);
-    expect(account).toMatch(/\.\.\.\(tenantErrors\(\) \?\? \{\}\),/);
+    // Both screens pass the address `repairSlug` rebuilt, if any (2026-11-22).
+    expect(account).toMatch(/const found = tenantErrors\(repairedSlug\);/);
+    expect(account).toMatch(/\.\.\.\(tenantErrors\(repairedSlug\) \?\? \{\}\),/);
   });
 });
 

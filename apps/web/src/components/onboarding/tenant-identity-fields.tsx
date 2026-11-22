@@ -58,6 +58,31 @@ const COMPACT_ON_PHONES = "max-sm:h-10";
 /** The visible half of the hostname. Purely presentational — never sent. */
 const SLUG_SUFFIX = ".drive-247.com";
 
+/**
+ * Whether a change came from a keystroke (typing, deleting, pasting,
+ * dictation, a keyboard's autocorrect) rather than from autofill.
+ *
+ * Browsers send typed edits as an `InputEvent` carrying an `inputType`.
+ * Autofill sets the value and fires a plain `input` event with none. On
+ * 21 Nov a phone's autofill wrote into "Web address" twice without a keystroke
+ * (PostHog autocapture), and because every change counted as the operator's
+ * own choice, the address stopped following the business name.
+ */
+export function isTypedChange(event: Event): boolean {
+  const inputType = (event as Partial<InputEvent>).inputType;
+  return typeof inputType === "string" && inputType.length > 0;
+}
+
+/**
+ * Placeholders are examples, marked "e.g.", never something that reads as an
+ * answer. "Acme Car Rentals" in grey looked like a filled-in name: Orlando
+ * (21 Nov) never tapped the field, and PostHog's Replay Vision also read it as
+ * typed text. Under an error the example goes, so the box looks as empty as
+ * it is.
+ */
+const examplePlaceholder = (example: string, error: string | undefined, empty: boolean) =>
+  error && empty ? "" : `e.g. ${example}`;
+
 export type SlugState =
   | { kind: "idle" }
   | { kind: "checking" }
@@ -189,9 +214,11 @@ export function TenantIdentityFields({
     onChange(patch);
   };
 
-  const setSlug = (raw: string) => {
+  const setSlug = (raw: string, typed: boolean) => {
     onClearError("slug");
-    onChange({ slug: sanitizeSlugInput(raw), slugTouched: true });
+    // Autofill may still write the box, but it does not make the address the
+    // operator's choice: the next business-name edit, or Continue, rebuilds it.
+    onChange({ slug: sanitizeSlugInput(raw), slugTouched: typed || value.slugTouched });
   };
 
   const slugError = errors.slug;
@@ -211,7 +238,7 @@ export function TenantIdentityFields({
           type="text"
           autoComplete="organization"
           autoFocus={autoFocusCompanyName}
-          placeholder="Acme Car Rentals"
+          placeholder={examplePlaceholder("Acme Car Rentals", errors.companyName, !value.companyName)}
           value={value.companyName}
           disabled={busy}
           maxLength={FIELD_MAX.companyName}
@@ -244,7 +271,7 @@ export function TenantIdentityFields({
             name="cityState"
             type="text"
             autoComplete="off"
-            placeholder="Houston, TX"
+            placeholder={examplePlaceholder("Houston, TX", errors.cityState, !value.cityState)}
             value={value.cityState ?? ""}
             disabled={busy}
             maxLength={FIELD_MAX.cityState}
@@ -288,17 +315,24 @@ export function TenantIdentityFields({
             id="signup-slug"
             name="slug"
             type="text"
-            inputMode="url"
+            // No `inputMode="url"`: it marks the box as a website field, which
+            // invites autofill, and a slug can hold neither "/" nor ".com".
             autoComplete="off"
+            data-lpignore="true"
+            data-1p-ignore=""
+            data-bwignore=""
+            data-form-type="other"
             autoCapitalize="off"
             spellCheck={false}
-            placeholder="acme-rentals"
+            // No sample: it fills itself from the business name, and a grey
+            // "acme-rentals" read as an address already chosen (21 Nov).
+            placeholder=""
             value={value.slug}
             disabled={busy}
             maxLength={FIELD_MAX.slug}
             aria-invalid={Boolean(slugError) || slugState.kind === "unavailable"}
             aria-describedby="signup-slug-status"
-            onChange={(e) => setSlug(e.target.value)}
+            onChange={(e) => setSlug(e.target.value, isTypedChange(e.nativeEvent))}
             className="h-full min-w-0 flex-1 rounded-l-xl bg-transparent pl-4 pr-1 text-[15px] outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed max-sm:text-base"
           />
           <span className="shrink-0 pr-4 pl-0 text-[15px] text-muted-foreground select-none max-sm:text-base">
