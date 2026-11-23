@@ -538,6 +538,15 @@ export interface PaymentStepProps {
   plans?: readonly SignupPlan[];
   /** Switch the plan being bought (a new intent is minted for it). */
   onChangePlan?(planId: SignupPlanId): void;
+  /**
+   * Whether the "Change plan" list is open, when the screen owns that state.
+   * The screen needs it: with the list open, the top-right X (and Escape, and
+   * a phone's back button) closes the list instead of offering the discount.
+   * Left out, the step keeps the state itself.
+   */
+  planPickerOpen?: boolean;
+  /** The step asks to open or close the "Change plan" list. */
+  onPlanPickerOpenChange?(open: boolean): void;
 }
 
 // ---------------------------------------------------------------------------

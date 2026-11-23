@@ -220,3 +220,37 @@ describe("only one box on the way out", () => {
     expect(screen).toContain("if (!next) onCloseButton();");
   });
 });
+
+// 2026-11-24: a new signup opened "Change plan", tapped the X to close the
+// list, got the one-time offer and took 20% off. Choosing a plan is not leaving.
+describe("Change plan is not an exit", () => {
+  const read = (f: string) => readFileSync(resolve(__dirname, f), "utf8");
+  const screen = read("onboarding-screen.tsx");
+  const step = read("steps/payment-step.tsx");
+
+  it("the X and Escape close an open plan list before anything else", () => {
+    const at = screen.indexOf("const onCloseButton = useCallback(");
+    const body = screen.slice(at, screen.indexOf("}, [exitOffer, requestClose, showExitOffer, trackExitOffer]);", at));
+    const pickerAt = body.indexOf("if (planPickerOpenRef.current)");
+    expect(pickerAt).toBeGreaterThan(-1);
+    expect(pickerAt).toBeLessThan(body.indexOf('showExitOffer("close")'));
+    expect(pickerAt).toBeLessThan(body.indexOf("requestClose()"));
+  });
+
+  it("the offer cannot show while the plan list is open (exit intent included)", () => {
+    expect(screen).toMatch(/covered: exitOffer !== null \|\| !isOpen \|\| planPickerOpen/);
+  });
+
+  it("a phone's back button closes an open plan list instead of offering", () => {
+    const at = screen.indexOf("const onPop = () => {");
+    const body = screen.slice(at, at + 900);
+    expect(body.indexOf("if (planPickerOpenRef.current)")).toBeGreaterThan(-1);
+    expect(body.indexOf("if (planPickerOpenRef.current)")).toBeLessThan(body.indexOf('showExitOffer("back")'));
+  });
+
+  it("the screen owns the plan list state and hands it to the payment step", () => {
+    expect(screen).toContain("planPickerOpen={planPickerOpen}");
+    expect(screen).toContain("onPlanPickerOpenChange={setPlanPickerOpen}");
+    expect(step).toContain("onPlanPickerOpenChange?.(value)");
+  });
+});

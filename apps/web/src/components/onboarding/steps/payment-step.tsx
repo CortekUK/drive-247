@@ -242,8 +242,18 @@ export function PaymentStep({
   onWideChange,
   plans = [],
   onChangePlan,
+  planPickerOpen: planPickerOpenProp,
+  onPlanPickerOpenChange,
 }: PaymentStepProps) {
-  const [planPickerOpen, setPlanPickerOpen] = React.useState(false);
+  // The screen owns this when it passes it (it closes the list on X / Escape /
+  // back before anything else happens); otherwise the step keeps it itself.
+  const [planPickerOpenOwn, setPlanPickerOpenOwn] = React.useState(false);
+  const planPickerOpen = planPickerOpenProp ?? planPickerOpenOwn;
+  const setPlanPickerOpen = (next: boolean | ((open: boolean) => boolean)) => {
+    const value = typeof next === "function" ? next(planPickerOpen) : next;
+    if (planPickerOpenProp === undefined) setPlanPickerOpenOwn(value);
+    onPlanPickerOpenChange?.(value);
+  };
   // Plans you can switch to: the live catalogue, with the current plan in it.
   const switchable = plans.length > 1 && onChangePlan ? plans : [];
   const wide = useWideFlag(onWideChange);
