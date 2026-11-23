@@ -127,11 +127,11 @@ export default function BonzahContentEditor() {
               <Card key={v.id}>
                 <CardContent className="py-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">
+                    <p className="text-sm font-medium truncate max-sm:whitespace-normal">
                       {v.title}{' '}
                       {!v.is_active && <span className="text-xs text-muted-foreground">(hidden)</span>}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate">{v.loom_url}</p>
+                    <p className="text-xs text-muted-foreground truncate max-sm:whitespace-normal max-sm:[overflow-wrap:anywhere]">{v.loom_url}</p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditVideo(v)}>
@@ -177,7 +177,7 @@ export default function BonzahContentEditor() {
               <Card key={q.id}>
                 <CardContent className="py-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">
+                    <p className="text-sm font-medium truncate max-sm:whitespace-normal">
                       {q.question}{' '}
                       {!q.is_active && <span className="text-xs text-muted-foreground">(hidden)</span>}
                     </p>

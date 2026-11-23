@@ -72,7 +72,11 @@ function labelTable(table: HTMLTableElement) {
       // under the title. Those go in a row across the card's foot instead.
       const last = cells[cells.length - 1];
       if (last && cells.length > 1 && last.getAttribute('data-label') === '') {
-        const wordy = (last.textContent || '').replace(/\s+/g, '').length > 2;
+        // …and so are more than two icons (Welcome Pack: up, down, hide,
+        // edit, delete ran over the page title).
+        const wordy =
+          (last.textContent || '').replace(/\s+/g, '').length > 2 ||
+          last.querySelectorAll('button, a[href]').length > 2;
         if (wordy !== last.hasAttribute('data-actions-row')) last.toggleAttribute('data-actions-row', wordy);
       }
     }

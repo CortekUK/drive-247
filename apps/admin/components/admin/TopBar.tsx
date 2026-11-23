@@ -350,7 +350,7 @@ function PageField({
           <span className="min-w-0 flex-1 truncate text-foreground">
             Search everywhere for <span className="font-semibold">&ldquo;{trimmed}&rdquo;</span>
           </span>
-          <kbd className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary">⌘↵</kbd>
+          <kbd className="shrink-0 max-sm:hidden rounded-full bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary">⌘↵</kbd>
         </button>
       )}
     </div>
