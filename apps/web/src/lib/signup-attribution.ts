@@ -1,8 +1,9 @@
 /**
  * "How did you hear about us?", "How many cars do you rent out?" and the
- * optional phone number on the signup.
+ * phone number on the signup.
  *
- * Both questions are required by the form. The server re-checks them in
+ * All three are required by the form. The phone became required on
+ * 2026-11-24 (owner): a 21+ car lead left it blank and the team could not call. The server re-checks them in
  * `supabase/functions/_shared/signup-attribution.ts`, which holds the same lists.
  */
 
@@ -55,7 +56,11 @@ export function isHeardAbout(value: unknown): value is HeardAbout {
   return HEARD_ABOUT_OPTIONS.some((option) => option.value === value);
 }
 
-/** Blank is fine, because the field is optional. Mirrors the server's rule. */
+/**
+ * The shape of a phone number: 7 to 15 digits, with `+`, spaces, brackets, dots
+ * or dashes allowed. Blank passes here (the server stores no phone then);
+ * `validateAttribution` is what makes the field required.
+ */
 export function isValidPhone(raw: string): boolean {
   const typed = raw.trim();
   if (!typed) return true;
@@ -76,8 +81,10 @@ export function validateAttribution(
   if (!isFleetSize(draft.fleetSize)) {
     errors.fleetSize = "Please choose how many cars you rent out.";
   }
-  if (!isValidPhone(draft.phone)) {
-    errors.phone = "Please enter a valid phone number, or leave this blank.";
+  if (!draft.phone.trim()) {
+    errors.phone = "Please enter your phone number.";
+  } else if (!isValidPhone(draft.phone)) {
+    errors.phone = "Please enter a valid phone number.";
   }
   return errors;
 }
@@ -103,9 +110,19 @@ export function attributionFromDraft(draft: AttributionDraft): SignupAttribution
   };
 }
 
-/** True when both questions have an answer on record. */
+/**
+ * True when both questions and the phone number are on record. A Google
+ * signup missing any of them is shown the short question screen before the card.
+ */
 export function hasCompleteAttribution(
-  a: { heardAbout?: unknown; fleetSize?: unknown } | null | undefined,
+  a: { heardAbout?: unknown; fleetSize?: unknown; phone?: unknown } | null | undefined,
 ): boolean {
-  return Boolean(a && isHeardAbout(a.heardAbout) && isFleetSize(a.fleetSize));
+  return Boolean(
+    a &&
+      isHeardAbout(a.heardAbout) &&
+      isFleetSize(a.fleetSize) &&
+      typeof a.phone === "string" &&
+      a.phone.trim() !== "" &&
+      isValidPhone(a.phone),
+  );
 }

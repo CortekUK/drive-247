@@ -176,7 +176,9 @@ describe("fleet size: the plan it picks", () => {
 describe("fleet size: on the form", () => {
   it("is required", () => {
     expect(validateAttribution({ ...EMPTY_ATTRIBUTION, heardAbout: "instagram" }).fleetSize).toBeTruthy();
-    expect(validateAttribution({ ...EMPTY_ATTRIBUTION, heardAbout: "instagram", fleetSize: "6-20" })).toEqual({});
+    expect(
+      validateAttribution({ ...EMPTY_ATTRIBUTION, heardAbout: "instagram", fleetSize: "6-20", phone: "(404) 555-0123" }),
+    ).toEqual({});
   });
 
   it("rides along with the answer to the server", () => {
@@ -187,7 +189,7 @@ describe("fleet size: on the form", () => {
   });
 
   it("asks again after Google sign-in when either answer is missing", () => {
-    expect(hasCompleteAttribution({ heardAbout: "youtube", fleetSize: "1-5" })).toBe(true);
+    expect(hasCompleteAttribution({ heardAbout: "youtube", fleetSize: "1-5", phone: "+14045550123" })).toBe(true);
     expect(hasCompleteAttribution({ heardAbout: "youtube" })).toBe(false);
     expect(hasCompleteAttribution({ fleetSize: "1-5" })).toBe(false);
     expect(hasCompleteAttribution(null)).toBe(false);
@@ -252,5 +254,38 @@ describe("Change plan is not an exit", () => {
     expect(screen).toContain("planPickerOpen={planPickerOpen}");
     expect(screen).toContain("onPlanPickerOpenChange={setPlanPickerOpen}");
     expect(step).toContain("onPlanPickerOpenChange?.(value)");
+  });
+});
+
+// 2026-11-24 (owner): the phone number is required. A 21+ car lead left it
+// blank and the team had no way to call.
+describe("phone number: required", () => {
+  const read = (f: string) => readFileSync(resolve(__dirname, f), "utf8");
+
+  it("blank is refused with its own message", () => {
+    expect(validateAttribution({ ...EMPTY_ATTRIBUTION, heardAbout: "instagram", fleetSize: "21+" }).phone).toBe(
+      "Please enter your phone number.",
+    );
+    expect(validateAttribution({ ...EMPTY_ATTRIBUTION, heardAbout: "instagram", fleetSize: "21+", phone: "   " }).phone).toBe(
+      "Please enter your phone number.",
+    );
+  });
+
+  it("a number that is not a phone number is refused", () => {
+    expect(validateAttribution({ ...EMPTY_ATTRIBUTION, heardAbout: "instagram", fleetSize: "21+", phone: "call me" }).phone).toBe(
+      "Please enter a valid phone number.",
+    );
+  });
+
+  it("a Google signup with no phone on record is asked for it before the card", () => {
+    expect(hasCompleteAttribution({ heardAbout: "instagram", fleetSize: "21+" })).toBe(false);
+    expect(hasCompleteAttribution({ heardAbout: "instagram", fleetSize: "21+", phone: "" })).toBe(false);
+    expect(hasCompleteAttribution({ heardAbout: "instagram", fleetSize: "21+", phone: "call me" })).toBe(false);
+  });
+
+  it("the field no longer says optional", () => {
+    const fields = read("heard-about-fields.tsx");
+    expect(fields).not.toMatch(/Phone number <span[^>]*>\(optional\)/);
+    expect(fields).toContain('aria-required="true"');
   });
 });

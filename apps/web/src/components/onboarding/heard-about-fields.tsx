@@ -127,7 +127,7 @@ function FleetSizeChips({
 }
 
 /**
- * The two questions and the optional phone number. Used on the first account
+ * The two questions and the phone number (required since 2026-11-24). Used on the first account
  * page and on the short screen Google and Apple signups see after signing in.
  *
  * A styled dropdown in the signup's own colours on every device, raised above
@@ -253,12 +253,14 @@ export function HeardAboutFields({
 
       <div>
         <Label htmlFor="signup-phone" className={SIGNUP_LABEL}>
-          Phone number <span className="font-normal text-muted-foreground">(optional)</span>
+          Phone number
         </Label>
         <Input
           ref={phoneRef}
           id="signup-phone"
           name="phone"
+          required
+          aria-required="true"
           type="tel"
           inputMode="tel"
           autoComplete="tel"

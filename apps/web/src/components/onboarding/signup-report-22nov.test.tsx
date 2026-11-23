@@ -44,13 +44,14 @@ vi.mock("next/font/google", () => ({
   Roboto: () => ({ className: "font-roboto", style: {} }),
 }));
 
-// The dropdown is Radix (pointer-driven). One button answers both questions.
+// The dropdown is Radix (pointer-driven). One button answers both questions
+// and gives the phone number, which is required since 2026-11-24.
 vi.mock("@/components/onboarding/heard-about-fields", () => ({
   HeardAboutFields: (props: { onChange(patch: Record<string, unknown>): void }) => (
     <button
       type="button"
       data-testid="answer-attribution"
-      onClick={() => props.onChange({ heardAbout: "facebook", fleetSize: "1-5" })}
+      onClick={() => props.onChange({ heardAbout: "facebook", fleetSize: "1-5", phone: "(559) 283-5337" })}
     >
       answer
     </button>
@@ -493,7 +494,7 @@ describe("Step 1: the phone check never silently rejects a valid number", () => 
   it("a number it does reject comes with a message", () => {
     expect(isValidPhone("call me")).toBe(false);
     const source = read("../../lib/signup-attribution.ts");
-    expect(source).toContain("Please enter a valid phone number, or leave this blank.");
+    expect(source).toContain("Please enter a valid phone number.");
   });
 });
 
