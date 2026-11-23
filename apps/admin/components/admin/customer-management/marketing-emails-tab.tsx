@@ -336,7 +336,7 @@ export function MarketingEmailsTab({ canEdit }: { canEdit: boolean }) {
                     <span className="text-[10px] font-medium uppercase leading-none">Day</span>
                     <span className="text-lg font-bold leading-tight tabular-nums">{l.day_offset}</span>
                   </div>
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 max-sm:basis-[calc(100%-4.5rem)]">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-medium">{l.label}</p>
                       <Badge variant="secondary" className="gap-1">
@@ -344,13 +344,13 @@ export function MarketingEmailsTab({ canEdit }: { canEdit: boolean }) {
                         {l.send_weekday == null ? 'Exact day' : `Every ${WEEKDAYS[l.send_weekday]}`}
                       </Badge>
                     </div>
-                    <p className="mt-0.5 truncate text-sm text-muted-foreground">{l.subject}</p>
+                    <p className="mt-0.5 truncate text-sm text-muted-foreground max-sm:whitespace-normal">{l.subject}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {timingText(l)} ·{' '}
                       {l.enabled && l.active_since ? `Automatic — on since ${formatDate(l.active_since)}` : 'Off — nobody gets this'}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 max-sm:-ml-2 max-sm:w-full">
                     <Button
                       variant="ghost"
                       size="sm"

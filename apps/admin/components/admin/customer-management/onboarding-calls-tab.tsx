@@ -317,11 +317,11 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
                 return (
                   <li key={r.tenant_id} className="flex flex-col gap-3 px-6 py-4 lg:flex-row lg:items-center lg:gap-6">
                     <div className="min-w-0 lg:w-[30%]">
-                      <p className="truncate text-sm font-medium">
+                      <p className="truncate text-sm font-medium max-sm:whitespace-normal">
                         {r.company_name || r.slug}
                         <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">{r.slug}</span>
                       </p>
-                      <p className="truncate text-xs text-muted-foreground">
+                      <p className="truncate text-xs text-muted-foreground max-sm:whitespace-normal max-sm:[overflow-wrap:anywhere]">
                         {r.contact_email ?? 'no email'} · signed up {ago(r.tenant_created_at)}
                         {r.subscription_status && ` · ${r.subscription_status}`}
                         {r.trial_end && r.subscription_status === 'trialing' && ` until ${fmtWhen(r.trial_end).split(',')[0]}`}

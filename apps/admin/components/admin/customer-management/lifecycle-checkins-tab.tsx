@@ -387,7 +387,9 @@ export function LifecycleCheckinsTab({ canEdit }: { canEdit: boolean }) {
                     <span className="text-[10px] font-medium uppercase leading-none">Day</span>
                     <span className="text-lg font-bold leading-tight tabular-nums">{c.day_offset}</span>
                   </div>
-                  <div className="min-w-0 flex-1">
+                  {/* Phones: the text takes the line beside the day, and the
+                      controls go under it, whichever controls a row has. */}
+                  <div className="min-w-0 flex-1 max-sm:basis-[calc(100%-4.5rem)]">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-medium">{c.label}</p>
                       <Badge variant="secondary" className="gap-1">
@@ -395,7 +397,7 @@ export function LifecycleCheckinsTab({ canEdit }: { canEdit: boolean }) {
                         {c.kind === 'email' ? 'Email to operator' : 'Task for our team'}
                       </Badge>
                     </div>
-                    <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                    <p className="mt-0.5 truncate text-sm text-muted-foreground max-sm:whitespace-normal">
                       {c.kind === 'email' ? c.subject : c.task_note || 'No note'}
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
@@ -404,7 +406,7 @@ export function LifecycleCheckinsTab({ canEdit }: { canEdit: boolean }) {
                         : 'Off — nobody gets this'}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 max-sm:-ml-2 max-sm:w-full">
                     {c.kind === 'email' && (
                       <Button
                         variant="ghost"

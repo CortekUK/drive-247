@@ -586,7 +586,7 @@ export function NpsProgramTab({ canEdit }: { canEdit: boolean }) {
                         return (
                           <label key={t.id} className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50">
                             <input type="checkbox" disabled={!canEdit} checked={on} onChange={() => togglePicked(t.id)} />
-                            <span className={cn('flex-1 truncate', draft.audience === 'all' && on && 'text-muted-foreground line-through')}>
+                            <span className={cn('flex-1 truncate max-sm:whitespace-normal', draft.audience === 'all' && on && 'text-muted-foreground line-through')}>
                               {t.company_name || t.slug}
                             </span>
                             <span className="text-xs uppercase text-muted-foreground">{isV2(t) ? 'v2' : 'v1'}</span>

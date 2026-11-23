@@ -1066,3 +1066,59 @@ html::-webkit-scrollbar-corner,
     font-size: 12px;
   }
 }
+@media (max-width: 1023px) {
+  /* A page can name its card's title (`data-card-title` on that cell): it
+     heads the card, and an unlabelled first cell (a favourite star) sits
+     beside it — Contact Requests read "☆" alone, then Source, the name
+     buried in the middle. */
+  [data-phone-cards] tbody tr:has(> td[data-card-title]) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  [data-phone-cards] tbody tr:has(> td[data-card-title]) > td[data-card-title] {
+    order: -1;
+    grid-column: 1 / -1 !important;
+    align-self: center;
+    font-size: 15px;
+    padding-right: 44px !important;
+  }
+  [data-phone-cards] tbody tr:has(> td[data-card-title]) > td[data-card-title]::before {
+    content: none !important;
+  }
+  [data-phone-cards] tbody tr:has(> td[data-card-title]) > td:first-child:not([data-card-title]) {
+    position: absolute;
+    /* auto, or the grid area (inside the card's padding) becomes its box */
+    grid-column: auto !important;
+    grid-row: auto;
+    top: 6px;
+    left: 8px;
+    width: auto;
+  }
+  [data-phone-cards] tbody tr:has(> td[data-card-title]) > td:first-child:not([data-card-title])::before {
+    content: none !important;
+  }
+  [data-phone-cards] tbody tr:has(> td[data-card-title]:not(:first-child)) > td[data-card-title] {
+    padding-left: 30px !important;
+  }
+  [data-phone-cards] tbody tr:has(> td[data-card-title]) > td:not(:first-child):not([data-card-title]):not([data-label=""]) {
+    grid-column: auto !important;
+    font-size: 13px;
+    padding-right: 0 !important;
+  }
+  [data-phone-cards] tbody tr:has(> td[data-card-title]) > td:nth-child(2):not([data-card-title]):not([data-label=""])::before {
+    content: attr(data-label) !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  [data-phone-cards] tbody tr:is(*, :has(> td[data-card-title])) > td[data-wide]:not([data-label=""]):not(:first-child):not([data-card-title]) {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  /* Beside an unlabelled first cell the grid has a narrow first column: a
+     wide value spans the two value columns, not that one. */
+  [data-phone-cards] tbody tr:has(> td:first-child[data-label=""]:not(:last-child)):not(:has(> td[data-card-title])) > td[data-wide]:not([data-label=""]):not(:first-child) {
+    grid-column: 2 / -1 !important;
+  }
+}

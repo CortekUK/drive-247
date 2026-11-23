@@ -58,6 +58,14 @@ function labelTable(table: HTMLTableElement) {
           }
         }
         col += cell.colSpan || 1;
+        // One long unbroken value (an email, a URL, an id) gets the card's
+        // whole width instead of breaking off its last letters
+        // ("sean@locomotorcars.co / m") in half of it.
+        const longest = (cell.textContent || '').split(/\s+/).reduce((n, w) => Math.max(n, w.length), 0);
+        // Never the title: the first cell, or the second beside an unlabelled first.
+        const title = cell === cells[0] || (cell === cells[1] && cells[0].getAttribute('data-label') === '');
+        const wide = longest > 20 && !title && !cell.hasAttribute('data-card-title');
+        if (wide !== cell.hasAttribute('data-wide')) cell.toggleAttribute('data-wide', wide);
       }
       // Trailing controls with words on them (Edit · Switch off · View) are
       // too wide for the top-right corner an icon or a ⋯ takes: they ran

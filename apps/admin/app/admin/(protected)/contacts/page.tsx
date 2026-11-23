@@ -346,7 +346,7 @@ export default function ContactRequestsPage() {
                           {r.is_test && <span className="text-warning">· Test</span>}
                         </span>
                       </td>
-                      <td className="max-w-[220px] px-3 py-3">
+                      <td className="max-w-[220px] px-3 py-3" data-card-title="">
                         <p className="truncate font-medium text-foreground">{r.contact_name}</p>
                         {companyOf(r) && <p className="truncate text-xs text-muted-foreground">{companyOf(r)}</p>}
                       </td>
