@@ -1,7 +1,7 @@
 -- ============================================================================
 -- sim_shift — STAGING-ONLY time-shift primitive for the cron simulation harness
 -- ============================================================================
--- Apply to the STAGING project (ksmreaadhbirzakkxqrq) ONLY.
+-- Apply to the STAGING project (csjouxrkblpsoihyejel) ONLY.
 --
 -- This function is INERT on any project that lacks the public.sim_meta staging
 -- sentinel row. Production has no such row, so even if this SQL were applied to

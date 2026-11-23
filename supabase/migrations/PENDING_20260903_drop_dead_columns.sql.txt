@@ -115,7 +115,7 @@ DROP TABLE IF EXISTS public.turo_bridge_tokens;
 --   public.tenants. It was written and never pushed.
 --
 --   The statement below is therefore a NO-OP on prod. It is kept because other
---   environments (staging branch ksmreaadhbirzakkxqrq, local stacks, any dev's
+--   environments (staging, local stacks, any dev's
 --   machine) may have run `supabase db push` and picked the migration up.
 --
 --   >>> SEPARATE FOLLOW-UP, NOT DONE HERE <<<

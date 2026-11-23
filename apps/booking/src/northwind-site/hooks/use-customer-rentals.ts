@@ -5,7 +5,7 @@
  *
  * ── THE ISOLATION BOUNDARY IS THIS FILE ─────────────────────────────────────
  * `rentals` has RLS OFF on staging and a table-level SELECT grant to `anon`.
- * Verified live against ksmreaadhbirzakkxqrq: an unauthenticated request
+ * Verified live against staging: an unauthenticated request
  * carrying only the public anon key returns other customers' rentals in full.
  * So the `.eq('customer_id', …).eq('tenant_id', …)` pair below is not an
  * optimisation and not a convenience — it is the ONLY thing standing between

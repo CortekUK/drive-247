@@ -65,3 +65,5 @@ testing-qa.env
 # Keep the masters out of git; re-encode from the originals if they change.
 /funnel_videos/
 .staging-credentials.local
+evals/environments/*/reports/*.pdf
+evals/environments/functions/.fingerprints.json

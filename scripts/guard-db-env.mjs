@@ -24,7 +24,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const STAGING_REF = "ksmreaadhbirzakkxqrq";
+const STAGING_REF = "csjouxrkblpsoihyejel";
 const PROD_REF = "hviqoaokxvlancmftwuo";
 
 const branch = (() => {

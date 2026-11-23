@@ -26,8 +26,8 @@ Two things will cause real damage faster than anything else you can do here.
 
 **One — there is no staging deploy.** You are working on `main`, in the repo that
 deploys, against the production database that ~34 subscribed operators are running
-their businesses on right now. A staging Supabase branch exists
-(`ksmreaadhbirzakkxqrq`) for local work, but no deployed site sits between you and
+their businesses on right now. A separate staging Supabase project exists
+(`csjouxrkblpsoihyejel`) for local work, but no deployed site sits between you and
 them. A migration you apply to production is applied to their data. An edge
 function you redeploy is serving their customers within seconds.
 

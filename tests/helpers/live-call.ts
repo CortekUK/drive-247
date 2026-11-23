@@ -36,12 +36,12 @@
 export const PRODUCTION_PROJECT_REFS: readonly string[] = ["hviqoaokxvlancmftwuo"];
 
 /**
- * The Supabase branch clone `scripts/db-switch.mjs` already knows about. Named
+ * The staging Supabase project `scripts/db-switch.mjs` already knows about. Named
  * here so "where am I allowed to point this?" has an answer in the code and not
  * only in someone's shell history. Not an allowlist — anything that is not
  * production is permitted; this is documentation.
  */
-export const KNOWN_STAGING_PROJECT_REF = "ksmreaadhbirzakkxqrq";
+export const KNOWN_STAGING_PROJECT_REF = "csjouxrkblpsoihyejel";
 
 /** Thrown, never returned. A refusal that could be ignored is not a refusal. */
 export class ProductionTargetError extends Error {

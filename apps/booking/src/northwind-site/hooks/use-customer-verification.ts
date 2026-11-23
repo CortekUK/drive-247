@@ -6,7 +6,7 @@
  * ── THE ISOLATION BOUNDARY IS THIS FILE ─────────────────────────────────────
  * `identity_verifications` behaves exactly like `rentals` on staging: RLS is
  * effectively off and `anon` holds both SELECT and UPDATE on the whole table.
- * Verified live against ksmreaadhbirzakkxqrq — a request carrying only the
+ * Verified live against staging — a request carrying only the
  * public anon key read back a row belonging to nobody in particular and then
  * PATCHed it. So the `.eq('customer_id', …).eq('tenant_id', …)` pair below is
  * the ONLY thing standing between one customer and another customer's passport

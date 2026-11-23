@@ -1,7 +1,7 @@
 -- Applied to PRODUCTION (hviqoaokxvlancmftwuo). Recovered and md5-verified against
 -- supabase_migrations.schema_migrations so this file and the live schema cannot drift.
 -- The version prefix matches what prod recorded, so the CLI treats prod as up to date.
--- STILL TO APPLY TO STAGING (ksmreaadhbirzakkxqrq), which is behind.
+-- STILL TO APPLY TO STAGING, which is behind.
 
 -- Square integration — migration 01: provider columns. ADDITIVE ONLY.
 -- Verified pre-flight: tenants=52, payments=1026, PG 17.6, none of these columns exist.

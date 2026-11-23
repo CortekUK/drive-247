@@ -12,7 +12,7 @@
  *
  * ── THE ISOLATION BOUNDARY ──────────────────────────────────────────────────
  * `chat_channels` and `chat_channel_messages` have RLS OFF on staging and a
- * SELECT grant to `anon` — verified live against ksmreaadhbirzakkxqrq: an
+ * SELECT grant to `anon` — verified live against staging: an
  * unauthenticated request carrying only the public anon key reads every
  * tenant's conversations in full. So the filters below are the ONLY thing
  * keeping one customer out of another's messages.

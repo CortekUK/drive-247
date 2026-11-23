@@ -268,7 +268,7 @@ describe("stripe/checkout — the health check: can a payment link be created at
     expect(mentionsProductionRef("https://api.drive-247.com/HVIQOAOKXVLANCMFTWUO/functions/v1")).toBe(
       "hviqoaokxvlancmftwuo",
     );
-    expect(mentionsProductionRef("https://ksmreaadhbirzakkxqrq.supabase.co/functions/v1")).toBe(null);
+    expect(mentionsProductionRef("https://csjouxrkblpsoihyejel.supabase.co/functions/v1")).toBe(null);
   });
 
   it("the live layer throws rather than calling a target that names production", () => {
@@ -286,7 +286,7 @@ describe("stripe/checkout — the health check: can a payment link be created at
       process.env.D247_LIVE_FUNCTIONS_URL = "https://hviqoaokxvlancmftwuo.supabase.co/functions/v1";
       // The escape hatch, pointed somewhere harmless. It must not launder the
       // URL above — that combination is exactly how a run lands on production.
-      process.env.D247_LIVE_PROJECT_REF = "ksmreaadhbirzakkxqrq";
+      process.env.D247_LIVE_PROJECT_REF = "csjouxrkblpsoihyejel";
       delete process.env.D247_LIVE_ANON_KEY;
       delete process.env.D247_LIVE_SESSION_JWT;
       expect(() => liveStatus()).toThrow(/hviqoaokxvlancmftwuo|production/i);

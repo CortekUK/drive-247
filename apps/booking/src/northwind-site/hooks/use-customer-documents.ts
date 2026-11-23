@@ -7,7 +7,7 @@
  * ── THE ISOLATION BOUNDARY IS THIS FILE ─────────────────────────────────────
  * Same rule, same reason, as `use-customer-rentals.ts` — read that header
  * first. `customer_documents` and `bonzah_insurance_policies` were both probed
- * live against staging (ksmreaadhbirzakkxqrq) with nothing but the public anon
+ * live against staging with nothing but the public anon
  * key and both answered 200. RLS is OFF on them. So the
  * `.eq('customer_id', …).eq('tenant_id', …)` pair on every statement below is
  * the ONLY thing keeping one customer out of another's licence scan, and the

@@ -10,8 +10,8 @@
 
 ## 0. The five rules that prevent real damage
 
-1. **`main` deploys to production.** ~57 tenants, ~32 paying. A staging Supabase branch exists
-   (`ksmreaadhbirzakkxqrq`, see §9) — use it for local work, but there is no staging *deploy*.
+1. **`main` deploys to production.** ~57 tenants, ~32 paying. A separate staging Supabase project exists
+   (`csjouxrkblpsoihyejel`, see §9) — use it for local work, but there is no staging *deploy*.
 2. **RLS is OFF on the core tables** (`rentals`, `customers`, `payments`, `vehicles`, `invoices`,
    `ledger_entries`, `app_users`). Policies on them exist but are inert. **Every query, update and
    delete must filter `.eq('tenant_id', tenant.id)`.** A missing filter = critical bug. Do **not**
@@ -359,7 +359,7 @@ unschedule a cron or undeploy a function — check `cron.job` and the deployed l
 
 ## 9. Environments, commands & scripts
 
-**Supabase projects:** prod `hviqoaokxvlancmftwuo` · staging branch `ksmreaadhbirzakkxqrq`.
+**Supabase projects:** prod `hviqoaokxvlancmftwuo` · staging project `csjouxrkblpsoihyejel` (database only so far; evals in `evals/environments/database`).
 `.mcp.json` points the Supabase MCP at **prod**.
 
 ```bash
@@ -376,7 +376,7 @@ Ports: booking 3000, portal 4002, web 4003, admin 4004 (CLAUDE.md's 3001–3003 
 
 Scripts (danger level):
 - **Prod by default — high:** `deploy-edge-function.py` (`SB_PAT=… python3 scripts/deploy-edge-function.py <fn>`;
-  set `SUPABASE_PROJECT_ID=ksmreaadhbirzakkxqrq` for staging; preserves deployed `verify_jwt`),
+  set `SUPABASE_PROJECT_ID=csjouxrkblpsoihyejel` for staging; preserves deployed `verify_jwt`),
   `trax-deploy.mjs`, `seed-northwind.mjs` / `wipe-northwind.mjs` (manifest-scoped; never `--force-sweep`),
   `bulk-update-branding.js`, `update-cms-content.js`.
 - **Read-only:** `v1-check/*`, `check-edge-deploys.mjs` (deployed bundle markers), `check-edge-function-scopes.mjs`,

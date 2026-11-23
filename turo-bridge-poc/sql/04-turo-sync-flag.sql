@@ -48,7 +48,7 @@
 --   only the anon-key read does.
 --
 --   PRODUCTION IS THE ONLY DATABASE THAT NEEDS THIS. Measured on the staging
---   branch database (ksmreaadhbirzakkxqrq) 2026-09-05: `anon` there holds
+--   branch database 2026-09-05: `anon` there holds
 --   TABLE-level SELECT on public.tenants, so the GRANT is a no-op; the column
 --   and public.turo_bridge_reservations do not exist; and `integration_veriff`
 --   -- a CORE column -- is missing, so no tenant resolves on staging at all,

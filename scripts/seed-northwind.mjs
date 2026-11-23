@@ -10,7 +10,7 @@
  * WORKS AGAINST EITHER ENVIRONMENT, and resolves everything at runtime:
  *
  *   # staging (what local dev reads — see .env.local)
- *   SUPABASE_ACCESS_TOKEN=sbp_... node scripts/seed-northwind.mjs --ref ksmreaadhbirzakkxqrq
+ *   SUPABASE_ACCESS_TOKEN=sbp_... node scripts/seed-northwind.mjs --ref csjouxrkblpsoihyejel
  *   # production
  *   SUPABASE_ACCESS_TOKEN=sbp_... node scripts/seed-northwind.mjs --ref hviqoaokxvlancmftwuo
  *
@@ -70,6 +70,7 @@
  * Flags:
  *   --ref <project-ref>   which Supabase project (or SUPABASE_PROJECT_REF)
  *   --dry-run             print the SQL, change nothing
+ *   --shift-days N        move every date in the story forward by N days
  *
  * Teardown: scripts/wipe-northwind.mjs (same --ref, reads the manifest this writes).
  */
@@ -85,7 +86,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Config
 // ---------------------------------------------------------------------------
 const TENANT_SLUG = "northwind";
-const KNOWN_REFS = { prod: "hviqoaokxvlancmftwuo", staging: "ksmreaadhbirzakkxqrq" };
+const KNOWN_REFS = { prod: "hviqoaokxvlancmftwuo", staging: "csjouxrkblpsoihyejel" };
 
 const argRef = (() => {
   const i = process.argv.indexOf("--ref");
@@ -94,6 +95,22 @@ const argRef = (() => {
 const PROJECT_REF = KNOWN_REFS[argRef] || argRef || process.env.SUPABASE_PROJECT_REF;
 const TOKEN = process.env.SUPABASE_ACCESS_TOKEN;
 const DRY_RUN = process.argv.includes("--dry-run");
+// --shift-days N moves every date in the story forward by N days, so a tenant
+// seeded long after TODAY (below) still has rentals that are live "now".
+// Applied to the SQL as it is sent; the story itself is not rewritten.
+const SHIFT_DAYS = (() => {
+  const i = process.argv.indexOf("--shift-days");
+  return i >= 0 ? Number(process.argv[i + 1]) || 0 : 0;
+})();
+function shiftDates(sql) {
+  if (!SHIFT_DAYS) return sql;
+  return sql.replace(/(?<![\d-])(20\d\d-\d\d-\d\d)(?!\d)/g, (d) => {
+    const dt = new Date(`${d}T00:00:00Z`);
+    if (Number.isNaN(dt.getTime())) return d;
+    dt.setUTCDate(dt.getUTCDate() + SHIFT_DAYS);
+    return dt.toISOString().slice(0, 10);
+  });
+}
 
 if (!PROJECT_REF) {
   console.error("Which project? Pass --ref <project-ref|prod|staging> or set SUPABASE_PROJECT_REF.");
@@ -138,6 +155,7 @@ const n = (v) => (v === null || v === undefined ? N : String(v));
 const b = (v) => (v === null || v === undefined ? N : v ? "true" : "false");
 
 async function runSql(label, sql) {
+  if (!label.startsWith("read:")) sql = shiftDates(sql);
   if (DRY_RUN && !label.startsWith("read:")) {
     console.log(`\n-- [dry-run] ${label}\n${sql}\n`);
     return [];

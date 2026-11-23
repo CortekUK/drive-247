@@ -3,7 +3,7 @@
  * db-switch.mjs — quickly point all apps at the production or staging Supabase DB.
  *
  * Usage:
- *   node scripts/db-switch.mjs staging   # point portal/booking/admin/web at the staging clone
+ *   node scripts/db-switch.mjs staging   # point portal/booking/admin/web at the staging project
  *   node scripts/db-switch.mjs prod      # restore the original (production) values
  *   node scripts/db-switch.mjs status    # show which DB each app currently targets
  *
@@ -20,20 +20,30 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const APPS = ["portal", "booking", "admin", "web"];
 
-// --- Staging (Supabase branch clone) values ---
+// --- Staging values ---
+// Staging is its own Supabase project. Its ref and keys live in the gitignored
+// .staging-credentials.local at the repo root, never in this file.
+function readStagingCredentials() {
+  const p = join(ROOT, ".staging-credentials.local");
+  if (!existsSync(p)) return {};
+  const out = {};
+  for (const line of readFileSync(p, "utf8").split("\n")) {
+    const m = line.match(/^([A-Z_]+)=(.*)$/);
+    if (m) out[m[1]] = m[2].trim();
+  }
+  return out;
+}
+const CREDS = readStagingCredentials();
+const STAGING_HOST = CREDS.STAGING_REF ?? "";
 const STAGING = {
-  NEXT_PUBLIC_SUPABASE_URL: "https://ksmreaadhbirzakkxqrq.supabase.co",
-  // Must be rewritten too — it was previously left on the prod ref, so anything
-  // reading PROJECT_ID on staging silently addressed production.
-  NEXT_PUBLIC_SUPABASE_PROJECT_ID: "ksmreaadhbirzakkxqrq",
-  NEXT_PUBLIC_SUPABASE_ANON_KEY:
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtzbXJlYWFkaGJpcnpha2t4cXJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3MzI5MTIsImV4cCI6MjA5NjMwODkxMn0.3oKl4PxS0D5rkV5MsgxBwHXUUfleRgmzdZHZf_uwk0s",
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_GUx5Z4qoLYZpkjgbstLHjw_2BrPf4YL",
-  SUPABASE_SERVICE_ROLE_KEY:
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtzbXJlYWFkaGJpcnpha2t4cXJxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDczMjkxMiwiZXhwIjoyMDk2MzA4OTEyfQ.Fo8OqiaEzCs6ECeRZB8_OgXIi138SRnBR4YyfeSNjfQ",
+  NEXT_PUBLIC_SUPABASE_URL: `https://${STAGING_HOST}.supabase.co`,
+  // Must be rewritten too: left on the prod ref, anything reading PROJECT_ID
+  // on staging silently addresses production.
+  NEXT_PUBLIC_SUPABASE_PROJECT_ID: STAGING_HOST,
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: CREDS.STAGING_ANON_KEY,
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: CREDS.STAGING_PUBLISHABLE_KEY,
+  SUPABASE_SERVICE_ROLE_KEY: CREDS.STAGING_SERVICE_ROLE_KEY,
 };
-
-const STAGING_HOST = "ksmreaadhbirzakkxqrq";
 
 function envPath(app) {
   return join(ROOT, "apps", app, ".env.local");
@@ -55,7 +65,7 @@ function currentHost(app) {
   if (!existsSync(p)) return "(no .env.local)";
   const m = readFileSync(p, "utf8").match(/^\s*NEXT_PUBLIC_SUPABASE_URL\s*=\s*"?([^"\n]+)"?/m);
   if (!m) return "(unset)";
-  return m[1].includes(STAGING_HOST) ? "STAGING" : "production";
+  return STAGING_HOST && m[1].includes(STAGING_HOST) ? "STAGING" : "production";
 }
 
 const target = (process.argv[2] || "").toLowerCase();
@@ -68,6 +78,11 @@ if (target === "status") {
 
 if (target !== "staging" && target !== "prod") {
   console.error("Usage: node scripts/db-switch.mjs <staging|prod|status>");
+  process.exit(1);
+}
+
+if (target === "staging" && Object.values(STAGING).some((v) => !v || !STAGING_HOST)) {
+  console.error("Staging keys not found. .staging-credentials.local needs STAGING_REF, STAGING_ANON_KEY,\nSTAGING_PUBLISHABLE_KEY and STAGING_SERVICE_ROLE_KEY.");
   process.exit(1);
 }
 

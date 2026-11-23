@@ -628,7 +628,7 @@ describe("boldsign/notify — the delivery gaps", () => {
           "  That ref is the PRODUCTION database (tests/README.md §6, and the reason",
           "  Layer 2 refuses it outright). The URL is baked into the trigger body, so",
           "  every database restored or branched from these migrations — the",
-          "  ksmreaadhbirzakkxqrq clone scripts/db-switch.mjs knows about, a preview",
+          "  staging project scripts/db-switch.mjs knows about, a preview",
           "  branch, a local stack — dispatches its operator emails INTO PRODUCTION.",
           "",
           "  Two consequences, both quiet:",

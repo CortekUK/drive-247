@@ -17,7 +17,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { CRON_MANIFEST, SHIFT_MANIFEST, SCENARIOS } from "./manifests.ts";
 
-const STAGING_REF = "ksmreaadhbirzakkxqrq";
+const STAGING_REF = "csjouxrkblpsoihyejel";
 const STAGING_HOST = `${STAGING_REF}.supabase.co`;
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";

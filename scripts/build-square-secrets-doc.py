@@ -357,7 +357,7 @@ def build():
          "regenerated in the console, re-entered, and re-tested before the Verified box is ticked.", False),
         ("Confirm row 009 by eye. Square does not expose the registered redirect URI through "
          "any API, so it can only be compared against the console's Sandbox and Production tabs.", False),
-        ("Staging has no Square configuration at all. The project ksmreaadhbirzakkxqrq carries "
+        ("Staging has no Square configuration at all. The project csjouxrkblpsoihyejel carries "
          "8 deployed Square functions and zero Square secrets, so every one of them is inert "
          "there. Giving staging real Square access needs its own webhook subscription and "
          "therefore its own signature key - the notification URL is part of the signed message, "

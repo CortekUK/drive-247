@@ -50,7 +50,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const TENANT_SLUG = "northwind";
-const KNOWN_REFS = { prod: "hviqoaokxvlancmftwuo", staging: "ksmreaadhbirzakkxqrq" };
+const KNOWN_REFS = { prod: "hviqoaokxvlancmftwuo", staging: "csjouxrkblpsoihyejel" };
 
 const argRef = (() => {
   const i = process.argv.indexOf("--ref");

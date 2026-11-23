@@ -6,7 +6,7 @@
  * ── THE ISOLATION BOUNDARY IS THIS FILE ─────────────────────────────────────
  * Same posture as `use-customer-rentals.ts`: `customer_notifications` is
  * reachable with nothing but the public anon key on staging (verified against
- * ksmreaadhbirzakkxqrq — the table answers 200 to an unauthenticated request),
+ * staging — the table answers 200 to an unauthenticated request),
  * so the row filters below are the access control, not a convenience.
  *
  * Two ids, always, on EVERY statement in this file — reads and writes alike:

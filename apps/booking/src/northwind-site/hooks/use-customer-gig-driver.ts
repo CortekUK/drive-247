@@ -37,7 +37,7 @@
  * hides, because the operator reads the TABLE and would otherwise never see a
  * document the customer believes they have submitted.
  *
- * ── RLS, VERIFIED LIVE AGAINST ksmreaadhbirzakkxqrq ─────────────────────────
+ * ── RLS, VERIFIED LIVE AGAINST STAGING ─────────────────────────
  * `gig_driver_images` has RLS ON with these policies (see migration
  * `20260225120000_add_gig_driver.sql`):
  *

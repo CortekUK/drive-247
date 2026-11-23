@@ -1,7 +1,7 @@
 -- Applied to PRODUCTION (hviqoaokxvlancmftwuo). Recovered and md5-verified against
 -- supabase_migrations.schema_migrations so this file and the live schema cannot drift.
 -- The version prefix matches what prod recorded, so the CLI treats prod as up to date.
--- STILL TO APPLY TO STAGING (ksmreaadhbirzakkxqrq), which is behind.
+-- STILL TO APPLY TO STAGING, which is behind.
 
 -- Defence in depth. RLS already blocks anon (no anon policy exists), but a
 -- default table grant means one careless future policy is all that stands
