@@ -1,5 +1,6 @@
 "use client";
 
+import { TraxGlyph } from "@/components/shared/trax-glyph";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import { IndigoStage } from "./indigo-stage";
@@ -73,17 +74,9 @@ function useTyped(text: string, reduced: boolean, speed = 16) {
 
 export function TraxMark({ size = 22 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden className="shrink-0">
-      <rect x="3" y="5" width="18" height="15" rx="5" fill="var(--lv-accent)" opacity="0.15" />
-      <rect x="3" y="5" width="18" height="15" rx="5" stroke="var(--lv-accent)" strokeWidth="1.5" opacity="0.6" />
-      <circle cx="9" cy="12" r="1.8" fill="var(--lv-accent)" />
-      <circle cx="9.6" cy="11.3" r="0.6" fill="white" opacity="0.8" />
-      <circle cx="15" cy="12" r="1.8" fill="var(--lv-accent)" />
-      <circle cx="15.6" cy="11.3" r="0.6" fill="white" opacity="0.8" />
-      <line x1="12" y1="5" x2="12" y2="2" stroke="var(--lv-accent)" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
-      <circle cx="12" cy="1.5" r="1.5" fill="var(--lv-accent)" opacity="0.7" />
-      <path d="M9.5 15.5 C10.5 16.8 13.5 16.8 14.5 15.5" stroke="var(--lv-accent)" strokeWidth="1.3" strokeLinecap="round" opacity="0.5" />
-    </svg>
+    <span aria-hidden className="inline-flex shrink-0 text-[var(--lv-accent)]" style={{ width: size, height: size }}>
+      <TraxGlyph className="size-full" />
+    </span>
   );
 }
 

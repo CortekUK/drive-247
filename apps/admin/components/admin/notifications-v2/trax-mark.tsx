@@ -1,6 +1,6 @@
 'use client';
 
-import { Sparkles } from 'lucide-react';
+import { TraxGlyph } from './trax-glyph';
 import { cn } from '@/lib/utils';
 
 /**
@@ -45,16 +45,13 @@ export function TraxMark({
         <span
           className={cn(
             'absolute -inset-1/4',
-            'bg-[conic-gradient(from_180deg,hsl(var(--chart-2)),hsl(var(--primary)),hsl(var(--chart-4)),hsl(var(--chart-1)),hsl(var(--chart-2)))]',
-            'dark:bg-[conic-gradient(from_180deg,hsl(var(--chart-2)),hsl(var(--chart-3)),hsl(var(--chart-1)),hsl(var(--chart-4)),hsl(var(--chart-2)))]',
+            'bg-[radial-gradient(circle_at_center,hsl(0_0%_100%/0.22),transparent_38%),linear-gradient(145deg,hsl(var(--chart-2)),hsl(var(--primary)))]',
+            'dark:bg-[radial-gradient(circle_at_center,hsl(0_0%_100%/0.18),transparent_38%),linear-gradient(145deg,hsl(var(--chart-2)),hsl(var(--chart-3)))]',
             animated && 'animate-[spin_12s_linear_infinite] motion-reduce:animate-none',
           )}
         />
       </span>
-      <Sparkles
-        className={cn('relative text-primary-foreground drop-shadow-[0_1px_2px_hsl(var(--chart-5)/0.55)]', s.icon)}
-        strokeWidth={2}
-      />
+      <TraxGlyph className={cn('relative text-primary-foreground drop-shadow-[0_1px_2px_hsl(var(--chart-5)/0.55)]', s.icon)} />
     </span>
   );
 }

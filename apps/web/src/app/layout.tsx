@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Manrope } from "next/font/google";
 import { JsonLd } from "@/components/shared/json-ld";
 import { ThemeProvider } from "@/components/shared/theme-provider";
 import { BookDemoDialog } from "@/components/book-demo/book-demo-dialog";
@@ -24,6 +24,18 @@ fbq('track', 'PageView');}`;
 const inter = Inter({
   variable: "--font-sans",
   subsets: ["latin"],
+});
+
+/**
+ * The portal's heading face (Manrope), for the signup screens: they wear the
+ * look of the portal's onboarding questions. Not preloaded, because only the
+ * signup uses it; the browser fetches it the first time a heading needs it.
+ */
+const signupDisplay = Manrope({
+  variable: "--font-signup-display",
+  subsets: ["latin"],
+  display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -94,7 +106,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable} suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} ${signupDisplay.variable}`} suppressHydrationWarning>
       <head>
         <JsonLd data={organizationLd} />
         <JsonLd data={softwareLd} />

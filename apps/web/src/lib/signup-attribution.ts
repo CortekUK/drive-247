@@ -1,13 +1,14 @@
 /**
- * "How did you hear about us?", "How many cars do you rent out?" and the
- * optional phone number on the signup.
+ * "How did you hear about us?" and the phone number on the signup.
  *
- * Both questions are required by the form. The server re-checks them in
- * `supabase/functions/_shared/signup-attribution.ts`, which holds the same lists.
+ * Both are optional (Ghulam, 2026-11-23). "How many cars do you rent out?" is
+ * no longer asked. The server re-checks what is sent in
+ * `supabase/functions/_shared/signup-attribution.ts`, which holds the same
+ * lists and never required either answer.
  */
 
 // Relative, not "@/": tests/integrations imports this file without the app alias.
-import { isFleetSize, type FleetSize } from "./fleet-size";
+import type { FleetSize } from "./fleet-size";
 
 export const HEARD_ABOUT_OPTIONS = [
   { value: "instagram", label: "Instagram" },
@@ -28,7 +29,7 @@ export const PHONE_MAX = 40;
 export interface AttributionDraft {
   heardAbout: HeardAbout | "";
   heardAboutOther: string;
-  /** "How many cars do you rent out?" Optional in the type only for older callers. */
+  /** No longer asked; kept in the type for older drafts and the dev mock. */
   fleetSize?: FleetSize | "";
   phone: string;
 }
@@ -40,16 +41,16 @@ export const EMPTY_ATTRIBUTION: AttributionDraft = {
   phone: "",
 };
 
-/** What is sent to the server. */
+/** What is sent to the server. Every part is optional. */
 export interface SignupAttribution {
-  heardAbout: HeardAbout;
+  heardAbout?: HeardAbout;
   heardAboutOther?: string;
-  /** "1-5" | "6-20" | "21+". Picks the plan; see lib/fleet-size.ts. */
+  /** No longer asked. Signups from before 2026-11-23 may still carry it. */
   fleetSize?: FleetSize;
   phone?: string;
 }
 
-export type AttributionField = "heardAbout" | "heardAboutOther" | "fleetSize" | "phone";
+export type AttributionField = "heardAbout" | "heardAboutOther" | "phone";
 
 export function isHeardAbout(value: unknown): value is HeardAbout {
   return HEARD_ABOUT_OPTIONS.some((option) => option.value === value);
@@ -64,18 +65,14 @@ export function isValidPhone(raw: string): boolean {
   return digits >= 7 && digits <= 15;
 }
 
+/**
+ * Only a typed phone number can be wrong. Leaving the question unanswered, or
+ * picking "Other" without saying what, is fine.
+ */
 export function validateAttribution(
   draft: AttributionDraft,
 ): Partial<Record<AttributionField, string>> {
   const errors: Partial<Record<AttributionField, string>> = {};
-  if (!isHeardAbout(draft.heardAbout)) {
-    errors.heardAbout = "Please choose an answer.";
-  } else if (draft.heardAbout === "other" && !draft.heardAboutOther.trim()) {
-    errors.heardAboutOther = "Please tell us where you heard about us.";
-  }
-  if (!isFleetSize(draft.fleetSize)) {
-    errors.fleetSize = "Please choose how many cars you rent out.";
-  }
   if (!isValidPhone(draft.phone)) {
     errors.phone = "Please enter a valid phone number, or leave this blank.";
   }
@@ -83,29 +80,19 @@ export function validateAttribution(
 }
 
 /**
- * The draft as a request body, or null when there is no complete answer yet.
+ * The draft as a request body, or null when nothing was answered.
  *
- * A phone that does not validate is left out rather than holding up the answer:
- * the Google button sends whatever is usable and asks for the rest afterwards.
- * The fleet size rides along once it is picked; the screen after a Google
- * sign-in asks for it when it is missing (see `hasCompleteAttribution`).
+ * A phone that does not validate is left out rather than holding anything up:
+ * the Google button sends whatever is usable.
  */
 export function attributionFromDraft(draft: AttributionDraft): SignupAttribution | null {
-  if (!isHeardAbout(draft.heardAbout)) return null;
+  const heardAbout = isHeardAbout(draft.heardAbout) ? draft.heardAbout : null;
   const other = draft.heardAboutOther.trim();
-  if (draft.heardAbout === "other" && !other) return null;
   const phone = draft.phone.trim();
-  return {
-    heardAbout: draft.heardAbout,
-    ...(draft.heardAbout === "other" ? { heardAboutOther: other } : {}),
-    ...(isFleetSize(draft.fleetSize) ? { fleetSize: draft.fleetSize } : {}),
+  const answer: SignupAttribution = {
+    ...(heardAbout ? { heardAbout } : {}),
+    ...(heardAbout === "other" && other ? { heardAboutOther: other } : {}),
     ...(phone && isValidPhone(phone) ? { phone } : {}),
   };
-}
-
-/** True when both questions have an answer on record. */
-export function hasCompleteAttribution(
-  a: { heardAbout?: unknown; fleetSize?: unknown } | null | undefined,
-): boolean {
-  return Boolean(a && isHeardAbout(a.heardAbout) && isFleetSize(a.fleetSize));
+  return Object.keys(answer).length > 0 ? answer : null;
 }

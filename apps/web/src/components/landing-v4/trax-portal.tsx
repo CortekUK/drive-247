@@ -1,5 +1,6 @@
 "use client";
 
+import { TraxGlyph } from "@/components/shared/trax-glyph";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowUp,
@@ -12,7 +13,6 @@ import {
   Loader2,
   Maximize2,
   Plus,
-  Sparkles,
   SquarePen,
   User,
   X,
@@ -41,21 +41,12 @@ const PROMPTS = [
   { Icon: CreditCard, label: "Check a rental's payments", q: "I want to check the payments for a rental." },
 ];
 
-/** components/chat/TraxIcon.tsx — the robot beside every Trax reply. */
+/** The Trax glyph beside every Trax reply (was the robot). */
 function TraxIcon() {
-  const c = "currentColor";
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
-      <rect x="3" y="5" width="18" height="15" rx="5" fill={c} opacity="0.15" />
-      <rect x="3" y="5" width="18" height="15" rx="5" stroke={c} strokeWidth="1.5" opacity="0.6" />
-      <circle cx="9" cy="12" r="1.8" fill={c} />
-      <circle cx="9.6" cy="11.3" r="0.6" fill="white" opacity="0.8" />
-      <circle cx="15" cy="12" r="1.8" fill={c} />
-      <circle cx="15.6" cy="11.3" r="0.6" fill="white" opacity="0.8" />
-      <line x1="12" y1="5" x2="12" y2="2" stroke={c} strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
-      <circle cx="12" cy="1.5" r="1.5" fill={c} opacity="0.7" />
-      <path d="M9.5 15.5 C10.5 16.8 13.5 16.8 14.5 15.5" stroke={c} strokeWidth="1.3" strokeLinecap="round" fill="none" opacity="0.5" />
-    </svg>
+    <span style={{ display: "inline-flex", width: 18, height: 18 }}>
+      <TraxGlyph />
+    </span>
   );
 }
 
@@ -67,7 +58,7 @@ function TraxMark({ size, animated }: { size: "xs" | "md"; animated?: boolean })
       <span className="disc">
         <span className="cone" />
       </span>
-      <Sparkles className="ic" strokeWidth={2} />
+      <TraxGlyph className="ic" />
     </span>
   );
 }

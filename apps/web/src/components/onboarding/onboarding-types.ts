@@ -1,6 +1,7 @@
 import type { SignupPlan, SignupPlanId } from "@/lib/plans";
 import type { PromoOffer } from "@/lib/promo-offer";
 import type { SignupAttribution } from "@/lib/signup-attribution";
+import { DEFAULT_BRAND_COLOR, DEFAULT_SITE_THEME, type SiteTheme } from "@/lib/signup-look";
 
 // ---------------------------------------------------------------------------
 // Steps
@@ -274,6 +275,13 @@ export interface BusinessDraft {
    * tenant's address: that one is the booking site's real address.
    */
   cityState: string;
+  /**
+   * The brand colour, one of SIGNUP_BRAND_COLORS (lib/signup-look.ts). Starts
+   * on the v2 default, so leaving it alone is a real answer.
+   */
+  brandColor: string;
+  /** The booking site's starting theme. Starts dark, the column's default. */
+  siteTheme: SiteTheme;
 }
 
 export const EMPTY_BUSINESS_DRAFT: BusinessDraft = {
@@ -282,6 +290,8 @@ export const EMPTY_BUSINESS_DRAFT: BusinessDraft = {
   slugTouched: false,
   acceptedTerms: false,
   cityState: "",
+  brandColor: DEFAULT_BRAND_COLOR,
+  siteTheme: DEFAULT_SITE_THEME,
 };
 
 // ---------------------------------------------------------------------------
@@ -392,6 +402,9 @@ export interface AccountFormValues {
   acceptedTerms: boolean;
   /** "City and state", normalised. Sent to `signup-begin` with the answers. */
   cityState?: string;
+  /** The look picked on the business page (lib/signup-look.ts). */
+  brandColor?: string;
+  siteTheme?: SiteTheme;
   /** "How did you hear about us?" and the optional phone number. */
   attribution: SignupAttribution;
   /** Honeypot. Always posted; a non-empty value means bot. */
@@ -416,6 +429,10 @@ export interface TenantFormValues {
    * has none, and the build must not stop for it. The forms require it.
    */
   cityState?: string;
+  /** The picked brand colour. Optional for the same reason; the build defaults it. */
+  brandColor?: string;
+  /** The picked booking site theme. Optional for the same reason. */
+  siteTheme?: SiteTheme;
 }
 
 /**
@@ -433,8 +450,14 @@ export interface TenantFormValues {
  * `attribution` — "How did you hear about us?" on its own. Google
  * signups skip the form that carries the question, so they answer here straight
  * after signing in. Anyone else who reaches the card with no answer sees it too.
+ *
+ * `password` — choose a password, on its own, AFTER the email code (Ghulam,
+ * 2026-11-23: about you → business → code → password → card). The account
+ * already exists and is signed in by then: `signup-begin` was given a random
+ * stand-in the browser keeps until this screen replaces it (see
+ * `submitAccount`). Google signups never see it.
  */
-export type AccountStepMode = "create" | "tenant" | "attribution";
+export type AccountStepMode = "create" | "tenant" | "attribution" | "password";
 
 /** The identity providers a signup can start with. */
 export type OauthProvider = "google";
@@ -565,6 +588,8 @@ export interface OnboardingContextValue {
   submitTenantDetails(values: TenantFormValues): Promise<void>;
   /** `attribution`-mode submit: save the answer and carry on to the next screen. */
   submitAttribution(values: SignupAttribution): Promise<void>;
+  /** `password`-mode submit: replace the stand-in with their password, then the card. */
+  submitPassword(password: string): Promise<void>;
   /** Stash the tenant details, then hand the browser to Google. Never returns. */
   startGoogleSignup(
     values: TenantFormValues,

@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import "./turo-story.css";
+import { SectionCta } from "./section-cta";
 
 /*
  * The Turo story (Ghulam, 2026-11-10: "start with the Turo story, make it a bit dramatic", then
@@ -317,6 +318,10 @@ export function TuroStory() {
               <SafariLogo />
               Safari coming soon
             </p>
+            {/* The story's one call to action, after the fix (Ghulam, 2026-11-13). Early access, never "included". */}
+            <div className={`tso-later${by(4, 1)}`} style={{ "--i": 6 } as CSSProperties}>
+              <SectionCta tone="dark" primary="Get early access" className="tso-cta" />
+            </div>
           </Slide>
 
           <ol className="tso-progress" aria-hidden>

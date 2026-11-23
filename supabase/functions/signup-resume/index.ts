@@ -45,6 +45,10 @@ function businessDto(meta: SignupMetadata) {
     fleetSize: b.fleetSize,
     vehicleType: b.vehicleType,
     businessColours: b.businessColours,
+    // The look picked on the business page, so a resume on another device
+    // builds with the same colour and theme.
+    brandColor: b.brandColor,
+    siteTheme: b.siteTheme,
     logoUrl: b.logoUrl,
     operatingSchedule: b.operatingSchedule,
     // The user ticked this to get here; it is re-asserted on submit anyway.

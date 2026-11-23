@@ -41,15 +41,21 @@ describe("signup attribution: the answer list", () => {
 });
 
 describe("signup attribution: the form", () => {
-  it("requires an answer", () => {
-    expect(validateAttribution(EMPTY_ATTRIBUTION).heardAbout).toBeTruthy();
+  it("leaves the answer optional (2026-11-23)", () => {
+    expect(validateAttribution(EMPTY_ATTRIBUTION)).toEqual({});
     expect(attributionFromDraft(EMPTY_ATTRIBUTION)).toBeNull();
   });
 
-  it("asks what 'Other' means", () => {
+  it("takes 'Other' without saying what it was", () => {
     const draft = { ...EMPTY_ATTRIBUTION, heardAbout: "other" as const, heardAboutOther: "  " };
-    expect(validateAttribution(draft).heardAboutOther).toBeTruthy();
-    expect(attributionFromDraft(draft)).toBeNull();
+    expect(validateAttribution(draft)).toEqual({});
+    expect(attributionFromDraft(draft)).toEqual({ heardAbout: "other" });
+  });
+
+  it("sends a phone on its own when the question is skipped", () => {
+    expect(attributionFromDraft({ ...EMPTY_ATTRIBUTION, phone: "(615) 555-0100" })).toEqual({
+      phone: "(615) 555-0100",
+    });
   });
 
   it("leaves the phone optional but checks one that is typed", () => {

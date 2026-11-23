@@ -1,4 +1,5 @@
-import { AlarmClock, ArrowRight, ArrowUpRight, Check, CornerDownRight, GripHorizontal, Info, Maximize2, MoreVertical, Plus, Sparkles } from "lucide-react";
+import { AlarmClock, ArrowRight, ArrowUpRight, Check, CornerDownRight, GripHorizontal, Info, Maximize2, MoreVertical, Plus } from "lucide-react";
+import { TraxGlyph } from "@/components/shared/trax-glyph";
 import { Fragment } from "react";
 import { PortalShell } from "../screens";
 import "./dashboard.css";
@@ -307,7 +308,7 @@ export function TraxCard() {
           <span className="lift">
             <span className="cone" />
           </span>
-          <Sparkles strokeWidth={2} />
+          <TraxGlyph />
         </span>
         <Eyebrow>Your business today</Eyebrow>
         <span className="db-trax-acts">

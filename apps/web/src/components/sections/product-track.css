@@ -115,6 +115,7 @@
  */
 @media (min-width: 1100px) and (min-height: 640px) and (prefers-reduced-motion: no-preference) {
   .pt-panel .pt-intro-sub,
+  .pt-panel .pt-intro-cta,
   .pt-panel .pt-intro:not(.is-lead) .pt-intro-slot {
     opacity: 0;
     translate: 0 28px;
@@ -123,6 +124,7 @@
   }
   .pt-panel .pt-intro:not(.is-lead) .pt-intro-slot { translate: -24px 0; }
   .pt-panel.is-here .pt-intro-sub,
+  .pt-panel.is-here .pt-intro-cta,
   .pt-panel.is-here .pt-intro:not(.is-lead) .pt-intro-slot {
     opacity: 1;
     translate: 0 0;
@@ -144,6 +146,7 @@
   .pt-panel.is-here .pt-caret { animation: pt-caret 1100ms steps(1, end) calc(80ms + var(--pt-chars) * 9ms) both; }
   /* The line under it and the arrow come once the heading is typed. */
   .pt-panel.is-here .pt-intro-sub { transition-delay: calc(180ms + var(--pt-chars, 40) * 9ms); }
+  .pt-panel.is-here .pt-intro-cta { transition-delay: calc(260ms + var(--pt-chars, 40) * 9ms); }
   .pt-panel.is-here .pt-intro:not(.is-lead) .pt-intro-slot { transition-delay: calc(320ms + var(--pt-chars, 40) * 9ms); }
 
   /* The calendar's labels play in again on each arrival, a beat after the screen lands. */
@@ -980,3 +983,6 @@
   .pt-intro-title { font-size: clamp(1.75rem, 8.2vw, 2.25rem); line-height: 1.06; }
   .pt-intro-sub { margin-top: 10px; font-size: 0.9375rem; line-height: 1.45; }
 }
+
+/* The call to action under an intro's words: left, like the words. */
+.pt-intro-cta .scta { justify-content: flex-start; margin-top: clamp(22px, 2.4vw, 36px); }

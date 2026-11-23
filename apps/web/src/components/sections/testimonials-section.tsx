@@ -9,9 +9,9 @@ import "./testimonials-section.css";
 import { CAPTIONS, CaptionLine, cueAt, wordCount } from "./testimonials-captions";
 
 /*
- * The founder on film beside the reasons for building it, then operators' words below.
+ * George, Head of Customer Success, on film beside the reasons for building it, then operators' words below.
  *
- *   Films    real footage of the founder, labelled as the founder.
+ *   Films    real footage of George, labelled as Head of Customer Success (Ghulam, 2026-11-10).
  *   Quotes   only what admins publish in `operator_testimonials`, signed by that name.
  *            No faces go with them: we have no photos of these operators.
  */

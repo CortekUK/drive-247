@@ -34,19 +34,29 @@
 
 import * as React from "react";
 import {
-  ArrowLeft,
   Check,
   CheckCircle2,
   Circle,
-  KeyRound,
-  Loader2,
   MailCheck,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import {
+  ColumnActions,
+  ColumnButton,
+  ColumnLinks,
+  ONE_COLUMN,
+  RequiredMark,
+  SIGNUP_FIELDS,
+  SIGNUP_HIT,
+  SIGNUP_INPUT,
+  SIGNUP_LABEL,
+  SIGNUP_LEAD,
+  SIGNUP_QUIET,
+  SIGNUP_TITLE,
+} from "@/components/onboarding/signup-ui";
 import {
   signupResetComplete,
   signupResetRequest,
@@ -331,7 +341,9 @@ export function PasswordResetPanel({
   ) : null;
 
   return (
-    <div>
+    // Centred like every signup screen (Ghulam, 2026-11-23): one column in the
+    // middle, the heading and line centred over left-aligned fields.
+    <div className="mx-auto w-full max-w-[34rem]">
       {/*
         Mounted for the panel's whole life, empty to begin with. A live region
         that is created at the same moment its content appears is never
@@ -349,20 +361,17 @@ export function PasswordResetPanel({
           key="request"
           className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none"
         >
-          <div className="flex size-10 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/40">
-            <KeyRound className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-          </div>
           <h3
             ref={headingRef}
             tabIndex={-1}
             // No `outline-none`: this heading is focused programmatically, and
             // suppressing the indicator on the one element focus lands on leaves
             // a keyboard user with no idea where they are.
-            className="mt-4 rounded-sm text-lg font-semibold tracking-tight focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            className={cn(SIGNUP_TITLE, "rounded-sm text-center focus-visible:ring-[3px] focus-visible:ring-ring/50")}
           >
             Reset your password
           </h3>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          <p className={cn(SIGNUP_LEAD, "mx-auto mt-4 text-center")}>
             We&apos;ll email a 6-digit code to{" "}
             {/* break-all: a long address must not push the dialog sideways at 375px. */}
             <span className="font-medium break-all text-foreground max-sm:[word-break:normal] max-sm:[overflow-wrap:break-word]">{email}</span>.
@@ -371,50 +380,33 @@ export function PasswordResetPanel({
 
           {errorBanner}
 
-          <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Button
-              type="button"
-              disabled={busy}
-              onClick={() => void requestCode(false)}
-              className="bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
-            >
-              {busy ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Sending…
-                </>
-              ) : (
-                "Send reset code"
-              )}
-            </Button>
+          {/* One column like every signup screen (Ghulam, 2026-11-23). */}
+          <ColumnActions>
+            <ColumnButton type="button" busy={busy} onClick={() => void requestCode(false)}>
+              {busy ? "Sending…" : "Send reset code"}
+            </ColumnButton>
+            <ColumnLinks>
             {/*
               Without this, a user holding a code from an email they already have
               is forced to request another one to reach the box they need — and
               inside the server's 60 s window that request sends nothing at all.
             */}
-            <Button
+            <button
               type="button"
-              variant="link"
               disabled={busy}
               onClick={() => {
                 setStatus("Enter the code you already have, then choose your new password.");
                 onViewChange("verify");
               }}
-              className="text-indigo-600 dark:text-indigo-400"
+              className={cn(SIGNUP_HIT, "text-sm font-medium text-indigo-600 underline-offset-4 hover:underline disabled:opacity-50 dark:text-indigo-400")}
             >
               I already have a code
-            </Button>
-            <Button
-              type="button"
-              variant="link"
-              disabled={busy}
-              onClick={onCancel}
-              className="text-muted-foreground"
-            >
-              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <button type="button" disabled={busy} onClick={onCancel} className={cn(SIGNUP_QUIET, SIGNUP_HIT)}>
               Back to sign in
-            </Button>
-          </div>
+            </button>
+            </ColumnLinks>
+          </ColumnActions>
         </div>
       ) : (
         // ---------------------------------------------------------------------
@@ -431,10 +423,7 @@ export function PasswordResetPanel({
           noValidate
           className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none"
         >
-          <div className="flex size-10 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/40">
-            <MailCheck className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-          </div>
-          <h3 className="mt-4 text-lg font-semibold tracking-tight">
+          <h3 className={cn(SIGNUP_TITLE, "text-center")}>
             Check your email
           </h3>
           {/*
@@ -442,7 +431,7 @@ export function PasswordResetPanel({
             ineligible address, so promising "we sent you a code" would be a lie in
             those branches — and a lie that doubles as an account-existence oracle.
           */}
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          <p className={cn(SIGNUP_LEAD, "mx-auto mt-4 text-center [@media(max-height:619px)]:hidden")}>
             If{" "}
             <span className="font-medium break-all text-foreground max-sm:[word-break:normal] max-sm:[overflow-wrap:break-word]">{email}</span>{" "}
             can be reset from here, a 6-digit code is on its way. Enter it below
@@ -457,14 +446,18 @@ export function PasswordResetPanel({
             </p>
           )}
 
-          <div className="mt-5 space-y-4">
+          <div className={cn(SIGNUP_FIELDS, ONE_COLUMN, "mt-8")}>
             {/*
               A username field the password manager can attach the new password
               to. `readOnly`, not `disabled`: a disabled input is skipped by
               autofill, which is exactly the association we are here to make.
             */}
-            <div>
-              <Label htmlFor="signup-reset-email">Email</Label>
+            {/* Kept for the password manager, out of sight: the line above
+                already names the address, and the screen has to fit a phone
+                (Ghulam, 2026-11-23). `sr-only`, not `hidden`, so autofill
+                still finds it. */}
+            <div className="sr-only">
+              <Label htmlFor="signup-reset-email" className={SIGNUP_LABEL}>Email</Label>
               <Input
                 id="signup-reset-email"
                 name="username"
@@ -472,12 +465,16 @@ export function PasswordResetPanel({
                 autoComplete="username"
                 value={email}
                 readOnly
-                className="mt-1.5 h-10 bg-muted/40"
+                tabIndex={-1}
+                className={cn(SIGNUP_INPUT, "mt-1 text-muted-foreground")}
               />
             </div>
 
             <div>
-              <Label htmlFor="signup-reset-code">6-digit code</Label>
+              <Label htmlFor="signup-reset-code" className={SIGNUP_LABEL}>
+                6-digit code
+                <RequiredMark />
+              </Label>
               <Input
                 ref={codeRef}
                 id="signup-reset-code"
@@ -494,19 +491,22 @@ export function PasswordResetPanel({
                   setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
                   setError(null);
                 }}
-                className="mt-1.5 h-10 font-mono text-lg tracking-[0.4em]"
+                className={cn(SIGNUP_INPUT, "mt-1 font-mono tracking-[0.4em]")}
               />
               <p
                 id="signup-reset-code-hint"
-                className="mt-1.5 text-xs text-muted-foreground"
+                className="mt-1.5 text-xs text-muted-foreground [@media(max-height:700px)]:hidden"
               >
                 Expires 15 minutes after it was sent.
               </p>
             </div>
 
             <div>
-              <Label htmlFor="signup-reset-password">New password</Label>
-              <div className="relative mt-1.5">
+              <Label htmlFor="signup-reset-password" className={SIGNUP_LABEL}>
+                New password
+                <RequiredMark />
+              </Label>
+              <div className="relative mt-1">
                 <Input
                   id="signup-reset-password"
                   type={showPassword ? "text" : "password"}
@@ -524,7 +524,7 @@ export function PasswordResetPanel({
                     setError(null);
                   }}
                   onBlur={() => setTouched((t) => ({ ...t, password: true }))}
-                  className="h-10 pr-10"
+                  className={cn(SIGNUP_INPUT, "pr-12")}
                 />
                 <PasswordToggle
                   shown={showPassword}
@@ -543,7 +543,7 @@ export function PasswordResetPanel({
               <div
                 id="signup-reset-password-rules"
                 aria-live="polite"
-                className="mt-2.5 space-y-1.5"
+                className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-1.5"
               >
                 {rules.map(({ rule, met }) => (
                   <p
@@ -566,7 +566,7 @@ export function PasswordResetPanel({
                 ))}
 
                 {password.length > 0 && (
-                  <div className="flex items-center gap-2 pt-0.5">
+                  <div className="col-span-2 flex items-center gap-2 pt-0.5">
                     <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
                       <div
                         className={cn(
@@ -601,8 +601,11 @@ export function PasswordResetPanel({
             </div>
 
             <div>
-              <Label htmlFor="signup-reset-confirm">Confirm new password</Label>
-              <div className="relative mt-1.5">
+              <Label htmlFor="signup-reset-confirm" className={SIGNUP_LABEL}>
+                Confirm new password
+                <RequiredMark />
+              </Label>
+              <div className="relative mt-1">
                 <Input
                   id="signup-reset-confirm"
                   type={showConfirm ? "text" : "password"}
@@ -618,7 +621,7 @@ export function PasswordResetPanel({
                     setError(null);
                   }}
                   onBlur={() => setTouched((t) => ({ ...t, confirm: true }))}
-                  className="h-10 pr-10"
+                  className={cn(SIGNUP_INPUT, "pr-12")}
                 />
                 <PasswordToggle
                   shown={showConfirm}
@@ -640,21 +643,11 @@ export function PasswordResetPanel({
 
           {errorBanner}
 
-          <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Button
-              type="submit"
-              disabled={!canSubmit}
-              className="bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
-            >
-              {busy ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Updating…
-                </>
-              ) : (
-                "Set new password"
-              )}
-            </Button>
+          <ColumnActions>
+            <ColumnButton busy={busy} disabled={!canSubmit}>
+              {busy ? "Updating…" : "Set new password"}
+            </ColumnButton>
+            <ColumnLinks>
             {/*
               `aria-disabled` + an early return, never `disabled`. A disabled
               button leaves the tab order, so the countdown that was its only
@@ -663,9 +656,8 @@ export function PasswordResetPanel({
               focusable, keeps its name, and explains itself through the hint
               below, which the button is described by.
             */}
-            <Button
+            <button
               type="button"
-              variant="link"
               aria-disabled={busy || cooling}
               aria-describedby="signup-reset-resend-hint"
               onClick={() => {
@@ -678,27 +670,22 @@ export function PasswordResetPanel({
                 void requestCode(true);
               }}
               className={cn(
-                "text-indigo-600 dark:text-indigo-400",
+                SIGNUP_HIT,
+                "text-sm font-medium text-indigo-600 underline-offset-4 hover:underline dark:text-indigo-400",
                 (busy || cooling) && "opacity-60 hover:no-underline",
               )}
             >
               Resend code
-            </Button>
-            <Button
-              type="button"
-              variant="link"
-              disabled={busy}
-              onClick={onCancel}
-              className="text-muted-foreground"
-            >
-              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <button type="button" disabled={busy} onClick={onCancel} className={cn(SIGNUP_QUIET, SIGNUP_HIT)}>
               Back to sign in
-            </Button>
-          </div>
+            </button>
+            </ColumnLinks>
+          </ColumnActions>
 
           <p
             id="signup-reset-resend-hint"
-            className="mt-2 text-xs text-muted-foreground"
+            className="mx-auto mt-2 max-w-[28rem] text-center text-xs text-muted-foreground [@media(max-height:700px)]:hidden"
           >
             {cooling
               ? `You can ask for another code in ${remaining}s. Codes take a moment to arrive — check your spam folder first.`

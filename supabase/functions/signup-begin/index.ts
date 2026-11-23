@@ -27,7 +27,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { fetchSignupPlan } from "../_shared/signup-plans.ts";
 import { isParkedRow, readRehearsalFor, signupModeFor } from "../_shared/signup-rehearsal.ts";
-import { mintOtp, otpEmailHtml, otpSubject } from "../_shared/signup-otp.ts";
+import { mintOtp, otpEmailHtml, otpEmailText, otpSubject } from "../_shared/signup-otp.ts";
 import { DRIVE247_SENDER } from "../_shared/drive247-email.ts";
 import { sendResendEmail } from "../_shared/resend-service.ts";
 import {
@@ -475,7 +475,7 @@ Deno.serve(async (req) => {
           app_metadata: { d247_signup: { ...meta, otp } },
         });
         const sent = await sendResendEmail(
-          { to: email, subject: otpSubject(otpCode), html: otpEmailHtml(otpCode), ...DRIVE247_SENDER, source: "signup-begin" },
+          { to: email, subject: otpSubject(otpCode), html: otpEmailHtml(otpCode), text: otpEmailText(otpCode), ...DRIVE247_SENDER, source: "signup-begin" },
           supabase,
         );
         if (!sent?.success) console.error(`${LOG} OTP email not delivered for ${created.user.id}`);

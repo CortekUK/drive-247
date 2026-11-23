@@ -2,6 +2,7 @@ import { StoryPoster } from "@/components/content/story-poster";
 import { STORIES } from "@/content/stories";
 import "@/components/content/content.css";
 import { Accent, SectionHeading } from "./section-heading";
+import { SectionCta } from "./section-cta";
 
 /*
  * Customer stories: three cards, each opening its own page under /customers. Renders
@@ -41,6 +42,8 @@ export function StoriesSection() {
         <div className="st-rail" aria-hidden>
           <i />
         </div>
+        {/* The last push before Launch and Pricing (Ghulam, 2026-11-13) */}
+        <SectionCta align="left" primary="Start your story" />
       </div>
     </section>
   );

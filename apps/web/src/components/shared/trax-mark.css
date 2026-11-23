@@ -26,10 +26,10 @@
 .tm-mark-fill {
   position: absolute;
   inset: -25%;
-  background: conic-gradient(from 180deg, hsl(var(--v2-chart-2)), hsl(var(--v2-primary)), hsl(var(--v2-chart-4)), hsl(var(--v2-chart-1)), hsl(var(--v2-chart-2)));
+  background: radial-gradient(circle at center, hsl(0 0% 100% / 0.22), transparent 38%), linear-gradient(145deg, hsl(var(--v2-chart-2)), hsl(var(--v2-primary)));
 }
 .dark .tm-mark-fill {
-  background: conic-gradient(from 180deg, hsl(var(--v2-chart-2)), hsl(var(--v2-chart-3)), hsl(var(--v2-chart-1)), hsl(var(--v2-chart-4)), hsl(var(--v2-chart-2)));
+  background: radial-gradient(circle at center, hsl(0 0% 100% / 0.18), transparent 38%), linear-gradient(145deg, hsl(var(--v2-chart-2)), hsl(var(--v2-chart-3)));
 }
 .tm-mark[data-animated="true"] .tm-mark-fill { animation: tm-spin 12s linear infinite; }
 .tm-mark-halo {

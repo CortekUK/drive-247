@@ -129,10 +129,12 @@ describe("3c. the plan", () => {
     expect(provider).toMatch(/entryPlanId\(plans\)/);
   });
 
-  it("the payment step always offers Change plan, from the live catalogue", () => {
+  it("the payment step always shows every plan, from the live catalogue", () => {
     expect(screen).toMatch(/plans=\{plans\}/);
     expect(screen).toMatch(/onChangePlan=\{changePlan\}/);
-    expect(payment).toMatch(/Change plan/);
+    // On show, not behind a "Change plan" toggle (2026-11-23).
+    expect(payment).toMatch(/<PlanPicker/);
+    expect(payment).not.toMatch(/planPickerOpen/);
     expect(payment).toMatch(/formatPlanPriceUsd\(p\)/);
   });
 
@@ -150,7 +152,10 @@ describe("3d. the reminder line", () => {
 });
 
 describe("3e. the purple button on a phone", () => {
-  it("is pinned to the bottom of the card on the payment step", () => {
-    expect(screen).toMatch(/paymentColumns &&\s*"max-sm:sticky max-sm:bottom-0/);
+  // Since 2026-11-23 the button lives in the footer row (the onboarding
+  // questions' look), and that row is pinned to the bottom on phones on every
+  // step, the card step included.
+  it("is pinned to the bottom of the screen on a phone", () => {
+    expect(screen).toMatch(/<footer className="sticky bottom-0[^"]*sm:static/);
   });
 });

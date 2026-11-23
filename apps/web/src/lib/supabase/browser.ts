@@ -2,6 +2,7 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import { consumeFreshStart } from "@/components/onboarding/fresh-start";
 import { createMockAuth, isMockSignup } from "@/components/onboarding/mock-signup";
 
 let _client: SupabaseClient | null = null;
@@ -58,6 +59,9 @@ export function getBrowserSupabase(): SupabaseClient {
 
 function getRealBrowserSupabase(): SupabaseClient {
   if (_client) return _client;
+  // `?fresh=1` signs the browser out by clearing the stored session, so that
+  // has to happen before the client first reads it (fresh-start.ts).
+  consumeFreshStart();
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anon) {

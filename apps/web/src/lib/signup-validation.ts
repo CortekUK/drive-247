@@ -48,7 +48,6 @@ export type AccountField =
   | "email"
   | "heardAbout"
   | "heardAboutOther"
-  | "fleetSize"
   | "phone"
   | "password"
   | "companyName"
@@ -621,7 +620,6 @@ export const ACCOUNT_FIELD_ORDER: readonly AccountField[] = [
   "email",
   "heardAbout",
   "heardAboutOther",
-  "fleetSize",
   "phone",
   "password",
   "companyName",

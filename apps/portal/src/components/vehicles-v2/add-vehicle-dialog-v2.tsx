@@ -58,7 +58,7 @@ import { Button } from "@/components/ui-v2/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger, PHONE_SCREEN_DIALOG } from "@/components/ui-v2/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import { useTraxPrice } from "@/hooks/use-trax-price";
-import { TraxIcon } from "@/components/chat/TraxIcon";
+import { TraxIcon } from "@/components/trax/trax-glyph";
 import { Cell, CONTROL, FORM_DIALOG_WASH, Segmented, StepFooter, ToggleTile, TWINKLE_CSS } from "@/components/shared/form-grid-v2";
 import {
   AddVehicleAddedArt,

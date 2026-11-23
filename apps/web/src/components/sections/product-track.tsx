@@ -76,7 +76,7 @@ function Typed({ children }: { children: ReactNode }) {
   );
 }
 
-export function TrackIntro({ title = CALENDAR_TITLE, sub = CALENDAR_SUB, lead = true }: { title?: ReactNode; sub?: ReactNode; lead?: boolean }) {
+export function TrackIntro({ title = CALENDAR_TITLE, sub = CALENDAR_SUB, lead = true, cta }: { title?: ReactNode; sub?: ReactNode; lead?: boolean; cta?: ReactNode }) {
   return (
     <div className={`pt-intro${lead ? " is-lead" : ""}`} style={{ "--pt-chars": plainText(title).replace(/\s/g, "").length } as CSSProperties}>
       {lead && (
@@ -112,6 +112,8 @@ export function TrackIntro({ title = CALENDAR_TITLE, sub = CALENDAR_SUB, lead = 
             <Typed>{title}</Typed>
           </h2>
           <p className="pt-intro-sub">{sub}</p>
+          {/* Optional call to action under the words (the last screen's, Ghulam 2026-11-13) */}
+          {cta && <div className="pt-intro-cta">{cta}</div>}
         </div>
         <div className="pt-intro-slot" aria-hidden>
           {lead ? (

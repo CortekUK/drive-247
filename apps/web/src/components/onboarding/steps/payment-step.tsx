@@ -24,7 +24,7 @@ import * as React from "react";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import type { Stripe, StripeElementsOptions } from "@stripe/stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
-import { Check, CreditCard, Loader2, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Check, ChevronRight, CreditCard, Loader2, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useTheme } from "next-themes";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -47,7 +47,7 @@ import {
 import { formatPlanPriceUsd, type SignupPlan, type SignupPlanId } from "@/lib/plans";
 import type { PromoOffer } from "@/lib/promo-offer";
 import { readReferralCodeFromDocument } from "@/lib/referral-cookie";
-import { ScreenHead, SIGNUP_ENTER } from "@/components/onboarding/signup-ui";
+import { ColumnButton, ScreenHead, SIGNUP_LABEL } from "@/components/onboarding/signup-ui";
 
 /** "13 Oct 2026" — the day a trial ends and the card is first charged. */
 function formatDay(iso: string | null): string | null {
@@ -243,7 +243,6 @@ export function PaymentStep({
   plans = [],
   onChangePlan,
 }: PaymentStepProps) {
-  const [planPickerOpen, setPlanPickerOpen] = React.useState(false);
   // Plans you can switch to: the live catalogue, with the current plan in it.
   const switchable = plans.length > 1 && onChangePlan ? plans : [];
   const wide = useWideFlag(onWideChange);
@@ -366,21 +365,38 @@ export function PaymentStep({
         fontSizeBase: phone ? "16px" : "15px",
         fontWeightNormal: "400",
         fontWeightMedium: "500",
-        borderRadius: "12px",
+        borderRadius: "0px",
         spacingUnit: "4px",
       },
+      // The signup's fields are bare underlines (the portal's onboarding
+      // questions), so the card fields are too: no box, a rule that turns
+      // indigo and thickens on focus, the label small and muted above it.
       rules: {
-        ".Label": { fontWeight: "500", marginBottom: "6px" },
+        ".Label": {
+          fontWeight: "500",
+          fontSize: "13px",
+          marginBottom: "4px",
+          color: dark ? "#a1a1aa" : "#71717a",
+        },
         ".Input": {
-          border: `1px solid ${dark ? "#3f3f46" : "#e4e4e7"}`,
+          border: "none",
+          borderBottom: `1px solid ${dark ? "rgba(255,255,255,0.15)" : "rgba(24,24,27,0.15)"}`,
+          borderRadius: "0px",
+          backgroundColor: "transparent",
           boxShadow: "none",
-          padding: "13px 16px",
+          padding: "12px 0px",
+          fontSize: phone ? "17px" : "18px",
         },
         ".Input:focus": {
-          border: `1px solid ${brand}`,
-          boxShadow: `0 0 0 3px ${dark ? "rgba(99,102,241,0.30)" : "rgba(79,70,229,0.15)"}`,
+          border: "none",
+          borderBottom: `1px solid ${brand}`,
+          boxShadow: `inset 0 -1px 0 0 ${brand}`,
         },
-        ".Input--invalid": { border: `1px solid ${dark ? "#f87171" : "#dc2626"}`, boxShadow: "none" },
+        ".Input--invalid": {
+          border: "none",
+          borderBottom: `1px solid ${dark ? "#f87171" : "#dc2626"}`,
+          boxShadow: "none",
+        },
         ".Tab": { border: `1px solid ${dark ? "#3f3f46" : "#e4e4e7"}`, boxShadow: "none" },
         ".Tab--selected": { border: `1px solid ${brand}`, color: brand },
       },
@@ -453,42 +469,71 @@ export function PaymentStep({
     !error;
 
   return (
-    // One narrow column while Stripe shows the compact Link view. When the full
-    // card form opens it is too tall for that, so on a laptop the screen goes
-    // two-column: what they are buying on the left, the card on the right.
-    <div className={cn(SIGNUP_ENTER, wide.on && "lg:grid lg:grid-cols-2 lg:items-start lg:gap-10")}>
-      <div className="min-w-0">
+    // Centred (Ghulam, 2026-11-23): the heading across the top, then two
+    // columns on a laptop, what they are buying on the left and the card on
+    // the right. One centred column on a phone.
+    <div>
       <ScreenHead
         title={ownerName.trim() ? `Last step, ${ownerName.trim().split(/\s+/)[0]}` : "Last step"}
       />
 
-      {/* Order summary — the last place the price is shown before it is taken. */}
-      <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-white px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]">
+      <div className="mx-auto mt-10 w-full max-w-[66rem] lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] lg:items-start lg:gap-16">
+      <div className="min-w-0">
+      <div className="signup-rise signup-rise-3 mx-auto max-w-[34rem] lg:mx-0">
+      {/*
+        Every plan, always on show (Ghulam, 2026-11-23: "you should be able to
+        see the plans in that same UI"). The plans differ only in fleet size,
+        so that is all each row says, beside its price. A tap switches the
+        plan, as "Change plan" used to (a new intent for the new price).
+      */}
+      {switchable.length > 0 && (
+        <>
+          {/* A label like Stripe's "Card number" on the right (same size,
+              weight and grey), so the two columns start on one line. */}
+          <p id="signup-plan-label" className={cn(SIGNUP_LABEL, "mb-1")}>
+            Plan
+          </p>
+          {/* The pills reach 16px past the column on each side, so the words
+              inside them line up with everything under them (Ghulam,
+              2026-11-23: "the alignment"). */}
+          <div className="-mx-4">
+            <PlanPicker
+              plans={switchable}
+              currentId={plan.id}
+              busy={busy}
+              onPick={(id) => {
+                if (id !== plan.id) onChangePlan?.(id);
+              }}
+            />
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Every plan has everything. Pick the one that fits your fleet.
+          </p>
+        </>
+      )}
+
+      {/* Order summary — the last place the price is shown before it is taken.
+          Flat, between two hairlines, like everything else on the page. With
+          the plans listed it is kept only for a free trial ("$0 today, then
+          $129/month"); otherwise the timeline below already says what is paid
+          today, and the row would say it twice. */}
+      {(switchable.length === 0 || isTrial) && (
+      <div className={cn("flex items-center justify-between gap-4 border-y border-foreground/10 py-4 dark:border-white/10", switchable.length > 0 && "mt-4")}>
         <div className="min-w-0">
-          <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
-            {plan.name}
+          <p className="flex flex-wrap items-center gap-2 text-[17px] font-medium">
+            {/* With the plans listed above, the name and fleet size would only
+                repeat the ticked row: this line is about the money. */}
+            {switchable.length > 0 ? "Due today" : plan.name}
             {mode === "test" && (
               <Badge variant="outline" className="text-[10px] tracking-wide">
                 TEST MODE
               </Badge>
             )}
           </p>
-          <p className="mt-0.5 text-xs text-muted-foreground max-sm:whitespace-nowrap">
-            {plan.fleetBand}
-          </p>
-          {/* Always offered before paying: a signup that started from a
-              button with no plan on it must be able to pick the right one. */}
-          {switchable.length > 0 && (
-            <button
-              type="button"
-              disabled={busy}
-              aria-expanded={planPickerOpen}
-              aria-controls="signup-plan-picker"
-              onClick={() => setPlanPickerOpen((v) => !v)}
-              className="relative mt-0.5 text-xs font-medium text-indigo-600 underline-offset-4 hover:underline disabled:opacity-50 max-sm:after:absolute max-sm:after:-inset-x-2 max-sm:after:-inset-y-2 max-sm:after:content-[''] dark:text-indigo-400"
-            >
-              {planPickerOpen ? "Keep this plan" : "Change plan"}
-            </button>
+          {switchable.length > 0 ? null : (
+            <p className="mt-0.5 text-xs text-muted-foreground max-sm:whitespace-nowrap">
+              {plan.fleetBand}
+            </p>
           )}
         </div>
         {isTrial ? (
@@ -519,17 +564,6 @@ export function PaymentStep({
           </div>
         )}
       </div>
-
-      {planPickerOpen && switchable.length > 0 && (
-        <PlanPicker
-          plans={switchable}
-          currentId={plan.id}
-          busy={busy}
-          onPick={(id) => {
-            setPlanPickerOpen(false);
-            if (id !== plan.id) onChangePlan?.(id);
-          }}
-        />
       )}
 
       {isTrial && (
@@ -613,8 +647,9 @@ export function PaymentStep({
       )}
 
       </div>
+      </div>
 
-      <div className={cn("mt-4 min-w-0", wide.on && "lg:mt-1")}>
+      <div className="signup-rise signup-rise-4 mx-auto mt-10 w-full min-w-0 max-w-[34rem] lg:mx-0 lg:mt-0 lg:max-w-none">
       {isConfigError || isUnexplainedGap ? (
         <ConfigurationErrorPanel />
       ) : stripeJs === "failed" ? (
@@ -648,6 +683,30 @@ export function PaymentStep({
         </Elements>
       )}
 
+      {/*
+        The money button, under the card and lined up with it (Ghulam,
+        2026-11-23), no longer in the footer's corner. It keeps its words
+        because it starts a trial on their card, or takes money. Outside
+        <Elements>, so it submits the card form by its id; every branch above
+        renders `signup-payment-form`. Nothing to press until there is an intent
+        to confirm, and none at all when the step cannot take payment.
+      */}
+      {!(isConfigError || isUnexplainedGap) && (
+        <div className="mt-6">
+          <ColumnButton form="signup-payment-form" busy={busy} disabled={!clientSecret}>
+            {busy ? (
+              isTrial ? "Saving your card…" : "Processing payment…"
+            ) : (
+              <>
+                {isTrial ? `Start my ${trialDays}-day free trial` : `Pay $${plan.priceUsd} and build my portal`}
+                <ChevronRight className="size-4" />
+              </>
+            )}
+          </ColumnButton>
+        </div>
+      )}
+
+      </div>
       </div>
     </div>
   );
@@ -1357,14 +1416,14 @@ export function DiscountCodeFields({
           autoComplete="off"
           spellCheck={false}
           maxLength={64}
-          className="h-9 font-mono text-sm uppercase placeholder:font-sans placeholder:normal-case max-sm:h-11 max-sm:text-base"
+          className="h-10 rounded-none border-0 border-b border-foreground/15 bg-transparent px-0 font-mono text-sm uppercase shadow-none placeholder:font-sans placeholder:normal-case focus-visible:border-indigo-600 focus-visible:ring-0 max-sm:h-11 max-sm:text-base dark:border-white/15 dark:bg-transparent"
         />
         {showingApplied ? (
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="h-9 shrink-0 max-sm:h-11 max-sm:px-4"
+            className="h-9 shrink-0 rounded-full px-4 max-sm:h-11"
             disabled={pending || busy}
             onClick={() => void remove()}
           >
@@ -1375,7 +1434,7 @@ export function DiscountCodeFields({
             type="submit"
             variant="outline"
             size="sm"
-            className="h-9 shrink-0 max-sm:h-11 max-sm:px-4"
+            className="h-9 shrink-0 rounded-full px-4 max-sm:h-11"
             disabled={!value.trim() || pending || busy}
           >
             {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : "Apply"}
@@ -1397,8 +1456,8 @@ export function DiscountCodeFields({
 }
 
 /**
- * "Change plan" on the payment step: every plan in the live catalogue, with
- * the one being bought ticked. Picking another mints a new intent for it
+ * The plans on the payment step, always on show: every plan in the live
+ * catalogue, with the one being bought ticked. Picking another mints a new intent for it
  * (the provider's `changePlan`; the server cancels the old incomplete
  * subscription, so two can never be live). Names, bands and prices come from
  * the catalogue the pricing cards were rendered from, never from copy here.
@@ -1418,8 +1477,8 @@ export function PlanPicker({
     <div
       id="signup-plan-picker"
       role="radiogroup"
-      aria-label="Choose a plan"
-      className={cn("mt-2 grid gap-1.5", SIGNUP_ENTER)}
+      aria-labelledby="signup-plan-label"
+      className="grid gap-1"
     >
       {plans.map((p) => {
         const selected = p.id === currentId;
@@ -1432,10 +1491,11 @@ export function PlanPicker({
             disabled={busy}
             onClick={() => onPick(p.id)}
             className={cn(
-              "flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2 text-left transition-colors duration-200 ease-out disabled:opacity-60 motion-reduce:transition-none",
+              // The questions' answer rows: the chosen one on a light wash.
+              "flex items-center justify-between gap-3 rounded-full py-2 pr-4 pl-4 text-left transition-colors duration-200 ease-out disabled:opacity-60 motion-reduce:transition-none",
               selected
-                ? "border-indigo-500 bg-indigo-50/60 dark:border-indigo-400 dark:bg-indigo-500/10"
-                : "border-zinc-200 bg-white hover:border-zinc-300 dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-white/20",
+                ? "bg-indigo-600/[0.08] ring-1 ring-indigo-600/25 dark:bg-indigo-400/[0.12] dark:ring-indigo-400/30"
+                : "hover:bg-foreground/[0.03]",
             )}
           >
             <span className="min-w-0">

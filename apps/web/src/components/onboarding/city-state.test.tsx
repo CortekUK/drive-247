@@ -117,7 +117,10 @@ describe("city and state: on the business page", () => {
     expect(city.placeholder).toBe("e.g. Houston, TX");
     expect(city.maxLength).toBe(80);
     expect(city.className).toBe(company.className);
-    expect(container.querySelector('label[for="signup-city-state"]')?.textContent).toBe("City and state");
+    // Required, so the label carries the star (2026-11-23).
+    expect(container.querySelector('label[for="signup-city-state"]')?.textContent).toBe("City and state* (required)");
+    // Picked from a list as it is typed (city-state-field.tsx).
+    expect(city.getAttribute("role")).toBe("combobox");
   });
 
   it("hands what is typed to the business draft", () => {
@@ -158,7 +161,8 @@ describe("city and state: wherever the business is asked", () => {
     expect(account).toMatch(/const cityError = validateCityState\(tenant\.cityState\);/);
     // Both screens pass the address `repairSlug` rebuilt, if any (2026-11-22).
     expect(account).toMatch(/const found = tenantErrors\(repairedSlug\);/);
-    expect(account).toMatch(/\.\.\.\(tenantErrors\(repairedSlug\) \?\? \{\}\),/);
+    // The business page checks it before it sends the form and the code.
+    expect(account).toMatch(/page === BUSINESS_PAGE \? \(tenantErrors\(repairedSlug\) \?\? \{\}\)/);
   });
 });
 

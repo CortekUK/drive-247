@@ -2,10 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { ArrowLeft, Info, Loader2, Lock, RotateCcw, TriangleAlert, X } from "lucide-react";
+import { Info, Loader2, RotateCcw, TriangleAlert, X } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import { useOnboarding, useOnboardingShell } from "./onboarding-provider";
@@ -15,22 +14,29 @@ import {
   type SignupErrorCode,
   type SignupStep,
 } from "./onboarding-types";
-import { ACCOUNT_PAGE_COUNT, AccountStep, type ResetShellState } from "./steps/account-step";
+import { AccountStep, type ResetShellState } from "./steps/account-step";
 import { EXIT_OFFER_CODE, isExitIntent, isPhoneLike, shouldShowExitOffer } from "./exit-offer";
 import { ExitOfferPanel, type FinishLaterState } from "./exit-offer-panel";
 import { PaymentStep } from "./steps/payment-step";
 import { VerifyStep } from "./steps/verify-step";
-import { SignupDoodles } from "./signup-doodles";
-import { SignupWash, SIGNUP_CARD, SIGNUP_ENTER, SIGNUP_HIT, SIGNUP_PRIMARY, SIGNUP_QUIET } from "./signup-ui";
+import {
+  FooterSlotProvider,
+  SignupWash,
+  StepLines,
+  SIGNUP_ENTER,
+} from "./signup-ui";
 
 /**
  * The self-serve signup, full screen.
  *
  * It takes over the page the moment a plan is picked and stays until the
- * provisioning overlay takes over from it. One idea per screen, stacked and
- * centred: a picture, a headline, one line from Trax, the fields, and one
- * button. The account form is three short pages (who you are → a password →
- * the business) instead of one long scroll, then payment.
+ * provisioning overlay takes over from it. Since 2026-11-23 it wears the look
+ * of the portal's onboarding questions (see signup-ui.tsx): no card, a
+ * display-size heading on the page wash, the fields as underlines, and the
+ * chrome in the bottom corner (progress lines on the left, the two angle
+ * brackets, back and forward, on the right). The order is the one agreed on
+ * 2026-11-23: who you are → the business (which creates the account and sends
+ * the code) → the email code → a password → the card.
  *
  * Only the LOOK changed when this replaced the old dialog. Every decision —
  * which step is showing, when closing needs confirming, what the primary
@@ -43,22 +49,12 @@ import { SignupWash, SIGNUP_CARD, SIGNUP_ENTER, SIGNUP_HIT, SIGNUP_PRIMARY, SIGN
  */
 
 /**
- * One form id per step. The single primary button sits below the step and
- * submits the active step's form by id, which is the only way to keep
- * `useStripe()`/`useElements()` inside `<Elements>` while the button that
- * triggers them lives outside it.
+ * The progress lines, one per screen in the order they come (Ghulam,
+ * 2026-11-23): the two account pages, the email code, the password, then the
+ * card. The Google return's business-only screen sits on the business line;
+ * Google skips the code and the password.
  */
-const FORM_IDS: Record<"account" | "payment", string> = {
-  account: "signup-account-form",
-  payment: "signup-payment-form",
-};
-
-/**
- * The progress dots: the three account pages, then payment. The code screen
- * and the Google return's "one last thing" both sit on the business dot —
- * they are gates between stages, not stages of their own.
- */
-const PROGRESS_LABELS = ["You", "Password", "Your business", "Payment"] as const;
+const PROGRESS_LABELS = ["You", "Your business", "Email code", "Password", "Card"] as const;
 
 type DialogStep = "account" | "payment";
 
@@ -102,6 +98,7 @@ export function OnboardingScreen() {
     applyPromoCode,
     submitTenantDetails,
     submitAttribution,
+    submitPassword,
     startGoogleSignup,
     verifyEmailCode,
     resendEmailCode,
@@ -119,7 +116,6 @@ export function OnboardingScreen() {
     plans,
     verifySentAt,
     changePlan,
-    chooseFleetSize,
     exitOfferSeen,
     noteExitOfferShown,
     trackExitOffer,
@@ -139,10 +135,13 @@ export function OnboardingScreen() {
     busy: false,
   });
 
-  /** Which page of the create-account form is showing (0 you, 1 password, 2 business). */
+  /** Which page of the create-account form is showing (0 you, 1 business, 2 password). */
   const [accountPage, setAccountPage] = useState(0);
-  /** The payment step's full card form is open (see PaymentStepProps.onWideChange). */
-  const [paymentWide, setPaymentWide] = useState(false);
+  /**
+   * The footer's action slot (see FooterAction in signup-ui.tsx). State, not a
+   * ref, so the screens that portal into it re-render once it exists.
+   */
+  const [footerSlot, setFooterSlot] = useState<HTMLDivElement | null>(null);
 
   // Memoised so the step receives a stable identity.
   const clearStepError = useCallback(() => setError(null), [setError]);
@@ -380,72 +379,30 @@ export function OnboardingScreen() {
 
   if (!plan || !dialogStep) return null;
 
-  /** The create-account pages are only in play on the plain create form. */
-  const paymentColumns = dialogStep === "payment" && !exitOffer;
-  const paymentTwoCol = paymentColumns && paymentWide;
   const paging = dialogStep === "account" && step !== "verify" && !state.signInPrompt && accountMode === "create";
-  const onBusinessPage = paging && accountPage === ACCOUNT_PAGE_COUNT - 1;
+  const onPasswordScreen =
+    dialogStep === "account" && step !== "verify" && !state.signInPrompt && accountMode === "password";
 
   const progressIndex =
     dialogStep === "payment"
-      ? 3
-      : step === "verify" || accountMode === "tenant"
-        ? 2
-        : paging
-          ? accountPage
-          : 0;
+      ? 4
+      : onPasswordScreen
+        ? 3
+        : step === "verify"
+          ? 2
+          : accountMode === "tenant"
+            ? 1
+            : paging
+              ? accountPage
+              : 0;
 
-  const primary =
-    dialogStep === "account"
-      ? accountMode === "tenant"
-        ? state.payment.paid
-          ? { label: "Build my portal", busyLabel: "Setting up…" }
-          : { label: "Continue to payment", busyLabel: "Saving…" }
-        : accountMode === "attribution"
-          ? { label: "Continue", busyLabel: "Saving…" }
-        : onBusinessPage
-          ? { label: "Continue to payment", busyLabel: "Creating your account…" }
-          : { label: "Continue", busyLabel: "Working…" }
-      : state.payment.intentType === "setup"
-        ? // Free trial: the server said so (it created a trialing subscription),
-          // so the button never promises a trial the server did not grant.
-          {
-            label: `Start my ${state.payment.trialDays}-day free trial`,
-            busyLabel: "Saving your card…",
-          }
-        : { label: `Pay $${plan.priceUsd} and build my portal`, busyLabel: "Processing payment…" };
-
-  // Screens that carry their own buttons own the whole decision: the code
-  // screen submits itself, the sign-in panel has its own Continue, and the two
-  // dead ends below offer different actions entirely.
-  const primaryHidden =
-    step === "verify" ||
-    (dialogStep === "account" && Boolean(state.signInPrompt)) ||
-    (dialogStep === "account" && state.error?.code === "EMAIL_IS_STAFF") ||
-    (dialogStep === "account" && accountReset.open) ||
-    // The first account page draws its own Continue above Google.
-    (paging && accountPage === 0 && !accountReset.open) ||
-    (dialogStep === "payment" && state.error?.code === "CONFIG_MISSING");
-
-  /**
-   * The Terms checkbox gates the primary button rather than failing on press.
-   * Accepting the Terms and the Privacy Policy is a legal precondition, so the
-   * button only looks pressable once it is ticked. Scoped to the screens that
-   * actually SHOW the checkbox: the business page and the Google return's
-   * "one last thing".
+  /*
+   * No button in the footer any more (Ghulam, 2026-11-23). Every screen draws
+   * its own under its fields (signup-ui.tsx ColumnActions), and the card step
+   * its trial / pay button under the card (payment-step.tsx). The footer is
+   * the progress, plus any text action a screen hands it (FooterAction).
    */
-  const consentPending =
-    (onBusinessPage || (dialogStep === "account" && accountMode === "tenant" && !state.signInPrompt)) &&
-    !state.business.acceptedTerms;
 
-  const primaryDisabled =
-    state.busy ||
-    resolving ||
-    consentPending ||
-    // Nothing to submit until the PaymentElement has an intent to confirm.
-    (dialogStep === "payment" && !state.payment.clientSecret);
-
-  const canGoBack = paging && accountPage > 0;
   // Keyed per STEP only. The account pages animate inside AccountStep: keying
   // this wrapper by page would remount the step and throw away everything
   // typed on the pages before.
@@ -475,7 +432,9 @@ export function OnboardingScreen() {
           }}
           onInteractOutside={(e) => e.preventDefault()}
           className={cn(
-            "fixed inset-0 z-[200] flex flex-col bg-white text-foreground outline-none dark:bg-[#0e0e14]",
+            // The questions' screen: the whole viewport, scrolling as one page
+            // when a screen is taller than the window (a phone, the card form).
+            "fixed inset-0 z-[200] overflow-y-auto overscroll-contain bg-white text-foreground outline-none dark:bg-[#0e0e14]",
             "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-200 data-[state=open]:ease-out",
             "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-200 data-[state=closed]:ease-in",
             "motion-reduce:animate-none!",
@@ -483,30 +442,8 @@ export function OnboardingScreen() {
             "[&_button:not(:disabled)]:cursor-pointer [&_a[href]]:cursor-pointer [&_[role=checkbox]:not(:disabled)]:cursor-pointer",
           )}
         >
-          {/* The portal's page wash — the same one under the onboarding questions. */}
+          {/* The portal's page wash: the one under the onboarding questions. */}
           <SignupWash />
-          <SignupDoodles />
-
-          {/* ── top bar ───────────────────────────────────────────────────── */}
-          {/* Short screens give the card the height: a slimmer bar, a closer
-              progress row and less air below (no step scrolls inside its card
-              at 1366x768 or 360x740). */}
-          <header className="relative flex h-14 shrink-0 items-center justify-between gap-4 px-5 max-sm:px-3 sm:h-16 sm:px-8 [@media(max-height:820px)]:h-12 sm:[@media(max-height:820px)]:h-12 [@media(max-height:700px)]:h-10 sm:[@media(max-height:700px)]:h-10">
-            <div />
-
-
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={onCloseButton}
-                disabled={state.busy || resolving || accountReset.busy || offerApplying}
-                aria-label={dialogStep === "account" ? "Close" : "Finish later"}
-                className="flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-out max-sm:size-11 hover:bg-zinc-100 hover:text-foreground disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none dark:hover:bg-white/10"
-              >
-                <X className="h-[18px] w-[18px]" />
-              </button>
-            </div>
-          </header>
 
           {/* The title a screen reader announces for the whole takeover. */}
           <DialogPrimitive.Title className="sr-only">Set up your Drive247 portal</DialogPrimitive.Title>
@@ -518,43 +455,24 @@ export function OnboardingScreen() {
                 : `${PROGRESS_LABELS[progressIndex]}.${state.busy ? " Working, please wait." : ""}`}
           </p>
 
+          <button
+            type="button"
+            onClick={onCloseButton}
+            disabled={state.busy || resolving || accountReset.busy || offerApplying}
+            aria-label={dialogStep === "account" ? "Close" : "Finish later"}
+            className="absolute top-4 right-4 z-10 flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-out max-sm:top-2 max-sm:right-2 max-sm:size-11 hover:bg-foreground/[0.05] hover:text-foreground disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none sm:top-6 sm:right-8"
+          >
+            <X className="h-[18px] w-[18px]" />
+          </button>
+
           {/* ── the screen ────────────────────────────────────────────────── */}
-          {/* Centred on every screen size (user, 2026-11-13). The page itself never
-              scrolls: a card taller than the screen scrolls inside itself. */}
-          <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-3 pb-4 max-sm:pb-[max(24px,env(safe-area-inset-bottom))] sm:px-6 sm:pb-8 sm:[@media(max-height:820px)]:pb-5 max-sm:[@media(max-height:820px)]:pb-[max(16px,env(safe-area-inset-bottom))] sm:[@media(max-height:700px)]:pb-3 max-sm:[@media(max-height:700px)]:pb-[max(12px,env(safe-area-inset-bottom))]">
-            {/* Progress sits above the card, not on it. */}
-            <ol
-              className="mb-5 flex shrink-0 items-center justify-center gap-1.5 max-sm:mb-4 [@media(max-height:820px)]:mb-3 [@media(max-height:700px)]:mb-2"
-              aria-label={`Step ${progressIndex + 1} of ${PROGRESS_LABELS.length}: ${PROGRESS_LABELS[progressIndex]}`}
-            >
-              {PROGRESS_LABELS.map((label, i) => (
-                <li key={label} aria-hidden className="relative h-1 w-7 overflow-hidden rounded-full bg-indigo-900/10 sm:w-10 dark:bg-white/15">
-                  <span
-                    className={cn(
-                      "absolute inset-0 origin-left rounded-full bg-indigo-600 transition-transform duration-200 ease-out motion-reduce:transition-none dark:bg-indigo-400",
-                      i <= progressIndex ? "scale-x-100" : "scale-x-0",
-                    )}
-                  />
-                </li>
-              ))}
-            </ol>
-            <div
-              className={cn(
-                // One narrow column on every step. The one exception is the
-                // payment step once Stripe opens the full card form, which is
-                // too tall for it: that goes two-column on a laptop.
-                "relative flex min-h-0 w-full max-w-[480px] flex-col overflow-hidden transition-[max-width] duration-200 ease-out motion-reduce:transition-none",
-                paymentTwoCol && "lg:max-w-[920px]",
-                SIGNUP_CARD,
-              )}
-            >
-              {/* Sized to fit: the picture shrinks, then steps aside, on short
-                  screens (see ScreenHead), so the page itself never scrolls.
-                  The overflow here is a last resort for a phone held sideways. */}
-              {/* Below 700px of height the picture is gone (ArtStage), so the card's
-                  own padding can tighten without un-cancelling its margins. */}
-              <div className="min-h-0 overflow-y-auto px-6 py-7 [scrollbar-width:none] overscroll-contain sm:px-10 sm:py-8 [@media(max-height:700px)]:py-5 sm:[@media(max-height:700px)]:py-5 [&::-webkit-scrollbar]:hidden">
-                <div ref={contentRef} className="w-full">
+          {/* The questions' frame: the same width, gutters and top air, the
+              content ranged left, and the footer row at the bottom. */}
+          <div className="relative flex min-h-full w-full flex-col px-6 pt-14 sm:px-10 sm:pt-16 lg:px-12 [@media(min-height:701px)_and_(max-height:880px)]:pt-10 [@media(max-height:700px)]:pt-6">
+            {/* Centred (Ghulam, 2026-11-23): each screen sits in the middle of
+                the window, both ways. */}
+            <div ref={contentRef} className="flex flex-1 flex-col justify-center pb-6 [@media(max-height:880px)]:pb-3">
+              <FooterSlotProvider value={footerSlot}>
                 {exitOffer ? (
                   <div key="offer">
                     <ExitOfferPanel
@@ -570,20 +488,21 @@ export function OnboardingScreen() {
                 ) : null}
 
                 {/*
-                  Kept mounted (merely hidden) behind the confirmation panel. The
-                  payment step owns a Stripe iframe; unmounting it would throw
-                  away a half-typed card number the moment someone clicks close.
+                  Kept mounted (merely hidden) behind the offer. The payment
+                  step owns a Stripe iframe; unmounting it would throw away a
+                  half-typed card number the moment someone clicks close.
                 */}
                 <div hidden={exitOffer !== null}>
                   {resolving ? (
-                    <div className="flex flex-col items-center justify-center gap-3 py-24" aria-live="polite">
+                    <div className="flex items-center justify-center gap-3 py-24" aria-live="polite">
                       <Loader2 className="h-5 w-5 animate-spin text-indigo-600 dark:text-indigo-400" />
                       <p className="text-sm text-muted-foreground">Checking your setup…</p>
                     </div>
                   ) : (
-                    // Keyed per screen so each one rises in on entry. Within a
-                    // screen the key is stable, so nothing remounts while typing.
-                    <div key={screenKey} className={SIGNUP_ENTER}>
+                    // Keyed per screen so each one rises in on entry (its heading
+                    // and fields carry the rise). Within a screen the key is
+                    // stable, so nothing remounts while typing.
+                    <div key={screenKey}>
                       {dialogStep === "account" && step !== "verify" ? (
                         <AccountStep
                           plan={plan}
@@ -602,6 +521,7 @@ export function OnboardingScreen() {
                           onSubmit={(values) => void submitAccount(values)}
                           onSubmitTenant={(values) => void submitTenantDetails(values)}
                           onSubmitAttribution={(values) => void submitAttribution(values)}
+                          onSubmitPassword={(password) => void submitPassword(password)}
                           onGoogle={(values, provider, attribution) => void startGoogleSignup(values, provider, attribution)}
                           onCheckSlug={checkSlug}
                           onSignIn={(values) => void signInExisting(values)}
@@ -611,7 +531,6 @@ export function OnboardingScreen() {
                           onClearError={clearStepError}
                           page={accountPage}
                           onPageChange={setAccountPage}
-                          onFleetSizeChange={chooseFleetSize}
                         />
                       ) : null}
 
@@ -649,7 +568,6 @@ export function OnboardingScreen() {
                           ownerName={state.account?.fullName ?? ""}
                           companyName={state.business.companyName}
                           portalSlug={state.business.slug}
-                          onWideChange={setPaymentWide}
                           plans={plans}
                           onChangePlan={changePlan}
                         />
@@ -657,95 +575,68 @@ export function OnboardingScreen() {
                     </div>
                   )}
 
-                  {/* The Stripe line always sits directly under the Pay button.
-                      Two-column: both live in the right column, under the card form.
-                      Phones: the pair is pinned to the bottom of the card, so
-                      "Start my free trial" is on screen without scrolling however
-                      tall Stripe's card form is (owner, 2026-11-19: 390x844). */}
-                  <div
-                    className={cn(
-                      paymentColumns && "flex flex-col",
-                      paymentColumns &&
-                        "max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:-mx-6 max-sm:bg-white max-sm:px-6 max-sm:pb-3 dark:max-sm:bg-[#17171f]",
-                      paymentTwoCol && "lg:grid lg:grid-cols-2 lg:gap-x-10 lg:[&>*]:col-start-2",
-                    )}
-                  >
-                  {paymentColumns && (
-                    <p className="order-last mt-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                      <Lock className="h-3 w-3 shrink-0" aria-hidden="true" />
-                      Payments are processed by Stripe. We never see your card details.
-                    </p>
-                  )}
-                  <div>
-                  {notices.map((n) => (
-                    <Alert key={n.key} variant="info" className={cn("mt-5 rounded-xl text-left", SIGNUP_ENTER)}>
-                      {n.icon === "resume" ? <RotateCcw /> : <Info />}
-                      <AlertDescription className="text-foreground">{n.text}</AlertDescription>
-                    </Alert>
-                  ))}
+                  <div className="mx-auto w-full max-w-[46rem]">
+                    {notices.map((n) => (
+                      <Alert key={n.key} variant="info" className={cn("mt-6 rounded-2xl text-left", SIGNUP_ENTER)}>
+                        {n.icon === "resume" ? <RotateCcw /> : <Info />}
+                        <AlertDescription className="text-foreground">{n.text}</AlertDescription>
+                      </Alert>
+                    ))}
 
-                  {offerNotice && dialogStep === "payment" ? (
-                    <p role="status" className={cn("mt-4 text-center text-[13px] text-muted-foreground", SIGNUP_ENTER)}>
-                      {offerNotice}
-                    </p>
-                  ) : null}
+                    {offerNotice && dialogStep === "payment" ? (
+                      <p role="status" className={cn("mt-4 text-[13px] text-muted-foreground", SIGNUP_ENTER)}>
+                        {offerNotice}
+                      </p>
+                    ) : null}
 
-                  {bannerError ? (
-                    <Alert variant="destructive" className={cn("mt-5 rounded-xl text-left", SIGNUP_ENTER)}>
-                      <TriangleAlert />
-                      <AlertTitle>I couldn&apos;t continue</AlertTitle>
-                      <AlertDescription className="text-red-600 dark:text-red-400">
-                        <span>{SIGNUP_ERROR_COPY[bannerError.code]}</span>
-                        {bannerError.code === "CONFIG_MISSING" ? (
-                          <a href="mailto:support@drive-247.com" className="font-semibold underline underline-offset-4">
-                            Email support
-                          </a>
-                        ) : null}
-                      </AlertDescription>
-                    </Alert>
-                  ) : null}
-
-                  {!resolving && (!primaryHidden || canGoBack) ? (
-                    <div className="mt-6 space-y-3">
-                      {!primaryHidden ? (
-                        <Button
-                          // `form` + `type="submit"` lets one button drive every
-                          // step's form; Enter in any field submits it too.
-                          type="submit"
-                          form={FORM_IDS[dialogStep]}
-                          disabled={primaryDisabled}
-                          className={SIGNUP_PRIMARY}
-                        >
-                          {state.busy ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              {primary.busyLabel}
-                            </>
-                          ) : (
-                            primary.label
-                          )}
-                        </Button>
-                      ) : null}
-
-                      {canGoBack ? (
-                        <button
-                          type="button"
-                          disabled={state.busy}
-                          onClick={() => setAccountPage((p) => Math.max(0, p - 1))}
-                          className={cn(SIGNUP_QUIET, SIGNUP_HIT, "mx-auto flex items-center gap-1.5")}
-                        >
-                          <ArrowLeft className="h-3.5 w-3.5" />
-                          Back
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  </div>
+                    {bannerError ? (
+                      <Alert variant="destructive" className={cn("mt-6 rounded-2xl text-left", SIGNUP_ENTER)}>
+                        <TriangleAlert />
+                        <AlertTitle>I couldn&apos;t continue</AlertTitle>
+                        <AlertDescription className="text-red-600 dark:text-red-400">
+                          <span>{SIGNUP_ERROR_COPY[bannerError.code]}</span>
+                          {bannerError.code === "CONFIG_MISSING" ? (
+                            <a href="mailto:support@drive-247.com" className="font-semibold underline underline-offset-4">
+                              Email support
+                            </a>
+                          ) : null}
+                        </AlertDescription>
+                      </Alert>
+                    ) : null}
                   </div>
                 </div>
-              </div>
-              </div>
+              </FooterSlotProvider>
             </div>
+
+            {/*
+              The footer row: just the progress since 2026-11-23, the buttons
+              having moved under each screen's fields. Pinned to the bottom of
+              the window; a fade keeps a long screen (a phone, Stripe's card
+              form) readable as it scrolls under it.
+            */}
+            <footer className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-x-8 gap-y-4 pt-8 sm:grid sm:grid-cols-[1fr_auto_1fr] pb-[max(20px,env(safe-area-inset-bottom))] sm:pb-7 [@media(max-height:880px)]:pt-3 [@media(max-height:880px)]:pb-[max(12px,env(safe-area-inset-bottom))]">
+              {/* The fade, the full width of the window whatever the frame's padding. */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 left-1/2 -z-10 w-screen -translate-x-1/2 bg-linear-to-t from-white/90 from-50% to-transparent dark:from-[#0e0e14]/90"
+              />
+              {/* Centred: the progress in the middle, the arrows still in the corner. */}
+              <div aria-hidden className="max-sm:hidden" />
+              <div className="flex flex-col gap-2 sm:items-center">
+                <StepLines
+                  total={PROGRESS_LABELS.length}
+                  current={progressIndex}
+                  label={`Step ${progressIndex + 1} of ${PROGRESS_LABELS.length}: ${PROGRESS_LABELS[progressIndex]}`}
+                />
+                {/* No "Payments are processed by Stripe" line here any more
+                    (Ghulam, 2026-11-23). */}
+              </div>
+
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-x-6 gap-y-3 sm:justify-self-end">
+                {/* Screens that own a text action put it here (FooterAction). */}
+                <div ref={setFooterSlot} className="contents" />
+              </div>
+            </footer>
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

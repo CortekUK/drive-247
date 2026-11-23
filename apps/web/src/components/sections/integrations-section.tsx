@@ -5,6 +5,7 @@ import { Globe, IdCard } from "lucide-react";
 import { useFadeIn } from "@/hooks/use-fade-in";
 import "./integrations-section.css";
 import { Accent, SectionHeading } from "./section-heading";
+import { SectionCta } from "./section-cta";
 
 /*
  * What Drive247 connects to: the portal's own Integrations board
@@ -94,6 +95,7 @@ export function IntegrationsSection() {
               </>
             }
           />
+          <SectionCta align="left" />
         </div>
 
         <ul className="ig-grid" aria-label="Integrations">

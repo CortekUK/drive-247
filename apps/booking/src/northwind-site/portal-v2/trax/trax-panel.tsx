@@ -20,12 +20,13 @@
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUp, CalendarClock, CreditCard, IdCard, Loader2, Sparkles, SquarePen, User, X } from 'lucide-react-nw';
+import { ArrowUp, CalendarClock, CreditCard, IdCard, Loader2, SquarePen, User, X } from 'lucide-react-nw';
 
 import { useCustomer } from '@nw/hooks/use-customer';
 import { cn } from '@nw/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@portal-v2-shared/tooltip';
 
+import { TraxGlyph } from './trax-glyph';
 import { useCustomerTrax, type TraxMessage } from './trax-context';
 
 /* ──────────────────────────────── the mark ─────────────────────────────── */
@@ -55,13 +56,13 @@ export function TraxMark({ size = 'sm', animated = false, className }: { size?: 
         <span
           className={cn(
             'absolute -inset-1/4',
-            'bg-[conic-gradient(from_180deg,hsl(var(--v2-chart-2)),hsl(var(--v2-primary)),hsl(var(--v2-chart-4)),hsl(var(--v2-chart-1)),hsl(var(--v2-chart-2)))]',
-            'dark:bg-[conic-gradient(from_180deg,hsl(var(--v2-chart-2)),hsl(var(--v2-chart-3)),hsl(var(--v2-chart-1)),hsl(var(--v2-chart-4)),hsl(var(--v2-chart-2)))]',
+            'bg-[radial-gradient(circle_at_center,hsl(0_0%_100%/0.22),transparent_38%),linear-gradient(145deg,hsl(var(--v2-chart-2)),hsl(var(--v2-primary)))]',
+            'dark:bg-[radial-gradient(circle_at_center,hsl(0_0%_100%/0.18),transparent_38%),linear-gradient(145deg,hsl(var(--v2-chart-2)),hsl(var(--v2-chart-3)))]',
             animated && 'animate-[v2-spin-slow_12s_linear_infinite] motion-reduce:animate-none',
           )}
         />
       </span>
-      <Sparkles strokeWidth={2} className={cn('relative text-pv-primary-fg drop-shadow-[0_1px_2px_hsl(var(--v2-chart-5)/0.55)]', s.icon)} />
+      <TraxGlyph className={cn('relative text-pv-primary-fg drop-shadow-[0_1px_2px_hsl(var(--v2-chart-5)/0.55)]', s.icon)} />
     </span>
   );
 }

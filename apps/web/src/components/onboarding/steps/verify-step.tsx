@@ -20,13 +20,22 @@
  */
 
 import * as React from "react";
-import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { ScreenHead, SIGNUP_HIT, SIGNUP_PRIMARY, SIGNUP_QUIET } from "@/components/onboarding/signup-ui";
+import {
+  ColumnActions,
+  ColumnButton,
+  ColumnLinks,
+  ONE_COLUMN_WIDTH,
+  ScreenHead,
+  SIGNUP_DISPLAY,
+  SIGNUP_HIT,
+  SIGNUP_QUIET,
+  UNDER_HEAD,
+} from "@/components/onboarding/signup-ui";
 import { resendCooldownSeconds } from "@/components/onboarding/pending-verify";
 import { MAIL_WEB_URL, openMailApp, type MailProvider } from "@/components/onboarding/mail-apps";
 
@@ -188,7 +197,9 @@ export function VerifyStep({
   };
 
   return (
-    <div className="space-y-6">
+    // One column like every signup screen (Ghulam, 2026-11-23): the code,
+    // then Verify full width under it, then the quiet links.
+    <div>
       <ScreenHead
         title="Check your inbox"
         lead={
@@ -198,7 +209,7 @@ export function VerifyStep({
         }
       />
 
-      <div className="space-y-2">
+      <div className={cn("signup-rise signup-rise-3 space-y-2", ONE_COLUMN_WIDTH, UNDER_HEAD)}>
         <Label htmlFor="signup-otp" className="sr-only">Verification code</Label>
 
         {/*
@@ -243,9 +254,9 @@ export function VerifyStep({
                selection, so it must sit exactly over the boxes and stay the
                full height of them. `text-transparent` rather than `hidden`,
                which would take it out of the tab order and off the a11y tree. */
-            className="absolute inset-0 h-14 w-full cursor-pointer bg-transparent text-transparent caret-transparent opacity-0"
+            className="absolute inset-0 h-16 w-full cursor-pointer bg-transparent text-transparent caret-transparent opacity-0"
           />
-          <div className="pointer-events-none flex items-center justify-between gap-2" aria-hidden>
+          <div className="pointer-events-none flex items-center justify-between gap-3" aria-hidden>
             {Array.from({ length: 6 }, (_, i) => {
               const char = code[i] ?? "";
               // The caret sits on the next empty box, and stays on the last one
@@ -255,11 +266,13 @@ export function VerifyStep({
                 <div
                   key={i}
                   className={cn(
-                    "flex h-14 flex-1 items-center justify-center rounded-xl border text-2xl font-semibold tabular-nums transition-colors duration-200 ease-out motion-reduce:transition-none",
-                    "border-zinc-200 bg-white text-foreground dark:border-white/10 dark:bg-white/[0.03]",
-                    char && "border-zinc-300 dark:border-white/20",
-                    error && "border-destructive",
-                    active && !error && "border-indigo-500 ring-[3px] ring-indigo-500/20 dark:border-indigo-400",
+                    // A bare rule per digit, as the questions draw a field.
+                    SIGNUP_DISPLAY,
+                    "flex h-16 flex-1 items-center justify-center border-b text-[32px] font-medium tabular-nums transition-[border-color,box-shadow] duration-200 ease-out motion-reduce:transition-none",
+                    "border-foreground/15 text-foreground dark:border-white/15",
+                    char && "border-foreground/40 dark:border-white/40",
+                    error && "border-red-500 dark:border-red-400",
+                    active && !error && "border-indigo-600 shadow-[inset_0_-1px_0_0_var(--color-indigo-600)] dark:border-indigo-400 dark:shadow-[inset_0_-1px_0_0_var(--color-indigo-400)]",
                     (busy || submitting) && "opacity-60",
                   )}
                 >
@@ -271,7 +284,7 @@ export function VerifyStep({
         </div>
 
         {error ? (
-          <p id="signup-otp-error" role="alert" className="text-sm text-destructive">
+          <p id="signup-otp-error" role="alert" className="text-center text-sm text-destructive">
             {error}
           </p>
         ) : null}
@@ -283,7 +296,7 @@ export function VerifyStep({
         is. Secondary on purpose: Verify stays the one primary action.
       */}
       {touchOnly ? (
-        <div className="-mt-2 grid grid-cols-2 gap-2.5">
+        <div className={cn("mt-6 grid grid-cols-2 gap-2.5", ONE_COLUMN_WIDTH)}>
           {MAIL_BUTTONS.map(({ provider, label, Logo }) => (
             <Button
               key={provider}
@@ -293,7 +306,7 @@ export function VerifyStep({
                 setMailFallback(null);
                 openMailApp(provider, setMailFallback);
               }}
-              className="h-11 gap-2 rounded-xl border-zinc-200 bg-white text-[14px] font-medium text-foreground shadow-none dark:border-white/10 dark:bg-white/[0.03]"
+              className="h-11 gap-2 rounded-full border-foreground/15 bg-transparent text-[14px] font-medium text-foreground shadow-none dark:border-white/15 dark:bg-transparent"
             >
               <Logo />
               {label}
@@ -316,46 +329,34 @@ export function VerifyStep({
         </div>
       ) : null}
 
-      {/*
-        The same indigo the dialog's own primary buttons use — "Continue to
-        payment" sits a few pixels below this one, and the default variant read
-        as a dead grey slab beside it. Disabled still dims, so the button is
-        honest about not being pressable until six digits are in.
-      */}
-      <Button
-        type="button"
-        className={SIGNUP_PRIMARY}
-        disabled={code.length !== 6 || busy || submitting}
-        onClick={() => void submit(code)}
-      >
-        {submitting ? (
-          <>
-            <Loader2 className="mr-2 size-4 animate-spin" />
-            Checking…
-          </>
-        ) : (
-          "Verify and continue"
-        )}
-      </Button>
-
-      <div className="flex items-center justify-between gap-3 text-sm">
-        <button
+      <ColumnActions>
+        <ColumnButton
           type="button"
-          onClick={() => void resend()}
-          disabled={cooldown > 0 || busy || submitting}
-          className={cn(SIGNUP_HIT, "font-medium text-indigo-600 underline-offset-4 hover:underline disabled:text-muted-foreground disabled:no-underline dark:text-indigo-400")}
+          busy={submitting}
+          disabled={code.length !== 6 || busy}
+          onClick={() => void submit(code)}
         >
-          {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
-        </button>
-        <button
-          type="button"
-          onClick={onUseDifferentEmail}
-          disabled={busy || submitting}
-          className={cn(SIGNUP_QUIET, SIGNUP_HIT)}
-        >
-          Use a different email
-        </button>
-      </div>
+          {submitting ? "Checking…" : "Verify"}
+        </ColumnButton>
+        <ColumnLinks>
+          <button
+            type="button"
+            onClick={() => void resend()}
+            disabled={cooldown > 0 || busy || submitting}
+            className={cn(SIGNUP_HIT, "text-sm font-medium text-indigo-600 underline-offset-4 hover:underline disabled:text-muted-foreground disabled:no-underline dark:text-indigo-400")}
+          >
+            {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
+          </button>
+          <button
+            type="button"
+            onClick={onUseDifferentEmail}
+            disabled={busy || submitting}
+            className={cn(SIGNUP_QUIET, SIGNUP_HIT)}
+          >
+            Use a different email
+          </button>
+        </ColumnLinks>
+      </ColumnActions>
     </div>
   );
 }

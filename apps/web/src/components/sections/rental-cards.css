@@ -461,3 +461,10 @@
   .rc-detail li { --rc-gap: 11px; }
   .rc-steps { margin-top: -12px; }
 }
+
+/* The call to action under the last feature: closer to the steps, and a size down so the held screen still fits. */
+.rc-detail .scta.rc-cta { margin-top: clamp(16px, 2.4svh, 28px); }
+@media (min-width: 1000px) {
+  .rc-detail .scta.rc-cta .scta-solid { height: 42px; padding-inline: 22px; font-size: 14px; }
+  .rc-detail .scta.rc-cta .scta-link { font-size: 14px; }
+}

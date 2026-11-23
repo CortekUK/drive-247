@@ -65,6 +65,10 @@ export interface ProvisionRequest {
   fleetSize?: string;
   vehicleType?: string;
   businessColours?: string;
+  /** The brand colour picked on the business page (lib/signup-look.ts). */
+  brandColor?: string;
+  /** The booking site's starting theme, picked on the business page. */
+  siteTheme?: "light" | "dark";
   logoUrl?: string;
   operatingSchedule?: {
     alwaysOpen?: boolean;
@@ -843,6 +847,8 @@ export interface ClientSignupMeta {
     fleetSize?: string;
     vehicleType?: string;
     businessColours?: string;
+    brandColor?: string;
+    siteTheme?: "light" | "dark";
     logoUrl?: string;
     operatingSchedule?: {
       alwaysOpen?: boolean;

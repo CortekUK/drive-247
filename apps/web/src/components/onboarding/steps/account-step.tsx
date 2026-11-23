@@ -18,19 +18,21 @@
  *   go away.
  *
  * The password page asks for the password twice. The confirm field is checked
- * here only (the server never sees it): page 1 will not move on until the two
- * match, and the checklist under the fields shows "Passwords match" live. The
- * reset panel next door carries the same pair.
+ * here only (the server never sees it): the password page will not submit until
+ * the two match, and the checklist under the fields shows "Passwords match"
+ * live. The reset panel next door carries the same pair.
+ *
+ * Page order (Ghulam, 2026-11-23): who you are, then the business, then the
+ * password. The password page is the one that creates the account.
  */
 
 import * as React from "react";
 import { Roboto } from "next/font/google";
-import { Check, Loader2 } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import type {
   AccountStepProps,
@@ -52,7 +54,6 @@ import {
   captureValidationErrors,
   type SignupStep,
 } from "@/lib/analytics";
-import type { FleetSize } from "@/lib/fleet-size";
 import {
   attributionFromDraft,
   EMPTY_ATTRIBUTION,
@@ -64,6 +65,7 @@ import {
   ACCOUNT_FIELD_ORDER,
   FIELD_MAX,
   firstErrorField,
+  isPasswordAcceptable,
   normalizeCityState,
   normalizeEmail,
   normalizeSlugClient,
@@ -85,12 +87,19 @@ import {
 } from "@/components/onboarding/steps/password-reset-panel";
 import {
   FieldError,
+  ColumnActions,
+  ColumnButton,
+  ColumnLinks,
+  ONE_COLUMN,
+  ONE_COLUMN_WIDTH,
+  RequiredMark,
   ScreenHead,
+  UNDER_HEAD,
   SIGNUP_ENTER,
+  SIGNUP_FIELDS,
   SIGNUP_HIT,
   SIGNUP_INPUT,
   SIGNUP_LABEL,
-  SIGNUP_PRIMARY,
   SIGNUP_QUIET,
 } from "@/components/onboarding/signup-ui";
 
@@ -148,7 +157,7 @@ export interface AccountStepShellProps extends AccountStepProps {
   onClearError?(): void;
   /**
    * Which page of the create-account form is on screen (0 who you are,
-   * 1 password, 2 business). Held by the shell, which draws the progress and
+   * 1 business, 2 password). Held by the shell, which draws the progress and
    * the Back button for it; the step falls back to its own state when it is
    * rendered without one.
    */
@@ -161,20 +170,39 @@ export interface AccountStepShellProps extends AccountStepProps {
    */
   paid?: boolean;
   /**
-   * "How many cars do you rent out?" was answered. The provider moves the plan
-   * to match, unless the visitor picked one on the pricing grid.
+   * `password` mode's submit: the password they chose, after the email code.
+   * The provider swaps it in for the stand-in the account was created with.
    */
-  onFleetSizeChange?(fleetSize: FleetSize): void;
+  onSubmitPassword?(password: string): void;
 }
 
-/** The create-account form's pages, and which page owns each field. */
-export const ACCOUNT_PAGE_COUNT = 3;
-const LAST_ACCOUNT_PAGE = ACCOUNT_PAGE_COUNT - 1;
+/**
+ * The create-account form's pages, and which page owns each field. Two since
+ * 2026-11-23: who you are, then the business, which creates the account and
+ * sends the code. The password is its own screen after the code (`password`
+ * mode), because the agreed order is about you → business → code → password.
+ */
+export const ACCOUNT_PAGE_COUNT = 2;
+/** The last page: it creates the account. */
+export const BUSINESS_PAGE = 1;
+const LAST_ACCOUNT_PAGE = BUSINESS_PAGE;
 const PAGE_FIELDS: readonly (readonly AccountField[])[] = [
-  ["fullName", "email", "heardAbout", "heardAboutOther", "fleetSize", "phone"],
-  ["password"],
+  ["fullName", "email", "heardAbout", "heardAboutOther", "phone"],
   ["companyName", "cityState", "slug", "acceptedTerms"],
 ];
+/**
+ * The funnel step each page reports as (lib/analytics.ts SIGNUP_STEP_NAMES).
+ * Tied to what the page asks, not where it sits, so `step_name` keeps meaning
+ * the same thing in PostHog whatever the order. The password screen reports 2.
+ */
+const PAGE_STEP: readonly SignupStep[] = [1, 3];
+/** The account check minus its password rule: the create pages ask no password. */
+function withoutPassword(found: FieldErrors<AccountField>): FieldErrors<AccountField> {
+  const rest = { ...found };
+  delete rest.password;
+  return rest;
+}
+
 /** The honeypot's value, or "" when it only repeats a field the person filled. */
 function honeypotValue(raw: string | undefined, typed: readonly (string | undefined)[]): string {
   const v = (raw ?? "").trim().toLowerCase();
@@ -210,7 +238,7 @@ export function AccountStep({
   page: pageProp,
   onPageChange,
   paid = true,
-  onFleetSizeChange,
+  onSubmitPassword,
 }: AccountStepShellProps) {
   const [ownPage, setOwnPage] = React.useState(0);
   const page = pageProp ?? ownPage;
@@ -305,7 +333,6 @@ export function AccountStep({
   const emailRef = React.useRef<HTMLInputElement>(null);
   const heardAboutRef = React.useRef<HTMLSelectElement | HTMLButtonElement>(null);
   const heardAboutOtherRef = React.useRef<HTMLInputElement>(null);
-  const fleetSizeRef = React.useRef<HTMLButtonElement>(null);
   const phoneRef = React.useRef<HTMLInputElement>(null);
   const passwordRef = React.useRef<HTMLInputElement>(null);
   const signInPasswordRef = React.useRef<HTMLInputElement>(null);
@@ -332,6 +359,9 @@ export function AccountStep({
     slug: normalizeSlugClient(slug ?? tenant.slug),
     acceptedTerms: tenant.acceptedTerms,
     cityState: normalizeCityState(tenant.cityState),
+    // The look picked on the business page (lib/signup-look.ts).
+    brandColor: tenant.brandColor,
+    siteTheme: tenant.siteTheme,
   });
 
   /**
@@ -381,8 +411,6 @@ export function AccountStep({
           ? heardAboutRef.current
           : field === "heardAboutOther"
             ? heardAboutOtherRef.current
-            : field === "fleetSize"
-              ? fleetSizeRef.current
             : field === "phone"
               ? phoneRef.current
               : field === "password"
@@ -427,7 +455,7 @@ export function AccountStep({
   ) => {
     const first = firstErrorField(found, order);
     if (!first) return;
-    if (mode !== "tenant" && !signInPrompt && pageOf(first) !== page) {
+    if (mode === "create" && !signInPrompt && pageOf(first) !== page) {
       pendingFocusRef.current = first;
       setPage(pageOf(first));
       return;
@@ -444,7 +472,7 @@ export function AccountStep({
     const byStep = new Map<SignupStep, Record<string, string | undefined>>();
     for (const [field, message] of Object.entries(found)) {
       if (!message) continue;
-      const step = (pageOf(field as AccountField) + 1) as SignupStep;
+      const step = PAGE_STEP[pageOf(field as AccountField)];
       byStep.set(step, { ...(byStep.get(step) ?? {}), [field]: message });
     }
     byStep.forEach((errs, step) => captureValidationErrors(step, errs));
@@ -520,7 +548,7 @@ export function AccountStep({
    * Take the operator to the page the error is about, with the caret in it.
    */
   React.useEffect(() => {
-    if (mode === "tenant" || signInPrompt) return;
+    if (mode !== "create" || signInPrompt) return;
     const field =
       (Object.keys(serverFieldError)[0] as AccountField | undefined) ?? validationField;
     if (field && pageOf(field) !== page) {
@@ -555,60 +583,64 @@ export function AccountStep({
     if (busy) return;
 
     // Only the business page sends the address, so only it repairs it.
-    const repairedSlug = page === LAST_ACCOUNT_PAGE ? repairAddress() : undefined;
+    const repairedSlug = page === BUSINESS_PAGE ? repairAddress() : undefined;
     const tenantValue = tenantValues(repairedSlug);
 
-    // Pages 0 and 1 check only their own fields, then move on. Nothing is sent.
+    // Every page checks its own fields first. Nothing is sent before the last.
+    // No password is asked here any more (it comes after the code), so its
+    // rule is left out of the check.
+    const all: FieldErrors<AccountField> = {
+      ...withoutPassword(validateAccount({ fullName, email, password: "", ...tenantValue })),
+      ...validateAttribution(attribution),
+      ...(page === BUSINESS_PAGE ? (tenantErrors(repairedSlug) ?? {}) : {}),
+    };
+    const pageErrors: FieldErrors<AccountField> = {};
+    for (const field of PAGE_FIELDS[page]) {
+      if (all[field]) pageErrors[field] = all[field];
+    }
+    setErrors(pageErrors);
+    if (Object.keys(pageErrors).length > 0) {
+      reportErrors(pageErrors);
+      focusFirst(pageErrors, ACCOUNT_FIELD_ORDER);
+      return;
+    }
+
     if (page < LAST_ACCOUNT_PAGE) {
-      const all: FieldErrors<AccountField> = {
-        ...validateAccount({ fullName, email, password, ...tenantValue }),
-        ...validateAttribution(attribution),
-      };
-      const pageErrors: FieldErrors<AccountField> = {};
-      for (const field of PAGE_FIELDS[page]) {
-        if (all[field]) pageErrors[field] = all[field];
-      }
-      setErrors(pageErrors);
-      if (Object.keys(pageErrors).length > 0) {
-        reportErrors(pageErrors);
-        focusFirst(pageErrors, ACCOUNT_FIELD_ORDER);
-        return;
-      }
-      // The second copy of the password, checked only here.
-      if (page === 1 && confirmPassword !== password) {
-        const message = confirmPassword ? "These passwords don't match." : "Type your password again to confirm it.";
-        setConfirmError(message);
-        captureValidationErrors(2, { passwordConfirm: message });
-        focusAndReveal(confirmRef.current);
-        return;
-      }
-      captureStepCompleted((page + 1) as SignupStep);
+      // A rebuilt address has not been looked at yet; the verdict the field
+      // reported was about the old one, so it must not block the last page.
+      if (repairedSlug !== undefined) setSlugState({ kind: "idle" });
+      captureStepCompleted(PAGE_STEP[page]);
       setPage(page + 1);
       return;
     }
 
+    // The whole form once more before anything is sent: an earlier page can
+    // hold an error the visitor never saw (an answer changed by Back).
     const nextErrors: FieldErrors<AccountField> = {
-      ...validateAccount({ fullName, email, password, ...tenantValue }),
+      ...withoutPassword(validateAccount({ fullName, email, password: "", ...tenantValue })),
       ...validateAttribution(attribution),
       ...(tenantErrors(repairedSlug) ?? {}),
     };
     setErrors(nextErrors);
 
+    // Optional (Ghulam, 2026-11-23): null when nothing was answered.
     const answered = attributionFromDraft(attribution);
-    if (Object.keys(nextErrors).length > 0 || !answered) {
+    if (Object.keys(nextErrors).length > 0) {
       reportErrors(nextErrors);
       focusFirst(nextErrors, ACCOUNT_FIELD_ORDER);
       return;
     }
 
-    captureStepCompleted(3);
+    captureStepCompleted(PAGE_STEP[page]);
 
     onSubmit({
       fullName: fullName.trim(),
       email: normalizeEmail(email),
-      password,
+      // Empty on purpose: the provider creates the account with a random
+      // stand-in, and the password screen after the code replaces it.
+      password: "",
       ...tenantValue,
-      attribution: answered,
+      attribution: answered ?? {},
       // Read from the DOM rather than from state: the whole point of the
       // honeypot is that only an automated filler touches it, and a bot that
       // sets `.value` directly never fires React's onChange.
@@ -646,6 +678,32 @@ export function AccountStep({
     onSubmitTenant(tenantValues(repairedSlug));
   };
 
+  /**
+   * `password` mode's submit. The checklist is the gate (it is exactly what
+   * `signup-begin` enforces), then the second copy must match.
+   */
+  const handlePasswordSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (busy) return;
+    if (!isPasswordAcceptable(password)) {
+      const message = SIGNUP_ERROR_COPY.WEAK_PASSWORD;
+      setErrors({ password: message });
+      captureValidationErrors(2, { password: message });
+      focusAndReveal(passwordRef.current);
+      return;
+    }
+    if (confirmPassword !== password) {
+      const message = confirmPassword ? "These passwords don't match." : "Type your password again to confirm it.";
+      setConfirmError(message);
+      captureValidationErrors(2, { passwordConfirm: message });
+      focusAndReveal(confirmRef.current);
+      return;
+    }
+    setErrors({});
+    captureStepCompleted(2);
+    onSubmitPassword?.(password);
+  };
+
   /** `attribution` mode's submit: the question on its own. */
   const handleAttributionSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -660,14 +718,12 @@ export function AccountStep({
     onSubmitAttribution(answered);
   };
 
-  const attributionFields = (autoFocus: boolean, compact = false) => (
+  const attributionFields = (autoFocus: boolean) => (
     <HeardAboutFields
-      compact={compact}
       value={attribution}
       errors={{
         heardAbout: fieldError("heardAbout"),
         heardAboutOther: fieldError("heardAboutOther"),
-        fleetSize: fieldError("fleetSize"),
         phone: fieldError("phone"),
       }}
       busy={busy}
@@ -680,8 +736,6 @@ export function AccountStep({
       heardAboutRef={heardAboutRef}
       otherRef={heardAboutOtherRef}
       phoneRef={phoneRef}
-      fleetRef={fleetSizeRef}
-      onFleetSizeChange={onFleetSizeChange}
     />
   );
 
@@ -739,19 +793,21 @@ export function AccountStep({
 
   if (isStaffEmail) {
     return (
-      <div className={SIGNUP_ENTER}>
+      <div>
         <ScreenHead
           title="You already have a portal"
           lead="That email already runs a Drive247 portal. Sign in there, or give me a different email and I'll start a new one."
         />
-        <div className="mt-6 space-y-3">
-          <Button type="button" onClick={onUseDifferentEmail} className={SIGNUP_PRIMARY}>
+        <ColumnActions>
+          <ColumnButton type="button" onClick={onUseDifferentEmail}>
             Use a different email
-          </Button>
-          <a href="mailto:support@drive-247.com" className={cn(SIGNUP_QUIET, "block text-center")}>
-            Email support
-          </a>
-        </div>
+          </ColumnButton>
+          <ColumnLinks>
+            <a href="mailto:support@drive-247.com" className={cn(SIGNUP_QUIET, SIGNUP_HIT)}>
+              Email support
+            </a>
+          </ColumnLinks>
+        </ColumnActions>
       </div>
     );
   }
@@ -796,12 +852,12 @@ export function AccountStep({
         : null);
 
     return (
-      <form id="signup-account-form" onSubmit={handleSignIn} noValidate className={SIGNUP_ENTER}>
+      <form id="signup-account-form" onSubmit={handleSignIn} noValidate>
         <ScreenHead title={title} lead={body} />
 
         {resetDoneFor === promptEmail && <PasswordResetSuccessNote />}
 
-        <div className="mt-6 space-y-3.5">
+        <div className={cn(SIGNUP_FIELDS, ONE_COLUMN, UNDER_HEAD)}>
           <div>
             <Label htmlFor="signup-signin-email" className={SIGNUP_LABEL}>
               Email
@@ -814,7 +870,7 @@ export function AccountStep({
               value={signInPrompt.email}
               readOnly
               disabled
-              className={cn(SIGNUP_INPUT, "mt-1.5")}
+              className={cn(SIGNUP_INPUT, "mt-1")}
             />
           </div>
 
@@ -822,7 +878,7 @@ export function AccountStep({
             <Label htmlFor="signup-signin-password" className={SIGNUP_LABEL}>
               Password
             </Label>
-            <div className="relative mt-1.5">
+            <div className="relative mt-1">
               <Input
                 ref={signInPasswordRef}
                 id="signup-signin-password"
@@ -854,27 +910,17 @@ export function AccountStep({
           </div>
         </div>
 
-        <div className="mt-6 space-y-3.5">
-          <Button type="submit" disabled={busy} className={SIGNUP_PRIMARY}>
-            {busy ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Signing in…
-              </>
-            ) : (
-              "Continue"
-            )}
-          </Button>
-          {/* Narrow phones: the two links stack instead of each folding onto two lines. */}
-          <div className="flex items-center justify-between gap-3 max-[359.98px]:flex-col max-[359.98px]:gap-3">
-            <button type="button" disabled={busy} onClick={onUseDifferentEmail} className={cn(SIGNUP_QUIET, SIGNUP_HIT, "max-sm:whitespace-nowrap")}>
-              Use a different email
-            </button>
+        <ColumnActions>
+          <ColumnButton busy={busy}>{busy ? "Signing in…" : "Sign in"}</ColumnButton>
+          <ColumnLinks>
             <button type="button" disabled={busy} onClick={openReset} className={cn(SIGNUP_QUIET, SIGNUP_HIT, "max-sm:whitespace-nowrap")}>
               Forgot password?
             </button>
-          </div>
-        </div>
+            <button type="button" disabled={busy} onClick={onUseDifferentEmail} className={cn(SIGNUP_QUIET, SIGNUP_HIT, "max-sm:whitespace-nowrap")}>
+              Use a different email
+            </button>
+          </ColumnLinks>
+        </ColumnActions>
       </form>
     );
   }
@@ -885,9 +931,12 @@ export function AccountStep({
   // -------------------------------------------------------------------------
   if (mode === "attribution") {
     return (
-      <form id="signup-account-form" onSubmit={handleAttributionSubmit} noValidate className={SIGNUP_ENTER}>
+      <form id="signup-account-form" onSubmit={handleAttributionSubmit} noValidate>
         <ScreenHead title="Two quick questions" />
-        <div className="mt-6 space-y-3.5">{attributionFields(true)}</div>
+        <div className={cn(SIGNUP_FIELDS, ONE_COLUMN, UNDER_HEAD)}>{attributionFields(true)}</div>
+        <ColumnActions>
+          <ColumnButton busy={busy}>Continue</ColumnButton>
+        </ColumnActions>
       </form>
     );
   }
@@ -899,8 +948,9 @@ export function AccountStep({
   // -------------------------------------------------------------------------
   if (mode === "tenant") {
     return (
-      <form id="signup-account-form" onSubmit={handleTenantSubmit} noValidate className={SIGNUP_ENTER}>
+      <form id="signup-account-form" onSubmit={handleTenantSubmit} noValidate>
         <ScreenHead
+          leadClassName="[@media(max-height:619px)]:hidden"
           title={paid ? "One last thing" : "Name your business"}
           lead={
             paid
@@ -909,8 +959,7 @@ export function AccountStep({
           }
         />
 
-        {/* Tighter on phones so "City and state" fits with no inner scroll at 360x740. */}
-        <div className="mt-6 space-y-4 max-sm:mt-4 max-sm:space-y-3">
+        <div className={cn(SIGNUP_FIELDS, ONE_COLUMN, UNDER_HEAD)}>
           <TenantIdentityFields
             value={tenant}
             busy={busy}
@@ -930,247 +979,57 @@ export function AccountStep({
             autoFocusCompanyName
             askCityState
             cityStateRef={cityStateRef}
+            askLook
           />
         </div>
+
+        <ColumnActions>
+          <ColumnButton busy={busy} disabled={!tenant.acceptedTerms}>
+            {busy ? (paid ? "Setting up…" : "Saving…") : paid ? "Build my portal" : "Continue to payment"}
+          </ColumnButton>
+        </ColumnActions>
       </form>
     );
   }
 
   // -------------------------------------------------------------------------
-  // Default: create the account — three pages of one form.
-  //
-  //   0  who you are   (Google, or name + email)
-  //   1  a password
-  //   2  the business  (name, city and state, web address, terms)
-  //
-  // Only page 2 submits to the server; pages 0 and 1 check their own fields
-  // and move on. The values live in this component, so going Back loses
-  // nothing, and an error the server sends back for a field on an earlier page
-  // takes the operator straight to that page (see the effect above).
+  // Branch: `password` mode — after the email code (Ghulam, 2026-11-23). The
+  // account exists and is signed in; this replaces the random stand-in it was
+  // created with by the password they will sign in to the portal with.
   // -------------------------------------------------------------------------
-  const nameError = fieldError("fullName");
-  const emailError = fieldError("email");
-  const passwordError = fieldError("password");
-  const firstName = fullName.trim().split(/\s+/)[0] ?? "";
-
-  return (
-    <form id="signup-account-form" onSubmit={handleCreateAccount} noValidate>
-      {page === 0 && (
-        <div key="page-0" className={SIGNUP_ENTER}>
-          <ScreenHead
-            art={googleEnabled ? undefined : null}
-            title="Let's get you on the road"
-          />
-
-          {/* Spaced to fit with no inner scroll down to 1366x768 and 360x740
-              (owner, 2026-11-19): every field stays, the gaps tighten. */}
-          {/* Two questions now (2026-11-20): 40px fields and tighter gaps so it
-              still fits with no inner scroll at 1366x768 and 360x740. */}
-          <div className={cn(googleEnabled ? "mt-4 space-y-2.5 max-sm:space-y-2 [@media(max-height:700px)]:mt-3 [@media(max-height:700px)]:space-y-2" : "mt-6 space-y-3.5")}>
-            <div>
-              <Label htmlFor="signup-full-name" className={SIGNUP_LABEL}>
-                Your name
-              </Label>
-              <Input
-                ref={fullNameRef}
-                id="signup-full-name"
-                name="fullName"
-                type="text"
-                autoComplete="name"
-                autoFocus
-                placeholder="Jordan Miller"
-                value={fullName}
-                disabled={busy}
-                maxLength={FIELD_MAX.fullName}
-                aria-invalid={Boolean(nameError)}
-                aria-describedby={nameError ? "signup-full-name-error" : undefined}
-                onChange={(e) => {
-                  setFullName(e.target.value);
-                  setErrors((prev) => ({ ...prev, fullName: undefined }));
-                  markDirty();
-                }}
-                className={cn(SIGNUP_INPUT, "mt-1 h-10")}
-              />
-              {nameError && <FieldError id="signup-full-name-error">{nameError}</FieldError>}
-            </div>
-
-            <div>
-              <Label htmlFor="signup-email" className={SIGNUP_LABEL}>
-                Email
-              </Label>
-              <Input
-                ref={emailRef}
-                id="signup-email"
-                name="email"
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                autoCapitalize="off"
-                spellCheck={false}
-                placeholder="you@yourcompany.com"
-                value={email}
-                disabled={busy}
-                aria-invalid={Boolean(emailError)}
-                aria-describedby={
-                  emailError
-                    ? "signup-email-error"
-                    : emailSuggestion
-                      ? "signup-email-suggestion"
-                      : "signup-email-help"
-                }
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setErrors((prev) => ({ ...prev, email: undefined }));
-                  setEmailSuggestion(null);
-                  markDirty();
-                }}
-                // Suggest on blur, not on every keystroke: "did you mean gmail.com"
-                // while someone is still typing "gm" is noise.
-                onBlur={() => setEmailSuggestion(suggestEmailCorrection(email))}
-                className={cn(SIGNUP_INPUT, "mt-1 h-10")}
-              />
-              {emailError ? (
-                <FieldError id="signup-email-error">{emailError}</FieldError>
-              ) : emailSuggestion ? (
-                <p
-                  id="signup-email-suggestion"
-                  aria-live="polite"
-                  className={cn("mt-1.5 text-[13px] text-muted-foreground", SIGNUP_ENTER)}
-                >
-                  Did you mean{" "}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail(emailSuggestion);
-                      setEmailSuggestion(null);
-                      emailRef.current?.focus();
-                    }}
-                    className="font-semibold text-indigo-600 underline-offset-4 hover:underline dark:text-indigo-400"
-                  >
-                    {emailSuggestion}
-                  </button>
-                  ?
-                </p>
-              ) : (
-                <p id="signup-email-help" className="mt-1.5 text-[13px] text-muted-foreground">
-                  This becomes the owner login for your portal.
-                </p>
-              )}
-            </div>
-
-            {attributionFields(false, true)}
-          </div>
-
-          {/*
-            Page 0 carries its own Continue so the email path comes first and
-            Google sits under it; the shell hides its footer button here.
-          */}
-          <Button type="submit" disabled={busy} className={cn(SIGNUP_PRIMARY, googleEnabled ? "mt-4 [@media(max-height:700px)]:mt-3" : "mt-5")}>
-            {busy ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Working…
-              </>
-            ) : (
-              "Continue"
-            )}
-          </Button>
-
-          {googleEnabled && (
+  if (mode === "password") {
+    const passwordError = fieldError("password");
+    const first = initialValues.fullName.trim().split(/\s+/)[0] ?? "";
+    const login = normalizeEmail(initialValues.email);
+    return (
+      <form id="signup-account-form" onSubmit={handlePasswordSubmit} noValidate>
+        {/* The username for the password manager, which otherwise goes
+            looking for one and picks the wrong field (see the honeypot). */}
+        <input
+          type="email"
+          name="username"
+          autoComplete="username"
+          value={login}
+          readOnly
+          hidden
+        />
+        <ScreenHead
+          title={first ? `Pick a password, ${first}` : "Choose a password"}
+          lead={
             <>
-              <div className="mt-3 flex items-center gap-3 [@media(max-height:700px)]:mt-2">
-                <Separator className="flex-1" />
-                <span className="text-xs text-muted-foreground">or</span>
-                <Separator className="flex-1" />
-              </div>
-
-              <div className="mt-3 space-y-2.5 [@media(max-height:700px)]:mt-2">
-                {googleEnabled && (
-                  // Google's sign-in branding: white with a #747775 hairline and
-                  // #1F1F1F Roboto Medium in light, #131314 / #8E918F / #E3E3E3
-                  // in dark, the full-colour "G" at 18px.
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => handleOauth("google")}
-                    className={cn(
-                      roboto.className,
-                      "h-11 w-full gap-2.5 rounded-xl border-[#747775] bg-white text-[15px] font-medium text-[#1F1F1F] shadow-none transition-colors duration-200 ease-out hover:bg-[#f2f2f2] hover:text-[#1F1F1F] motion-reduce:transition-none dark:border-[#8E918F] dark:bg-[#131314] dark:text-[#E3E3E3] dark:hover:bg-[#2a2a2c] dark:hover:text-[#E3E3E3]",
-                    )}
-                  >
-                    <GoogleMark />
-                    Continue with Google
-                  </Button>
-                )}
-              </div>
+              You&apos;ll use it with{" "}
+              <span className="font-medium text-foreground">{login}</span> to sign in to your portal.
             </>
-          )}
+          }
+        />
 
-          {/*
-            A deliberate way back in for someone who has already started.
-
-            Without this the sign-in panel was reachable only by ACCIDENT: fill in
-            the whole form, submit, and have the server answer "that email already
-            exists". A returning operator whose session had expired had no way to
-            say "that's me, I have a password" — so the honest-looking action was
-            the wrong one, and taking it burned a throttle slot to be told something
-            they already knew.
-          */}
-          <p className="mt-4 text-center text-[13px] text-muted-foreground [@media(max-height:700px)]:mt-3">
-            Already started?{" "}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                const typed = normalizeEmail(email);
-                if (!typed) {
-                  // Nothing to sign in AS. Point at the field rather than opening
-                  // a panel with an empty, read-only address.
-                  setErrors((prev) => ({
-                    ...prev,
-                    email: "Enter your email address to sign in.",
-                  }));
-                  emailRef.current?.focus();
-                  return;
-                }
-                onSignInInstead(typed);
-              }}
-              className="font-semibold text-indigo-600 underline-offset-4 hover:underline disabled:opacity-50 dark:text-indigo-400"
-            >
-              Sign in
-            </button>
-          </p>
-        </div>
-      )}
-
-      {page === 1 && (
-        <div key="page-1" className={SIGNUP_ENTER}>
-          {/* The username for the password manager, which otherwise goes
-              looking for one and picks the wrong field (see the honeypot). */}
-          <input
-            type="email"
-            name="username"
-            autoComplete="username"
-            value={normalizeEmail(email)}
-            readOnly
-            hidden
-          />
-          <ScreenHead
-            title={firstName ? `Nice to meet you, ${firstName}` : "Choose a password"}
-            lead={
-              <>
-                Pick a password. You&apos;ll use it with{" "}
-                <span className="font-medium text-foreground">{normalizeEmail(email)}</span> to sign in to your portal.
-              </>
-            }
-          />
-
-          <div className="mt-6">
+        <div className={cn(SIGNUP_FIELDS, ONE_COLUMN, UNDER_HEAD)}>
+          <div>
             <Label htmlFor="signup-password" className={SIGNUP_LABEL}>
               Password
+              <RequiredMark />
             </Label>
-            <div className="relative mt-1.5">
+            <div className="relative mt-1">
               <Input
                 ref={passwordRef}
                 id="signup-password"
@@ -1200,12 +1059,12 @@ export function AccountStep({
               word. Advisory only — it never blocks; the checklist below is the
               gate (it is exactly what signup-begin enforces).
             */}
-            <div className="mt-2 flex h-4 items-center gap-3" aria-hidden>
+            <div className="mt-2.5 flex h-4 items-center gap-3" aria-hidden>
               <div className="flex flex-1 gap-1">
                 {[0, 1, 2, 3].map((i) => {
                   const filled = password.length > 0 && i < Math.max(1, strength.score);
                   return (
-                    <span key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-white/10">
+                    <span key={i} className="h-[3px] flex-1 overflow-hidden rounded-full bg-foreground/[0.08]">
                       <span
                         className={cn(
                           "block h-full origin-left rounded-full transition-transform duration-200 ease-out motion-reduce:transition-none",
@@ -1224,11 +1083,12 @@ export function AccountStep({
             {passwordError && <FieldError>{passwordError}</FieldError>}
           </div>
 
-          <div className="mt-3">
+          <div>
             <Label htmlFor="signup-password-confirm" className={SIGNUP_LABEL}>
               Confirm password
+              <RequiredMark />
             </Label>
-            <div className="relative mt-1.5">
+            <div className="relative mt-1">
               <Input
                 ref={confirmRef}
                 id="signup-password-confirm"
@@ -1251,26 +1111,29 @@ export function AccountStep({
           </div>
 
           {/*
-            The checklist: what the password needs, plus the match. One polite
-            live region, so a screen reader hears a change without an
-            announcement per keystroke.
+            The checklist: what the password needs, plus the match, drawn as
+            the questions draw their answers (a small mark in the gutter, the
+            label beside it). One polite live region, so a screen reader hears
+            a change without an announcement per keystroke. One column: three
+            in two columns left "Passwords match" alone on its own row
+            (Ghulam, 2026-11-23).
           */}
           <ul
             id="signup-password-rules"
             aria-live="polite"
-            className="mt-4 grid gap-2 rounded-xl border border-zinc-100 bg-zinc-50/70 px-3.5 py-3 dark:border-white/10 dark:bg-white/[0.03]"
+            className="col-span-full grid gap-2.5 [@media(max-height:700px)]:gap-2"
           >
             {[
               ...ruleState.map(({ rule, met }) => ({ id: rule.id, label: rule.label, met })),
               { id: "match", label: "Passwords match", met: confirmPassword.length > 0 && confirmPassword === password },
             ].map(({ id, label, met }) => (
-              <li key={id} className="flex items-center gap-2.5 text-[13px]">
+              <li key={id} className="flex items-center gap-3 text-[14px]">
                 <span
                   className={cn(
-                    "flex size-[18px] shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ease-out motion-reduce:transition-none",
+                    "flex size-[18px] shrink-0 items-center justify-center rounded-full transition-colors duration-200 ease-out motion-reduce:transition-none",
                     met
-                      ? "border-indigo-600 bg-indigo-600 text-white dark:border-indigo-400 dark:bg-indigo-400 dark:text-[#0e0e14]"
-                      : "border-zinc-300 text-transparent dark:border-white/20",
+                      ? "bg-indigo-600 text-white dark:bg-indigo-400 dark:text-[#0e0e14]"
+                      : "text-transparent ring-1 ring-foreground/25",
                   )}
                 >
                   <Check className="size-3" strokeWidth={3} />
@@ -1283,10 +1146,214 @@ export function AccountStep({
             ))}
           </ul>
         </div>
+
+        <ColumnActions>
+          <ColumnButton busy={busy}>{busy ? "Saving…" : "Save password"}</ColumnButton>
+        </ColumnActions>
+      </form>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Default: create the account — two pages of one form.
+  //
+  //   0  who you are   (one column: Google, "or", then name, email, the
+  //                     optional question and phone, then Sign up)
+  //   1  the business  (name, city and state, web address, terms; creates the
+  //                     account and sends the code)
+  //
+  // Only page 1 submits to the server; page 0 checks its own fields and moves
+  // on. The values live in this component, so going Back loses nothing, and an
+  // error the server sends back for a field on page 0 takes the operator
+  // straight to it (see the effect above). The password comes after the code.
+  // -------------------------------------------------------------------------
+  const nameError = fieldError("fullName");
+  const emailError = fieldError("email");
+
+  return (
+    <form id="signup-account-form" onSubmit={handleCreateAccount} noValidate>
+      {page === 0 && (
+        <div key="page-0">
+          <ScreenHead title="Let's get you on the road" />
+
+          {/*
+            Google first (Ghulam, 2026-11-23): one click and they are in, so
+            it leads, and "or" separates it from the form below.
+          */}
+          {googleEnabled && (
+            <div className={cn("signup-rise signup-rise-2 mt-12 [@media(min-height:701px)_and_(max-height:880px)]:mt-10 [@media(min-height:620px)_and_(max-height:700px)]:mt-10 [@media(max-height:619px)]:mt-5", ONE_COLUMN_WIDTH)}>
+              {/*
+                Google's sign-in branding: white with a #747775 hairline and
+                #1F1F1F Roboto Medium in light, #131314 / #8E918F / #E3E3E3
+                in dark, the full-colour "G" at 18px. The pill is one of
+                Google's own button shapes.
+              */}
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => handleOauth("google")}
+                className={cn(
+                  roboto.className,
+                  "h-11 [@media(max-height:700px)]:h-10 w-full gap-2.5 rounded-full border-[#747775] bg-white px-6 text-[15px] font-medium text-[#1F1F1F] shadow-none transition-colors duration-200 ease-out hover:bg-[#f2f2f2] hover:text-[#1F1F1F] motion-reduce:transition-none dark:border-[#8E918F] dark:bg-[#131314] dark:text-[#E3E3E3] dark:hover:bg-[#2a2a2c] dark:hover:text-[#E3E3E3]",
+                )}
+              >
+                <GoogleMark />
+                Continue with Google
+              </Button>
+              {/* "OR", clear of the button and easy to see (Ghulam, 2026-11-23). */}
+              <div role="separator" aria-label="or" className="mt-8 [@media(min-height:701px)_and_(max-height:880px)]:mt-6 [@media(min-height:620px)_and_(max-height:700px)]:mt-6 [@media(max-height:619px)]:mt-4 flex items-center gap-4 text-sm leading-none font-semibold tracking-[0.12em] text-foreground/70 uppercase dark:text-white/70">
+                <span aria-hidden className="h-px flex-1 bg-foreground/20 dark:bg-white/20" />
+                <span aria-hidden>or</span>
+                <span aria-hidden className="h-px flex-1 bg-foreground/20 dark:bg-white/20" />
+              </div>
+            </div>
+          )}
+
+          {/* One column (Ghulam, 2026-11-23), with its own Sign up under it. */}
+          <div className={cn(SIGNUP_FIELDS, ONE_COLUMN, googleEnabled ? "mt-8 [@media(min-height:701px)_and_(max-height:880px)]:mt-6 [@media(min-height:620px)_and_(max-height:700px)]:mt-6 [@media(max-height:619px)]:mt-4" : "mt-10 [@media(max-height:880px)]:mt-6")}>
+            <div>
+              <Label htmlFor="signup-full-name" className={SIGNUP_LABEL}>
+                Your name
+                <RequiredMark />
+              </Label>
+              <Input
+                ref={fullNameRef}
+                id="signup-full-name"
+                name="fullName"
+                type="text"
+                autoComplete="name"
+                autoFocus
+                placeholder="Jordan Miller"
+                value={fullName}
+                disabled={busy}
+                maxLength={FIELD_MAX.fullName}
+                aria-invalid={Boolean(nameError)}
+                aria-describedby={nameError ? "signup-full-name-error" : undefined}
+                onChange={(e) => {
+                  setFullName(e.target.value);
+                  setErrors((prev) => ({ ...prev, fullName: undefined }));
+                  markDirty();
+                }}
+                className={cn(SIGNUP_INPUT, "mt-1")}
+              />
+              {nameError && <FieldError id="signup-full-name-error">{nameError}</FieldError>}
+            </div>
+
+            <div>
+              <Label htmlFor="signup-email" className={SIGNUP_LABEL}>
+                Email
+                <RequiredMark />
+              </Label>
+              <Input
+                ref={emailRef}
+                id="signup-email"
+                name="email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                autoCapitalize="off"
+                spellCheck={false}
+                placeholder="you@yourcompany.com"
+                value={email}
+                disabled={busy}
+                aria-invalid={Boolean(emailError)}
+                aria-describedby={
+                  emailError
+                    ? "signup-email-error"
+                    : emailSuggestion
+                      ? "signup-email-suggestion"
+                      : undefined
+                }
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setErrors((prev) => ({ ...prev, email: undefined }));
+                  setEmailSuggestion(null);
+                  markDirty();
+                }}
+                // Suggest on blur, not on every keystroke: "did you mean gmail.com"
+                // while someone is still typing "gm" is noise.
+                onBlur={() => setEmailSuggestion(suggestEmailCorrection(email))}
+                className={cn(SIGNUP_INPUT, "mt-1")}
+              />
+              {emailError ? (
+                <FieldError id="signup-email-error">{emailError}</FieldError>
+              ) : emailSuggestion ? (
+                <p
+                  id="signup-email-suggestion"
+                  aria-live="polite"
+                  className={cn("mt-1.5 text-[13px] text-muted-foreground", SIGNUP_ENTER)}
+                >
+                  Did you mean{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail(emailSuggestion);
+                      setEmailSuggestion(null);
+                      emailRef.current?.focus();
+                    }}
+                    className="font-semibold text-indigo-600 underline-offset-4 hover:underline dark:text-indigo-400"
+                  >
+                    {emailSuggestion}
+                  </button>
+                  ?
+                </p>
+              ) : null}
+            </div>
+
+            {attributionFields(false)}
+          </div>
+
+          {/*
+            Sign up sits under the fields, in the same column, so this page
+            does not also show the footer's arrow (onboarding-screen.tsx). It
+            submits the form like the arrow did: the page checks its fields
+            and moves on to the business. The way back in for someone who has
+            already started comes after it.
+          */}
+          <ColumnActions>
+            <ColumnButton busy={false} disabled={busy}>Sign up</ColumnButton>
+
+            {/*
+              A deliberate way back in for someone who has already started.
+
+              Without this the sign-in panel was reachable only by ACCIDENT: fill in
+              the whole form, submit, and have the server answer "that email already
+              exists". A returning operator whose session had expired had no way to
+              say "that's me, I have a password" — so the honest-looking action was
+              the wrong one, and taking it burned a throttle slot to be told something
+              they already knew.
+            */}
+            <p className="mt-2 text-center text-[13px] text-muted-foreground [@media(max-height:880px)]:mt-0.5">
+              Already started?{" "}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  const typed = normalizeEmail(email);
+                  if (!typed) {
+                    // Nothing to sign in AS. Point at the field rather than opening
+                    // a panel with an empty, read-only address.
+                    setErrors((prev) => ({
+                      ...prev,
+                      email: "Enter your email address to sign in.",
+                    }));
+                    emailRef.current?.focus();
+                    return;
+                  }
+                  onSignInInstead(typed);
+                }}
+                className="font-semibold text-indigo-600 underline-offset-4 hover:underline disabled:opacity-50 dark:text-indigo-400"
+              >
+                Sign in
+              </button>
+            </p>
+          </ColumnActions>
+        </div>
       )}
 
-      {page === 2 && (
-        <div key="page-2" className={SIGNUP_ENTER}>
+      {page === BUSINESS_PAGE && (
+        <div key="page-business">
           {/*
             The tenant half. It sits BEFORE payment because a web address that
             turns out to be taken has to be fixable while changing it is still
@@ -1295,19 +1362,14 @@ export function AccountStep({
           */}
           <ScreenHead
             title="What's your business called?"
-            lead={
-              <>
-                I&apos;ll build your booking site under this name.
-                {/* Phones drop the second sentence (the web address field says
-                    it too) so the page fits at 360x740 with City and state. */}
-                <span className="max-sm:hidden"> The web address is yours for good.</span>
-              </>
-            }
+            // Short (Ghulam, 2026-11-23). "Can't be changed later" is said under
+            // the web address itself.
+            lead="I'll build your booking site with this name."
+            leadClassName="[@media(max-height:619px)]:hidden"
           />
 
-          {/* Tighter on phones so "City and state" fits with no inner scroll at
-              360x740 (2026-11-21). Desktop keeps its spacing. */}
-          <div className="mt-6 space-y-4 max-sm:mt-4 max-sm:space-y-3">
+          {/* One column, its own Continue under it, like the first page. */}
+          <div className={cn(SIGNUP_FIELDS, ONE_COLUMN, UNDER_HEAD)}>
             <TenantIdentityFields
               value={tenant}
               busy={busy}
@@ -1327,10 +1389,27 @@ export function AccountStep({
               autoFocusCompanyName
               askCityState
               cityStateRef={cityStateRef}
+              askLook
             />
           </div>
+
+          <ColumnActions>
+            {/* Greyed out until the Terms are ticked, as the arrow was. */}
+            <ColumnButton busy={busy} disabled={!tenant.acceptedTerms}>
+              {busy ? "Sending your code…" : "Continue"}
+            </ColumnButton>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setPage(page - 1)}
+              className={cn(SIGNUP_QUIET, SIGNUP_HIT, "mx-auto mt-2 px-2 [@media(max-height:880px)]:mt-0.5")}
+            >
+              Back
+            </button>
+          </ColumnActions>
         </div>
       )}
+
       {/*
         Honeypot. LAST in the form on purpose: Chrome's password manager
         treats the text field just before a password field as the username

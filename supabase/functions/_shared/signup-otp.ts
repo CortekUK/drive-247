@@ -133,9 +133,28 @@ export function canResend(otp: SignupOtp | undefined | null): boolean {
 /**
  * The code is in the subject so a phone's notification shows it: the operator
  * can read it without leaving the signup to open the email.
+ *
+ * "verification code", said in the subject, the preview line, the body and
+ * the plain-text part (Ghulam, 2026-11-23): Gmail draws its own "Copy code"
+ * card only for mail it is sure carries a one-time code, and those words, a
+ * plain-text part and the bare digits are what it reads. Gmail still decides.
  */
 export function otpSubject(code: string): string {
-  return `${code} is your Drive247 code`;
+  return `${code} is your Drive247 verification code`;
+}
+
+/** The plain-text part, sent with the HTML: what code detectors read best. */
+export function otpEmailText(code: string): string {
+  const minutes = Math.round(OTP_TTL_MS / 60_000);
+  return [
+    `Your Drive247 verification code is ${code}`,
+    "",
+    `Enter it on the signup screen and I'll carry on setting up your Drive247 portal. It expires in ${minutes} minutes.`,
+    "",
+    "Didn't start a Drive247 signup? You can ignore this email. Nobody can use your address without this code.",
+    "",
+    "Drive247 · drive-247.com",
+  ].join("\n");
 }
 
 /**
@@ -170,6 +189,7 @@ export function otpEmailHtml(code: string): string {
     .d-muted { color:#8a8aa0 !important; }
     .d-code { background:#1c1a3d !important; border-color:#2f2c6b !important; color:#c7d2fe !important; }
     .d-rule { border-color:#262633 !important; }
+    .d-frame { background:#1a1830 !important; }
     .l-logo { display:none !important; max-height:0 !important; }
     .d-logo { display:block !important; max-height:none !important; overflow:visible !important; }
   }
@@ -179,26 +199,32 @@ export function otpEmailHtml(code: string): string {
   [data-ogsc] .d-body { color:#b4b4c4 !important; }
   [data-ogsc] .d-muted { color:#8a8aa0 !important; }
   [data-ogsc] .d-code { background:#1c1a3d !important; border-color:#2f2c6b !important; color:#c7d2fe !important; }
+  [data-ogsc] .d-frame { background:#1a1830 !important; }
   [data-ogsc] .l-logo { display:none !important; }
   [data-ogsc] .d-logo { display:block !important; max-height:none !important; }
 </style>
 </head>
 <body class="d-page" style="margin:0;padding:0;background:#f4f4f8;">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">Your Drive247 code is ${code}. It expires in ${minutes} minutes.</div>
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">Your Drive247 verification code is ${code}. It expires in ${minutes} minutes.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="d-page" style="background:#f4f4f8;">
   <tr>
     <td align="center" style="padding:40px 16px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
+        <!-- The logo and the card on one light-purple panel, so they read as
+             one card: the same frame as the onboarding call emails
+             (drive247-email.ts \`framed\`), 23 Nov 2026. -->
+        <tr><td class="d-frame" bgcolor="#ede9fe" style="background:#ede9fe;border-radius:22px;padding:28px 18px 18px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
-          <td align="center" style="padding:0 0 24px;">
+          <td align="center" style="padding:0 0 22px;">
             ${logoImgs()}
           </td>
         </tr>
         <tr>
-          <td class="d-card" style="background:#ffffff;border:1px solid #e8e8f0;border-radius:16px;padding:36px 32px;font-family:${font};">
+          <td class="d-card" style="background:#ffffff;border:1px solid #ddd6fe;border-radius:16px;padding:36px 32px;font-family:${font};">
             <h1 class="d-ink" style="margin:0 0 10px;font-size:22px;line-height:1.3;font-weight:600;color:#0b0b1a;">Confirm your email</h1>
             <p class="d-body" style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#4a4a5c;">
-              Here is your code. Enter it on the signup screen and I'll carry on setting up your Drive247 portal.
+              Here is your verification code. Enter it on the signup screen and I'll carry on setting up your Drive247 portal.
             </p>
             <div class="d-code" style="background:#eef2ff;border:1px solid #e0e7ff;border-radius:12px;padding:20px 12px;text-align:center;font-size:34px;line-height:1;font-weight:700;letter-spacing:10px;color:#4338ca;font-family:${font};">${code}</div>
             <p class="d-muted" style="margin:16px 0 0;font-size:13px;line-height:1.6;color:#7a7a8c;text-align:center;">
@@ -210,6 +236,8 @@ export function otpEmailHtml(code: string): string {
             </p>
           </td>
         </tr>
+        </table>
+        </td></tr>
         <tr>
           <td align="center" class="d-muted" style="padding:20px 0 0;font-family:${font};font-size:12px;line-height:1.6;color:#9a9aac;">
             Drive247 · <a href="https://www.drive-247.com" class="d-muted" style="color:#9a9aac;text-decoration:none;">drive-247.com</a>

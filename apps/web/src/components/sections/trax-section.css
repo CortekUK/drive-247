@@ -933,3 +933,6 @@
   .tm-root .tm-pin > .tm-copy .sh-sub, .tm-copy .tm-sub { margin-top: 6px; }
   .tm-root .tm-pin > .tm-section { flex: 1; height: auto; min-height: 0; padding: clamp(12px, 2svh, 20px) 0; }
 }
+
+/* The call to action under the heading: tight to the words so the held screen still fits. */
+.tm-copy .scta.tm-cta { margin-top: clamp(14px, 2svh, 24px); }

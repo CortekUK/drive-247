@@ -227,6 +227,7 @@
   /* The words line up with the tops of the phones (Ghulam, 2026-11-10). */
   .pw-head { grid-area: head; align-self: start; text-align: left; }
   .pw-head .sh { align-items: flex-start; margin: 0; text-align: left; }
+  .pw-head .scta.pw-cta { justify-content: flex-start; }
   .pw-head .sh-title { font-size: clamp(3rem, min(6vw, 11svh), 7.5rem); line-height: 1.06; text-wrap: balance; }
   .pw-head .sh-sub { max-width: 40rem; font-size: clamp(1.25rem, min(1.75vw, 3.1svh), 1.875rem); text-wrap: pretty; }
 

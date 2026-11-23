@@ -65,6 +65,10 @@ export interface SignupBusinessSnapshot {
   fleetSize?: string;
   vehicleType?: string;
   businessColours?: string;
+  /** The brand colour picked on the business page (_shared/signup-look.ts). */
+  brandColor?: string;
+  /** The booking site's starting theme, picked on the business page. */
+  siteTheme?: "light" | "dark";
   logoUrl?: string;
   operatingSchedule?: {
     alwaysOpen?: boolean;

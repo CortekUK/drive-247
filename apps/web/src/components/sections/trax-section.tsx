@@ -33,6 +33,7 @@ import { TraxMark } from "@/components/shared/trax-mark";
 import { LINE_MEDIA } from "./launch-section";
 import "./trax-section.css";
 import { Accent, SectionHeading } from "./section-heading";
+import { SectionCta } from "./section-cta";
 
 /*
  * A question goes in at the middle, and Trax goes out along the branches to the parts
@@ -710,6 +711,8 @@ export function TraxSection() {
           </>
         }
       />
+      {/* The section's call to action, under the words (Ghulam, 2026-11-13) */}
+      <SectionCta className="tm-cta" tone="dark" primary="Try Trax free" />
     </div>
     {/* The "You ask / I check your records / You get the answer" step bar was here; removed (Ghulam, 2026-11-10). */}
 

@@ -1,0 +1,99 @@
+/*
+ * The signup's screen entrance, copied from the portal's onboarding questions
+ * (apps/portal/src/components/onboarding/first-run-wizard.tsx): each block
+ * resolves out of a blur while it rises into place, the heading first and the
+ * rest a beat behind. The portal does it with `motion`; this app has no motion
+ * library, so it is a CSS keyframe with the same numbers.
+ *
+ * The end state is `transform: none; filter: none` on purpose. A leftover
+ * `filter: blur(0)` or `translateY(0)` would make every animated block a
+ * containing block for fixed-position children (Stripe's and Radix's popups).
+ *
+ * `prefers-reduced-motion` gets the portal's 0.14s opacity fade instead.
+ */
+
+@keyframes signup-rise {
+  from {
+    opacity: 0;
+    transform: translateY(26px);
+    filter: blur(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@keyframes signup-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.signup-rise {
+  animation: signup-rise 550ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.signup-rise-2 {
+  animation-delay: 55ms;
+}
+
+.signup-rise-3 {
+  animation-delay: 110ms;
+}
+
+.signup-rise-4 {
+  animation-delay: 165ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signup-rise {
+    animation: signup-fade 140ms ease-out both;
+  }
+}
+
+/*
+ * Bryan's card during the build (onboarding-call.tsx): in from the right edge
+ * on anything wider than a phone, up from the bottom edge on a phone.
+ */
+@keyframes signup-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(110%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes signup-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(110%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.signup-slide-in {
+  animation: signup-sheet-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (min-width: 640px) {
+  .signup-slide-in {
+    animation-name: signup-slide-in;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signup-slide-in {
+    animation: signup-fade 140ms ease-out both;
+  }
+}

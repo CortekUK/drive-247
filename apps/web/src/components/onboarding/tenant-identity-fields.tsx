@@ -40,7 +40,9 @@ import {
 } from "@/lib/signup-validation";
 
 import type { BusinessDraft, SlugCheckResult } from "./onboarding-types";
-import { FieldError, SIGNUP_INPUT, SIGNUP_LABEL } from "./signup-ui";
+import { BrandLookField } from "./brand-look-field";
+import { CityStateField } from "./city-state-field";
+import { FieldError, RequiredMark, SIGNUP_INPUT, SIGNUP_LABEL } from "./signup-ui";
 
 /**
  * Long enough that a normal typist finishes a word first, short enough that the
@@ -48,12 +50,6 @@ import { FieldError, SIGNUP_INPUT, SIGNUP_LABEL } from "./signup-ui";
  * checks/hour per user, which ~450 ms comfortably respects.
  */
 const SLUG_DEBOUNCE_MS = 450;
-
-/**
- * 40px fields on phones when "City and state" is on the screen, as the first
- * page does, so the business page still fits at 360x740 with no inner scroll.
- */
-const COMPACT_ON_PHONES = "max-sm:h-10";
 
 /** The visible half of the hostname. Purely presentational — never sent. */
 const SLUG_SUFFIX = ".drive-247.com";
@@ -113,6 +109,12 @@ export interface TenantIdentityFieldsProps {
    */
   askCityState?: boolean;
   cityStateRef?: React.RefObject<HTMLInputElement | null>;
+  /**
+   * Offer the brand colour and the booking site's light or dark under the web
+   * address. On wherever the signup asks for the business; off on the build
+   * screen's "pick another address" panel.
+   */
+  askLook?: boolean;
 }
 
 export function TenantIdentityFields({
@@ -129,6 +131,7 @@ export function TenantIdentityFields({
   autoFocusCompanyName = false,
   askCityState = false,
   cityStateRef,
+  askLook = false,
 }: TenantIdentityFieldsProps) {
   const [slugState, setSlugState] = React.useState<SlugState>({ kind: "idle" });
 
@@ -230,6 +233,7 @@ export function TenantIdentityFields({
       <div>
         <Label htmlFor="signup-company-name" className={SIGNUP_LABEL}>
           Business name
+          <RequiredMark />
         </Label>
         <Input
           ref={companyNameRef}
@@ -247,12 +251,13 @@ export function TenantIdentityFields({
             errors.companyName ? "signup-company-name-error" : "signup-company-name-help"
           }
           onChange={(e) => setCompanyName(e.target.value)}
-          className={cn(SIGNUP_INPUT, "mt-1.5", askCityState && COMPACT_ON_PHONES)}
+          className={cn(SIGNUP_INPUT, "mt-1")}
         />
         {errors.companyName ? (
           <FieldError id="signup-company-name-error">{errors.companyName}</FieldError>
         ) : (
-          <p id="signup-company-name-help" className="mt-1.5 text-[13px] text-muted-foreground">
+          // Left out in a very short window, so the screen fits without scrolling.
+          <p id="signup-company-name-help" className="mt-1.5 text-[13px] text-muted-foreground [@media(max-height:619px)]:hidden">
             How customers will see you. You can change it later.
           </p>
         )}
@@ -262,26 +267,23 @@ export function TenantIdentityFields({
         <div>
           <Label htmlFor="signup-city-state" className={SIGNUP_LABEL}>
             City and state
+            <RequiredMark />
           </Label>
-          {/* `off`, not `address-level2`: that autofills the city alone and
-              leaves the state out without anyone noticing. */}
-          <Input
-            ref={cityStateRef}
+          {/* Pick from the list as you type (Ghulam, 2026-11-23). */}
+          <CityStateField
             id="signup-city-state"
-            name="cityState"
-            type="text"
-            autoComplete="off"
+            inputRef={cityStateRef}
             placeholder={examplePlaceholder("Houston, TX", errors.cityState, !value.cityState)}
             value={value.cityState ?? ""}
-            disabled={busy}
+            busy={busy}
             maxLength={FIELD_MAX.cityState}
-            aria-invalid={Boolean(errors.cityState)}
-            aria-describedby={errors.cityState ? "signup-city-state-error" : undefined}
-            onChange={(e) => {
+            invalid={Boolean(errors.cityState)}
+            describedBy={errors.cityState ? "signup-city-state-error" : undefined}
+            onChange={(next) => {
               onClearError("cityState");
-              onChange({ cityState: e.target.value });
+              onChange({ cityState: next });
             }}
-            className={cn(SIGNUP_INPUT, "mt-1.5", COMPACT_ON_PHONES)}
+            className={cn(SIGNUP_INPUT, "mt-1")}
           />
           {errors.cityState && (
             <FieldError id="signup-city-state-error">{errors.cityState}</FieldError>
@@ -289,9 +291,13 @@ export function TenantIdentityFields({
         </div>
       )}
 
-      <div>
+      {/* The full width of the grid: a hostname needs the room. `col-span-full`,
+          not `col-span-2`, which forced a second column into the one-column
+          screens. */}
+      <div className="col-span-full">
         <Label htmlFor="signup-slug" className={SIGNUP_LABEL}>
           Web address
+          <RequiredMark />
         </Label>
 
         {/*
@@ -302,12 +308,12 @@ export function TenantIdentityFields({
         */}
         <div
           className={cn(
-            "mt-1.5 flex h-11 items-center rounded-xl border border-zinc-200 bg-white transition-[color,box-shadow] dark:border-white/10 dark:bg-white/[0.03]",
-            "focus-within:border-indigo-500 focus-within:ring-[3px] focus-within:ring-indigo-500/20 dark:focus-within:border-indigo-400",
+            // An underline like every other field, the suffix sitting on it.
+            "mt-1 flex h-12 [@media(max-height:880px)]:h-10 [@media(max-height:700px)]:mt-0 items-center border-b border-foreground/15 transition-[border-color,box-shadow] dark:border-white/15",
+            "focus-within:border-indigo-600 focus-within:shadow-[inset_0_-1px_0_0_var(--color-indigo-600)] dark:focus-within:border-indigo-400 dark:focus-within:shadow-[inset_0_-1px_0_0_var(--color-indigo-400)]",
             (slugError || slugState.kind === "unavailable") &&
-              "border-destructive focus-within:border-destructive focus-within:ring-destructive/20",
+              "border-red-500 focus-within:border-red-500 focus-within:shadow-[inset_0_-1px_0_0_var(--color-red-500)] dark:border-red-400",
             busy && "opacity-50",
-            askCityState && COMPACT_ON_PHONES,
           )}
         >
           <input
@@ -333,9 +339,9 @@ export function TenantIdentityFields({
             aria-invalid={Boolean(slugError) || slugState.kind === "unavailable"}
             aria-describedby="signup-slug-status"
             onChange={(e) => setSlug(e.target.value, isTypedChange(e.nativeEvent))}
-            className="h-full min-w-0 flex-1 rounded-l-xl bg-transparent pl-4 pr-1 text-[15px] outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed max-sm:text-base"
+            className="h-full min-w-0 flex-1 bg-transparent pr-1 pl-0 text-[18px] caret-indigo-600 outline-none placeholder:text-foreground/25 disabled:cursor-not-allowed max-sm:text-[17px] dark:caret-indigo-400"
           />
-          <span className="shrink-0 pr-4 pl-0 text-[15px] text-muted-foreground select-none max-sm:text-base">
+          <span className="shrink-0 text-[18px] text-muted-foreground select-none max-sm:text-[17px]">
             {SLUG_SUFFIX}
           </span>
         </div>
@@ -381,9 +387,14 @@ export function TenantIdentityFields({
             </p>
           ) : (
             <p className="text-[13px] text-muted-foreground">
-              This is your booking site. Your portal will be at{" "}
-              {value.slug || "your-address"}.portal.drive-247.com. It can&apos;t be
-              changed later.
+              {/* The full sentence on a laptop; a phone gets the part that
+                  matters in one line, so the screen fits (2026-11-23). */}
+              <span className="max-sm:hidden">
+                This is your booking site. Your portal will be at{" "}
+                {value.slug || "your-address"}.portal.drive-247.com. It can&apos;t be
+                changed later.
+              </span>
+              <span className="sm:hidden">Your booking site. It can&apos;t be changed later.</span>
             </p>
           )}
 
@@ -412,7 +423,18 @@ export function TenantIdentityFields({
         </div>
       </div>
 
-      <div>
+      {/* The colour and the booking site's light or dark, quietly, under the
+          address they belong to (brand-look-field.tsx). */}
+      {askLook && (
+        <BrandLookField
+          brandColor={value.brandColor}
+          siteTheme={value.siteTheme}
+          busy={busy}
+          onChange={onChange}
+        />
+      )}
+
+      <div className="col-span-full">
         <div className="flex items-start gap-2.5">
           <Checkbox
             ref={termsRef}

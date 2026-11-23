@@ -37,6 +37,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { LandingV2 } from "@/components/landing-v2/landing-v2";
 import { LandingTheme } from "@/components/shared/landing-theme";
+import { SectionCta } from "@/components/sections/section-cta";
 
 export default async function Home({
   searchParams,
@@ -159,6 +160,7 @@ export default async function Home({
               </>
             }
             sub="See which cars make you money, which ones cost you money, and where your next opportunity is."
+            cta={<SectionCta align="left" />}
           />
           {/* Insights as the calendar and messages are on phones (boss, 2026-11-13: in the "screen
               view", end to end), without its "Insights" title (track-phone-stage.css). */}

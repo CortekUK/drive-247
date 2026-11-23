@@ -47,7 +47,7 @@ import { EditorToolbarV2 } from "./editor-toolbar-v2";
 import { SelectionBarV2, SlashMenuV2 } from "./slash-menu-v2";
 import { EditorSidePanelV2, type SidePanelTabV2 } from "./editor-side-panel-v2";
 import { AGREEMENT_STARTER_V2, duplicateSignerFieldsReasonV2 } from "./starter-content";
-import { TraxIcon } from "@/components/chat/TraxIcon";
+import { TraxIcon } from "@/components/trax/trax-glyph";
 import { TraxAgreementPane } from "@/components/agreements-v2/trax-studio/trax-agreement-pane";
 import { AgreementOutlinePane, type OutlineSection } from "@/components/agreements-v2/trax-studio/agreement-outline-pane";
 import { DockTip, SigningDockV2 } from "@/components/agreements-v2/trax-studio/signing-dock-v2";

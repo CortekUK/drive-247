@@ -10,7 +10,7 @@ import {
   X,
   Send,
 } from 'lucide-react';
-import { TraxIcon } from '@/components/chat/TraxIcon';
+import { TraxIcon } from "@/components/trax/trax-glyph";
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatMessage } from './ChatMessage';

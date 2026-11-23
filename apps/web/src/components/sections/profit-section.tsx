@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { TraxGlyph } from "@/components/shared/trax-glyph";
 import type { CSSProperties } from "react";
 import { useReveal } from "./operations-dashboard";
 import "./profit-section.css";
@@ -85,7 +85,7 @@ export function ProfitSection() {
 
           <div className="pf-trax">
             <span className="pf-trax-mark">
-              <Sparkles strokeWidth={2} />
+              <TraxGlyph />
             </span>
             <p>
               <b>Trax</b>

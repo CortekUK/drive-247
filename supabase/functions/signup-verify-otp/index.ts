@@ -23,6 +23,7 @@ import {
   checkOtp,
   mintOtp,
   otpEmailHtml,
+  otpEmailText,
   otpSubject,
   OTP_MAX_ATTEMPTS,
 } from "../_shared/signup-otp.ts";
@@ -91,7 +92,7 @@ Deno.serve(async (req) => {
         app_metadata: { d247_signup: { ...meta, otp, updatedAt: new Date().toISOString() } },
       });
       const sent = await sendResendEmail(
-        { to: email, subject: otpSubject(fresh), html: otpEmailHtml(fresh), ...DRIVE247_SENDER, source: "signup-verify-otp" },
+        { to: email, subject: otpSubject(fresh), html: otpEmailHtml(fresh), text: otpEmailText(fresh), ...DRIVE247_SENDER, source: "signup-verify-otp" },
         supabase,
       );
       if (!sent?.success) {

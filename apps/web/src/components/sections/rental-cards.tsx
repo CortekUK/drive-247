@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { FlowStory, type FlowTone } from "./verify-story";
 import "./rental-cards.css";
+import { SectionCta } from "./section-cta";
 
 /*
  * Four features in one held screen. The list stays on the left and the active one moves down
@@ -332,6 +333,10 @@ export function RentalCards() {
                     ))}
                   </ul>
                   </div>
+                  {/* The section's call to action, under the last feature's steps (Ghulam, 2026-11-13) */}
+                  {i === FEATURES.length - 1 && (
+                    <SectionCta className="rc-cta" align="left" />
+                  )}
                 </div>
               </div>
               {/* Where the screen sits when the section does not hold still. */}

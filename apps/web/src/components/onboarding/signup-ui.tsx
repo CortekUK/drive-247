@@ -1,27 +1,83 @@
 "use client";
 
 /**
- * The few pieces every full-screen signup screen is built from, so the five
- * screens read as one product: a picture, a headline, one Trax line, then the
- * fields. Everything is flat — 1px borders, no shadows — and every entrance is
- * the TRAX motion (200ms, opacity plus the 12px rise).
+ * The few pieces every full-screen signup screen is built from.
+ *
+ * THE LOOK IS THE PORTAL'S ONBOARDING QUESTIONS (Ghulam, 2026-11-23). Every
+ * signup screen now wears the design of the portal's first-run questions
+ * (apps/portal/src/components/onboarding/first-run-wizard.tsx): no card, no
+ * picture, the screen's one heading at display size in Manrope, left-aligned on
+ * the page wash, fields as bare underlines, and the chrome reduced to thin
+ * progress lines and a Back / Continue pair in the bottom corner.
+ *
+ * Apps do not share components, so the numbers are copied here. Keep them in
+ * step with the portal if the questions change.
  */
 
-import type { ReactNode } from "react";
+import { createContext, forwardRef, useContext, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { Loader2 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-/** Inputs on these screens: taller, rounder and larger type than the site default. */
-export const SIGNUP_INPUT =
-  "h-11 [@media(max-height:700px)]:h-10 rounded-xl border-zinc-200 bg-white px-4 text-[15px] shadow-none md:text-[15px] max-sm:text-base dark:border-white/10 dark:bg-white/[0.03] focus-visible:border-indigo-500 focus-visible:ring-indigo-500/20 dark:focus-visible:border-indigo-400";
+import "./signup-motion.css";
 
-/** The one primary action per screen. */
+/**
+ * The heading face. Manrope, loaded once in the root layout as
+ * `--font-signup-display` (the portal sets its headings in it too).
+ */
+export const SIGNUP_DISPLAY = "font-[family-name:var(--font-signup-display),var(--font-sans)]";
+
+/** The screen's heading: the questions' prompt, same size, weight and tracking. */
+export const SIGNUP_TITLE = cn(
+  SIGNUP_DISPLAY,
+  "text-[clamp(2rem,5.2vw,3.5rem)] leading-[1.04] font-medium tracking-[-0.032em] text-balance text-foreground",
+  // A short window (a laptop with its browser bars) gets a smaller heading,
+  // so the screen fits without scrolling.
+  "sm:[@media(max-height:760px)]:text-[clamp(1.75rem,4vw,2.75rem)]",
+  // Phones: small enough that "Let's get you on the road" is one line that
+  // clears the close button, down to a 320px-wide screen (Ghulam,
+  // 2026-11-23: every screen must fit a phone without scrolling).
+  "max-sm:text-[clamp(22px,7vw,28px)]",
+);
+
+/** The one muted line under the heading (the questions' help line). */
+export const SIGNUP_LEAD = "max-w-[52ch] text-[15px] leading-relaxed text-pretty text-muted-foreground";
+
+/**
+ * Short windows (Ghulam, 2026-11-23: every screen fits one screen, on a
+ * phone or a laptop, without scrolling). Sized by the window's HEIGHT, so a
+ * laptop window is treated like a phone of the same height: 760px or less
+ * 880px or less makes fields 40px tall with less space between them, 700px
+ * or less also drops the gap under each label. The two heights are separate
+ * ranges where they set the same thing (a 760px rule otherwise beat a 700px
+ * one in the stylesheet). Checked at phone sizes from 320x568 and
+ * laptop windows from 1280x600.
+ *
+ * Inputs: a bare rule, no box. The rule turns indigo and thickens on focus,
+ * the way the questions' free-text answer does. 18px type (16px minimum on
+ * phones, or iOS zooms the page into the field).
+ */
+export const SIGNUP_INPUT =
+  "h-12 [@media(max-height:880px)]:h-10 [@media(max-height:700px)]:mt-0 rounded-none border-0 border-b border-foreground/15 bg-transparent px-0 text-[18px] shadow-none md:text-[18px] max-sm:text-[17px] caret-indigo-600 placeholder:text-foreground/25 focus-visible:border-indigo-600 focus-visible:ring-0 focus-visible:shadow-[inset_0_-1px_0_0_var(--color-indigo-600)] aria-invalid:border-red-500 aria-invalid:ring-0 dark:bg-transparent dark:border-white/15 dark:caret-indigo-400 dark:placeholder:text-white/25 dark:focus-visible:border-indigo-400 dark:focus-visible:shadow-[inset_0_-1px_0_0_var(--color-indigo-400)] dark:aria-invalid:ring-0";
+
+/** The one forward action per screen: the questions' accent pill. */
 export const SIGNUP_PRIMARY =
-  "h-11 w-full rounded-xl bg-indigo-600 text-[15px] font-semibold text-white shadow-none transition-colors duration-200 ease-out hover:bg-indigo-700 disabled:bg-indigo-600/40 disabled:opacity-100 motion-reduce:transition-none dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:disabled:bg-indigo-500/30";
+  "h-11 rounded-full bg-indigo-600 px-7 text-[15px] font-medium text-white shadow-none transition-[background-color,transform] duration-200 ease-out hover:bg-indigo-700 active:translate-y-px focus-visible:ring-[3px] focus-visible:ring-indigo-500/30 disabled:pointer-events-none disabled:bg-indigo-600/25 disabled:text-white/80 disabled:opacity-100 motion-reduce:transition-none dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:disabled:bg-indigo-500/25";
+
+/**
+ * The footer's two angle brackets (Ghulam, 2026-11-23: "just the angle
+ * brackets"). Forward is the accent pill drawn round; back is its outline.
+ * What each one does is still said, in the tooltip and to a screen reader.
+ */
+export const SIGNUP_ARROW = cn(SIGNUP_PRIMARY, "size-11 shrink-0 px-0");
+export const SIGNUP_BACK_ARROW =
+  "flex size-11 shrink-0 items-center justify-center rounded-full text-foreground ring-1 ring-foreground/15 transition-colors duration-200 ease-out hover:bg-foreground/[0.04] focus-visible:ring-[3px] focus-visible:ring-indigo-500/30 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none dark:ring-white/15";
 
 /** Quiet text actions (Back, Resend, Use a different email…). */
 export const SIGNUP_QUIET =
-  "text-sm font-medium text-muted-foreground transition-colors duration-200 ease-out hover:text-foreground disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none";
+  "rounded-full text-sm text-muted-foreground underline-offset-4 transition-colors duration-200 ease-out hover:text-foreground disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none";
 
 /**
  * Phones: widens a small text action's tap area to about 44px without moving
@@ -31,73 +87,131 @@ export const SIGNUP_QUIET =
 export const SIGNUP_HIT =
   "relative max-sm:after:absolute max-sm:after:-inset-x-2 max-sm:after:-inset-y-3 max-sm:after:content-['']";
 
-/** Field labels. */
-export const SIGNUP_LABEL = "text-[13px] font-medium text-foreground/80";
+/** Field labels: small and muted, so the heading stays the only loud thing. */
+export const SIGNUP_LABEL = "text-[13px] font-medium text-muted-foreground";
 
-/** The enter half of the TRAX motion, for anything that mounts. */
+/** The enter half of the TRAX motion, for small things that mount (errors, notes). */
 export const SIGNUP_ENTER =
   "animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none";
 
-/** The signup card itself: solid, with a clear edge and a soft brand lift. */
-export const SIGNUP_CARD =
-  "rounded-[28px] border border-[#d4d3e6] bg-white shadow-[0_2px_4px_rgba(30,27,75,0.08),0_12px_28px_-8px_rgba(30,27,75,0.18),0_40px_90px_-30px_rgba(68,45,215,0.50)] dark:border-white/15 dark:bg-[#17171f] dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_40px_90px_-30px_rgba(0,0,0,0.85)]";
+/** A whole screen arriving: the questions' blur-and-rise (signup-motion.css). */
+export const SIGNUP_RISE = "signup-rise";
 
 /**
- * The stage: a tinted band across the top of the card that the picture stands
- * in. Full-bleed — it cancels the card's padding with the negative margins the
- * caller passes — and it gives way on short screens (shorter below 820px of
- * height, gone below 700px) so the form always fits without scrolling.
+ * The fields under a heading: one column on phones, two on anything wider,
+ * kept to a readable width on a big screen. A field that needs the whole row
+ * takes `sm:col-span-2`.
  */
-export function ArtStage({ children, className }: { children: ReactNode; className?: string }) {
+export const SIGNUP_FIELDS =
+  "signup-rise signup-rise-3 mx-auto grid w-full max-w-[46rem] grid-cols-1 gap-x-10 gap-y-6 text-left sm:grid-cols-2 [@media(min-height:701px)_and_(max-height:880px)]:gap-y-4 [@media(max-height:700px)]:gap-y-3";
+
+/**
+ * A row of quiet actions under a screen's fields (Google, "Already started?",
+ * Resend, Forgot password?), centred like everything else on the screen.
+ */
+export const SIGNUP_ACTIONS = "flex flex-wrap items-center justify-center gap-x-6 gap-y-3";
+
+/**
+ * ONE COLUMN (Ghulam, 2026-11-23: "same layout on this screen and on other as
+ * well"). Every signup screen with fields is one centred column: the fields,
+ * then the screen's own full-width button, then any quiet links. The footer's
+ * arrows are hidden on these screens, so the footer is only the progress.
+ */
+export const ONE_COLUMN_WIDTH = "mx-auto w-full max-w-[28rem]";
+/** Add to `SIGNUP_FIELDS` for the one-column grid. */
+export const ONE_COLUMN = cn(ONE_COLUMN_WIDTH, "sm:grid-cols-1");
+/** The gap between a heading and the fields under it, by window height. */
+export const UNDER_HEAD = "mt-10 [@media(min-height:701px)_and_(max-height:880px)]:mt-8 [@media(min-height:620px)_and_(max-height:700px)]:mt-6 [@media(max-height:619px)]:mt-4";
+
+/** The buttons under a one-column screen's fields. */
+export function ColumnActions({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div
       className={cn(
-        "relative h-[196px] overflow-hidden rounded-t-[27px] border-b border-indigo-200/70 bg-[linear-gradient(180deg,#f3f2ff_0%,#e5e3fd_100%)] dark:border-white/10 dark:bg-[linear-gradient(180deg,#24224d_0%,#1b1a3a_100%)] [@media(max-height:820px)]:h-[150px] [@media(max-height:700px)]:hidden",
+        "signup-rise signup-rise-4 mt-8 flex flex-col items-stretch gap-3 [@media(max-height:880px)]:gap-2 [@media(min-height:701px)_and_(max-height:880px)]:mt-5 [@media(min-height:620px)_and_(max-height:700px)]:mt-4 [@media(max-height:619px)]:mt-3",
+        ONE_COLUMN_WIDTH,
         className,
       )}
     >
-      <div
-        aria-hidden
-        className="absolute inset-0 bg-[radial-gradient(circle,rgba(79,70,229,0.16)_1px,transparent_1.3px)] [mask-image:linear-gradient(to_bottom,black_20%,transparent_85%)] bg-[size:18px_18px] dark:bg-[radial-gradient(circle,rgba(165,180,252,0.14)_1px,transparent_1.3px)]"
-      />
       {children}
     </div>
   );
 }
 
+/** A row of quiet links under the button ("Forgot password?", "Back"…). */
+export function ColumnLinks({ children }: { children: ReactNode }) {
+  return <div className="mt-2 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 [@media(max-height:880px)]:mt-0.5">{children}</div>;
+}
+
+/** The screen's one full-width button: submits its form unless told otherwise. */
+export const ColumnButton = forwardRef<
+  HTMLButtonElement,
+  {
+    busy?: boolean;
+    disabled?: boolean;
+    type?: "submit" | "button";
+    /** Submits this form by id from outside it (the card step's Stripe form). */
+    form?: string;
+    onClick?(): void;
+    children: ReactNode;
+  }
+>(function ColumnButton({ busy = false, disabled = false, type = "submit", form, onClick, children }, ref) {
+  return (
+    <Button
+      ref={ref}
+      type={type}
+      form={form}
+      disabled={busy || disabled}
+      onClick={onClick}
+      className={cn(SIGNUP_PRIMARY, "w-full [@media(max-height:700px)]:h-10")}
+    >
+      {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+      {children}
+    </Button>
+  );
+});
+
 /**
- * Picture, headline, one line. The picture stands in the card's stage at the
- * very top; the headline says the one thing the screen is for, and the line is
- * Trax speaking. `art={null}` drops the stage for a little plain white air above
- * the headline; the screen then spaces its own fields out to fill the card.
+ * Heading and one line, left-aligned, as the questions' prompt and help line.
+ * `art` is accepted and ignored: the questions have no pictures, so neither
+ * does the signup.
  */
 export function ScreenHead({
-  art,
   title,
   lead,
   titleId,
+  leadClassName,
 }: {
   art?: ReactNode;
   title: ReactNode;
   lead?: ReactNode;
   titleId?: string;
+  /** For example, hiding the line in a very short window so the screen fits. */
+  leadClassName?: string;
 }) {
   return (
-    <div className="flex flex-col items-center text-center">
-      {art === null ? (
-        <div aria-hidden className="h-4 sm:h-6 [@media(max-height:700px)]:hidden" />
-      ) : art ? (
-        <ArtStage className="-mx-6 -mt-7 mb-6 self-stretch sm:-mx-10 sm:-mt-8">{art}</ArtStage>
-      ) : null}
-      <h2 id={titleId} className="text-[24px] leading-[1.2] font-semibold tracking-[-0.02em] text-balance sm:text-[26px] [@media(max-height:700px)]:text-[22px] sm:[@media(max-height:700px)]:text-[23px]">
+    <div className="flex flex-col items-center gap-4 text-center">
+      <h2 id={titleId} className={cn(SIGNUP_TITLE, SIGNUP_RISE, "max-w-[22ch]")}>
         {title}
       </h2>
-      {lead ? (
-        <p className="mt-2 max-w-[380px] text-[14px] leading-relaxed text-pretty text-muted-foreground">
-          {lead}
-        </p>
-      ) : null}
+      {lead ? <p className={cn(SIGNUP_LEAD, SIGNUP_RISE, "signup-rise-2 mx-auto", leadClassName)}>{lead}</p> : null}
     </div>
+  );
+}
+
+/**
+ * The star on a required field's label (Ghulam, 2026-11-23). Optional fields
+ * carry nothing, not even "(optional)". A screen reader hears "required".
+ */
+export function RequiredMark() {
+  return (
+    <>
+      {/* Pulled in against the Label's own 8px gap, so it sits by the word. */}
+      <span aria-hidden className="-ml-1.5 text-red-500 dark:text-red-400">
+        *
+      </span>
+      <span className="sr-only"> (required)</span>
+    </>
   );
 }
 
@@ -111,18 +225,81 @@ export function FieldError({ id, children }: { id?: string; children: ReactNode 
 }
 
 /**
- * The page wash — the same one the portal's onboarding questions sit on.
+ * The footer's action slot.
+ *
+ * The questions keep their one forward button in the bottom-right corner, and
+ * so does the signup. Most screens are submitted by the shell's own button
+ * there; the few that own their action (the email code, the sign-in panel)
+ * hand it to the same corner with <FooterAction>, which portals it into the
+ * slot the shell provides. Rendered without a shell (a test, a preview), it
+ * simply draws in place.
+ */
+const FooterSlotContext = createContext<HTMLElement | null>(null);
+
+export const FooterSlotProvider = FooterSlotContext.Provider;
+
+export function FooterAction({ children }: { children: ReactNode }) {
+  const slot = useContext(FooterSlotContext);
+  if (slot) return createPortal(children, slot);
+  return <div className="mt-8 flex flex-wrap items-center justify-center gap-6">{children}</div>;
+}
+
+/**
+ * The questions' progress: one short line per step, the current one longer
+ * and in the accent, the finished ones a lighter accent.
+ */
+export function StepLines({
+  total,
+  current,
+  label,
+}: {
+  total: number;
+  /** Zero-based; everything before it counts as done. */
+  current: number;
+  label: string;
+}) {
+  return (
+    <div
+      role="progressbar"
+      aria-valuemin={1}
+      aria-valuemax={total}
+      aria-valuenow={Math.min(current + 1, total)}
+      aria-label={label}
+      className="flex items-center gap-1.5"
+    >
+      {Array.from({ length: total }, (_, i) => (
+        <span
+          key={i}
+          aria-hidden
+          className={cn(
+            "h-[3px] rounded-full transition-all duration-500 ease-out motion-reduce:transition-none",
+            i === current
+              ? "w-9 bg-indigo-600 dark:bg-indigo-400"
+              : i < current
+                ? "w-5 bg-indigo-600/40 dark:bg-indigo-400/40"
+                : "w-5 bg-foreground/[0.12]",
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The page wash, the same one the portal's onboarding questions sit on.
  *
  * Copied from the portal's `.bg-app-gradient::before` (styles/v2-theme.css)
  * plus the first-run wizard's two blurred blobs (`LiquidWash`), at the stock
  * Drive247 brand: `hsl(249 69% 51%)` is the portal's `--v2-wash` and
  * `hsl(247 92% 60%)` its `--chart-3`. apps do not share CSS, so the layers are
  * written out here; keep them in step with the portal if that wash changes.
- * Static on purpose — nothing behind the form competes with it.
+ * Fixed to the viewport, like the questions' wash, so it stays put while a
+ * long screen scrolls over it. Static on purpose: nothing behind the form
+ * competes with it.
  */
 export function SignupWash() {
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+    <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(70rem_50rem_at_105%_-10%,hsl(249_69%_51%/0.20),transparent_55%),radial-gradient(60rem_48rem_at_-8%_-6%,hsl(247_92%_60%/0.16),transparent_52%),radial-gradient(55rem_45rem_at_50%_115%,hsl(249_69%_51%/0.12),transparent_55%),linear-gradient(180deg,hsl(249_69%_51%/0.07)_0%,transparent_45%)] dark:bg-[radial-gradient(70rem_50rem_at_105%_-10%,hsl(249_69%_60%/0.24),transparent_55%),radial-gradient(60rem_48rem_at_-8%_-6%,hsl(247_92%_66%/0.18),transparent_52%),radial-gradient(55rem_45rem_at_50%_115%,hsl(249_69%_60%/0.14),transparent_55%),linear-gradient(180deg,hsl(249_69%_60%/0.08)_0%,transparent_45%)]" />
       <div className="absolute -top-48 -right-48 size-[44rem] rounded-full bg-[hsl(249_69%_51%/0.08)] blur-[130px] motion-reduce:hidden dark:bg-[hsl(249_69%_60%/0.12)]" />
       <div className="absolute -bottom-48 -left-48 size-[44rem] rounded-full bg-[hsl(247_92%_60%/0.07)] blur-[130px] motion-reduce:hidden dark:bg-[hsl(247_92%_66%/0.10)]" />

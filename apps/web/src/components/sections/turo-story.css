@@ -268,3 +268,6 @@
   .tso-track { height: 420svh; }
   .tso-slide { gap: 12px; padding: 40px 20px 72px; }
 }
+
+/* The finale's call to action: close under the Safari line, above the progress bars. */
+.tso-slide .scta.tso-cta { margin-top: clamp(16px, 3svh, 32px); }

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { PortalScreen } from "./portal-glass";
+import { SectionCta } from "./section-cta";
 
 /* Everything here is theirs: each row starts with "Your". Type and real screens only. */
 const ROWS: {
@@ -133,7 +134,7 @@ export function useReveal() {
   return { ref, visible };
 }
 
-function Row({ row, flipped }: { row: (typeof ROWS)[number]; flipped: boolean }) {
+function Row({ row, flipped, last }: { row: (typeof ROWS)[number]; flipped: boolean; last?: boolean }) {
   const { ref, visible } = useReveal();
 
   return (
@@ -159,6 +160,8 @@ function Row({ row, flipped }: { row: (typeof ROWS)[number]; flipped: boolean })
             </div>
           ))}
         </dl>
+        {/* The area's one call to action, under the last row's words (Ghulam, 2026-11-13) */}
+        {last && <SectionCta align="left" />}
       </div>
 
       <PortalScreen src={row.src} alt={row.alt} aspect={row.aspect} tab={row.tab} url={row.url} phone={row.phone} phoneAlt={row.phoneAlt} />
@@ -277,7 +280,7 @@ export function OperationsDashboard() {
       )}
       <div className="pg-rows">
         {ROWS.map((row, i) => (
-          <Row key={row.src} row={row} flipped={i % 2 === 1} />
+          <Row key={row.src} row={row} flipped={i % 2 === 1} last={i === ROWS.length - 1} />
         ))}
       </div>
     </section>

@@ -49,9 +49,12 @@ export function PasswordToggle({
       onClick={onToggle}
       aria-pressed={shown}
       aria-label={shown ? `Hide ${fieldLabel}` : `Show ${fieldLabel}`}
-      className="absolute top-1/2 right-1.5 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+      className="absolute top-1/2 right-0 -translate-y-1/2 text-muted-foreground hover:text-foreground"
     >
-      {shown ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      {/* The icon says what IS (Ghulam, 2026-11-23): an open eye while the
+          password can be read, a crossed-out one while it is hidden. The
+          accessible name still says what a press will do. */}
+      {shown ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
     </Button>
   );
 }

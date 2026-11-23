@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { TraxGlyph } from "@/components/shared/trax-glyph";
 import {
   ArrowRight,
   Bell,
@@ -11,7 +12,6 @@ import {
   Search,
   Settings,
   SlidersHorizontal,
-  Sparkles,
   X,
 } from "lucide-react";
 
@@ -161,7 +161,7 @@ export function TraxDot() {
       <span className="lift">
         <span className="cone" />
       </span>
-      <Sparkles strokeWidth={2} />
+      <TraxGlyph />
     </span>
   );
 }

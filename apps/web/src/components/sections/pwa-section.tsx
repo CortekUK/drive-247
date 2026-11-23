@@ -19,6 +19,7 @@ import { useEffect, useRef, useState } from "react";
 import { useFadeIn } from "@/hooks/use-fade-in";
 import "./pwa-section.css";
 import { Accent, SectionHeading } from "./section-heading";
+import { SectionCta } from "./section-cta";
 
 /*
  * Both portals install on a phone like apps, straight from the browser.
@@ -211,6 +212,8 @@ export function PwaSection() {
               </>
             }
           />
+          {/* The section's call to action, under the words (Ghulam, 2026-11-13) */}
+          <SectionCta className="pw-cta" />
         </div>
 
         <div ref={stage} className="pw-stage">

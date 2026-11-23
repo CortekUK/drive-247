@@ -1,0 +1,60 @@
+/* A section's closing call to action. See section-cta.tsx. Motion per the TRAX standard: 200ms, ease-out in / ease-in out. */
+.scta {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 22px;
+  margin-top: clamp(28px, 3vw, 44px);
+}
+.scta.is-center { justify-content: center; }
+.scta.is-left { justify-content: flex-start; }
+
+.scta-solid {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 46px;
+  padding-inline: 26px;
+  border-radius: 999px;
+  background: hsl(var(--v2-primary));
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  text-decoration: none;
+  transition: background-color 200ms ease-in;
+}
+.scta-solid:hover { background: hsl(var(--v2-primary) / 0.88); transition-timing-function: ease-out; }
+.scta-solid svg { width: 17px; height: 17px; transition: transform 200ms ease-in; }
+.scta-solid:hover svg { transform: translateX(2px); transition-timing-function: ease-out; }
+
+.scta-link {
+  font-size: 15px;
+  font-weight: 600;
+  color: hsl(var(--v2-primary));
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 4px;
+  transition: text-decoration-color 200ms ease-in;
+}
+.scta-link:hover { text-decoration-color: currentColor; transition-timing-function: ease-out; }
+
+/* Dark sections (Trax, the Turo story): a white pill, a soft white link. */
+.scta.is-dark .scta-solid { background: #fff; color: hsl(var(--v2-primary)); }
+.scta.is-dark .scta-solid:hover { background: rgb(255 255 255 / 0.86); }
+.scta.is-dark .scta-link { color: rgb(255 255 255 / 0.78); }
+
+.scta-solid:focus-visible, .scta-link:focus-visible { outline: 2px solid hsl(var(--v2-primary)); outline-offset: 3px; }
+.scta.is-dark .scta-solid:focus-visible, .scta.is-dark .scta-link:focus-visible { outline-color: #fff; }
+
+@media (max-width: 639.98px) {
+  .scta { flex-direction: column; gap: 14px; }
+  .scta.is-left { align-items: flex-start; }
+  .scta-solid { height: 50px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scta-solid, .scta-solid svg, .scta-link { transition: none; }
+}

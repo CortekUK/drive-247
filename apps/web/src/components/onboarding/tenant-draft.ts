@@ -39,6 +39,13 @@
 import { getBrowserSupabase } from "@/lib/supabase/browser";
 import { isSignupPlanId, type SignupPlanId } from "@/lib/plans";
 import { isHeardAbout, type SignupAttribution } from "@/lib/signup-attribution";
+import {
+  DEFAULT_BRAND_COLOR,
+  DEFAULT_SITE_THEME,
+  isBrandColor,
+  isSiteTheme,
+  type SiteTheme,
+} from "@/lib/signup-look";
 
 import type { BusinessDraft, TenantFormValues } from "./onboarding-types";
 
@@ -59,6 +66,17 @@ interface StoredDraft {
   acceptedTerms: boolean;
   /** Absent on drafts saved before "City and state" was asked. */
   cityState?: string;
+  /** Absent on drafts saved before the look was asked (2026-11-23). */
+  brandColor?: string;
+  siteTheme?: SiteTheme;
+}
+
+/** The look, kept only when it is one the signup offers. */
+function lookFrom(blob: Partial<StoredDraft>): Pick<TenantFormValues, "brandColor" | "siteTheme"> {
+  return {
+    ...(isBrandColor(blob.brandColor) ? { brandColor: blob.brandColor.toUpperCase() } : {}),
+    ...(isSiteTheme(blob.siteTheme) ? { siteTheme: blob.siteTheme } : {}),
+  };
 }
 
 /**
@@ -110,6 +128,7 @@ function toDraft(raw: unknown): TenantFormValues | null {
     // cannot prove the box was ticked is a draft that has to ask again.
     acceptedTerms: blob.acceptedTerms === true,
     ...(typeof blob.cityState === "string" && blob.cityState.trim() ? { cityState: blob.cityState } : {}),
+    ...lookFrom(blob),
   };
 }
 
@@ -285,6 +304,7 @@ export function readPendingOauth():
       slug: typeof blob.slug === "string" ? blob.slug : "",
       acceptedTerms: blob.acceptedTerms === true,
       cityState: typeof blob.cityState === "string" ? blob.cityState : "",
+      ...lookFrom(blob),
     },
     attribution: isHeardAbout(blob.attribution?.heardAbout) ? blob.attribution ?? null : null,
   };
@@ -316,5 +336,7 @@ export function draftToBusiness(values: TenantFormValues): BusinessDraft {
     slugTouched: Boolean(values.slug),
     acceptedTerms: values.acceptedTerms,
     cityState: values.cityState ?? "",
+    brandColor: values.brandColor ?? DEFAULT_BRAND_COLOR,
+    siteTheme: values.siteTheme ?? DEFAULT_SITE_THEME,
   };
 }

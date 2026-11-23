@@ -22,11 +22,11 @@ import {
 import { captureSignup, captureStepCompleted, identifyAccount } from "@/lib/analytics";
 import { readMetaSignals, trackRegistration, trackStartTrial } from "@/lib/meta-tracking";
 import {
-  hasCompleteAttribution,
   isHeardAbout,
   type HeardAbout,
   type SignupAttribution,
 } from "@/lib/signup-attribution";
+import { DEFAULT_BRAND_COLOR, DEFAULT_SITE_THEME, isBrandColor, isSiteTheme } from "@/lib/signup-look";
 import { isFleetSize, planForFleetSize, type FleetSize } from "@/lib/fleet-size";
 import { promoRejectionText, type PromoOffer } from "@/lib/promo-offer";
 import {
@@ -80,6 +80,14 @@ import {
   writePendingOauth,
 } from "./tenant-draft";
 import { isMockSignup, mockResetSignup } from "./mock-signup";
+import {
+  forgetStandIn,
+  isPasswordPending,
+  makeStandInPassword,
+  PASSWORD_PENDING_META_KEY,
+  readStandIn,
+  rememberStandIn,
+} from "./signup-stand-in";
 import { EXIT_OFFER_CODE, readExitOfferSeen, writeExitOfferSeen } from "./exit-offer";
 import {
   clearPendingVerify,
@@ -87,6 +95,11 @@ import {
   writePendingVerify,
 } from "./pending-verify";
 import { OnboardingScreen } from "./onboarding-screen";
+import { consumeFreshStart, FRESH_START_PARAM } from "./fresh-start";
+
+// `?fresh=1` (the developer hub's "Start fresh"): clear this browser's signup
+// data before anything below reads it. Client only; once per load.
+consumeFreshStart();
 
 /** This tab's open signup screen, so a refresh can reopen it. */
 const OPEN_PLAN_KEY = "d247.signup.openPlan";
@@ -451,6 +464,30 @@ function err(code: OnboardingError["code"], detail?: Record<string, unknown>): O
 }
 
 /** Keep only known milestones, in the canonical order, so "first incomplete" is always meaningful. */
+/**
+ * Mark the signed-in account as still on its stand-in password (see
+ * signup-stand-in.ts), so a later resume asks for one before the card. Never
+ * throws: the flag is a safety net, and the password screen is next anyway.
+ */
+async function markPasswordPending(): Promise<void> {
+  try {
+    const { error } = await getBrowserSupabase().auth.updateUser({ data: { [PASSWORD_PENDING_META_KEY]: true } });
+    if (error) console.warn("[onboarding] could not flag the stand-in password", error);
+  } catch (e) {
+    console.warn("[onboarding] could not flag the stand-in password", e);
+  }
+}
+
+/** The signed-in account is still on its stand-in password. Local read, no request. */
+async function passwordStillPending(): Promise<boolean> {
+  try {
+    const { data } = await getBrowserSupabase().auth.getSession();
+    return isPasswordPending(data.session?.user);
+  } catch {
+    return false;
+  }
+}
+
 function sanitiseMilestones(raw: unknown): ProvisionMilestone[] {
   if (!Array.isArray(raw)) return [];
   const seen = new Set(raw.filter((m): m is string => typeof m === "string"));
@@ -529,6 +566,10 @@ function draftFromSnapshot(b: NonNullable<ResumeSignupDTO["business"]>): Busines
     acceptedTerms: true,
     // Not part of the snapshot: it is a signup answer, saved on its own.
     cityState: "",
+    // The look picked on the business page; the defaults for a snapshot that
+    // predates it.
+    brandColor: isBrandColor(b.brandColor) ? b.brandColor.toUpperCase() : DEFAULT_BRAND_COLOR,
+    siteTheme: isSiteTheme(b.siteTheme) ? b.siteTheme : DEFAULT_SITE_THEME,
   };
 }
 
@@ -549,7 +590,26 @@ function tenantValuesFrom(d: BusinessDraft): TenantFormValues | null {
   // "City and state" rides along when it is there, but never holds up a build:
   // a signup that started before the question existed has none.
   const cityState = normalizeCityState(d.cityState);
-  return { companyName, slug, acceptedTerms: true, ...(cityState ? { cityState } : {}) };
+  return {
+    companyName,
+    slug,
+    acceptedTerms: true,
+    ...(cityState ? { cityState } : {}),
+    // The look rides along too; the build defaults whatever is missing.
+    ...lookOf(d),
+  };
+}
+
+/**
+ * The look picked on the business page, kept only when it is one the signup
+ * offers (lib/signup-look.ts). Every place that rebuilds the tenant values
+ * field by field spreads this in, or the pick is silently dropped.
+ */
+function lookOf(v: { brandColor?: unknown; siteTheme?: unknown }): Pick<TenantFormValues, "brandColor" | "siteTheme"> {
+  return {
+    ...(isBrandColor(v.brandColor) ? { brandColor: v.brandColor.toUpperCase() } : {}),
+    ...(isSiteTheme(v.siteTheme) ? { siteTheme: v.siteTheme } : {}),
+  };
 }
 
 /**
@@ -566,6 +626,9 @@ function buildProvisionRequest(v: TenantFormValues): ProvisionRequest {
     companyName: v.companyName,
     slug: v.slug,
     acceptedTerms: v.acceptedTerms,
+    // The look picked on the business page (lib/signup-look.ts).
+    ...(v.brandColor ? { brandColor: v.brandColor } : {}),
+    ...(v.siteTheme ? { siteTheme: v.siteTheme } : {}),
     tracking: readMetaSignals(),
   };
 }
@@ -1235,7 +1298,7 @@ export function OnboardingProvider({
   // -------------------------------------------------------------------------
 
   const hydrateFromResume = useCallback(
-    (dto: ResumeSignupDTO, requestedPlanId: SignupPlanId) => {
+    (dto: ResumeSignupDTO, requestedPlanId: SignupPlanId, opts: { passwordFirst?: boolean } = {}) => {
       // Once money has moved the plan is fixed. Before that, the user is free to
       // click a different card and we re-mint the intent for it (edge case 28).
       const planLocked =
@@ -1295,6 +1358,13 @@ export function OnboardingProvider({
       // on the create-account form.
       switch (dto.resumeStep) {
         case "payment":
+          // Left on the password screen: it comes before the card, so the
+          // portal never opens on a login nobody knows (signup-stand-in.ts).
+          if (opts.passwordFirst) {
+            setAccountMode("password");
+            dispatch({ type: "resumeTo", step: "account" });
+            break;
+          }
           dispatch({ type: "resumeTo", step: "payment" });
           void startPaymentInternal(planId);
           break;
@@ -1341,26 +1411,14 @@ export function OnboardingProvider({
           return;
         }
 
-        // Heading for the card with no answer on record: a Google signup that
-        // closed the question screen and came back, or one that started earlier.
-        if (
-          signup.resumeStep === "payment" &&
-          !signup.paid &&
-          !attributionAnsweredRef.current &&
-          !hasCompleteAttribution(await fetchSignupMeta())
-        ) {
-          dispatch({ type: "setAccount", account: { fullName: signup.fullName, email: signup.email } });
-          dispatch({ type: "signInPrompt", prompt: null });
-          // The answer on that screen may move the plan (fleet size), so the
-          // plan is read when they carry on, not now.
-          afterAttributionRef.current = () =>
-            hydrateFromResume(signup, stateRef.current.planId ?? requestedPlanId);
-          setAccountMode("attribution");
-          dispatch({ type: "resumeTo", step: "account" });
-          return;
-        }
+        // Still on the random stand-in password the account was created with
+        // (they left on the password screen): that screen is asked again first.
+        const passwordFirst =
+          signup.resumeStep === "payment" && !signup.paid && (await passwordStillPending());
 
-        hydrateFromResume(signup, requestedPlanId);
+        // No question screen on the way back: "How did you hear about us?" is
+        // optional since 2026-11-23, so a signup without an answer goes on.
+        hydrateFromResume(signup, requestedPlanId, { passwordFirst });
       } catch (e) {
         const error = toOnboardingError(e);
         if (isSessionLoss(error)) {
@@ -1638,7 +1696,7 @@ export function OnboardingProvider({
         let meta = await fetchSignupMeta();
         // A returning Google user is not stamped again, so an answer they gave
         // before pressing the button still has to be saved.
-        if (!hasCompleteAttribution(meta) && pending.attribution) {
+        if (!isHeardAbout(meta?.heardAbout) && isHeardAbout(pending.attribution?.heardAbout)) {
           await signupSaveAttribution(pending.attribution).catch((e) =>
             console.warn("[onboarding] could not save the signup answer", e),
           );
@@ -1647,8 +1705,7 @@ export function OnboardingProvider({
         resumeHintRef.current = meta;
         setHasResumableSignup(true);
 
-        const hasAnswer = hasCompleteAttribution(meta);
-        void reportRegistration("oauth", { holdPostHog: !hasAnswer });
+        void reportRegistration("oauth");
 
         const carryOn = async () => {
           /*
@@ -1678,18 +1735,12 @@ export function OnboardingProvider({
 
           // The server decides the step, exactly as it does for a password resume.
           // For a signup that has just been stamped that is always `payment`.
-          // The plan is read now: the fleet-size answer may have moved it.
+          // The plan is read now, as the visitor may have changed it.
           await resolveResume(stateRef.current.planId ?? pending.planId);
         };
 
-        // Google skips the form that carries the question, so it comes first.
-        if (!hasAnswer) {
-          afterAttributionRef.current = carryOn;
-          setAccountMode("attribution");
-          dispatch({ type: "resumeTo", step: "account" });
-          return;
-        }
-
+        // The question is optional (2026-11-23), so Google is not stopped to
+        // ask it: an answer typed before pressing the button was saved above.
         await carryOn();
       } catch (e) {
         const error = toOnboardingError(e);
@@ -1897,7 +1948,8 @@ export function OnboardingProvider({
    * "Start free trial" outside the pricing grid (the hero, the header, the demo
    * form's thank-you screen): open the form straight away, instead of scrolling
    * to the cards. A button on this page asks with OPEN_SIGNUP_EVENT; one on
-   * another page sends the visitor to `?signup=start`.
+   * another page sends the visitor to `?signup=start`. The developer hub's
+   * `?fresh=1` lands here too, once fresh-start.ts has cleared the browser.
    *
    * It opens on the ENTRY plan (the cheapest in the live catalogue), not the
    * highlighted one. It used to pick the highlighted tier, and nothing on the
@@ -1916,8 +1968,9 @@ export function OnboardingProvider({
     window.addEventListener(OPEN_SIGNUP_EVENT, onRequest);
 
     const params = new URLSearchParams(window.location.search);
-    if (params.get("signup") === "start") {
+    if (params.get("signup") === "start" || params.get(FRESH_START_PARAM) === "1") {
       params.delete("signup");
+      params.delete(FRESH_START_PARAM);
       const query = params.toString();
       window.history.replaceState(
         null,
@@ -2010,6 +2063,7 @@ export function OnboardingProvider({
         slug: normalizeSlugClient(values.slug),
         acceptedTerms: values.acceptedTerms,
         cityState,
+        ...lookOf(values),
       };
 
       dispatch({ type: "busy", busy: true });
@@ -2018,12 +2072,22 @@ export function OnboardingProvider({
       // rate limit) does not also throw away the business name and address the
       // operator just typed — the step re-renders from this.
       dispatch({ type: "business", patch: draftToBusiness(tenant) });
+      /*
+       * THE PASSWORD COMES AFTER THE CODE (Ghulam, 2026-11-23).
+       *
+       * Nobody has chosen one yet, so the account is created with a random
+       * stand-in (signup-stand-in.ts) that only this tab knows. The browser
+       * signs in with it once the code has confirmed the address, and the
+       * password screen then replaces it. `values.password` is only used if a
+       * caller still sends one.
+       */
+      const password = values.password || makeStandInPassword();
       let handedOff = false;
       try {
         const begun = await signupBegin({
           fullName: values.fullName.trim(),
           email: values.email.trim().toLowerCase(),
-          password: values.password,
+          password,
           planId,
           companyWebsite: values.companyWebsite,
           formStartedAt: values.formStartedAt,
@@ -2048,7 +2112,8 @@ export function OnboardingProvider({
          * which signs in once the code has confirmed the address.
          */
         if (begun?.requiresVerification) {
-          pendingPasswordRef.current = values.password;
+          pendingPasswordRef.current = password;
+          rememberStandIn(values.email, password);
           pendingTenantRef.current = tenant;
           dispatch({
             type: "setAccount",
@@ -2079,7 +2144,7 @@ export function OnboardingProvider({
         // a devtools snapshot or a serialised error report.
         const { error: signInError } = await getBrowserSupabase().auth.signInWithPassword({
           email: values.email.trim().toLowerCase(),
-          password: values.password,
+          password,
         });
         if (signInError) {
           // The account exists (or, for a honeypot hit, deliberately does not).
@@ -2127,6 +2192,15 @@ export function OnboardingProvider({
          * while they read their inbox, and the verify step is the one place
          * that knows when they are through.
          */
+        // No code was needed, so the password screen comes straight away: the
+        // stand-in must not be what this account is left with.
+        if (!values.password) {
+          rememberStandIn(values.email, password);
+          await markPasswordPending();
+          setAccountMode("password");
+          return;
+        }
+
         dispatch({ type: "goto", step: "payment" });
         handedOff = true;
         void startPaymentInternal(planId);
@@ -2156,9 +2230,11 @@ export function OnboardingProvider({
           try {
             const res = await signupVerifyOtp({ email, action: "resend" });
             if (res.ok || res.code === "OTP_COOLDOWN") {
-              // They typed it a moment ago; keep it so the verify step can sign
-              // in the instant the address is confirmed.
-              pendingPasswordRef.current = values.password;
+              // The account was made on an earlier try, with THAT try's
+              // stand-in: this tab may still have it. A real password typed on
+              // the way in is the other way to sign in once the code is spent.
+              const earlier = readStandIn(email) ?? values.password;
+              pendingPasswordRef.current = earlier || null;
               pendingTenantRef.current = tenant;
               writeLocalTenantDraft(tenant);
               rememberCodeSent({ fullName: values.fullName.trim(), email }, planId);
@@ -2234,7 +2310,9 @@ export function OnboardingProvider({
          * the payment intent, provisioning — runs on that session, so a failure
          * here has to be visible rather than silent.
          */
-        const password = pendingPasswordRef.current;
+        // In memory, or (after a reload on this screen) this tab's copy of the
+        // stand-in the account was created with.
+        const password = pendingPasswordRef.current ?? readStandIn(email);
         pendingPasswordRef.current = null;
         if (password) {
           const { error: signInError } = await getBrowserSupabase().auth.signInWithPassword({
@@ -2267,16 +2345,28 @@ export function OnboardingProvider({
 
         // Now that a session exists, the draft can reach the server copy — the
         // one that survives a device switch.
-        const pendingTenant = pendingTenantRef.current;
+        const pendingTenant = pendingTenantRef.current ?? readLocalTenantDraft();
         pendingTenantRef.current = null;
-        if (pendingTenant) await saveTenantDraft(pendingTenant);
+        if (pendingTenant) {
+          await saveTenantDraft(pendingTenant);
+          dispatch({ type: "business", patch: draftToBusiness(pendingTenant) });
+        }
+
+        // Signed in with the stand-in: the password screen is next (Ghulam,
+        // 2026-11-23: code → password → card). It goes on to the card, or to
+        // the business fields first if a reload lost them.
+        if (password) {
+          await markPasswordPending();
+          setAccountMode("password");
+          dispatch({ type: "resumeTo", step: "account" });
+          return true;
+        }
 
         // They named the business on the page before the code, so asking again
         // is a repeat, and the `tenant` screen's copy assumes a paid plan. Go
         // straight to the card. The screen stays as the fallback for a reload
         // on the code screen, which loses the ref.
         if (pendingTenant) {
-          dispatch({ type: "business", patch: draftToBusiness(pendingTenant) });
           setAccountMode("create");
           dispatch({ type: "goto", step: "payment" });
           void startPaymentRef.current?.();
@@ -2297,6 +2387,54 @@ export function OnboardingProvider({
   );
 
   const clearVerifyError = useCallback(() => setVerifyError(null), []);
+
+  /**
+   * The password screen, after the code (Ghulam, 2026-11-23). The account is
+   * signed in on its stand-in; this swaps in the password they chose, clears
+   * the "still on the stand-in" flag in the same write, then carries on to the
+   * card (or to the business fields first, if a reload lost them).
+   */
+  const submitPassword = useCallback(
+    async (password: string) => {
+      if (stateRef.current.busy) return;
+      dispatch({ type: "busy", busy: true });
+      dispatch({ type: "error", error: null });
+      let handedOff = false;
+      try {
+        const { error: updateError } = await getBrowserSupabase().auth.updateUser({
+          password,
+          data: { [PASSWORD_PENDING_META_KEY]: false },
+        });
+        if (updateError) {
+          const code = (updateError as { code?: string }).code;
+          if (code === "weak_password" || updateError.name === "AuthWeakPasswordError") {
+            dispatch({ type: "error", error: err("WEAK_PASSWORD") });
+          } else if (updateError.name === "AuthSessionMissingError" || updateError.status === 401) {
+            handleSessionLoss(err("SESSION_LOST"));
+          } else {
+            dispatch({ type: "error", error: err("INTERNAL", { message: updateError.message }) });
+          }
+          return;
+        }
+        pendingPasswordRef.current = null;
+        forgetStandIn();
+
+        if (!tenantValuesFrom(stateRef.current.business)) {
+          setAccountMode("tenant");
+          return;
+        }
+        setAccountMode("create");
+        dispatch({ type: "goto", step: "payment" });
+        handedOff = true;
+        void startPaymentRef.current?.();
+      } catch (e) {
+        dispatch({ type: "error", error: toOnboardingError(e) });
+      } finally {
+        if (!handedOff) dispatch({ type: "busy", busy: false });
+      }
+    },
+    [handleSessionLoss],
+  );
 
   const resendEmailCode = useCallback(async () => {
     const email = stateRef.current.account?.email;
@@ -2327,6 +2465,7 @@ export function OnboardingProvider({
         slug: normalizeSlugClient(values.slug),
         acceptedTerms: values.acceptedTerms,
         cityState,
+        ...lookOf(values),
       };
       dispatch({ type: "busy", busy: true });
       dispatch({ type: "error", error: null });
@@ -2440,6 +2579,7 @@ export function OnboardingProvider({
       slug: normalizeSlugClient(values.slug),
       acceptedTerms: values.acceptedTerms,
       cityState: normalizeCityState(values.cityState),
+      ...lookOf(values),
     };
     dispatch({ type: "busy", busy: true });
     dispatch({ type: "error", error: null });
@@ -2478,13 +2618,22 @@ export function OnboardingProvider({
       dispatch({ type: "error", error: null });
       try {
         // No server call, so a wrong password never burns a signup throttle slot.
-        const { error: signInError } = await getBrowserSupabase().auth.signInWithPassword({
+        const { data: signedIn, error: signInError } = await getBrowserSupabase().auth.signInWithPassword({
           email: values.email.trim().toLowerCase(),
           password: values.password,
         });
         if (signInError) {
           dispatch({ type: "error", error: err("SIGN_IN_FAILED") });
           return;
+        }
+        // They just signed in with a password they know (one they set, or one
+        // "Forgot password?" set), so it is no longer the stand-in: the resume
+        // below must not ask for a password again.
+        if (isPasswordPending(signedIn?.user)) {
+          await getBrowserSupabase()
+            .auth.updateUser({ data: { [PASSWORD_PENDING_META_KEY]: false } })
+            .catch((e: unknown) => console.warn("[onboarding] could not clear the stand-in flag", e));
+          forgetStandIn();
         }
         // The business typed before a reload on the code screen: now that a
         // session exists it can reach the copy that survives a device switch.
@@ -2523,6 +2672,7 @@ export function OnboardingProvider({
       clearPendingVerify();
       setVerifySentAt(null);
       pendingPasswordRef.current = null;
+      forgetStandIn();
       setVerifyError(null);
       setAccountMode("create");
       dispatch({ type: "goto", step: "account" });
@@ -2929,6 +3079,7 @@ export function OnboardingProvider({
       submitAccount,
       submitTenantDetails,
       submitAttribution,
+      submitPassword,
       startGoogleSignup,
       signInExisting,
       useDifferentEmail,
@@ -2947,6 +3098,7 @@ export function OnboardingProvider({
     }),
     [
       submitAttribution,
+      submitPassword,
       state,
       plan,
       isOpen,

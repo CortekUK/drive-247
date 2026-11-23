@@ -557,7 +557,7 @@
 .l4-tx-mark.md { width: 40px; height: 40px; }
 .l4-tx-mark .disc { position: absolute; inset: 0; overflow: hidden; border-radius: 50%; box-shadow: 0 4px 14px -4px rgb(68 45 215 / 0.55); }
 .l4-tx-mark.xs .disc { box-shadow: 0 2px 6px -2px rgb(68 45 215 / 0.5); }
-.l4-tx-mark .cone { position: absolute; inset: -25%; background: conic-gradient(from 180deg, #6361ff, #442dd7, #442dd7, #a3b3ff, #6361ff); }
+.l4-tx-mark .cone { position: absolute; inset: -25%; background: radial-gradient(circle at center, rgb(255 255 255 / 0.22), transparent 38%), linear-gradient(145deg, #6461ff, #442dd7); }
 .l4-tx-mark.anim .cone { animation: l4-spin 12s linear infinite; }
 .l4-tx-mark .ic { position: relative; color: #f0f3ff; filter: drop-shadow(0 1px 2px rgb(55 42 172 / 0.55)); }
 .l4-tx-mark.xs .ic { width: 12px; height: 12px; }

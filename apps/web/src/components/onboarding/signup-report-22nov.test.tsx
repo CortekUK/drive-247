@@ -184,12 +184,20 @@ function mount(props: HarnessProps = {}) {
 const events = (name: string) =>
   capture.mock.calls.filter(([event]) => event === name).map(([, props]) => props as Record<string, unknown>);
 
-/** Fill page 1 ("who you are") and page 2 (password) the way Orlando did. */
-function passFirstTwoPages() {
+/**
+ * Fill page 1 ("who you are") the way Orlando did. Since 2026-11-23 the
+ * business page comes next and sends the form; the password is its own screen
+ * after the email code (`password` mode).
+ */
+function passFirstPage() {
   type($(container, "#signup-full-name")!, "Orlando Driver");
   type($(container, "#signup-email")!, "orlando@rentco.com");
   click($(container, '[data-testid="answer-attribution"]')!);
   submit(container);
+}
+
+/** Fill the password screen (`password` mode, after the code) and send it. */
+function passPasswordScreen() {
   type($(container, "#signup-password")!, "Str0ng!Passw0rd#2026");
   type($(container, "#signup-password-confirm")!, "Str0ng!Passw0rd#2026");
   submit(container);
@@ -244,7 +252,7 @@ describe("Bug 1 (Orlando): an empty business name never looks filled", () => {
   it("Orlando's path: name left empty → clear error, empty-looking box, caret and scroll on it", () => {
     const onSubmit = vi.fn();
     mount({ onSubmit });
-    passFirstTwoPages();
+    passFirstPage();
     expect(container.textContent).toContain("What's your business called?");
 
     // Orlando's recorded order: city, tapped the address, ticked terms. Never the name.
@@ -264,17 +272,20 @@ describe("Bug 1 (Orlando): an empty business name never looks filled", () => {
   it("the same path with a name typed goes through", () => {
     const onSubmit = vi.fn();
     mount({ onSubmit });
-    passFirstTwoPages();
+    passFirstPage();
     type($(container, "#signup-company-name")!, "Sunshine Rentals");
     type($(container, "#signup-city-state")!, "Orlando, FL");
     click($(container, "#signup-terms")!);
     submit(container);
+    // The business page sends the form, with no password: the account is made
+    // with a stand-in, and the password screen comes after the code.
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit.mock.calls[0][0]).toMatchObject({
       companyName: "Sunshine Rentals",
       slug: "sunshine-rentals",
       cityState: "Orlando, FL",
       acceptedTerms: true,
+      password: "",
     });
   });
 });
@@ -451,16 +462,38 @@ describe("Bug 2 (Fresno): the web address follows the name and survives autofill
 // Bug 3: blank screen between step 1 and the password step
 // ===========================================================================
 
-describe("Bug 3 (Dinuba): the password page follows step 1 directly", () => {
-  it("one Continue on step 1 shows the password fields straight away", () => {
+describe("Bug 3 (Dinuba): the next page follows step 1 directly", () => {
+  it("one Continue on step 1 shows the business fields straight away", () => {
     mount();
     type($(container, "#signup-full-name")!, "Dinuba Driver");
     type($(container, "#signup-email")!, "dinuba@rentco.com");
     click($(container, '[data-testid="answer-attribution"]')!);
     submit(container);
+    expect($(container, "#signup-company-name")).not.toBeNull();
+    expect($(container, "#signup-city-state")).not.toBeNull();
+    expect($(container, "#signup-full-name")).toBeNull();
+  });
+
+  it("the business page asks no password: it comes after the code, on its own screen", () => {
+    mount();
+    passFirstPage();
+    expect($(container, "#signup-password")).toBeNull();
+    act(() => root.render(<Harness mode="password" />));
     expect($(container, "#signup-password")).not.toBeNull();
     expect($(container, "#signup-password-confirm")).not.toBeNull();
-    expect($(container, "#signup-full-name")).toBeNull();
+    expect($(container, "#signup-company-name")).toBeNull();
+  });
+
+  it("the password screen sends the password once it passes and matches", () => {
+    const onSubmitPassword = vi.fn();
+    mount({ mode: "password", onSubmitPassword });
+    type($(container, "#signup-password")!, "Str0ng!Passw0rd#2026");
+    type($(container, "#signup-password-confirm")!, "Str0ng!Passw0rd#2027");
+    submit(container);
+    expect(onSubmitPassword).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("These passwords don't match.");
+    passPasswordScreen();
+    expect(onSubmitPassword).toHaveBeenCalledWith("Str0ng!Passw0rd#2026");
   });
 });
 
@@ -503,7 +536,7 @@ describe("Autofill never trips the anti-bot field", () => {
     mount({ onSubmit });
     // Fresno's phone filled it at 18:00:45 along with name, email and phone.
     autofill($(container, 'input[name="hp_x7"]')!, "742 Evergreen Terrace");
-    passFirstTwoPages();
+    passFirstPage();
     type($(container, "#signup-company-name")!, "Sunshine Rentals");
     type($(container, "#signup-city-state")!, "Orlando, FL");
     click($(container, "#signup-terms")!);
@@ -516,7 +549,7 @@ describe("Autofill never trips the anti-bot field", () => {
     const onSubmit = vi.fn();
     mount({ onSubmit });
     setSilently($(container, 'input[name="hp_x7"]')!, "https://spam.example");
-    passFirstTwoPages();
+    passFirstPage();
     type($(container, "#signup-company-name")!, "Sunshine Rentals");
     type($(container, "#signup-city-state")!, "Orlando, FL");
     click($(container, "#signup-terms")!);
@@ -552,18 +585,25 @@ describe("Tracking: signup_step_completed and signup_validation_error", () => {
     expect(events("signup_validation_error")).toHaveLength(1);
   });
 
-  it("steps 1, 2 and 3 report themselves on the password path", () => {
+  it("steps 1 and 3 report themselves on the way to the code, in the order they are met", () => {
     mount();
-    passFirstTwoPages();
+    passFirstPage();
     type($(container, "#signup-company-name")!, "Sunshine Rentals");
     type($(container, "#signup-city-state")!, "Orlando, FL");
     click($(container, "#signup-terms")!);
     submit(container);
+    // Step numbers keep their names (3 is still "business"), so PostHog's
+    // step_name means the same thing before and after the reorder.
     expect(events("signup_step_completed").map((p) => [p.step, p.step_name])).toEqual([
       [1, "details"],
-      [2, "password"],
       [3, "business"],
     ]);
+  });
+
+  it("step 2 reports itself on the password screen, after the code", () => {
+    mount({ mode: "password" });
+    passPasswordScreen();
+    expect(events("signup_step_completed").map((p) => [p.step, p.step_name])).toEqual([[2, "password"]]);
   });
 
   it("step 3 reports itself on the Google path too", () => {

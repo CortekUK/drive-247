@@ -22,7 +22,6 @@ import { FLEET_SIZE_OPTIONS, FLEET_SIZE_PLAN, fleetSizePlanId, isFleetSize, plan
 import {
   attributionFromDraft,
   EMPTY_ATTRIBUTION,
-  hasCompleteAttribution,
   validateAttribution,
 } from "@/lib/signup-attribution";
 
@@ -173,24 +172,15 @@ describe("fleet size: the plan it picks", () => {
   });
 });
 
-describe("fleet size: on the form", () => {
-  it("is required", () => {
-    expect(validateAttribution({ ...EMPTY_ATTRIBUTION, heardAbout: "instagram" }).fleetSize).toBeTruthy();
-    expect(validateAttribution({ ...EMPTY_ATTRIBUTION, heardAbout: "instagram", fleetSize: "6-20" })).toEqual({});
+describe("fleet size: no longer asked on the form (2026-11-23)", () => {
+  it("is not required", () => {
+    expect(validateAttribution(EMPTY_ATTRIBUTION)).toEqual({});
   });
 
-  it("rides along with the answer to the server", () => {
+  it("is not sent, even from an old draft that has one", () => {
     expect(attributionFromDraft({ ...EMPTY_ATTRIBUTION, heardAbout: "youtube", fleetSize: "21+" })).toEqual({
       heardAbout: "youtube",
-      fleetSize: "21+",
     });
-  });
-
-  it("asks again after Google sign-in when either answer is missing", () => {
-    expect(hasCompleteAttribution({ heardAbout: "youtube", fleetSize: "1-5" })).toBe(true);
-    expect(hasCompleteAttribution({ heardAbout: "youtube" })).toBe(false);
-    expect(hasCompleteAttribution({ fleetSize: "1-5" })).toBe(false);
-    expect(hasCompleteAttribution(null)).toBe(false);
   });
 });
 

@@ -9,6 +9,7 @@ import { ArrowIntro } from "./demo-intro";
 import { Accent } from "./section-heading";
 import { NumberGauge } from "./numbers-gauge";
 import { LINE_MEDIA } from "./launch-section";
+import { SectionCta } from "./section-cta";
 
 /*
  * Drive247 in numbers, as a car's instrument cluster: each figure sits under its own
@@ -150,7 +151,8 @@ export function NumbersSection() {
             <Stat key={stat.label} stat={stat} run={run} delay={index * STAGGER_MS} />
           ))}
         </ul>
-
+        {/* The proof's call to action (Ghulam, 2026-11-13) */}
+        <SectionCta primary="Join them" />
       </div>
     </section>
   );

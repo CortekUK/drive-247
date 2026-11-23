@@ -1,7 +1,7 @@
 'use client';
 
 import { User, Copy, Check } from 'lucide-react';
-import { TraxIcon } from '@/components/chat/TraxIcon';
+import { TraxIcon } from "@/components/trax/trax-glyph";
 import { useAuthStore } from '@/stores/auth-store';
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';

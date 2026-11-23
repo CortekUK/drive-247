@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import {
-  Info,
+  ChevronRight,
+  Loader2,
   MessageSquare,
   Pause,
   Pencil,
@@ -25,11 +26,17 @@ import { cn } from "@/lib/utils";
 import { useOnboarding } from "./onboarding-provider";
 import { TenantIdentityFields } from "./tenant-identity-fields";
 import { BuildArt } from "./signup-art";
-import Image from "next/image";
-
-import { BrowserChrome } from "@/components/sections/portal-glass";
-import "../../../../../shared/portal-v2/tokens.css";
-import { SignupWash, SIGNUP_ENTER, SIGNUP_PRIMARY } from "./signup-ui";
+import { BryanNudge, CallScreen, type BryanAnswer } from "./onboarding-call";
+import {
+  SignupWash,
+  StepLines,
+  SIGNUP_ARROW,
+  SIGNUP_ENTER,
+  SIGNUP_LEAD,
+  SIGNUP_PRIMARY,
+  SIGNUP_QUIET,
+  SIGNUP_TITLE,
+} from "./signup-ui";
 import {
   type ProvisionMilestone,
   MILESTONE_COPY,
@@ -92,6 +99,11 @@ const STEP_LINES: Record<ProvisionMilestone, { title: string; line: string }> = 
  * once: nobody should wait to hear that.
  */
 const STEP_DWELL_MS = 2800;
+
+/** The finished scene ("You're live.") stays up this long before moving on. */
+const DONE_HOLD_MS = 1600;
+/** When Bryan slides in: once the first scene has played. */
+const BRYAN_AFTER_MS = 2500;
 
 const UNPAID_FAILURE_COPY =
   "We couldn't finish building your portal. Try again, or talk to us and we'll finish it for you.";
@@ -193,7 +205,6 @@ export function ProvisioningScreen() {
   // What the SCREEN has reached, not the server: the paced count.
   const doneCount = failed ? serverDone : shownDone;
   const activeIndex = doneCount >= total ? -1 : doneCount;
-  const percent = (doneCount / total) * 100;
 
   const companyName = result?.companyName || business.companyName || "your portal";
 
@@ -227,6 +238,46 @@ export function ProvisioningScreen() {
         ? `${result.portalUrl}/login?email=${encodeURIComponent(email)}`
         : `${result.portalUrl}/login`))
     : "";
+
+  // -------------------------------------------------------------------------
+  // After the build (Ghulam, 2026-11-23): Bryan, the call, straight in.
+  // -------------------------------------------------------------------------
+
+  /** Bryan's question during the build: "Yes, let's book a time" or "Not now". */
+  const [bryan, setBryan] = useState<BryanAnswer>(null);
+  /** The answer as it is now, for the timer set when the build finished. */
+  const bryanRef = useRef<BryanAnswer>(null);
+  useEffect(() => {
+    bryanRef.current = bryan;
+  }, [bryan]);
+  const [bryanShown, setBryanShown] = useState(false);
+  useEffect(() => {
+    if (!running) return;
+    const t = window.setTimeout(() => setBryanShown(true), BRYAN_AFTER_MS);
+    return () => window.clearTimeout(t);
+  }, [running]);
+
+  /**
+   * What follows "You're live.": Bryan's calendar, unless they told him "Not
+   * now", or straight into the portal. `live` is the short hold on the
+   * finished scene before either.
+   */
+  const [after, setAfter] = useState<"live" | "call" | "entering">("live");
+  const [callBooked, setCallBooked] = useState(false);
+  const enterPortal = useCallback(() => {
+    if (!portalHref) return;
+    setAfter("entering");
+    window.location.assign(portalHref);
+  }, [portalHref]);
+  const finished = succeeded && result !== null;
+  useEffect(() => {
+    if (!finished) return;
+    const t = window.setTimeout(() => {
+      if (bryanRef.current === "no") enterPortal();
+      else setAfter("call");
+    }, DONE_HOLD_MS);
+    return () => window.clearTimeout(t);
+  }, [finished, enterPortal]);
 
   return (
     /*
@@ -277,7 +328,7 @@ export function ProvisioningScreen() {
             there is not, so a tall failure panel on a small phone stays
             reachable.
           */
-          className="fixed inset-0 z-[300] flex items-start justify-center overflow-y-auto bg-white px-5 py-10 outline-none dark:bg-[#0e0e14] [&_button:not(:disabled)]:cursor-pointer [&_a[href]]:cursor-pointer [&_[role=checkbox]:not(:disabled)]:cursor-pointer"
+          className="fixed inset-0 z-[300] overflow-y-auto bg-white outline-none dark:bg-[#0e0e14] [&_button:not(:disabled)]:cursor-pointer [&_a[href]]:cursor-pointer [&_[role=checkbox]:not(:disabled)]:cursor-pointer"
         >
           {/* The same wash the signup screens wear, so the hand-off is seamless. */}
           <SignupWash />
@@ -294,86 +345,101 @@ export function ProvisioningScreen() {
           )}
 
           {/*
-            ONE STEP AT A TIME, NO CARD. The build used to be a card with the
-            full eight-row checklist; now the picture is the screen, and under
-            it only the step in hand, swapping as each one lands.
+            THE PREVIEW'S BUILD (Ghulam, 2026-11-23), in the questions' look:
+            the real build's scene for each step (BuildArt) ranged left, Trax's
+            heading and line for the step in hand under it, and the progress
+            lines in the bottom corner. Bryan slides in from the right a few
+            seconds in. Once it is finished: Bryan's calendar, or straight into
+            the portal (onboarding-call.tsx).
           */}
-          <div className={cn("relative my-auto flex w-full max-w-[1120px] flex-col items-center text-center", SIGNUP_ENTER)}>
-            {!(succeeded && result) && (
-              <div className="relative h-[260px] w-full max-w-[900px] sm:h-[460px] [@media(max-height:900px)]:h-[380px] [@media(max-height:780px)]:h-[300px] [@media(max-height:680px)]:h-[200px]">
-                <BuildArt
-                  progress={percent / 100}
-                  done={doneCount}
-                  company={companyName === "your portal" ? "" : companyName}
-                  slug={business.slug}
-                  owner={account?.fullName ?? ""}
+          {finished && after === "call" ? (
+            <div className="relative flex min-h-full w-full flex-col px-6 pt-14 sm:px-10 sm:pt-16 lg:px-12 [@media(max-height:760px)]:pt-10">
+              <DialogPrimitive.Title className="sr-only">Book your onboarding call</DialogPrimitive.Title>
+              <div className="flex flex-1 flex-col justify-center pb-6">
+                <CallScreen
+                  fullName={account?.fullName ?? ""}
+                  email={email}
+                  onBookedChange={setCallBooked}
                 />
               </div>
-            )}
+              <footer className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-x-6 gap-y-3 pt-8 pb-[max(20px,env(safe-area-inset-bottom))] sm:pb-7 [@media(max-height:760px)]:pt-6 [@media(max-height:760px)]:pb-5">
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-y-0 left-1/2 -z-10 w-screen -translate-x-1/2 bg-linear-to-t from-white/90 from-50% to-transparent dark:from-[#0e0e14]/90"
+                />
+                {!callBooked ? (
+                  <button type="button" onClick={enterPortal} className={SIGNUP_QUIET}>
+                    Skip for now
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={enterPortal}
+                  aria-label="Go to my portal"
+                  title="Go to my portal"
+                  className={SIGNUP_ARROW}
+                >
+                  <ChevronRight className="size-5" />
+                </button>
+              </footer>
+            </div>
+          ) : (
+            <div className="relative flex min-h-full w-full flex-col px-6 pt-14 sm:px-10 sm:pt-16 lg:px-12 [@media(max-height:760px)]:pt-10">
+              <div className="flex flex-1 flex-col items-center justify-center pb-6 text-center">
+                {!failed ? (
+                  <div className="relative mx-auto h-[220px] w-full max-w-[760px] sm:h-[340px] [@media(max-height:820px)]:h-[280px] [@media(max-height:700px)]:h-[200px]">
+                    <BuildArt
+                      progress={doneCount / total}
+                      done={doneCount}
+                      company={companyName === "your portal" ? "" : companyName}
+                      slug={business.slug}
+                      owner={account?.fullName ?? ""}
+                    />
+                  </div>
+                ) : null}
 
-            {succeeded && result ? null : (
-              /* ── running / failed ────────────────────────────────────────── */
-              <div className="w-full">
-                {running ? (
+                {running || finished ? (
                   <>
                     {/* Keyed on the step, so each new one rises in. */}
                     <DialogPrimitive.Title asChild>
                       <h1
-                        key={activeMilestone ?? "finishing"}
+                        key={finished ? "live" : (activeMilestone ?? "finishing")}
                         aria-live="polite"
-                        className={cn("mt-10 text-[30px] leading-tight font-semibold tracking-[-0.02em] text-balance max-sm:mt-6 max-sm:text-[28px] sm:text-[40px]", SIGNUP_ENTER)}
+                        className={cn(SIGNUP_TITLE, "signup-rise mx-auto mt-8 max-w-[22ch]")}
                       >
-                        {activeMilestone ? STEP_LINES[activeMilestone].title : "Putting the kettle on"}
+                        {finished
+                          ? "You're live."
+                          : activeMilestone
+                            ? STEP_LINES[activeMilestone].title
+                            : "Putting the kettle on"}
                       </h1>
                     </DialogPrimitive.Title>
-
                     <p
-                      key={`${activeMilestone ?? "finishing"}-${showSlowHint ? "slow" : "line"}`}
-                      className={cn("mt-3 text-[15px] text-muted-foreground sm:text-base", SIGNUP_ENTER)}
+                      key={`${finished ? "live" : (activeMilestone ?? "finishing")}-${showSlowHint ? "slow" : "line"}`}
+                      className={cn(SIGNUP_LEAD, "signup-rise signup-rise-2 mx-auto mt-4")}
                     >
-                      {showSlowHint
-                        ? "Still going. Good things take a moment, and so does this one."
-                        : activeMilestone
-                          ? STEP_LINES[activeMilestone].line
-                          : "Nearly there. Keep this tab open and I'll take you straight in."}
-                    </p>
-
-                    {/* Where they are in the build, as the signup's own dashes. */}
-                    <div
-                      role="progressbar"
-                      aria-label="Setup progress"
-                      aria-valuemin={0}
-                      aria-valuemax={total}
-                      aria-valuenow={doneCount}
-                      className="mt-10 flex items-center justify-center gap-1.5"
-                    >
-                      {PROVISION_MILESTONES.map((m, i) => (
-                        <span key={m} aria-hidden className="relative h-1 w-7 overflow-hidden rounded-full bg-indigo-900/10 sm:w-9 dark:bg-white/15">
-                          <span
-                            className={cn(
-                              "absolute inset-0 origin-left rounded-full bg-indigo-600 transition-transform duration-200 ease-out motion-reduce:transition-none dark:bg-indigo-400",
-                              i < doneCount ? "scale-x-100" : "scale-x-0",
-                            )}
-                          />
-                        </span>
-                      ))}
-                    </div>
-                    <p className="mt-2.5 text-xs text-muted-foreground tabular-nums">
-                      Step {Math.min(doneCount + 1, total)} of {total}
+                      {finished
+                        ? after === "entering"
+                          ? "Taking you into your portal."
+                          : "Taking you in."
+                        : showSlowHint
+                          ? "Still going. Good things take a moment, and so does this one."
+                          : activeMilestone
+                            ? STEP_LINES[activeMilestone].line
+                            : "Nearly there. Keep this tab open and I'll take you straight in."}
                     </p>
                   </>
                 ) : (
                   <DialogPrimitive.Title asChild>
-                    <h1 className="mt-10 text-[30px] leading-tight font-semibold tracking-[-0.02em] text-balance max-sm:mt-6 max-sm:text-[28px]">
+                    <h1 className={cn(SIGNUP_TITLE, "signup-rise mx-auto max-w-[22ch]")}>
                       {failed && activeMilestone ? `Stuck on: ${MILESTONE_COPY[activeMilestone].running.toLowerCase()}` : `Building ${companyName}`}
                     </h1>
                   </DialogPrimitive.Title>
                 )}
 
-                <div className="mx-auto max-w-[440px] text-left">
                 {failed && failure && (
-                  <div className="mt-6 animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
-                    <Alert variant="destructive">
+                  <div className="mx-auto mt-8 w-full max-w-[34rem] text-left animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
+                    <Alert variant="destructive" className="rounded-2xl">
                       <TriangleAlert />
                       <AlertTitle>We couldn&apos;t finish setting up your portal</AlertTitle>
                       <AlertDescription className="text-red-600 dark:text-red-400">
@@ -381,30 +447,25 @@ export function ProvisioningScreen() {
                       </AlertDescription>
                     </Alert>
 
-                    <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-                      <Button
-                        onClick={() => void retryProvision()}
-                        className={cn(SIGNUP_PRIMARY, "sm:w-auto sm:px-6")}
-                      >
+                    <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+                      <Button onClick={() => void retryProvision()} className={SIGNUP_PRIMARY}>
                         <RotateCcw className="h-4 w-4" />
                         Try again
                       </Button>
                       {recoverable && !fixing && (
-                        <Button variant="outline" onClick={() => setFixing(true)} className="max-sm:h-11">
-                          <Pencil className="h-4 w-4" />
+                        <button type="button" onClick={() => setFixing(true)} className={cn(SIGNUP_QUIET, "flex items-center gap-1.5")}>
+                          <Pencil className="h-3.5 w-3.5" />
                           Edit details
-                        </Button>
+                        </button>
                       )}
-                      <Button variant="ghost" asChild className="max-sm:h-11">
-                        <a href="mailto:support@drive-247.com">
-                          <MessageSquare className="h-4 w-4" />
-                          Email support
-                        </a>
-                      </Button>
+                      <a href="mailto:support@drive-247.com" className={cn(SIGNUP_QUIET, "flex items-center gap-1.5")}>
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        Email support
+                      </a>
                     </div>
 
                     {recoverable && fixing && (
-                      <div className="mt-6 space-y-4 rounded-lg border p-4 text-left animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
+                      <div className="mt-10 grid grid-cols-1 gap-x-10 gap-y-6 animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out sm:grid-cols-2 motion-reduce:animate-none">
                         <TenantIdentityFields
                           value={business}
                           // Always editable here: this panel only renders inside
@@ -419,7 +480,7 @@ export function ProvisioningScreen() {
                           onCheckSlug={checkSlug}
                           autoFocusCompanyName
                         />
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground sm:col-span-2">
                           Nothing is charged again — your subscription is already
                           active.
                         </p>
@@ -427,81 +488,36 @@ export function ProvisioningScreen() {
                     )}
                   </div>
                 )}
-                </div>
               </div>
-            )}
-          </div>
-          {succeeded && result && (
-            /*
-              YOU'RE LIVE, IN TWO HALVES. The portal on the left (where they
-              run the business), the booking site on the right (where renters
-              book), each with its own heading, preview and way in. Stacked on
-              a phone.
-            */
-            <div className={cn("absolute inset-0 z-[1] overflow-y-auto lg:overflow-hidden", SIGNUP_ENTER)}>
-              <DialogPrimitive.Title asChild>
-                <h2 className="sr-only">
-                  You&apos;re live.
-                </h2>
-              </DialogPrimitive.Title>
 
-              {/* One colour across the whole screen: the indigo accent. */}
-              {/* A soft purple wash: lavender at the top fading to white, with a
-                  brighter glow behind each device. */}
-              <div
-                aria-hidden
-                className="pv2-tokens absolute inset-0"
-                style={{
-                  background:
-                    "radial-gradient(60% 55% at 25% 70%, rgb(165 160 250 / 0.35), transparent 70%), radial-gradient(60% 55% at 75% 70%, rgb(196 181 253 / 0.35), transparent 70%), linear-gradient(180deg, #ede9fe 0%, #f5f3ff 45%, #ffffff 100%)",
-                }}
-              />
-              <div className="relative grid min-h-full grid-cols-1 lg:h-full lg:grid-cols-2">
-                <LiveHalf
-                  your="Your own"
-                  big="portal."
-                  lead="Run your rentals, money, fleet and to-dos from one place."
-                  card={
-                    <LiveDevice
-                      src="/v2/hero/dashboard"
-                      aspect="1440 / 900"
-                      below="/v2/slide-fleet"
-                      belowAspect="3834 / 1150"
-                      phone="/v2/phone-dashboard"
-                      tab="Your portal"
-                      url={result.portalUrl.replace(/^https?:\/\//, "")}
-                      label={`Go to my portal, ${result.portalUrl.replace(/^https?:\/\//, "")}${result.portalSignInUrl === null ? ". Sign in with the email and password you just created." : ""}`}
-                      onOpen={() => window.location.assign(portalHref)}
-                    />
-                  }
-                />
-                <LiveHalf
-                  tone="right"
-                  your="Your own"
-                  big="booking site."
-                  lead="Renters pick their dates, choose a car and pay, under your name."
-                  card={
-                    <LiveDevice
-                      src="/v2/site-main"
-                      aspect="1917 / 992"
-                      below="/v2/hero-booking"
-                      belowAspect="1440 / 740"
-                      phone="/v2/phone-booking-site"
-                      tab={result.companyName || "Your booking site"}
-                      url={result.bookingUrl.replace(/^https?:\/\//, "")}
-                      label={`View my booking site, ${result.bookingUrl.replace(/^https?:\/\//, "")}, opens in a new tab`}
-                      href={result.bookingUrl}
-                    />
-                  }
-                  note={
-                    result.contentSeeded === false
-                      ? "Some pages still show our default copy. You can edit every page from Portal, then Website."
-                      : null
-                  }
-                />
-              </div>
+              {/* The questions' footer row: where they are in the build. */}
+              {running || finished ? (
+                <footer className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-x-8 gap-y-3 pt-8 pb-[max(20px,env(safe-area-inset-bottom))] sm:grid sm:grid-cols-[1fr_auto_1fr] sm:pb-7 [@media(max-height:760px)]:pt-6 [@media(max-height:760px)]:pb-5">
+                  {/* Centred: where they are in the build, in the middle. */}
+                  <div aria-hidden className="max-sm:hidden" />
+                  <div className="flex items-center gap-4">
+                    <StepLines total={total} current={Math.min(doneCount, total - 1)} label="Setup progress" />
+                    <p className="text-xs text-muted-foreground tabular-nums">
+                      Step {Math.min(doneCount + 1, total)} of {total}
+                    </p>
+                  </div>
+                  {after === "entering" ? (
+                    <Loader2 className="size-5 animate-spin text-indigo-600 sm:justify-self-end dark:text-indigo-400" aria-hidden />
+                  ) : null}
+                </footer>
+              ) : null}
             </div>
           )}
+
+          {/* Bryan, while the build runs (and on "You're live." if it is still up). */}
+          {bryanShown && !failed && !(finished && after !== "live") ? (
+            <BryanNudge
+              fullName={account?.fullName ?? ""}
+              answer={bryan}
+              onAnswer={setBryan}
+              onClose={() => setBryanShown(false)}
+            />
+          ) : null}
 
           {rehearsal && !failed && (
             <RehearsalControls
@@ -639,141 +655,6 @@ function RehearsalControls({
       <button type="button" onClick={() => setOpen(false)} aria-label="Hide rehearsal controls" title="Hide" className={icon}>
         <X className="h-4 w-4" />
       </button>
-    </div>
-  );
-}
-
-/**
- * One half of the "You're live." screen: a label, a short heading and line,
- * the preview, and one button.
- */
-function LiveHalf({
-  your,
-  big,
-  lead,
-  card,
-  tone = "left",
-  note = null,
-}: {
-  your: string;
-  big: string;
-  lead: string;
-  card: ReactNode;
-  /** Left = soft lavender, right = a slightly deeper light indigo. */
-  tone?: "left" | "right";
-  note?: string | null;
-}) {
-  return (
-    <section
-      className={cn(
-        "pv2-tokens flex min-h-[100dvh] flex-col items-center justify-center gap-[clamp(20px,3dvh,40px)] px-6 py-16 text-center sm:px-8 lg:h-full lg:px-4 lg:min-h-0",
-        "lg:justify-start lg:pt-[max(64px,10dvh)] lg:pb-[max(56px,7dvh)]",
-        "text-[hsl(var(--v2-primary))]",
-      )}
-    >
-      {/* The laptop is about 1.6 times as wide as it is tall; capping its width
-          by the screen height keeps each half exactly one screen tall. */}
-      {/* Title, then one line. On a laptop the right half puts it under its
-          device, so it sits in the white below the diagonal. */}
-      <div>
-        {/* The landing page's section title: one regular-weight line, the key
-            word in the brand colour (product-track.css .pt-intro-title). */}
-        <h3 className="whitespace-nowrap text-[clamp(2rem,min(3.8vw,8dvh),4.75rem)] leading-[1.05] font-bold tracking-[-0.04em]">
-          {your} <span>{big}</span>
-        </h3>
-        <p className={cn("mx-auto mt-3 text-[clamp(1rem,min(1.35vw,2.5dvh),1.4rem)] lg:whitespace-nowrap leading-[1.4] tracking-[-0.012em]", "text-[hsl(var(--v2-primary)/0.7)]")}>{lead}</p>
-      </div>
-      {/* The device takes every pixel left under the title, down to a small gap
-          above the bottom edge. */}
-      <div className="w-full max-w-[900px] px-0 text-left sm:px-2 lg:min-h-0 lg:flex-1">{card}</div>
-      {note && <p className="mt-4 max-w-[360px] text-xs text-[#737373]">{note}</p>}
-    </section>
-  );
-}
-
-/**
- * One of the two "You're live." screens, in the same frame the landing page
- * uses: the real screen open in a browser on a tablet, with the phone view
- * resting on its corner. It builds itself in on arrival (portal-glass.css,
- * the `is-in` reveal), and the whole device is the way in.
- */
-function LiveDevice({
-  src,
-  aspect,
-  phone,
-  tab,
-  url,
-  label,
-  href,
-  onOpen,
-  flipped = false,
-  below,
-  belowAspect = "1440 / 740",
-}: {
-  /** The visible slice of `below`, cropped from its top. */
-  belowAspect?: string;
-  /** A second page shown under the first, as if scrolled. */
-  below?: string;
-  src: string;
-  aspect: string;
-  phone: string;
-  tab: string;
-  url: string;
-  label: string;
-  href?: string;
-  onOpen?: () => void;
-  flipped?: boolean;
-}) {
-  const cover =
-    "absolute inset-0 z-10 outline-none";
-  return (
-    <div
-      className={cn(
-        "pv2-tokens is-in group relative transition-transform duration-200 ease-out hover:-translate-y-1 motion-reduce:transition-none lg:h-full",
-        flipped ? "is-flipped pl-[9%]" : "pr-[9%]",
-      )}
-      style={{ ["--pg-ease" as string]: "cubic-bezier(0.16, 1, 0.3, 1)" }}
-    >
-      <div className="pg-device lg:h-full">
-        {/* A tablet: the landing page's dark frame with the browser in it. */}
-        <div className="pg-tablet lg:flex lg:h-full lg:flex-col lg:[&_.pg-browser]:flex lg:[&_.pg-browser]:min-h-0 lg:[&_.pg-browser]:flex-1 lg:[&_.pg-browser]:flex-col lg:[&_.pg-screen]:min-h-0 lg:[&_.pg-screen]:flex-1" style={{ padding: "clamp(5px, 0.5vw, 8px)", borderRadius: "clamp(12px, 1.2vw, 18px)" }}>
-          <i className="pg-tablet-camera" aria-hidden style={{ top: "calc(clamp(5px, 0.5vw, 8px) / 2)" }} />
-          {/* Tall enough to reach the bottom of the screen. The page shows from
-              the top at full width; a second page continues under the first,
-              like scrolling down the site. */}
-          <BrowserChrome tab={tab} url={url} screenStyle={{ minHeight: 240 }}>
-            <div className="absolute inset-0 flex flex-col">
-              {[
-                // Alone, the page fills the screen from its top-left corner.
-                { s: src, style: below ? { aspectRatio: aspect } : { flex: 1 }, pos: "left top" },
-                // The page underneath loses its own nav bar (the top 8%), so it
-                // reads as the same site scrolled, not a second header.
-                ...(below ? [{ s: below, style: { aspectRatio: belowAspect }, pos: "center bottom" }] : []),
-              ].map((pg) => (
-                <div key={pg.s} className="relative w-full shrink-0 overflow-hidden" style={pg.style}>
-                  <Image src={`${pg.s}.png`} alt="" fill sizes="45vw" className="dark:hidden" style={{ objectFit: "cover", objectPosition: pg.pos }} />
-                  <Image src={`${pg.s}-dark.png`} alt="" fill sizes="45vw" className="hidden dark:block" style={{ objectFit: "cover", objectPosition: pg.pos }} />
-                </div>
-              ))}
-            </div>
-          </BrowserChrome>
-        </div>
-        {/* The phone view, resting on the tablet's outer bottom corner. */}
-        <div
-          className="pg-phone"
-          style={{ width: "min(21%, 17dvh)", bottom: "-4%", borderRadius: 14, padding: 4, ...(flipped ? { left: "-9%", right: "auto" } : { right: "-9%" }) }}
-        >
-          <div className="pg-phone-screen" style={{ borderRadius: 10 }}>
-            <Image src={`${phone}.png`} alt="" fill sizes="180px" className="dark:hidden" />
-            <Image src={`${phone}-dark.png`} alt="" fill sizes="180px" className="hidden dark:block" />
-          </div>
-        </div>
-      </div>
-      {href ? (
-        <a href={href} target="_blank" rel="noopener noreferrer" aria-label={label} className={cover} />
-      ) : (
-        <button type="button" onClick={onOpen} aria-label={label} className={cover} />
-      )}
     </div>
   );
 }

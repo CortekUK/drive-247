@@ -3,10 +3,17 @@
 import { forwardRef } from "react";
 import { Loader2 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import { ScreenHead, SIGNUP_ENTER, SIGNUP_HIT, SIGNUP_PRIMARY, SIGNUP_QUIET } from "./signup-ui";
+import {
+  ColumnActions,
+  ColumnButton,
+  ColumnLinks,
+  ScreenHead,
+  SIGNUP_ENTER,
+  SIGNUP_HIT,
+  SIGNUP_QUIET,
+} from "./signup-ui";
 
 export type FinishLaterState = "idle" | "sending" | "sent" | "failed";
 
@@ -29,7 +36,7 @@ export const ExitOfferPanel = forwardRef<
 >(function ExitOfferPanel({ applying, showFinishLater, finishLater, onAccept, onFinishLater, onDismiss }, ref) {
   const sent = finishLater === "sent";
   return (
-    <section className={SIGNUP_ENTER} aria-labelledby="signup-exit-offer-title" aria-describedby="signup-exit-offer-lead">
+    <section aria-labelledby="signup-exit-offer-title" aria-describedby="signup-exit-offer-lead">
       <ScreenHead
         titleId="signup-exit-offer-title"
         title="Not ready just yet?"
@@ -40,17 +47,11 @@ export const ExitOfferPanel = forwardRef<
           </span>
         }
       />
-      <div className="mt-6 space-y-3">
-        <Button ref={ref} type="button" onClick={onAccept} disabled={applying} className={SIGNUP_PRIMARY}>
-          {applying ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Applying…
-            </>
-          ) : (
-            "Apply 20% off and continue"
-          )}
-        </Button>
+      {/* One column like every signup screen (Ghulam, 2026-11-23). */}
+      <ColumnActions className="mt-10">
+        <ColumnButton ref={ref} type="button" busy={applying} onClick={onAccept}>
+          {applying ? "Applying…" : "Apply 20% off and continue"}
+        </ColumnButton>
 
         {showFinishLater ? (
           sent ? (
@@ -63,7 +64,7 @@ export const ExitOfferPanel = forwardRef<
                 type="button"
                 onClick={onFinishLater}
                 disabled={applying || finishLater === "sending"}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white text-[15px] font-semibold text-foreground transition-colors duration-200 ease-out hover:bg-zinc-50 disabled:opacity-50 motion-reduce:transition-none dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-full px-6 text-[15px] font-medium text-foreground ring-1 ring-foreground/15 transition-colors duration-200 ease-out hover:bg-foreground/[0.03] disabled:opacity-50 motion-reduce:transition-none dark:ring-white/15"
               >
                 {finishLater === "sending" && <Loader2 className="h-4 w-4 animate-spin" />}
                 Email me a link to finish later
@@ -77,15 +78,17 @@ export const ExitOfferPanel = forwardRef<
           )
         ) : null}
 
-        <button
-          type="button"
-          onClick={onDismiss}
-          disabled={applying}
-          className={cn(SIGNUP_QUIET, SIGNUP_HIT, "block w-full text-center")}
-        >
-          {sent ? "Close" : "No thanks"}
-        </button>
-      </div>
+        <ColumnLinks>
+          <button
+            type="button"
+            onClick={onDismiss}
+            disabled={applying}
+            className={cn(SIGNUP_QUIET, SIGNUP_HIT)}
+          >
+            {sent ? "Close" : "No thanks"}
+          </button>
+        </ColumnLinks>
+      </ColumnActions>
     </section>
   );
 });

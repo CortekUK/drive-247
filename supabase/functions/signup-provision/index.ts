@@ -30,6 +30,7 @@
 import { handleCors, errorResponse, jsonResponse } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { extractBrandColorsFromText, buildTenantPalette } from "../_shared/brand-colors.ts";
+import { readBrandColor, readSiteTheme } from "../_shared/signup-look.ts";
 import { fetchSignupPlan } from "../_shared/signup-plans.ts";
 import {
   getOrCreateSignupPrice,
@@ -136,6 +137,12 @@ async function ensureV2Experience(
   supabase: ReturnType<typeof createClient>,
   tenantId: string,
   log: string,
+  /**
+   * The colour the operator picked on the business page, if any. Graphite
+   * (#1E293B) is one of the picks AND the old provisioning default, so a
+   * picked Graphite must not be repainted as if nobody had chosen it.
+   */
+  chosenColor?: string | null,
 ): Promise<void> {
   try {
     const { data, error } = await supabase
@@ -163,7 +170,7 @@ async function ensureV2Experience(
     // at it — so the paint travels with the flag, under the same guard the
     // manual repair uses.
     const current = (row.light_primary_color ?? row.primary_color ?? "").toUpperCase();
-    if (PROVISIONING_DEFAULT_COLORS.has(current)) {
+    if (PROVISIONING_DEFAULT_COLORS.has(current) && current !== (chosenColor ?? "").toUpperCase()) {
       patch.primary_color = V2_DEFAULT_BRAND_COLOR;
       patch.light_primary_color = V2_DEFAULT_BRAND_COLOR;
     }
@@ -279,6 +286,10 @@ interface ProvisionRequest {
   fleetSize?: string;
   vehicleType?: string;
   businessColours?: string;
+  /** Picked on the business page: one of SIGNUP_BRAND_COLORS (_shared/signup-look.ts). */
+  brandColor?: string;
+  /** Picked on the business page: the booking site's starting theme. */
+  siteTheme?: string;
   logoUrl?: string;
   operatingSchedule?: {
     alwaysOpen?: boolean;
@@ -341,7 +352,7 @@ Deno.serve(async (req) => {
         console.log(`${LOG} idempotent hit — tenant ${existingTenant.id} already provisioned`);
         // The row may have been written by an older deploy of this function,
         // before it set portal_experience. See ensureV2Experience.
-        await ensureV2Experience(supabase, existingTenant.id, LOG);
+        await ensureV2Experience(supabase, existingTenant.id, LOG, meta?.business?.brandColor);
         return jsonResponse({
           success: true,
           tenantId: existingTenant.id,
@@ -491,7 +502,7 @@ Deno.serve(async (req) => {
           );
           // Same reason as the idempotency hit above: this tenant was INSERTED by
           // whichever build died mid-run, which may not have set the column.
-          await ensureV2Experience(supabase, pendingId, LOG);
+          await ensureV2Experience(supabase, pendingId, LOG, meta?.business?.brandColor);
           const portalUrl = meta.portalUrl ?? `https://${pendingTenant.slug}.portal.drive-247.com`;
           const bookingUrl = meta.bookingUrl ?? `https://${pendingTenant.slug}.drive-247.com`;
           meta = await writeSignupMeta(supabase, authUserId, {
@@ -671,6 +682,10 @@ Deno.serve(async (req) => {
 
     const location = cleanOrNull(body.location, MAX.location);
     const businessColours = cleanOrNull(body.businessColours, MAX.colours);
+    // The look picked on the business page. Only the allowed values count;
+    // anything else is "not chosen" and the defaults below stand.
+    const brandColor = readBrandColor(body.brandColor);
+    const siteTheme = readSiteTheme(body.siteTheme);
     const fleetSize = cleanOrNull(body.fleetSize, MAX.short);
     const vehicleType = cleanOrNull(body.vehicleType, MAX.short);
 
@@ -750,6 +765,8 @@ Deno.serve(async (req) => {
       ...(fleetSize ? { fleetSize } : {}),
       ...(vehicleType ? { vehicleType } : {}),
       ...(businessColours ? { businessColours } : {}),
+      ...(brandColor ? { brandColor } : {}),
+      ...(siteTheme ? { siteTheme } : {}),
       ...(logoUrl ? { logoUrl } : {}),
       ...(body.operatingSchedule ? { operatingSchedule: body.operatingSchedule } : {}),
     };
@@ -894,10 +911,14 @@ Deno.serve(async (req) => {
     // purple is a different product surface and a separate decision, so the rest
     // of the palette keeps the extractor's colours and renders exactly as it does
     // for a tenant provisioned today.
+    //
+    // Since 2026-11-23 the operator can pick the colour on the business page
+    // (one of the v2 swatches). Their pick goes into the same two columns;
+    // without one, the v2 default does, as before.
     const palette = {
       ...buildTenantPalette(colors),
-      primary_color: V2_DEFAULT_BRAND_COLOR,
-      light_primary_color: V2_DEFAULT_BRAND_COLOR,
+      primary_color: brandColor ?? V2_DEFAULT_BRAND_COLOR,
+      light_primary_color: brandColor ?? V2_DEFAULT_BRAND_COLOR,
     };
     await markMilestone(supabase, authUserId, "brand_ready");
 
@@ -1070,6 +1091,9 @@ Deno.serve(async (req) => {
       status: "active",
       tenant_type: isProduction ? "production" : "test",
       portal_experience: "v2",
+      // The booking site's starting theme, when one was picked; otherwise the
+      // column default stands.
+      ...(siteTheme ? { customer_theme_mode: siteTheme } : {}),
       ...identityCols,
       ...palette,
       ...logoCols,
