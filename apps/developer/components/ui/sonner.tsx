@@ -1,0 +1,36 @@
+"use client";
+
+import { Toaster as Sonner, toast } from "sonner";
+import { useThemeMode } from "@/lib/theme";
+
+type ToasterProps = React.ComponentProps<typeof Sonner>;
+
+const Toaster = ({ ...props }: ToasterProps) => {
+  // Follows the app's light/dark switch; the surfaces below are tokens, so a
+  // toast is a popover in either mode.
+  const { isDark } = useThemeMode();
+  return (
+    <Sonner
+      theme={isDark ? "dark" : "light"}
+      className="toaster group"
+      toastOptions={{
+        classNames: {
+          toast:
+            "group toast group-[.toaster]:rounded-2xl group-[.toaster]:bg-popover group-[.toaster]:text-popover-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
+          description: "group-[.toast]:text-muted-foreground",
+          actionButton:
+            "group-[.toast]:rounded-3xl group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
+          cancelButton:
+            "group-[.toast]:rounded-3xl group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
+          success: "group-[.toast]:border-success/40",
+          error: "group-[.toast]:border-destructive/40",
+          info: "group-[.toast]:border-primary/40",
+          warning: "group-[.toast]:border-warning/40",
+        },
+      }}
+      {...props}
+    />
+  );
+};
+
+export { Toaster, toast };

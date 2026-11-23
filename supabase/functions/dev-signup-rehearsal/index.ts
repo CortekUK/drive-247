@@ -11,6 +11,9 @@
 //             northwind portal tab picks up (components/dev/dev-bridge.tsx)
 //   previews  { previews } — the preview switches the portal mirrors locally
 //
+// The developer hub (apps/developer, Onboarding tab) has its own actions on
+// `public.dev_signup_test_emails`, all starting `test_email`: see test-emails.ts.
+//
 // WHAT RESET MAY TOUCH, AND NOTHING ELSE
 //   - the auth user of the configured rehearsal email (deleted; app_users rows
 //     survive because app_users.auth_user_id is ON DELETE SET NULL)
@@ -26,58 +29,24 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { errorResponse, handleCors, jsonResponse } from "../_shared/cors.ts";
-import { getSignupStripeClient, SIGNUP_STRIPE_ACCOUNT } from "../_shared/signup-stripe.ts";
+import { SIGNUP_STRIPE_ACCOUNT } from "../_shared/signup-stripe.ts";
 import { REHEARSAL_TENANT_SLUG } from "../_shared/signup-rehearsal.ts";
 import { SIGNUP_META_KEY } from "../_shared/signup-state.ts";
+import {
+  cancelSignupSubscription,
+  clearSignupThrottle,
+  createdBySignup,
+  deleteTenantViaAdmin,
+  EMAIL_RE,
+  findAuthUserByEmail,
+  LIVE_STATUSES,
+  otherSignedInStaff,
+  type Step,
+} from "./helpers.ts";
+import { handleTestEmailAction, isTestEmailAction } from "./test-emails.ts";
 
 const LOG = "[dev-signup-rehearsal]";
-const LIVE_STATUSES = ["active", "trialing", "past_due", "unpaid", "paused", "incomplete"];
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PORTAL_ACTIONS = new Set(["first_run", "quick_tour"]);
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-type Step = { step: string; ok: boolean; detail: string };
-
-/** Exact-address auth user lookup (GoTrue `?filter=` is a partial match). */
-async function findAuthUserByEmail(url: string, serviceKey: string, email: string): Promise<any | null> {
-  const res = await fetch(`${url}/auth/v1/admin/users?filter=${encodeURIComponent(email)}&per_page=20`, {
-    headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
-  });
-  if (!res.ok) throw new Error(`GoTrue admin lookup failed (${res.status})`);
-  const body = await res.json().catch(() => null);
-  const users: any[] = Array.isArray(body?.users) ? body.users : [];
-  return users.find((u) => String(u?.email ?? "").toLowerCase() === email) ?? null;
-}
-
-/** Cancel a subscription on the signup account, trying the given modes in order. */
-async function cancelSignupSubscription(
-  subscriptionId: string,
-  modes: Array<"test" | "live">,
-  mustBelongTo?: string,
-): Promise<string> {
-  for (const mode of modes) {
-    let stripe;
-    try {
-      stripe = getSignupStripeClient(mode);
-    } catch {
-      continue;
-    }
-    let sub: any;
-    try {
-      sub = await stripe.subscriptions.retrieve(subscriptionId);
-    } catch (e: any) {
-      if (e?.code === "resource_missing" || e?.statusCode === 404) continue;
-      throw e;
-    }
-    if (mustBelongTo && sub.metadata?.d247_signup_auth_user !== mustBelongTo) {
-      return `left alone (${mode}): not started by the rehearsal login`;
-    }
-    if (sub.status === "canceled" || sub.status === "incomplete_expired") return `already ${sub.status} (${mode})`;
-    await stripe.subscriptions.cancel(subscriptionId);
-    return `canceled (${mode})`;
-  }
-  return "not found on the signup account";
-}
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -110,6 +79,18 @@ Deno.serve(async (req) => {
     return errorResponse("Invalid JSON body", 400);
   }
   const action = String(body?.action ?? "");
+
+  if (isTestEmailAction(action)) {
+    return await handleTestEmailAction(action, body, {
+      admin,
+      url,
+      serviceKey,
+      anonKey,
+      authHeader,
+      callerAppUserId: callerRow.id,
+      callerAuthId: caller.id,
+    });
+  }
 
   const readSettings = async () => {
     const { data, error } = await admin.from("dev_signup_rehearsal").select("*").eq("id", 1).maybeSingle();
@@ -311,40 +292,23 @@ Deno.serve(async (req) => {
         if (!t) continue;
         if (t.slug === REHEARSAL_TENANT_SLUG) continue;
 
-        const fromMeta = tenantId === meta?.tenantId || tenantId === meta?.pendingTenantId;
-        const { count: provisioned } = await admin
-          .from("signup_attempts")
-          .select("id", { count: "exact", head: true })
-          .eq("scope", "provision")
-          .eq("outcome", "ok")
-          .eq("tenant_id", tenantId)
-          .ilike("email", email);
-        const { data: otherStaff } = await admin
-          .from("app_users")
-          .select("id, email")
-          .eq("tenant_id", tenantId)
-          .not("auth_user_id", "is", null);
-        const strangers = (otherStaff || []).filter((u: any) => String(u.email ?? "").toLowerCase() !== email);
+        const bySignup = await createdBySignup(admin, tenantId, email, meta);
+        const strangers = await otherSignedInStaff(admin, tenantId, email);
 
-        if (!(fromMeta || (provisioned ?? 0) > 0) || strangers.length > 0) {
+        if (!bySignup || strangers > 0) {
           steps.push({
             step: `Company ${t.slug}`,
             ok: true,
-            detail: strangers.length
+            detail: strangers
               ? "left alone: other staff use it"
               : "left alone: it was not created by a rehearsal signup",
           });
           continue;
         }
 
-        const res = await fetch(`${url}/functions/v1/admin-delete-tenant`, {
-          method: "POST",
-          headers: { Authorization: authHeader, apikey: anonKey, "Content-Type": "application/json" },
-          body: JSON.stringify({ tenant_id: tenantId }),
-        });
-        const out = await res.json().catch(() => ({}));
-        if (!res.ok || out?.error) {
-          steps.push({ step: `Company ${t.slug}`, ok: false, detail: `could not delete: ${out?.error ?? res.status}` });
+        const deleted = await deleteTenantViaAdmin(url, anonKey, authHeader, tenantId);
+        if (!deleted.ok) {
+          steps.push({ step: `Company ${t.slug}`, ok: false, detail: `could not delete: ${deleted.error}` });
           // Stop before the login goes: it is the only pointer left to this company.
           return await finish(false, 500);
         }
@@ -427,23 +391,7 @@ Deno.serve(async (req) => {
 
       // ---- 3. Signup throttle --------------------------------------------------
       {
-        const since = new Date(Date.now() - DAY_MS).toISOString();
-        const { data: mine } = await admin
-          .from("signup_attempts")
-          .select("ip_address")
-          .ilike("email", email)
-          .gte("created_at", since);
-        const ips = [...new Set((mine || []).map((r: any) => r.ip_address).filter(Boolean))];
-        let removed = 0;
-        const del = async (q: any) => {
-          const { data } = await q.select("id");
-          removed += data?.length ?? 0;
-        };
-        await del(admin.from("signup_attempts").delete().ilike("email", email));
-        if (authUser) await del(admin.from("signup_attempts").delete().eq("auth_user_id", authUser.id));
-        if (ips.length) {
-          await del(admin.from("signup_attempts").delete().in("ip_address", ips).gte("created_at", since));
-        }
+        const removed = await clearSignupThrottle(admin, email, authUser?.id ?? null);
         steps.push({ step: "Signup limits", ok: true, detail: `${removed} attempt record${removed === 1 ? "" : "s"} cleared` });
       }
 

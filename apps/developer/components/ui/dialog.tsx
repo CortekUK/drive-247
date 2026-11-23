@@ -1,0 +1,109 @@
+import * as React from "react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { X } from "lucide-react";
+
+import { cn } from "@/lib/utils";
+import { MOTION_DIALOG, MOTION_OVERLAY } from "./motion";
+
+const Dialog = DialogPrimitive.Root;
+
+const DialogTrigger = DialogPrimitive.Trigger;
+
+const DialogPortal = DialogPrimitive.Portal;
+
+const DialogClose = DialogPrimitive.Close;
+
+const DialogOverlay = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Overlay>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
+>(({ className, ...props }, ref) => (
+  <DialogPrimitive.Overlay
+    ref={ref}
+    className={cn(
+      // v2 scrim: a light 30% wash plus a blur, not an 80% blackout. The blur
+      // is `supports-` guarded so browsers without backdrop-filter still get a
+      // usable scrim rather than a transparent one.
+      "fixed inset-0 isolate z-[100] bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm", MOTION_OVERLAY,
+      className,
+    )}
+    {...props}
+  />
+));
+DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
+
+const DialogContent = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    /** Classes for this dialog's scrim (the ⌘K search blurs the page more). */
+    overlayClassName?: string;
+    /** False for dialogs that draw their own way out (the stepped "add" forms). */
+    showCloseButton?: boolean;
+  }
+>(({ className, overlayClassName, showCloseButton = true, children, ...props }, ref) => (
+  <DialogPortal>
+    <DialogOverlay className={overlayClassName} />
+    {/* On a phone, Northwind's (ui-v2/dialog.tsx): a 1rem margin on each side
+        rather than edge to edge, and never taller than the screen — a long
+        form scrolls inside the card instead of running off the bottom with
+        its buttons. `w-[calc(100%-2rem)]` rather than a max-width, so a
+        dialog that asks for `max-w-2xl` still keeps the margin. */}
+    <DialogPrimitive.Content
+      ref={ref}
+      className={cn(
+        "fixed left-[50%] top-[50%] z-[100] grid w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-4xl bg-popover p-6 text-popover-foreground shadow-xl ring-1 ring-foreground/10 max-sm:max-h-[calc(100svh-2rem)] max-sm:overflow-y-auto", MOTION_DIALOG,
+        className,
+      )}
+      {...props}
+    >
+      {children}
+      {showCloseButton && <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
+        <X className="h-4 w-4" />
+        <span className="sr-only">Close</span>
+      </DialogPrimitive.Close>}
+    </DialogPrimitive.Content>
+  </DialogPortal>
+));
+DialogContent.displayName = DialogPrimitive.Content.displayName;
+
+const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={cn("flex flex-col space-y-1.5 text-center sm:text-left", className)} {...props} />
+);
+DialogHeader.displayName = "DialogHeader";
+
+const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-0 sm:space-x-2", className)} {...props} />
+);
+DialogFooter.displayName = "DialogFooter";
+
+const DialogTitle = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Title>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
+>(({ className, ...props }, ref) => (
+  <DialogPrimitive.Title
+    ref={ref}
+    className={cn("text-lg font-semibold leading-none tracking-tight", className)}
+    {...props}
+  />
+));
+DialogTitle.displayName = DialogPrimitive.Title.displayName;
+
+const DialogDescription = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Description>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
+>(({ className, ...props }, ref) => (
+  <DialogPrimitive.Description ref={ref} className={cn("text-sm text-muted-foreground", className)} {...props} />
+));
+DialogDescription.displayName = DialogPrimitive.Description.displayName;
+
+export {
+  Dialog,
+  DialogPortal,
+  DialogOverlay,
+  DialogClose,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+};
