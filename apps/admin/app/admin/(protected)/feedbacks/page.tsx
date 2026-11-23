@@ -22,7 +22,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, MoreVertical, Star, ImageIcon, Loader2, Plus, RotateCcw } from 'lucide-react';
+import { Check, MoreVertical, Star, ImageIcon, Loader2, Plus, RotateCcw, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from '@/components/ui/sonner';
@@ -31,7 +31,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { confirmDialog } from '@/components/ui/confirm';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { HEADER_ACTIONS, HEADER_PRIMARY, PAGE_HEADER, PAGE_HEADER_TEXT, PAGE_TITLE, PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 import { EmptyState } from '@/components/admin/empty-state';
 import { FeedbackEmptyArt } from '@/components/admin/illustrations/scenes/admin-scenes';
@@ -542,7 +542,7 @@ function CampaignView({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3 max-md:flex-1">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="truncate text-xl font-semibold text-foreground">{campaign.name}</h2>
@@ -556,16 +556,26 @@ function CampaignView({
             </div>
           </div>
         </div>
-        {!campaign.ended_at && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 rounded-full bg-destructive/10 px-3.5 text-[13px] font-medium text-destructive hover:bg-destructive/15 hover:text-destructive"
-            onClick={onEnd}
+        <div className="flex items-center gap-2 max-md:contents">
+          {!campaign.ended_at && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 rounded-full bg-destructive/10 px-3.5 text-[13px] font-medium text-destructive hover:bg-destructive/15 hover:text-destructive"
+              onClick={onEnd}
+            >
+              End campaign
+            </Button>
+          )}
+          {/* Phones: a ✕ like every other dialog's — there is no backdrop
+              edge worth aiming for on a screen this dialog nearly fills. */}
+          <DialogClose
+            aria-label="Close"
+            className="relative -mr-1 ml-1 rounded-sm text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden after:absolute after:-inset-3 after:content-['']"
           >
-            End campaign
-          </Button>
-        )}
+            <X className="h-4 w-4" />
+          </DialogClose>
+        </div>
       </div>
 
       {/* One list: a row per company, answered first, with a filter on top. */}
@@ -591,7 +601,7 @@ function CampaignView({
           {shown.map((r) => (
             <li key={r.id} className="group flex items-start gap-4 px-5 py-3.5">
               <div className="min-w-0 flex-1">
-                <p className={cn('truncate text-sm font-medium', r.state === 'excluded' ? 'text-muted-foreground' : 'text-foreground')}>{r.name}</p>
+                <p className={cn('truncate text-sm font-medium max-md:whitespace-normal max-md:[overflow-wrap:break-word]', r.state === 'excluded' ? 'text-muted-foreground' : 'text-foreground')}>{r.name}</p>
                 {r.feedback.map((f) => (
                   <button
                     key={f.id}

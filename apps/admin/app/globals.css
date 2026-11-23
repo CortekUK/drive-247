@@ -850,6 +850,12 @@ html::-webkit-scrollbar-corner,
   [data-phone-cards] {
     overflow: visible !important;
   }
+  /* A rounded card still clips to its corners (`clip`, not `hidden`: no
+     scroll box), or the first row's square background covers them — the
+     Blocked Customers card's top edge looked broken. */
+  [data-phone-cards]:is([class*="rounded"]) {
+    overflow: clip !important;
+  }
   [data-phone-cards] table,
   [data-phone-cards] tbody {
     display: block;

@@ -2,6 +2,11 @@ import type { Config } from "tailwindcss";
 
 const config: Config = {
   darkMode: 'class',
+  /* `hover:` only on a device that can hover (a mouse, a trackpad). On a
+     phone a tap left the hover tint stuck on whatever was touched last: the
+     company page's Health tile stayed tinted beside a white gap. Desktop is
+     unchanged. */
+  future: { hoverOnlyWhenSupported: true },
   content: [
     "../../shared/trax-support/**/*.{ts,tsx}",
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",

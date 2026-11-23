@@ -47,11 +47,13 @@ function paperFor(id: string): string {
 /** A slight tilt, alternating, so a pile looks stuck on rather than printed. */
 const TILTS = ['-rotate-[0.8deg]', 'rotate-[0.7deg]', '-rotate-[0.4deg]', 'rotate-[1deg]'];
 
-/** Square-ish corners, a soft lifted shadow and a strip of tape at the top. */
+/** Square-ish corners, a soft lifted shadow and a strip of tape at the top —
+ *  amber, like washi tape: in white it read as a stray box between the
+ *  charts (user review, Nov 2026). */
 const STICKY =
   'relative rounded-[4px] text-foreground shadow-[0_1px_1px_rgba(0,0,0,0.04),0_8px_16px_-10px_rgba(0,0,0,0.35)] dark:shadow-none dark:ring-1 dark:ring-white/10 ' +
   'before:pointer-events-none before:absolute before:-top-1.5 before:left-1/2 before:h-3.5 before:w-12 before:-translate-x-1/2 before:-rotate-2 ' +
-  'before:rounded-[2px] before:bg-white/70 before:shadow-[0_1px_1px_rgba(0,0,0,0.06)] dark:before:bg-white/15';
+  'before:rounded-[2px] before:bg-amber-300/70 before:shadow-[0_1px_1px_rgba(0,0,0,0.08)] dark:before:bg-amber-300/35';
 
 const day = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 const authorOf = (n: Note) => n.author?.name || n.author?.email || 'A team member';

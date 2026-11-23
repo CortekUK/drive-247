@@ -134,11 +134,14 @@ function InvoiceLink({ href, label, children }: { href: string | null; label: st
 
 export function SubscriptionTrail({
   invoices,
+  loaded = true,
   top,
   formatCurrency,
   formatDate,
 }: {
   invoices: TrailInvoice[];
+  /** False until the first read lands; nothing is drawn below the figures until then. */
+  loaded?: boolean;
   /** The billing figures above the trail, inside the card. */
   top: ReactNode;
   formatCurrency: (amount: number, currency: string) => string;
@@ -146,7 +149,9 @@ export function SubscriptionTrail({
 }) {
   // MOCK (Ghulam, Oct 18 2026): a tenant with no invoices shows sample lines
   // so the trail can be reviewed. Delete with MOCK_INVOICES once signed off.
-  const trail = invoices.length > 0 ? invoices : MOCK_INVOICES;
+  // Never while the real ones are still loading: the samples flashed up for
+  // a second and then turned into the tenant's own invoice (user review).
+  const trail = invoices.length > 0 ? invoices : loaded ? MOCK_INVOICES : [];
 
   return (
     <section className="mt-4 flex min-h-0 flex-1 flex-col gap-1.5 max-lg:flex-none">
@@ -157,7 +162,7 @@ export function SubscriptionTrail({
       <div className="shrink-0 max-lg:px-4">{top}</div>
       <div className="mt-3 shrink-0 border-t border-border/60" />
       <div className="min-h-0 flex-1 overflow-y-auto max-lg:flex-none max-lg:overflow-visible">
-        {trail.length === 0 ? (
+        {!loaded ? null : trail.length === 0 ? (
           <p className="pt-3 text-sm text-muted-foreground">No subscription payments yet.</p>
         ) : (
           // Below `lg` the rows are cards (lib/phone-cards.ts) rather than

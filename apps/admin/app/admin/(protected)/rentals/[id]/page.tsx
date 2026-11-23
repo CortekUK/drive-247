@@ -442,6 +442,8 @@ export default function TenantDetailsPage() {
   // Subscription state
   const [subscription, setSubscription] = useState<TenantSubscription | null>(null);
   const [invoices, setInvoices] = useState<TenantInvoice[]>([]);
+  /** The first read has landed: until then the trail draws nothing, not its sample rows. */
+  const [invoicesLoaded, setInvoicesLoaded] = useState(false);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
   /** Non-null when the subscription read FAILED — never render that as "none". */
   const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
@@ -819,6 +821,7 @@ export default function TenantDetailsPage() {
 
       if (invErr) throw invErr;
       setInvoices(invoiceData || []);
+      setInvoicesLoaded(true);
     } catch (error: any) {
       console.error('Error loading subscription:', error);
       // Surface it. Silence here is what turned a failed read into "no
@@ -2053,6 +2056,7 @@ export default function TenantDetailsPage() {
               column, the others behind See all. */}
           <SubscriptionTrail
             invoices={invoices}
+            loaded={invoicesLoaded}
             formatCurrency={formatCurrency}
             formatDate={formatDate}
             top={
