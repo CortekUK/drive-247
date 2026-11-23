@@ -157,7 +157,7 @@ export function OnboardingQuestionCard({
           placeholder="Ask something"
           aria-label="Question"
           onChange={(e) => onDraftChange({ prompt: e.target.value })}
-          className={cn(INLINE, 'resize-none py-1 text-[clamp(2rem,4vw,3.5rem)] font-medium leading-[1.04] tracking-[-0.032em] text-foreground [field-sizing:content]')}
+          className={cn(INLINE, 'resize-none py-1 text-[clamp(2rem,4vw,3.5rem)] max-md:text-[1.625rem] font-medium leading-[1.04] tracking-[-0.032em] text-foreground [field-sizing:content]')}
         />
         <textarea
           rows={1}
@@ -413,10 +413,11 @@ function AnswerRow({
         placeholder="An answer"
         aria-label={`Answer ${index + 1}`}
         onChange={(e) => onLabel(e.target.value)}
-        className={cn(INLINE, 'ml-1 h-8 w-auto min-w-[8rem] max-w-[32rem] text-[17px] [field-sizing:content]', first ? 'font-medium text-foreground' : 'text-foreground/60')}
+        className={cn(INLINE, 'ml-1 h-8 w-auto min-w-[8rem] max-w-[32rem] text-[17px] [field-sizing:content] max-md:min-w-0 max-md:flex-1 max-md:text-[15px]', first ? 'font-medium text-foreground' : 'text-foreground/60')}
       />
-      {/* Remove, right after the text, only while hovered or focused. */}
-      <span className="pointer-events-none flex items-center rounded-full bg-card opacity-0 shadow-sm ring-1 ring-border transition-opacity duration-200 focus-within:pointer-events-auto focus-within:opacity-100 group-hover/opt:pointer-events-auto group-hover/opt:opacity-100 motion-reduce:transition-none">
+      {/* Remove, right after the text, only while hovered or focused — and
+          always on a phone, which has no hover to reveal it. */}
+      <span className="pointer-events-none flex shrink-0 items-center rounded-full bg-card opacity-0 max-md:pointer-events-auto max-md:opacity-100 shadow-sm ring-1 ring-border transition-opacity duration-200 focus-within:pointer-events-auto focus-within:opacity-100 group-hover/opt:pointer-events-auto group-hover/opt:opacity-100 motion-reduce:transition-none">
         <IconButton label={`Remove answer ${index + 1}`} disabled={busy || !canRemove} onClick={onRemove} danger>
           <Trash2 className="size-3.5" />
         </IconButton>
