@@ -345,8 +345,8 @@ export default function BlacklistPage() {
       {/* `overflow-x-auto`, not `overflow-hidden`: this table is wider than a
           phone and the card was CLIPPING the columns past the fold with no way
           to reach them. Any non-visible overflow still rounds the corners. */}
-      <div className="overflow-x-auto rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10">
-        <table className="min-w-full divide-y divide-dark-border max-md:[&_td:not([colspan])]:whitespace-nowrap">
+      <div className="overflow-x-auto rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10" data-phone-cards="">
+        <table className="min-w-full divide-y divide-dark-border">
           <thead className="bg-card/95">
             <tr>
               <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-8" />
@@ -511,8 +511,8 @@ export default function BlacklistPage() {
           {filteredEntries.length} {filteredEntries.length === 1 ? 'entry' : 'entries'} · added by each company
         </p>
       </div>
-      <div className="overflow-x-auto rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10">
-        <table className="min-w-full divide-y divide-dark-border max-md:[&_td]:whitespace-nowrap">
+      <div className="overflow-x-auto rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10" data-phone-cards="">
+        <table className="min-w-full divide-y divide-dark-border">
           <thead className="bg-card/95">
             <tr>
               {['Identity', 'Type', 'Name given', 'Company', 'Reason', 'Added'].map((h) => (

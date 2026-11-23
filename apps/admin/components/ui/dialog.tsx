@@ -50,7 +50,7 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-[100] grid w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-4xl bg-popover p-6 text-popover-foreground shadow-xl ring-1 ring-foreground/10 max-sm:max-h-[calc(100svh-2rem)] max-sm:overflow-y-auto", MOTION_DIALOG,
+        "fixed left-[50%] top-[50%] z-[100] grid w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-4xl bg-popover p-6 text-popover-foreground shadow-xl ring-1 ring-foreground/10 max-md:max-h-[calc(100svh-2rem)] max-md:overflow-y-auto max-md:overscroll-contain", MOTION_DIALOG,
         className,
       )}
       {...props}

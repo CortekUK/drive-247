@@ -20,17 +20,18 @@
 import * as React from 'react';
 import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { PanelLeft } from 'lucide-react';
+import { PanelLeft, X } from 'lucide-react';
 
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const SIDEBAR_COOKIE_NAME = 'sidebar_state';
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = '16rem';
-const SIDEBAR_WIDTH_MOBILE = '18rem';
+/* The phone menu is full screen (boss, Nov 2026), as the operator portal's is. */
+const SIDEBAR_WIDTH_MOBILE = '100vw';
 const SIDEBAR_WIDTH_ICON = '3rem';
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 
@@ -158,10 +159,12 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          /* No edge line and no close button on phones: v2 separates surfaces
-             by tone and space, never by rules, and the sheet closes on the
-             scrim like the portal's does. */
-          className="w-[var(--sidebar-width)] border-r-0 border-l-0 bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+          /* The operator portal's phone menu (apps/portal ui-v2/sidebar.tsx):
+             full screen from the left, no edge line (v2 separates surfaces by
+             tone and space), the primitive's corner ✕ hidden in favour of the
+             one below, and the brand wash (globals.css). The sidebar header's
+             own top padding is dropped: the ✕ row gives the org row its room. */
+          className="flex w-[var(--sidebar-width)] max-w-none flex-col gap-0 border-r-0 shadow-none border-l-0 bg-sidebar p-0 pt-[env(safe-area-inset-top,0px)] text-sidebar-foreground sm:max-w-none [&>button]:hidden [&_[data-slot=sidebar-header]]:pt-0"
           style={{ '--sidebar-width': SIDEBAR_WIDTH_MOBILE } as React.CSSProperties}
           side={side}
         >
@@ -169,7 +172,18 @@ function Sidebar({
             <SheetTitle>Sidebar</SheetTitle>
             <SheetDescription>Displays the mobile sidebar.</SheetDescription>
           </SheetHeader>
-          <div className="flex h-full w-full flex-col">{children}</div>
+          {/* Full screen leaves no page strip to tap away, so the menu closes
+              from an ✕ on the exact spot of the top bar's burger: the same tap
+              opens and closes it. */}
+          <div className="flex h-12 shrink-0 items-center px-4">
+            <SheetClose
+              aria-label="Close menu"
+              className="-ml-2 inline-flex size-9 items-center justify-center rounded-full text-foreground outline-none transition-colors hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-ring active:bg-primary/10"
+            >
+              <X className="size-[22px]" strokeWidth={2} aria-hidden />
+            </SheetClose>
+          </div>
+          <div className="flex min-h-0 w-full flex-1 flex-col pb-[env(safe-area-inset-bottom,0px)]">{children}</div>
         </SheetContent>
       </Sheet>
     );

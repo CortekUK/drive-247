@@ -17,13 +17,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, Bell, LifeBuoy, MessageCircle, Search, SlidersHorizontal, X } from 'lucide-react';
-import { SidebarTrigger } from '@/components/ui/sidebar';
+import { ArrowUpRight, Bell, LifeBuoy, Menu, MessageCircle, Search, SlidersHorizontal, X } from 'lucide-react';
+import { useSidebar } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { AdminGlobalSearch } from '@/components/admin/admin-global-search';
 import { useAdminNav } from '@/components/admin/admin-nav';
 import { TeamChatComingSoon } from '@/components/admin/team-chat-coming-soon';
 import { usePageSearchSlot, type PageSearchRegistration } from '@/components/admin/page-search-slot';
+import { OPEN_PHONE_SEARCH_EVENT } from '@/components/admin/mobile-nav';
 
 const FIELD =
   'group relative flex h-8 w-full max-w-[380px] items-center gap-2 overflow-hidden rounded-full ' +
@@ -52,6 +53,16 @@ export function TopBar({ showNavTrigger = true }: { showNavTrigger?: boolean }) 
   const open = useCallback(() => setSearchOpen(true), []);
   /** A phone: the page's own search, opened from the magnifier, takes the row. */
   const [phoneFieldOpen, setPhoneFieldOpen] = useState(false);
+  const { toggleSidebar } = useSidebar();
+
+  // The phone tab bar's Search: the page's own field when the page lends one,
+  // otherwise ⌘K search — what this bar's own magnifier does.
+  const hasSlot = !!slot;
+  useEffect(() => {
+    const onPhoneSearch = () => (hasSlot ? setPhoneFieldOpen(true) : setSearchOpen(true));
+    window.addEventListener(OPEN_PHONE_SEARCH_EVENT, onPhoneSearch);
+    return () => window.removeEventListener(OPEN_PHONE_SEARCH_EVENT, onPhoneSearch);
+  }, [hasSlot]);
 
   // ⌘K / Ctrl+K from anywhere.
   useEffect(() => {
@@ -69,10 +80,24 @@ export function TopBar({ showNavTrigger = true }: { showNavTrigger?: boolean }) 
   const unread = nav.supportCount ?? 0;
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-2 bg-transparent px-3 sm:px-4">
-      {/* Phone-only navigation opener; the desktop rail collapses on its own
-          hairline and ⌘B. */}
-      {showNavTrigger && <SidebarTrigger aria-label="Open navigation" className="-ml-1 shrink-0 md:hidden" />}
+    <header className="flex h-16 shrink-0 items-center gap-2 bg-transparent px-4">
+      {/* Phones, as the operator portal (boss, Nov 2026): the burger at the
+          TOP LEFT opens the menu full screen from the left. The menu is the
+          sidebar itself (a sheet below `md`), and its ✕ sits on this exact
+          spot, so the same tap opens and closes it. It gives way while the
+          page's search field holds the row. `-ml-2` puts the glyph on the
+          same edge as the content below. The desktop rail collapses on its
+          own hairline and ⌘B. */}
+      {showNavTrigger && (
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label="Open menu"
+          className="-ml-2 inline-flex size-9 shrink-0 items-center justify-center rounded-full text-foreground transition-colors hover:bg-primary/10 active:bg-primary/10 md:hidden [header:has([data-phone-field])_&]:hidden"
+        >
+          <Menu className="size-[22px]" strokeWidth={2} aria-hidden />
+        </button>
+      )}
 
       {/* sm+: either the page's own list search, or the global ⌘K pill —
           never both (Northwind's rule: two search fields on one screen, one
@@ -98,12 +123,13 @@ export function TopBar({ showNavTrigger = true }: { showNavTrigger?: boolean }) 
 
       {/* A phone's magnifier: on a list page it opens that page's own search
           in the bar, as Northwind's does; elsewhere, ⌘K search. It gives way
-          while the page field is showing. */}
+          while the page field is showing, and wherever the tab bar is up: its
+          Search does the same thing within the thumb's reach. */}
       <button
         type="button"
         onClick={slot ? () => setPhoneFieldOpen(true) : open}
         aria-label={slot ? 'Search this page' : 'Search'}
-        className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/[0.07] text-primary sm:hidden [header:has([data-phone-field])_&]:hidden"
+        className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/[0.07] text-primary sm:hidden [header:has([data-phone-field])_&]:hidden [body:has([data-mobile-tab-bar])_&]:hidden"
       >
         <Search className="size-4" aria-hidden />
       </button>

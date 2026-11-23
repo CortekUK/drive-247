@@ -22,6 +22,7 @@ import {
 import CreateTenantDialog from '@/components/admin/CreateTenantDialog';
 import SalesOnboardingDialog from '@/components/admin/SalesOnboardingDialog';
 import { CreateCompanyChooser } from '@/components/admin/create-company-chooser';
+import { ADD_COMPANY_PARAM, OPEN_ADD_COMPANY_EVENT } from '@/components/admin/mobile-nav';
 import SalesCredentialsDialog, { type SalesCredentialsTarget } from '@/components/admin/SalesCredentialsDialog';
 import { credentialsForSubmission, type OnboardingSubmissionForCredentials } from '@/lib/sales-credentials';
 import { EmptyState, NoMatchState } from '@/components/admin/empty-state';
@@ -370,6 +371,20 @@ export default function RentalCompaniesPage() {
   const [showChooser, setShowChooser] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  // The phone tab bar's plus opens the same chooser: by event while this page
+  // is open, or by `?new=1` when it lands here from another page (the param
+  // is dropped at once so a reload or Back does not reopen it).
+  useEffect(() => {
+    const open = () => setShowChooser(true);
+    window.addEventListener(OPEN_ADD_COMPANY_EVENT, open);
+    const url = new URL(window.location.href);
+    if (url.searchParams.has(ADD_COMPANY_PARAM)) {
+      setShowChooser(true);
+      url.searchParams.delete(ADD_COMPANY_PARAM);
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    }
+    return () => window.removeEventListener(OPEN_ADD_COMPANY_EVENT, open);
+  }, []);
   // Onboarded companies' hand-over (what the Onboarding page used to open),
   // by tenant id. Quick-setup companies have none, so they get no key button.
   const [onboardings, setOnboardings] = useState<Map<string, OnboardingSubmissionForCredentials>>(new Map());

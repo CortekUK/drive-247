@@ -36,8 +36,9 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { SidebarProvider } from '@/components/admin/SidebarContext';
 import { SidebarSectionsProvider, useRegisterSidebarSections } from '@/components/admin/sidebar-sections';
 import { PageSearchProvider } from '@/components/admin/page-search-slot';
-import { MobileNavProvider, MobileTabBar, PhoneSectionChips } from '@/components/admin/mobile-nav';
+import { MobileTabBar, PhoneSectionChips } from '@/components/admin/mobile-nav';
 import { useState } from 'react';
+import { usePhoneCardLabels } from '@/lib/phone-cards';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -56,13 +57,13 @@ export default function AdminPreviewPage() {
   // AdminNavProvider reads the signed-in admin's saved sidebar order through
   // React Query; signed out it never fetches, but it still needs a client.
   const [queryClient] = useState(() => new QueryClient());
+  usePhoneCardLabels();
   return (
     <QueryClientProvider client={queryClient}>
     <TooltipProvider>
     <AdminNavProvider>
     <PageSearchProvider>
     <SidebarSectionsProvider>
-    <MobileNavProvider>
     <SidebarProvider>
     {/* The SHELL, not an approximation of it.
 
@@ -77,7 +78,7 @@ export default function AdminPreviewPage() {
     <div className="flex h-svh overflow-hidden bg-background bg-app-gradient">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden pt-[env(safe-area-inset-top,0px)]">
-      <TopBar showNavTrigger={false} />
+      <TopBar />
       <PhoneSectionChips />
       <main data-scrollport className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
       <div className="p-4 pt-1 sm:p-6 sm:pt-2 max-md:pb-[calc(env(safe-area-inset-bottom,0px)+5rem)]">
@@ -191,7 +192,6 @@ export default function AdminPreviewPage() {
       <MobileTabBar />
     </div>
     </SidebarProvider>
-    </MobileNavProvider>
     </SidebarSectionsProvider>
     </PageSearchProvider>
     </AdminNavProvider>
