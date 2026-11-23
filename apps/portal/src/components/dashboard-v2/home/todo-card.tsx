@@ -616,7 +616,7 @@ export function TodoCard() {
       style={inDialog ? undefined : cap.style}
       className={cn(
         'relative mt-1.5 grid min-h-0 grid-cols-[minmax(0,1fr)] overflow-y-auto overscroll-contain px-4 pb-3',
-        inDialog ? 'flex-1 grid-rows-[minmax(0,1fr)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : '[scrollbar-width:thin]'
+        inDialog ? 'flex-1 grid-rows-[minmax(0,1fr)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : '[scrollbar-width:thin] md:flex-1 md:!max-h-none'
       )}
     >
       <AutoSkeleton loading={isLoading} className="h-full">

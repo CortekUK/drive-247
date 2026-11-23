@@ -18,6 +18,11 @@
  *
  * Compact on purpose: at lg+ the bands below share one screen, so every pixel
  * this card takes comes out of them — the same trade the banners above make.
+ *
+ * Not mounted (23 Nov 2026): the call now lives in the top bar, beside Help
+ * (`components/onboarding/onboarding-call-button.tsx`, which borrows
+ * `BookingDialog` and `ChecklistLink` from here), and Stripe has its own
+ * one-line banner on the home (`stripe-connect-banner.tsx`).
  */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -211,7 +216,7 @@ function formatCallTime(iso: string, timeZone: string | null | undefined): strin
   }
 }
 
-function ChecklistLink({
+export function ChecklistLink({
   href,
   external,
   done,
@@ -278,7 +283,7 @@ function ChecklistLink({
  * booked; the card polls while this is open. "I've booked my call" stays as a
  * fallback for a booking made under a different email.
  */
-function BookingDialog({
+export function BookingDialog({
   open,
   onOpenChange,
   bookingUrl,

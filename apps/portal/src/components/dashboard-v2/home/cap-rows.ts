@@ -12,6 +12,10 @@ import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
  * is MEASURED: the scroller's height is held to the bottom of its `count`th
  * visible `<li>`, plus its own bottom padding. Fewer rows than that, no cap.
  * Re-measured whenever the list or the card's width changes.
+ *
+ * PHONES ONLY since 23 Nov 2026 (Ghulam: "more height, overflow them a bit").
+ * From md up the cards share one fixed row height and the list fills it and
+ * scrolls, so the cap stands down there.
  */
 export function useCapRows<T extends HTMLElement = HTMLDivElement>(count = 3) {
   const ref = useRef<T>(null);
@@ -20,7 +24,12 @@ export function useCapRows<T extends HTMLElement = HTMLDivElement>(count = 3) {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+    const wide = window.matchMedia('(min-width: 768px)');
     const measure = () => {
+      if (wide.matches) {
+        setMax(undefined);
+        return;
+      }
       const rows = Array.from(el.querySelectorAll<HTMLElement>(':scope ul > li')).filter((li) => li.offsetParent !== null);
       if (rows.length <= count) {
         setMax(undefined);
@@ -35,9 +44,11 @@ export function useCapRows<T extends HTMLElement = HTMLDivElement>(count = 3) {
     ro.observe(el);
     const mo = new MutationObserver(measure);
     mo.observe(el, { childList: true, subtree: true });
+    wide.addEventListener('change', measure);
     return () => {
       ro.disconnect();
       mo.disconnect();
+      wide.removeEventListener('change', measure);
     };
   }, [count]);
 

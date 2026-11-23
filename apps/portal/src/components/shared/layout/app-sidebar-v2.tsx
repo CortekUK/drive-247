@@ -17,7 +17,6 @@ import { runThroughLeaveGuard } from "@/lib/leave-guard";
 //   Signature→FileSignature  ShieldSlash→ShieldX  FlowArrow→Workflow
 import {
   Clock,
-  Gift,
   ChevronRight,
   CircleDollarSign,
   Zap,
@@ -96,7 +95,6 @@ import {
   NavInsurances,
   NavIntegrations,
   NavRentals,
-  NavSupport,
   NavVehicles,
 } from "@/components/icons/nav-icons";
 import { Input } from "@/components/ui-v2/input";
@@ -119,7 +117,7 @@ import { getTabKeysForRoute } from "@/lib/permissions";
 import { UserMenuV2, SettingsLinkV2 } from "@/components/shared/layout/user-menu-v2";
 import { OrgSwitcher } from "@/components/shared/layout/org-switcher";
 import { SidebarPromo } from "@/components/shared/layout/sidebar-promo";
-import { DevSection } from "@/components/shared/layout/dev-section";
+import { OnboardingCallSidebarCard } from "@/components/onboarding/onboarding-call-sidebar";
 import { SidebarCustomizerDialog } from "@/components/shared/layout/sidebar-customizer-dialog";
 import { useNavPreferences } from "@/hooks/use-nav-preferences";
 import { dropRetiredDefaultOrder } from "@/lib/nav-preferences";
@@ -127,8 +125,6 @@ import { applyNavPreferences } from "@/lib/nav-preferences";
 // The Trax conversation rail — the scoped rail this sidebar becomes on /trax.
 import { TraxRail } from "@/components/trax/trax-rail";
 import { SupportRail } from "@/components/support/support-rail";
-import { SUPPORT_ROUTE } from "@/lib/support-route";
-import { useSupportUnreadMessages } from "@/hooks/use-support-messaging";
 // The rental control centre's stage rail. The sidebar becomes it on a rental
 // detail page, the same way it becomes the Settings rail on /settings — see
 // `isRentalDetailPage` below.
@@ -372,10 +368,6 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // so this badge is the only standing signal that work has come due.
   const { needsAttention: fleetNeedsAttention } = useFleetHealthStats();
   const { data: pendingBookingsCount } = usePendingBookingsCount();
-  // Unread replies from Drive247 Support — MESSAGES, counted by the server from
-  // stored messages and this operator's own read state. `null` (not yet known, or
-  // unavailable) shows no badge rather than a zero or a guess.
-  const { count: supportUnread } = useSupportUnreadMessages();
   const { appUser } = useAuthStore();
   const {
     isInGracePeriod,
@@ -635,7 +627,6 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     }
     return true;
   };
-  const canSeeRewards = filterItem({ name: "Rewards", href: "/rewards", icon: Gift });
   // Integrations is a fixed row in the JSX below, not one of the lists, so it
   // goes through the same filter by hand. Without this every manager saw the
   // row and was bounced to the dashboard on clicking it (QA B8.5, 2026-11-10).
@@ -821,16 +812,8 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     .map((g) => ({ ...g, items: g.items.filter(filterItem) }))
     .filter((g) => g.items.length > 0);
 
-  // Support, with its unread-message badge. Same destination as TRAX's Support
-  // control. Not given a ROUTE_TO_TAB entry: every staff role may reach its own
-  // tickets, and the messaging endpoint enforces the rest.
-  const supportRow: NavItem = {
-    name: "Support",
-    href: SUPPORT_ROUTE,
-    icon: NavSupport,
-    badge: supportUnread ?? 0,
-    badgeLabel: (n: number) => `${n} unread ${n === 1 ? "message" : "messages"}`,
-  };
+  // No Support row (Ghulam, 23 Nov 2026: "no support tab"). /support still
+  // opens by its URL and from TRAX's Support control.
 
   /**
    * The rows this rail renders itself and the customiser does not move:
@@ -846,8 +829,6 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     { name: "Dashboard", href: "/", icon: NavDashboard },
     { name: "Integrations", href: "/integrations", icon: NavIntegrations },
     { name: "Billing", href: "/subscription", icon: NavBilling },
-    { name: "Rewards", href: "/rewards", icon: Gift },
-    supportRow,
   ];
 
   // The user's own arrangement, laid over the nav the app just computed.
@@ -1390,17 +1371,26 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   return (
     <Sidebar collapsible="icon" className="transition-all duration-300 ease-in-out">
       {/* Organization switcher at the very top */}
-      <SidebarHeader className="p-1.5 pt-4">
+      {/* With the switch in here, the header's bottom padding and the
+          content's top padding shrink to 4px + 0, the 4px the switch had under
+          it, so the first nav row does not move either. */}
+      <SidebarHeader className={`p-1.5 pt-4${canSeeCms ? " pb-1" : ""}`}>
         <OrgSwitcher collapsed={collapsed} onNavigate={closeMobileOnNav} />
-      </SidebarHeader>
 
-      {/* Navigation — fingertip items + drill-in groups */}
-      <SidebarContent className="gap-0 pt-1 transition-all duration-300 ease-in-out">
         {/* Section tabs: Portal / Website. Hidden entirely from a manager
-            without the `cms` grant — v1 hides "Website Content" from them too. */}
+            without the `cms` grant — v1 hides "Website Content" from them too.
+
+            In the HEADER, not the scrolling content (Ghulam, 23 Nov 2026:
+            "these should be fixed always"): once the onboarding call card took
+            room at the foot of the rail, the nav scrolled and carried the
+            switch up under the org row. The header does not scroll. Spacing
+            keeps the switch at the same height it had (12px under the org
+            row), so the pages lined up against it do not move. */}
         {canSeeCms && !collapsed && (
-          <div className="px-1.5 pb-1 pt-0.5">
-            <div className="relative grid grid-cols-2 rounded-full p-1">
+          <div className="pt-1">
+            {/* `website-switch` is the quick tour's anchor for the booking
+                site and Website editor stops (lib/first-rental-tour.ts). */}
+            <div data-tour="website-switch" className="relative grid grid-cols-2 rounded-full p-1">
               {/* Sliding active pill */}
               <span
                 aria-hidden
@@ -1446,7 +1436,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             Website section — v1's "Website Content" entry — is unreachable from
             the rail, since the strip above needs the full width. */}
         {canSeeCms && collapsed && (
-          <SidebarGroup className="p-1.5 pb-1">
+          <SidebarGroup className="p-0 pt-1">
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
@@ -1463,7 +1453,10 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             </SidebarGroupContent>
           </SidebarGroup>
         )}
+      </SidebarHeader>
 
+      {/* Navigation — fingertip items + drill-in groups */}
+      <SidebarContent className={`gap-0 ${canSeeCms ? "pt-0" : "pt-1"} transition-all duration-300 ease-in-out`}>
         {view === "cms" ? (
           /* Website — the site's pages, each with its live/off switch. Anything
              that is not a page (blog posts, promos, branding, SEO) is managed
@@ -1776,7 +1769,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                           settings.payments on v2), so a manager sees the row only
                           when the route would let them in (QA B8.5). */}
                       {canSeeIntegrations && (
-                      <SidebarMenuItem>
+                      <SidebarMenuItem data-tour="nav-integrations">
                         <SidebarMenuButton
                           asChild
                           isActive={isActive("/integrations")}
@@ -1822,29 +1815,9 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                         </SidebarMenuButton>
                       </SidebarMenuItem>
 
-                      {/* Rewards — the Creator Rewards Programme. This rail only
-                          renders for v2-chrome tenants, which is exactly who the
-                          programme is for (the route 404s for everyone else).
-                          In ROUTE_TO_TAB under the Subscription key: the reward is
-                          money off the tenant's Drive247 bill. */}
-                      {canSeeRewards && (
-                      <SidebarMenuItem>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={isActive("/rewards")}
-                          tooltip={collapsed ? "Rewards" : undefined}
-                          className={NAV_ROW}
-                        >
-                          <Link href="/rewards" onClick={closeMobileOnNav}>
-                            <Gift className="!size-[17px] shrink-0" />
-                            <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Rewards</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                      )}
-
-                      {/* Support, with its unread-message badge. */}
-                      {renderFlatRow(supportRow)}
+                      {/* Rewards is not in this rail any more (Ghulam, 23 Nov
+                          2026: "we don't need that rewards tab"). /rewards
+                          still opens by its URL. */}
 
                       {/* Welcome pack, kept from v1 — the source worktree dropped
                           it, but `/welcome` is a live route this branch's v1 rail
@@ -2010,13 +1983,14 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
           </div>
         )}
 
-        {/* A link to the /dev page. Self-gating, on the canary's SLUG and
-            nothing else — see dev-section.tsx, which also records what the
-            build and localhost gates used to buy and why they went (Sep 20
-            2026: the tool was asked for ON LIVE). It renders null for every
-            other tenant, including the other two whose
-            `tenants.portal_experience` is already 'v2'. */}
-        {!collapsed && <DevSection />}
+        {/* The free onboarding call with Bryan, as a card (23 Nov 2026). It
+            took the Developer link's place: that link is gone from the rail
+            on Ghulam's word, and /dev still opens by its URL. Renders nothing
+            once the call is done, hidden or not on offer, and only for the
+            owner. */}
+        <div className={collapsed ? "pb-1" : "px-0.5"}>
+          <OnboardingCallSidebarCard collapsed={collapsed} />
+        </div>
 
         <SidebarMenu>
           {/* Profile row — the name opens the user menu, and the row carries

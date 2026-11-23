@@ -125,12 +125,17 @@ export function HomeBands() {
           what does Trax make of today, who is waiting on me, and my own to-do list. See admin-cards.tsx. */}
       {/* Rearrangeable (Sep 27 2026): each card has a grip at its top centre,
           and this user's order is remembered in the browser. */}
-      {/* Requests and To do are as tall as their rows (three at most, then they
-          scroll); the Trax card stretches to the row they make. */}
+      {/* One height for all three from md up (Ghulam, 23 Nov 2026: "these
+          should be of same height at every time", then "more height, overflow
+          them a bit"): the row is a fixed 360px and every card fills it.
+          Requests and To do fill the card and scroll, the next row peeking at
+          the bottom edge; the Trax card fits as many whole points as the height
+          allows. On a phone, where they stack, each stays as tall as it needs
+          (three rows at most, cap-rows.ts). */}
       <section aria-label="Operations">
         <SortableCards
           storageKey={`dashboard-v2:ops-order:${appUser?.id ?? 'anon'}`}
-          className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-3 md:gap-5"
+          className="grid grid-cols-1 items-stretch gap-4 md:auto-rows-[360px] md:grid-cols-3 md:gap-5"
           items={[
             {
               id: 'trax',

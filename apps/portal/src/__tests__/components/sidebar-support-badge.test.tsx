@@ -98,68 +98,37 @@ beforeEach(() => {
 });
 afterEach(() => { act(() => root?.unmount()); root = null; document.body.replaceChildren(); vi.unstubAllGlobals(); });
 
-describe('Support in the main sidebar', () => {
+describe('Support and the main sidebar', () => {
   it('lays the rail out as Dashboard, Money & paperwork, then Account', () => {
     sidebar();
     const names = [...document.querySelectorAll('a')].map((a) => a.textContent?.replace(/\d+\+?$/, '').trim());
     const start = names.indexOf('Dashboard');
-    expect(names.slice(start, start + 12)).toEqual([
+    expect(names.slice(start, start + 10)).toEqual([
       'Dashboard', 'Rentals', 'Customers', 'Vehicles', 'Availability',
       'Agreements', 'Finances', 'Insights',
-      'Integrations', 'Billing', 'Rewards', 'Support',
+      'Integrations', 'Billing',
     ]);
     const headings = [...document.querySelectorAll('p')].map((p) => p.textContent?.trim());
     expect(headings).toContain('Money & paperwork');
     expect(headings).toContain('Account');
   });
 
-  it('sits at the end of Account and opens the existing Support section', () => {
-    sidebar();
-    expect(link('Support')!.getAttribute('href')).toBe('/support');
-    // Same row furniture as its neighbours: the same button slot and icon size.
-    expect(link('Support')!.getAttribute('data-sidebar')).toBe(link('Finances')!.getAttribute('data-sidebar'));
-    // Its icon is drawn at the neighbours' size.
-    const iconClasses = (name: string) => (link(name)!.querySelector('svg')?.getAttribute('class') ?? '').split(' ').filter((c) => !c.startsWith('lucide'));
-    expect(iconClasses('Support')).toEqual(iconClasses('Finances'));
-  });
-
-  it('shows the unread-message count as a right-aligned badge inside the row, named for assistive tech', () => {
-    sidebar();
-    const support = link('Support')!;
-    const badge = support.lastElementChild as HTMLElement;
-    expect(badge.textContent).toBe('2');
-    expect(badge.className).toContain('ml-auto');
-    expect(badge.className).toContain('tabular-nums');
-    expect(badge.getAttribute('aria-hidden')).toBe('true');
-    expect(support.getAttribute('aria-label')).toBe('Support, 2 unread messages');
-    // The label keeps its place whatever the number is.
-    expect(support.querySelector('span')?.className).toContain('flex-1');
-  });
-
-  it('says "message" for one, and shows nothing when there is nothing unread or the count is unknown', () => {
-    mocks.unread = { count: 1 };
-    sidebar();
-    expect(link('Support')!.getAttribute('aria-label')).toBe('Support, 1 unread message');
-    for (const count of [0, null]) {
+  // Ghulam, 23 Nov 2026: "no support tab". /support still opens by its URL
+  // and from TRAX's Support control.
+  it('has no Support row, for a head admin or a manager', () => {
+    for (const manager of [false, true]) {
       act(() => root?.unmount()); document.body.replaceChildren();
-      mocks.unread = { count };
+      mocks.manager = manager;
       sidebar();
-      expect(link('Support')!.textContent?.trim()).toBe('Support');
-      expect(link('Support')!.hasAttribute('aria-label')).toBe(false);
+      expect(link('Support')).toBeUndefined();
+      expect(document.querySelector('a[href="/support"]')).toBeNull();
     }
   });
 
-  it('is there for a manager too: every staff role has its own tickets', () => {
-    mocks.manager = true;
-    sidebar();
-    expect(link('Support')).toBeDefined();
-  });
-
-  it('gives way to the Support rail on the Support route itself', () => {
+  it('still shows the Support rail on the Support route itself', () => {
     mocks.pathname = '/support';
     sidebar();
     expect(document.querySelector('[data-testid="support-rail"]')).not.toBeNull();
-    expect(link('Support')).toBeUndefined();
   });
 });
 

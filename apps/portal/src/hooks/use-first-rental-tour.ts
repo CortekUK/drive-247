@@ -13,6 +13,7 @@ import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { useRentalCreationGate } from '@/hooks/use-rental-creation-gate';
 import { arrivalHoldMs } from '@/lib/first-run-arrival';
 import { toast } from '@/hooks/use-toast';
+import { CONNECT_STRIPE_HREF, openOnboardingCall, useFirstSteps } from '@/hooks/use-first-steps';
 import {
   getSystemAnnouncementPriority,
   useSystemAnnouncementPriority,
@@ -38,6 +39,7 @@ import {
   writeTourProgress,
   MAX_RESUME_PROMPTS,
   type ResolvedStep,
+  type TourAction,
   type TourBuildContext,
   type TourStep,
 } from '@/lib/first-rental-tour';
@@ -231,6 +233,9 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
   } = useManagerPermissions();
   const { blocked: rentalCreationBlocked, isLoading: rentalGateLoading } =
     useRentalCreationGate();
+  // Stripe and the call with Bryan, for the quick tour's last card. On a
+  // /fake-quick-tour run this is the pretend new company.
+  const firstSteps = useFirstSteps();
 
   const [phase, setPhase] = useState<TourPhase>('idle');
   const [steps, setSteps] = useState<readonly TourStep[]>([]);
@@ -287,6 +292,9 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     isMobile: typeof window !== 'undefined' && window.innerWidth < 768,
     rentalCreationBlocked,
     bookingUrl: getBookingBaseUrl(tenant?.slug),
+    firstSteps: firstSteps.ready
+      ? { stripeConnected: firstSteps.stripeConnected, call: firstSteps.call, callTime: firstSteps.callTime }
+      : undefined,
   };
 
   const stepsRef = useRef<readonly TourStep[]>(steps);
@@ -577,8 +585,11 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let elapsed = 0;
+    // A step that can stand without its anchor only waits briefly: on the
+    // dashboard the chrome it points at is already there, or it is not coming.
     const budget =
-      step.route && timedOutRouteRef.current === routePathname(step.route)
+      step.centerIfMissing ||
+      (step.route && timedOutRouteRef.current === routePathname(step.route))
         ? ANCHOR_WAIT_SHORT_MS
         : ANCHOR_WAIT_MS;
 
@@ -592,6 +603,13 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
       }
       elapsed += ANCHOR_POLL_MS;
       if (elapsed >= budget) {
+        if (step.centerIfMissing) {
+          // Its row is hidden for this user (opt-in, no grant, collapsed
+          // rail). The sentence still holds, so say it centred.
+          setCurrent(resolveStep({ ...step, anchors: [], side: 'center' }, document));
+          setPhase('showing');
+          return;
+        }
         skipForward();
         return;
       }
@@ -799,6 +817,21 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
   }, [suppressed, phase, pause]);
 
   const detail = current?.step.detail ? current.step.detail(ctxRef.current) : null;
+  // Worked out at draw time, like `detail`, so state that lands mid-tour is used.
+  const body = current ? (current.step.bodyFor ? current.step.bodyFor(ctxRef.current) : current.step.body) : '';
+  const actions = current?.step.actionsFor ? current.step.actionsFor(ctxRef.current) : [];
+
+  /** A button on the card: the tour ends, then the thing happens. */
+  const runAction = useCallback(
+    (id: TourAction['id']) => {
+      finish();
+      if (id === 'connect-stripe') router.push(CONNECT_STRIPE_HREF);
+      // The call button in the top bar owns Bryan's calendar; the top bar is
+      // on every page, so it is always there to hear this.
+      if (id === 'book-call') openOnboardingCall();
+    },
+    [finish, router],
+  );
 
   return {
     phase,
@@ -807,6 +840,9 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     index,
     current,
     detail,
+    body,
+    actions,
+    runAction,
     next,
     back,
     end,

@@ -56,7 +56,20 @@ export function nextJourneyEmail(s: JourneyState, now: number = Date.now()): Jou
 const esc = (s: unknown) =>
   String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 
-/** The calendar, pre-filled with the address the booking webhook matches a tenant by. */
+/**
+ * Where "Book Your Free Onboarding Call" goes: the company's own portal, which
+ * opens Bryan's calendar on arrival (`?book-call=1`). Since 23 Nov 2026 the
+ * calendar is our own (onboarding_call_bookings), not the GoHighLevel widget.
+ */
+export function portalBookingLink(slug: string): string {
+  return `https://${slug}.portal.drive-247.com/?book-call=1`;
+}
+
+/**
+ * The old GoHighLevel calendar, pre-filled with the address the booking
+ * webhook matches a tenant by. Kept for anything still on it; the journey
+ * emails use `portalBookingLink`.
+ */
 export function bookingLink(email: string): string {
   const url = new URL(ONBOARDING_BOOKING_URL);
   if (email) url.searchParams.set("email", email);
@@ -109,7 +122,7 @@ export function buildJourneyHtml(step: JourneyEmail, t: { slug: string; companyN
     eyebrow: copy.eyebrow,
     title: copy.title(company),
     intro: copy.body,
-    cta: { label: "Book Your Free Onboarding Call", href: esc(bookingLink(t.email)) },
+    cta: { label: "Book Your Free Onboarding Call", href: esc(portalBookingLink(t.slug)) },
     steps: {
       heading: "In 30 minutes, Bryan will help you",
       items: [

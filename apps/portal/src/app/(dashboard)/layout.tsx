@@ -68,6 +68,7 @@ import { usePortalAnnouncements } from "@/hooks/use-portal-announcements";
 import { SystemAnnouncementBanner } from "@/components/announcements/system-announcement-banner";
 import { AnnouncementDialogHost } from "@/components/announcements/announcement-dialog-host";
 import { NpsPrompt } from "@/components/nps/nps-prompt";
+import { useFakeQuickTourQuiet } from "@/lib/fake-quick-tour";
 
 function LoadingSkeleton() {
   return (
@@ -118,6 +119,10 @@ export default function DashboardLayout({
   // actually defines `.bg-app-gradient` (styles/v2-theme.css). Reading the
   // matching gate keeps the class and its definition switched by the same flag.
   const v2Theme = useV2("theme");
+  // /fake-quick-tour (northwind only): while that run is on screen, every
+  // dialog below stays shut so the quick tour is the only thing showing. The
+  // paywall and the tour itself are NOT affected. See lib/fake-quick-tour.ts.
+  const fakeTourQuiet = useFakeQuickTourQuiet();
   // The sidebar primitives carry a React CONTEXT, and ui/ and ui-v2/ each
   // define their own. AppSidebarV2 calls useSidebar() from ui-v2, so it must
   // sit inside ui-v2's SidebarProvider — pairing it with v1's provider throws
@@ -929,7 +934,7 @@ export default function DashboardLayout({
             link. Purely reassurance: dismissible, blocks nothing, and renders
             only when a live subscription exists, which is exactly when the gate
             below does not. */}
-        <SubscriptionActivatedDialog />
+        {!fakeTourQuiet && <SubscriptionActivatedDialog />}
 
         {/* Hard gate modal. Same component for both states — different copy
             via `variant`. Dialog stays mounted; visibility is driven by
@@ -961,7 +966,7 @@ export default function DashboardLayout({
             lock out". Self-gates on owing money and on the 24h dismissal, so a
             healthy or hard-gated tenant renders nothing here. See
             use-soft-subscription-block.ts. */}
-        <SubscriptionSoftReminder />
+        {!fakeTourQuiet && <SubscriptionSoftReminder />}
 
         {/* Recurring post-subscription nudge for outstanding setup tasks.
             Self-gates on `isSubscribed`, so it never shows while the hard
@@ -974,7 +979,7 @@ export default function DashboardLayout({
             and auto-hides the moment both tasks are complete. Mounted last so
             it sits above the dashboard; the subscription paywall above still
             renders on top when both happen to be up. */}
-        <MigrationBlockerDialog />
+        {!fakeTourQuiet && <MigrationBlockerDialog />}
 
         {/* Staff feedback channel. One dialog, mounted once here and driven
             from three places (sidebar button, rental-completion follow-up,
@@ -996,14 +1001,14 @@ export default function DashboardLayout({
             workspaces (Messages, Trax, Support), whose own composers own the
             bottom edge. */}
         {v2Chrome && !isBoundedHeight && <MobileTabBar />}
-        <FeedbackForcePrompt suppressed={promptsSuppressed} />
+        <FeedbackForcePrompt suppressed={promptsSuppressed || fakeTourQuiet} />
 
         {/* First-login nudge toward the welcome pack. Dismissible, and
             suppressed while the paywall owns the screen — this is the fifth
             dialog mounted here, and a new operator can already meet the
             subscription gate, the policy gate and the setup reminder before
             seeing a single screen. Same rule as FeedbackForcePrompt above. */}
-        <WelcomePackPrompt suppressed={promptsSuppressed} />
+        <WelcomePackPrompt suppressed={promptsSuppressed || fakeTourQuiet} />
 
         {/* First-run onboarding wizard — step 5 of the signup flow, between
             "Go to portal" and the dashboard. Full screen, shown exactly once,
@@ -1029,7 +1034,7 @@ export default function DashboardLayout({
         <FirstRunHandoffGate />
         {v2Chrome && <LightUntilChosen />}
 
-        <FirstRunWizard suppressed={promptsSuppressed} />
+        <FirstRunWizard suppressed={promptsSuppressed || fakeTourQuiet} />
 
         {/* First-rental walkthrough — step 7, immediately after the wizard
             above. Eleven steps across six pages (dashboard, Vehicles,
@@ -1061,17 +1066,19 @@ export default function DashboardLayout({
             hooks/use-announcement-blocked.ts). One dialog at a time; a hard
             blocker is not shown on the pages `isSubscriptionPage` keeps
             reachable. */}
-        <AnnouncementDialogHost
-          showGate={showGate}
-          isSubscriptionPage={!!isSubscriptionPage}
-          pathname={pathname ?? "/"}
-        />
+        {!fakeTourQuiet && (
+          <AnnouncementDialogHost
+            showGate={showGate}
+            isSubscriptionPage={!!isSubscriptionPage}
+            pathname={pathname ?? "/"}
+          />
+        )}
 
         {/* NPS question (admin → Customer management → NPS Program), v1 and v2.
             The lowest-priority dialog here: it waits for the paywall, every
             onboarding surface, announcements and any open modal, using the
             same check the feature-announcement dialogs use. */}
-        <NpsPrompt v2={v2Chrome} suppressed={promptsSuppressed} />
+        <NpsPrompt v2={v2Chrome} suppressed={promptsSuppressed || fakeTourQuiet} />
       </Provider>
     </DynamicThemeProvider>
   );

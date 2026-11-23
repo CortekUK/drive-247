@@ -65,6 +65,13 @@ export interface Drive247Email {
   steps?: { heading: string; items: string[] };
   /** Small print at the bottom of the card (HTML). */
   note?: string;
+  /**
+   * The logo and the card together on one rounded light-purple panel, so
+   * they read as one complete card (review, 23 Nov 2026, onboarding call
+   * emails: "the logo should have a background"). Off by default: every
+   * existing email keeps the logo floating above the card on the grey page.
+   */
+  framed?: boolean;
 }
 
 /** Drive247-branded email HTML. */
@@ -155,6 +162,7 @@ export function renderDrive247Email(e: Drive247Email): string {
     .d-num { background:#1c1a3d !important; color:#c7d2fe !important; }
     .d-link { color:#a5b4fc !important; }
     .d-rule { border-color:#262633 !important; }
+    .d-frame { background:#1a1830 !important; }
     .l-logo { display:none !important; max-height:0 !important; }
     .d-logo { display:block !important; max-height:none !important; overflow:visible !important; }
   }
@@ -165,6 +173,7 @@ export function renderDrive247Email(e: Drive247Email): string {
   [data-ogsc] .d-body { color:#b4b4c4 !important; }
   [data-ogsc] .d-muted { color:#8a8aa0 !important; }
   [data-ogsc] .d-link { color:#a5b4fc !important; }
+  [data-ogsc] .d-frame { background:#1a1830 !important; }
   [data-ogsc] .l-logo { display:none !important; }
   [data-ogsc] .d-logo { display:block !important; max-height:none !important; }
 </style>
@@ -175,13 +184,15 @@ export function renderDrive247Email(e: Drive247Email): string {
   <tr>
     <td align="center" style="padding:40px 16px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
+        ${e.framed ? `<tr><td class="d-frame" bgcolor="#ede9fe" style="background:#ede9fe;border-radius:22px;padding:28px 18px 18px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">` : ""}
         <tr>
-          <td align="center" style="padding:0 0 24px;">
+          <td align="center" style="padding:0 0 ${e.framed ? 22 : 24}px;">
             ${logoImgs()}
           </td>
         </tr>
         <tr>
-          <td class="d-card" style="background:#ffffff;border:1px solid #e8e8f0;border-radius:16px;padding:36px 32px;font-family:${FONT};">
+          <td class="d-card" style="background:#ffffff;border:1px solid ${e.framed ? "#ddd6fe" : "#e8e8f0"};border-radius:16px;padding:36px 32px;font-family:${FONT};">
             ${e.eyebrow ? `<p style="margin:0 0 10px;font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:${ACCENT};" class="d-link">${e.eyebrow}</p>` : ""}
             ${e.title ? `<h1 class="d-ink" style="margin:0 0 14px;font-size:24px;line-height:1.3;font-weight:600;color:#0b0b1a;">${e.title}</h1>` : ""}
             ${intro}
@@ -193,6 +204,7 @@ export function renderDrive247Email(e: Drive247Email): string {
             ${note}
           </td>
         </tr>
+        ${e.framed ? `</table></td></tr>` : ""}
         <tr>
           <td align="center" class="d-muted" style="padding:20px 0 0;font-family:${FONT};font-size:12px;line-height:1.7;color:#9a9aac;">
             Questions? Write to us at <a href="mailto:${SUPPORT_EMAIL}" class="d-muted" style="color:#9a9aac;">${SUPPORT_EMAIL}</a><br>

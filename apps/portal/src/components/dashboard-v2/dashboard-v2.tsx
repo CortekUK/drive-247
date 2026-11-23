@@ -8,7 +8,9 @@ import { BonzahStatusBanner } from "@/components/dashboard/bonzah-status-banner"
 import { BonzahPendingAlert } from "@/components/dashboard/bonzah-pending-alert";
 import { HomeBands } from "@/components/dashboard-v2/home/home-bands";
 import { WebinarPopup } from "@/components/dashboard-v2/webinar-popup";
+import { StripeConnectBanner } from "@/components/dashboard-v2/stripe-connect-banner";
 import { HOME_PALETTE } from "@/components/dashboard-v2/home/ui";
+import { useFakeQuickTourQuiet } from "@/lib/fake-quick-tour";
 
 /**
  * The v2 dashboard body.
@@ -35,6 +37,8 @@ import { HOME_PALETTE } from "@/components/dashboard-v2/home/ui";
 export function DashboardV2() {
   // Integration billing (northwind): no credits, so no low-credits banner (D3).
   const creditsRetired = useIntegrationBilling();
+  // /fake-quick-tour keeps every dialog shut while its run is on screen.
+  const fakeTourQuiet = useFakeQuickTourQuiet();
   return (
     /* Switch row alignment: at md+ the first band title ("On your desk", a 26px
        line box) is centred on the sidebar's Portal / Website switch, 92px from
@@ -60,12 +64,13 @@ export function DashboardV2() {
       {/* At lg+ the dashboard is one screen (Sep 27 2026): this column fills
           <main> (already bounded to the viewport) and HomeBands shares it out. */}
       <div className="pv lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
-        {/* The free onboarding call, while it is still on offer (renders
-            nothing otherwise). Above the bands: it is the first thing a new
-            operator should see. */}
+        {/* Connect Stripe: the one thing a new company must do before a real
+            rental, as one quiet line until it is done (23 Nov 2026). The free
+            call with Bryan lives in the top bar, beside Help. */}
+        <StripeConnectBanner />
         <HomeBands />
         {/* Webinar invitation popup — a portal, so it takes no space here. */}
-        <WebinarPopup />
+        {!fakeTourQuiet && <WebinarPopup />}
       </div>
       {/* The palette goes LAST. `space-y-10` gives every child after the first
           a 40px top margin, and a <style> element counts as a child, so ahead of

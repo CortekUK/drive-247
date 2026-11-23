@@ -3,14 +3,17 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { ArrowRight, Check, Compass, LayoutDashboard, Loader2 } from 'lucide-react';
+import { ArrowRight, Check, Compass, LayoutDashboard, Loader2, X } from 'lucide-react';
 
 import { Button } from '@/components/ui-v2/button';
 import { cn } from '@/lib/utils';
 import { useFirstRentalTour } from '@/hooks/use-first-rental-tour';
 import { useSystemAnnouncementPriority } from '@/lib/announcements/system-priority';
-import { routePathname, type ResolvedStep, type TourSide, type TourStep } from '@/lib/first-rental-tour';
+import { findAnchor, isTourStop, routePathname, type ResolvedStep, type TourAction, type TourSide, type TourStep } from '@/lib/first-rental-tour';
+import { CustomersEmptyArt, VehiclesEmptyArt } from '@/components/illustrations-v2/empty-scenes';
+import { PaymentsEmptyArt } from '@/components/illustrations-v2/scenes/payments';
 import { MOTION_IN, MOTION_OFFSET, MOTION_OUT } from '@/lib/motion';
+import { endFakeQuickTour } from '@/lib/fake-quick-tour';
 
 /**
  * The first-rental walkthrough — eleven steps across six pages, canary only.
@@ -64,6 +67,29 @@ export function FirstRentalTour({ suppressed = false }: { suppressed?: boolean }
   // Portals need a document. Next renders this on the server first.
   useEffect(() => setMounted(true), []);
 
+  // The pointed-at thing, as the card layer measured it: the veil leaves it
+  // clear. Kept here, not in the card layer, because that layer remounts on
+  // every step and the veil must NOT, or the page would flash between steps.
+  const [spot, setSpot] = useState<Rect | null>(null);
+  useEffect(() => {
+    // A new page (a tab tour moving on) or the end of the run: no hole.
+    if (tour.phase === 'navigating' || tour.phase === 'idle') setSpot(null);
+  }, [tour.phase]);
+
+  // A /fake-quick-tour run keeps the dashboard's dialogs shut. Once the tour
+  // goes back to idle (finished, skipped or paused) the portal is normal again.
+  const wasRunning = useRef(false);
+  useEffect(() => {
+    if (tour.phase !== 'idle') {
+      wasRunning.current = true;
+      return;
+    }
+    if (wasRunning.current) {
+      wasRunning.current = false;
+      endFakeQuickTour();
+    }
+  }, [tour.phase]);
+
   if (!mounted || stepAside) return null;
 
   if (tour.phase === 'prompt') {
@@ -78,32 +104,47 @@ export function FirstRentalTour({ suppressed = false }: { suppressed?: boolean }
     );
   }
 
+  // Tones the rest of the app down while a card is up, and stays up across
+  // the step change (same element, same place in both branches below, so
+  // React keeps it). Off while a tab tour navigates.
+  const veil = tour.phase !== 'navigating' ? <TourVeil spot={spot} /> : null;
+
   if (tour.phase === 'transit' || tour.phase === 'navigating' || tour.phase === 'waiting') {
     return createPortal(
-      <TransitPill
-        label={tour.steps[tour.index]?.label}
-        onSkip={tour.end}
-        yieldsToSystem={tour.yieldsToSystem}
-      />,
+      <>
+        {veil}
+        <TransitPill
+          label={tour.steps[tour.index]?.label}
+          onSkip={tour.end}
+          yieldsToSystem={tour.yieldsToSystem}
+        />
+      </>,
       document.body,
     );
   }
 
   if (tour.phase === 'showing' && tour.current) {
     return createPortal(
-      <TourLayer
-        resolved={tour.current}
-        steps={tour.steps}
-        index={tour.index}
-        detail={tour.detail}
-        onNext={tour.next}
-        onBack={tour.back}
-        onEnd={tour.end}
-        onFinishToDashboard={tour.finishToDashboard}
-        onAnchorLost={tour.anchorLost}
-        onPause={tour.pause}
-        yieldsToSystem={tour.yieldsToSystem}
-      />,
+      <>
+        {veil}
+        <TourLayer
+          onSpot={setSpot}
+          resolved={tour.current}
+          steps={tour.steps}
+          index={tour.index}
+          detail={tour.detail}
+          body={tour.body}
+          actions={tour.actions}
+          onAction={tour.runAction}
+          onNext={tour.next}
+          onBack={tour.back}
+          onEnd={tour.end}
+          onFinishToDashboard={tour.finishToDashboard}
+          onAnchorLost={tour.anchorLost}
+          onPause={tour.pause}
+          yieldsToSystem={tour.yieldsToSystem}
+        />
+      </>,
       document.body,
     );
   }
@@ -111,7 +152,18 @@ export function FirstRentalTour({ suppressed = false }: { suppressed?: boolean }
   return null;
 }
 
-// ── The card + spotlight ───────────────────────────────────────────────────
+// ── The card + cursor ──────────────────────────────────────────────────────
+//
+// The look (Ghulam, 23 Nov 2026, from PostHog's own product tour): the page
+// stays sharp and usable, with NO blur and NO spotlight ring, only toned down
+// by a light veil of its own background colour (`TourVeil`), the pointed-at
+// thing left clear. A small cursor glides from one thing to the next and points
+// at it, and a plain popover card sits beside the cursor: title and a close
+// button, the words, a hairline, then "2 of 11" with Back and Next.
+//
+// The spotlight it replaced (blur layer, dim, rim, lift, placement latch) was
+// heavy enough that the app behind it stopped reading as the app, which is the
+// opposite of what an orientation is for.
 
 interface Rect {
   top: number;
@@ -120,305 +172,220 @@ interface Rect {
   height: number;
 }
 
-const CARD_WIDTH = 400;
-const CENTERED_WIDTH = 468;
 /**
- * How many times the card may change its mind about spotlight-vs-centred for
- * one step at one window size before it is forced onto the centred wash.
- *
- * Two, because the honest cases need at most two: `cardH` starts at a guess, so
- * the first real measurement legitimately moves it once, and a genuine layout
- * shift underneath (a query settling, an image loading) can move it a second
- * time. A third disagreement is not new information — it is the 400px height
- * and the 468px height taking turns. See `placementLatch`.
+ * The veil: the rest of the app, toned down (Ghulam, 23 Nov: "tone down the
+ * rest of the UI, not the tour card", then "blackish", lighter). A light black
+ * dim; no blur, so the app still reads as the app. The pointed-at thing is
+ * left clear.
  */
-const MAX_PLACEMENT_FLIPS = 2;
-/**
- * The Welcome card only. It is the one card that is an introduction rather
- * than a label on something — Trax says who it is and what the next minute is
- * for — and at 408px that landed as a notification. Wide enough to carry a
- * two-line headline at a size worth reading.
- */
-const WELCOME_WIDTH = 640;
-/** Visible space between the spotlight's outer edge and the card. */
-const GAP = 16;
-/**
- * How far the spotlight stands off the element it is presenting.
- *
- * Was 8, which put the edge on the text's own bounding box — it read as a
- * border drawn around the words rather than a light pointed at them.
- */
-const PAD = 12;
+const VEIL = 'hsl(0 0% 4% / 0.28)';
+/** How far the clear hole stands off the pointed-at thing, and its corners. */
+const VEIL_PAD = 6;
+const VEIL_RADIUS = 10;
 
-/**
- * The spotlight's corner radius. ONE constant, THREE consumers: the pane, the
- * lift, and the radius handed to `scrimHolePath`. Typed as a literal in any of
- * them they drift by a pixel and the seam shows through the corners.
- */
-const SPOT_RADIUS = 20;
-
-/**
- * ONE NOTE KEPT FROM A REMOVED CONSTANT, so nobody re-derives it the hard way:
- * an outer `box-shadow`'s inner edge cannot be feathered at any blur radius.
- * The 9999px spread pushes the shadow's own blurred perimeter off-screen, so
- * `0 0 28px 9999px` renders pixel-identical to `0 0 0 9999px`.
- *
- * A `BLUR_FEATHER` once cut the blur's hole 20px outside the dim's, to keep the
- * two edges apart. It was removed: that ring ended up dimmed but NOT blurred,
- * and around a floating panel it showed the page behind it sharp — a stray
- * bright card under the highlighted one. The dim and the blur now share one
- * hole, hugging the anchor exactly, and the rim floats outside both.
- */
-
-/**
- * How hard the page behind the tour is pushed back.
- *
- * A dim alone was not enough. At `0.45` every card, table row and sidebar label
- * behind the tour stayed legible, so the eye kept reading the app instead of
- * the one sentence the step is trying to say — the screen read as noise with a
- * box on top of it. Blur is what actually separates the two planes: text stops
- * resolving as text, and the card becomes the only thing in focus.
- *
- * Kept deliberately light. This is a guide, not a modal — the operator is meant
- * to keep their bearings and see WHERE the thing being described sits on their
- * own screen. Blur it out completely and the tour stops teaching the layout.
- */
-const SCRIM = 'hsl(0 0% 4% / 0.38)';
-const SCRIM_BLUR = 'blur(5px)';
-
-/**
- * The spotlight's edge, stacked outward from the hole.
- *
- * Every entry is ZERO-BLUR, which is what keeps it cheap enough to re-rasterise
- * on every frame of the spring. Outer box-shadows paint front-to-back — first
- * listed is on top — and are clipped OUT of the border box, so none of this can
- * touch the highlighted element's own pixels. That matters: the target is
- * arbitrary page content and must not be restyled.
- *
- *   0   – 1.5px  a near-white hairline: the lit lip of a raised surface, and
- *                the reason the indigo below is legible at all. The old
- *                `ring-2 ring-primary/60` sat straight on the seam with dimmed
- *                grey on one side and white page on the other, and at that
- *                alpha a single indigo hairline had contrast against neither —
- *                so it read as the cut line rather than as an accent.
- *   1.5 – 4.5px  the indigo band, tinted toward 250 so it belongs to the
- *                primary ramp rather than sitting on it.
- *   4.5 – 5.5px  a faint outer hairline, so the band has an edge of its own
- *                and does not bleed into the dim.
- *   5.5 – ∞      the dim.
- */
-const SPOT_EDGE = [
-  '0 0 0 1.5px hsl(250 100% 99% / 0.62)',
-  '0 0 0 4.5px hsl(var(--primary) / 0.62)',
-  '0 0 0 5.5px hsl(250 100% 99% / 0.20)',
-].join(', ');
-
-/**
- * The dim, carried by its own element sitting on the EXACT anchor rect.
- *
- * Split away from the rim above, and the split is the fix for a real artifact.
- * The rim is drawn PAD outside the anchor so it does not sit on the element's
- * own edge — but when the dim rode along with it, the ring between the element
- * and the rim was left BRIGHT. Around a floating panel like the Setup guide
- * dock, that ring is not empty space: it is the dashboard behind the dock,
- * shown sharp and undimmed, and it reads as a stray card or toast wedged under
- * the one being highlighted.
- *
- * Dimming from the exact rect means everything that is not the anchor is dark,
- * and the rim floats over that instead of fencing off a bright margin.
- */
-const SPOT_DIM = `0 0 0 9999px ${SCRIM}`;
-
-/**
- * The lift — the reason this reads as presented rather than punched.
- *
- * A hole in a sheet and an object raised above one differ by exactly one thing:
- * the second casts a shadow. These paint over the dim and are clipped out of
- * the border box, so they darken the page around and below the anchor without
- * laying a single pixel on the anchor itself.
- *
- * The 30px indigo bloom is doing separate work from the drop shadows. It is
- * laid directly over the seam that cannot be feathered, spreading the visual
- * transition across 30px so the eye reads a gradient instead of a cut.
- */
-const SPOT_LIFT = [
-  '0 1px 3px -1px hsl(248 60% 4% / 0.40)',
-  '0 0 30px 0 hsl(var(--primary) / 0.26)',
-  '0 12px 26px -10px hsl(248 60% 4% / 0.45)',
-  '0 34px 60px -24px hsl(248 60% 4% / 0.60)',
-].join(', ');
-
-/** Keep the spotlight this far off the viewport edge. */
-const SPOT_EDGE_INSET = 6;
-
-/**
- * Slack required between the card and the spotlight — see `clear()`.
- *
- * Large enough to absorb a one-render-stale card height and a dock that
- * resizes itself, small enough that it never pushes a placement that genuinely
- * fits into the centred fallback.
- */
-const CLEAR_MARGIN = 10;
-
-/**
- * The spotlight's box: the anchor, padded, clamped to the viewport.
- *
- * ONE function, FOUR consumers — the blur hole, the pane, the lift and the
- * card's placement. They must agree to the pixel or the rim slides off the blur
- * hole and shows a soft-edged sliver, so none of them may compute this again.
- *
- * The clamp is not cosmetic. Two live steps anchor full-width content, and
- * unclamped the padded rect runs past the right edge of the screen and 12px
- * into the 280px sidebar on the left — losing the treatment on exactly the
- * targets where the seam is longest and most visible.
- */
-function spotlightBox(anchor: Rect, viewportW: number, viewportH: number, pad: number): Rect {
-  const left = Math.max(SPOT_EDGE_INSET, anchor.left - pad);
-  const top = Math.max(SPOT_EDGE_INSET, anchor.top - pad);
-  const right = Math.min(viewportW - SPOT_EDGE_INSET, anchor.left + anchor.width + pad);
-  const bottom = Math.min(viewportH - SPOT_EDGE_INSET, anchor.top + anchor.height + pad);
-  return {
-    top,
-    left,
-    width: Math.max(0, right - left),
-    height: Math.max(0, bottom - top),
-  };
-}
-
-/**
- * The whole viewport, minus a rounded hole over the highlighted element.
- *
- * `backdrop-filter` blurs everything under an element, and there is no way to
- * exempt a region of it — so the spotlight's cut-out has to be cut out of the
- * blur layer itself. `clip-path: path(evenodd, …)` does that in one property:
- * an outer rectangle covering the screen and an inner rounded rect, with the
- * even-odd fill rule leaving the inner one empty.
- *
- * Without this the highlighted control would be blurred along with everything
- * else — which is precisely backwards, since it is the one thing the step is
- * pointing at.
- */
-function scrimHolePath(rect: Rect, radius: number, viewportW: number, viewportH: number): string {
-  const { top: y, left: x, width: w, height: h } = rect;
-  const r = Math.max(0, Math.min(radius, w / 2, h / 2));
+/** The viewport minus a rounded hole (even-odd), for `clip-path`. */
+function veilPath(r: Rect, viewportW: number, viewportH: number): string {
+  const x = Math.max(0, r.left - VEIL_PAD);
+  const y = Math.max(0, r.top - VEIL_PAD);
+  const w = Math.min(viewportW, r.left + r.width + VEIL_PAD) - x;
+  const h = Math.min(viewportH, r.top + r.height + VEIL_PAD) - y;
+  const rad = Math.max(0, Math.min(VEIL_RADIUS, w / 2, h / 2));
   const hole =
-    `M${x + r},${y} H${x + w - r} A${r},${r} 0 0 1 ${x + w},${y + r} ` +
-    `V${y + h - r} A${r},${r} 0 0 1 ${x + w - r},${y + h} ` +
-    `H${x + r} A${r},${r} 0 0 1 ${x},${y + h - r} ` +
-    `V${y + r} A${r},${r} 0 0 1 ${x + r},${y} Z`;
+    `M${x + rad},${y} H${x + w - rad} A${rad},${rad} 0 0 1 ${x + w},${y + rad} ` +
+    `V${y + h - rad} A${rad},${rad} 0 0 1 ${x + w - rad},${y + h} ` +
+    `H${x + rad} A${rad},${rad} 0 0 1 ${x},${y + h - rad} ` +
+    `V${y + rad} A${rad},${rad} 0 0 1 ${x + rad},${y} Z`;
   return `path(evenodd, "M0,0 H${viewportW} V${viewportH} H0 Z ${hole}")`;
 }
 
-type Placement = Exclude<TourSide, 'center'>;
-
-/** Preference order for placing the card, starting with the step's own. */
-function placementsFor(preferred: TourSide): Placement[] {
-  switch (preferred) {
-    case 'right':
-      return ['right', 'left', 'bottom', 'top'];
-    case 'left':
-      return ['left', 'right', 'bottom', 'top'];
-    case 'top':
-      return ['top', 'bottom', 'right', 'left'];
-    default:
-      return ['bottom', 'top', 'right', 'left'];
-  }
+function TourVeil({ spot }: { spot: Rect | null }) {
+  const reduceMotion = useReducedMotion();
+  const viewportW = window.innerWidth;
+  const viewportH = window.innerHeight;
+  return (
+    <motion.div
+      aria-hidden
+      // Under the card layer (z-65). Takes no clicks: the app stays usable.
+      className="fixed inset-0 z-[64] transition-[clip-path] duration-300 ease-out"
+      initial={reduceMotion ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={reduceMotion ? { duration: 0 } : MOTION_IN}
+      style={{
+        background: VEIL,
+        clipPath: spot ? veilPath(spot, viewportW, viewportH) : undefined,
+        pointerEvents: 'none',
+      }}
+    />
+  );
 }
 
-function positionFor(
-  placement: Placement,
-  anchor: Rect,
-  cardW: number,
-  cardH: number,
-): { left: number; top: number } {
-  // `anchor` here is the SPOTLIGHT's box, not the raw element rect — it already
-  // carries PAD and the viewport clamp. So GAP is measured from the edge the
-  // operator can actually see, which is what the constant is supposed to mean.
-  //
-  // Previously this took the raw rect and offset by GAP, leaving only
-  // GAP - PAD of real space: the card and the highlight read as touching, and
-  // on the Payments step the card's corner sat directly against the rim.
-  switch (placement) {
-    case 'right':
-      return { left: anchor.left + anchor.width + GAP, top: anchor.top };
-    case 'left':
-      return { left: anchor.left - GAP - cardW, top: anchor.top };
-    case 'top':
-      return { left: anchor.left + anchor.width / 2 - cardW / 2, top: anchor.top - GAP - cardH };
-    default:
-      return {
-        left: anchor.left + anchor.width / 2 - cardW / 2,
-        top: anchor.top + anchor.height + GAP,
-      };
-  }
-}
+/** Card width beside the cursor. */
+const CARD_WIDTH = 360;
+/** Card width for a step with nothing to point at (Done, phone stops). */
+const CENTERED_WIDTH = 420;
+/** The Welcome card: wide enough for the three illustrated tiles in a row. */
+const WELCOME_WIDTH = 640;
+/** Keep the card at least this far inside the viewport. */
+const GAP = 16;
+/**
+ * An anchor covering more than this share of the viewport is pointing at
+ * everything, which is to say nothing: the card goes centre instead.
+ */
+const OVERSIZE = 0.66;
 
 /**
- * Where the card goes — or `null` if there is nowhere honest to put it.
- *
- * Returns only a placement that is BOTH fully on screen AND disjoint from the
- * spotlight. There is deliberately no fallback and no clamping: a returned
- * position is used verbatim.
- *
- * That is the whole point. The previous version chose a side, then clamped the
- * result into the viewport on both axes — and the clamp was what broke the
- * invariant. For a `right` placement on a wide anchor, `left` is
- * `spot.right + GAP`, and clamping it back to `viewportW - cardW - GAP` yields
- * a coordinate INSIDE the spotlight. Choosing well and then clamping undoes the
- * choice on the very next line, which is how the card ended up sitting in the
- * middle of the Brand Identity panel.
- *
- * So the check and the result are the same value. Two axis-aligned boxes are
- * disjoint if they are disjoint on either axis, and an accepted candidate is
- * disjoint by construction — nothing downstream may move it.
- *
- * `null` means "no side has room", and the caller degrades to the centred wash.
- * Refusing to place is the correct answer there; squeezing is what produced the
- * mess.
+ * Where the cursor's tip was last, across steps. The card layer remounts on
+ * every step (the hook passes through `waiting` in between), so the cursor
+ * would otherwise appear from nowhere each time instead of gliding over.
  */
-function placeCard(
-  spot: Rect,
+let lastTip: { x: number; y: number } | null = null;
+
+/**
+ * Where the cursor's tip lands: just inside the anchor's edge on the side the
+ * card goes, so the cursor sits BETWEEN the thing and the card, as in
+ * PostHog's tour. (It used to land 55% across, and the card was placed off the
+ * tip, so on a wide anchor like the Portal / Website switch the card covered
+ * the very thing it was describing.)
+ */
+function tipFor(r: Rect, side: TourSide): { x: number; y: number } {
+  if (side === 'bottom') return { x: r.left + r.width / 2, y: r.top + r.height * 0.72 };
+  if (side === 'top') return { x: r.left + r.width / 2, y: r.top + r.height * 0.3 };
+  const inset = Math.min(18, r.width / 3);
+  return { x: side === 'left' ? r.left + inset : r.left + r.width - inset, y: r.top + r.height * 0.55 };
+}
+
+/** Space between the anchor's edge and the card: room for the cursor. */
+const CARD_OFFSET = 24;
+
+/**
+ * Where the card goes: beside the ANCHOR, never on top of it. Tries the
+ * step's own side first, then the others, and takes the first that fits on
+ * screen. Beside it, the card's top sits a little above the cursor tip.
+ */
+function cardBeside(
+  r: Rect,
+  tip: { x: number; y: number },
   side: TourSide,
   cardW: number,
   cardH: number,
   viewportW: number,
   viewportH: number,
-): { left: number; top: number } | null {
-  const onScreen = (p: { left: number; top: number }) =>
-    p.left >= GAP &&
-    p.left + cardW <= viewportW - GAP &&
-    p.top >= GAP &&
-    p.top + cardH <= viewportH - GAP;
+): { left: number; top: number } {
+  const right = r.left + r.width;
+  const bottom = r.top + r.height;
+  const clampX = (l: number) => Math.min(Math.max(l, GAP), Math.max(GAP, viewportW - GAP - cardW));
+  const clampY = (t: number) => Math.min(Math.max(t, GAP), Math.max(GAP, viewportH - GAP - cardH));
+  const fitsX = (l: number) => l >= GAP && l + cardW <= viewportW - GAP;
 
-  /**
-   * Clear of the spotlight, with room to spare.
-   *
-   * The margin is not padding — it is tolerance for the two ways the inputs go
-   * stale between placement and paint:
-   *
-   *   1. `cardH` is measured from the rendered card, so on a step change the
-   *      first render uses the PREVIOUS step's height. Underestimate it and a
-   *      card placed above the spotlight extends past its top edge.
-   *   2. Several anchors resize under their own steam. The Setup guide dock is
-   *      `position: fixed` and expands and minimises; when it grows, the
-   *      spotlight grows with it and can reach a card that was clear when it
-   *      was placed.
-   *
-   * Exact adjacency — the old test — turns either of those into a visible
-   * overlap, which is precisely what was happening on the Setup guide step.
-   * Requiring a real gap means a few pixels of drift costs nothing.
-   */
-  const clear = (p: { left: number; top: number }) =>
-    p.left + cardW + CLEAR_MARGIN <= spot.left ||
-    p.left >= spot.left + spot.width + CLEAR_MARGIN ||
-    p.top + cardH + CLEAR_MARGIN <= spot.top ||
-    p.top >= spot.top + spot.height + CLEAR_MARGIN;
+  type Try = () => { left: number; top: number } | null;
+  const onRight: Try = () => {
+    const left = right + CARD_OFFSET;
+    return fitsX(left) ? { left, top: clampY(tip.y - 28) } : null;
+  };
+  const onLeft: Try = () => {
+    const left = r.left - CARD_OFFSET - cardW;
+    return fitsX(left) ? { left, top: clampY(tip.y - 28) } : null;
+  };
+  // Below: clear of the anchor AND of the cursor hanging off its bottom edge.
+  const below: Try = () => {
+    const top = Math.max(bottom, tip.y + 26) + 12;
+    return top + cardH <= viewportH - GAP ? { left: clampX(tip.x - 28), top } : null;
+  };
+  const above: Try = () => {
+    const top = r.top - 12 - cardH;
+    return top >= GAP ? { left: clampX(tip.x - 28), top } : null;
+  };
 
-  for (const placement of placementsFor(side)) {
-    const p = positionFor(placement, spot, cardW, cardH);
-    if (onScreen(p) && clear(p)) return p;
+  const order: Try[] =
+    side === 'left'
+      ? [onLeft, below, onRight, above]
+      : side === 'bottom'
+        ? [below, onRight, onLeft, above]
+        : side === 'top'
+          ? [above, below, onRight, onLeft]
+          : [onRight, below, onLeft, above];
+  for (const t of order) {
+    const p = t();
+    if (p) return p;
   }
-  return null;
+  return { left: clampX(right + CARD_OFFSET), top: clampY(tip.y - 28) };
+}
+
+/** The pointer itself: an arrow in the accent colour with a white edge. */
+function TourCursor({ x, y, reduceMotion }: { x: number; y: number; reduceMotion: boolean | null }) {
+  // Read once, on mount: where to glide FROM. A first appearance fades in from
+  // a little below and to the right of where it lands.
+  const [from] = useState(() => lastTip);
+  useEffect(() => {
+    lastTip = { x, y };
+  }, [x, y]);
+  // The SVG's tip is at (3, 2); shift so that point lands on (x, y).
+  const at = { x: x - 3, y: y - 2 };
+  return (
+    <motion.div
+      aria-hidden
+      className="absolute left-0 top-0"
+      style={{ pointerEvents: 'none' }}
+      initial={
+        reduceMotion
+          ? false
+          : from
+            ? { x: from.x - 3, y: from.y - 2, opacity: 1 }
+            : { x: at.x + 40, y: at.y + 32, opacity: 0 }
+      }
+      animate={{ x: at.x, y: at.y, opacity: 1 }}
+      transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 160, damping: 22, mass: 0.9 }}
+    >
+      <svg width="26" height="28" viewBox="0 0 26 28" className="drop-shadow-[0_2px_3px_rgba(15,23,42,0.35)]">
+        <path
+          d="M3 2 L3 22 L8.4 17.2 L12.4 26 L16.6 24.2 L12.7 15.6 L20 15.6 Z"
+          fill="hsl(var(--primary))"
+          stroke="white"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </motion.div>
+  );
+}
+
+/**
+ * The hello card's picture: what a first rental needs AT LEAST, illustrated
+ * with the app's own empty-state art (ILLUSTRATION_GUIDE.md). A car, a
+ * customer and Stripe: without any one of them New Rental cannot finish. The
+ * rest comes with the rental itself, and the line under the tiles says so.
+ */
+const RENTAL_NEEDS = [
+  { id: 'car', label: 'A car', caption: 'With its prices and photos, added in Vehicles.', Art: VehiclesEmptyArt },
+  { id: 'customer', label: 'A customer', caption: 'Who is renting. Bookings on your site add them for you.', Art: CustomersEmptyArt },
+  { id: 'stripe', label: 'Your Stripe account', caption: 'Your customers pay you directly into it. Connect it under Integrations.', Art: PaymentsEmptyArt },
+] as const;
+
+function RentalNeeds() {
+  return (
+    <div className="mt-2 flex flex-col gap-3">
+      <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+        {RENTAL_NEEDS.map(({ id, label, caption, Art }) => (
+          <li
+            key={id}
+            className="flex items-center gap-3 overflow-hidden rounded-lg border border-foreground/[0.08] bg-foreground/[0.02] pr-3 sm:flex-col sm:items-stretch sm:gap-0 sm:pr-0"
+          >
+            <div className="w-24 shrink-0 bg-card px-2 py-1.5 sm:w-full sm:border-b sm:border-foreground/[0.06] sm:px-3 sm:pb-0 sm:pt-2">
+              <Art className="w-full max-w-[180px]" />
+            </div>
+            <div className="flex flex-col gap-0.5 py-2.5 sm:px-3">
+              <span className="text-[13px] font-semibold text-foreground">{label}</span>
+              <span className="text-[12px] leading-snug text-muted-foreground">{caption}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <p className="text-[12.5px] leading-relaxed text-muted-foreground">
+        The driver check, the agreement and insurance come with the rental itself. I will show you where each one
+        lives.
+      </p>
+    </div>
+  );
 }
 
 function TourLayer({
@@ -426,18 +393,29 @@ function TourLayer({
   steps,
   index,
   detail,
+  body,
+  actions = [],
+  onAction,
   onNext,
   onBack,
   onEnd,
   onFinishToDashboard,
   onAnchorLost,
   onPause,
+  onSpot,
   yieldsToSystem = false,
 }: {
+  /** Tells the veil what to leave clear (null: nothing, the card is centred). */
+  onSpot?: (spot: Rect | null) => void;
   resolved: ResolvedStep;
   steps: readonly TourStep[];
   index: number;
   detail: string | null;
+  /** The step's words as worked out for this company (`bodyFor`), else `step.body`. */
+  body?: string;
+  /** Buttons that end the tour and do something (the last card's Connect Stripe, Book a call). */
+  actions?: readonly TourAction[];
+  onAction?: (id: TourAction['id']) => void;
   onNext: () => void;
   onBack: () => void;
   onEnd: () => void;
@@ -449,95 +427,44 @@ function TourLayer({
 }) {
   const { step, element, notes } = resolved;
   const [rect, setRect] = useState<Rect | null>(null);
-  /** True when the anchor floats over the page — see `measure`. */
-  const [elevated, setElevated] = useState(false);
-  const [cardH, setCardH] = useState(280);
+  const [cardH, setCardH] = useState(200);
   const cardRef = useRef<HTMLDivElement>(null);
-  /**
-   * Guards the ONE feedback loop in this component's layout.
-   *
-   * `cardH` decides `placement`, `placement` decides `centered`, and `centered`
-   * decides the card's WIDTH — 400px when it sits beside a spotlight, 468px on
-   * the centred wash. A different width wraps the text differently, which
-   * changes the height, which feeds straight back into `placement`.
-   *
-   * For most steps that settles in one pass. For a step whose two heights
-   * straddle the "does it fit beside the anchor" threshold it does not settle
-   * at all: the card is too tall at 400 so it centres, becomes short enough at
-   * 468 so it un-centres, and the layout effect below sets state on every
-   * render until React gives up with "Maximum update depth exceeded".
-   *
-   * The `h !== cardH` guard in that effect cannot help — both heights are
-   * genuinely different from the last one. The cycle has to be broken here.
-   *
-   * So: a couple of adjustments are allowed (the first measurement almost
-   * always needs one, since `cardH` starts at a guess), and after that the
-   * decision is frozen on the CENTRED wash. Centred is the right way to fail —
-   * it is already this component's documented fallback for "no side has room",
-   * it always fits, and it never covers the thing the step is describing.
-   *
-   * Keyed on the step AND the viewport, so a resize re-decides from scratch
-   * rather than inheriting a verdict reached at a different window size.
-   */
-  const placementLatch = useRef<{ key: string; centered: boolean; flips: number }>({
-    key: '',
-    centered: false,
-    flips: 0,
-  });
   const reduceMotion = useReducedMotion();
 
   const measure = useCallback(() => {
     if (!element) return;
     // The element can be removed while the tour is up — a route change that
-    // rebuilds the rail, a permissions refetch, a tab switch. Handing it back
-    // to the hook (which re-resolves, then skips) is the only honest response;
-    // pointing at a detached node is the exact stall this tour is built to
-    // avoid.
+    // rebuilds the rail, a permissions refetch, a tab switch. Hand it back to
+    // the hook (which re-resolves, then skips) rather than point at nothing.
     if (!document.contains(element)) {
       onAnchorLost();
       return;
     }
     const box = element.getBoundingClientRect();
-    const r = { top: box.top, left: box.left, right: box.right, bottom: box.bottom, width: box.width, height: box.height };
-    if (r.width === 0 && r.height === 0) {
+    if (box.width === 0 && box.height === 0) {
       onAnchorLost();
       return;
     }
-    // A heading with its subtitle right under it is lit as ONE box. Padded
-    // round the heading alone, the hole ends partway down the subtitle and
-    // the tour shows half a line of text sharp and half blurred.
-    const subtitle = element.nextElementSibling;
-    if (/^H[1-6]$/.test(element.tagName) && subtitle?.tagName === 'P') {
-      const s = subtitle.getBoundingClientRect();
-      if (s.height > 0) {
-        r.top = Math.min(r.top, s.top);
-        r.left = Math.min(r.left, s.left);
-        r.right = Math.max(r.right, s.right);
-        r.bottom = Math.max(r.bottom, s.bottom);
-        r.width = r.right - r.left;
-        r.height = r.bottom - r.top;
-      }
+    // Take in the step's neighbours (`span`): Customers with Vehicles, the
+    // money and paperwork rows as one block.
+    let top = box.top;
+    let left = box.left;
+    let right = box.right;
+    let bottom = box.bottom;
+    for (const selector of step.span ?? []) {
+      const other = findAnchor([selector], document);
+      if (!other) continue;
+      const o = other.getBoundingClientRect();
+      top = Math.min(top, o.top);
+      left = Math.min(left, o.left);
+      right = Math.max(right, o.right);
+      bottom = Math.max(bottom, o.bottom);
     }
-    setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+    setRect({ top, left, width: right - left, height: bottom - top });
+  }, [element, onAnchorLost, step.span]);
 
-    // Does this anchor FLOAT OVER the page, or sit in it?
-    //
-    // It decides how much room the spotlight leaves around it, and the two
-    // cases genuinely want opposite things. A page heading is text on the page:
-    // padding the hole reveals more of the same page, and without that room the
-    // rim crops the words. A docked panel — `position: fixed`, its own surface,
-    // its own shadow — has OTHER CONTENT behind it, so the same padding reveals
-    // the dashboard underneath it, sharp and undimmed, and reads as a stray
-    // card wedged under the highlighted one.
-    //
-    // Asking the element which it is costs one `getComputedStyle` per measure
-    // and needs no per-step configuration, so a future step cannot forget it.
-    const position = window.getComputedStyle(element).position;
-    setElevated(position === 'fixed' || position === 'sticky');
-  }, [element, onAnchorLost]);
-
-  // Measure before paint so the spotlight never renders at the wrong place for
-  // a frame, then keep it honest through scroll, resize and layout shifts.
+  // Measure before paint so the cursor never lands in the wrong place for a
+  // frame, then keep it honest through scroll, resize and layout shifts.
   useLayoutEffect(() => {
     measure();
   }, [measure]);
@@ -548,8 +475,7 @@ function TourLayer({
     // bubble a scroll event to window) still re-measures.
     window.addEventListener('scroll', measure, true);
     window.addEventListener('resize', measure);
-    const observer =
-      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
     observer?.observe(element);
     observer?.observe(document.body);
     return () => {
@@ -559,14 +485,12 @@ function TourLayer({
     };
   }, [element, measure]);
 
-  // The card's real height, so placement and clamping use the truth rather
-  // than a guess — the finale is taller than a one-liner. No deps: the card
-  // only exists once the anchor has been measured, so this has to look again
-  // after every render; the equality guard keeps it from looping.
+  // The card's real height, so it is kept inside the viewport by the truth
+  // rather than a guess. The equality guard keeps this from looping.
   useLayoutEffect(() => {
     const card = cardRef.current;
     if (!card) return;
-    const h = card.offsetHeight || 280;
+    const h = card.offsetHeight || 200;
     if (h !== cardH) setCardH(h);
   });
 
@@ -578,10 +502,8 @@ function TourLayer({
 
   // Clicking the thing being pointed at. On a look-at-this step whose next
   // step is on the same page, that counts as "understood" and moves on. On a
-  // do-this step (Add Vehicle opens a dialog) the tour steps aside instead —
-  // a coach mark floating over the dialog they just opened is in the way.
-  // When the next step is on another page, a click is left alone: the click
-  // itself may be a navigation, and the hook will notice the route change.
+  // do-this step the tour steps aside instead. When the next step is on
+  // another page, a click is left alone: the hook notices the route change.
   const nextStep = steps[index + 1];
   const nextIsSamePage =
     !!nextStep &&
@@ -614,6 +536,23 @@ function TourLayer({
     return () => window.removeEventListener('keydown', onKey);
   }, [onEnd, onNext, onBack]);
 
+  // Tell the veil what to leave clear: the anchor, unless this card is centred.
+  useEffect(() => {
+    if (!onSpot) return;
+    if (!element || !rect || step.side === 'center') {
+      onSpot(null);
+      return;
+    }
+    const tooBig = (rect.width * rect.height) / (window.innerWidth * window.innerHeight) > OVERSIZE;
+    onSpot(tooBig ? null : rect);
+  }, [element, rect, step.side, onSpot]);
+
+  // A fresh run starts the cursor fresh: it fades in at the first stop
+  // instead of gliding over from wherever the last run left it.
+  useEffect(() => {
+    if (index === 0) lastTip = null;
+  }, [index]);
+
   // Move focus to the card so the buttons are immediately reachable, and put it
   // back where it was when the layer goes away.
   useEffect(() => {
@@ -632,239 +571,39 @@ function TourLayer({
   const viewportH = typeof window === 'undefined' ? 800 : window.innerHeight;
   const isWelcome = step.id === 'welcome';
 
-  // The spotlight's geometry, computed ONCE. The blur hole, the pane, the lift
-  // and the card placement all read from this — recomputing it anywhere else is
-  // how the rim and the blur hole drift apart.
-  // Zero for a floating panel, PAD for anything sitting in the page.
-  const pad = elevated ? 0 : PAD;
-  const rawSpot = rect ? spotlightBox(rect, viewportW, viewportH, pad) : null;
+  const oversized = rect !== null && (rect.width * rect.height) / (viewportW * viewportH) > OVERSIZE;
+  const centered = !hasAnchor || oversized || step.side === 'center';
+  const tip = !centered && rect ? tipFor(rect, step.side) : null;
 
-  /**
-   * Is this anchor too big to be worth pointing at?
-   *
-   * A spotlight is a gesture: "that one, there". It only carries meaning while
-   * the thing it surrounds is smaller than the thing it excludes. Past roughly
-   * two-thirds of the viewport there is nothing left to exclude — the rim runs
-   * around the whole screen, the dim survives only as a strip down one side,
-   * and the operator is being pointed at everything, which is to say nothing.
-   *
-   * This happened for real. The Booking-site step anchored to the whole Brand
-   * Identity card, which is taller than the viewport: the rim enclosed the
-   * screen, no card placement fitted, and the card was clamped down on top of
-   * the highlight. It read, in the team lead's words, "like a dropdown".
-   *
-   * So past the threshold the step degrades to the treatment the Welcome and
-   * Done steps already use — an even wash, no rim, card centred. That is honest
-   * about what it can say, and it still works: the page is behind the wash,
-   * legible enough to place, just not competing.
-   *
-   * Fixing the step's anchor is the better fix and is done separately. This is
-   * the floor under every future step, so a badly chosen anchor degrades to
-   * something calm instead of covering the screen.
-   */
-  const OVERSIZE = 0.66;
-  const oversized =
-    rawSpot !== null &&
-    (rawSpot.width * rawSpot.height) / (viewportW * viewportH) > OVERSIZE;
+  const cardW = Math.min(
+    centered ? (isWelcome ? WELCOME_WIDTH : CENTERED_WIDTH) : CARD_WIDTH,
+    viewportW - GAP * 2,
+  );
+  const { left, top } = tip
+    ? cardBeside(rect!, tip, step.side, cardW, cardH, viewportW, viewportH)
+    : { left: (viewportW - cardW) / 2, top: Math.max(GAP, viewportH * 0.4 - cardH / 2) };
 
-  // The card's width in spotlight mode, needed BEFORE we know whether we are in
-  // spotlight mode — placement feasibility is one of the things that decides it.
-  const spotCardW = Math.min(CARD_WIDTH, viewportW - GAP * 2);
-
-  // Where the card would go, if a spotlight is even viable. `null` means no side
-  // has room for it without overlapping the highlight.
-  const placement =
-    hasAnchor && !oversized && rawSpot
-      ? placeCard(rawSpot, step.side, spotCardW, cardH, viewportW, viewportH)
-      : null;
-
-  // Three ways to end up on the even wash, and they get identical treatment:
-  // no anchor at all (Welcome, Done), an anchor too big to point at, or an
-  // anchor with nowhere to stand the card. The last is what stops the tour ever
-  // covering the thing it is describing.
-  const wouldCenter = !hasAnchor || oversized || placement === null;
-
-  // Break the width/height feedback loop. See `placementLatch` above for why
-  // this exists at all; without it a step whose card is a borderline fit
-  // re-renders forever.
-  //
-  // Written during render rather than in an effect on purpose: the value is
-  // needed by THIS render's layout, and deferring it to an effect would paint
-  // one frame at the wrong width — the exact flicker `measure`'s
-  // `useLayoutEffect` is careful to avoid. It is idempotent, so React's
-  // double-invoked render in StrictMode reaches the same answer.
-  const layoutKey = `${step.id}|${viewportW}x${viewportH}`;
-  const latch = placementLatch.current;
-  if (latch.key !== layoutKey) {
-    // New step, or the window changed size: decide fresh.
-    latch.key = layoutKey;
-    latch.centered = wouldCenter;
-    latch.flips = 0;
-  } else if (wouldCenter !== latch.centered) {
-    if (latch.flips < MAX_PLACEMENT_FLIPS) {
-      latch.centered = wouldCenter;
-      latch.flips += 1;
-    } else {
-      // Still disagreeing after two adjustments — this is the oscillation.
-      // Settle on the wash and stop; it always fits, so the height stops
-      // moving and the measuring effect goes quiet.
-      latch.centered = true;
-    }
-  }
-  const centered = latch.centered;
-  const spot = centered ? null : rawSpot;
-
-  const cardW = centered
-    ? Math.min(isWelcome ? WELCOME_WIDTH : CENTERED_WIDTH, viewportW - GAP * 2)
-    : spotCardW;
-
-  // `placement` was already resolved above, and is used verbatim — see
-  // `placeCard`. Nothing clamps it here: an accepted placement is on screen and
-  // clear of the spotlight by construction, and re-clamping is exactly what
-  // used to drop the card on top of the anchor.
-  let left: number;
-  let top: number;
-  if (centered || !placement) {
-    left = (viewportW - cardW) / 2;
-    // Trax sits to the LEFT of the Welcome card now, not under it, so there is
-    // no vertical overhang to make room for and the card centres normally.
-    top = Math.max(GAP, viewportH * 0.4 - cardH / 2);
-  } else {
-    left = placement.left;
-    top = placement.top;
-  }
-
-  const progress = Math.round(((index + 1) / steps.length) * 100);
-  const outline = step.showOutline
-    ? steps.filter((s) => s.anchors.length > 0).map((s) => s.label)
-    : [];
+  const outline = step.showOutline ? steps.filter(isTourStop).map((s) => s.label) : [];
+  // The counter counts the STOPS only ("2 of 5"): the hello and last cards are
+  // not stops and carry none, and the hello card says how many there are.
+  const stops = steps.filter(isTourStop);
+  const stopNumber = stops.findIndex((s) => s.id === step.id) + 1;
+  const counter =
+    stopNumber > 0
+      ? `${stopNumber} of ${stops.length}`
+      : isFirst && stops.length > 0
+        ? `${stops.length} quick stops`
+        : '';
 
   return (
     <div
       className="fixed inset-0 z-[65]"
-      // The layer itself takes NO clicks. Only the card below opts back in, so
-      // the whole app keeps working underneath and nobody is ever trapped.
+      // The layer itself takes NO clicks. Only the card opts back in, so the
+      // whole app keeps working underneath and nobody is ever trapped.
       style={{ pointerEvents: 'none' }}
       aria-live="polite"
     >
-      {centered ? (
-        // No anchor: a plain wash, so the card reads as the one thing on screen.
-        //
-        <motion.div
-          aria-hidden
-          initial={reduceMotion ? false : { opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={reduceMotion ? { duration: 0 } : MOTION_IN}
-          className="absolute inset-0"
-          style={{
-            background: SCRIM,
-            backdropFilter: SCRIM_BLUR,
-            WebkitBackdropFilter: SCRIM_BLUR,
-            pointerEvents: 'none',
-          }}
-        />
-      ) : (
-        <>
-          {/* The blur that goes with the spotlight's dim.
-              Separate from the ring below because `backdrop-filter` cannot be
-              applied by a box-shadow: the shadow paints OVER the page, while
-              the blur has to be an element that sits over it and filters what
-              shows through. Clipped to everything-but-the-hole so the
-              highlighted control stays sharp while the rest of the app softens.
-
-              Rendered BEFORE the ring on purpose. A blur layer painted after it
-              would filter the ring itself — the ring sits 2px outside the hole,
-              so it falls in the blurred region — and the one element the step
-              is pointing at would come out softer than the page around it.
-
-              Not animated: framer cannot interpolate two `path()` strings, so
-              this is a plain CSS transition instead. */}
-          {spot && (
-            <div
-              aria-hidden
-              className="absolute inset-0 transition-[clip-path] duration-200 ease-out"
-              style={{
-                backdropFilter: SCRIM_BLUR,
-                WebkitBackdropFilter: SCRIM_BLUR,
-                // The hole is the anchor, EXACTLY — no feather ring.
-                //
-                // It used to be cut BLUR_FEATHER (20px) further out, to keep
-                // the blur's edge away from the dim's. But that ring was then
-                // dimmed and NOT blurred, and around a floating panel like the
-                // Setup guide dock the thing inside it is the dashboard behind
-                // the dock, shown sharp. It read as a stray card wedged under
-                // the highlighted one. Hugging the anchor means the only sharp
-                // pixels on screen are the anchor's own.
-                clipPath: scrimHolePath(spot, SPOT_RADIUS, viewportW, viewportH),
-                pointerEvents: 'none',
-              }}
-            />
-          )}
-          {/* The pane — hard edges, the dim, and a breath of indigo inside.
-              Nothing here is blurred, so this is the layer that stays
-              pixel-locked to the geometry. No transform, ever: a fraction of a
-              percent of scale would slide the rim off its own edge.
-
-              The interior wash is small and load-bearing. The complaint was a
-              "pale lavender-grey slab" — undisturbed page, framed by a razor.
-              Framing it better does not fix that; the region has to stop being
-              an absence of scrim and become a tinted surface. 5% is a fraction
-              of a contrast step and it is the whole difference. */}
-          <motion.div
-            aria-hidden
-            initial={reduceMotion ? false : { opacity: 0 }}
-            animate={{
-              opacity: 1,
-              top: spot!.top,
-              left: spot!.left,
-              width: spot!.width,
-              height: spot!.height,
-            }}
-            transition={
-              reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 38 }
-            }
-            className="absolute bg-primary/[0.05] dark:bg-primary/[0.12]"
-            style={{
-              borderRadius: SPOT_RADIUS,
-              // Rim and dim on ONE element, both keyed to the same box.
-              // Splitting them put the rim `PAD` outside the dim's hole, which
-              // left a bright margin between the two — fine in theory, and in
-              // practice the page showing through around a floating panel. The
-              // padding now lives in the box itself (`pad` above), so there is
-              // no gap for anything to show through.
-              boxShadow: `${SPOT_EDGE}, ${SPOT_DIM}`,
-              pointerEvents: 'none',
-            }}
-          />
-          {/* The lift. Rendered AFTER the pane so its shadows fall on the dim
-              rather than under it, and after the blur so the bloom is not
-              itself blurred. This layer carries the settle precisely because
-              everything on it is feathered — half a percent of scale is nothing
-              on a soft shadow and would have been a visible misalignment on the
-              rim above. */}
-          <motion.div
-            aria-hidden
-            initial={reduceMotion ? false : { opacity: 0, scale: 0.99 }}
-            animate={{
-              opacity: 1,
-              scale: 1,
-              top: spot!.top,
-              left: spot!.left,
-              width: spot!.width,
-              height: spot!.height,
-            }}
-            transition={
-              reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 38 }
-            }
-            className="absolute"
-            style={{
-              borderRadius: SPOT_RADIUS,
-              boxShadow: SPOT_LIFT,
-              pointerEvents: 'none',
-            }}
-          />
-        </>
-      )}
+      {tip && <TourCursor x={tip.x} y={tip.y} reduceMotion={reduceMotion} />}
 
       <AnimatePresence mode="wait">
         <motion.div
@@ -880,116 +619,97 @@ function TourLayer({
           initial={reduceMotion ? false : { opacity: 0, y: MOTION_OFFSET }}
           animate={{ opacity: 1, y: 0, transition: reduceMotion ? { duration: 0 } : MOTION_IN }}
           exit={reduceMotion ? undefined : { opacity: 0, y: MOTION_OFFSET, transition: MOTION_OUT }}
-          className={cn(
-            'absolute flex flex-col rounded-3xl bg-card text-card-foreground shadow-md outline-none ring-1 ring-foreground/10 dark:ring-foreground/15',
-            isWelcome ? 'gap-5 p-7 sm:p-8' : 'gap-4 p-5',
-          )}
+          // Stands apart from the page (Ghulam, 23 Nov): an accent edge, a soft
+          // accent halo, and a glow under it in the same colour. The veil
+          // behind it does the rest.
+          className="absolute flex flex-col overflow-hidden rounded-xl border border-primary/35 bg-card text-card-foreground shadow-[0_0_0_4px_hsl(var(--primary)/0.10),0_24px_50px_-14px_hsl(var(--primary)/0.45),0_4px_12px_-4px_rgba(15,23,42,0.16)] outline-none"
           style={{ top, left, width: cardW, pointerEvents: 'auto' }}
         >
-          {/* Header — who is talking, and where you are. No mark: a mascot was
-              tried here and dropped, and a generic AI glyph in its place would
-              say less than the name does. */}
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs font-medium uppercase tracking-[0.14em] text-foreground/55">
-              Trax
-            </span>
-            <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
-              {index + 1} of {steps.length}
-            </span>
-          </div>
+          <div className={cn('flex flex-col gap-2', isWelcome ? 'px-6 pb-5 pt-5' : 'px-5 pb-4 pt-4')}>
+            {/* Title and the way out. The X ends the tour, as Escape does. */}
+            <div className="flex items-start justify-between gap-3">
+              <h2
+                className={cn(
+                  'font-heading font-semibold text-foreground',
+                  isWelcome ? 'text-[21px] leading-tight tracking-[-0.01em]' : 'text-[17px] leading-snug',
+                )}
+              >
+                {step.title}
+              </h2>
+              <button
+                type="button"
+                onClick={onEnd}
+                aria-label="Close the tour"
+                title="Close"
+                className="-mr-1.5 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+              >
+                <X className="size-4" aria-hidden="true" />
+              </button>
+            </div>
 
-          {/* Progress. Thin, quiet, and always moving forward. */}
-          <div
-            className="h-1 w-full overflow-hidden rounded-full bg-foreground/[0.07]"
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={progress}
-          >
-            <motion.div
-              className="h-full rounded-full bg-primary"
-              initial={false}
-              animate={{ width: `${progress}%` }}
-              transition={reduceMotion ? { duration: 0 } : { duration: 0.25, ease: 'easeOut' }}
-            />
-          </div>
+            <p className="text-[14px] leading-relaxed text-muted-foreground">{body || step.body}</p>
 
-          <div className="flex flex-col gap-1.5">
-            <h2
-              className={cn(
-                'font-heading font-medium text-foreground',
-                isWelcome
-                  ? 'text-[28px] leading-[1.15] tracking-[-0.02em] sm:text-[32px]'
-                  : 'text-lg leading-snug',
-              )}
-            >
-              {step.title}
-            </h2>
-            <p
-              className={cn(
-                'leading-relaxed text-muted-foreground',
-                isWelcome ? 'mt-1 text-[15px]' : 'text-[13px]',
-              )}
-            >
-              {step.body}
-            </p>
+            {isWelcome && <RentalNeeds />}
+
             {detail && (
-              <p className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-full bg-primary/[0.07] px-2.5 py-1 text-[12px] font-medium text-primary ring-1 ring-primary/10">
+              <p className="mt-0.5 inline-flex w-fit items-center gap-1.5 rounded-full bg-primary/[0.07] px-2.5 py-1 text-[12px] font-medium text-primary ring-1 ring-primary/10">
                 <Compass className="size-3" />
                 {detail}
               </p>
             )}
+
+            {/* What we'll cover — the Welcome card only. Built from THIS user's
+                steps, so it never promises a page they cannot reach. */}
+            {outline.length > 0 && (
+              <ul className="mt-1 flex flex-wrap gap-1.5">
+                {outline.map((label) => (
+                  <li
+                    key={label}
+                    className="rounded-full bg-foreground/[0.05] px-2.5 py-1 text-[11px] font-medium text-foreground/70"
+                  >
+                    {label}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* The quiet lines. Notes whose anchor was absent were already
+                dropped when the step resolved. */}
+            {notes.length > 0 && (
+              <ul className="mt-1 flex flex-col gap-1.5">
+                {notes.map((note) => (
+                  <li key={note} className="flex items-start gap-2 text-[12px] leading-relaxed text-muted-foreground">
+                    <Check className="mt-0.5 size-3 shrink-0 text-primary" />
+                    <span>{note}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* The last card's own buttons (Connect Stripe, Book a free call):
+                each ends the tour, then does its thing. The first is primary.
+                "Later" in the footer closes the tour without either. */}
+            {isLast && actions.length > 0 && onAction && (
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {actions.map((action, i) => (
+                  <Button
+                    key={action.id}
+                    type="button"
+                    size="sm"
+                    variant={i === 0 ? 'default' : 'outline'}
+                    onClick={() => onAction(action.id)}
+                  >
+                    {action.label}
+                    {i === 0 && <ArrowRight className="size-3.5" />}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* What we'll cover — the Welcome card only. Built from THIS user's
-              steps, so it never promises a page they cannot reach. */}
-          {outline.length > 0 && (
-            <ul className="flex flex-wrap gap-1.5">
-              {outline.map((label) => (
-                <li
-                  key={label}
-                  className="rounded-full bg-foreground/[0.05] px-2.5 py-1 text-[11px] font-medium text-foreground/70"
-                >
-                  {label}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {/* The quiet lines. One each, no depth. Notes whose anchor was absent
-              were already dropped when the step resolved, so nothing here
-              points at a screen this operator cannot see. */}
-          {notes.length > 0 && (
-            <ul className="flex flex-col gap-1.5 border-t border-foreground/[0.07] pt-3">
-              {notes.map((note) => (
-                <li
-                  key={note}
-                  className="flex items-start gap-2 text-[12px] leading-relaxed text-muted-foreground"
-                >
-                  <Check className="mt-0.5 size-3 shrink-0 text-primary" />
-                  <span>{note}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {/* Actions. Skip is present on EVERY step but the last (where
-              finishing IS skipping) — it is the left-hand item so it never
-              moves as the step counter changes. */}
-          <div className="flex items-center justify-between gap-2 pt-0.5">
-            {isLast ? (
-              <span />
-            ) : (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground"
-                onClick={onEnd}
-              >
-                Skip tour
-              </Button>
-            )}
+          {/* Footer: where you are, and the way on. */}
+          <div className="flex items-center justify-between gap-2 border-t border-primary/15 bg-primary/[0.05] px-5 py-3">
+            <span className="text-[13px] tabular-nums text-muted-foreground">{counter}</span>
             <div className="flex items-center gap-1.5">
               {!isFirst && (
                 <Button type="button" variant="ghost" size="sm" onClick={onBack}>
@@ -997,7 +717,11 @@ function TourLayer({
                 </Button>
               )}
               {isLast ? (
-                onDashboard ? (
+                actions.length > 0 ? (
+                  <Button type="button" variant="ghost" size="sm" onClick={onEnd}>
+                    Later
+                  </Button>
+                ) : onDashboard ? (
                   <Button type="button" size="sm" onClick={onEnd}>
                     Done
                     <Check className="size-3.5" />
@@ -1016,12 +740,10 @@ function TourLayer({
               ) : (
                 <Button type="button" size="sm" onClick={onNext}>
                   {isFirst ? "Let's go" : 'Next'}
-                  <ArrowRight className="size-3.5" />
                 </Button>
               )}
             </div>
           </div>
-
         </motion.div>
       </AnimatePresence>
     </div>

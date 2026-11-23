@@ -48,8 +48,9 @@
  * ---------------------------------------------------------------------------
  * WHY IDS ARE NAMESPACED — this one is load-bearing
  *
- * `buildTour` REWRITES a step by id: on a canary without a usable Stripe
- * Connect account it swaps `rental` for `BLOCKED_RENTAL_STEP`. (It used to drop
+ * `buildTour` used to REWRITE a step by id: on a canary without a usable Stripe
+ * Connect account it swapped `rental` for `BLOCKED_RENTAL_STEP` (the quick tour
+ * v4 has no swap; the namespacing still guards the next one). (It used to drop
  * `insurance` and `agreement` too; those steps left the first-run tour when it
  * shrank to an orientation, and they live in `rentals.ts` now.) `rental` is
  * exactly the word a Rentals tour wants for its own steps. A collision would

@@ -66,14 +66,16 @@ function parse(raw: unknown): OnboardingCallState | null {
   };
 }
 
-export function useOnboardingCall({ poll = false }: { poll?: boolean } = {}) {
+export function useOnboardingCall({ poll = false, enabled = true }: { poll?: boolean; enabled?: boolean } = {}) {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
   const queryKey = ["onboarding-call", tenant?.id];
 
   const query = useQuery({
     queryKey,
-    enabled: !!tenant?.id,
+    // `enabled` lets a caller mounted for every tenant (the tour, in the
+    // dashboard layout) keep this off outside the canary.
+    enabled: !!tenant?.id && enabled,
     staleTime: 60 * 1000,
     // Coming back from adding a vehicle or a logo in another tab ticks the box.
     refetchOnWindowFocus: true,

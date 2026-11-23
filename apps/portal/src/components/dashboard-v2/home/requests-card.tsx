@@ -338,7 +338,7 @@ export function RequestsCard() {
       <div
         ref={cap.ref}
         style={cap.style}
-        className="relative mt-2 grid min-h-0 grid-cols-[minmax(0,1fr)] overflow-y-auto overscroll-contain px-4 pb-4 [scrollbar-width:thin]"
+        className="relative mt-2 grid min-h-0 grid-cols-[minmax(0,1fr)] overflow-y-auto overscroll-contain px-4 pb-4 [scrollbar-width:thin] md:flex-1 md:!max-h-none"
       >
         <AutoSkeleton loading={isLoading} className="h-full">
         {isError ? (

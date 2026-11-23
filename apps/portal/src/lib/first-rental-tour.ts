@@ -3,47 +3,44 @@
  * two things it remembers: that a user has seen it, and where they got to.
  *
  * THE PRODUCT DECISION, restated here because the shape of this file follows
- * from it, and because this file has already been the wrong size once.
+ * from it, and because this file has already been the wrong size twice.
  *
- * It shipped as three coach marks. It was then grown into an eleven-step
- * WALKTHROUGH that crossed six pages — dashboard, Vehicles, Customers, the New
- * Rental form (three steps deep, including insurance and the agreement),
- * Payments, Settings — and marched a brand-new operator through making a first
- * rental before they had a car or a customer to make one with.
+ * History: three coach marks, then an eleven-step WALKTHROUGH through the New
+ * Rental form (ruled out: "woh abhi woh tour nahi hai"), then an eight-step
+ * ORIENTATION that visited Vehicles, Customers, Rentals and Settings.
  *
- * Ghulam ruled that out in review: "woh abhi woh tour nahi hai" — that is not
- * the tour — and named the walk through payments specifically. His design is
- * four separate things, and this file is only the third of them:
+ * v4 (Ghulam, 23 Nov 2026) is the BIG PICTURE in SEVEN cards: about five
+ * stops is what people finish (completion falls fast past five), so the six
+ * things a rental is made of are grouped, not given a card each.
  *
- *   questions answered → a first dialog where Trax introduces itself →
- *   a SHORT general orientation → and inside every tab, a tour BUTTON the
- *   operator takes at their own convenience.
+ *   Hello                 what the tour is, and what a first rental needs at
+ *                         least (a car, a customer, Stripe), illustrated
+ *   1 Car and customer    the two rows together, plus the driver check
+ *   2 Paperwork and money agreement, insurance, payments
+ *   3 The rental          all of it put together
+ *   4 Your booking site   the site, and the Website editor (CMS)
+ *   5 Trax                help, any time
+ *   The last card         the one must-do, connect Stripe (under Integrations,
+ *                         with Turo, accounting and the rest), with the free
+ *                         onboarding call with Bryan beside it
  *
- * So this is now an ORIENTATION, not a walkthrough. Its whole job is to say
- * WHERE THINGS LIVE and then get out of the way. Eight shallow steps, one
- * stop per place, and nothing that walks into a form:
+ * The counter counts the five stops only ("2 of 5"); the hello and last cards
+ * carry none.
  *
- *   1. Welcome       (dashboard)   Trax introduces itself; a minute, skippable
- *   2. Your sidebar  (dashboard)   ONE stop for the nav, not one per item
- *   3. Vehicles      → /vehicles   this is your fleet — NOT the Add dialog
- *   4. Customers     → /customers  this is everyone who rents from you
- *   5. Rentals       → /rentals    where the business runs — NOT /rentals/new
- *   6. Tab tours     (same page)   every tab has its own tour, take it later
- *   7. Booking site  → /settings   "your customers book here", and settings
- *   8. Done          (anywhere)    a finale, and a pointer to the tab tours
+ * The last card is the one people act on, so it carries buttons (Connect
+ * Stripe, Book a free call) and its words follow the company's real state
+ * (`bodyFor` / `actionsFor`, read from `useFirstSteps`).
  *
- * WHY IT MAY NOT GROW BACK. The depth that used to be steps 6-9 has not been
- * deleted — it MOVED, to `lib/tab-tours/{vehicles,customers,rentals,payments}.ts`,
- * where roughly ten steps per tab are launched from a button on that tab rather
- * than fired at somebody on their first login. Anything you are tempted to add
- * here almost certainly belongs there instead. The `tours` step exists to hand
- * the operator over to them, which is what makes this list allowed to be short.
+ * Every stop is on the DASHBOARD and points at the sidebar row (or chrome
+ * control) where that thing lives. No navigation at all: nothing to wait for,
+ * nothing that depends on a page having data, and it reads the same on an
+ * empty account as on a busy one. On a phone the sidebar is an off-canvas
+ * sheet, so those stops become centred cards (`centerOnMobile`); a row a user
+ * cannot see (Insurances is opt-in, a manager lacks a grant, the rail is
+ * collapsed) degrades to a centred card instead of a skip (`centerIfMissing`).
  *
- * The old dashboard "setup guide" step went the other way: it is not a stop any
- * more, because the panel it pointed at is already on the screen the operator
- * lands on and needs no spotlight to be found. That panel has since been taken
- * off the dashboard altogether, so the finale now points at Settings, where the
- * remaining setup is actually done.
+ * The depth lives in the TAB TOURS (`lib/tab-tours/*`), launched from a button
+ * on each tab. Anything you are tempted to add here belongs there.
  *
  * Still skippable at every step, still replayable from the user menu, still NO
  * VIDEOS inside it — videos live in the setup checklist and the empty states.
@@ -83,11 +80,13 @@
  * anyone who sat through v2 is being offered a genuinely different tour rather
  * than a repeat — and anyone stranded mid-v2 has their saved step discarded by
  * `isProgress` rather than resumed onto a route this list no longer visits.
+ * v3 → v4: the orientation became the big-picture tour (what a rental needs,
+ * Stripe, the booking site, integrations, Trax), all on the dashboard.
  *
  * Older keys are not cleaned up here — the reset path in `lib/dev-actions.ts`
  * matches on the `d247.tour.` namespace, so it clears every version at once.
  */
-export const FIRST_RENTAL_TOUR_VERSION = 3;
+export const FIRST_RENTAL_TOUR_VERSION = 4;
 
 /** Every key this module writes starts with this. */
 const KEY_PREFIX = 'd247.tour.first-rental';
@@ -244,6 +243,23 @@ export interface TourBuildContext {
    * dropped, so the ordinary tour is what runs.
    */
   emptyTabs?: readonly string[];
+  /**
+   * A new company's first steps (`useFirstSteps`): is Stripe connected, and
+   * where the free onboarding call with Bryan stands. Read by the quick
+   * tour's last card. Absent means "not known", which the card treats as
+   * Stripe connected and no call, so it never nags on a missing read.
+   */
+  firstSteps?: {
+    stripeConnected: boolean;
+    call: 'offer' | 'booked' | 'none';
+    callTime: string | null;
+  };
+}
+
+/** A button on a tour card that DOES something, and ends the tour. */
+export interface TourAction {
+  id: 'connect-stripe' | 'book-call';
+  label: string;
 }
 
 export interface TourStep {
@@ -298,6 +314,35 @@ export interface TourStep {
    * the step still reads sensibly in the source.
    */
   routeFor?: (ctx: TourBuildContext) => string | null;
+  /**
+   * On a phone, draw this step as a centred card with no spotlight. For stops
+   * anchored in the sidebar, which is an off-canvas sheet below `md`: waiting
+   * for an anchor that is never on screen would stall every step. Applied by
+   * `buildTour`.
+   */
+  centerOnMobile?: boolean;
+  /**
+   * If the anchor is not on screen after a short wait, show the card centred
+   * instead of skipping the step. For stops whose message stands on its own
+   * even when the thing it points at is hidden (an opt-in sidebar row, a
+   * collapsed rail). Applied by the hook.
+   */
+  centerIfMissing?: boolean;
+  /**
+   * More selectors whose element (first visible match of each) is taken in
+   * with the anchor, so one card can point at neighbouring rows together:
+   * Customers and Vehicles, or the money and paperwork rows. The cursor and
+   * the clear area cover the lot. Missing ones are simply left out.
+   */
+  span?: readonly string[];
+  /**
+   * Words that depend on the company's state, worked out when the card is
+   * drawn (so a read that lands mid-tour is still used). Wins over `body`;
+   * keep `body` as the version a reader of this file sees.
+   */
+  bodyFor?: (ctx: TourBuildContext) => string;
+  /** Buttons on the card. Each one ends the tour and then does its thing. */
+  actionsFor?: (ctx: TourBuildContext) => readonly TourAction[];
 }
 
 /**
@@ -325,258 +370,156 @@ export const AUTOSTART_DELAY_MS = 700;
 
 const SIDEBAR = '[data-sidebar="sidebar"]';
 
+/** A sidebar row, by the `data-tour` the v2 rail stamps on every item. */
+const nav = (href: string) => `${SIDEBAR} [data-tour="nav-${href}"]`;
+
+/** The Portal / Website switch at the top of the v2 rail. */
+const WEBSITE_SWITCH = '[data-tour="website-switch"]';
+
+/** Trax's Help button in the v2 top bar. */
+const TRAX_HELP = '[data-tour="trax-help"]';
+
 /**
- * The universal last resort. Every page in the v2 chrome renders a title
- * inside the inset; a page that cannot render one is a page that failed.
+ * Every stop in the middle of the tour shares these: it lives on the
+ * dashboard, it is a centred card on a phone, it is a centred card when its
+ * row is hidden, and clicking the row (which navigates away) pauses the tour
+ * cleanly instead of advancing it onto a page that is leaving.
  */
-const PAGE_TITLE = '[data-slot="sidebar-inset"] h1';
+const STOP = {
+  route: '/',
+  side: 'right' as TourSide,
+  centerOnMobile: true,
+  centerIfMissing: true,
+  pauseOnAnchorClick: true,
+};
 
 /**
- * A page's title AND its subtitle, as one box. Tried before PAGE_TITLE where a
- * page draws one: a spotlight padded round the <h1> alone ends halfway down
- * the subtitle under it, so the top half of that line shows sharp and the
- * bottom half blurred ("bits of text" in the tour).
- */
-const PAGE_HEADER = '[data-slot="sidebar-inset"] [data-tour="page-header"]';
-
-/** One line each. These ride the rerouted rental step when the flow is gated. */
-const INSURANCE_NOTE = 'Insurance is offered in the same flow, priced per rental.';
-const AGREEMENT_NOTE = 'The rental agreement is drawn up and sent for signature as part of this.';
-
-/**
- * The canonical step list. `buildTour` filters and reroutes it per user; this
- * is what a head admin on a desktop with Stripe connected walks through.
+ * The canonical step list. `buildTour` filters and swaps it per user; this is
+ * what a head admin on a desktop with Stripe connected sees.
  *
- * TWO PROPERTIES OF THIS LIST ARE LOAD-BEARING, and neither is obvious.
- *
- * ROUTES ONLY EVER MOVE FORWARD: `/` → `/vehicles` → `/customers` → `/rentals`
- * → `/settings`, and the finale stays put. Five pushes for eight steps. A tour
- * that doubles back — Settings, then a tab page again — reads as lost, and each
- * extra navigation is another chance for an anchor to arrive late.
- *
- * NOTHING HERE REQUIRES AN EDIT GRANT. The old walkthrough pointed at Add
- * Vehicle and Add Customer, so a viewer or a read-only manager lost those steps
- * and could fall under `MIN_TOUR_STOPS` entirely. An orientation is about where
- * things ARE, which is a read, so these steps point at what the page shows
- * rather than at what it lets you press — and everyone who can open the page
- * gets them.
+ * Trax speaks in the first person, no emoji anywhere. Every body is one or two
+ * short sentences: this tour names things, the tab tours explain them.
  */
 export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
   {
     id: 'welcome',
     label: 'Welcome',
-    // Trax speaks, in the first person, and this is the one card where that
-    // introduction happens — every step after it is already understood to be
-    // Trax talking, so they stay short and practical rather than re-introducing
-    // anybody. No emoji anywhere in this file: the voice carries the warmth.
-    title: 'I am Trax. Let me show you around.',
-    body: 'I work alongside you in here. Give me a minute and you will know where everything lives. Skip whenever you like, or replay this from your profile menu.',
+    // The card draws the three things a first rental needs, illustrated
+    // (`RentalNeeds` in the component), under this line.
+    title: 'I am Trax. Here is what a rental needs.',
+    body: 'Five quick stops and you will know your way around. To take your first rental, you need at least these three:',
     route: '/',
     anchors: [],
     side: 'center',
-    showOutline: true,
+  },
+
+  // ── 1. What a rental is made of ────────────────────────────────────────
+  {
+    ...STOP,
+    id: 'car-customer',
+    label: 'Car and customer',
+    title: 'A car, and someone to rent it',
+    body: 'Your cars live in Vehicles and the people who rent them in Customers. Before anyone drives, I check their licence and that their face matches it.',
+    anchors: [nav('customers'), nav('vehicles')],
+    span: [nav('vehicles')],
   },
   {
-    id: 'sidebar',
-    label: 'Navigation',
-    title: 'Everything lives here',
-    body: 'Rentals, Customers and Vehicles up top. Money, paperwork and your account below.',
-    route: '/',
-    anchors: [`${SIDEBAR} [data-sidebar="content"]`, SIDEBAR],
-    side: 'right',
-    requires: { desktop: true },
+    ...STOP,
+    id: 'paperwork-money',
+    label: 'Paperwork and money',
+    title: 'The paperwork and the money',
+    body: 'Each rental gets an agreement signed online and, if you like, Bonzah insurance priced for its dates. Every payment, deposit and refund is kept here, and card payments go through Stripe.',
+    // Finances (or Payments), Agreements and Insurances where shown: the
+    // "Money & paperwork" block of the rail, as one.
+    anchors: [nav('agreements'), nav('finances'), nav('payments')],
+    span: [nav('finances'), nav('payments'), nav('insurances')],
   },
+
+  // ── 2. Put together ────────────────────────────────────────────────────
   {
-    id: 'vehicles',
-    label: 'Vehicles',
-    // Was "Add your first vehicle", anchored on the Add button and pausing the
-    // tour so they went and did it. That is the tab tour's job now — and
-    // `lib/tab-tours/vehicles.ts` does it better, because it can then walk
-    // INTO the record. Here we only say what this page is.
-    //
-    // The graph's label and headline number, never the whole hero row: the row
-    // runs the width of the content column, and a card with nowhere clear of
-    // the spotlight to stand degrades to a wash that teaches nothing. The
-    // overview is NOT drawn on an empty fleet (the teaching empty state takes
-    // its place), so a brand-new tenant lands on the page header. The body
-    // therefore says nothing about a graph. Then the overview's root, then the
-    // stat tile this step used to name (v1 still draws it), then the header.
-    title: 'Your fleet',
-    body: 'Every car you rent out lives here, with its rates, its photos and whether it is free to book.',
-    route: '/vehicles',
-    anchors: [
-      '[data-tour="vehicles-chart"]',
-      '[data-tour="fleet-overview"]',
-      '[data-tour="fleet-stat-total-vehicles"]',
-      PAGE_HEADER,
-      PAGE_TITLE,
-    ],
-    side: 'bottom',
-  },
-  {
-    id: 'customers',
-    label: 'Customers',
-    title: 'Everyone who rents from you',
-    body: 'Anyone who books on your site lands here on their own. Their licence, history and what they owe sit on one page.',
-    route: '/customers',
-    // The graph's label and headline number, then `customers-stats` (the name
-    // the v1 four-card grid still carries). Neither is drawn on an empty
-    // Customers tab, so a brand-new tenant lands on the page header.
-    anchors: ['[data-tour="customers-chart"]', '[data-tour="customers-stats"]', PAGE_HEADER, PAGE_TITLE],
-    side: 'bottom',
-  },
-  {
+    ...STOP,
     id: 'rental',
-    label: 'Rentals',
-    // The step the lead's ruling changed most. It used to be `/rentals/new`
-    // and drag the operator three steps into the form. It now stops at the
-    // door: this is the tab, that is the button, come back when you have a car
-    // and a customer.
-    //
-    // `pauseOnAnchorClick` is NOT optional here, and not for the usual reason.
-    // The next step (`tours`) is on this same page, and the renderer treats a
-    // click on a look-at-this step whose next step is same-page as "understood"
-    // and advances. So without this, clicking New Rental would advance the
-    // orientation to `tours` while the browser navigated away to the form, and
-    // the card would be left pointing at a page that is leaving.
-    title: 'Where the business runs',
-    body: 'Every booking lives here, from the first enquiry to the keys coming back. New Rental starts one whenever you are ready.',
-    route: '/rentals',
-    anchors: ['[data-tour="new-rental"]', '[data-tour="rentals-header"]', PAGE_TITLE],
-    side: 'bottom',
-    pauseOnAnchorClick: true,
+    label: 'Rental',
+    title: 'Put together, that is a rental',
+    body: 'Pick the car and the customer, and the driver check, agreement, insurance and payment follow in one flow. New Rental on the Rentals page starts one.',
+    anchors: [nav('rentals')],
   },
+
+  // ── 3. Where customers find you ────────────────────────────────────────
   {
-    id: 'tours',
-    label: 'Tab tours',
-    // The handoff, and the reason this list is allowed to be eight steps.
-    //
-    // It lives HERE, on `/rentals`, rather than at the end after Settings —
-    // the button only exists on the tab pages, so a step for it after the
-    // Settings stop would mean navigating back to a tab and breaking the
-    // forward-only route order. This is the last tab the orientation visits,
-    // which also makes it the right moment to say it: they have just been
-    // shown three tabs, and this is how they go deeper into any of them.
-    //
-    // `pauseOnAnchorClick`, because clicking this launches a tab tour. Two
-    // tours drawing cards on one screen is the worst outcome available here,
-    // so the orientation steps aside the moment they reach for the other one.
-    title: 'Each tab has its own tour',
-    // FOUR tab tours, not three. Payments has one too, and it was the tab the
-    // original objection to the old walkthrough was actually about — omitting
-    // it here would send the operator away believing the one tour they most
-    // need does not exist. Keep this sentence in step with TAB_TOUR_IDS.
-    body: 'This button walks you through one tab properly, at whatever moment suits you. Vehicles, Customers, Rentals and Payments each have one.',
-    route: '/rentals',
-    // The button self-gates on the canary slug and the v2 chrome — the same
-    // two things this tour's own gate requires — so it is present whenever the
-    // orientation is running. The fallbacks are for the replay path, which
-    // bypasses that gate, and cost nothing when the button is there.
-    anchors: ['[data-tour="take-tab-tour"]', '[data-tour="rentals-header"]', PAGE_TITLE],
-    side: 'bottom',
-    pauseOnAnchorClick: true,
-  },
-  {
+    ...STOP,
     id: 'booking-site',
     label: 'Booking site',
-    title: 'Your customers book here',
-    body: 'Your name, logo and colours go on a public booking site that is already live for you.',
-    route: '/settings',
-    // Point at the Branding entry on the settings index (v2 has no settings
-    // rail any more), not at a panel. The panel (`[data-tour="booking-site-branding"]`) is a whole Card
-    // — Application Name, Company Logo and Favicon — and it is TALLER THAN THE
-    // VIEWPORT, so spotlighting it rimmed nearly the entire screen, left only a
-    // strip of sidebar dimmed, and slid around as the operator scrolled. A
-    // spotlight around everything points at nothing.
-    //
-    // The row is the thing the sentence is actually about: "your customers book
-    // here" is telling them WHERE this lives, and the answer is Settings →
-    // Branding. Once they are looking at the right row, the panel beside it is
-    // already on screen and needs no rim of its own.
-    //
-    // `[id$="-trigger-branding"]` used to sit here as the small-element
-    // fallback. It addresses Radix's generated TabsTrigger id from the v1
-    // settings page, which the v2 sidebar replaced — so it matched nothing, and
-    // every run fell through to the oversized card. Kept last, still, for a
-    // tenant rendering the v1 tab strip.
-    // The page's own <h1> is the genuine last resort, and it is last for a
-    // reason. `[id$="-trigger-branding"]` above it matches only the v1 Radix
-    // tab strip, which the v2 sidebar replaced — and this tour requires v2
-    // chrome, so under the chrome it actually runs in that selector resolves
-    // to NOTHING. Without a real fallback beneath it, the step's only
-    // remaining candidate was the oversized Branding card this step exists to
-    // avoid, and the suite's "every step ends on markup the page cannot render
-    // without" assertion was true of this step only on a technicality.
-    // /settings renders an h1 in every branch, so this makes the guarantee real.
-    anchors: [
-      '[data-tour="settings-tab-branding"]',
-      '[data-tour="booking-site-branding"]',
-      '[id$="-trigger-branding"]',
-      '[data-slot="sidebar-inset"] h1',
-      'main h1',
-    ],
-    side: 'right',
-    requires: { settingsTab: 'branding' },
+    title: 'Your booking site is already live',
+    body: 'Your cars appear on it as you add them, and customers book and pay there. This switch opens the Website side, where you change its pages, words, photos and colours yourself.',
+    anchors: [WEBSITE_SWITCH],
     detail: (ctx) => (ctx.bookingUrl ? ctx.bookingUrl.replace(/^https?:\/\//, '') : null),
-    notes: [
-      {
-        // The lead asked for settings to be named rather than merely visited.
-        // Anchored on the rail this step is already standing in front of, so a
-        // tenant whose settings sidebar is not drawn never reads about a list
-        // that is not there.
-        text: 'The rest of your setup is in this list — locations, deposits, fees and more.',
-        anchors: ['[data-tour="settings-index"]'],
-      },
-    ],
   },
+
+  // ── 4. Help ────────────────────────────────────────────────────────────
+  {
+    ...STOP,
+    id: 'trax',
+    label: 'Trax',
+    title: 'And I am always here',
+    body: 'Ask me how to do something, or anything about your business. Press Help whenever you need me.',
+    anchors: [TRAX_HELP],
+    bodyFor: (ctx) => {
+      const base = 'Ask me how to do something, or anything about your business. Press Help whenever you need me.';
+      const call = ctx.firstSteps?.call;
+      if (call === 'offer') return `${base} Would you rather talk to a person? Book a free onboarding call with Bryan from the card at the foot of your sidebar.`;
+      if (call === 'booked') return `${base} Your onboarding call with Bryan is on the card at the foot of your sidebar.`;
+      return base;
+    },
+    side: 'bottom',
+    // The Help button is in the top bar on a phone too.
+    centerOnMobile: false,
+  },
+
+  // ── The last card: the one must-do ─────────────────────────────────────
   {
     id: 'done',
     label: 'Done',
-    title: "That's the house",
-    // The dashboard's setup guide is no longer mounted (the lead asked for it
-    // off the home screen), so the finale names where remaining setup actually
-    // lives rather than a panel the operator would look for and not find.
-    body: 'Take a tab tour whenever you want the detail on one. Anything still to switch on lives in Settings.',
+    title: 'That is the big picture',
+    body: 'One thing to do before a real rental: connect Stripe under Integrations, where Turo, accounting and your other tools plug in too. You do not have to do it alone: Bryan will set it all up with you on a free 30-minute call.',
+    bodyFor: finaleBody,
+    actionsFor: finaleActions,
     route: null,
     anchors: [],
     side: 'center',
+    notes: [{ text: 'Every tab has its own tour for the detail, on the button at the top of that tab.' }],
   },
 ];
 
 /**
- * The rental step as it reads when the New Rental flow is GATED — a lean
- * tenant without a usable Stripe Connect account gets a "connect Stripe"
- * dialog instead of the form when they press the button.
- *
- * The orientation stops at `/rentals` either way, so this no longer exists to
- * rescue a step that had nowhere to stand; it exists because the sentence is
- * different. Telling that operator "New Rental starts one whenever you are
- * ready" would be false — the button will stop them — so this says what it
- * will actually do and where the fix is.
- *
- * It also carries the two one-liners the healthy operator does not get, and
- * that asymmetry is deliberate: someone who can open the rental flow will meet
- * insurance and the agreement inside it, or in the Rentals tab tour. Someone
- * who is blocked at the door will not meet them at all, so they are told.
+ * The last card's words. Six versions: Stripe missing or connected, times the
+ * call on offer, booked, or not on offer. Stripe is always the one must-do;
+ * the call is always offered as help, never as a step.
  */
-export const BLOCKED_RENTAL_STEP: TourStep = {
-  id: 'rental',
-  label: 'Rentals',
-  title: 'Where the business runs',
-  // Names the real fix path (Settings, payments tab — where the connect-Stripe
-  // dialog sends them); the dashboard setup guide it used to name is gone.
-  body: 'Every booking lives here. New Rental starts one once your payments are connected in Settings.',
-  route: '/rentals',
-  anchors: [
-    '[data-tour="new-rental"]',
-    '[data-tour="rentals-header"]',
-    '[data-tour="nav-rentals"]',
-    `${SIDEBAR} a[href="/rentals"]`,
-  ],
-  side: 'bottom',
-  pauseOnAnchorClick: true,
-  notes: [{ text: INSURANCE_NOTE }, { text: AGREEMENT_NOTE }],
-};
+export function finaleBody(ctx: TourBuildContext): string {
+  const fs = ctx.firstSteps ?? { stripeConnected: true, call: 'none' as const, callTime: null };
+  const when = fs.callTime ? ` on ${fs.callTime}` : ' booked';
+  const tools = 'Turo, accounting and your other tools plug in under Integrations too.';
+  if (!fs.stripeConnected) {
+    const stripe = 'One thing to do before a real rental: connect your Stripe account, so your customers pay you directly into it. It is under Integrations, where Turo, accounting and your other tools plug in too.';
+    if (fs.call === 'offer') return `${stripe} You do not have to do it alone: Bryan will set it all up with you on a free 30-minute call.`;
+    if (fs.call === 'booked') return `${stripe} Your call with Bryan is${when}, and he can do it with you.`;
+    return `${stripe} It takes 30 seconds.`;
+  }
+  const ready = `Stripe is connected, so you can take real rentals today. ${tools}`;
+  if (fs.call === 'offer') return `${ready} Want a hand with the rest? Bryan will go through it all with you on a free 30-minute call.`;
+  if (fs.call === 'booked') return `${ready} Your call with Bryan is${when}.`;
+  return ready;
+}
+
+/** The last card's buttons, first one primary. */
+export function finaleActions(ctx: TourBuildContext): readonly TourAction[] {
+  const fs = ctx.firstSteps ?? { stripeConnected: true, call: 'none' as const, callTime: null };
+  const out: TourAction[] = [];
+  if (!fs.stripeConnected) out.push({ id: 'connect-stripe', label: 'Connect Stripe' });
+  if (fs.call === 'offer') out.push({ id: 'book-call', label: 'Book onboarding call' });
+  return out;
+}
 
 /** `/settings?tab=branding` → `/settings`. */
 export function routePathname(route: string): string {
@@ -633,28 +576,17 @@ export function stepAllowed(step: TourStep, ctx: TourBuildContext): boolean {
  * settled by then, so the tour that starts is the tour that can finish.
  */
 export function buildTour(ctx: TourBuildContext, steps: readonly TourStep[] = FIRST_RENTAL_TOUR): TourStep[] {
-  // The Stripe reroute below REWRITES a step by id, and `rental` is generic
-  // enough that another tour could reasonably use it. If one did, a canary
-  // without a usable Connect account would silently get THIS tour's copy —
-  // different title, different body, different notes — with no error and no
-  // failed build, which on a project that ships with `ignoreBuildErrors: true`
-  // means nobody finds out.
-  //
-  // So the reroute is scoped to the list it was written for. Tab tours
-  // additionally namespace their ids (`rentals.new`), which makes a collision
-  // impossible rather than merely unlikely — belt and braces, because the cost
-  // of being wrong here is a wrong screen rather than a crash.
-  //
-  // The orientation no longer enters the New Rental form, so there is nothing
-  // left to DROP when the flow is gated — `insurance` and `agreement` were the
-  // only steps that lived in there, and they are now the Rentals tab tour's.
-  // What survives is a copy swap: same page, same button, honest sentence.
-  const canReroute = steps === FIRST_RENTAL_TOUR;
+  // v3 swapped the rental step for a "connect Stripe first" version here. v4
+  // has no swap: the Stripe line is on the last card, which reads
+  // `ctx.firstSteps` when it is drawn (`finaleBody`), so it is right even if
+  // the read lands after the tour starts.
   const out: TourStep[] = [];
   for (const raw of steps) {
     let step = raw;
-    if (canReroute && ctx.rentalCreationBlocked && step.id === 'rental') {
-      step = BLOCKED_RENTAL_STEP;
+    // A sidebar stop on a phone: the rail is an off-canvas sheet there, so
+    // draw the card centred rather than wait for a row that is never shown.
+    if (ctx.isMobile && step.centerOnMobile) {
+      step = { ...step, anchors: [], side: 'center' };
     }
     // Resolve a record-scoped route into a real path, and drop the step if the
     // tenant has no such record. This runs BEFORE `stepAllowed` so the route
@@ -671,9 +603,17 @@ export function buildTour(ctx: TourBuildContext, steps: readonly TourStep[] = FI
   return out;
 }
 
+/**
+ * Is this a real stop, as opposed to the Welcome or Done card? A stop that
+ * `buildTour` centred for a phone still counts: it was pointing at something.
+ */
+export function isTourStop(step: TourStep): boolean {
+  return step.anchors.length > 0 || !!step.centerOnMobile;
+}
+
 /** Steps that point at something on screen. Welcome and Done do not count. */
 export function countAnchoredSteps(steps: readonly TourStep[]): number {
-  return steps.filter((s) => s.anchors.length > 0).length;
+  return steps.filter(isTourStop).length;
 }
 
 /** Enough of a walkthrough to be worth starting? */

@@ -34,6 +34,7 @@ import {
   MailCheck,
   BookOpen,
   Building2,
+  CalendarDays,
   HeartPulse,
   ClipboardCheck,
   LayoutGrid,
@@ -165,6 +166,9 @@ function useBuildNav(): AdminNav {
       // inbound queues. Each user can still rearrange it (Customise sidebar).
       { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutGrid },
       { name: 'Rental Companies', href: '/admin/rentals', icon: Building2 },
+      // Bryan's booking calendar for the free onboarding call: his hours and
+      // who has booked (23 Nov 2026). Replaces the GoHighLevel calendar.
+      ...(isSuper ? [{ name: 'Call Calendar', href: '/admin/call-calendar', icon: CalendarDays }] : []),
       // Onboarding is merged into Rental Companies (Ghulam, Oct 17 2026):
       // its form is the second choice behind "Add New Company" there.
       // Premium integrations and their prices. Super admins only (the

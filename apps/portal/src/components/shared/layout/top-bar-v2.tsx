@@ -582,6 +582,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
         {/* No support phone number here any more (boss, Nov 2026), on phones or
             desktop: Help (Trax) is the way to get help. */}
 
+
         {trax && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -589,6 +590,8 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
                 variant="ghost"
                 size="sm"
                 aria-label="Help, ask Trax"
+                // The quick tour's Trax stop (lib/first-rental-tour.ts).
+                data-tour="trax-help"
                 aria-expanded={trax.sheetOpen}
                 onClick={trax.sheetOpen ? trax.closeSheet : trax.openSheet}
                 className={
