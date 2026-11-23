@@ -31,6 +31,7 @@ import { AppSidebarV2 } from "@/components/shared/layout/app-sidebar-v2";
 import { TopBarV2 } from "@/components/shared/layout/top-bar-v2";
 import { HelplineLink } from "@/components/shared/layout/helpline-link";
 import { MobileTabBar } from "@/components/shared/layout/mobile-tab-bar";
+import { GlassRoot } from "@/components/glass/glass-root";
 import { TraxV2Provider } from "@/components/trax/support/trax-support-context";
 import { TraxPanel } from "@/components/trax/trax-panel";
 import { SupportRailProvider } from "../../../../../shared/trax-support/support-rail";
@@ -685,6 +686,8 @@ export default function DashboardLayout({
         /* What the shape recorder measures (shape-snapshot.tsx); v2 only. */
         data-shape-root={v2Chrome ? "" : undefined}
       >
+        {/* The Glass look (northwind only; renders nothing otherwise). v2 only. */}
+        {v2Chrome && <GlassRoot />}
         <TraxWrap>
         <SearchSlotWrap>
         <SupportRailWrap>

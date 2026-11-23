@@ -19,6 +19,7 @@
     "update-cms": "node scripts/update-cms-content.js",
     "db:switch": "node scripts/db-switch.mjs",
     "v1:check": "node scripts/v1-check/check.mjs",
+    "glass:check": "node scripts/glass-check/check.cjs",
     "v1:snapshot": "node scripts/v1-check/snapshot.mjs",
     "test:spine": "vitest run --config tests/vitest.config.ts",
     "test:spine:watch": "vitest --config tests/vitest.config.ts",

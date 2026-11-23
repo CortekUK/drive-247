@@ -10,7 +10,7 @@
  * (lib/appearance/portal-look.ts), not on the branding row.
  *
  * Glass is the booking site's Template 2 material (frosted, brand-tinted panes
- * with a bright rim, over one photograph). For now only the dashboard wears it.
+ * with a bright rim, over one photograph), on every page of the portal.
  */
 
 import { Check } from 'lucide-react';
@@ -43,7 +43,7 @@ export function PortalThemeSectionV2({
     <SettingsSection
       anchor="theme"
       title="Theme"
-      description="How your dashboard looks. Pick one and press Save changes. It is kept on this device."
+      description="How your portal looks. Pick one and press Save changes. It is kept on this device."
     >
       <SettingsPanel>
         <div className="grid max-w-2xl gap-4 py-4 sm:grid-cols-2">

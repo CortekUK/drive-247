@@ -9,10 +9,6 @@ import { BonzahPendingAlert } from "@/components/dashboard/bonzah-pending-alert"
 import { HomeBands } from "@/components/dashboard-v2/home/home-bands";
 import { WebinarPopup } from "@/components/dashboard-v2/webinar-popup";
 import { HOME_PALETTE } from "@/components/dashboard-v2/home/ui";
-import { GLASS_PALETTE, useGlassPointerLight } from "@/components/dashboard-v2/glass-look";
-import { useTenant } from "@/contexts/TenantContext";
-import { isGlassTenant, usePortalLook } from "@/lib/appearance/portal-look";
-import { cn } from "@/lib/utils";
 
 /**
  * The v2 dashboard body.
@@ -39,12 +35,6 @@ import { cn } from "@/lib/utils";
 export function DashboardV2() {
   // Integration billing (northwind): no credits, so no low-credits banner (D3).
   const creditsRetired = useIntegrationBilling();
-  // Settings → Branding → Theme. Glass dresses this screen only, for now.
-  const { tenant } = useTenant();
-  const [look] = usePortalLook(tenant?.id);
-  // Northwind only for now: every other v2 tenant keeps the Standard look.
-  const glass = isGlassTenant(tenant?.slug) && look === "glass";
-  useGlassPointerLight(glass);
   return (
     /* Switch row alignment: at md+ the first band title ("On your desk", a 26px
        line box) is centred on the sidebar's Portal / Website switch, 92px from
@@ -69,7 +59,7 @@ export function DashboardV2() {
           palette. `.pv` keeps those tokens off the rest of the portal. */}
       {/* At lg+ the dashboard is one screen (Sep 27 2026): this column fills
           <main> (already bounded to the viewport) and HomeBands shares it out. */}
-      <div className={cn("pv lg:flex lg:min-h-0 lg:flex-1 lg:flex-col", glass && "pv-glass")}>
+      <div className="pv lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
         {/* The free onboarding call, while it is still on offer (renders
             nothing otherwise). Above the bands: it is the first thing a new
             operator should see. */}
@@ -82,8 +72,6 @@ export function DashboardV2() {
           `.pv` it pushed the first band 40px down under nothing visible. It
           still styles the whole document from here. */}
       <style>{HOME_PALETTE}</style>
-      {/* The Glass look (glass-look.ts): only while it is chosen. */}
-      {glass && <style>{GLASS_PALETTE}</style>}
     </div>
   );
 }

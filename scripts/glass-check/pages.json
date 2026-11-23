@@ -1,0 +1,158 @@
+[
+  {
+    "name": "dashboard",
+    "path": "/"
+  },
+  {
+    "name": "vehicles",
+    "path": "/vehicles"
+  },
+  {
+    "name": "customers",
+    "path": "/customers"
+  },
+  {
+    "name": "rentals",
+    "path": "/rentals"
+  },
+  {
+    "name": "availability",
+    "path": "/blocked-dates"
+  },
+  {
+    "name": "finances",
+    "path": "/finances"
+  },
+  {
+    "name": "agreements",
+    "path": "/agreements"
+  },
+  {
+    "name": "insights",
+    "path": "/insights"
+  },
+  {
+    "name": "insurances",
+    "path": "/insurances"
+  },
+  {
+    "name": "integrations",
+    "path": "/integrations"
+  },
+  {
+    "name": "billing",
+    "path": "/subscription"
+  },
+  {
+    "name": "rewards",
+    "path": "/rewards"
+  },
+  {
+    "name": "settings",
+    "path": "/settings"
+  },
+  {
+    "name": "branding",
+    "path": "/settings/appearance"
+  },
+  {
+    "name": "team",
+    "path": "/users"
+  },
+  {
+    "name": "rental-detail",
+    "path": "/rentals/a4d8482a-dc3f-498e-82ad-294c719143b9"
+  },
+  {
+    "name": "rental-new",
+    "path": "/rentals/new"
+  },
+  {
+    "name": "customer-detail",
+    "path": "/customers/a2560b1c-47b1-565a-831b-5c141b78f3ff"
+  },
+  {
+    "name": "vehicle-detail",
+    "path": "/vehicles/708e9f43-dea8-4443-b9f1-c2d4d80e769d"
+  },
+  {
+    "name": "payments",
+    "path": "/payments"
+  },
+  {
+    "name": "invoices",
+    "path": "/invoices"
+  },
+  {
+    "name": "pending-bookings",
+    "path": "/pending-bookings"
+  },
+  {
+    "name": "reminders",
+    "path": "/reminders"
+  },
+  {
+    "name": "audit-logs",
+    "path": "/audit-logs"
+  },
+  {
+    "name": "messages",
+    "path": "/messages"
+  },
+  {
+    "name": "trax",
+    "path": "/trax"
+  },
+  {
+    "name": "support",
+    "path": "/support"
+  },
+  {
+    "name": "settings-general",
+    "path": "/settings?tab=general"
+  },
+  {
+    "name": "settings-locations",
+    "path": "/settings?tab=locations"
+  },
+  {
+    "name": "settings-booking-rules",
+    "path": "/settings?tab=duration"
+  },
+  {
+    "name": "settings-lockbox",
+    "path": "/settings?tab=lockbox"
+  },
+  {
+    "name": "settings-notifications",
+    "path": "/settings?tab=notifications"
+  },
+  {
+    "name": "settings-booking-site",
+    "path": "/settings?tab=booking-site"
+  },
+  {
+    "name": "dialog-add-vehicle",
+    "path": "/vehicles",
+    "open": "Add Vehicle",
+    "desktopOnly": true
+  },
+  {
+    "name": "dialog-add-customer",
+    "path": "/customers",
+    "open": "Add Customer",
+    "desktopOnly": true
+  },
+  {
+    "name": "panel-search",
+    "path": "/",
+    "open": "Search",
+    "desktopOnly": true
+  },
+  {
+    "name": "panel-notifications",
+    "path": "/",
+    "open": "Notifications",
+    "desktopOnly": true
+  }
+]
