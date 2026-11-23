@@ -155,7 +155,7 @@ export default function AdminPreviewPage() {
       <section aria-label="List table" className="mt-8">
         <h2 className="mb-3 text-sm font-medium text-muted-foreground">List table</h2>
         <Card className="overflow-hidden">
-          <Table className="max-md:min-w-[560px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
+          <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Company</TableHead>

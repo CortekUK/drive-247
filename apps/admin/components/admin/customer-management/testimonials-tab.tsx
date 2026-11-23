@@ -320,7 +320,7 @@ export function TestimonialsTab({ canEdit }: { canEdit: boolean }) {
             />
           ) : (
             <div className="overflow-x-auto">
-              <Table className="max-md:min-w-[720px]">
+              <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[70px]">Order</TableHead>

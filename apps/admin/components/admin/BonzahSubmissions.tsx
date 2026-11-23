@@ -311,7 +311,7 @@ export default function BonzahSubmissions() {
               <NoMatchState noun="submissions" onClear={() => setFilter('all')} />
             )
           ) : (
-            <Table className="max-md:min-w-[760px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Business</TableHead>

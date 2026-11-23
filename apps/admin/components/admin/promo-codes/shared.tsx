@@ -24,7 +24,7 @@ export function CopyValue({ value, label, mono = true, className }: { value: str
   return (
     <div className={cn('flex min-w-0 items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2', className)}>
       {label && <span className="shrink-0 text-xs text-muted-foreground">{label}</span>}
-      <span className={cn('min-w-0 flex-1 truncate text-sm', mono && 'font-mono')} title={value}>{value}</span>
+      <span className={cn('min-w-0 flex-1 truncate text-sm max-sm:whitespace-normal max-sm:text-[12px] max-sm:[overflow-wrap:anywhere]', mono && 'font-mono')} title={value}>{value}</span>
       <Button type="button" variant="ghost" size="sm" className="h-7 shrink-0 gap-1.5 px-2" onClick={copy} aria-label={`Copy ${label ?? 'value'}`}>
         {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
         {copied ? 'Copied' : 'Copy'}

@@ -1210,7 +1210,7 @@ export default function RentalCompaniesPage() {
       {/* On a phone the table scrolls sideways inside its card rather than
           squeezing every company name into a three-line stack. */}
       <Card className="overflow-hidden">
-        <Table className="max-md:min-w-[720px]">
+        <Table>
           <TableHeader>
             <TableRow>
               <TableHead className="w-10"></TableHead>

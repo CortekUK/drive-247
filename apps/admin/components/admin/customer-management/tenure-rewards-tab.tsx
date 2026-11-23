@@ -564,7 +564,7 @@ export function TenureRewardsTab({ canEdit }: { canEdit: boolean }) {
             />
           ) : (
             <div className="overflow-x-auto">
-              <Table className="max-md:min-w-[720px]">
+              <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Tenure</TableHead>

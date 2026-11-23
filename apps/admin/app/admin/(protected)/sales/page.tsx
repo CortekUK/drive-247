@@ -167,7 +167,7 @@ export default function SalesPage() {
               action={{ label: 'Create onboarding', onClick: () => setShowCreate(true) }}
             />
           ) : (
-            <Table className="max-md:min-w-[600px]">
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="min-w-[180px]">Business</TableHead>

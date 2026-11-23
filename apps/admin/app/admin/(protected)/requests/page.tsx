@@ -385,7 +385,7 @@ export default function RequestsPage() {
               />
             )
           ) : (
-            <Table className="max-md:min-w-[760px]">
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Tenant</TableHead>

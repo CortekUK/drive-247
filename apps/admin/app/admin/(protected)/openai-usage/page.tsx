@@ -371,7 +371,7 @@ export default function OpenAIUsagePage() {
               {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
             </div>
           ) : (
-            <Table className="max-md:min-w-[560px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Function</TableHead>
@@ -507,7 +507,7 @@ export default function OpenAIUsagePage() {
           ) : (
             /* Phones scroll the table sideways; wrapped model names and
                function badges were unreadable. */
-            <Table className="max-md:min-w-[720px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[160px]">Time</TableHead>

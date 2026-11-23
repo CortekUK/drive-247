@@ -29,7 +29,9 @@ export const CONTROL =
   'shadow-[0_1px_2px_hsl(var(--foreground)/0.04)] outline-none transition-[border-color,box-shadow] duration-200 ' +
   'placeholder:text-muted-foreground/70 hover:border-primary/40 focus-visible:border-primary/60 ' +
   'focus-visible:ring-3 focus-visible:ring-primary/15 aria-invalid:border-destructive/60 ' +
-  'disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none';
+  'disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none ' +
+  // A long option in a narrow select ends in "…" instead of a clipped letter.
+  '[&:is(select)]:truncate';
 
 /** The accent wash behind an "add" dialog — the portal's, from the same tokens. */
 export const FORM_DIALOG_WASH = {
@@ -71,7 +73,7 @@ export function Cell({
 }) {
   return (
     <div className={cn('flex min-w-0 flex-col gap-1.5', className)}>
-      <span className="truncate px-0.5 text-[13px] font-medium text-foreground/80">
+      <span className="truncate px-0.5 text-[13px] font-medium text-foreground/80 max-sm:whitespace-normal">
         {label}
         {required && <span className="ml-0.5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">*</span>}
       </span>
@@ -79,7 +81,8 @@ export function Cell({
       {/* Reserved: an error or a hint never moves the row. */}
       <span
         className={cn(
-          'min-h-[18px] truncate px-0.5 text-[11px] leading-[18px]',
+          // Phones: the whole hint, wrapped, rather than "Everywhere else …".
+          'min-h-[18px] truncate px-0.5 text-[11px] leading-[18px] max-sm:whitespace-normal max-sm:text-[12px] max-sm:leading-[16px]',
           error ? 'text-destructive' : 'text-muted-foreground',
         )}
       >

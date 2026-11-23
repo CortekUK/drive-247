@@ -252,8 +252,8 @@ export function ForceLogoutDialog({
                             >
                               <Checkbox checked={out} onCheckedChange={(v) => toggle([s.session_id], !v)} aria-label={`Sign out ${s.email ?? 'this session'}`} />
                               <span className="min-w-0">
-                                <span className="flex items-center gap-1.5">
-                                  <span className="truncate text-sm font-medium text-foreground">{s.name || s.email || 'Unknown'}</span>
+                                <span className="flex items-center gap-1.5 max-sm:flex-wrap max-sm:gap-y-0.5">
+                                  <span className="truncate text-sm font-medium text-foreground max-sm:whitespace-normal">{s.name || s.email || 'Unknown'}</span>
                                   {s.role && (
                                     <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-px text-[10px] font-medium capitalize text-primary">
                                       {s.role.replace(/_/g, ' ')}

@@ -59,6 +59,14 @@ function labelTable(table: HTMLTableElement) {
         }
         col += cell.colSpan || 1;
       }
+      // Trailing controls with words on them (Edit · Switch off · View) are
+      // too wide for the top-right corner an icon or a ⋯ takes: they ran
+      // under the title. Those go in a row across the card's foot instead.
+      const last = cells[cells.length - 1];
+      if (last && cells.length > 1 && last.getAttribute('data-label') === '') {
+        const wordy = (last.textContent || '').replace(/\s+/g, '').length > 2;
+        if (wordy !== last.hasAttribute('data-actions-row')) last.toggleAttribute('data-actions-row', wordy);
+      }
     }
   }
 }

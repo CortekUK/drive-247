@@ -944,6 +944,24 @@ html::-webkit-scrollbar-corner,
   [data-phone-cards] tbody tr:has(> td[data-label=""]:last-child:not(:first-child)) > td:first-child {
     padding-right: 44px !important;
   }
+  /* …unless they are words (Edit · Switch off · View): then a row across the
+     foot of the card, left-aligned, the title keeping its full width. */
+  [data-phone-cards] tbody td[data-label=""][data-actions-row]:last-child:not(:first-child) {
+    position: static;
+    grid-column: 1 / -1;
+    margin-top: 2px;
+  }
+  [data-phone-cards] tbody td[data-actions-row] :is(.justify-end, .ml-auto) {
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+  [data-phone-cards] tbody td[data-actions-row] > :is(div, span) {
+    flex-wrap: wrap;
+    margin-left: -8px;
+  }
+  [data-phone-cards] tbody tr:has(> td[data-label=""][data-actions-row]:last-child:not(:first-child)) > td:is(:first-child, :nth-child(2)) {
+    padding-right: 0 !important;
+  }
   /* An unlabelled first cell (a checkbox, a favourite star) sits beside the
      title, not on a line of its own: the second cell becomes the title. */
   [data-phone-cards] tbody tr:has(> td:first-child[data-label=""]:not(:last-child)) {
@@ -1034,5 +1052,17 @@ html::-webkit-scrollbar-corner,
      fit and wrap when they do not, instead of squeezing the name. */
   [data-phone-cards] tbody td .flex:not(.flex-col):not(.inline-flex) {
     flex-wrap: wrap;
+  }
+}
+@media (max-width: 1023px) {
+  /* A link, key or id in a card (https://drive-247.com/r/RENTALKING-0812)
+     breaks anywhere and sits a size down, rather than three big lines. */
+  [data-phone-cards] tbody td:not(:first-child) .font-mono,
+  [data-phone-cards] tbody td:first-child .font-mono:not(:first-child) ,
+  [data-phone-cards] tbody td .font-mono :is(span, code) {
+    overflow-wrap: anywhere;
+  }
+  [data-phone-cards] tbody td .font-mono:not(:first-child):not(h1, h2, h3) {
+    font-size: 12px;
   }
 }

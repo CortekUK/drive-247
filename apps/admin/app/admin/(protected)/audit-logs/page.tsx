@@ -836,7 +836,7 @@ export default function AuditLogsPage() {
             <>
               {/* Phones scroll the table sideways rather than squashing six
                   columns into stacks of wrapped words. */}
-              <Table className="max-md:min-w-[720px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
+              <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[160px]">Date & Time</TableHead>
