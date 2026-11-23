@@ -149,12 +149,14 @@ export function SubscriptionTrail({
   const trail = invoices.length > 0 ? invoices : MOCK_INVOICES;
 
   return (
-    <section className="mt-4 flex min-h-0 flex-1 flex-col gap-1.5">
+    <section className="mt-4 flex min-h-0 flex-1 flex-col gap-1.5 max-lg:flex-none">
       <h2 className="shrink-0 px-1 text-base font-semibold tracking-tight">Subscription</h2>
-    <Card className="flex min-h-0 flex-1 flex-col p-5 pb-2">
-      <div className="shrink-0">{top}</div>
+    {/* Below `lg` the page scrolls as one, so the card is as tall as its
+        rows rather than a fixed pane that scrolls inside itself. */}
+    <Card className="flex min-h-0 flex-1 flex-col p-5 pb-2 max-lg:flex-none max-lg:px-0 max-lg:pt-4">
+      <div className="shrink-0 max-lg:px-4">{top}</div>
       <div className="mt-3 shrink-0 border-t border-border/60" />
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto max-lg:flex-none max-lg:overflow-visible">
         {trail.length === 0 ? (
           <p className="pt-3 text-sm text-muted-foreground">No subscription payments yet.</p>
         ) : (

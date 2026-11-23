@@ -583,8 +583,8 @@ function StatCard({
   return (
     <Card>
       <CardContent className="pt-6">
-        <div className="flex items-start justify-between">
-          <div>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
             <p className="text-xs text-muted-foreground mb-1">{label}</p>
             {loading ? (
               <Skeleton className="h-7 w-20" />
@@ -592,7 +592,7 @@ function StatCard({
               <p className="text-2xl font-bold tabular-nums">{value}</p>
             )}
           </div>
-          <div className={`flex items-center justify-center h-8 w-8 rounded-lg ${colors[accent]}`}>
+          <div className={`flex shrink-0 items-center justify-center h-8 w-8 rounded-lg ${colors[accent]}`}>
             {icon}
           </div>
         </div>

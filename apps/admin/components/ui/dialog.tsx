@@ -56,7 +56,10 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       {children}
-      {showCloseButton && <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
+{/* The ring is for the keyboard only (`focus-visible`): the dialog focuses
+          this button as it opens, and a tap-opened dialog drew a ring round
+          the ✕ that no other dialog had. A 44px tap area on phones. */}
+      {showCloseButton && <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm text-muted-foreground opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none max-md:after:absolute max-md:after:-inset-3 max-md:after:content-['']">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>}

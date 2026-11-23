@@ -25,6 +25,13 @@ function headerLabels(table: HTMLTableElement): string[] {
   const labels: string[] = [];
   for (const th of Array.from(row.cells)) {
     const text = (th.textContent || th.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim();
+    // A row's controls need no caption on a card: like the operator's ⋯ they
+    // go to the card's top-right corner (globals.css), which an empty label
+    // asks for.
+    if (/^actions?$/i.test(text)) {
+      for (let i = 0; i < (th.colSpan || 1); i++) labels.push('');
+      continue;
+    }
     for (let i = 0; i < (th.colSpan || 1); i++) labels.push(text);
   }
   return labels;

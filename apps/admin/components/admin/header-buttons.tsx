@@ -26,11 +26,11 @@ import { cn } from '@/lib/utils';
  * above and below and their centre lands on the subtitle's. Below `sm` the
  * header stacks and the cluster keeps its natural height.
  */
-export const HEADER_ACTIONS = 'flex shrink-0 items-center gap-2 sm:self-end sm:h-5 max-sm:justify-self-end';
+export const HEADER_ACTIONS = 'flex shrink-0 items-center gap-2 sm:self-end sm:h-5 max-sm:col-span-2 max-sm:mt-2 max-sm:flex-wrap max-sm:justify-self-start';
 
 /**
  * A page header on a phone (below `sm`): the title on its own line, then ONE
- * line of description — cut short with an ellipsis, never removed — with the
+ * description — wrapped in full, never cut short — with the
  * header's buttons at the right end of that line, instead of a full-width
  * button stacked underneath (asked for Oct 24 2026). Every class is
  * `max-sm:`, so the desktop header is untouched.
@@ -51,7 +51,10 @@ export const PAGE_HEADER =
   'max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:items-center max-sm:gap-x-3 max-sm:gap-y-1';
 export const PAGE_HEADER_TEXT = 'max-sm:contents';
 export const PAGE_TITLE = 'max-sm:col-span-2';
-export const PAGE_DESCRIPTION = 'max-sm:mt-0 max-sm:min-w-0 max-sm:truncate';
+/* The description is read in full on a phone too (user review, Nov 2026: the
+   one-line ellipsis hid what the page is for), across the full width, with
+   the buttons on the line under it (user review, Nov 2026). */
+export const PAGE_DESCRIPTION = 'max-sm:col-span-2 max-sm:mt-0 max-sm:min-w-0 max-sm:[overflow-wrap:break-word]';
 
 /**
  * The header's one labelled button, Northwind's HEADER_PRIMARY_V2: a 32px brand

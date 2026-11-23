@@ -163,7 +163,7 @@ function IntegrationStatus({ tone, label }: { tone: StatusTone; label: string })
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
+        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium max-md:gap-1 max-md:px-2',
         tone === 'success' && 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
         tone === 'warning' && 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
         tone === 'info' && 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400',
@@ -1800,7 +1800,7 @@ export default function TenantDetailsPage() {
               )}
             </div>
             {/* On a phone the row scrolls sideways, each tile a fixed width. */}
-            <div className="grid grid-cols-5 gap-3 max-md:-mx-4 max-md:flex max-md:snap-x max-md:scroll-px-4 max-md:overflow-x-auto max-md:px-4 max-md:pb-1 max-md:pt-0.5 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden max-md:[&>*]:w-28 max-md:[&>*]:shrink-0 max-md:[&>*]:snap-start">
+            <div className="grid grid-cols-5 gap-3 max-md:-mx-4 max-md:flex max-md:snap-x max-md:scroll-px-4 max-md:overflow-x-auto max-md:px-4 max-md:pb-1 max-md:pt-0.5 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden max-md:[&>*]:w-[132px] max-md:[&>*]:shrink-0 max-md:[&>*]:snap-start">
               {integrationTiles.slice(0, INTEGRATIONS_IN_ROW)}
             </div>
           </section>
