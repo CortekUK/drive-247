@@ -189,6 +189,22 @@ export function OnboardingScreen() {
     return () => window.removeEventListener("resize", read);
   }, []);
 
+  /**
+   * The payment step's "Change plan" list. Held here, not in the step, because
+   * while it is open the person is choosing a plan, not leaving: the top-right
+   * X, Escape and a phone's back button close the list, and the one-time
+   * discount offer cannot show (2026-11-24: a new signup tapped "Change plan",
+   * then the X to close the list, got the offer and took 20% off).
+   */
+  const [planPickerOpen, setPlanPickerOpen] = useState(false);
+  const planPickerOpenRef = useRef(planPickerOpen);
+  useEffect(() => {
+    planPickerOpenRef.current = planPickerOpen;
+  });
+  useEffect(() => {
+    if (state.step !== "payment" || !isOpen) setPlanPickerOpen(false);
+  }, [state.step, isOpen]);
+
   const offerAllowed = shouldShowExitOffer({
     step: state.step,
     paid: state.payment.paid,
@@ -196,7 +212,7 @@ export function OnboardingScreen() {
     busy: state.busy,
     seenLocally: exitOfferSeen,
     seenOnAccount: false,
-    covered: exitOffer !== null || !isOpen,
+    covered: exitOffer !== null || !isOpen || planPickerOpen,
   });
   const offerAllowedRef = useRef(offerAllowed);
   useEffect(() => {
@@ -270,6 +286,17 @@ export function OnboardingScreen() {
     if (state.step !== "payment") return;
     const onPop = () => {
       if (!backGuardRef.current) return;
+      if (planPickerOpenRef.current) {
+        // Back with the plan list open closes the list, like the X. The guard
+        // entry it used up is put back, so the next back still reaches here.
+        setPlanPickerOpen(false);
+        try {
+          window.history.pushState({ ...(window.history.state ?? {}), d247ExitGuard: true }, "");
+        } catch {
+          backGuardRef.current = false;
+        }
+        return;
+      }
       backGuardRef.current = false;
       if (offerAllowedRef.current) showExitOffer("back");
       else requestClose();
@@ -285,6 +312,12 @@ export function OnboardingScreen() {
    * after "No thanks" a second box read as a trap (owner, 2026-11-20).
    */
   const onCloseButton = useCallback(() => {
+    if (planPickerOpenRef.current) {
+      // The X / Escape with "Change plan" open closes the list. Nobody is
+      // leaving, so no offer and no close.
+      setPlanPickerOpen(false);
+      return;
+    }
     if (exitOffer) {
       // Closing over the offer is a "no thanks" on the way out.
       trackExitOffer("exit_offer_dismissed");
@@ -570,6 +603,8 @@ export function OnboardingScreen() {
                           portalSlug={state.business.slug}
                           plans={plans}
                           onChangePlan={changePlan}
+                          planPickerOpen={planPickerOpen}
+                          onPlanPickerOpenChange={setPlanPickerOpen}
                         />
                       ) : null}
                     </div>

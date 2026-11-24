@@ -27,7 +27,11 @@ describe("City and state picker", () => {
   });
 
   it("finds a later word, after the names that start with it", () => {
-    expect(labels("lake city")).toContain("Salt Lake City, UT");
+    // Six places are called exactly "Lake City", which fills the default list of
+    // six, so the later-word match is looked for in a longer list.
+    const longer = searchCities(list, "lake city", 20).map((o) => o.label);
+    expect(longer).toContain("Salt Lake City, UT");
+    expect(longer.indexOf("Salt Lake City, UT")).toBeGreaterThan(longer.indexOf("Lake City, FL"));
   });
 
   it("ignores accents and dots", () => {

@@ -832,6 +832,8 @@ export interface ClientSignupMeta {
   heardAbout?: string;
   /** "How many cars do you rent out?" Absent until it has been answered. */
   fleetSize?: string;
+  /** The phone number from the account step. Absent until it has been given. */
+  phone?: string;
   /** "City and state" from the business page. Absent until it has been given. */
   cityState?: string;
   /** When the card step's one-time offer was shown (ISO), on any device. */

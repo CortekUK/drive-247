@@ -17,10 +17,13 @@ export const GHL_BOOKING_URL = configuredHttpsUrl(
   "https://api.leadconnectorhq.com/widget/booking/5IaMFcRJ2O4R589QF89C",
 );
 
+// The home page's Google listing, the share cards and the schema.org
+// description. Wording from the team's SEO review (2026-11-24). Google may
+// still rewrite what it shows. "14 days" matches the signup's trial.
 export const SITE_META = {
-  title: "Drive247 — Direct Booking Platform for Independent Car Rental Operators",
+  title: "Car Rental Management Software for Turo Hosts | Drive247",
   description:
-    "For independent car rental operators and Turo hosts with 1 to 50 cars: a branded booking site, operator portal and renter portal, with Trax built in.",
+    "Manage your rental fleet, launch your own direct booking website, accept payments and automate operations. Try Drive247 free for 14 days.",
   ogImage: "/og.png",
 };
 

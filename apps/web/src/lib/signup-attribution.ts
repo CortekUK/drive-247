@@ -1,10 +1,12 @@
 /**
  * "How did you hear about us?" and the phone number on the signup.
  *
- * Both are optional (Ghulam, 2026-11-23). "How many cars do you rent out?" is
- * no longer asked. The server re-checks what is sent in
+ * The phone number is required (2026-11-24, owner): a 21+ car lead left it
+ * blank and the team could not call. "How did you hear about us?" is optional,
+ * and "How many cars do you rent out?" is no longer asked (Ghulam, 2026-11-23).
+ * The server re-checks what is sent in
  * `supabase/functions/_shared/signup-attribution.ts`, which holds the same
- * lists and never required either answer.
+ * lists and does not require any of them: the form is what requires the phone.
  */
 
 // Relative, not "@/": tests/integrations imports this file without the app alias.
@@ -56,7 +58,11 @@ export function isHeardAbout(value: unknown): value is HeardAbout {
   return HEARD_ABOUT_OPTIONS.some((option) => option.value === value);
 }
 
-/** Blank is fine, because the field is optional. Mirrors the server's rule. */
+/**
+ * The shape of a phone number: 7 to 15 digits, with `+`, spaces, brackets, dots
+ * or dashes allowed. Blank passes here (the server stores no phone then);
+ * `validateAttribution` is what makes the field required.
+ */
 export function isValidPhone(raw: string): boolean {
   const typed = raw.trim();
   if (!typed) return true;
@@ -66,15 +72,17 @@ export function isValidPhone(raw: string): boolean {
 }
 
 /**
- * Only a typed phone number can be wrong. Leaving the question unanswered, or
- * picking "Other" without saying what, is fine.
+ * The phone number is required and must look like one. Leaving "How did you
+ * hear about us?" unanswered, or picking "Other" without saying what, is fine.
  */
 export function validateAttribution(
   draft: AttributionDraft,
 ): Partial<Record<AttributionField, string>> {
   const errors: Partial<Record<AttributionField, string>> = {};
-  if (!isValidPhone(draft.phone)) {
-    errors.phone = "Please enter a valid phone number, or leave this blank.";
+  if (!draft.phone.trim()) {
+    errors.phone = "Please enter your phone number.";
+  } else if (!isValidPhone(draft.phone)) {
+    errors.phone = "Please enter a valid phone number.";
   }
   return errors;
 }
@@ -95,4 +103,15 @@ export function attributionFromDraft(draft: AttributionDraft): SignupAttribution
     ...(phone && isValidPhone(phone) ? { phone } : {}),
   };
   return Object.keys(answer).length > 0 ? answer : null;
+}
+
+/**
+ * True when a usable phone number is on record. A Google signup without one is
+ * shown the short question screen before the card. The other answers are
+ * optional, so they are not checked.
+ */
+export function hasCompleteAttribution(
+  a: { heardAbout?: unknown; fleetSize?: unknown; phone?: unknown } | null | undefined,
+): boolean {
+  return Boolean(a && typeof a.phone === "string" && a.phone.trim() !== "" && isValidPhone(a.phone));
 }

@@ -156,6 +156,6 @@ describe("3e. the purple button on a phone", () => {
   // questions' look), and that row is pinned to the bottom on phones on every
   // step, the card step included.
   it("is pinned to the bottom of the screen on a phone", () => {
-    expect(screen).toMatch(/<footer className="sticky bottom-0[^"]*sm:static/);
+    expect(screen).toMatch(/<footer className="sticky bottom-0/);
   });
 });

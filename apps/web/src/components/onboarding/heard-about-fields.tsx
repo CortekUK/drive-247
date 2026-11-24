@@ -30,9 +30,9 @@ interface HeardAboutFieldsProps {
 }
 
 /**
- * "How did you hear about us?" and the phone number, both optional (Ghulam,
- * 2026-11-23, when "How many cars do you rent out?" was taken off the form).
- * Used on the first account page.
+ * "How did you hear about us?" (optional) and the phone number (required
+ * since 2026-11-24). "How many cars do you rent out?" was taken off the form
+ * (Ghulam, 2026-11-23). Used on the first account page.
  *
  * A styled dropdown in the signup's own colours on every device, raised above
  * the full-screen signup layer (z-[200]). The native select showed the
@@ -147,6 +147,8 @@ export function HeardAboutFields({
           ref={phoneRef}
           id="signup-phone"
           name="phone"
+          required
+          aria-required="true"
           type="tel"
           inputMode="tel"
           autoComplete="tel"

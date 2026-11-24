@@ -22,6 +22,7 @@ import { FLEET_SIZE_OPTIONS, FLEET_SIZE_PLAN, fleetSizePlanId, isFleetSize, plan
 import {
   attributionFromDraft,
   EMPTY_ATTRIBUTION,
+  hasCompleteAttribution,
   validateAttribution,
 } from "@/lib/signup-attribution";
 
@@ -173,14 +174,23 @@ describe("fleet size: the plan it picks", () => {
 });
 
 describe("fleet size: no longer asked on the form (2026-11-23)", () => {
-  it("is not required", () => {
-    expect(validateAttribution(EMPTY_ATTRIBUTION)).toEqual({});
+  it("is not required, and neither is how they heard; only the phone is", () => {
+    expect(validateAttribution({ ...EMPTY_ATTRIBUTION, phone: "(404) 555-0123" })).toEqual({});
+    expect(Object.keys(validateAttribution(EMPTY_ATTRIBUTION))).toEqual(["phone"]);
   });
 
   it("is not sent, even from an old draft that has one", () => {
     expect(attributionFromDraft({ ...EMPTY_ATTRIBUTION, heardAbout: "youtube", fleetSize: "21+" })).toEqual({
       heardAbout: "youtube",
     });
+  });
+
+  it("asks again after Google sign-in when no phone number is on record", () => {
+    expect(hasCompleteAttribution({ phone: "+14045550123" })).toBe(true);
+    expect(hasCompleteAttribution({ heardAbout: "youtube", phone: "+14045550123" })).toBe(true);
+    expect(hasCompleteAttribution({ heardAbout: "youtube", fleetSize: "1-5" })).toBe(false);
+    expect(hasCompleteAttribution({ phone: "abc" })).toBe(false);
+    expect(hasCompleteAttribution(null)).toBe(false);
   });
 });
 
@@ -208,5 +218,75 @@ describe("only one box on the way out", () => {
   it("offers first on the X and Escape, on every device", () => {
     expect(screen).toMatch(/if \(offerAllowedRef\.current\) \{\s*showExitOffer\("close"\)/);
     expect(screen).toContain("if (!next) onCloseButton();");
+  });
+});
+
+// 2026-11-24: a new signup opened "Change plan", tapped the X to close the
+// list, got the one-time offer and took 20% off. Choosing a plan is not leaving.
+describe("Change plan is not an exit", () => {
+  const read = (f: string) => readFileSync(resolve(__dirname, f), "utf8");
+  const screen = read("onboarding-screen.tsx");
+  const step = read("steps/payment-step.tsx");
+
+  it("the X and Escape close an open plan list before anything else", () => {
+    const at = screen.indexOf("const onCloseButton = useCallback(");
+    const body = screen.slice(at, screen.indexOf("}, [exitOffer, requestClose, showExitOffer, trackExitOffer]);", at));
+    const pickerAt = body.indexOf("if (planPickerOpenRef.current)");
+    expect(pickerAt).toBeGreaterThan(-1);
+    expect(pickerAt).toBeLessThan(body.indexOf('showExitOffer("close")'));
+    expect(pickerAt).toBeLessThan(body.indexOf("requestClose()"));
+  });
+
+  it("the offer cannot show while the plan list is open (exit intent included)", () => {
+    expect(screen).toMatch(/covered: exitOffer !== null \|\| !isOpen \|\| planPickerOpen/);
+  });
+
+  it("a phone's back button closes an open plan list instead of offering", () => {
+    const at = screen.indexOf("const onPop = () => {");
+    const body = screen.slice(at, at + 900);
+    expect(body.indexOf("if (planPickerOpenRef.current)")).toBeGreaterThan(-1);
+    expect(body.indexOf("if (planPickerOpenRef.current)")).toBeLessThan(body.indexOf('showExitOffer("back")'));
+  });
+
+  // Since 2026-11-23 the payment step shows every plan all the time, so there is
+  // no list to open and the X can no longer land on one. The screen keeps the
+  // guard, which stays shut, in case a plan list comes back.
+  it("the screen owns the plan list state; the payment step has no list to open", () => {
+    expect(screen).toContain("planPickerOpen={planPickerOpen}");
+    expect(screen).toContain("onPlanPickerOpenChange={setPlanPickerOpen}");
+    expect(step).not.toMatch(/planPickerOpen/);
+  });
+});
+
+// 2026-11-24 (owner): the phone number is required. A 21+ car lead left it
+// blank and the team had no way to call.
+describe("phone number: required", () => {
+  const read = (f: string) => readFileSync(resolve(__dirname, f), "utf8");
+
+  it("blank is refused with its own message", () => {
+    expect(validateAttribution({ ...EMPTY_ATTRIBUTION, heardAbout: "instagram", fleetSize: "21+" }).phone).toBe(
+      "Please enter your phone number.",
+    );
+    expect(validateAttribution({ ...EMPTY_ATTRIBUTION, heardAbout: "instagram", fleetSize: "21+", phone: "   " }).phone).toBe(
+      "Please enter your phone number.",
+    );
+  });
+
+  it("a number that is not a phone number is refused", () => {
+    expect(validateAttribution({ ...EMPTY_ATTRIBUTION, heardAbout: "instagram", fleetSize: "21+", phone: "call me" }).phone).toBe(
+      "Please enter a valid phone number.",
+    );
+  });
+
+  it("a Google signup with no phone on record is asked for it before the card", () => {
+    expect(hasCompleteAttribution({ heardAbout: "instagram", fleetSize: "21+" })).toBe(false);
+    expect(hasCompleteAttribution({ heardAbout: "instagram", fleetSize: "21+", phone: "" })).toBe(false);
+    expect(hasCompleteAttribution({ heardAbout: "instagram", fleetSize: "21+", phone: "call me" })).toBe(false);
+  });
+
+  it("the field no longer says optional", () => {
+    const fields = read("heard-about-fields.tsx");
+    expect(fields).not.toMatch(/Phone number <span[^>]*>\(optional\)/);
+    expect(fields).toContain('aria-required="true"');
   });
 });

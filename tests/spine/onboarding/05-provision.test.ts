@@ -191,8 +191,10 @@ describe("05 — provision: the tenant row lands on v2 (Layer 0)", () => {
     const s = src();
     expect(s).toContain('const V2_DEFAULT_BRAND_COLOR = "#442DD7"');
     const palette = s.slice(s.indexOf("const palette = {"));
-    expect(palette.slice(0, 400)).toContain("primary_color: V2_DEFAULT_BRAND_COLOR");
-    expect(palette.slice(0, 400)).toContain("light_primary_color: V2_DEFAULT_BRAND_COLOR");
+    // Since the brand look question (2026-11-23) the colour the operator picked
+    // wins, and the v2 default is what is written when they picked none.
+    expect(palette.slice(0, 400)).toContain("primary_color: brandColor ?? V2_DEFAULT_BRAND_COLOR");
+    expect(palette.slice(0, 400)).toContain("light_primary_color: brandColor ?? V2_DEFAULT_BRAND_COLOR");
   });
 
   it("pins those two colour columns only, and not the booking site's chrome", () => {
