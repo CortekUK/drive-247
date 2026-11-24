@@ -23,11 +23,6 @@
     "v1:check": "node scripts/v1-check/check.mjs",
     "glass:check": "node scripts/glass-check/check.cjs",
     "v1:snapshot": "node scripts/v1-check/snapshot.mjs",
-    "test:spine": "vitest run --config tests/vitest.config.ts",
-    "test:spine:watch": "vitest --config tests/vitest.config.ts",
-    "test:spine:live": "node --env-file=tests/.env.local ./node_modules/vitest/vitest.mjs run --config tests/vitest.config.ts",
-    "test:spine:one": "vitest run --config tests/vitest.config.ts -t",
-    "test:docs": "node scripts/gen-test-docs.mjs",
     "dev:staging": "node scripts/db-switch.mjs staging && node scripts/kill-dev-ports.mjs portal && turbo run dev --filter=portal",
     "dev:prod": "node scripts/db-switch.mjs prod && node scripts/kill-dev-ports.mjs portal && turbo run dev --filter=portal"
   },
