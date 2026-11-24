@@ -29,6 +29,7 @@ function useBreadcrumbs() {
     '/admin/audit-logs': 'Audit Logs',
     '/admin/requests': 'Mode Requests',
     '/admin/announcements': 'Announcements',
+    '/admin/team-board': 'Team Board',
   };
 
   const segments = pathname.split('/').filter(Boolean);

@@ -36,7 +36,9 @@ import {
   Building2,
   CalendarDays,
   HeartPulse,
+  Inbox,
   ClipboardCheck,
+  ClipboardList,
   LayoutGrid,
   LifeBuoy,
   ListChecks,
@@ -188,7 +190,18 @@ function useBuildNav(): AdminNav {
 
     const more: AdminNavItem[] = [];
 
-    const groups: AdminNavGroup[] = [];
+    // Internal: the team's own tools, not a view of any tenant. One caption on
+    // the rail with its pages under it (Ghulam, 24 Nov 2026). Super admins only,
+    // as the table's RLS is.
+    const groups: AdminNavGroup[] = isSuper
+      ? [
+          {
+            label: 'Internal',
+            icon: Inbox,
+            items: [{ name: 'Team Board', href: '/admin/team-board', icon: ClipboardList }],
+          },
+        ]
+      : [];
 
     // The development environment: everything that drives the Northwind canary
     // or rehearses a real flow. Not on the sidebar — Settings → Developer lists

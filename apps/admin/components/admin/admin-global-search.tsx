@@ -63,6 +63,7 @@ const PAGE_BRIEFS: Record<string, string> = {
   '/admin/rentals': 'Every rental company on Drive247: plan, status, owner, and each one’s record.',
   '/admin/announcements': 'Feature cards and system messages shown in operators’ portals.',
   '/admin/feedbacks': 'What operators tell us about the software, with AI insights across it.',
+  '/admin/team-board': 'Notes, documents and images from the team: who each is for and where it stands.',
   '/admin/sales': 'Companies provisioned for signed clients, followed until they go live.',
   '/admin/promo-codes': 'Campaign codes, operator referral links, claims and the referral leaderboard.',
   '/admin/signup-plans': 'The plans a new operator chooses from at signup, and who gets a free trial.',
