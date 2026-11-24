@@ -34,3 +34,9 @@ set file_size_limit = 1073741824, -- 1 GB
       'video/webm'
     ]::text[]
 where id = 'team-board';
+
+-- Every other bucket keeps the limit it had in practice. Fourteen buckets had
+-- no limit of their own and so followed the project-wide cap (50 MB). Raising
+-- that cap for Team Board would have let them take 1 GB files as well; some of
+-- them accept uploads from customers.
+update storage.buckets set file_size_limit = 52428800 where file_size_limit is null;
