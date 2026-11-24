@@ -19,6 +19,7 @@
     "update-branding": "node scripts/bulk-update-branding.js",
     "update-cms": "node scripts/update-cms-content.js",
     "db:switch": "node scripts/db-switch.mjs",
+    "synced": "node scripts/synced.mjs",
     "v1:check": "node scripts/v1-check/check.mjs",
     "glass:check": "node scripts/glass-check/check.cjs",
     "v1:snapshot": "node scripts/v1-check/snapshot.mjs",
