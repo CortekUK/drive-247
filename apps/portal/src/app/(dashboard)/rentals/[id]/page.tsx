@@ -2853,6 +2853,18 @@ const RentalDetail = () => {
                 <Ban className="h-4 w-4 mr-2" />
                 Reject
               </Button>
+              {/* Approved but not yet handed over: Approve and Reject are both
+                  greyed out, and Delete would drop the payment without a
+                  refund. Cancel (with its refund options) is the way out, and
+                  the Edit Rental Period dialog tells staff to use it to change
+                  dates. Only while the rental is still Pending in the
+                  database: cancel-rental-refund refuses an Active one. */}
+              {rental.approval_status === 'approved' && String(rental.status ?? '').toLowerCase() === 'pending' && (
+                <Button variant="outline" onClick={() => setShowCancelDialog(true)}>
+                  <Ban className="h-4 w-4 mr-2" />
+                  Cancel Rental
+                </Button>
+              )}
               <div className="border-l pl-2 ml-1">
                 <TooltipProvider>
                   <Tooltip>
