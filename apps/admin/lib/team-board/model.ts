@@ -1,13 +1,16 @@
 /**
  * Team Board: the platform team's notes, documents and images in one place
- * (Super Admin > Internal > Team Board). Table `team_board_items`, files in the
- * private `team-board` bucket. Staff only, by RLS.
+ * (Super Admin > Internal > Team Board). Table `team_board_items`, its files in
+ * `team_board_attachments` (several per post) and the private `team-board`
+ * bucket. Staff only, by RLS.
  *
  * This file is the shape of a post and the rules both dialogs and the page
  * share. No React here.
  */
 
 export type TeamBoardKind = 'note' | 'document' | 'image' | 'voice' | 'video';
+/** The kinds a file can be: everything but a plain note. */
+export type FileKind = Exclude<TeamBoardKind, 'note'>;
 export type TeamBoardStatus = 'not_started' | 'in_progress' | 'done';
 
 export interface TeamMember {
@@ -23,14 +26,19 @@ export interface TeamPerson {
   name: string;
 }
 
+export interface TeamAttachment {
+  id: string;
+  kind: FileKind;
+  path: string;
+  name: string;
+  mime_type: string;
+  size_bytes: number;
+  sort_order: number;
+}
+
 export interface TeamBoardItem {
   id: string;
-  kind: TeamBoardKind;
   body: string;
-  attachment_path: string | null;
-  attachment_name: string | null;
-  attachment_type: string | null;
-  attachment_size: number | null;
   status: TeamBoardStatus;
   created_by: string;
   for_person_id: string | null;
@@ -38,18 +46,21 @@ export interface TeamBoardItem {
   updated_at: string;
   creator: TeamMember | null;
   for_person: TeamPerson | null;
+  /** The files on the post. None makes it a note. */
+  attachments: TeamAttachment[];
 }
 
 export const TEAM_BOARD_TABLE = 'team_board_items';
 export const TEAM_BOARD_BUCKET = 'team-board';
 export const TEAM_BOARD_FAVORITES = 'team_board_favorites';
 export const TEAM_BOARD_PEOPLE = 'team_board_people';
+export const TEAM_BOARD_ATTACHMENTS = 'team_board_attachments';
 
 export const TEAM_BOARD_COLUMNS = `
-  id, kind, body, attachment_path, attachment_name, attachment_type, attachment_size,
-  status, created_by, for_person_id, created_at, updated_at,
+  id, body, status, created_by, for_person_id, created_at, updated_at,
   creator:app_users!team_board_items_created_by_fkey ( id, name, email, avatar_url ),
-  for_person:team_board_people!team_board_items_for_person_id_fkey ( id, name )
+  for_person:team_board_people!team_board_items_for_person_id_fkey ( id, name ),
+  attachments:team_board_attachments ( id, kind, path, name, mime_type, size_bytes, sort_order )
 `;
 
 export const BODY_MAX = 5000;
@@ -80,6 +91,32 @@ export const KIND_LABEL: Record<TeamBoardKind, string> = {
   video: 'Video',
 };
 
+const KIND_PLURAL: Record<FileKind, string> = { document: 'documents', image: 'images', voice: 'voice notes', video: 'videos' };
+
+/** A post can carry this many files. */
+export const FILES_MAX = 20;
+
+/** A post's files in the order they were added. */
+export function filesOf(item: Pick<TeamBoardItem, 'attachments'>): TeamAttachment[] {
+  return [...(item.attachments ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+}
+
+/** What a post is, from its files: a note, one kind of file, or a mix ('files'). */
+export function kindOf(item: Pick<TeamBoardItem, 'attachments'>): TeamBoardKind | 'files' {
+  const kinds = new Set((item.attachments ?? []).map((a) => a.kind));
+  if (kinds.size === 0) return 'note';
+  return kinds.size === 1 ? [...kinds][0] : 'files';
+}
+
+/** "Note", "Image", "3 images", "4 files". */
+export function kindLabelOf(item: Pick<TeamBoardItem, 'attachments'>): string {
+  const kind = kindOf(item);
+  const n = item.attachments?.length ?? 0;
+  if (kind === 'note') return KIND_LABEL.note;
+  if (kind === 'files') return `${n} files`;
+  return n === 1 ? KIND_LABEL[kind] : `${n} ${KIND_PLURAL[kind]}`;
+}
+
 /** What a voice note says when nothing was typed with it. */
 export const VOICE_NOTE_BODY = 'Voice note';
 
@@ -108,7 +145,7 @@ export function baseType(type: string): string {
 }
 
 /** What kind of post a file makes, or null for a file this board does not take. */
-export function kindOfFile(file: { type: string }): Exclude<TeamBoardKind, 'note'> | null {
+export function kindOfFile(file: { type: string }): FileKind | null {
   const type = baseType(file.type);
   if (IMAGE_TYPES.includes(type)) return 'image';
   if (DOCUMENT_TYPES.includes(type)) return 'document';
@@ -183,13 +220,14 @@ export const NO_FILTERS: BoardFilters = { query: '', status: 'all', kind: 'all',
 export function matchesFilters(item: TeamBoardItem, f: BoardFilters, starred: ReadonlySet<string>): boolean {
   if (f.favouritesOnly && !starred.has(item.id)) return false;
   if (f.status !== 'all' && item.status !== f.status) return false;
-  if (f.kind !== 'all' && item.kind !== f.kind) return false;
+  if (f.kind === 'note' && item.attachments.length > 0) return false;
+  if (f.kind !== 'all' && f.kind !== 'note' && !item.attachments.some((a) => a.kind === f.kind)) return false;
   if (f.forWho === 'team' && item.for_person_id !== null) return false;
   if (f.forWho !== 'all' && f.forWho !== 'team' && item.for_person_id !== f.forWho) return false;
   if (f.postedBy !== 'all' && item.created_by !== f.postedBy) return false;
   const q = f.query.trim().toLowerCase();
   if (!q) return true;
-  return [item.body, item.attachment_name, memberName(item.creator), item.for_person?.name ?? 'everyone']
+  return [item.body, ...item.attachments.map((a) => a.name), memberName(item.creator), item.for_person?.name ?? 'everyone']
     .filter(Boolean)
     .some((v) => (v as string).toLowerCase().includes(q));
 }

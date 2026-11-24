@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, FileText, ImageIcon, Mic, MoreVertical, Plus, Star, StickyNote, Video } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, FileText, ImageIcon, Mic, MoreVertical, Paperclip, Plus, Star, StickyNote, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/sonner';
@@ -29,6 +29,7 @@ import {
   NO_FILTERS,
   STATUS_LABEL,
   STATUS_TEXT,
+  TEAM_BOARD_ATTACHMENTS,
   TEAM_BOARD_BUCKET,
   TEAM_BOARD_COLUMNS,
   TEAM_BOARD_FAVORITES,
@@ -38,12 +39,16 @@ import {
   formatDate,
   initialsOf,
   baseType,
+  filesOf,
+  kindLabelOf,
+  kindOf,
   kindOfFile,
   matchesFilters,
   memberName,
   storagePathFor,
   titleOf,
   type BoardFilters,
+  type FileKind,
   type TeamBoardItem,
   type TeamBoardKind,
   type TeamBoardStatus,
@@ -57,7 +62,7 @@ const PAGE_SIZE = 25;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
-const KIND_ICON: Record<TeamBoardKind, typeof FileText> = { note: StickyNote, document: FileText, image: ImageIcon, voice: Mic, video: Video };
+const KIND_ICON: Record<TeamBoardKind | 'files', typeof FileText> = { note: StickyNote, document: FileText, image: ImageIcon, voice: Mic, video: Video, files: Paperclip };
 
 const PILL =
   'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring';
@@ -153,29 +158,18 @@ export default function TeamBoardPage() {
     }
   };
 
-  /** Puts a file in the private bucket. Returns the attachment columns, or null when it failed. */
-  const upload = async (file: File) => {
-    const kind = kindOfFile(file);
-    if (!kind) return null;
-    const path = storagePathFor(file.name);
-    const type = baseType(file.type);
-    const { data: auth } = await supabase.auth.getSession();
-    const token = auth.session?.access_token;
-    if (!token) {
-      toast.error('You are signed out. Sign in again and retry.');
-      return null;
-    }
-    // One request with a progress bar: a file here can be up to 1 GB, and the
-    // storage client reports nothing until it is done.
-    setUploadPct(0);
-    const problem = await new Promise<string | null>((resolve) => {
+  /** Puts one file in the private bucket. Returns why it failed, or null. */
+  const putFile = (file: File, path: string, token: string, onBytes: (loaded: number) => void) =>
+    new Promise<string | null>((resolve) => {
+      // One request with progress: a file here can be up to 1 GB, and the
+      // storage client reports nothing until it is done.
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `${supabaseUrl}/storage/v1/object/${TEAM_BOARD_BUCKET}/${path.split('/').map(encodeURIComponent).join('/')}`);
       xhr.setRequestHeader('Authorization', `Bearer ${token}`);
       xhr.setRequestHeader('apikey', supabaseAnonKey);
-      xhr.setRequestHeader('Content-Type', type);
+      xhr.setRequestHeader('Content-Type', baseType(file.type));
       xhr.setRequestHeader('x-upsert', 'false');
-      xhr.upload.onprogress = (e) => e.lengthComputable && setUploadPct(Math.round((e.loaded / e.total) * 100));
+      xhr.upload.onprogress = (e) => e.lengthComputable && onBytes(e.loaded);
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) return resolve(null);
         let message = `error ${xhr.status}`;
@@ -189,64 +183,99 @@ export default function TeamBoardPage() {
       xhr.onerror = () => resolve('the connection dropped');
       xhr.send(file);
     });
-    setUploadPct(null);
-    if (problem) {
-      toast.error(`Could not upload the file: ${problem}`);
-      return null;
-    }
-    return { kind, attachment_path: path, attachment_name: file.name, attachment_type: type, attachment_size: file.size };
+
+  const removeFiles = async (paths: string[]) => {
+    if (!paths.length) return;
+    const { error } = await supabase.storage.from(TEAM_BOARD_BUCKET).remove(paths);
+    if (error) console.warn('[team-board] could not remove files:', error.message);
   };
 
-  const removeFile = async (path: string | null) => {
-    if (!path) return;
-    const { error } = await supabase.storage.from(TEAM_BOARD_BUCKET).remove([path]);
-    if (error) console.warn('[team-board] could not remove a file:', error.message);
+  /** Puts every file up, one after another. All or nothing: null when any failed. */
+  const uploadAll = async (files: File[]) => {
+    if (!files.length) return [];
+    const { data: auth } = await supabase.auth.getSession();
+    const token = auth.session?.access_token;
+    if (!token) {
+      toast.error('You are signed out. Sign in again and retry.');
+      return null;
+    }
+    const total = files.reduce((sum, f) => sum + f.size, 0) || 1;
+    let before = 0;
+    const done: { kind: FileKind; path: string; name: string; mime_type: string; size_bytes: number }[] = [];
+    setUploadPct(0);
+    for (const file of files) {
+      const kind = kindOfFile(file);
+      const path = storagePathFor(file.name);
+      const problem = kind ? await putFile(file, path, token, (loaded) => setUploadPct(Math.round(((before + loaded) / total) * 100))) : 'that file type is not supported';
+      if (problem || !kind) {
+        setUploadPct(null);
+        await removeFiles(done.map((d) => d.path));
+        toast.error(`Could not upload "${file.name}": ${problem}`);
+        return null;
+      }
+      before += file.size;
+      done.push({ kind, path, name: file.name, mime_type: baseType(file.type), size_bytes: file.size });
+    }
+    setUploadPct(null);
+    return done;
   };
 
   const save = async (draft: PostDraft): Promise<boolean> => {
     if (!user) return false;
     const existing = editing && editing !== 'new' ? editing : null;
 
-    // The file first, the row second: a post never points at a missing file.
-    const uploaded = draft.file ? await upload(draft.file) : null;
-    if (draft.file && !uploaded) return false;
+    // The files first, the rows second: a post never points at a missing file.
+    const uploaded = await uploadAll(draft.files);
+    if (!uploaded) return false;
+    const undoFiles = () => removeFiles(uploaded.map((u) => u.path));
 
-    const attachment = uploaded
-      ? uploaded
-      : draft.removeAttachment
-        ? { kind: 'note' as const, attachment_path: null, attachment_name: null, attachment_type: null, attachment_size: null }
-        : {};
-    const row = { body: draft.body, status: draft.status, for_person_id: draft.forPersonId, ...attachment };
-
-    const request = existing
-      ? db.from(TEAM_BOARD_TABLE).update(row).eq('id', existing.id).select(TEAM_BOARD_COLUMNS).single()
-      : db.from(TEAM_BOARD_TABLE).insert({ ...row, created_by: user.id }).select(TEAM_BOARD_COLUMNS).single();
-    const { data, error } = await request;
-
-    if (error || !data) {
-      // The row was not written, so the file just uploaded belongs to nothing.
-      if (uploaded) await removeFile(uploaded.attachment_path);
-      toast.error(`Could not save: ${error?.message ?? 'nothing came back'}`);
+    const row = { body: draft.body, status: draft.status, for_person_id: draft.forPersonId };
+    const written = existing
+      ? await db.from(TEAM_BOARD_TABLE).update(row).eq('id', existing.id).select('id').single()
+      : await db.from(TEAM_BOARD_TABLE).insert({ ...row, created_by: user.id }).select('id').single();
+    const id = (written.data as { id: string } | null)?.id;
+    if (written.error || !id) {
+      await undoFiles();
+      toast.error(`Could not save: ${written.error?.message ?? 'nothing came back'}`);
       return false;
     }
 
-    const saved = data as TeamBoardItem;
-    if (existing) {
-      // The old file is only removed once the row no longer points at it.
-      if ((uploaded || draft.removeAttachment) && existing.attachment_path) await removeFile(existing.attachment_path);
-      setItems((prev) => prev.map((i) => (i.id === saved.id ? saved : i)));
-      toast.success('Post saved');
-    } else {
-      setItems((prev) => [saved, ...prev]);
-      toast.success('Posted');
+    if (uploaded.length) {
+      const start = existing ? Math.max(-1, ...existing.attachments.map((a) => a.sort_order)) + 1 : 0;
+      const { error } = await db.from(TEAM_BOARD_ATTACHMENTS).insert(uploaded.map((u, i) => ({ ...u, item_id: id, sort_order: start + i })));
+      if (error) {
+        await undoFiles();
+        // A new post that lost its files is not left behind half made.
+        if (!existing) await db.from(TEAM_BOARD_TABLE).delete().eq('id', id);
+        toast.error(`Could not save the files: ${error.message}`);
+        return false;
+      }
     }
+
+    if (existing && draft.removeIds.length) {
+      const gone = existing.attachments.filter((a) => draft.removeIds.includes(a.id));
+      const { error } = await db.from(TEAM_BOARD_ATTACHMENTS).delete().in('id', draft.removeIds);
+      // A file is only removed once no row points at it.
+      if (error) toast.error(`Could not take a file off: ${error.message}`);
+      else await removeFiles(gone.map((a) => a.path));
+    }
+
+    const fresh = await db.from(TEAM_BOARD_TABLE).select(TEAM_BOARD_COLUMNS).eq('id', id).single();
+    if (fresh.error || !fresh.data) {
+      void load();
+    } else {
+      const saved = fresh.data as TeamBoardItem;
+      setItems((prev) => (existing ? prev.map((i) => (i.id === saved.id ? saved : i)) : [saved, ...prev]));
+    }
+    toast.success(existing ? 'Post saved' : 'Posted');
     return true;
   };
 
   const remove = async (item: TeamBoardItem) => {
+    const n = item.attachments.length;
     const ok = await confirmDialog({
       title: 'Delete this post?',
-      description: item.attachment_name ? `"${item.attachment_name}" is deleted with it. This cannot be undone.` : 'This cannot be undone.',
+      description: n === 1 ? `"${item.attachments[0].name}" is deleted with it. This cannot be undone.` : n > 1 ? `Its ${n} files are deleted with it. This cannot be undone.` : 'This cannot be undone.',
       confirmLabel: 'Delete',
       destructive: true,
     });
@@ -256,7 +285,7 @@ export default function TeamBoardPage() {
       toast.error(`Could not delete: ${error.message}`);
       return;
     }
-    await removeFile(item.attachment_path);
+    await removeFiles(item.attachments.map((a) => a.path));
     setItems((prev) => prev.filter((i) => i.id !== item.id));
     if (openId === item.id) setOpenId(null);
     toast.success('Post deleted');
@@ -338,7 +367,7 @@ export default function TeamBoardPage() {
               {(Object.keys(KIND_LABEL) as TeamBoardKind[]).map((k) => (
                 <DropdownMenuItem key={k} onSelect={() => setFilter('kind', k)} className={cn(filters.kind === k && 'font-medium text-primary')}>
                   <span className="flex-1">{KIND_LABEL[k]}s</span>
-                  <span className="text-xs text-muted-foreground tabular-nums">{items.filter((i) => i.kind === k).length}</span>
+                  <span className="text-xs text-muted-foreground tabular-nums">{items.filter((i) => (k === 'note' ? i.attachments.length === 0 : i.attachments.some((a) => a.kind === k))).length}</span>
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -431,7 +460,8 @@ export default function TeamBoardPage() {
                     </tr>
                   ))
                 : shown.map((item) => {
-                    const Icon = KIND_ICON[item.kind];
+                    const Icon = KIND_ICON[kindOf(item)];
+                    const files = filesOf(item);
                     return (
                       <tr key={item.id} onClick={() => setOpenId(item.id)} className="group cursor-pointer transition-colors hover:bg-muted/40">
                         <td className="py-3 pl-4" onClick={(e) => e.stopPropagation()}>
@@ -447,12 +477,17 @@ export default function TeamBoardPage() {
                         </td>
                         <td className="max-w-[360px] px-3 py-3" data-card-title="">
                           <p className="truncate font-medium text-foreground">{titleOf(item.body)}</p>
-                          {item.attachment_name && <p className="truncate text-xs text-muted-foreground">{item.attachment_name}</p>}
+                          {files.length > 0 && (
+                            <p className="truncate text-xs text-muted-foreground">
+                              {files[0].name}
+                              {files.length > 1 && ` +${files.length - 1} more`}
+                            </p>
+                          )}
                         </td>
                         <td className="whitespace-nowrap px-3 py-3">
                           <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                             <Icon className="size-3.5" />
-                            {KIND_LABEL[item.kind]}
+                            {kindLabelOf(item)}
                           </span>
                         </td>
                         <td className="max-w-[180px] px-3 py-3 text-foreground">
