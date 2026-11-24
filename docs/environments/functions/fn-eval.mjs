@@ -2,7 +2,7 @@
 /**
  * fn-eval.mjs — are staging's edge functions the same as prod's?
  *
- *   SUPABASE_ACCESS_TOKEN=… node docs/evals/environments/functions/fn-eval.mjs
+ *   SUPABASE_ACCESS_TOKEN=… node docs/environments/functions/fn-eval.mjs
  *   --only same_list,same_lock     run some checks
  *   --no-knock                     skip the same_answer check
  *   --no-cache                     download every function again (slow: about 10 minutes)

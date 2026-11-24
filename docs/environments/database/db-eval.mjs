@@ -5,7 +5,7 @@
  * Compares DEFINITIONS, never row data. Reads both projects over the Supabase
  * Management API in read-only mode, so it cannot change either database.
  *
- *   SUPABASE_ACCESS_TOKEN=… node docs/evals/environments/database/db-eval.mjs
+ *   SUPABASE_ACCESS_TOKEN=… node docs/environments/database/db-eval.mjs
  *
  *   --target <ref>   staging project ref (default: STAGING_REF in .staging-credentials.local)
  *   --only a,b       run only these checks

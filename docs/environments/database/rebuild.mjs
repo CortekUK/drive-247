@@ -6,7 +6,7 @@
  * schemas on staging, builds them again from prod's blueprint, then runs
  * db-eval to prove the result.
  *
- *   SUPABASE_ACCESS_TOKEN=… node docs/evals/environments/database/rebuild.mjs --yes
+ *   SUPABASE_ACCESS_TOKEN=… node docs/environments/database/rebuild.mjs --yes
  *   --dry-run   show what would happen, change nothing
  *   --keep      leave the prod blueprint in reports/blueprints/ for reading
  *
@@ -349,5 +349,5 @@ await write(`notify pgrst, 'reload schema'`);
 
 step(9, `Built in ${Math.round((Date.now() - t0) / 1000)}s. Running db-eval to prove it`);
 const { ok } = await report("rebuild", applyExceptions(await runChecks()));
-console.log("Staging has no tenant and no logins now. Put them back with:\n  node docs/evals/environments/database/reseed.mjs\n");
+console.log("Staging has no tenant and no logins now. Put them back with:\n  node docs/environments/database/reseed.mjs\n");
 process.exit(ok ? 0 : 1);

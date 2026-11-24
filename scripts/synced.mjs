@@ -81,8 +81,8 @@ if (!process.env.SUPABASE_ACCESS_TOKEN) {
 } else {
   console.log("  Comparing the staging database and edge functions with production (one to a few minutes) ...\n");
   for (const [label, file] of [
-    ["Database", "docs/evals/environments/database/db-eval.mjs"],
-    ["Edge functions", "docs/evals/environments/functions/fn-eval.mjs"],
+    ["Database", "docs/environments/database/db-eval.mjs"],
+    ["Edge functions", "docs/environments/functions/fn-eval.mjs"],
   ]) {
     let out = "";
     let passed = true;

@@ -6,7 +6,7 @@
  * months later it is thousands of differences behind. Run this on a schedule and
  * drift is caught the next morning, when it is still one line of SQL to fix.
  *
- *   SUPABASE_ACCESS_TOKEN=… node docs/evals/environments/database/nightly.mjs
+ *   SUPABASE_ACCESS_TOKEN=… node docs/environments/database/nightly.mjs
  *
  *   --with-alarm       also run alarm-test (it writes to staging, so it is opt-in)
  *   --skip-blueprint   skip the pg_dump comparison (use where pg_dump 17 is missing)

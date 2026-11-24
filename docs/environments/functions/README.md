@@ -5,8 +5,8 @@ what prod actually has deployed, not what is in git.
 
 ```bash
 export SUPABASE_ACCESS_TOKEN=...
-node docs/evals/environments/functions/fn-eval.mjs          # compare (about 30 seconds)
-node docs/evals/environments/functions/copy-from-prod.mjs   # staging drifted: copy prod's functions across
+node docs/environments/functions/fn-eval.mjs          # compare (about 30 seconds)
+node docs/environments/functions/copy-from-prod.mjs   # staging drifted: copy prod's functions across
 ```
 
 Exit code is 0 only when everything is identical. Every run writes a PDF to `reports/`.

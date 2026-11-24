@@ -7,7 +7,7 @@
  * how many rows a request may return, how long a query may run, how login works.
  * None of that lives in the schema, so none of the other evals can see it.
  *
- *   SUPABASE_ACCESS_TOKEN=… node docs/evals/environments/database/settings-check.mjs
+ *   SUPABASE_ACCESS_TOKEN=… node docs/environments/database/settings-check.mjs
  *
  * Read-only. Anything that looks like a credential is never compared by value
  * and never printed: only "set" or "not set" is compared.

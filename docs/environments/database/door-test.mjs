@@ -5,7 +5,7 @@
  * The other evals compare how the database is BUILT. This one compares how it
  * BEHAVES from outside, the way the apps and a stranger on the internet see it.
  *
- *   SUPABASE_ACCESS_TOKEN=… node docs/evals/environments/database/door-test.mjs
+ *   SUPABASE_ACCESS_TOKEN=… node docs/environments/database/door-test.mjs
  *
  * Four comparisons, all read-only on both sides:
  *   api_menu_tables      every table and view the API offers
