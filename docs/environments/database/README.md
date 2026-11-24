@@ -44,31 +44,33 @@ Exit code is 0 only when everything is identical. Every run writes a PDF to
 - **A new check needs a break.** `alarm-test.mjs` refuses to run if a db-eval check has no break defined.
 - **A new kind of object needs a check.** `blind-spots.mjs` fails until one covers it.
 
-## Accepted differences (10)
+## Accepted differences (9)
 
-All 10 have one cause: staging was created in November 2026 on a newer Supabase
+All 9 have one cause: staging was created in November 2026 on a newer Supabase
 platform image than prod. Supabase owns these objects; we cannot change them on
 either side. Each is one exact entry in `accepted-differences.json`. Status:
 **approved by Ghulam on 24 Nov 2026.**
 
 | # | Check | Object | What differs | Why it is fine |
 |---|---|---|---|---|
-| 1 | `database_settings` | `authenticator` preload libraries | Staging preloads `supautils` for this role | Set by the newer image |
-| 2 | `database_settings` | `supabase_realtime_admin` search_path | Staging gives the role its own search_path | Set by the newer image |
-| 3 | `extension_versions` | `pg_net` | 0.19.5 on prod, 0.20.4 on staging | Ships with the image, cannot be downgraded |
-| 4 | `extension_versions` | `supabase_vault` | 0.3.1 on prod, 0.3.2 on staging | Ships with the image, cannot be downgraded |
-| 5 | `extension_versions` | `vector` | 0.8.0 on prod, 0.8.2 on staging | Patch release; a downgrade means dropping every embedding column |
-| 6 | `role_memberships` | `supabase_realtime_admin` in `anon` | Membership exists on staging only | Granted by the newer image |
-| 7 | `role_memberships` | `supabase_realtime_admin` in `authenticated` | Same | Same |
-| 8 | `role_memberships` | `supabase_realtime_admin` in `service_role` | Same | Same |
-| 9 | `kind_counts_match` | role memberships | Count is off by three | Follows from 6, 7, 8 |
-| 10 | `kind_counts_match` | database and role settings | Count is off by one | Follows from 2 |
+| 1 | `database_settings` | `supabase_realtime_admin` search_path | Staging gives the role its own search_path | Set by the newer image |
+| 2 | `extension_versions` | `pg_net` | 0.19.5 on prod, 0.20.4 on staging | Ships with the image, cannot be downgraded |
+| 3 | `extension_versions` | `supabase_vault` | 0.3.1 on prod, 0.3.2 on staging | Ships with the image, cannot be downgraded |
+| 4 | `extension_versions` | `vector` | 0.8.0 on prod, 0.8.2 on staging | Patch release; a downgrade means dropping every embedding column |
+| 5 | `role_memberships` | `supabase_realtime_admin` in `anon` | Membership exists on staging only | Granted by the newer image |
+| 6 | `role_memberships` | `supabase_realtime_admin` in `authenticated` | Same | Same |
+| 7 | `role_memberships` | `supabase_realtime_admin` in `service_role` | Same | Same |
+| 8 | `kind_counts_match` | role memberships | Count is off by three | Follows from 5, 6, 7 |
+| 9 | `kind_counts_match` | database and role settings | Count is off by one | Follows from 1 |
 
 Two earlier entries (Realtime's own publication) were removed on 2026-11-24: Realtime
 created the publication on staging too, the difference disappeared, and the eval
 flagged both entries as stale.
 
-Worth a second look when we review: 6, 7 and 8. They let Supabase's Realtime
+A third entry (the `authenticator` preload libraries) was removed the same day: Supabase
+updated prod and the two now match.
+
+Worth a second look when we review: 5, 6 and 7. They let Supabase's Realtime
 admin role act as our three API roles on staging, which prod does not allow.
 
 Two more things are ignored in code, not in the list, because they touch every
