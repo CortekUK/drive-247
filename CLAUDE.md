@@ -4,6 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Development Commands
 
+**HARD RULE: local development always uses the STAGING database** (`csjouxrkblpsoihyejel`), on every
+branch. Only the deployed `main` talks to production. Every `npm run dev*` script runs
+`scripts/guard-db-env.mjs` first, which switches any app found on production back to staging.
+The staging keys come from the gitignored `.staging-credentials.local` in the repo root (ask Ghulam).
+Log in locally with the staging accounts in that file, not your production login.
+To look at production from your machine on purpose, for one run: `ALLOW_PROD_LOCAL=1 npm run dev:portal`
+after `npm run db:switch prod`, then `npm run db:switch staging` when done.
+
 **Always use these npm scripts to run the dev server.** Each one automatically kills anything holding ports 3000–3005 (via `scripts/kill-dev-ports.mjs`) before starting, so you never need to manually kill stuck processes or pick alternative ports. Do NOT run `next dev`, `turbo run dev`, or any per-app dev command directly — go through the root scripts.
 
 ```bash

@@ -13,7 +13,7 @@
     "dev:portal": "node scripts/guard-db-env.mjs && node scripts/kill-dev-ports.mjs portal && turbo run dev --filter=portal",
     "dev:web": "node scripts/guard-db-env.mjs && node scripts/kill-dev-ports.mjs web && turbo run dev --filter=web",
     "dev:admin": "node scripts/guard-db-env.mjs && node scripts/kill-dev-ports.mjs admin && turbo run dev --filter=admin",
-    "dev:developer": "node scripts/kill-dev-ports.mjs developer && turbo run dev --filter=developer",
+    "dev:developer": "node scripts/guard-db-env.mjs && node scripts/kill-dev-ports.mjs developer && turbo run dev --filter=developer",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "update-branding": "node scripts/bulk-update-branding.js",
@@ -23,8 +23,7 @@
     "v1:check": "node scripts/v1-check/check.mjs",
     "glass:check": "node scripts/glass-check/check.cjs",
     "v1:snapshot": "node scripts/v1-check/snapshot.mjs",
-    "dev:staging": "node scripts/db-switch.mjs staging && node scripts/kill-dev-ports.mjs portal && turbo run dev --filter=portal",
-    "dev:prod": "node scripts/db-switch.mjs prod && node scripts/kill-dev-ports.mjs portal && turbo run dev --filter=portal"
+    "dev:staging": "node scripts/db-switch.mjs staging && node scripts/kill-dev-ports.mjs portal && turbo run dev --filter=portal"
   },
   "devDependencies": {
     "pg": "^8.16.3",

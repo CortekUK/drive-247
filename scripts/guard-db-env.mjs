@@ -1,22 +1,27 @@
 #!/usr/bin/env node
 /**
- * guard-db-env.mjs — make the branch↔database binding structural.
+ * guard-db-env.mjs — local development always uses the STAGING database.
+ *
+ * THE RULE (Ghulam, 2026-11-24, a hard rule)
+ * -----------------------------------------
+ * Anything running on a developer's machine talks to staging, on every branch.
+ * Only the deployed `main` talks to production. A half-finished feature, a
+ * wrong delete, a test payment or a test email then costs nothing.
  *
  * THE FAILURE THIS PREVENTS
  * -------------------------
- * Branch and database are independent: `.env.local` keeps pointing wherever it
- * last pointed, across every branch switch. So it is entirely possible to sit on
- * the `staging` branch and run every query against PRODUCTION — same code, real
- * customers, no warning. That is the one combination that must never happen.
+ * A branch and a database are independent: each app's `.env.local` keeps
+ * pointing wherever it last pointed. For months that was production, so every
+ * local server ran its queries against real customers with no warning.
  *
  * Runs before every dev server start (wired into the root `dev:*` scripts).
  *
- *   on `staging`, env points at prod  ->  auto-corrects to staging, loudly
- *   not on `staging`, env points at staging -> warns (may well be deliberate)
- *   anything else                     ->  silent
+ *   any app's .env.local points at production  ->  switched to staging, loudly
+ *   every app points at staging                ->  one quiet line
  *
- * Bypass with ALLOW_DB_MISMATCH=1 (there is no good reason; it exists so the
- * guard can never be the thing blocking a release).
+ * To look at production from your machine on purpose, for one run:
+ *   ALLOW_PROD_LOCAL=1 npm run dev:portal
+ * It is refused without that, and it is never the default.
  */
 import { execSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
@@ -26,51 +31,50 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const STAGING_REF = "csjouxrkblpsoihyejel";
 const PROD_REF = "hviqoaokxvlancmftwuo";
-
-const branch = (() => {
-  try {
-    return execSync("git rev-parse --abbrev-ref HEAD", { cwd: ROOT, stdio: ["pipe", "pipe", "ignore"] })
-      .toString().trim();
-  } catch { return null; }
-})();
-if (!branch) process.exit(0);
-
-const envFile = join(ROOT, "apps", "portal", ".env.local");
-if (!existsSync(envFile)) process.exit(0);
-const env = readFileSync(envFile, "utf8");
-
-// Check the URL variable specifically, NOT the whole file: db-switch rewrites
-// only the 4 Supabase vars, so the prod ref legitimately survives elsewhere
-// (NEXT_PUBLIC_SUPABASE_PROJECT_ID, webhook URLs). A whole-file `includes`
-// reports a mismatch that isn't one.
-const urlLine = env
-  .split("\n")
-  .map((l) => l.trim())
-  .find((l) => l.startsWith("NEXT_PUBLIC_SUPABASE_URL=") && !l.startsWith("#"));
-const url = urlLine ? urlLine.split("=", 2)[1].replace(/["']/g, "").trim() : "";
-const pointsAtStaging = url.includes(STAGING_REF);
-const pointsAtProd = url.includes(PROD_REF);
+const APPS = ["portal", "booking", "admin", "web", "developer"];
 
 const RED = "\x1b[31m", YEL = "\x1b[33m", GRN = "\x1b[32m", DIM = "\x1b[2m", OFF = "\x1b[0m";
-const onStaging = branch === "staging";
 
-if (onStaging && pointsAtProd) {
-  if (process.env.ALLOW_DB_MISMATCH === "1") {
-    console.log(`${RED}[db-guard] on 'staging' but pointed at PRODUCTION — allowed via ALLOW_DB_MISMATCH${OFF}`);
-    process.exit(0);
-  }
-  console.log(`${RED}[db-guard] branch 'staging' but .env points at PRODUCTION — correcting.${OFF}`);
+/** Where one app's local settings point: "staging", "prod", "other" or null (no file). */
+function targetOf(app) {
+  const file = join(ROOT, "apps", app, ".env.local");
+  if (!existsSync(file)) return null;
+  // The URL variable specifically, not the whole file: the prod ref can
+  // legitimately appear elsewhere in it (a webhook URL, a comment).
+  const line = readFileSync(file, "utf8")
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => l.startsWith("NEXT_PUBLIC_SUPABASE_URL=") && !l.startsWith("#"));
+  const url = line ? line.slice(line.indexOf("=") + 1).replace(/["']/g, "").trim() : "";
+  if (url.includes(STAGING_REF)) return "staging";
+  if (url.includes(PROD_REF)) return "prod";
+  return "other";
+}
+
+const onProd = APPS.filter((app) => targetOf(app) === "prod");
+
+if (onProd.length === 0) {
+  console.log(`${GRN}[db-guard] local → staging database ✓${OFF}`);
+  process.exit(0);
+}
+
+if (process.env.ALLOW_PROD_LOCAL === "1") {
+  console.log(`${RED}[db-guard] LOCAL SERVER ON THE PRODUCTION DATABASE (${onProd.join(", ")}) — allowed by ALLOW_PROD_LOCAL=1.${OFF}`);
+  console.log(`${YEL}           Real customers. Read, do not write. Switch back with:  npm run db:switch staging${OFF}`);
+  process.exit(0);
+}
+
+console.log(`${RED}[db-guard] ${onProd.join(", ")} pointed at PRODUCTION. Local development uses staging: switching.${OFF}`);
+try {
   execSync("node scripts/db-switch.mjs staging", { cwd: ROOT, stdio: "inherit" });
-  console.log(`${GRN}[db-guard] now on the staging database.${OFF}`);
-  process.exit(0);
+} catch {
+  console.log(`${RED}[db-guard] could not switch to staging, so the dev server is not started.${OFF}`);
+  console.log(`${DIM}           .staging-credentials.local must be in the repo root. Ask Ghulam for it.${OFF}`);
+  process.exit(1);
 }
-
-if (!onStaging && pointsAtStaging) {
-  console.log(`${YEL}[db-guard] branch '${branch}' but .env points at the STAGING database.${OFF}`);
-  console.log(`${DIM}           if that is not deliberate:  node scripts/db-switch.mjs prod${OFF}`);
-  process.exit(0);
+const still = APPS.filter((app) => targetOf(app) === "prod");
+if (still.length) {
+  console.log(`${RED}[db-guard] ${still.join(", ")} still pointed at production. Not starting.${OFF}`);
+  process.exit(1);
 }
-
-if (onStaging && pointsAtStaging) {
-  console.log(`${GRN}[db-guard] staging branch → staging database ✓${OFF}`);
-}
+console.log(`${GRN}[db-guard] now on the staging database.${OFF}`);

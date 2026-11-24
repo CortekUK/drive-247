@@ -1,24 +1,31 @@
 #!/usr/bin/env node
 /**
- * db-switch.mjs — quickly point all apps at the production or staging Supabase DB.
+ * db-switch.mjs — point every app's local settings at the staging or production database.
+ *
+ * THE RULE (Ghulam, 2026-11-24): local development always uses STAGING. The dev
+ * scripts enforce it (scripts/guard-db-env.mjs switches a production setting
+ * back before a server starts). `prod` exists only for a deliberate look at
+ * live data, and a dev server then needs ALLOW_PROD_LOCAL=1 to start.
  *
  * Usage:
- *   node scripts/db-switch.mjs staging   # point portal/booking/admin/web at the staging project
- *   node scripts/db-switch.mjs prod      # restore the original (production) values
- *   node scripts/db-switch.mjs status    # show which DB each app currently targets
+ *   node scripts/db-switch.mjs staging   # the normal state
+ *   node scripts/db-switch.mjs prod      # deliberate, temporary
+ *   node scripts/db-switch.mjs status    # which database each app targets
  *
  * How it works:
- *   - On the FIRST switch to staging, each app's .env.local is backed up to
- *     .env.local.prod.bak (untouched thereafter). `prod` simply restores that backup,
- *     so your real production keys are never hard-coded in this script.
- *   - Only the 4 Supabase vars are rewritten when switching to staging.
+ *   - Switching to staging rewrites the Supabase variables in each app's
+ *     .env.local from the gitignored .staging-credentials.local. No key lives
+ *     in this file.
+ *   - Whenever an app is found on production, its .env.local is first saved to
+ *     .env.local.prod.bak, so the backup is always the latest production
+ *     settings. `prod` restores that backup.
  */
 import { readFileSync, writeFileSync, existsSync, copyFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const APPS = ["portal", "booking", "admin", "web"];
+const APPS = ["portal", "booking", "admin", "web", "developer"];
 
 // --- Staging values ---
 // Staging is its own Supabase project. Its ref and keys live in the gitignored
@@ -95,9 +102,16 @@ for (const app of APPS) {
   }
 
   if (target === "staging") {
-    if (!existsSync(bak)) copyFileSync(p, bak); // back up prod once
     let content = readFileSync(p, "utf8");
+    // Save production's settings each time we leave them, so the backup is never
+    // an older copy missing keys that were added since.
+    const onProd = /^\s*NEXT_PUBLIC_SUPABASE_URL\s*=.*hviqoaokxvlancmftwuo/m.test(content);
+    if (onProd || !existsSync(bak)) copyFileSync(p, bak);
     for (const [k, v] of Object.entries(STAGING)) content = setVar(content, k, v);
+    // The push key pair is per project: a staging server must hand out staging's public half.
+    if (CREDS.STAGING_VAPID_PUBLIC_KEY && /^\s*NEXT_PUBLIC_VAPID_PUBLIC_KEY\s*=/m.test(content)) {
+      content = setVar(content, "NEXT_PUBLIC_VAPID_PUBLIC_KEY", CREDS.STAGING_VAPID_PUBLIC_KEY);
+    }
     writeFileSync(p, content);
     console.log(`  ${app.padEnd(8)} -> STAGING`);
   } else {
@@ -110,4 +124,10 @@ for (const app of APPS) {
   }
 }
 
-console.log(`\nDone. Restart the dev server for changes to take effect (npm run dev).`);
+if (target === "prod") {
+  console.log("\nLocal settings now point at PRODUCTION. That breaks the local-uses-staging rule:");
+  console.log("a dev server will switch back to staging unless started with ALLOW_PROD_LOCAL=1.");
+  console.log("When you are done:  npm run db:switch staging");
+} else {
+  console.log(`\nDone. Restart the dev server for changes to take effect (npm run dev).`);
+}
