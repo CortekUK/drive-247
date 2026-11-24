@@ -208,12 +208,11 @@ Each app has its own `components/ui/` directory with Radix UI primitives (40+ co
 ## Testing
 
 **The test suites were removed on 2026-11-24 (Ghulam's decision).** The portal, admin, web,
-booking and root (`tests/integrations`, `tests/spine`) suites are gone: 464 test files that had
-drifted from the code they read. The vitest configs and `npm test` scripts are still in place, so
-new tests can be added in the same folders. To bring the old ones back:
-`git checkout tests-before-removal-2026-11-24 -- apps/portal/src/__tests__ apps/admin/__tests__ apps/booking/src/__tests__ tests`.
-What still checks things: `npm run synced` and the evals in `evals/environments/`. The rest of
-this section describes the setup as it was, and still applies to any test you add.
+booking and root (`tests/integrations`, `tests/spine`) suites are gone for good: 464 test files
+that had drifted from the code they read. The vitest configs and `npm test` scripts are still in
+place, so new tests can be added in the same folders. What checks things now: `npm run synced`
+and the evals in `evals/environments/`. The rest of this section describes the setup as it was,
+and still applies to any test you add.
 
 Tests use Vitest + jsdom + Testing Library. Only portal currently has test files; booking has vitest config but no tests yet.
 
