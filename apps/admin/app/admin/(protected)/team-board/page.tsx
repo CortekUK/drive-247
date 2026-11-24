@@ -32,6 +32,7 @@ import {
   TEAM_BOARD_BUCKET,
   TEAM_BOARD_COLUMNS,
   TEAM_BOARD_FAVORITES,
+  TEAM_BOARD_PEOPLE,
   TEAM_BOARD_STATUSES,
   TEAM_BOARD_TABLE,
   formatDate,
@@ -46,6 +47,7 @@ import {
   type TeamBoardKind,
   type TeamBoardStatus,
   type TeamMember,
+  type TeamPerson,
 } from '@/lib/team-board/model';
 
 const PAGE_SIZE = 25;
@@ -82,7 +84,8 @@ function Person({ member, fallback }: { member: TeamMember | null; fallback?: st
 export default function TeamBoardPage() {
   const { user } = useAuthStore();
   const [items, setItems] = useState<TeamBoardItem[]>([]);
-  const [members, setMembers] = useState<TeamMember[]>([]);
+  // Who a post can be for: the team by name, in the order Ghulam gave.
+  const [people, setPeople] = useState<TeamPerson[]>([]);
   // The posts the person looking has starred. Stars are per person.
   const [starred, setStarred] = useState<ReadonlySet<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -98,13 +101,13 @@ export default function TeamBoardPage() {
   const load = useCallback(async () => {
     const [posts, team, stars] = await Promise.all([
       db.from(TEAM_BOARD_TABLE).select(TEAM_BOARD_COLUMNS).order('created_at', { ascending: false }).range(0, 999),
-      db.from('app_users').select('id, name, email, avatar_url').is('tenant_id', null).eq('is_active', true).order('name', { ascending: true }),
+      db.from(TEAM_BOARD_PEOPLE).select('id, name').order('sort_order', { ascending: true }),
       // RLS returns only my own stars, so no filter on the person is needed.
       db.from(TEAM_BOARD_FAVORITES).select('item_id'),
     ]);
     if (posts.error) toast.error(`Could not load the board: ${posts.error.message}`);
     else setItems((posts.data as TeamBoardItem[]) ?? []);
-    if (!team.error) setMembers((team.data as TeamMember[]) ?? []);
+    if (!team.error) setPeople((team.data as TeamPerson[]) ?? []);
     if (!stars.error) setStarred(new Set(((stars.data as { item_id: string }[]) ?? []).map((r) => r.item_id)));
     setLoading(false);
   }, []);
@@ -179,7 +182,7 @@ export default function TeamBoardPage() {
       : draft.removeAttachment
         ? { kind: 'note' as const, attachment_path: null, attachment_name: null, attachment_type: null, attachment_size: null }
         : {};
-    const row = { body: draft.body, status: draft.status, for_user_id: draft.forUserId, ...attachment };
+    const row = { body: draft.body, status: draft.status, for_person_id: draft.forPersonId, ...attachment };
 
     const request = existing
       ? db.from(TEAM_BOARD_TABLE).update(row).eq('id', existing.id).select(TEAM_BOARD_COLUMNS).single()
@@ -249,9 +252,7 @@ export default function TeamBoardPage() {
       ? 'For anyone'
       : filters.forWho === 'team'
         ? 'For everyone'
-        : filters.forWho === user?.id
-          ? 'For me'
-          : `For ${memberName(members.find((m) => m.id === filters.forWho) ?? null)}`;
+        : `For ${people.find((p) => p.id === filters.forWho)?.name ?? 'someone'}`;
   const byLabel =
     filters.postedBy === 'all'
       ? 'Put up by anyone'
@@ -318,22 +319,15 @@ export default function TeamBoardPage() {
               <DropdownMenuItem onSelect={() => setFilter('forWho', 'all')} className={cn(filters.forWho === 'all' && 'font-medium text-primary')}>
                 For anyone
               </DropdownMenuItem>
-              {user && (
-                <DropdownMenuItem onSelect={() => setFilter('forWho', user.id)} className={cn(filters.forWho === user.id && 'font-medium text-primary')}>
-                  For me
-                </DropdownMenuItem>
-              )}
               <DropdownMenuItem onSelect={() => setFilter('forWho', 'team')} className={cn(filters.forWho === 'team' && 'font-medium text-primary')}>
                 For everyone
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {members
-                .filter((m) => m.id !== user?.id)
-                .map((m) => (
-                  <DropdownMenuItem key={m.id} onSelect={() => setFilter('forWho', m.id)} className={cn(filters.forWho === m.id && 'font-medium text-primary')}>
-                    {memberName(m)}
-                  </DropdownMenuItem>
-                ))}
+              {people.map((p) => (
+                <DropdownMenuItem key={p.id} onSelect={() => setFilter('forWho', p.id)} className={cn(filters.forWho === p.id && 'font-medium text-primary')}>
+                  {p.name}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -428,7 +422,7 @@ export default function TeamBoardPage() {
                           </span>
                         </td>
                         <td className="max-w-[180px] px-3 py-3 text-foreground">
-                          {item.for_user_id ? <Person member={item.for_user} /> : <span className="text-muted-foreground">Everyone</span>}
+                          {item.for_person ? <span className="truncate">{item.for_person.name}</span> : <span className="text-muted-foreground">Everyone</span>}
                         </td>
                         <td className="max-w-[180px] px-3 py-3 text-foreground">
                           <Person member={item.creator} />
@@ -528,7 +522,7 @@ export default function TeamBoardPage() {
         }}
         onDelete={(i) => void remove(i)}
       />
-      <PostDialog open={editing !== null} initial={editing === 'new' ? null : editing} members={members} onClose={() => setEditing(null)} onSave={save} />
+      <PostDialog open={editing !== null} initial={editing === 'new' ? null : editing} people={people} onClose={() => setEditing(null)} onSave={save} />
     </div>
   );
 }

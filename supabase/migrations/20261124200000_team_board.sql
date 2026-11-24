@@ -16,6 +16,33 @@
 create type public.team_board_kind as enum ('note', 'document', 'image');
 create type public.team_board_status as enum ('not_started', 'in_progress', 'done');
 
+-- The people a post can be for. Names, not logins: most of the team has no
+-- platform account, and a post can still be for them.
+create table public.team_board_people (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  sort_order integer not null,
+  created_at timestamptz not null default now(),
+  constraint team_board_people_name_not_blank check (char_length(btrim(name)) >= 1),
+  constraint team_board_people_name_key unique (name)
+);
+
+comment on table public.team_board_people is
+  'Who a Team Board post can be for. The team by name; a person here needs no login.';
+
+insert into public.team_board_people (name, sort_order) values
+  ('Ghulam', 1), ('Neema', 2), ('Haris', 3), ('Hamza', 4),
+  ('Hamna', 5), ('Bryan', 6), ('George', 7), ('Jordan', 8);
+
+alter table public.team_board_people enable row level security;
+
+create policy "team board people: staff read" on public.team_board_people
+  for select to authenticated using (public.is_super_admin());
+
+revoke all on table public.team_board_people from public, anon, authenticated;
+grant select on table public.team_board_people to authenticated;
+grant all on table public.team_board_people to service_role;
+
 create table public.team_board_items (
   id uuid primary key default gen_random_uuid(),
   kind public.team_board_kind not null default 'note',
@@ -30,7 +57,7 @@ create table public.team_board_items (
   -- Who put this up.
   created_by uuid not null references public.app_users (id),
   -- Who it is for. NULL means the whole team.
-  for_user_id uuid references public.app_users (id) on delete set null,
+  for_person_id uuid references public.team_board_people (id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint team_board_items_body_not_blank check (char_length(btrim(body)) >= 1),
@@ -44,7 +71,7 @@ comment on table public.team_board_items is
 
 create index team_board_items_created_at_idx on public.team_board_items (created_at desc);
 create index team_board_items_status_idx on public.team_board_items (status);
-create index team_board_items_for_user_idx on public.team_board_items (for_user_id);
+create index team_board_items_for_person_idx on public.team_board_items (for_person_id);
 
 create trigger team_board_items_set_updated_at
   before update on public.team_board_items

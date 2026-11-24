@@ -34,14 +34,14 @@ import {
   memberName,
   type TeamBoardItem,
   type TeamBoardStatus,
-  type TeamMember,
+  type TeamPerson,
 } from '@/lib/team-board/model';
 
 /** What the page needs to save a post. `file` is a newly chosen file, if any. */
 export interface PostDraft {
   body: string;
   status: TeamBoardStatus;
-  forUserId: string | null;
+  forPersonId: string | null;
   file: File | null;
   /** Editing only: the post had a file and it was taken off. */
   removeAttachment: boolean;
@@ -54,14 +54,14 @@ const EVERYONE = 'everyone';
 export function PostDialog({
   open,
   initial,
-  members,
+  people,
   onClose,
   onSave,
 }: {
   open: boolean;
   /** null = a new post. */
   initial: TeamBoardItem | null;
-  members: TeamMember[];
+  people: TeamPerson[];
   onClose: () => void;
   onSave: (draft: PostDraft) => Promise<boolean>;
 }) {
@@ -78,7 +78,7 @@ export function PostDialog({
     if (!open) return;
     setBody(initial?.body ?? '');
     setStatus(initial?.status ?? 'not_started');
-    setForWho(initial?.for_user_id ?? EVERYONE);
+    setForWho(initial?.for_person_id ?? EVERYONE);
     setFile(null);
     setKeptName(initial?.attachment_name ?? null);
     setTried(false);
@@ -111,7 +111,7 @@ export function PostDialog({
     const ok = await onSave({
       body: body.trim(),
       status,
-      forUserId: forWho === EVERYONE ? null : forWho,
+      forPersonId: forWho === EVERYONE ? null : forWho,
       file,
       removeAttachment: !!initial?.attachment_path && !keptName && !file,
     });
@@ -195,9 +195,9 @@ export function PostDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={EVERYONE}>Everyone</SelectItem>
-                  {members.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {memberName(m)}
+                  {people.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -332,7 +332,7 @@ export function PostDetailDialog({
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
             <div>
               <dt className="text-xs font-medium text-muted-foreground">Who is it for</dt>
-              <dd className="mt-0.5 text-foreground">{post.for_user_id ? memberName(post.for_user) : 'Everyone'}</dd>
+              <dd className="mt-0.5 text-foreground">{post.for_person?.name ?? 'Everyone'}</dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-muted-foreground">Put up by</dt>
@@ -359,27 +359,35 @@ export function PostDetailDialog({
           </dl>
         </div>
 
-        <div className="flex items-center justify-between gap-2 px-6 pb-6 pt-4">
-          <Button variant="ghost" className="rounded-full text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => onDelete(post)}>
+        {/* Phones: Delete and the star are icons only, so the row never wraps. */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-6 pb-6 pt-4">
+          <Button
+            variant="ghost"
+            aria-label="Delete"
+            className="rounded-full text-destructive hover:bg-destructive/10 hover:text-destructive max-sm:size-10 max-sm:px-0"
+            onClick={() => onDelete(post)}
+          >
             <Trash2 className="size-4" />
-            Delete
+            <span className="max-sm:hidden">Delete</span>
           </Button>
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
-              className="rounded-full"
+              className="rounded-full max-sm:size-10 max-sm:px-0"
+              aria-label={starred ? 'Remove from favourites' : 'Add to favourites'}
               aria-pressed={starred}
               onClick={() => onStar(post)}
             >
               <Star className={cn('size-4', starred && 'fill-amber-400 text-amber-400')} />
-              {starred ? 'Favourite' : 'Add to favourites'}
+              <span className="max-sm:hidden">{starred ? 'Favourite' : 'Add to favourites'}</span>
             </Button>
             <Button variant="outline" className="rounded-full" onClick={() => onEdit(post)}>
               <Pencil className="size-4" />
               Edit
             </Button>
             <DialogClose asChild>
-              <Button className="rounded-full">Close</Button>
+              {/* Phones close with the X in the corner; the row has no room for a fourth button. */}
+              <Button className="rounded-full max-sm:hidden">Close</Button>
             </DialogClose>
           </div>
         </div>

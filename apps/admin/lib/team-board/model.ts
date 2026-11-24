@@ -17,6 +17,12 @@ export interface TeamMember {
   avatar_url: string | null;
 }
 
+/** Someone a post can be for. The team, by name: they need no login. */
+export interface TeamPerson {
+  id: string;
+  name: string;
+}
+
 export interface TeamBoardItem {
   id: string;
   kind: TeamBoardKind;
@@ -27,22 +33,23 @@ export interface TeamBoardItem {
   attachment_size: number | null;
   status: TeamBoardStatus;
   created_by: string;
-  for_user_id: string | null;
+  for_person_id: string | null;
   created_at: string;
   updated_at: string;
   creator: TeamMember | null;
-  for_user: TeamMember | null;
+  for_person: TeamPerson | null;
 }
 
 export const TEAM_BOARD_TABLE = 'team_board_items';
 export const TEAM_BOARD_BUCKET = 'team-board';
 export const TEAM_BOARD_FAVORITES = 'team_board_favorites';
+export const TEAM_BOARD_PEOPLE = 'team_board_people';
 
 export const TEAM_BOARD_COLUMNS = `
   id, kind, body, attachment_path, attachment_name, attachment_type, attachment_size,
-  status, created_by, for_user_id, created_at, updated_at,
+  status, created_by, for_person_id, created_at, updated_at,
   creator:app_users!team_board_items_created_by_fkey ( id, name, email, avatar_url ),
-  for_user:app_users!team_board_items_for_user_id_fkey ( id, name, email, avatar_url )
+  for_person:team_board_people!team_board_items_for_person_id_fkey ( id, name )
 `;
 
 export const BODY_MAX = 5000;
@@ -144,7 +151,7 @@ export interface BoardFilters {
   query: string;
   status: 'all' | TeamBoardStatus;
   kind: 'all' | TeamBoardKind;
-  /** 'all', 'team' (posts for everyone), or a member's id. */
+  /** 'all', 'team' (posts for everyone), or a person's id. */
   forWho: string;
   /** 'all' or a member's id. */
   postedBy: string;
@@ -159,12 +166,12 @@ export function matchesFilters(item: TeamBoardItem, f: BoardFilters, starred: Re
   if (f.favouritesOnly && !starred.has(item.id)) return false;
   if (f.status !== 'all' && item.status !== f.status) return false;
   if (f.kind !== 'all' && item.kind !== f.kind) return false;
-  if (f.forWho === 'team' && item.for_user_id !== null) return false;
-  if (f.forWho !== 'all' && f.forWho !== 'team' && item.for_user_id !== f.forWho) return false;
+  if (f.forWho === 'team' && item.for_person_id !== null) return false;
+  if (f.forWho !== 'all' && f.forWho !== 'team' && item.for_person_id !== f.forWho) return false;
   if (f.postedBy !== 'all' && item.created_by !== f.postedBy) return false;
   const q = f.query.trim().toLowerCase();
   if (!q) return true;
-  return [item.body, item.attachment_name, memberName(item.creator), item.for_user ? memberName(item.for_user) : 'everyone']
+  return [item.body, item.attachment_name, memberName(item.creator), item.for_person?.name ?? 'everyone']
     .filter(Boolean)
     .some((v) => (v as string).toLowerCase().includes(q));
 }
