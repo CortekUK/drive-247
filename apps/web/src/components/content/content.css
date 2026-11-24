@@ -6,6 +6,8 @@
 
 /* ── Sections and their heads ───────────────────────────────────────────── */
 .ct-section { padding-block: clamp(96px, 11vw, 160px); }
+/* Under the "Book a demo" band the blog starts closer, in step with the other section gaps (QA-1). */
+#book-a-demo + .ct-section { padding-top: clamp(64px, 7vw, 112px); }
 .ct-inner { width: min(100% - 2 * clamp(20px, 4vw, 80px), 1560px); margin-inline: auto; }
 .ct-head {
   display: flex;

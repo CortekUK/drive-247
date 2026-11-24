@@ -9,7 +9,9 @@
 .dc {
   position: relative;
   /* A short band from one edge of the screen to the other (Ghulam, 2026-11-10: the height is right, the width end to end). */
-  margin-block: clamp(40px, 5vw, 80px);
+  /* Room above the band only: below it, the blog section's own padding gives the space (QA-1:
+     both together left a 285-300px gap under the band). */
+  margin-block: clamp(40px, 5vw, 80px) 0;
   padding: clamp(40px, 4vw, 60px) 1.25rem clamp(36px, 3.6vw, 52px);
   background: hsl(var(--v2-primary));
   overflow: hidden;

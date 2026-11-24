@@ -6,7 +6,10 @@
 .pw-section {
   --pw-a: hsl(var(--v2-primary));
   --pw-tint: color-mix(in srgb, hsl(var(--v2-primary)) 11%, hsl(var(--v2-card)));
-  padding-block: clamp(72px, 9vw, 136px);
+  /* No padding of its own here: Your site above and Integrations below already bring theirs, and
+     with this section's 72-136px on both sides too the gaps ran to ~290px on laptop screens (QA-1).
+     The tall-desktop layout (min-width 1100px, min-height 640px) sets its own below. */
+  padding-block: 0;
   overflow-x: clip;
 }
 .dark .pw-section { --pw-tint: color-mix(in srgb, hsl(var(--v2-primary)) 24%, hsl(var(--v2-card))); }
@@ -27,8 +30,10 @@
 }
 .pw-col { display: grid; justify-items: center; gap: 18px; margin: 0; }
 .pw-col.is-home { display: none; }
-@media (min-width: 900px) {
-  .pw-stage { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(24px, 4vw, 64px); }
+/* Three phones from 760px (was 900px): tablets in portrait showed only two, with the home
+   screen, where the app badges count up, left out (QA-1). Below 760px the phones are a swipe row. */
+@media (min-width: 760px) {
+  .pw-stage { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(16px, 4vw, 64px); }
   .pw-col.is-home { display: grid; }
   .pw-col.is-ops { order: 1; }
   .pw-col.is-home { order: 2; }
@@ -214,7 +219,9 @@
  * gets smaller phones, never a scroll.
  */
 @media (min-width: 1100px) and (min-height: 640px) {
-  .pw-section { display: flex; align-items: center; min-height: 100svh; padding-block: clamp(56px, 8svh, 88px); }
+  /* No bottom padding: the section is a screen tall with the phones centred, so the centring
+     already leaves room below them (QA-1: with the padding too, the gap to Integrations ran long). */
+  .pw-section { display: flex; align-items: center; min-height: 100svh; padding-block: clamp(56px, 8svh, 88px) 0; }
   .pw-inner {
     display: grid;
     grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.25fr);
@@ -291,8 +298,9 @@ img.pw-note-icon { object-fit: cover; padding: 0; background: #fff; box-shadow: 
   .pw-head .sh-sub { margin-top: clamp(18px, 3svh, 32px); }
 }
 
-/* More room above the phones section (Ghulam, 2026-11-10). */
-.pw-section { margin-top: clamp(120px, 18svh, 240px); }
+/* More room above the phones section (Ghulam, 2026-11-10) used to be a top margin of up to 240px
+   here, stacked on Your site's bottom margin: 365-415px of empty page (QA-1). The section's own
+   padding now gives that room, in step with the gaps between the other sections. */
 
 /*
  * ── On a phone ──────────────────────────────────────────────────────────────

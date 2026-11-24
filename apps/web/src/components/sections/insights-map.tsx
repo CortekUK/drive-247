@@ -73,9 +73,23 @@ function node(size: number, hub: boolean, live: boolean): string {
   )}`;
 }
 
-export function InsightsMap({ places, earth, zoom, onFail }: { places: MapPlace[]; earth: boolean; zoom: { dir: 1 | -1; at: number } | null; onFail: () => void }) {
+export function InsightsMap({
+  places,
+  earth,
+  zoom,
+  reset,
+  onFail,
+}: {
+  places: MapPlace[];
+  earth: boolean;
+  zoom: { dir: 1 | -1; at: number } | null;
+  /** Bumped by the "show all places" button: back to the view that fits every place. */
+  reset: number;
+  onFail: () => void;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const mapRef = useRef<GMaps>(null);
+  const boundsRef = useRef<GMaps>(null);
   const [ready, setReady] = useState(false);
 
   // Build the map once.
@@ -88,7 +102,10 @@ export function InsightsMap({ places, earth, zoom, onFail }: { places: MapPlace[
         const map = new g.Map(box.current, {
           disableDefaultUI: true,
           keyboardShortcuts: false,
-          gestureHandling: "none", // the page scrolls over it; the zoom buttons zoom
+          // Drag moves the map; the wheel still scrolls the page (Ctrl + wheel zooms), so the
+          // page never gets stuck on it. "none" left a visitor who zoomed in with no way to reach
+          // the places that went off screen (QA-1).
+          gestureHandling: "cooperative",
           clickableIcons: false,
           mapTypeId: "satellite",
           backgroundColor: "#202022",
@@ -96,6 +113,13 @@ export function InsightsMap({ places, earth, zoom, onFail }: { places: MapPlace[
         const bounds = new g.LatLngBounds();
         places.forEach((p) => bounds.extend(p));
         map.fitBounds(bounds, 28);
+        boundsRef.current = bounds;
+        // Zoom stays between the view that shows every place and four steps in, so the
+        // places can't be zoomed away from or shrunk to nothing.
+        g.event.addListenerOnce(map, "idle", () => {
+          const fitted = map.getZoom() ?? 12;
+          map.setOptions({ minZoom: fitted, maxZoom: fitted + 4 });
+        });
         const max = Math.max(...places.map((p) => p.n));
         // On a phone the map is a few hundred pixels wide: smaller nodes and labels, so the
         // places close together do not pile their names on each other.
@@ -137,6 +161,13 @@ export function InsightsMap({ places, earth, zoom, onFail }: { places: MapPlace[
     if (!map || !zoom) return;
     map.setZoom((map.getZoom() ?? 12) + zoom.dir);
   }, [zoom, ready]);
+
+  // "Show all places": back to the view that fits every place.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !reset || !boundsRef.current) return;
+    map.fitBounds(boundsRef.current, 28);
+  }, [reset, ready]);
 
   return <div ref={box} className={`ia-gmap${ready ? " is-ready" : ""}`} />;
 }

@@ -184,8 +184,9 @@
 @media (min-width: 1100px) and (min-height: 700px) {
   /* No header rides over this part of the page, so the section uses the screen's full height. */
   .ys { height: 100svh; padding: clamp(20px, 3svh, 32px) 0 24px; }
-  /* Room after the play screen before the page moves on to the phones (Ghulam, 2026-11-10). */
-  .ys { margin-bottom: clamp(120px, 22svh, 260px); }
+  /* The room before the phones now comes from the phones section's own padding alone: this margin
+     (Ghulam, 2026-11-10) and the phones section's top margin both added "more room" here, and
+     together they left 365-415px of empty page between the two (QA-1). */
   .ys-inner {
     height: 100%;
     grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);

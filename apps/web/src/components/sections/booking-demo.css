@@ -195,7 +195,11 @@
 .bd-cal-grid button:nth-child(7n + 1) { border-left: 0; }
 .bd-cal-grid button:hover:not(:disabled) { background: hsl(var(--v2-muted)); }
 .bd-cal-grid button > span { display: grid; place-items: center; min-width: 30px; height: 30px; padding-inline: 4px; border-radius: 99px; white-space: nowrap; transition: background-color 200ms ease-out, color 200ms ease-out; }
-.bd-cal-grid button small { position: absolute; bottom: 2px; font-size: 9px; font-weight: 700; color: var(--bd-a); }
+/* The day's label ("Pickup", "Return") sits under the circle in the cell's own stack, not
+   pinned to its bottom edge: pinned, it ran 6px into the bottom of the circle (QA-1). The
+   circle is a touch smaller in a labelled cell so both fit the smallest (40px) cell. */
+.bd-cal-grid button small { font-size: 9px; font-weight: 700; line-height: 1; color: var(--bd-a); }
+.bd-cal-grid button:has(small) > span { min-width: 26px; height: 26px; }
 .bd-cal-grid .is-past { color: color-mix(in srgb, hsl(var(--v2-muted-foreground)) 55%, transparent); cursor: default; }
 .bd-cal-grid .is-in { background: var(--bd-tint); }
 .bd-cal-grid .is-end { background: var(--bd-tint); }
@@ -446,6 +450,13 @@
  * Nothing here applies above 760px.
  */
 .bd-view-short, .bd-phonebar { display: none; }
+/* Tablets in portrait (iPad mini and the like): the four tabs need ~722px but the bar is ~707px
+   here, so in one row they spilled 16px past both ends of the bar (QA-1). Two by two, as on a
+   phone, with the full names; the rest of the demo keeps its tablet layout. */
+@media (min-width: 760px) and (max-width: 899.98px) {
+  .bd-views { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; border-radius: 20px; }
+  .bd-views button { justify-content: center; border-radius: 16px; }
+}
 @media (max-width: 759.98px) {
   /* The four screens, two by two: every one in view, nothing cut off at the edge. */
   .bd-views { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; overflow: visible; border-radius: 20px; }

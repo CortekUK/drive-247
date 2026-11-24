@@ -95,7 +95,7 @@
 .ia-map-anchor .pt-label.is-down { top: 0; left: 0; }
 
 .ia-map-btn, .ia-zoom button { display: grid; place-items: center; background: #fff; color: #1e1b4b; }
-.ia-map-btn { position: absolute; top: 18px; left: 18px; width: 40px; height: 40px; border-radius: 50%; box-shadow: 0 2px 8px rgb(0 0 0 / 0.2); }
+.ia-map-btn { position: absolute; top: 18px; left: 18px; width: 40px; height: 40px; border-radius: 50%; box-shadow: 0 2px 8px rgb(0 0 0 / 0.2); cursor: pointer; }
 .ia-map-btn svg, .ia-zoom svg { width: 18px; height: 18px; }
 .ia-mode { position: absolute; top: 18px; left: 50%; translate: -50% 0; display: flex; gap: 2px; padding: 3px; border-radius: 99px; background: hsl(0 0% 100% / 0.9); box-shadow: 0 2px 8px rgb(0 0 0 / 0.2); }
 .ia-mode button { padding: 6px 16px; border-radius: 99px; font-size: 14px; font-weight: 500; color: #4f44d8; cursor: pointer; transition: background-color 200ms ease-out, color 200ms ease-out; }
