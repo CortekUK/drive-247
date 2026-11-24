@@ -143,6 +143,9 @@ export function stripeAttributionMetadata(a: SignupAttribution): Record<string, 
       : {}),
     ...(isFleetSize(a.fleetSize) ? { fleet_size: a.fleetSize } : {}),
     ...(cityState ? { city_state: cityState } : {}),
+    // The team calls new signups from Stripe (Neema, 2026-11-24: Carlos Torres
+    // had no phone there). Normalised the same way as on signup.
+    ...(normalizeSignupPhone(a.phone) ? { phone: normalizeSignupPhone(a.phone)! } : {}),
   };
 }
 
@@ -258,7 +261,9 @@ export async function stampStripeCustomer(
   const metadata = stripeAttributionMetadata(attribution);
   if (!Object.keys(metadata).length) return;
   try {
-    await stripe.customers.update(customerId, { metadata });
+    // The phone also goes in Stripe's own Phone field, which the dashboard
+    // shows on the customer page.
+    await stripe.customers.update(customerId, { metadata, ...(metadata.phone ? { phone: metadata.phone } : {}) });
   } catch (e) {
     console.error(`[signup-attribution] could not update Stripe customer ${customerId} (non-fatal):`, e);
   }

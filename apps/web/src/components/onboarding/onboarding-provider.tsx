@@ -90,6 +90,7 @@ import {
   rememberStandIn,
 } from "./signup-stand-in";
 import { EXIT_OFFER_CODE, readExitOfferSeen, writeExitOfferSeen } from "./exit-offer";
+import { BLACK_FRIDAY_CODE, isBlackFridayInBrowser, signupCodeFor } from "@/lib/black-friday";
 import {
   clearPendingVerify,
   readPendingVerify,
@@ -654,10 +655,19 @@ async function reportStartTrial(res: ProvisionResponse): Promise<void> {
       userId: user.id,
       email: user.email ?? "",
     });
-    captureSignup("signup_trial_started", { tenant_slug: res.slug, ...(await heardAboutProps()) });
+    captureSignup("signup_trial_started", { tenant_slug: res.slug, ...promoCodeProps(), ...(await heardAboutProps()) });
   } catch {
     /* tracking never gets in the way of the success screen */
   }
+}
+
+/**
+ * The code this signup is using, for PostHog: BF30 during Black Friday,
+ * otherwise the carried promo / referral code. Nothing when there is none.
+ */
+function promoCodeProps(): { promo_code?: string } {
+  const code = signupCodeFor(readReferralCodeFromDocument(), isBlackFridayInBrowser());
+  return code ? { promo_code: code } : {};
 }
 
 /**
@@ -679,7 +689,7 @@ async function heardAboutProps(): Promise<{ heard_about?: HeardAbout; fleet_size
 async function reportAccountCreated(userId: string, method: "email" | "oauth"): Promise<void> {
   const props = await heardAboutProps();
   identifyAccount(userId, props);
-  captureSignup("signup_account_created", { method, ...props });
+  captureSignup("signup_account_created", { method, ...promoCodeProps(), ...props });
 }
 
 /**
@@ -1042,8 +1052,10 @@ export function OnboardingProvider({
       dispatch({ type: "payment", patch: { clientSecret: null } });
       try {
         // A Drive247 promo / referral code the visitor carries: the /r/{code}
-        // cookie, which survives the Google and Stripe redirects.
-        const carried = readReferralCodeFromDocument();
+        // cookie, which survives the Google and Stripe redirects. During Black
+        // Friday it is always BF30 (lib/black-friday.ts), worked out here rather
+        // than written to the cookie, so it stops by itself when the offer ends.
+        const carried = signupCodeFor(readReferralCodeFromDocument(), isBlackFridayInBrowser());
         let promoNotice: string | null = null;
         let res: PaymentIntentResponse;
         try {
@@ -1514,7 +1526,7 @@ export function OnboardingProvider({
       if (stateRef.current.step === "plan") setPlanPicked(picked);
       setPlanSwitchBlocked(null);
       setIsOpen(true);
-      if (!isMockSignup()) captureSignup("signup_opened", { plan: planId });
+      if (!isMockSignup()) captureSignup("signup_opened", { plan: planId, ...promoCodeProps() });
 
       const current = stateRef.current;
 
@@ -2821,7 +2833,7 @@ export function OnboardingProvider({
 
   const sendFinishLaterLink = useCallback(async (): Promise<boolean> => {
     try {
-      await signupFinishLaterSend(EXIT_OFFER_CODE);
+      await signupFinishLaterSend(isBlackFridayInBrowser() ? BLACK_FRIDAY_CODE : EXIT_OFFER_CODE);
       return true;
     } catch (e) {
       console.warn("[onboarding] could not send the finish-later link", toOnboardingError(e));

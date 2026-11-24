@@ -321,6 +321,7 @@ export const MOCK_PROMO_CODES: Record<string, PromoOffer> = {
   // The card step's "Not ready just yet?" offer (exit-offer.ts). Remove it to
   // rehearse the code not existing yet: the quiet "couldn't be applied" line.
   WELCOME20: offer("WELCOME20", "campaign", "percent", 20, "repeating", 3),
+  BF30: offer("BF30", "campaign", "percent", 30, "repeating", 3),
   SAVE15: offer("SAVE15", "campaign", "percent", 15, "repeating", 2),
   HALFOFF: offer("HALFOFF", "campaign", "percent", 50, "once", null),
   FLAT50: offer("FLAT50", "campaign", "fixed", 50, "once", null),

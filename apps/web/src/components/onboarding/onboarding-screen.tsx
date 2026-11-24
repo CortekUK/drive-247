@@ -17,6 +17,7 @@ import {
 import { AccountStep, type ResetShellState } from "./steps/account-step";
 import { EXIT_OFFER_CODE, isExitIntent, isPhoneLike, shouldShowExitOffer } from "./exit-offer";
 import { ExitOfferPanel, type FinishLaterState } from "./exit-offer-panel";
+import { isBlackFridayInBrowser } from "@/lib/black-friday";
 import { PaymentStep } from "./steps/payment-step";
 import { VerifyStep } from "./steps/verify-step";
 import {
@@ -205,10 +206,15 @@ export function OnboardingScreen() {
     if (state.step !== "payment" || !isOpen) setPlanPickerOpen(false);
   }, [state.step, isOpen]);
 
+  // Black Friday (lib/black-friday.ts): BF30 is on every signup, so the popup
+  // offers no code at all. It says the price is saved and offers the link.
+  const [blackFriday] = useState(() => isBlackFridayInBrowser());
+
   const offerAllowed = shouldShowExitOffer({
     step: state.step,
     paid: state.payment.paid,
-    promoApplied: Boolean(state.payment.promo),
+    // During the offer the applied code IS the offer, so it does not hide the popup.
+    promoApplied: Boolean(state.payment.promo) && !blackFriday,
     busy: state.busy,
     seenLocally: exitOfferSeen,
     seenOnAccount: false,
@@ -511,7 +517,8 @@ export function OnboardingScreen() {
                     <ExitOfferPanel
                       ref={offerPrimaryRef}
                       applying={offerApplying}
-                      showFinishLater={phoneLike}
+                      blackFriday={blackFriday}
+                      showFinishLater={phoneLike || blackFriday}
                       finishLater={finishLater}
                       onAccept={() => void acceptExitOffer()}
                       onFinishLater={() => void requestFinishLater()}
@@ -597,7 +604,7 @@ export function OnboardingScreen() {
                           intentType={state.payment.intentType}
                           trialDays={state.payment.trialDays}
                           trialEndsAt={state.payment.trialEndsAt}
-                          onApplyPromo={applyPromoCode}
+                          onApplyPromo={blackFriday ? undefined : applyPromoCode}
                           ownerName={state.account?.fullName ?? ""}
                           companyName={state.business.companyName}
                           portalSlug={state.business.slug}

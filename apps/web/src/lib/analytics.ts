@@ -39,6 +39,8 @@ posthog.init(${JSON.stringify(POSTHOG_KEY)},{api_host:${JSON.stringify(POSTHOG_H
 /** The signup steps, in the order a visitor meets them. */
 export type SignupEvent =
   | "signup_opened"
+  /** The Black Friday bar's "Start free trial" (lib/black-friday.ts). */
+  | "bf_banner_clicked"
   | "signup_account_submitted"
   | "signup_account_created"
   | "signup_plan_changed"
