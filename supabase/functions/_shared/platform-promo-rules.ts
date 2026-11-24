@@ -142,18 +142,39 @@ export function planTierDiscounts(
 }
 
 /**
- * "3 months" must mean 3 REAL bills. A repeating coupon counts months from
- * when it is applied, so on a checkout that starts with a free trial the
- * coupon is stretched by the trial's length in (rounded-up) months.
+ * Whole extra months a trial needs on a repeating coupon, so that "3 months"
+ * means exactly 3 PAID bills.
+ *
+ * A repeating coupon counts months from signup, not from the first paid bill.
+ * With a 14-day trial the bills fall on day 14, then a month apart, so a
+ * 3-month coupon from signup already covers bills 1 to 3 and ends before the
+ * 4th. Rounding the trial UP to a whole month (the old rule) gave every trial
+ * signup a 4th discounted bill nobody advertised: WELCOME20 on Ashkun's
+ * subscription runs 23 Nov to 23 Mar and covers 7 Dec, 7 Jan, 7 Feb AND 7 Mar
+ * (Neema, 2026-11-25: "set to 3 months from signup").
+ *
+ * So only whole months of trial count: a trial under 30 days adds nothing, a
+ * 30 to 59 day trial adds one. Coupons already on subscriptions (variant
+ * deferred_1m) are left exactly as they are.
  */
-export function deferredCouponMonths(months: number, trialDays: number): number {
-  return months + Math.max(0, Math.ceil(trialDays / 30));
+export function trialExtraMonths(trialDays: number): number {
+  return Math.max(0, Math.floor(trialDays / 30));
 }
 
-/** Variant name for the Stripe mirror table: standard, or deferred_{k}m. */
+/** The coupon's duration_in_months on a checkout that starts with a free trial. */
+export function deferredCouponMonths(months: number, trialDays: number): number {
+  return months + trialExtraMonths(trialDays);
+}
+
+/**
+ * Variant name for the Stripe mirror table: `standard` without a trial,
+ * `deferred_{k}m` with one. Always `deferred_` once there is a trial, even at
+ * k = 0, so a "once" code's trial coupon (repeating, 1 month, to land on the
+ * first PAID bill) never shares a row with its no-trial `standard` coupon
+ * (duration once, which would be spent on the $0 trial invoice).
+ */
 export function promoVariant(trialDays: number): string {
-  const extra = Math.max(0, Math.ceil(trialDays / 30));
-  return extra === 0 ? "standard" : `deferred_${extra}m`;
+  return trialDays > 0 ? `deferred_${trialExtraMonths(trialDays)}m` : "standard";
 }
 
 /** What a stored code looks like (matches the table's CHECK). */
