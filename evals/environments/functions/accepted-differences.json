@@ -7,13 +7,6 @@
       "reason": "The prod ref appears only inside a code comment that records when a column was checked. Nothing calls that address.",
       "added": "2026-11-23",
       "by": "Approved by Ghulam, 2026-11-24"
-    },
-    {
-      "check": "no_prod_pointers",
-      "key": "emergency-bootstrap: prod address x2",
-      "reason": "The function has prod's URL written into its code instead of reading SUPABASE_URL. On staging it would call prod with staging's key and be refused, so it is broken here but cannot change prod. Proper fix: read the URL from the environment and redeploy on both sides.",
-      "added": "2026-11-23",
-      "by": "Approved by Ghulam, 2026-11-24, until the function is fixed"
     }
   ]
 }

@@ -40,12 +40,11 @@ Shared plumbing (Supabase calls, exceptions, the report) lives in `../database/l
 - **A deploy is not trusted until read back.** `copy-from-prod.mjs` downloads each
   function from staging after uploading it and compares the bytes.
 
-## Accepted differences (2), approved by Ghulam on 24 Nov 2026
+## Accepted differences (1), approved by Ghulam on 24 Nov 2026
 
 | Function | What | Why it is fine |
 |---|---|---|
 | `turo-bridge-ingest` | Mentions the prod ref | Only inside a code comment |
-| `emergency-bootstrap` | Has prod's URL written into its code | On staging it calls prod with staging's key and is refused. Broken on staging, harmless to prod. Fix: read `SUPABASE_URL`, redeploy both sides. |
 
 ## Not covered
 
