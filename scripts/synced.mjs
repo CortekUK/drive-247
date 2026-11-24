@@ -1,18 +1,20 @@
 #!/usr/bin/env node
 /**
- * synced.mjs — is my code the same as GitHub's main and staging?
+ * synced.mjs — are we all on the same thing?
  *
- *   npm run synced          code only (takes a second)
- *   npm run synced -- --all also checks the staging database and edge
- *                           functions against production (needs
- *                           SUPABASE_ACCESS_TOKEN; takes about a minute)
+ *   SUPABASE_ACCESS_TOKEN=… npm run synced
+ *
+ * Checks three layers and prints one verdict:
+ *   1. Code: my main and staging, and GitHub's main and staging, are one commit.
+ *   2. Database: staging is built the same as production (db-eval).
+ *   3. Edge functions: staging runs the same code as production (fn-eval).
  *
  * Every commit has an id, a fingerprint of the whole codebase. Two places with
- * the same id hold exactly the same code. This prints the id of each place and
- * says SYNCED when they all match. Read the id out loud to a teammate: if
- * theirs is the same, you are on the same code.
+ * the same id hold exactly the same code. Read the last line out loud to a
+ * teammate: if theirs says the same, you are on the same thing.
  *
- * It only reads. It never pulls, pushes or changes a file.
+ * Takes about a minute. It only reads: it never pulls, pushes, or changes a
+ * file, a database or a function.
  */
 import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
@@ -56,9 +58,9 @@ if (unsaved) problems.push(`${files} not committed, so your code differs from ev
 
 console.log("");
 if (problems.length === 0) {
-  console.log(`  SYNCED  ${want}\n`);
+  console.log(`  Code             synced on ${want}\n`);
 } else {
-  console.log("  NOT SYNCED");
+  console.log("  Code             NOT SYNCED");
   for (const p of problems) console.log(`   - ${p}`);
   const behind = Number(git("rev-list", "--count", "HEAD..origin/main") ?? 0);
   const ahead = Number(git("rev-list", "--count", "origin/main..HEAD") ?? 0);
@@ -70,23 +72,29 @@ if (problems.length === 0) {
 
 let ok = problems.length === 0;
 
-if (process.argv.includes("--all")) {
-  if (!process.env.SUPABASE_ACCESS_TOKEN) {
-    console.log("  --all needs SUPABASE_ACCESS_TOKEN to compare the staging database and functions with production.\n");
-    ok = false;
-  } else {
-    for (const [label, file] of [
-      ["Database, staging vs production", "evals/environments/database/db-eval.mjs"],
-      ["Edge functions, staging vs production", "evals/environments/functions/fn-eval.mjs"],
-    ]) {
-      let out = "";
-      try { out = execFileSync("node", [join(ROOT, file), "--no-pdf"], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }); }
-      catch (e) { out = String(e.stdout || ""); ok = false; }
-      const score = out.split("\n").find((l) => l.startsWith("SCORE")) ?? "did not finish";
-      console.log(`  ${label}: ${score.replace("SCORE ", "")}`);
-    }
-    console.log("");
+// ── database and edge functions: staging against production ────────────────
+
+const layers = [];
+if (!process.env.SUPABASE_ACCESS_TOKEN) {
+  console.log("  Database and edge functions were NOT checked: set SUPABASE_ACCESS_TOKEN and run again.\n");
+  ok = false;
+} else {
+  console.log("  Comparing the staging database and edge functions with production (about a minute) ...\n");
+  for (const [label, file] of [
+    ["Database", "evals/environments/database/db-eval.mjs"],
+    ["Edge functions", "evals/environments/functions/fn-eval.mjs"],
+  ]) {
+    let out = "";
+    let passed = true;
+    try { out = execFileSync("node", [join(ROOT, file), "--no-pdf"], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }); }
+    catch (e) { out = String(e.stdout || ""); passed = false; }
+    const score = (out.split("\n").find((l) => l.startsWith("SCORE")) ?? "did not finish").replace("SCORE ", "");
+    layers.push(passed);
+    if (!passed) ok = false;
+    console.log(`  ${label.padEnd(16)} ${passed ? "same as production" : "DIFFERENT"}   (${score})`);
   }
+  console.log("");
 }
 
+console.log(ok ? `  ALL SYNCED  ${want}  code, database and edge functions\n` : "  NOT ALL SYNCED. See above.\n");
 process.exit(ok ? 0 : 1);
