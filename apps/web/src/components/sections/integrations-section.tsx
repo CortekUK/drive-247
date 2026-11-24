@@ -58,7 +58,7 @@ const CARDS: Card[] = [
     more: "Renters add cover for their trip as they book. The policy is issued there and then, and its PDF sits on the rental.",
   },
   { name: "Inshur", tag: "Soon", category: "Insurance", tint: "#1f6feb", logo: brandLogo("inshur.com"), text: "Fleet insurance for your vehicles between rentals.", more: "Cover for your cars while they're parked between trips, alongside the per-rental cover your renters buy." },
-  { name: "BoldSign", tag: "Live", category: "Documents", tint: "#ff5a1f", logo: brandLogo("boldsign.com"), free: true, text: "E-signature for rental agreements.", more: "Agreements go out to sign as soon as a booking is made, in your branding. The signed PDF is saved on the rental. Included free." },
+  { name: "BoldSign", tag: "Live", category: "Documents", tint: "#ff5a1f", logo: brandLogo("boldsign.com"), text: "E-signature for rental agreements.", more: "Agreements go out to sign as soon as a booking is made, in your branding. The signed PDF is saved on the rental. Priced by use, like ID checks and texts." },
   { name: "CheckMyDriver", tag: "Soon", category: "Verification", tint: "#0ea5e9", glyph: "id", text: "Verify driver's licenses & identity.", more: "Check a renter's driving licence and identity before they drive away, without them coming to the desk." },
   { name: "Twilio Messages", category: "Messaging", tint: "#f22f46", logo: brandLogo("twilio.com"), text: "SMS notifications, reminders & 2-way chat.", more: "Confirmations, reminders and two-way texts with your renters, from your own number, in the same thread as their chat and email." },
   { name: "Twilio Calling", category: "Calling", tint: "#f22f46", logo: brandLogo("twilio.com"), text: "Call forwarding, voicemail & recordings.", more: "Calls to your business number reach your phone. Missed ones leave a voicemail, and calls are recorded on the renter's record." },
@@ -138,6 +138,14 @@ export function IntegrationsSection() {
                   <div className="ig-words">
                     <h3>
                       {card.name}
+                      {/* Said on the card itself, not only on its back: Inshur and
+                          CheckMyDriver are previews in the portal, and the page says
+                          "coming soon" for them elsewhere. */}
+                      {card.tag === "Soon" && (
+                        <span className="ml-2 inline-block rounded-full bg-foreground/[0.07] px-2 py-0.5 align-middle text-[11px] font-semibold text-muted-foreground dark:bg-white/10">
+                          Coming soon
+                        </span>
+                      )}
                     </h3>
                     <p>{card.text}</p>
                   </div>
@@ -145,6 +153,7 @@ export function IntegrationsSection() {
                 <div className="ig-card ig-back" aria-hidden>
                   <small>
                     {card.category}
+                    {card.tag === "Soon" ? " · Coming soon" : ""}
                     {card.free ? " · Free" : ""}
                   </small>
                   <b>{card.name}</b>
