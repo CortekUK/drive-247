@@ -7,7 +7,7 @@
  * So this script uses Postgres' own tool, pg_dump, to write out the full
  * blueprint of each database, and compares the two blueprints object by object.
  *
- *   SUPABASE_ACCESS_TOKEN=… node evals/environments/database/blueprint-diff.mjs
+ *   SUPABASE_ACCESS_TOKEN=… node docs/evals/environments/database/blueprint-diff.mjs
  *   --keep    leave the two dump files in reports/blueprints/ for reading
  *
  * Needs pg_dump 17 (brew install postgresql@17, or set PG_DUMP to its path).

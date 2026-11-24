@@ -2,7 +2,7 @@
 /**
  * copy-from-prod.mjs — put on staging exactly the edge functions prod is running.
  *
- *   SUPABASE_ACCESS_TOKEN=… node evals/environments/functions/copy-from-prod.mjs
+ *   SUPABASE_ACCESS_TOKEN=… node docs/evals/environments/functions/copy-from-prod.mjs
  *   --dry-run            show what would be copied, change nothing
  *   --only a,b           copy just these functions
  *   --prune              also delete staging functions that prod does not have

@@ -7,7 +7,7 @@
  * STAGING on purpose, confirms the check goes red, then puts it back and
  * confirms the check returns to exactly where it was.
  *
- *   SUPABASE_ACCESS_TOKEN=… node evals/environments/database/alarm-test.mjs
+ *   SUPABASE_ACCESS_TOKEN=… node docs/evals/environments/database/alarm-test.mjs
  *   --only a,b    test only these checks
  *
  * It WRITES to staging, and only to staging: lib.mjs refuses any write aimed at

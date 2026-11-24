@@ -10,10 +10,10 @@ Production is `hviqoaokxvlancmftwuo`. Staging is read from `STAGING_REF` in
 
 ```bash
 export SUPABASE_ACCESS_TOKEN=...
-node evals/environments/database/nightly.mjs        # everything, one report
-node evals/environments/database/db-eval.mjs        # just the main comparison
-node evals/environments/database/rebuild.mjs --yes  # staging drifted: rebuild it from prod
-node evals/environments/database/reseed.mjs         # after a rebuild: tenant, logins and demo data back
+node docs/evals/environments/database/nightly.mjs        # everything, one report
+node docs/evals/environments/database/db-eval.mjs        # just the main comparison
+node docs/evals/environments/database/rebuild.mjs --yes  # staging drifted: rebuild it from prod
+node docs/evals/environments/database/reseed.mjs         # after a rebuild: tenant, logins and demo data back
 ```
 
 Exit code is 0 only when everything is identical. Every run writes a PDF to

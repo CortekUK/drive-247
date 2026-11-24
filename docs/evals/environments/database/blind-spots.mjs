@@ -6,7 +6,7 @@
  * way: it asks the database "what kinds of thing do you hold, and how many of
  * each?" and then confirms every kind is claimed by a db-eval check.
  *
- *   SUPABASE_ACCESS_TOKEN=… node evals/environments/database/blind-spots.mjs
+ *   SUPABASE_ACCESS_TOKEN=… node docs/evals/environments/database/blind-spots.mjs
  *
  * It fails when:
  *   - a kind of object exists (on either side) that no db-eval check covers

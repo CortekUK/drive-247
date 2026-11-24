@@ -13,7 +13,7 @@
  *      (STAGING_LOGIN_*) and the platform super admin (STAGING_ADMIN_*).
  *   4. The demo data (scripts/seed-northwind.mjs), dated so it is live today.
  *
- *   SUPABASE_ACCESS_TOKEN=… node evals/environments/database/reseed.mjs
+ *   SUPABASE_ACCESS_TOKEN=… node docs/evals/environments/database/reseed.mjs
  *
  * Safe to run again: everything is created only if it is missing. Production
  * is only read (one settings row and four public logo files). No customer row

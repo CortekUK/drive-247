@@ -211,7 +211,7 @@ Each app has its own `components/ui/` directory with Radix UI primitives (40+ co
 booking and root (`tests/integrations`, `tests/spine`) suites are gone for good: 464 test files
 that had drifted from the code they read. The vitest configs and `npm test` scripts are still in
 place, so new tests can be added in the same folders. What checks things now: `npm run synced`
-and the evals in `evals/environments/`. The rest of this section describes the setup as it was,
+and the evals in `docs/evals/environments/`. The rest of this section describes the setup as it was,
 and still applies to any test you add.
 
 Tests use Vitest + jsdom + Testing Library. Only portal currently has test files; booking has vitest config but no tests yet.
