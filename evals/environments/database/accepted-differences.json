@@ -58,20 +58,6 @@
       "by": "Claude, awaiting Ghulam's review"
     },
     {
-      "check": "publications",
-      "key": "supabase_realtime_messages_publication",
-      "reason": "Supabase platform layer: the staging project was created on a newer platform image than prod. Prod's older Realtime service keeps this publication for its own message partitions. Created and managed by Realtime, not by us.",
-      "added": "2026-11-23",
-      "by": "Claude, awaiting Ghulam's review"
-    },
-    {
-      "check": "kind_counts_match",
-      "key": "publications",
-      "reason": "Supabase platform layer: the staging project was created on a newer platform image than prod. Count differs by the one Realtime-managed publication accepted under the publications check.",
-      "added": "2026-11-23",
-      "by": "Claude, awaiting Ghulam's review"
-    },
-    {
       "check": "kind_counts_match",
       "key": "role memberships",
       "reason": "Supabase platform layer: the staging project was created on a newer platform image than prod. Count differs by the three Realtime admin memberships accepted under the role_memberships check.",

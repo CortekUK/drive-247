@@ -42,9 +42,9 @@ Exit code is 0 only when everything is identical. Every run writes a PDF to
 - **A new check needs a break.** `alarm-test.mjs` refuses to run if a db-eval check has no break defined.
 - **A new kind of object needs a check.** `blind-spots.mjs` fails until one covers it.
 
-## Accepted differences (12)
+## Accepted differences (10)
 
-All 12 have one cause: staging was created in November 2026 on a newer Supabase
+All 10 have one cause: staging was created in November 2026 on a newer Supabase
 platform image than prod. Supabase owns these objects; we cannot change them on
 either side. Each is one exact entry in `accepted-differences.json`. Status:
 **awaiting Ghulam's review.**
@@ -59,10 +59,12 @@ either side. Each is one exact entry in `accepted-differences.json`. Status:
 | 6 | `role_memberships` | `supabase_realtime_admin` in `anon` | Membership exists on staging only | Granted by the newer image |
 | 7 | `role_memberships` | `supabase_realtime_admin` in `authenticated` | Same | Same |
 | 8 | `role_memberships` | `supabase_realtime_admin` in `service_role` | Same | Same |
-| 9 | `publications` | `supabase_realtime_messages_publication` | Exists on prod only | Prod's older Realtime service keeps it for itself |
-| 10 | `kind_counts_match` | publications | Count is off by one | Follows from 9 |
-| 11 | `kind_counts_match` | role memberships | Count is off by three | Follows from 6, 7, 8 |
-| 12 | `kind_counts_match` | database and role settings | Count is off by one | Follows from 2 |
+| 9 | `kind_counts_match` | role memberships | Count is off by three | Follows from 6, 7, 8 |
+| 10 | `kind_counts_match` | database and role settings | Count is off by one | Follows from 2 |
+
+Two earlier entries (Realtime's own publication) were removed on 2026-11-24: Realtime
+created the publication on staging too, the difference disappeared, and the eval
+flagged both entries as stale.
 
 Worth a second look when we review: 6, 7 and 8. They let Supabase's Realtime
 admin role act as our three API roles on staging, which prod does not allow.
