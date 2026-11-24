@@ -7,7 +7,7 @@
  * share. No React here.
  */
 
-export type TeamBoardKind = 'note' | 'document' | 'image';
+export type TeamBoardKind = 'note' | 'document' | 'image' | 'voice' | 'video';
 export type TeamBoardStatus = 'not_started' | 'in_progress' | 'done';
 
 export interface TeamMember {
@@ -53,7 +53,8 @@ export const TEAM_BOARD_COLUMNS = `
 `;
 
 export const BODY_MAX = 5000;
-export const FILE_MAX_BYTES = 25 * 1024 * 1024;
+/** 1 GB. The bucket and the project's storage cap are set to the same. */
+export const FILE_MAX_BYTES = 1024 * 1024 * 1024;
 
 /** The three states, in the order work moves through them. */
 export const TEAM_BOARD_STATUSES: readonly TeamBoardStatus[] = ['not_started', 'in_progress', 'done'];
@@ -75,7 +76,12 @@ export const KIND_LABEL: Record<TeamBoardKind, string> = {
   note: 'Note',
   document: 'Document',
   image: 'Image',
+  voice: 'Voice note',
+  video: 'Video',
 };
+
+/** What a voice note says when nothing was typed with it. */
+export const VOICE_NOTE_BODY = 'Voice note';
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const DOCUMENT_TYPES = [
@@ -90,20 +96,31 @@ const DOCUMENT_TYPES = [
   'text/csv',
 ];
 
-/** What the file picker offers. The bucket enforces the same list. */
-export const ACCEPTED_FILE_TYPES = [...DOCUMENT_TYPES, ...IMAGE_TYPES].join(',');
+const AUDIO_TYPES = ['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/x-m4a'];
+const VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/webm'];
 
-/** A document, an image, or (null) a file this board does not take. */
+/** What the file picker offers. The bucket enforces the same list. */
+export const ACCEPTED_FILE_TYPES = [...DOCUMENT_TYPES, ...IMAGE_TYPES, ...AUDIO_TYPES, ...VIDEO_TYPES].join(',');
+
+/** `audio/webm;codecs=opus` -> `audio/webm`. The bucket matches on the plain type. */
+export function baseType(type: string): string {
+  return type.split(';')[0].trim().toLowerCase();
+}
+
+/** What kind of post a file makes, or null for a file this board does not take. */
 export function kindOfFile(file: { type: string }): Exclude<TeamBoardKind, 'note'> | null {
-  if (IMAGE_TYPES.includes(file.type)) return 'image';
-  if (DOCUMENT_TYPES.includes(file.type)) return 'document';
+  const type = baseType(file.type);
+  if (IMAGE_TYPES.includes(type)) return 'image';
+  if (DOCUMENT_TYPES.includes(type)) return 'document';
+  if (AUDIO_TYPES.includes(type)) return 'voice';
+  if (VIDEO_TYPES.includes(type)) return 'video';
   return null;
 }
 
 /** Why a chosen file cannot be attached, or null when it can. */
 export function fileProblem(file: { type: string; size: number }): string | null {
-  if (!kindOfFile(file)) return 'That file type is not supported. Attach a PDF, Word, Excel or PowerPoint file, a text file, or an image.';
-  if (file.size > FILE_MAX_BYTES) return 'That file is larger than 25 MB.';
+  if (!kindOfFile(file)) return 'That file type is not supported. Attach a PDF, Word, Excel or PowerPoint file, a text file, an image, audio or a video.';
+  if (file.size > FILE_MAX_BYTES) return 'That file is larger than 1 GB.';
   return null;
 }
 
@@ -133,7 +150,8 @@ export function formatBytes(bytes: number | null): string {
   if (!bytes) return '';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 export const formatDate = (iso: string) =>

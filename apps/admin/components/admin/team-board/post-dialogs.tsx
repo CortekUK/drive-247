@@ -3,13 +3,14 @@
 /**
  * Team Board's two dialogs: writing a post (or editing one), and reading one.
  *
- * A post is text. It may carry one document or one image, and then the text
- * says what the file is about. The file goes up first and the row second, so a
+ * A post is text. It may carry one file (a document, an image, a video or a
+ * voice note recorded here), and then the text says what the file is about.
+ * An image can be pasted straight in. A voice note needs no text. The file goes up first and the row second, so a
  * post never points at a file that is not there.
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, ExternalLink, FileText, ImageIcon, Loader2, Paperclip, Pencil, Star, Trash2, X } from 'lucide-react';
+import { ChevronDown, ExternalLink, FileText, ImageIcon, Loader2, Mic, Paperclip, Pencil, Square, Star, Trash2, Video, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -27,12 +28,15 @@ import {
   STATUS_TEXT,
   TEAM_BOARD_BUCKET,
   TEAM_BOARD_STATUSES,
+  VOICE_NOTE_BODY,
+  baseType,
   fileProblem,
   formatBytes,
   formatDateTime,
   kindOfFile,
   memberName,
   type TeamBoardItem,
+  type TeamBoardKind,
   type TeamBoardStatus,
   type TeamPerson,
 } from '@/lib/team-board/model';
@@ -49,12 +53,24 @@ export interface PostDraft {
 
 const EVERYONE = 'everyone';
 
+const FILE_ICON: Record<Exclude<TeamBoardKind, 'note'>, typeof FileText> = { document: FileText, image: ImageIcon, voice: Mic, video: Video };
+
+/** "2026-11-24 22.15", safe in a file name. */
+const stamp = () => {
+  const d = new Date();
+  const two = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}.${two(d.getMinutes())}`;
+};
+
+const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+
 /* --------------------------------- Write --------------------------------- */
 
 export function PostDialog({
   open,
   initial,
   people,
+  uploadPct,
   onClose,
   onSave,
 }: {
@@ -62,6 +78,8 @@ export function PostDialog({
   /** null = a new post. */
   initial: TeamBoardItem | null;
   people: TeamPerson[];
+  /** 0-100 while the file is going up, otherwise null. */
+  uploadPct: number | null;
   onClose: () => void;
   onSave: (draft: PostDraft) => Promise<boolean>;
 }) {
@@ -73,6 +91,97 @@ export function PostDialog({
   const [busy, setBusy] = useState(false);
   const [tried, setTried] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
+
+  // Recording a voice note.
+  const [recording, setRecording] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const recorder = useRef<MediaRecorder | null>(null);
+  const discard = useRef(false);
+  // A local address for the file just chosen or recorded, to preview it.
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const stopRecording = (throwAway: boolean) => {
+    discard.current = throwAway;
+    if (recorder.current && recorder.current.state !== 'inactive') recorder.current.stop();
+  };
+
+  useEffect(() => {
+    if (!recording) return;
+    const t = setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [recording]);
+
+  // Closing the dialog mid-recording lets go of the microphone.
+  useEffect(() => {
+    if (!open) stopRecording(true);
+    return () => stopRecording(true);
+  }, [open]);
+
+  useEffect(() => {
+    if (!file) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  const startRecording = async () => {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      toast.error('This browser cannot record audio.');
+      return;
+    }
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      toast.error('The microphone is blocked. Allow it for this site in your browser, then try again.');
+      return;
+    }
+    const wanted = ['audio/webm', 'audio/mp4', 'audio/ogg'].find((t) => MediaRecorder.isTypeSupported(t));
+    const r = new MediaRecorder(stream, wanted ? { mimeType: wanted } : undefined);
+    const chunks: Blob[] = [];
+    discard.current = false;
+    r.ondataavailable = (e) => {
+      if (e.data.size) chunks.push(e.data);
+    };
+    r.onstop = () => {
+      stream.getTracks().forEach((t) => t.stop());
+      setRecording(false);
+      if (discard.current) return;
+      const type = baseType(r.mimeType || wanted || 'audio/webm');
+      const blob = new Blob(chunks, { type });
+      if (!blob.size) {
+        toast.error('Nothing was recorded.');
+        return;
+      }
+      const ext = type === 'audio/mp4' ? 'm4a' : type === 'audio/ogg' ? 'ogg' : 'webm';
+      setFile(new File([blob], `Voice note ${stamp()}.${ext}`, { type }));
+      setKeptName(null);
+    };
+    recorder.current = r;
+    r.start();
+    setSeconds(0);
+    setRecording(true);
+  };
+
+  /** An image copied from anywhere (a screenshot, a chat) is attached on paste. */
+  const pasteImage = (e: React.ClipboardEvent) => {
+    const image = Array.from(e.clipboardData.files).find((f) => f.type.startsWith('image/'));
+    if (!image || busy || recording) return;
+    e.preventDefault();
+    // Screenshots all arrive as "image.png": give each a name of its own.
+    const ext = image.name.includes('.') ? image.name.split('.').pop() : 'png';
+    const named = /^image\.\w+$/i.test(image.name) || !image.name ? new File([image], `Pasted image ${stamp()}.${ext}`, { type: image.type }) : image;
+    const problem = fileProblem(named);
+    if (problem) {
+      toast.error(problem);
+      return;
+    }
+    setFile(named);
+    setKeptName(null);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -86,7 +195,9 @@ export function PostDialog({
 
   const attachedName = file?.name ?? keptName;
   const attachedKind = file ? kindOfFile(file) : initial && keptName ? (initial.kind === 'note' ? null : initial.kind) : null;
-  const empty = !body.trim();
+  // A voice note speaks for itself: text with it is optional.
+  const empty = !body.trim() && attachedKind !== 'voice';
+  const AttachedIcon = attachedKind ? FILE_ICON[attachedKind] : FileText;
 
   const choose = (picked: File | undefined) => {
     if (picker.current) picker.current.value = '';
@@ -106,10 +217,10 @@ export function PostDialog({
 
   const save = async () => {
     setTried(true);
-    if (empty) return;
+    if (empty || recording) return;
     setBusy(true);
     const ok = await onSave({
-      body: body.trim(),
+      body: body.trim() || VOICE_NOTE_BODY,
       status,
       forPersonId: forWho === EVERYONE ? null : forWho,
       file,
@@ -121,17 +232,25 @@ export function PostDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !busy && onClose()}>
-      <DialogContent className="flex max-h-[90vh] w-[96vw] max-w-[560px] flex-col gap-0 overflow-hidden rounded-3xl p-0">
+      <DialogContent onPaste={pasteImage} className="flex max-h-[90vh] w-[96vw] max-w-[560px] flex-col gap-0 overflow-hidden rounded-3xl p-0">
         <DialogHeader className="px-6 pb-4 pt-6 text-left">
           <DialogTitle>{initial ? 'Edit post' : 'New post'}</DialogTitle>
-          <DialogDescription>Write a note, or attach a document or an image and say what it is about.</DialogDescription>
+          <DialogDescription>Write a note, record a voice note, or attach a file and say what it is about.</DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 space-y-4 overflow-y-auto px-6 pb-2 [scrollbar-width:thin]">
           <label className="block space-y-1">
             <span className="text-xs font-medium text-muted-foreground">
-              {attachedName ? (attachedKind === 'image' ? 'What is this image about?' : 'What is this document about?') : 'What do you want to share?'}
-              <span className="text-destructive"> *</span>
+              {attachedKind === 'voice'
+                ? 'Add a line with it (optional)'
+                : attachedName
+                  ? attachedKind === 'image'
+                    ? 'What is this image about?'
+                    : attachedKind === 'video'
+                      ? 'What is this video about?'
+                      : 'What is this document about?'
+                  : 'What do you want to share?'}
+              {attachedKind !== 'voice' && <span className="text-destructive"> *</span>}
             </span>
             <Textarea
               autoFocus
@@ -148,10 +267,33 @@ export function PostDialog({
           <div className="space-y-1">
             <span className="text-xs font-medium text-muted-foreground">Attachment</span>
             <input ref={picker} type="file" accept={ACCEPTED_FILE_TYPES} className="hidden" onChange={(e) => choose(e.target.files?.[0])} />
-            {attachedName ? (
+            {recording ? (
+              <div className="flex items-center gap-2.5 rounded-2xl border border-destructive/40 bg-destructive/5 px-3 py-2">
+                <span className="flex size-8 shrink-0 items-center justify-center">
+                  <span className="size-3 animate-pulse rounded-full bg-destructive" />
+                </span>
+                <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
+                  Recording <span className="tabular-nums text-muted-foreground">{clock(seconds)}</span>
+                </span>
+                <Button type="button" variant="ghost" className="h-8 rounded-full px-3 text-[13px]" onClick={() => stopRecording(true)}>
+                  Discard
+                </Button>
+                <Button type="button" className="h-8 rounded-full px-3 text-[13px]" onClick={() => stopRecording(false)}>
+                  <Square className="size-3 fill-current" />
+                  Stop
+                </Button>
+              </div>
+            ) : attachedName ? (
+              <div className="space-y-2">
+              {file && previewUrl && attachedKind === 'image' && (
+                // A local preview of the image just chosen or pasted.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={previewUrl} alt="" className="max-h-[180px] w-full rounded-2xl border border-border object-contain" />
+              )}
+              {file && previewUrl && attachedKind === 'voice' && <audio controls src={previewUrl} className="h-10 w-full" />}
               <div className="flex items-center gap-2.5 rounded-2xl border border-border px-3 py-2">
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  {attachedKind === 'image' ? <ImageIcon className="size-4" /> : <FileText className="size-4" />}
+                  <AttachedIcon className="size-4" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-foreground">{attachedName}</span>
@@ -170,19 +312,34 @@ export function PostDialog({
                   <X className="size-4" />
                 </button>
               </div>
+              </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => picker.current?.click()}
-                disabled={busy}
-                className="flex w-full items-center gap-2.5 rounded-2xl border border-dashed border-border px-3 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
-              >
-                <Paperclip className="size-4 shrink-0" />
-                <span>
-                  Attach a document or an image
-                  <span className="block text-xs">PDF, Word, Excel, PowerPoint, text or an image, up to 25 MB.</span>
-                </span>
-              </button>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => picker.current?.click()}
+                  disabled={busy}
+                  className="flex w-full items-center gap-2.5 rounded-2xl border border-dashed border-border px-3 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
+                >
+                  <Paperclip className="size-4 shrink-0" />
+                  <span>
+                    Attach a file
+                    <span className="block text-xs">Or paste an image. Up to 1 GB.</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void startRecording()}
+                  disabled={busy}
+                  className="flex w-full items-center gap-2.5 rounded-2xl border border-dashed border-border px-3 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
+                >
+                  <Mic className="size-4 shrink-0" />
+                  <span>
+                    Record a voice note
+                    <span className="block text-xs">Uses your microphone.</span>
+                  </span>
+                </button>
+              </div>
             )}
           </div>
 
@@ -223,9 +380,9 @@ export function PostDialog({
               Cancel
             </Button>
           </DialogClose>
-          <Button className="rounded-full bg-gradient-primary text-primary-foreground hover:opacity-90" onClick={() => void save()} disabled={busy}>
+          <Button className="rounded-full bg-gradient-primary text-primary-foreground hover:opacity-90" onClick={() => void save()} disabled={busy || recording}>
             {busy && <Loader2 className="size-4 animate-spin" />}
-            {initial ? 'Save' : 'Post'}
+            {busy && uploadPct !== null ? `Uploading ${uploadPct}%` : initial ? 'Save' : 'Post'}
           </Button>
         </div>
       </DialogContent>
@@ -302,9 +459,14 @@ export function PostDetailDialog({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={fileUrl} alt={post.attachment_name ?? 'Attached image'} className="max-h-[320px] w-full rounded-2xl border border-border object-contain" />
               )}
+              {post.kind === 'voice' && fileUrl && <audio controls src={fileUrl} className="h-10 w-full" />}
+              {post.kind === 'video' && fileUrl && <video controls src={fileUrl} className="max-h-[320px] w-full rounded-2xl border border-border bg-black" />}
               <div className="flex items-center gap-2.5 rounded-2xl border border-border px-3 py-2">
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  {post.kind === 'image' ? <ImageIcon className="size-4" /> : <FileText className="size-4" />}
+                  {(() => {
+                    const Icon = post.kind === 'note' ? FileText : FILE_ICON[post.kind];
+                    return <Icon className="size-4" />;
+                  })()}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-foreground">{post.attachment_name}</span>

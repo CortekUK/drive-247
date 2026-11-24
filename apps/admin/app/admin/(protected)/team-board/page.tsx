@@ -11,12 +11,12 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, FileText, ImageIcon, MoreVertical, Plus, Star, StickyNote } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, FileText, ImageIcon, Mic, MoreVertical, Plus, Star, StickyNote, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/sonner';
 import { confirmDialog } from '@/components/ui/confirm';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseAnonKey, supabaseUrl } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import { HEADER_ACTIONS, HEADER_PRIMARY, PAGE_DESCRIPTION, PAGE_HEADER, PAGE_HEADER_TEXT, PAGE_TITLE } from '@/components/admin/header-buttons';
@@ -37,6 +37,7 @@ import {
   TEAM_BOARD_TABLE,
   formatDate,
   initialsOf,
+  baseType,
   kindOfFile,
   matchesFilters,
   memberName,
@@ -56,7 +57,7 @@ const PAGE_SIZE = 25;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
-const KIND_ICON: Record<TeamBoardKind, typeof FileText> = { note: StickyNote, document: FileText, image: ImageIcon };
+const KIND_ICON: Record<TeamBoardKind, typeof FileText> = { note: StickyNote, document: FileText, image: ImageIcon, voice: Mic, video: Video };
 
 const PILL =
   'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring';
@@ -88,6 +89,8 @@ export default function TeamBoardPage() {
   const [people, setPeople] = useState<TeamPerson[]>([]);
   // The posts the person looking has starred. Stars are per person.
   const [starred, setStarred] = useState<ReadonlySet<string>>(new Set());
+  // 0-100 while a file is going up, otherwise null.
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<BoardFilters>(NO_FILTERS);
   const [page, setPage] = useState(0);
@@ -155,12 +158,43 @@ export default function TeamBoardPage() {
     const kind = kindOfFile(file);
     if (!kind) return null;
     const path = storagePathFor(file.name);
-    const { error } = await supabase.storage.from(TEAM_BOARD_BUCKET).upload(path, file, { contentType: file.type, upsert: false });
-    if (error) {
-      toast.error(`Could not upload the file: ${error.message}`);
+    const type = baseType(file.type);
+    const { data: auth } = await supabase.auth.getSession();
+    const token = auth.session?.access_token;
+    if (!token) {
+      toast.error('You are signed out. Sign in again and retry.');
       return null;
     }
-    return { kind, attachment_path: path, attachment_name: file.name, attachment_type: file.type, attachment_size: file.size };
+    // One request with a progress bar: a file here can be up to 1 GB, and the
+    // storage client reports nothing until it is done.
+    setUploadPct(0);
+    const problem = await new Promise<string | null>((resolve) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${supabaseUrl}/storage/v1/object/${TEAM_BOARD_BUCKET}/${path.split('/').map(encodeURIComponent).join('/')}`);
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.setRequestHeader('apikey', supabaseAnonKey);
+      xhr.setRequestHeader('Content-Type', type);
+      xhr.setRequestHeader('x-upsert', 'false');
+      xhr.upload.onprogress = (e) => e.lengthComputable && setUploadPct(Math.round((e.loaded / e.total) * 100));
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) return resolve(null);
+        let message = `error ${xhr.status}`;
+        try {
+          message = (JSON.parse(xhr.responseText) as { message?: string }).message ?? message;
+        } catch {
+          /* not JSON: keep the status */
+        }
+        resolve(message);
+      };
+      xhr.onerror = () => resolve('the connection dropped');
+      xhr.send(file);
+    });
+    setUploadPct(null);
+    if (problem) {
+      toast.error(`Could not upload the file: ${problem}`);
+      return null;
+    }
+    return { kind, attachment_path: path, attachment_name: file.name, attachment_type: type, attachment_size: file.size };
   };
 
   const removeFile = async (path: string | null) => {
@@ -522,7 +556,7 @@ export default function TeamBoardPage() {
         }}
         onDelete={(i) => void remove(i)}
       />
-      <PostDialog open={editing !== null} initial={editing === 'new' ? null : editing} people={people} onClose={() => setEditing(null)} onSave={save} />
+      <PostDialog open={editing !== null} initial={editing === 'new' ? null : editing} people={people} uploadPct={uploadPct} onClose={() => setEditing(null)} onSave={save} />
     </div>
   );
 }
