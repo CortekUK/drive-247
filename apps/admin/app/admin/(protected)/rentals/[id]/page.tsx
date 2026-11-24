@@ -163,7 +163,7 @@ function IntegrationStatus({ tone, label }: { tone: StatusTone; label: string })
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
+        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium max-md:gap-1 max-md:px-2',
         tone === 'success' && 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
         tone === 'warning' && 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
         tone === 'info' && 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400',
@@ -448,6 +448,8 @@ export default function TenantDetailsPage() {
   // Subscription state
   const [subscription, setSubscription] = useState<TenantSubscription | null>(null);
   const [invoices, setInvoices] = useState<TenantInvoice[]>([]);
+  /** The first read has landed: until then the trail draws nothing, not its sample rows. */
+  const [invoicesLoaded, setInvoicesLoaded] = useState(false);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
   /** Non-null when the subscription read FAILED — never render that as "none". */
   const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
@@ -825,6 +827,7 @@ export default function TenantDetailsPage() {
 
       if (invErr) throw invErr;
       setInvoices(invoiceData || []);
+      setInvoicesLoaded(true);
     } catch (error: any) {
       console.error('Error loading subscription:', error);
       // Surface it. Silence here is what turned a failed read into "no
@@ -1844,7 +1847,7 @@ export default function TenantDetailsPage() {
               )}
             </div>
             {/* On a phone the row scrolls sideways, each tile a fixed width. */}
-            <div className="grid grid-cols-5 gap-3 max-md:-mx-4 max-md:flex max-md:snap-x max-md:scroll-px-4 max-md:overflow-x-auto max-md:px-4 max-md:pb-1 max-md:pt-0.5 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden max-md:[&>*]:w-28 max-md:[&>*]:shrink-0 max-md:[&>*]:snap-start">
+            <div className="grid grid-cols-5 gap-3 max-md:-mx-4 max-md:flex max-md:snap-x max-md:scroll-px-4 max-md:overflow-x-auto max-md:px-4 max-md:pb-1 max-md:pt-0.5 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden max-md:[&>*]:w-[132px] max-md:[&>*]:shrink-0 max-md:[&>*]:snap-start">
               {integrationTiles.slice(0, INTEGRATIONS_IN_ROW)}
             </div>
           </section>
@@ -1864,7 +1867,7 @@ export default function TenantDetailsPage() {
             <DialogContent className="max-h-[88vh] overflow-y-auto p-8 sm:max-w-4xl">
               {openIntegration === 'booking-site' && (
                 <>
-                  <DialogHeader>
+                  <DialogHeader className="text-left">
                     <div className="mb-2 flex h-16 items-center"><LayoutTemplate size={48} className="text-violet-600" /></div>
                     <DialogTitle>Booking Site Design</DialogTitle>
                   </DialogHeader>
@@ -1920,7 +1923,7 @@ export default function TenantDetailsPage() {
               )}
               {openIntegration === 'stripe' && (
                 <>
-                  <DialogHeader>
+                  <DialogHeader className="text-left">
                     <div className="mb-2 flex h-16 items-center"><IntegrationLogo src={brandLogo('stripe.com')} alt="Stripe" size={48} /></div>
                     <DialogTitle className="flex items-center gap-2">
                       Stripe Connect
@@ -1959,7 +1962,7 @@ export default function TenantDetailsPage() {
               )}
               {openIntegration === 'bonzah' && (
                 <>
-                  <DialogHeader>
+                  <DialogHeader className="text-left">
                     <div className="mb-2 flex h-16 items-center">
                       <img src="/bonzah-logo.svg" alt="Bonzah" className="h-8 w-auto dark:hidden" />
                       <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="hidden h-8 w-auto dark:block" />
@@ -2030,7 +2033,7 @@ export default function TenantDetailsPage() {
               )}
               {openIntegration === 'tesla' && (
                 <>
-                  <DialogHeader>
+                  <DialogHeader className="text-left">
                     <div className="mb-2 flex h-16 items-center"><IntegrationLogo src={brandLogo('tesla.com')} alt="Tesla" size={48} /></div>
                     <DialogTitle className="flex items-center gap-2">
                       Tesla Fleet API
@@ -2056,7 +2059,7 @@ export default function TenantDetailsPage() {
               )}
               {openIntegration === 'boldsign' && (
                 <>
-                  <DialogHeader>
+                  <DialogHeader className="text-left">
                     <div className="mb-2 flex h-16 items-center"><IntegrationLogo src={brandLogo('boldsign.com')} alt="BoldSign" size={48} /></div>
                     <DialogTitle className="flex items-center gap-2">
                       BoldSign
@@ -2097,6 +2100,7 @@ export default function TenantDetailsPage() {
               column, the others behind See all. */}
           <SubscriptionTrail
             invoices={invoices}
+            loaded={invoicesLoaded}
             formatCurrency={formatCurrency}
             formatDate={formatDate}
             top={
@@ -2725,7 +2729,7 @@ export default function TenantDetailsPage() {
               ) : (
                 <div className="overflow-hidden rounded-2xl border border-border/40">
                   {/* Scrolls sideways on a phone rather than squashing. */}
-                  <Table className="max-md:min-w-[640px] max-md:[&_td:not(:first-child)]:whitespace-nowrap">
+                  <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Name</TableHead>
@@ -2839,7 +2843,7 @@ export default function TenantDetailsPage() {
                 <div>
                   <h3 className="text-sm font-semibold mb-3">Invoices</h3>
                   <div className="overflow-hidden rounded-2xl border border-border/40">
-                    <Table className="max-md:min-w-[600px] max-md:[&_td]:whitespace-nowrap">
+                    <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead>Invoice</TableHead>

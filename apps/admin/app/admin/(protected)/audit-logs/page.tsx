@@ -48,6 +48,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DatePicker } from '@/components/ui/date-picker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { format } from 'date-fns';
 import { Download, Loader2 } from 'lucide-react';
 
@@ -350,6 +352,7 @@ function TenantPicker({
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function AuditLogsPage() {
+  const isPhone = useIsMobile();
   // Data
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -657,29 +660,45 @@ export default function AuditLogsPage() {
     if (!details || Object.keys(details).length === 0) return <span className="text-muted-foreground">—</span>;
 
     const entries = Object.entries(details).slice(0, 6);
+    const trigger = (
+      <button className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+        <Info className="h-3.5 w-3.5" />
+        {Object.keys(details).length} field{Object.keys(details).length !== 1 ? 's' : ''}
+      </button>
+    );
+    const list = (
+      <div className="space-y-1">
+        {entries.map(([key, val]) => (
+          <div key={key} className="text-xs [overflow-wrap:anywhere]">
+            <span className="text-primary font-medium">{key}:</span>{' '}
+            <span className="text-muted-foreground">{String(val).slice(0, 80)}</span>
+          </div>
+        ))}
+        {Object.keys(details).length > 6 && (
+          <div className="text-xs text-muted-foreground/60">
+            +{Object.keys(details).length - 6} more...
+          </div>
+        )}
+      </div>
+    );
+
+    // A phone has no hover, so a tooltip there never opened: tap instead.
+    if (isPhone) {
+      return (
+        <Popover>
+          <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+          <PopoverContent align="start" className="w-[min(20rem,calc(100vw-2rem))] p-3">
+            {list}
+          </PopoverContent>
+        </Popover>
+      );
+    }
 
     return (
       <Tooltip>
-        <TooltipTrigger asChild>
-          <button className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
-            <Info className="h-3.5 w-3.5" />
-            {Object.keys(details).length} field{Object.keys(details).length !== 1 ? 's' : ''}
-          </button>
-        </TooltipTrigger>
+        <TooltipTrigger asChild>{trigger}</TooltipTrigger>
         <TooltipContent side="left" className="max-w-sm">
-          <div className="space-y-1">
-            {entries.map(([key, val]) => (
-              <div key={key} className="text-xs">
-                <span className="text-primary font-medium">{key}:</span>{' '}
-                <span className="text-muted-foreground">{String(val).slice(0, 80)}</span>
-              </div>
-            ))}
-            {Object.keys(details).length > 6 && (
-              <div className="text-xs text-muted-foreground/60">
-                +{Object.keys(details).length - 6} more...
-              </div>
-            )}
-          </div>
+          {list}
         </TooltipContent>
       </Tooltip>
     );
@@ -836,7 +855,7 @@ export default function AuditLogsPage() {
             <>
               {/* Phones scroll the table sideways rather than squashing six
                   columns into stacks of wrapped words. */}
-              <Table className="max-md:min-w-[720px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
+              <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[160px]">Date & Time</TableHead>

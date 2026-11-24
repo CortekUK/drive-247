@@ -113,11 +113,17 @@ export interface RentalsTableProps {
   hasMore?: boolean;
   /** The measured window fill (`useViewportFillCap`), replacing 520px from md up. */
   maxHeight?: number;
+  /**
+   * Below `lg` each row becomes a compact card (the host app's
+   * `[data-phone-cards]` CSS), every cell labelled with its heading. Off by
+   * default: only the operator portal ships that CSS.
+   */
+  phoneCards?: boolean;
 }
 
-export function RentalsTable({ rows, partyLabel, showAmount = false, onOpen, scrollRootRef, sentinelRef, hasMore = false, maxHeight }: RentalsTableProps) {
+export function RentalsTable({ rows, partyLabel, showAmount = false, onOpen, scrollRootRef, sentinelRef, hasMore = false, maxHeight, phoneCards = false }: RentalsTableProps) {
   return (
-    <RentalsTableFrame scrollRootRef={scrollRootRef} maxHeight={maxHeight} partyLabel={partyLabel} showAmount={showAmount} footer={
+    <RentalsTableFrame scrollRootRef={scrollRootRef} maxHeight={maxHeight} partyLabel={partyLabel} showAmount={showAmount} phoneCards={phoneCards} footer={
       // The sentinel, inside the scroll container after the last row. The bars
       // read as "more coming" on a slow frame; `aria-hidden` because the count
       // line under the card says the same thing in words.
@@ -135,7 +141,7 @@ export function RentalsTable({ rows, partyLabel, showAmount = false, onOpen, scr
       )
     }>
       {rows.map((row) => (
-        <RentalRow key={row.id} row={row} onOpen={onOpen} showAmount={showAmount} />
+        <RentalRow key={row.id} row={row} onOpen={onOpen} showAmount={showAmount} partyLabel={partyLabel} />
       ))}
     </RentalsTableFrame>
   );
@@ -165,6 +171,7 @@ function RentalsTableFrame({
   showAmount = false,
   scrollRootRef,
   maxHeight,
+  phoneCards = false,
   footer,
   children,
 }: {
@@ -172,6 +179,7 @@ function RentalsTableFrame({
   showAmount?: boolean;
   scrollRootRef?: RefObject<HTMLDivElement>;
   maxHeight?: number;
+  phoneCards?: boolean;
   footer?: ReactNode;
   children: ReactNode;
 }) {
@@ -186,7 +194,12 @@ function RentalsTableFrame({
           wrapper: as a scroll container of its own it was what the sticky
           header pinned to, and it never scrolls vertically, so the header
           scrolled away with the rows. */}
-      <CardContent ref={scrollRootRef} className={cn(V2_LIST_CLASSES.scrollRoot, V2_LIST_CLASSES.fillViewport)} style={style}>
+      <CardContent
+        ref={scrollRootRef}
+        className={cn(V2_LIST_CLASSES.scrollRoot, V2_LIST_CLASSES.fillViewport)}
+        style={style}
+        data-phone-cards={phoneCards ? "" : undefined}
+      >
         <Table className="min-w-[720px] table-fixed">
           {/* Sticky while the body scrolls inside the card, nearly opaque with a
               blur behind it, so rows passing underneath stay hidden. */}
@@ -207,7 +220,7 @@ function RentalsTableFrame({
   );
 }
 
-function RentalRow({ row, onOpen, showAmount = false }: { row: RentalsTableRow; onOpen: (id: string) => void; showAmount?: boolean }) {
+function RentalRow({ row, onOpen, showAmount = false, partyLabel }: { row: RentalsTableRow; onOpen: (id: string) => void; showAmount?: boolean; partyLabel: string }) {
   const open = () => {
     // Letting go of a drag-select inside the row fires a click on the row: that
     // is someone copying a reference, not asking to open the rental.
@@ -241,7 +254,7 @@ function RentalRow({ row, onOpen, showAmount = false }: { row: RentalsTableRow; 
         </div>
       </TableCell>
 
-      <TableCell className={V2_LIST_CLASSES.cell}>
+      <TableCell className={V2_LIST_CLASSES.cell} data-label={partyLabel}>
         {row.partyImage || row.partySub ? (
           <div className="flex min-w-0 items-center gap-3">
             {row.partyImage ? (
@@ -258,10 +271,10 @@ function RentalRow({ row, onOpen, showAmount = false }: { row: RentalsTableRow; 
       </TableCell>
 
       {/* `tabular-nums` lines the two date columns up down the page. */}
-      <TableCell className={cn(V2_LIST_CLASSES.cell, "tabular-nums")}>
+      <TableCell className={cn(V2_LIST_CLASSES.cell, "tabular-nums")} data-label="Pickup">
         <span className={V2_LIST_CLASSES.text}>{formatRentalDate(row.start)}</span>
       </TableCell>
-      <TableCell className={cn(V2_LIST_CLASSES.cell, "tabular-nums")}>
+      <TableCell className={cn(V2_LIST_CLASSES.cell, "tabular-nums")} data-label="Return">
         {row.end ? (
           <span className={V2_LIST_CLASSES.text}>{formatRentalDate(row.end)}</span>
         ) : row.ongoing ? (
@@ -280,7 +293,7 @@ function RentalRow({ row, onOpen, showAmount = false }: { row: RentalsTableRow; 
       {/* Status — one treatment for every value, hue the only thing that
           changes. The open indicator (row-open.tsx) sits at the row's end, in
           room the cell keeps for it, while the row is hovered or focused. */}
-      <TableCell className={cn(V2_LIST_CLASSES.cell, ROW_OPEN_CELL)}>
+      <TableCell className={cn(V2_LIST_CLASSES.cell, ROW_OPEN_CELL)} data-label="Status">
         <div className="flex flex-wrap items-center justify-start gap-1.5">
           <span className={cn("text-sm font-medium", V2_LIST_TONES[RENTAL_STATUS_TONE[row.status] ?? "muted"])}>{row.status}</span>
           {row.meta?.map((chip) => (

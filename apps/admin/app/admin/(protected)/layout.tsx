@@ -14,7 +14,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AdminSupportRail } from '@/components/support/AdminSupportRail';
 import { SupportRailProvider } from '../../../../../shared/trax-support/support-rail';
-import { MobileNavProvider, MobileTabBar, PhoneSectionChips } from '@/components/admin/mobile-nav';
+import { MobileTabBar, PhoneSectionChips } from '@/components/admin/mobile-nav';
+import { usePhoneCardLabels } from '@/lib/phone-cards';
 
 function LoadingScreen() {
   return (
@@ -59,6 +60,8 @@ export default function ProtectedLayout({
   const pathname = usePathname();
   const { user, loading, checkAuth } = useAuthStore();
   const [queryClient] = useState(() => new QueryClient());
+  // Every table's cells carry their column's name, for the phone cards.
+  usePhoneCardLabels();
 
   useEffect(() => {
     checkAuth();
@@ -125,8 +128,6 @@ export default function ProtectedLayout({
           across the top; this is what carries them there. */}
       <SidebarSectionsProvider>
       <SupportRailProvider>
-      {/* The phone's bottom tab bar and its More screen (mobile-nav.tsx). */}
-      <MobileNavProvider>
       {/* Northwind's frame: the brand wash on the provider, bounded to one
           viewport, so the rail and the page are one surface and `<main>` is
           the only thing that scrolls. */}
@@ -136,13 +137,12 @@ export default function ProtectedLayout({
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden pt-[env(safe-area-inset-top,0px)]">
           {/* Support is its own workspace: no top bar on a desktop (the rail has
               Back to dashboard). A phone keeps it for the navigation menu. */}
-          {/* On a phone the tab bar is the navigation, so the top bar's menu
-              button goes — except on Support, a bounded workspace whose
-              composer owns the bottom edge and which keeps the sheet. */}
+          {/* On a phone the full menu opens from the top bar's burger, on
+              every page, as in the operator portal (mobile-nav.tsx). */}
           {isSupport || isCompanyPage ? (
-            <div className="md:hidden"><TopBar showNavTrigger={isSupport} /></div>
+            <div className="md:hidden"><TopBar /></div>
           ) : (
-            <TopBar showNavTrigger={false} />
+            <TopBar />
           )}
           {/* A page's own sections, which a desktop shows in the rail. */}
           {!isSupport && <PhoneSectionChips />}
@@ -163,7 +163,6 @@ export default function ProtectedLayout({
         {/* Not on Support: its composer owns the bottom edge. */}
         {!isSupport && <MobileTabBar />}
       </SidebarProvider>
-      </MobileNavProvider>
       </SupportRailProvider>
       </SidebarSectionsProvider>
       </PageSearchProvider>

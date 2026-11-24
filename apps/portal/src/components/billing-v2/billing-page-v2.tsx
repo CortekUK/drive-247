@@ -482,8 +482,12 @@ export function BillingPageV2() {
   }
 
   // Subscribed — first screen (plan, card, referrals), then next invoice and invoices.
+  // Phones: the shell already gives the 16px gutter, and the 3D card's glow
+  // layers poke past its rounded clip on Android Chrome, which let the whole
+  // page pan sideways; `overflow-x-clip` stops that without making this a
+  // scroll box.
   return (
-    <div className="mx-auto w-full max-w-[1240px] p-6">
+    <div className="mx-auto w-full max-w-[1240px] p-6 max-md:overflow-x-clip max-sm:px-0 max-sm:pt-2">
       {/* First screen: header, plan details and the card/referrals row fit ONE
           viewport on desktop (100svh less the 4rem top bar and this page's
           p-6). The card/referrals row takes what is left and the card sizes to

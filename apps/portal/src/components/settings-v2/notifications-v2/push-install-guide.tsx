@@ -77,7 +77,7 @@ const PLATFORMS: Record<Platform, { label: string; browser: string; icon: Compon
 };
 
 function stepsFor(platform: Platform, { host, name, iconUrl }: GuideProps): GuideStep[] {
-  const site = <span className="font-medium text-foreground">{host}</span>;
+  const site = <span className="font-medium text-foreground [overflow-wrap:anywhere]">{host}</span>;
   if (platform === "iphone") {
     return [
       { title: "Open the portal in Safari", body: <>Use Safari, not Chrome. Go to {site} and sign in.</>, picture: <MiniSafariBar host={host} /> },

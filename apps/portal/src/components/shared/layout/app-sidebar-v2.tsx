@@ -943,13 +943,17 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // Its own component because everything it reads comes from the Trax provider,
   // not from the navigation hooks above — which have all already run, so this
   // early return keeps the hook order identical on every route.
-  if (isTraxPage) return <TraxRail />;
+  // Not on a phone (Nov 20 2026): there this sidebar is the burger menu, and
+  // swapping it for a rail left the burger opening nothing you could use. The
+  // Trax and Support pages carry their own lists on a phone, so the burger
+  // opens the navigation — the same rule the record rails follow below.
+  if (isTraxPage && !isMobile) return <TraxRail />;
 
   // --- Support Mode ---
   // The ticket list takes the sidebar's slot (support-rail.tsx), so Support is
   // tickets | conversation | details rather than four columns. Same early-return
   // position as Trax, for the same hook-order reason.
-  if (isSupportPage) return <SupportRail />;
+  if (isSupportPage && !isMobile) return <SupportRail />;
 
   /*
    * A record rail REPLACES the nav on a desktop, where the record's own dock
@@ -1979,7 +1983,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         {/* Promo / announcement slot (feature releases, training, promotions) */}
         {!collapsed && (
           <div className="px-0.5 pb-1.5">
-            <SidebarPromo />
+            <SidebarPromo onNavigate={closeMobileOnNav} />
           </div>
         )}
 

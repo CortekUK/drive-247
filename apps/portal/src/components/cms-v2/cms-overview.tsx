@@ -65,7 +65,7 @@ export function CmsOverview() {
     return (
       /* Starts where the loaded header starts (24.5px at md+, below), so
          nothing jumps when the pages land. */
-      <div className="mx-auto max-w-6xl px-6 py-10 md:px-12 md:pt-[24.5px]">
+      <div className="mx-auto max-w-6xl px-0 pb-10 pt-2 md:px-12 md:pt-[24.5px]">
         <Skeleton className="h-9 w-48" />
         <Skeleton className="mt-8 h-32 w-full rounded-4xl" />
       </div>
@@ -78,8 +78,9 @@ export function CmsOverview() {
     /* Switch row alignment: at md+ the h1 (text-[28px] leading-tight, a 35px
        line box) is centred on the sidebar's Portal / Website switch at y=92.
        main's content box starts at 50px there: 50 + 24.5 + 17.5 = 92. pt-10
-       put it at 107.5. Below md it keeps pt-10. */
-    <div className="pv mx-auto max-w-6xl px-6 pb-8 pt-10 md:px-12 md:pt-[24.5px]">
+       put it at 107.5. Below md the page sits in main's own 16px gutter
+       (no extra px), as every other phone screen does. */
+    <div className="pv mx-auto max-w-6xl px-0 pb-8 pt-2 md:px-12 md:pt-[24.5px]">
       <style>{HOME_PALETTE}</style>
       <h1 className="font-heading text-[28px] font-medium leading-tight tracking-tight">
         Your website

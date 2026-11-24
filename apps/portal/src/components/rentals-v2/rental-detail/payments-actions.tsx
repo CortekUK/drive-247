@@ -53,7 +53,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui-v2/button";
 import { Checkbox } from "@/components/ui-v2/checkbox";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, PHONE_FORM_DIALOG } from "@/components/ui-v2/dialog";
 // v1's money dialogs, reused verbatim — see the header.
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { RefundDialog } from "@/components/shared/dialogs/refund-dialog";
@@ -169,7 +169,7 @@ function AimDialog({
 
   return (
     <DialogContent
-      className="max-h-[85vh] overflow-y-auto no-scrollbar"
+      className={cn("max-h-[85vh] overflow-y-auto no-scrollbar", PHONE_FORM_DIALOG)}
       aria-describedby={undefined}
       /* No implicit submit. This is not a form and Enter does nothing here —
          the confirming control has to be reached and pressed deliberately. */
@@ -335,7 +335,7 @@ function ReleaseDialog({ ledger, rentalId, onDone }: { ledger: Ledger; rentalId:
   };
 
   return (
-    <DialogContent aria-describedby={undefined}>
+    <DialogContent className={PHONE_FORM_DIALOG} aria-describedby={undefined}>
       <DialogHeader>
         <DialogTitle>Release the deposit</DialogTitle>
       </DialogHeader>

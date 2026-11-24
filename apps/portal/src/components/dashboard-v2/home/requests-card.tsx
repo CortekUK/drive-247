@@ -209,11 +209,11 @@ function DialogRow({
   return (
     <li
       style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }}
-      className="group flex animate-in items-center gap-2 rounded-xl pr-2 transition-colors fade-in-0 slide-in-from-bottom-3 duration-200 ease-out fill-mode-both hover:bg-gradient-to-r hover:from-[var(--pv-accent-bg)] hover:to-transparent motion-reduce:animate-none"
+      className="group flex animate-in items-center gap-2 max-sm:items-start max-sm:gap-0 max-sm:pr-0 rounded-xl pr-2 transition-colors fade-in-0 slide-in-from-bottom-3 duration-200 ease-out fill-mode-both hover:bg-gradient-to-r hover:from-[var(--pv-accent-bg)] hover:to-transparent motion-reduce:animate-none"
     >
-      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-4 px-3 py-2.5 text-left">
+      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-4 px-3 py-2.5 text-left max-sm:flex-wrap max-sm:gap-x-3 max-sm:gap-y-2 max-sm:px-2">
         <Avatar r={r} />
-        <span className="min-w-0 flex-1">
+        <span className="min-w-0 flex-1 max-sm:basis-[calc(100%-3rem)]">
           <span className="flex items-center gap-2">
             <span className="truncate text-[14px] font-semibold text-[var(--pv-ink)] transition-colors group-hover:text-[var(--pv-accent-ink)]">
               {r.customerName}
@@ -222,10 +222,10 @@ function DialogRow({
               {k.label}
             </span>
           </span>
-          <span className="block truncate text-[12.5px] text-[var(--pv-ink-3)]">{detail(r)}</span>
+          <span className="block truncate text-[12.5px] text-[var(--pv-ink-3)] max-sm:mt-0.5 max-sm:whitespace-normal">{detail(r)}</span>
         </span>
-        <span className="w-12 shrink-0 text-right text-[11.5px] tabular-nums text-[var(--pv-ink-3)]">{waited(r.at)}</span>
-        <span className="flex shrink-0 items-center gap-1 rounded-lg border border-[var(--pv-line)] bg-[var(--pv-paper)] px-2.5 py-1 text-[12px] font-medium text-[var(--pv-ink-2)] transition-colors group-hover:border-[var(--pv-accent-30)] group-hover:text-[var(--pv-accent-ink)]">
+        <span className="w-12 shrink-0 text-right text-[11.5px] tabular-nums text-[var(--pv-ink-3)] max-sm:ml-12 max-sm:w-auto max-sm:text-left">{waited(r.at)}</span>
+        <span className="flex shrink-0 items-center gap-1 rounded-lg max-sm:ml-auto border border-[var(--pv-line)] bg-[var(--pv-paper)] px-2.5 py-1 text-[12px] font-medium text-[var(--pv-ink-2)] transition-colors group-hover:border-[var(--pv-accent-30)] group-hover:text-[var(--pv-accent-ink)]">
           Review
           <ArrowRight className="size-3.5" aria-hidden />
         </span>
@@ -235,7 +235,7 @@ function DialogRow({
         onClick={onRemove}
         aria-label={`Remove ${r.customerName}'s ${k.label.toLowerCase()} request from this list`}
         title="Remove from list"
-        className="flex size-8 shrink-0 items-center justify-center rounded-full text-[var(--pv-ink-3)] transition-colors hover:bg-[var(--pv-late-bg)] hover:text-[var(--pv-late)]"
+        className="flex size-8 shrink-0 items-center justify-center rounded-full text-[var(--pv-ink-3)] transition-colors hover:bg-[var(--pv-late-bg)] hover:text-[var(--pv-late)] max-sm:mt-2 max-sm:size-10"
       >
         <X className="size-4" strokeWidth={2.25} />
       </button>
@@ -367,12 +367,14 @@ export function RequestsCard() {
       {/* Every request, grouped by kind. Portalled out of the card, so it
           carries `.pv` itself. */}
       <Dialog open={allOpen} onOpenChange={setAllOpen}>
-        <DialogContent className={`pv max-w-3xl gap-0 overflow-hidden p-0 ${PHONE_SHEET}`}>
-          <SheetGrabber onClose={() => setAllOpen(false)} />
+        <DialogContent className={`pv max-w-3xl gap-0 overflow-hidden p-0 ${PHONE_SHEET} max-md:flex max-md:flex-col`}>
           <DialogHeader
-            className="space-y-2 border-b border-[var(--pv-line)] px-7 pb-5 pt-6 text-left"
+            className="space-y-2 border-b border-[var(--pv-line)] px-7 pb-5 pt-6 text-left max-md:shrink-0 max-md:px-4 max-md:pb-4 max-md:pt-0"
             style={{ backgroundImage: CARD_WASH }}
           >
+            {/* Inside the header, so the header's wash runs to the sheet's top
+                edge instead of starting under a white strip. */}
+            <SheetGrabber onClose={() => setAllOpen(false)} />
             <DialogTitle className="text-[20px] font-semibold tracking-[-0.02em] text-[var(--pv-ink)]">
               Requests
             </DialogTitle>
@@ -386,7 +388,7 @@ export function RequestsCard() {
             <div
               role="tablist"
               aria-label="Filter requests"
-              className="mt-1 inline-flex max-w-full flex-wrap items-center gap-0.5 rounded-full bg-[var(--pv-wash)] p-1"
+              className="no-scrollbar mt-1 inline-flex max-w-full flex-wrap items-center gap-0.5 rounded-full bg-[var(--pv-wash)] p-1 max-md:flex-nowrap max-md:overflow-x-auto"
             >
               {([['all', 'All', requests.length, 'var(--pv-ink)', 'var(--pv-line)'] as const, ...(Object.keys(KIND) as RequestKind[]).map(
                 (kind) => [kind, `${KIND[kind].label}s`, requests.filter((r) => r.kind === kind).length, KIND[kind].ink, KIND[kind].tint] as const
@@ -400,7 +402,7 @@ export function RequestsCard() {
                     aria-selected={active}
                     onClick={() => setKindFilter(key)}
                     className={
-                      'flex items-center gap-2 rounded-full py-1.5 pl-3.5 pr-1.5 text-[12.5px] font-medium outline-none transition-all duration-200 ease-out focus-visible:ring-2 focus-visible:ring-[var(--pv-accent-30)] ' +
+                      'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full py-1.5 pl-3.5 pr-1.5 text-[12.5px] font-medium outline-none transition-all duration-200 ease-out focus-visible:ring-2 focus-visible:ring-[var(--pv-accent-30)] ' +
                       (active
                         ? 'bg-[var(--pv-paper)] text-[var(--pv-ink)] shadow-[0_0_0_1px_var(--pv-line)]'
                         : 'text-[var(--pv-ink-3)] hover:text-[var(--pv-ink)]')
@@ -429,7 +431,7 @@ export function RequestsCard() {
             </div>
           </DialogHeader>
 
-          <div className="max-h-[70vh] overflow-y-auto px-5 py-5">
+          <div className="max-h-[70vh] overflow-y-auto overscroll-contain px-5 py-5 max-md:max-h-none max-md:min-h-0 max-md:flex-1 max-md:px-2 max-md:pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)]">
           {/* Re-keyed on the filter, so switching pills replays the Trax
               panel's entrance (trax-panel.tsx): rise 12px and fade in over
               200ms ease-out — here with each row a beat after the last. */}
@@ -469,7 +471,7 @@ export function RequestsCard() {
 
           {/* Undo, for the last request taken off the list. */}
           {lastRemoved && (
-            <div className="flex animate-in items-center justify-between gap-3 border-t border-[var(--pv-line)] bg-[var(--pv-wash)] px-6 py-3 text-[12.5px] fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
+            <div className="flex animate-in items-center justify-between gap-3 border-t border-[var(--pv-line)] bg-[var(--pv-wash)] px-6 py-3 max-md:shrink-0 max-md:px-4 text-[12.5px] fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
               <span className="min-w-0 truncate text-[var(--pv-ink-2)]">
                 Removed {lastRemoved.customerName}&rsquo;s {KIND[lastRemoved.kind].label.toLowerCase()} request from your list.
               </span>

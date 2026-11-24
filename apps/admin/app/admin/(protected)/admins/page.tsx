@@ -236,7 +236,7 @@ export default function ManageAdminsPage() {
       {/* `overflow-x-auto`, not `overflow-hidden`: this table is wider than a
           phone and the card was CLIPPING the columns past the fold with no way
           to reach them. Any non-visible overflow still rounds the corners. */}
-      <div className="overflow-x-auto rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10">
+      <div className="overflow-x-auto rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10" data-phone-cards="">
         <table className="min-w-full divide-y divide-dark-border">
           <thead className="bg-card/95">
             <tr>

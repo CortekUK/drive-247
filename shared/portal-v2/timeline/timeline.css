@@ -282,3 +282,14 @@
 .tl-fill .tl-grid-row { border-bottom-color: hsl(var(--primary) / .08); }
 .tl-fill .tl-weekend { background: hsl(var(--primary) / .045); }
 .tl-fill .tl-footer { background: hsl(var(--primary) / .04); border-top-color: hsl(var(--primary) / .12); }
+
+/* Phones: the name column gave up half the screen (176–204px of ~390), leaving
+   room for four days. It narrows so a week fits beside it; the name still
+   wraps to two lines and the full text stays in the row's title. The inline
+   --tl-identity is the desktop width, so this wins with !important. */
+@media (max-width: 639px) {
+  .rental-timeline:not(.tl-compact) .tl-axis { --tl-identity: 120px !important; }
+  .tl-identity { padding: 8px 10px; gap: 6px; }
+  .tl-fill .tl-identity { padding-left: 12px; }
+  .tl-vehicle-thumb, .tl-vehicle-placeholder { width: 26px; height: 20px; }
+}

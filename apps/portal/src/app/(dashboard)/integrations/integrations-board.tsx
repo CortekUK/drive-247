@@ -38,6 +38,7 @@ import { panelFor } from "./_panels/registry";
 import { partitionByPins, useIntegrationPins } from "./integration-pins";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -46,7 +47,7 @@ import {
 // The branch drew these two from `@phosphor-icons/react`, which is not a
 // dependency of this app. lucide-react — already the icon set everywhere else
 // in the portal — carries both, and takes the same `size` / `color` props.
-import { Globe, IdCard, Pin } from "lucide-react";
+import { Globe, IdCard, Pin, X } from "lucide-react";
 // Integration billing (northwind only): premium, beta, not-available and hidden
 // flags from the super admin's catalog. See premium-integration.tsx.
 import {
@@ -576,6 +577,10 @@ export function IntegrationsBoard() {
             // Education screens: a narrow, near-square dialog (see
             // DialogWidthContext in _panels/_screens.tsx).
             selected && SCREEN_LED.has(selected.name) && narrow && "sm:max-w-[860px]",
+            // Phones: still a floating card, but short enough that the dimmed
+            // page shows above and below it to tap for closing (94vh left no
+            // room, and a phone has no Esc). 16px gutter at the sides too.
+            "max-sm:max-h-[calc(100dvh-8rem)] max-sm:w-[calc(100%-2rem)] max-sm:px-4 max-sm:pb-5 max-sm:pt-4",
           )}>
           <DialogWidthContext.Provider value={setNarrow}>
           {selected && (() => {
@@ -612,7 +617,7 @@ export function IntegrationsBoard() {
                     what they are in their own headline, so the name and
                     tagline stay for screen readers only and the status chip
                     moves up beside the logo. */}
-                <div className={cn("mb-2 flex h-16 items-center gap-3", SCREEN_LED.has(selected.name) && "-mt-2 mb-0 h-12")}>
+                <div className={cn("mb-2 flex h-16 items-center gap-3", SCREEN_LED.has(selected.name) && "-mt-2 mb-0 h-12 max-sm:mt-0 max-sm:h-auto max-sm:flex-wrap max-sm:gap-y-3")}>
                   {selected.wordmark ? (
                     <span className="text-2xl font-bold tracking-tight text-foreground">{selected.wordmark}</span>
                   ) : (
@@ -623,9 +628,23 @@ export function IntegrationsBoard() {
                     // Three matching pills (Ghulam, Oct 2): Add-on, Beta and the
                     // status share one height, padding, size and casing here.
                     // The card keeps its own marks; only the dialog is evened.
-                    <div className="ml-auto flex items-center gap-2 [&>*]:inline-flex [&>*]:h-6 [&>*]:min-w-[4.5rem] [&>*]:items-center [&>*]:justify-center [&>*]:rounded-full [&>*]:px-2.5 [&>*]:text-[11px] [&>*]:font-medium [&>*]:normal-case [&>*]:leading-none [&>*]:tracking-normal">
+                    <div className="ml-auto flex items-center gap-2 max-sm:order-last max-sm:ml-0 max-sm:basis-full max-sm:flex-wrap empty:hidden [&>*]:inline-flex [&>*]:h-6 [&>*]:min-w-[4.5rem] [&>*]:items-center [&>*]:justify-center [&>*]:rounded-full [&>*]:px-2.5 [&>*]:text-[11px] [&>*]:font-medium [&>*]:normal-case [&>*]:leading-none [&>*]:tracking-normal">
                       {dialogBadges}
                     </div>
+                  )}
+                  {/* Phones only: the way out. On desktop Esc or a click
+                      outside closes it, and the status chip owns the corner.
+                      On a phone the badges drop to their own line under the
+                      logo, so two or three of them can never push this off
+                      the right edge (Turo Sync carries Add-on, Beta and a
+                      status). */}
+                  {SCREEN_LED.has(selected.name) && (
+                    <DialogClose
+                      aria-label="Close"
+                      className="hidden size-9 shrink-0 items-center justify-center rounded-full bg-foreground/[0.06] max-sm:ml-auto text-foreground/70 outline-none transition-colors hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring max-sm:flex"
+                    >
+                      <X className="size-4" />
+                    </DialogClose>
                   )}
                 </div>
                 <DialogTitle className={cn("flex items-center gap-2", SCREEN_LED.has(selected.name) && "sr-only")}>

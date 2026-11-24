@@ -353,7 +353,7 @@ const V2_LOCKBOX_MESSAGES_HREF = `/settings?tab=templates#${settingsSectionId('l
  * gives sticky something to work against, and it is exactly the scrollport's
  * content box, so `<main>`'s own `p-4` still fits and nothing scrolls.
  */
-const V2_SETTINGS_PAGE_COLUMN = `w-full min-h-full max-w-[1160px] space-y-8 pb-6 md:pt-[26px] ${SETTINGS_COLUMN_BESIDE_TRAX}`;
+const V2_SETTINGS_PAGE_COLUMN = `w-full min-h-full max-w-[1160px] space-y-8 max-md:space-y-4 pb-6 md:pt-[26px] ${SETTINGS_COLUMN_BESIDE_TRAX}`;
 
 /**
  * Light → dark colour sync.
@@ -3134,7 +3134,7 @@ const Settings = () => {
           ))}
         </SettingsTabs>
       ) : (
-        <div className="space-y-10">
+        <div className="space-y-10 max-md:space-y-2">
           {sections.map((section) => (
             <SettingsSection
               key={section.anchor}
@@ -3785,7 +3785,7 @@ const Settings = () => {
 
         case 'reminders':
           return (
-            <div className="space-y-10">
+            <div className="space-y-10 max-md:space-y-2">
               <div className="settings-v2-body">
                 <EmailNotificationSettings canEdit={canEditSettings('reminders')} />
               </div>
@@ -3805,7 +3805,7 @@ const Settings = () => {
           // messages permission; the lockbox message follows Key handover's.
           const canEditTemplates = canEditSettings('templates');
           return (
-            <div className="space-y-10">
+            <div className="space-y-10 max-md:space-y-2">
               <BusinessRentalGate thing="your return reminder" rows={1}>
                 <ReturnReminderPanelV2
                   form={rentalForm}

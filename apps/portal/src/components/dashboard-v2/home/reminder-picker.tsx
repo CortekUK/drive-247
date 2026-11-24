@@ -98,7 +98,7 @@ export function ReminderPicker({
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className={`pv max-w-[560px] gap-0 overflow-y-auto p-0 ${PHONE_SHEET}`}>
         <SheetGrabber onClose={() => setOpen(false)} />
-        <DialogHeader className="flex-row items-center gap-2 space-y-0 border-b border-[var(--pv-line)] px-5 py-4 text-left">
+        <DialogHeader className="flex-row items-center gap-2 space-y-0 border-b border-[var(--pv-line)] px-5 py-4 text-left max-md:px-4 max-md:pb-4 max-md:pt-3 max-md:pr-16">
           <AlarmClock className="size-4 text-[var(--pv-accent-ink)]" strokeWidth={2.25} />
           <DialogTitle className="text-[15px] font-semibold text-[var(--pv-ink)]">Remind me</DialogTitle>
         </DialogHeader>

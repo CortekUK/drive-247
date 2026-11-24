@@ -218,20 +218,27 @@ export function SidebarCustomizerDialog({ open, onOpenChange }: { open: boolean;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-0 p-0 sm:max-w-6xl">
-        <DialogHeader className="border-b border-border px-5 py-4 text-left sm:px-7">
+      {/* Phones: full screen, where the menu it is opened from sits, and in
+          the menu's wash (globals.css `[data-sidebar-edit]`), as the operator
+          portal's customiser is. Header and footer stay put; the columns
+          scroll between them. */}
+      <DialogContent
+        data-sidebar-edit=""
+        className="gap-0 p-0 sm:max-w-6xl max-sm:inset-0 max-sm:left-0 max-sm:top-0 max-sm:flex max-sm:h-dvh max-sm:max-h-none max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:flex-col max-sm:overflow-hidden max-sm:rounded-none max-sm:pt-[env(safe-area-inset-top,0px)] max-sm:pb-[env(safe-area-inset-bottom,0px)] max-sm:shadow-none max-sm:ring-0"
+      >
+        <DialogHeader className="border-b border-border px-5 py-4 text-left max-sm:shrink-0 max-sm:pr-12 sm:px-7">
           <DialogTitle>Customise sidebar</DialogTitle>
           <DialogDescription>Put the pages you use in the order you use them.</DialogDescription>
         </DialogHeader>
 
         {isUnavailable ? (
-          <div className="px-6 py-10 text-center text-sm text-muted-foreground">
+          <div className="px-6 py-10 text-center text-sm text-muted-foreground max-sm:min-h-0 max-sm:flex-1">
             Your saved sidebar could not be loaded, so customising is unavailable right now.
           </div>
         ) : (
           /* Three columns from md; below it they stack (at sm the two fixed
              columns left the middle one a sliver). */
-          <div className="grid grid-cols-1 divide-y divide-border md:grid-cols-[310px_1fr_280px] md:divide-x md:divide-y-0">
+          <div className="grid grid-cols-1 divide-y divide-border md:grid-cols-[310px_1fr_280px] md:divide-x md:divide-y-0 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto max-sm:overscroll-contain">
             {/* Pages off the sidebar */}
             <div className={SCROLL_COLUMN}>
               <ColumnHeading title="Add to your sidebar" count={draft.hidden.length} hint="Pages you removed, and pages that live elsewhere." />
@@ -305,7 +312,7 @@ export function SidebarCustomizerDialog({ open, onOpenChange }: { open: boolean;
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-2 border-t border-border px-5 py-3 sm:px-7">
+        <div className="flex items-center justify-between gap-2 border-t border-border px-5 py-3 max-sm:shrink-0 sm:px-7">
           <Button
             variant="ghost"
             size="sm"

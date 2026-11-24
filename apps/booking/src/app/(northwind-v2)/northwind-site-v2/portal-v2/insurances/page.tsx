@@ -228,7 +228,7 @@ export default function PortalInsurancesPage() {
             One fact per cell, one line per row. A long policy number truncates
             and is shown whole on hover.
           */}
-          <ListTable rows={progressive} minWidth="min-w-[980px]">
+          <ListTable rows={progressive} minWidth="min-w-[980px]" phoneCards>
             <ListTableHeader>
               <ListHead className="w-[26%]">Insurance</ListHead>
               <ListHead className="w-[13%]">Provider</ListHead>
@@ -279,7 +279,7 @@ export default function PortalInsurancesPage() {
                         )}
                       </ListCell>
                       <ListCell>
-                        <span className={cn(V2_LIST_CLASSES.text, 'whitespace-nowrap tabular-nums')}>
+                        <span className={cn(V2_LIST_CLASSES.text, 'whitespace-nowrap tabular-nums max-lg:whitespace-normal')}>
                           {coverRange(row.start, row.end)}
                         </span>
                       </ListCell>

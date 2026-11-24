@@ -286,8 +286,8 @@ function Key({
     <div className="flex min-w-0 items-center gap-2 rounded-3xl bg-muted/40 p-3 [@media(max-height:860px)]:py-2">
       <div className="flex min-w-0 flex-1 flex-col justify-between gap-2 self-stretch">
         <div className="leading-tight">
-          <p className="truncate text-[13px] font-medium whitespace-nowrap">{label}</p>
-          <p className="truncate text-[11px] text-muted-foreground">{hint}</p>
+          <p className="truncate text-[13px] font-medium whitespace-nowrap max-sm:whitespace-normal">{label}</p>
+          <p className="truncate text-[11px] text-muted-foreground max-sm:whitespace-normal">{hint}</p>
         </div>
         <label className="flex items-baseline gap-1">
           {prefix ? <span className="text-base text-muted-foreground">{prefix}</span> : null}

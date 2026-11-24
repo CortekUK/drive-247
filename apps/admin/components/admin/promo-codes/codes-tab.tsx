@@ -16,7 +16,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/sonner';
 import { FilterChip, FilterSearch, FilterSection, FilterShell } from '@/components/admin/filter-primitives';
 import { FilterReveal } from '@/components/admin/overview-flip';
-import { cn } from '@/lib/utils';
 import { promoApi, type PromoCode } from './api';
 import { TermsFields, draftFromTerms, termsFromDraft, type TermsDraft } from './shared';
 
@@ -125,7 +124,7 @@ export function CodesTab({ canEdit }: { canEdit: boolean }) {
         <CardContent className="p-0">
           {/* With rows, scrolls sideways inside the card on phones rather than squashing;
               the empty state keeps the card's width. */}
-          <Table className={cn(!loading && codes.length > 0 && 'max-md:min-w-[640px] max-md:[&_td]:whitespace-nowrap max-md:[&_th]:whitespace-nowrap')}>
+          <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Code</TableHead>

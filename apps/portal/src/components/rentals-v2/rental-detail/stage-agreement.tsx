@@ -90,7 +90,7 @@ import { resolveAgreementMileage } from "@/lib/agreement-mileage";
 import type { StageProps } from "./stages";
 import { SHOW_MULTI_PERIOD } from "./multi-period";
 import { AgreementTemplateRowV2, useRentalTemplateChoiceV2 } from "./agreement-template-row-v2";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, PHONE_FORM_DIALOG } from "@/components/ui-v2/dialog";
 import {
   fmtDate,
   fmtDateTime,
@@ -701,7 +701,7 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
       {/* Island layout, the Customer stage's grammar: full-width cards stacked
           down the pane — the document, the template, then the terms filling
           what is left. Earlier versions open in a dialog. */}
-      <div className="flex h-full min-h-0 flex-col gap-4">
+      <div className="flex h-full min-h-0 flex-col gap-4 max-lg:h-auto">
         {/* ── out of date ─────────────────────────────────────────────────── */}
         {showBanner && (
           <div className="shrink-0">
@@ -771,9 +771,9 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
               {steps.map((s) => (
                 <li key={s.label} className="min-w-0">
                   <span className={cn("block h-1 rounded-full", s.done ? "bg-success" : "bg-foreground/10")} />
-                  <p className={cn("mt-1.5 truncate text-xs", s.done ? "font-medium" : "text-muted-foreground")}>
+                  <p className={cn("mt-1.5 truncate text-xs max-lg:whitespace-normal", s.done ? "font-medium" : "text-muted-foreground")}>
                     {s.label}
-                    {s.at && <span className="ml-1.5 font-normal text-muted-foreground">{s.at}</span>}
+                    {s.at && <span className="ml-1.5 font-normal text-muted-foreground max-lg:ml-0 max-lg:block">{s.at}</span>}
                   </p>
                 </li>
               ))}
@@ -816,7 +816,7 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
 
       {/* ── earlier versions — a dialog, not a growing list ──────────────── */}
       <Dialog open={versionsOpen} onOpenChange={setVersionsOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto no-scrollbar sm:max-w-xl" aria-describedby={undefined}>
+        <DialogContent className={cn("max-h-[85vh] overflow-y-auto no-scrollbar sm:max-w-xl", PHONE_FORM_DIALOG)} aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Earlier versions</DialogTitle>
           </DialogHeader>

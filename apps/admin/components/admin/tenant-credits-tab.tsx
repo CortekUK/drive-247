@@ -202,9 +202,9 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
           <p className="text-sm text-dark-text-secondary mt-0.5">Recent credit activity for this tenant</p>
         </div>
 
-        <div className="overflow-x-auto">
-          {/* Scrolls sideways on a phone; rows stay one line. */}
-          <table className="w-full max-md:min-w-[640px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
+        {/* Below `lg` the rows are cards (lib/phone-cards.ts). */}
+        <div className="overflow-x-auto" data-phone-cards="">
+          <table className="w-full">
             <thead>
               <tr className="border-b border-dark-border">
                 <th className="h-10 whitespace-nowrap px-3 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Date</th>

@@ -675,10 +675,12 @@ function NotificationWorkspace({
   return (
     <div className="flex h-full min-h-0 flex-col max-md:h-auto lg:flex-row" data-notification-item={item.key}>
       {/* MAIN: the preview, then its switch, theme, Send test and Save. */}
-      {/* Phones: the preview gets the screen under the bar (the column scrolls
-          on to Trax below), rather than what is left beside a 70vh chat. */}
+      {/* Phones: the preview is as tall as it draws (FitToBox), with its
+          switch and Save straight under it and Trax below, rather than a
+          screen-tall box that centred the phones between empty bands (user
+          review, Nov 2026). */}
       <section
-        className="flex min-h-0 min-w-0 flex-1 flex-col max-md:h-[calc(100dvh-57px)] max-md:flex-none"
+        className="flex min-h-0 min-w-0 flex-1 flex-col max-md:h-auto max-md:flex-none"
         data-notification-main="" aria-label={`${item.name}: preview`}>
         <h2 className="sr-only">{message === 'app' ? 'App message' : 'Email'}</h2>
 
@@ -934,12 +936,25 @@ function FitToBox({ children, grow = false }: { children: ReactNode; grow?: bool
   const inner = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [top, setTop] = useState(0);
+  /** Phones: the box takes the content's scaled height instead of the column's. */
+  const [phoneHeight, setPhoneHeight] = useState<number | null>(null);
   useEffect(() => {
     const o = outer.current;
     const i = inner.current;
     if (!o || !i || typeof ResizeObserver === 'undefined') return;
     const fit = (): void => {
       const h = i.offsetHeight;
+      if (window.innerWidth < 768) {
+        // Fit the width only, and let the box be as tall as the result.
+        const w = i.offsetWidth;
+        const roomW = o.clientWidth;
+        const next = grow && w > 0 && roomW > 0 ? Math.min(1.8, roomW / w) : 1;
+        setScale(next);
+        setTop(0);
+        setPhoneHeight(h > 0 ? Math.ceil(h * next) : null);
+        return;
+      }
+      setPhoneHeight(null);
       const room = o.clientHeight;
       let next = h > 0 && room > 0 ? Math.min(1, room / h) : 1;
       if (grow && h > 0 && room > 0) {
@@ -957,7 +972,12 @@ function FitToBox({ children, grow = false }: { children: ReactNode; grow?: bool
     return () => observer.disconnect();
   }, [grow]);
   return (
-    <div ref={outer} className="relative min-h-0 flex-1 overflow-hidden" data-fit-to-box="">
+    <div
+      ref={outer}
+      className="relative min-h-0 flex-1 overflow-hidden"
+      style={phoneHeight != null ? { height: phoneHeight, flex: 'none' } : undefined}
+      data-fit-to-box=""
+    >
       <div
         ref={inner}
         className={cn('absolute left-1/2 top-0 origin-top', grow ? 'w-max' : 'w-full')}
@@ -1029,8 +1049,10 @@ function EmailPair({
 
   const PW = GMAIL_PREVIEW_VIEWS.phone.mockupWidth;
   const DW = GMAIL_PREVIEW_VIEWS.desktop.mockupWidth;
-  const ready = m.W > 0 && m.H > 0 && m.hd > 0 && m.hp > 0;
-  const sp = ready ? Math.min(m.H / m.hp, (m.W * (m.phoneOnly ? 1 : 0.4)) / PW) : 0;
+  // Phones: the phone Gmail at the box's width, and the box as tall as that
+  // draws (the column no longer hands it a screen-tall height to fill).
+  const ready = m.phoneOnly ? m.W > 0 && m.hp > 0 : m.W > 0 && m.H > 0 && m.hd > 0 && m.hp > 0;
+  const sp = !ready ? 0 : m.phoneOnly ? m.W / PW : Math.min(m.H / m.hp, (m.W * 0.4) / PW);
   const wp = PW * sp;
   const wd = Math.max(0, m.W - PAIR_GAP - wp);
   const MIN_WIDEN = 0.65;
@@ -1048,7 +1070,12 @@ function EmailPair({
   );
 
   return (
-    <div ref={box} className="relative min-h-0 flex-1 overflow-hidden" data-email-previews="">
+    <div
+      ref={box}
+      className="relative min-h-0 flex-1 overflow-hidden"
+      style={m.phoneOnly && ready ? { height: Math.ceil(m.hp * sp), flex: 'none' } : undefined}
+      data-email-previews=""
+    >
       <div
         ref={desk}
         className="absolute left-0 top-0 origin-top-left"

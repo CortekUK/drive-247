@@ -18,6 +18,7 @@
  *                    each option's stored value, move earlier / later, delete
  */
 
+import { useIsMobile } from '@/hooks/use-mobile';
 import { ArrowLeft, ArrowRight, Check, GripVertical, Loader2, Plus, Settings2, Trash2 } from 'lucide-react';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -157,7 +158,7 @@ export function OnboardingQuestionCard({
           placeholder="Ask something"
           aria-label="Question"
           onChange={(e) => onDraftChange({ prompt: e.target.value })}
-          className={cn(INLINE, 'resize-none py-1 text-[clamp(2rem,4vw,3.5rem)] font-medium leading-[1.04] tracking-[-0.032em] text-foreground [field-sizing:content]')}
+          className={cn(INLINE, 'resize-none py-1 text-[clamp(2rem,4vw,3.5rem)] max-md:text-[1.625rem] font-medium leading-[1.04] tracking-[-0.032em] text-foreground [field-sizing:content]')}
         />
         <textarea
           rows={1}
@@ -316,7 +317,7 @@ function AnswerList({
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
       <SortableContext items={keys.current} strategy={verticalListSortingStrategy}>
-        <ul className="-ml-7 flex flex-col gap-0.5" aria-label="Answers">
+        <ul className="-ml-7 flex flex-col gap-0.5 max-md:-ml-2" aria-label="Answers">
           {options.map((option, index) => (
             <AnswerRow
               key={keys.current[index]}
@@ -376,6 +377,7 @@ function AnswerRow({
   onRemove: () => void;
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: busy });
+  const phone = useIsMobile();
   return (
     <li
       ref={setNodeRef}
@@ -387,7 +389,7 @@ function AnswerRow({
         type="button"
         aria-label={`Drag answer ${index + 1} to reorder`}
         title="Drag to reorder"
-        className="flex h-8 w-5 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/50 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/opt:opacity-100 active:cursor-grabbing max-md:opacity-100"
+        className="flex h-8 w-5 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/50 max-md:-mr-1 max-md:text-muted-foreground/40 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/opt:opacity-100 active:cursor-grabbing max-md:opacity-100"
         {...attributes}
         {...listeners}
       >
@@ -406,17 +408,35 @@ function AnswerRow({
           <span className={cn('size-[10px] ring-1 ring-foreground/30', multi ? 'rounded-[3px]' : 'rounded-full')} />
         )}
       </span>
-      <input
-        value={option.label}
-        maxLength={60}
-        disabled={busy}
-        placeholder="An answer"
-        aria-label={`Answer ${index + 1}`}
-        onChange={(e) => onLabel(e.target.value)}
-        className={cn(INLINE, 'ml-1 h-8 w-auto min-w-[8rem] max-w-[32rem] text-[17px] [field-sizing:content]', first ? 'font-medium text-foreground' : 'text-foreground/60')}
-      />
-      {/* Remove, right after the text, only while hovered or focused. */}
-      <span className="pointer-events-none flex items-center rounded-full bg-card opacity-0 shadow-sm ring-1 ring-border transition-opacity duration-200 focus-within:pointer-events-auto focus-within:opacity-100 group-hover/opt:pointer-events-auto group-hover/opt:opacity-100 motion-reduce:transition-none">
+      {phone ? (
+        // Phones: a one-row box that wraps a long answer ("Card payments,
+        // through another provider") onto a second line instead of cutting
+        // it off. Enter never adds a line break: an answer is one line.
+        <textarea
+          value={option.label}
+          rows={1}
+          maxLength={60}
+          disabled={busy}
+          placeholder="An answer"
+          aria-label={`Answer ${index + 1}`}
+          onChange={(e) => onLabel(e.target.value.replace(/\s*\n\s*/g, ' '))}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+          className={cn(INLINE, 'ml-1 min-h-8 min-w-0 flex-1 resize-none py-1 text-[15px] leading-snug [field-sizing:content]', first ? 'font-medium text-foreground' : 'text-foreground/60')}
+        />
+      ) : (
+        <input
+          value={option.label}
+          maxLength={60}
+          disabled={busy}
+          placeholder="An answer"
+          aria-label={`Answer ${index + 1}`}
+          onChange={(e) => onLabel(e.target.value)}
+          className={cn(INLINE, 'ml-1 h-8 w-auto min-w-[8rem] max-w-[32rem] text-[17px] [field-sizing:content]', first ? 'font-medium text-foreground' : 'text-foreground/60')}
+        />
+      )}
+      {/* Remove, right after the text, only while hovered or focused — and
+          always on a phone, which has no hover to reveal it. */}
+      <span className="pointer-events-none flex shrink-0 items-center rounded-full bg-card opacity-0 max-md:pointer-events-auto max-md:opacity-100 shadow-sm ring-1 ring-border transition-opacity duration-200 focus-within:pointer-events-auto focus-within:opacity-100 group-hover/opt:pointer-events-auto group-hover/opt:opacity-100 motion-reduce:transition-none">
         <IconButton label={`Remove answer ${index + 1}`} disabled={busy || !canRemove} onClick={onRemove} danger>
           <Trash2 className="size-3.5" />
         </IconButton>

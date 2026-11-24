@@ -312,7 +312,14 @@ function usePhoneCardLabels(ref: RefObject<HTMLElement | null>, enabled: boolean
     const root = ref.current;
     if (!enabled || !root || typeof MutationObserver === "undefined") return;
     const sync = () => {
-      const heads = Array.from(root.querySelectorAll("thead tr:first-child > th")).map((th) => (th.textContent ?? "").trim());
+      // Screen-reader-only text is not a heading the eye sees: an actions
+      // column headed `<span class="sr-only">Actions</span>` stays unlabelled,
+      // so its ⋯ goes to the card's corner instead of a labelled row.
+      const heads = Array.from(root.querySelectorAll("thead tr:first-child > th")).map((th) => {
+        const copy = th.cloneNode(true) as HTMLElement;
+        copy.querySelectorAll(".sr-only").forEach((el) => el.remove());
+        return (copy.textContent ?? "").trim();
+      });
       root.querySelectorAll("tbody tr").forEach((tr) => {
         let col = 0;
         Array.from(tr.children).forEach((td) => {

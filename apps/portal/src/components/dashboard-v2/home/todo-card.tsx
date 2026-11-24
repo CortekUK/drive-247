@@ -116,10 +116,10 @@ function EditTodoDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={`pv max-w-md gap-0 overflow-hidden p-0 ${PHONE_SHEET}`}>
         <SheetGrabber onClose={() => onOpenChange(false)} />
-        <DialogHeader className="px-6 pb-2 pt-5 text-left">
+        <DialogHeader className="px-6 pb-2 pt-5 text-left max-md:px-4 max-md:pt-3 max-md:pr-16">
           <DialogTitle className="text-[16px] font-semibold text-[var(--pv-ink)]">Edit to-do</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 px-6 pb-5 pt-2">
+        <div className="space-y-4 px-6 pb-5 pt-2 max-md:px-4">
           <textarea
             autoFocus
             value={body}
@@ -685,7 +685,7 @@ export function TodoCard() {
       <Dialog open={expanded} onOpenChange={setExpanded}>
         <DialogContent className={`pv flex max-h-[85vh] max-w-2xl flex-col gap-0 overflow-hidden p-0 ${PHONE_SHEET}`}>
           <SheetGrabber onClose={() => setExpanded(false)} />
-          <DialogHeader className="border-b border-[var(--pv-line)] px-6 pb-4 pt-5 text-left">
+          <DialogHeader className="border-b border-[var(--pv-line)] px-6 pb-4 pt-5 text-left max-md:px-4 max-md:pt-2 max-md:pr-16">
             <DialogTitle className="text-[20px] font-semibold tracking-[-0.02em] text-[var(--pv-ink)]">To do</DialogTitle>
           </DialogHeader>
           <div className="flex min-h-0 flex-1 flex-col pb-2 pt-1">

@@ -304,7 +304,7 @@ export function PreviewSwitch<T extends string>({
             aria-label={iconOnly && Icon ? option.label : undefined}
             title={iconOnly && Icon ? option.label : undefined}
             className={cn(
-              "inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50",
+              "v2-phone-hit inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50",
               selected
                 ? "bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
                 : "text-muted-foreground hover:bg-primary/10 hover:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]",

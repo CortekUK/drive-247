@@ -35,7 +35,7 @@ function WhenStep({ start, state, go }: { start: string | null; state: Extension
   const days = end ? differenceInCalendarDays(end, from) : null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
+    <div className="flex h-full min-h-0 flex-col gap-4 max-lg:h-auto">
       {/* Start is the booking's end — shown, not chosen. */}
       <div className="grid shrink-0 grid-cols-2 gap-3">
         <div className="rounded-2xl bg-muted/50 px-4 py-3">

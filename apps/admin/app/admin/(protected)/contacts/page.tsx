@@ -333,7 +333,8 @@ export default function ContactRequestsPage() {
       </div>
 
       <div className="overflow-hidden rounded-3xl border border-border bg-card">
-        <div className="overflow-x-auto">
+        {/* Below `lg` the rows are cards (lib/phone-cards.ts). */}
+        <div className="overflow-x-auto" data-phone-cards="">
           <table className="w-full min-w-[920px] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -376,7 +377,7 @@ export default function ContactRequestsPage() {
                           {r.is_test && <span className="text-warning">· Test</span>}
                         </span>
                       </td>
-                      <td className="max-w-[220px] px-3 py-3">
+                      <td className="max-w-[220px] px-3 py-3" data-card-title="">
                         <p className="truncate font-medium text-foreground">{r.contact_name}</p>
                         {(companyOf(r) || r.city_state) && (
                           <p className="truncate text-xs text-muted-foreground">{[companyOf(r), r.city_state].filter(Boolean).join(' · ')}</p>

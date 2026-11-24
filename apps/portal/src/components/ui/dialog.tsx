@@ -62,7 +62,9 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-[100] grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg sm:rounded-lg",
+        "fixed left-[50%] top-[50%] z-[100] grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg sm:rounded-lg max-md:w-[calc(100%-2rem)] max-md:max-h-[calc(100dvh-2rem)] max-md:overflow-y-auto max-md:overscroll-contain max-md:rounded-2xl",
+        // Phones and tablets: floats 1rem in from every edge and scrolls inside
+        // rather than running off the screen (same rule as ui-v2/dialog.tsx).
         MOTION_DIALOG,
         className,
       )}

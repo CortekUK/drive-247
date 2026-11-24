@@ -60,7 +60,7 @@ import { CancelRentalDialog } from "@/components/shared/dialogs/cancel-rental-di
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui-v2/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, PHONE_FORM_DIALOG, PHONE_SCREEN_DIALOG } from "@/components/ui-v2/dialog";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -278,7 +278,7 @@ export function StagePayments({ detail, refetch }: StageProps) {
           Paid = Remaining — then charges and payments as two full-width cards
           sharing the height. Long lists scroll inside their own card; detail
           and receipts open in dialogs. */}
-      <div className="flex h-full min-h-0 flex-col gap-4">
+      <div className="flex h-full min-h-0 flex-col gap-4 max-lg:h-auto">
         {/* ── the balance ─────────────────────────────────────────────────── */}
         <Surface className="shrink-0 px-6 py-5">
           <div className="flex flex-wrap items-end gap-x-10 gap-y-4" data-tour="rental-outstanding">
@@ -363,7 +363,7 @@ export function StagePayments({ detail, refetch }: StageProps) {
           openLabel="Open all charges"
           onOpen={() => setListOpen("charges")}
           aside={
-            <span className="inline-flex items-baseline whitespace-nowrap pr-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            <span className="inline-flex items-baseline whitespace-nowrap pr-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground max-lg:hidden">
               <span className="w-24 text-right">Total</span>
               <Op>−</Op>
               <span className="w-24 text-right">Paid</span>
@@ -453,7 +453,7 @@ export function StagePayments({ detail, refetch }: StageProps) {
       </Dialog>
       {/* ── every charge, in full ─────────────────────────────────────────── */}
       <Dialog open={listOpen === "charges"} onOpenChange={(o) => !o && setListOpen(null)}>
-        <DialogContent showCloseButton={false} className="flex max-h-[88vh] flex-col gap-0 bg-white p-0 sm:max-w-3xl dark:bg-card">
+        <DialogContent showCloseButton={false} className={cn("flex max-h-[88vh] flex-col gap-0 bg-white p-0 sm:max-w-3xl dark:bg-card", PHONE_SCREEN_DIALOG)}>
           <ListHeader
             title="Charges"
             sub={`${detail.rentalNumber ?? "This rental"} · ${ledger.charges.length} charge${ledger.charges.length === 1 ? "" : "s"}`}
@@ -472,7 +472,7 @@ export function StagePayments({ detail, refetch }: StageProps) {
               </Button>
             )}
           </ListHeader>
-          <div className="min-h-0 overflow-y-auto px-9 pb-9 no-scrollbar">
+          <div className="min-h-0 overflow-y-auto px-9 pb-9 no-scrollbar max-sm:flex-1 max-sm:px-4 max-sm:pb-6">
             <Facts
               items={[
                 { label: "Total", value: usd(t.charged) },
@@ -485,7 +485,7 @@ export function StagePayments({ detail, refetch }: StageProps) {
                 },
               ]}
             />
-            <div className="mt-6 flex items-baseline justify-end pr-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="mt-6 flex items-baseline justify-end pr-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground max-lg:hidden">
               <span className="w-24 text-right">Total</span>
               <Op>−</Op>
               <span className="w-24 text-right">Paid</span>
@@ -509,7 +509,7 @@ export function StagePayments({ detail, refetch }: StageProps) {
 
       {/* ── every payment, in full ─────────────────────────────────────── */}
       <Dialog open={listOpen === "payments"} onOpenChange={(o) => !o && setListOpen(null)}>
-        <DialogContent showCloseButton={false} className="flex max-h-[88vh] flex-col gap-0 bg-white p-0 sm:max-w-3xl dark:bg-card">
+        <DialogContent showCloseButton={false} className={cn("flex max-h-[88vh] flex-col gap-0 bg-white p-0 sm:max-w-3xl dark:bg-card", PHONE_SCREEN_DIALOG)}>
           <ListHeader
             title="Payments"
             sub={`${detail.rentalNumber ?? "This rental"} · ${ledger.payments.length} payment${ledger.payments.length === 1 ? "" : "s"}`}
@@ -522,7 +522,7 @@ export function StagePayments({ detail, refetch }: StageProps) {
               </Button>
             )}
           </ListHeader>
-          <div className="min-h-0 overflow-y-auto px-9 pb-9 no-scrollbar">
+          <div className="min-h-0 overflow-y-auto px-9 pb-9 no-scrollbar max-sm:flex-1 max-sm:px-4 max-sm:pb-6">
             <Facts
               items={[
                 { label: "Received", value: usd(t.received), tone: "text-success" },
@@ -550,7 +550,7 @@ export function StagePayments({ detail, refetch }: StageProps) {
       {/* ── a receipt — the Finances tab's own paper slip ────────────────── */}
       <Dialog open={!!openReceipt} onOpenChange={(o) => !o && setReceiptOpen(null)}>
         {openReceipt && (
-          <DialogContent className="max-h-[90vh] overflow-y-auto no-scrollbar sm:max-w-md" aria-describedby={undefined}>
+          <DialogContent className={cn("max-h-[90vh] overflow-y-auto no-scrollbar sm:max-w-md", PHONE_FORM_DIALOG)} aria-describedby={undefined}>
             <DialogHeader>
               <DialogTitle>Receipt</DialogTitle>
             </DialogHeader>
@@ -606,6 +606,11 @@ export function StagePayments({ detail, refetch }: StageProps) {
 }
 
 /** The quiet "−" and "=" of the Finances sum. */
+/** A figure's column name, shown above it below desktop width only. */
+const PhoneLabel = ({ children }: { children: string }) => (
+  <span className="block text-[10px] font-medium uppercase tracking-wider text-muted-foreground lg:hidden">{children}</span>
+);
+
 const Op = ({ children }: { children: string }) => (
   <span aria-hidden className="mx-1.5 text-muted-foreground/50">
     {children}
@@ -679,14 +684,14 @@ function PaymentLine({
           }
         : {})}
       className={cn(
-        "group/pay flex h-8 items-center gap-3 rounded-xl px-2 text-sm",
+        "group/pay flex h-8 items-center gap-3 rounded-xl px-2 text-sm max-lg:h-auto max-lg:min-h-8 max-lg:py-1.5",
         live &&
           "cursor-pointer transition-colors duration-200 ease-out hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
       )}
     >
       <span className="flex min-w-0 flex-1 items-center gap-1.5 text-muted-foreground">
         <PaymentSourceIcon provider={providerOf(p)} />
-        <span className="truncate">{label}</span>
+        <span className="truncate max-lg:whitespace-normal">{label}</span>
         {landed && <SyncMark kind="payment" sourceId={p.id} />}
         {exception && (
           <span className={cn("ml-1.5 shrink-0 text-xs font-medium", p.status === "failed" ? "text-destructive" : "text-warning")}>
@@ -698,7 +703,7 @@ function PaymentLine({
         <Button
           size="xs"
           variant="ghost"
-          className="opacity-0 transition-opacity duration-200 ease-out group-hover/pay:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none"
+          className="opacity-0 transition-opacity duration-200 ease-out group-hover/pay:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none max-lg:opacity-100"
           onClick={(e) => (e.stopPropagation(), onRefund())}
         >
           <Undo2 />
@@ -706,13 +711,13 @@ function PaymentLine({
         </Button>
       )}
       {landed && !live ? (
-        <span className="flex w-28 shrink-0 items-center justify-end gap-0.5 font-medium tabular-nums text-foreground">
+        <span className="flex w-28 shrink-0 items-center justify-end gap-0.5 font-medium tabular-nums text-foreground max-lg:w-auto">
           <span aria-hidden className="mr-1 text-muted-foreground">+</span>
           <ReceiptText className="size-3.5 shrink-0 text-muted-foreground" />
           {(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
       ) : landed ? (
-        <span className="relative w-28 shrink-0">
+        <span className="relative w-28 shrink-0 max-lg:w-auto">
           <span className="flex items-center justify-end gap-0.5 font-medium tabular-nums text-foreground transition-opacity duration-100 ease-out group-hover/pay:opacity-0 group-focus-visible/pay:opacity-0 motion-reduce:transition-none">
             <span aria-hidden className="mr-1 text-muted-foreground">+</span>
             <ReceiptText className="size-3.5 shrink-0 text-muted-foreground" />
@@ -750,11 +755,11 @@ function RefundLine({
   pending: boolean;
 }) {
   return (
-    <div className="flex h-7 items-center gap-3 px-2 text-sm">
+    <div className="flex h-7 items-center gap-3 px-2 text-sm max-lg:h-auto max-lg:min-h-7">
       <span className="flex min-w-0 flex-1 items-center gap-1.5 pl-3 text-muted-foreground">
         <CornerDownRight aria-hidden className="size-3 shrink-0 text-muted-foreground/60" />
         <PaymentSourceIcon provider={provider} />
-        <span className="truncate">
+        <span className="truncate max-lg:whitespace-normal">
           {provider === "manual" ? "Manual refund" : "Refund · to card"}
           {at && ` · ${shortDay(at)}`}
         </span>
@@ -820,7 +825,7 @@ function SummaryCard({
 /** A full-view dialog's header: title and count, its actions, and Close. No ×. */
 function ListHeader({ title, sub, onClose, children }: { title: string; sub: string; onClose: () => void; children?: React.ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-4 px-9 pb-5 pt-8">
+    <div className="flex items-start justify-between gap-4 px-9 pb-5 pt-8 max-sm:px-4 max-sm:pt-6">
       <div className="min-w-0">
         <DialogTitle className="text-lg font-semibold">{title}</DialogTitle>
         <DialogDescription className="mt-0.5">{sub}</DialogDescription>
@@ -838,7 +843,7 @@ function ListHeader({ title, sub, onClose, children }: { title: string; sub: str
 /** Four labelled figures in one quiet strip — the top of every full view. */
 function Facts({ items }: { items: { label: string; value: string; tone?: string; sub?: string }[] }) {
   return (
-    <div className={cn(insetCls, "grid grid-cols-4 px-5 py-4")}>
+    <div className={cn(insetCls, "grid grid-cols-4 px-5 py-4 max-lg:grid-cols-2 max-lg:gap-y-3 max-md:px-4")}>
       {items.map((f) => (
         <div key={f.label} className="min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{f.label}</p>
@@ -909,7 +914,7 @@ function ChargesTree({
                   }
                 : {})}
               className={cn(
-                "group/charge flex h-9 items-center gap-2 rounded-xl px-2 text-sm",
+                "group/charge flex h-9 items-center gap-2 rounded-xl px-2 text-sm max-lg:h-auto max-lg:flex-wrap max-lg:gap-y-1.5 max-lg:py-2",
                 toggle && "cursor-pointer transition-colors duration-200 ease-out hover:bg-muted/50 motion-reduce:transition-none"
               )}
             >
@@ -920,21 +925,21 @@ function ChargesTree({
                   allocs.length === 0 && "opacity-30"
                 )}
               />
-              <span className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="flex min-w-0 flex-1 items-center gap-2 max-lg:flex-wrap max-lg:gap-y-0.5">
                 {stuck && <ShieldAlert className="size-3.5 shrink-0 text-destructive" />}
-                <span className="truncate font-medium">{c.label}</span>
+                <span className="truncate font-medium max-lg:whitespace-normal">{c.label}</span>
                 {c.dueDate && (
                   <span className={cn("shrink-0 text-xs tabular-nums", late ? "font-medium text-destructive" : "text-muted-foreground")}>
                     {late ? "Overdue · " : "Due "}
                     {day(c.dueDate)}
                   </span>
                 )}
-                {detailed && c.note && <span className="truncate text-xs text-muted-foreground">· {c.note}</span>}
+                {detailed && c.note && <span className="truncate text-xs text-muted-foreground max-lg:whitespace-normal">· {c.note}</span>}
               </span>
               {onPay && left > 0 && c.settleable && (
                 <Button
                   size="xs"
-                  className="rounded-full opacity-0 transition-opacity duration-200 ease-out group-hover/charge:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none"
+                  className="rounded-full opacity-0 transition-opacity duration-200 ease-out group-hover/charge:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none max-lg:opacity-100"
                   onClick={(e) => (e.stopPropagation(), onPay())}
                 >
                   Pay
@@ -952,12 +957,24 @@ function ChargesTree({
                   <Trash2 />
                 </Button>
               )}
-              <span className="inline-flex items-baseline whitespace-nowrap tabular-nums">
-                <span className="w-24 text-right text-[13px] text-muted-foreground">{usd(c.amountCents)}</span>
+              {/* Below desktop width: the three figures take their own line under the
+                  charge, each with its column's name (the headings row is
+                  hidden there, it no longer lines up with anything). */}
+              <span className="inline-flex items-baseline whitespace-nowrap tabular-nums max-lg:ml-5 max-lg:flex max-lg:w-full max-lg:items-end">
+                <span className="w-24 text-right text-[13px] text-muted-foreground max-lg:w-auto max-lg:flex-1 max-lg:text-left">
+                  <PhoneLabel>Total</PhoneLabel>
+                  {usd(c.amountCents)}
+                </span>
                 <Op>−</Op>
-                <span className="w-24 text-right text-[13px] text-muted-foreground">{usd(paid)}</span>
+                <span className="w-24 text-right text-[13px] text-muted-foreground max-lg:w-auto max-lg:flex-1 max-lg:text-left">
+                  <PhoneLabel>Paid</PhoneLabel>
+                  {usd(paid)}
+                </span>
                 <Op>=</Op>
-                <span className={cn("w-24 text-right text-[15px]", left === 0 ? "font-medium" : "font-semibold", tone)}>{usd(left)}</span>
+                <span className={cn("w-24 text-right text-[15px] max-lg:w-auto max-lg:flex-1 max-lg:text-left", left === 0 ? "font-medium" : "font-semibold", tone)}>
+                  <PhoneLabel>Remaining</PhoneLabel>
+                  {usd(left)}
+                </span>
               </span>
             </div>
 
@@ -1038,7 +1055,7 @@ function PaymentsList({
             />
             {refund && <RefundLine paymentId={p.id} provider={refund.provider} cents={p.refundedCents} at={p.refundedAt} pending={refund.pending} />}
             {detailed && (
-              <p className="truncate pl-[2.1rem] pr-2 text-xs text-muted-foreground">
+              <p className="truncate pl-[2.1rem] pr-2 text-xs text-muted-foreground max-lg:whitespace-normal">
                 {counts(p) ? (went ? `Paid ${went}` : "Not applied to a charge yet") : p.status === "pending" ? "Nothing is applied until it is paid" : "No money moved"}
                 {" · "}
                 {when(p.at)}

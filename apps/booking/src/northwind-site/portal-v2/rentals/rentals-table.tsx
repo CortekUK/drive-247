@@ -67,7 +67,9 @@ export function CustomerRentalsTable({
   const maxHeight = useViewportFillCap(rows.scrollRootRef, fillViewport);
 
   return (
-    <div className="flex flex-col gap-3">
+    // `data-rental-cards`: on a phone each rental is laid out as a rental
+    // (site.css, "Rental cards"), not the generic two-column card.
+    <div className="flex flex-col gap-3" data-rental-cards="">
       <RentalsTable
         partyLabel="Vehicle"
         rows={rows.visible.map(toRow)}
@@ -76,6 +78,7 @@ export function CustomerRentalsTable({
         sentinelRef={rows.sentinelRef}
         hasMore={rows.hasMore}
         maxHeight={maxHeight}
+        phoneCards
       />
       {footer ? (
       <div className={V2_LIST_CLASSES.footer}>

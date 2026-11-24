@@ -468,7 +468,7 @@ export function NotificationsPageV2({ canEdit, registerSave, todaySettings, scro
                   // setup's steps. Shared settings components are untouched.
                   className={cn(
                     // pt-3: level with the search box at the top of the list.
-                    "w-full flex-1 px-8 pb-6 pt-3",
+                    "w-full flex-1 px-8 pb-6 pt-3 max-md:px-4",
                     "[&_ol[aria-label='Push_setup_steps']>li+li]:border-t [&_ol[aria-label='Push_setup_steps']>li+li]:border-border/70",
                   )}
                 >
@@ -490,13 +490,17 @@ export function NotificationsPageV2({ canEdit, registerSave, todaySettings, scro
                 {/* Bottom of the setup: Back to Settings on the left, the settings
                     pages' own save bar (settings-kit) on the right, both floating
                     at the foot of the view (Ghulam, Oct 1 2026). */}
-                <div className="pointer-events-none sticky bottom-4 z-30 flex items-end justify-between gap-3 px-8 pb-1 pt-2">
+                {/* Phones: the header row above already carries Back, so this one is
+                    its icon alone (named for screen readers) and the save bar keeps
+                    its one line. */}
+                <div className="pointer-events-none sticky bottom-4 z-30 flex items-end justify-between gap-3 px-8 pb-1 pt-2 max-md:px-4">
                   <Link
                     href="/settings"
-                    className="pointer-events-auto inline-flex h-11 items-center gap-1.5 rounded-full border bg-card px-4 text-[13px] font-medium text-foreground shadow-lg transition-colors duration-200 ease-out hover:bg-muted motion-reduce:transition-none"
+                    aria-label="Back to settings"
+                    className="pointer-events-auto inline-flex h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border bg-card px-4 text-[13px] font-medium text-foreground shadow-lg transition-colors duration-200 ease-out hover:bg-muted motion-reduce:transition-none max-sm:w-11 max-sm:justify-center max-sm:px-0"
                   >
                     <ArrowLeft className="size-4" aria-hidden="true" />
-                    Back to settings
+                    <span className="max-sm:sr-only">Back to settings</span>
                   </Link>
                   {canEdit && (
                     <SettingsStickySaveBar
@@ -651,9 +655,10 @@ function NotificationWorkspace({
         : null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col lg:flex-row" data-notification-item={item.key}>
-        {/* MAIN: which message, its switches and Send test, then the preview. */}
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col" data-notification-main="" aria-label={`${item.name}: preview`}>
+    <div className="flex h-full min-h-0 flex-col max-lg:h-auto lg:flex-row" data-notification-item={item.key}>
+        {/* MAIN: which message, its switches and Send test, then the preview.
+            Below lg it takes its content's height and the page scrolls on to Trax. */}
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col max-lg:flex-none" data-notification-main="" aria-label={`${item.name}: preview`}>
           {/* No top row (Ghulam, Oct 1 2026): its switches and Send test live in
               the row under the preview. The left list shows which message is open. */}
           <h2 className="sr-only">{message === "app" ? "App message" : "Email"}</h2>
@@ -755,7 +760,7 @@ function NotificationWorkspace({
                         title="Cancel changes"
                         onClick={saveBar.onCancel}
                         disabled={!saveBar.dirty || saveBar.saving}
-                        className="flex size-6 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-out hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none"
+                        className="v2-phone-hit flex size-6 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 ease-out hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none"
                       >
                         <X className="size-3.5" strokeWidth={3} aria-hidden="true" />
                       </button>
@@ -766,7 +771,7 @@ function NotificationWorkspace({
                         title={saveBar.saving ? "Saving…" : "Save changes"}
                         onClick={saveBar.onSave}
                         disabled={!saveBar.dirty || saveBar.saving}
-                        className="flex size-6 items-center justify-center rounded-full text-primary transition-colors duration-200 ease-out hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none dark:text-[hsl(var(--v2-link,var(--primary)))]"
+                        className="v2-phone-hit flex size-6 items-center justify-center rounded-full text-primary transition-colors duration-200 ease-out hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none dark:text-[hsl(var(--v2-link,var(--primary)))]"
                       >
                         {saveBar.saving ? (
                           <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
@@ -870,6 +875,21 @@ function FitToBox({
     const fit = () => {
       const h = i.offsetHeight;
       const room = o.clientHeight;
+      /* Below lg the workspace stacks and scrolls, so the box has no height of
+         its own to fit into: the Trax rail takes a fixed 70vh and the preview
+         got the ~80px left over (scale 0.14, a speck). There, the width sets
+         the scale and the box takes the height that comes out of it. */
+      if (grow && stacked.matches) {
+        const w = i.offsetWidth;
+        const roomW = o.clientWidth;
+        const fitW = h > 0 && w > 0 && roomW > 0 ? Math.min(1.8, roomW / w) : 1;
+        o.style.height = h > 0 ? `${Math.ceil(h * fitW)}px` : "";
+        setScale(fitW);
+        setTop(0);
+        measureRef.current?.(h, h * fitW);
+        return;
+      }
+      o.style.height = "";
       let next = h > 0 && room > 0 ? Math.min(1, room / h) : 1;
       if (grow && h > 0 && room > 0) {
         const w = i.offsetWidth;
@@ -880,14 +900,19 @@ function FitToBox({
       setTop(grow && h > 0 ? Math.max(0, (room - h * next) / 2) : 0);
       measureRef.current?.(h, room);
     };
+    const stacked = window.matchMedia("(max-width: 1023.98px)");
     const observer = new ResizeObserver(fit);
     observer.observe(o);
     observer.observe(i);
+    stacked.addEventListener("change", fit);
     fit();
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      stacked.removeEventListener("change", fit);
+    };
   }, [grow]);
   return (
-    <div ref={outer} className="relative min-h-0 flex-1 overflow-hidden" data-fit-to-box="">
+    <div ref={outer} className={cn("relative min-h-0 flex-1 overflow-hidden", grow && "max-lg:flex-none")} data-fit-to-box="">
       <div
         ref={inner}
         className={cn("absolute left-1/2 top-0 origin-top", grow ? "w-max" : "w-full")}

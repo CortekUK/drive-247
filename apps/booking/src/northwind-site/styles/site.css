@@ -534,6 +534,21 @@
   background-repeat: no-repeat;
 }
 
+/* The phone menu (shell.tsx PhoneMenu): the operator's (v2-theme.css,
+   `[data-slot="sidebar"][data-mobile="true"]`, boss: "too white"). It renders
+   on <body>, outside `.pv2`, so it carries the page colour and the same
+   brand-derived wash itself, a little stronger, laid on the sheet (it is not
+   the viewport, so no fixed layer). */
+.pv2-phone-menu {
+  background-color: var(--pv-bg);
+  background-image:
+    radial-gradient(28rem 22rem at 110% -6%, color-mix(in srgb, var(--pv-wash) 30%, transparent), transparent 62%),
+    radial-gradient(26rem 22rem at -12% 0%, color-mix(in srgb, var(--pv-chart-3) 24%, transparent), transparent 60%),
+    radial-gradient(30rem 24rem at 40% 112%, color-mix(in srgb, var(--pv-wash) 20%, transparent), transparent 62%),
+    linear-gradient(180deg, color-mix(in srgb, var(--pv-wash) 10%, transparent) 0%, transparent 55%);
+  background-repeat: no-repeat;
+}
+
 /* Trax motion: a screen arrives with opacity + a 12px lift, 200ms ease-out. */
 /* Trax (customer portal Help): the operator's v2-theme.css keyframes for the
    mark's turning fill and breathing halo. */
@@ -1371,4 +1386,307 @@ body.g2 [data-slot="select-item"] { border-radius: 14px; }
   .g2-car-body, .g2-car-shadow { transform: none !important; transition: none !important; }
   .g2-cta, .g2-well { transition: none; }
   .g2-roll-digit > span, .g2-rail-fill, .g2-bead { transition: none; }
+}
+
+/* ===========================================================================
+ * Phone cards, copied from the operator portal (apps/portal/src/styles/
+ * v2-theme.css, the same block) and scoped to `.pv2`. The shared list kit
+ * (shared/portal-v2/list-table.tsx) sets `data-phone-cards` and each cell's
+ * `data-label` when a table passes `phoneCards`. Change both copies together.
+ *
+ * Below `md` a list table is not a 720–880px table scrolled sideways inside a 520px box;
+ * each row is a compact block that scrolls with the page:
+ *
+ *   LWK678                                   ← first cell, the record's name
+ *   MAKE / MODEL     YEAR    COLOR   STATUS  ← every other column, its name
+ *   toyota corolla   2021    White   Available  as a small label over it
+ *
+ * Nothing desktop shows is dropped: the same cells, reflowed. Labels come from
+ * the header via `data-label` (shared/portal-v2/list-table.tsx). A trailing
+ * unlabelled cell (a row's ⋯ menu) goes to the row's top-right corner.
+ * =========================================================================== */
+@media (max-width: 1023px) {
+  .pv2 [data-phone-cards] {
+    /* !important: from md up `useViewportFillCap` sets an inline height cap. */
+    max-height: none !important;
+    overflow: visible;
+  }
+  .pv2 [data-phone-cards] > [data-slot="table-container"],
+  .pv2 [data-phone-cards] table,
+  .pv2 [data-phone-cards] tbody {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+  .pv2 [data-phone-cards] thead {
+    display: none;
+  }
+  /* The card's own top/bottom padding sat above the (hidden) header row. */
+  .pv2 :has(> [data-phone-cards]) {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+  /* Two equal columns, so a field sits in the same place on every card and
+     the list can be scanned straight down. Half a card is wide enough that
+     whole words fit ("Unavailable" broke mid-word in four narrow columns). */
+  .pv2 [data-phone-cards] tbody tr {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    column-gap: 16px;
+    row-gap: 8px;
+    padding: 12px 16px;
+  }
+  .pv2 [data-phone-cards] tbody td {
+    display: block;
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0;
+    text-align: left;
+    font-size: 13px;
+    line-height: 1.3;
+  }
+  .pv2 [data-phone-cards] tbody td:first-child {
+    grid-column: 1 / -1;
+    font-size: 15px;
+  }
+  /* Status text and plain values share one size and baseline. */
+  .pv2 [data-phone-cards] tbody td:not(:first-child) > span,
+  .pv2 [data-phone-cards] tbody td:not(:first-child) > div > span[class~="text-sm"] {
+    font-size: 13px;
+    line-height: 1.3;
+  }
+  /* A value too long for the row wraps at word gaps instead of being cut off. */
+  .pv2 [data-phone-cards] tbody td:not(:first-child),
+  .pv2 [data-phone-cards] tbody td:not(:first-child) .truncate {
+    white-space: normal;
+    overflow-wrap: break-word;
+    text-overflow: clip;
+  }
+  .pv2 [data-phone-cards] tbody td:not(:first-child)::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+  .pv2 [data-phone-cards] tbody td[data-label=""]::before {
+    content: none;
+  }
+  .pv2 [data-phone-cards] tbody td:not(:first-child):empty {
+    display: none;
+  }
+  /* The ⋯ (or any unlabelled trailing control): top-right of the block. */
+  .pv2 [data-phone-cards] tbody td[data-label=""]:last-child:not(:first-child) {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+  }
+  .pv2 [data-phone-cards] tbody td:first-child:has(~ td[data-label=""]:last-child) {
+    padding-right: 36px;
+  }
+}
+
+/* Every customer list on a phone (user, Nov 2026: "too messy"). The generic
+   card above put the status in whichever column it fell in, and long values
+   (emails, date ranges, policy numbers) broke mid-word in half a card. So:
+
+     Car insurance certificate        Verified ⋯   ← title, status top right
+     PROVIDER           POLICY NUMBER               ← the rest, two columns
+     Progressive        PGR-4471-2209
+     COVERAGE DATES                                 ← long values: full width
+     Aug 9, 2026 – Aug 9, 2027
+
+   The status needs no label: the coloured word says what it is. Same cells,
+   reflowed; nothing dropped. Rentals have their own layout below. */
+@media (max-width: 767px) {
+  .pv2 [data-phone-cards] tbody tr:has(> td[data-label="Status"]) > td:first-child {
+    grid-column: 1;
+    align-self: center;
+  }
+  .pv2 [data-phone-cards] tbody td[data-label="Status"] {
+    grid-row: 1;
+    grid-column: 2;
+    align-self: center;
+    justify-self: end;
+    text-align: right;
+  }
+  .pv2 [data-phone-cards] tbody td[data-label="Status"]::before {
+    content: none;
+  }
+  .pv2 [data-phone-cards] tbody td[data-label="Status"] > div {
+    justify-content: flex-end;
+  }
+  /* With a ⋯ in the corner, the status steps left of it and the title no
+     longer needs the room. */
+  .pv2 [data-phone-cards] tbody tr:has(> td[data-label=""]:last-child) > td[data-label="Status"] {
+    padding-right: 32px;
+  }
+  .pv2 [data-phone-cards] tbody tr:has(> td[data-label="Status"]) > td:first-child:has(~ td[data-label=""]:last-child) {
+    padding-right: 0;
+  }
+  /* The title wraps rather than cutting off ("Car insurance certific…"). */
+  .pv2 [data-phone-cards] tbody td:first-child .truncate {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+  }
+  /* Invoices: the "Total − Paid = Remaining" sum. Its header reads as one
+     run of words when used as a label, and its figures keep the fixed widths
+     that line the desktop columns up, which indent them in a card. */
+  .pv2 [data-phone-cards] tbody td[data-label^="Total"] {
+    grid-column: 1 / -1;
+  }
+  .pv2 [data-phone-cards] tbody td[data-label^="Total"]::before {
+    content: "Total \2212  Paid = Remaining";
+  }
+  .pv2 [data-phone-cards] tbody td[data-label^="Total"] span[style] {
+    min-width: 0 !important;
+  }
+  /* Values that are one long run of text get the whole width. */
+  .pv2 [data-phone-cards] tbody td[data-label*="mail" i],
+  .pv2 [data-phone-cards] tbody td[data-label*="dates" i],
+  .pv2 [data-phone-cards] tbody td[data-label="Policy number"] {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Rental cards (customer portal rentals list, `data-rental-cards` in
+   portal-v2/rentals/rentals-table.tsx). On a phone a rental is one compact
+   row, the way a trips list reads in an app (user, Nov 2026: the stacked
+   version with labels was "out of proportion"):
+
+     [photo]  Nissan Versa                Completed
+              NWD-5190
+              R-a4d848          Oct 24 – Oct 31
+
+   The photo on the left beside everything; the car and the status on top;
+   the reference and the dates on one line under them. The same five cells,
+   reflowed: the car cell and its inner row are `display: contents`, so the
+   photo and the name become items of the card's own grid. The two dates
+   read as a range, so they keep no labels. `[data-rental-cards]` is doubled
+   to outrank the generic status rule above. */
+@media (max-width: 767px) {
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody tr {
+    grid-template-columns: 76px minmax(0, 1fr) auto auto;
+    grid-template-areas: none;
+    column-gap: 0;
+    row-gap: 6px;
+    align-items: center;
+    padding: 14px 16px;
+  }
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td::before {
+    content: none;
+  }
+  /* The car: photo in the first column across both rows, name and plate on
+     top beside it. */
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(2),
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(2) > div {
+    display: contents;
+  }
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(2) img {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    align-self: center;
+    width: 64px;
+    height: 48px;
+    border-radius: 10px;
+  }
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(2) > div > div,
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(2):not(:has(img)) {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+    min-width: 0;
+  }
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(2):not(:has(img)) {
+    display: block;
+    grid-column: 1 / 3;
+  }
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(2) > div > div > span:first-child {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.25;
+    /* Wraps between words only ("Chevrolet / Malibu", never "Chevrole t"). */
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(2) > div > div > span + span {
+    margin-top: 1px;
+    font-size: 12.5px;
+  }
+  /* Status: top right, level with the car's name. */
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(5) {
+    grid-column: 3 / 5;
+    grid-row: 1;
+    align-self: start;
+    justify-self: end;
+    padding-left: 12px;
+    text-align: right;
+  }
+  /* Reference, then the dates at the right, on the second line. */
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(1) {
+    grid-column: 2;
+    grid-row: 2;
+    font-size: 12.5px;
+    color: var(--pv-muted-fg);
+  }
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(1) span {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--pv-muted-fg);
+  }
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(3) {
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: end;
+    padding-left: 12px;
+  }
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(4) {
+    grid-column: 4;
+    grid-row: 2;
+    justify-self: start;
+    white-space: nowrap;
+  }
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(4)::before {
+    content: "\2013";
+    display: inline;
+    margin: 0 6px;
+    font-size: inherit;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--pv-muted-fg);
+  }
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(3),
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(4),
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(3) span,
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(4) span {
+    font-size: 13px;
+    white-space: nowrap;
+  }
+}
+
+/* The narrowest phones (320px): a smaller photo leaves the name room. */
+@media (max-width: 359px) {
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody tr {
+    grid-template-columns: 64px minmax(0, 1fr) auto auto;
+  }
+  .pv2 [data-rental-cards][data-rental-cards] [data-phone-cards] tbody td:nth-child(2) img {
+    width: 52px;
+    height: 40px;
+  }
+}
+
+/* Tablets beside the sidebar: the table's columns ran off the side, so they get
+   the same cards with every field on one line. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .pv2 [data-phone-cards] tbody tr {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }

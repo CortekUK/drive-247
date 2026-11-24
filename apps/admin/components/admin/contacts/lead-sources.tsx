@@ -276,7 +276,9 @@ function SourceCard({
 }) {
   return (
     <section className="space-y-3 rounded-3xl border border-border p-4">
-      <div className="flex items-start justify-between gap-3">
+      {/* Phones: the button goes under the line it belongs to, rather than
+          squeezing that line into three. */}
+      <div className="flex items-start justify-between gap-3 max-sm:flex-col">
         <div className="min-w-0">
           <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <span className={cn('size-2 rounded-full', dot)} />

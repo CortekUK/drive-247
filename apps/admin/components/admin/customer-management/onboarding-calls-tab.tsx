@@ -405,8 +405,8 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
                 return (
                   <li key={r.tenant_id} className="flex flex-col gap-3 px-6 py-4 lg:flex-row lg:items-center lg:gap-6">
                     <div className="min-w-0 lg:w-[30%]">
-                      <p className="flex min-w-0 items-center text-sm font-medium">
-                        <span className="truncate">{r.company_name || r.slug}</span>
+                      <p className="flex min-w-0 items-center text-sm font-medium max-sm:flex-wrap">
+                        <span className="truncate max-sm:whitespace-normal">{r.company_name || r.slug}</span>
                         <span className="ml-1.5 shrink-0 text-[11px] font-normal text-muted-foreground">{r.slug}</span>
                         <a
                           href={searchUrl(r)}
@@ -419,7 +419,7 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
                           Search online
                         </a>
                       </p>
-                      <p className="truncate text-xs text-muted-foreground">
+                      <p className="truncate text-xs text-muted-foreground max-sm:whitespace-normal max-sm:[overflow-wrap:anywhere]">
                         {r.city_state && `${r.city_state} · `}
                         {r.contact_email ?? 'no email'}
                         {r.phone && ` · ${r.phone}`}

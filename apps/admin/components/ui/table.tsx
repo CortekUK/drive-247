@@ -9,13 +9,20 @@ import { cn } from "@/lib/utils";
  * the pointer. Every table in this app is built from these, so they all match.
  */
 
-const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
-  ({ className, ...props }, ref) => (
-    <div className="relative w-full overflow-auto">
-      <table ref={ref} className={cn("w-full caption-bottom text-sm", className)} {...props} />
-    </div>
-  ),
-);
+/*
+ * Below `lg` every table shows its rows as cards (lib/phone-cards.ts, CSS in
+ * globals.css), as the operator portal's lists do. `phoneCards={false}` keeps
+ * a table a table — for one that is already narrow enough, or a grid whose
+ * columns only make sense side by side.
+ */
+const Table = React.forwardRef<
+  HTMLTableElement,
+  React.HTMLAttributes<HTMLTableElement> & { phoneCards?: boolean }
+>(({ className, phoneCards = true, ...props }, ref) => (
+  <div className="relative w-full overflow-auto" data-phone-cards={phoneCards ? "" : undefined}>
+    <table ref={ref} className={cn("w-full caption-bottom text-sm", className)} {...props} />
+  </div>
+));
 Table.displayName = "Table";
 
 const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(

@@ -730,7 +730,7 @@ export function SettingsField({
 
 /** A unit or connecting word beside an input ("years", "hours before pickup"). */
 export function Unit({ children }: { children: ReactNode }) {
-  return <span className="text-sm text-muted-foreground">{children}</span>;
+  return <span className="shrink-0 whitespace-nowrap text-sm text-muted-foreground">{children}</span>;
 }
 
 /**

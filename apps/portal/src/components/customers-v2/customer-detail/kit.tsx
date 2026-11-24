@@ -213,7 +213,10 @@ export function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-full min-h-0 w-full max-w-3xl flex-col">
+    // Phones: the whole record scrolls as one page under the top bar instead.
+    // A fixed title above a scroll box left only ~400px for the card, which
+    // read as a card cut off halfway with dead space under it.
+    <div className="flex h-full min-h-0 w-full max-w-3xl flex-col max-md:h-auto">
       <div className="flex shrink-0 items-start gap-4">
         <div className="min-w-0 flex-1">
           {/* The section's own name: the same once loaded, so a skeleton keeps it. */}
@@ -225,7 +228,7 @@ export function Panel({
 
       {/* `min-h-0` is load-bearing: without it a flex child refuses to shrink
           below its content and the column grows the page instead of scrolling. */}
-      <div className="mt-7 min-h-0 flex-1 space-y-6 overflow-y-auto no-scrollbar pb-8 md:pr-1 max-md:mt-5">{children}</div>
+      <div className="mt-7 min-h-0 flex-1 space-y-6 overflow-y-auto no-scrollbar pb-8 md:pr-1 max-md:mt-5 max-md:flex-none max-md:overflow-visible">{children}</div>
     </div>
   );
 }

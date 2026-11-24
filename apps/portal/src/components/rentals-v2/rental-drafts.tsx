@@ -219,15 +219,17 @@ export function RentalDrafts() {
 
   if (!drafts.length) return null;
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
+    // Phones: one row that swipes sideways, so ten drafts do not push the list
+    // a screen further down. Every chip is still there.
+    <div className="no-scrollbar flex flex-wrap items-center gap-2 max-sm:-mx-4 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:px-4">
+      <span className="flex shrink-0 items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
         <FilePen className="size-3.5" />
         Drafts
       </span>
       {drafts.map((d) => (
         <span
           key={d.id}
-          className="group inline-flex items-center gap-1 rounded-full bg-primary/[0.07] py-1 pl-3 pr-1 text-[12px] text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
+          className="group inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-primary/[0.07] py-1 pl-3 pr-1 text-[12px] text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
         >
           <Link href={`/rentals/${d.id}?stage=customer`} className="font-medium hover:underline">
             {d.rental_number ?? "Draft"}
@@ -244,7 +246,7 @@ export function RentalDrafts() {
             title="Discard this draft"
             disabled={discard.isPending}
             onClick={() => discard.mutate(d.id)}
-            className="ml-0.5 rounded-full p-1 hover:bg-primary/10"
+            className="ml-0.5 rounded-full p-1 hover:bg-primary/10 max-md:p-1.5"
           >
             <X className="size-3" />
           </button>

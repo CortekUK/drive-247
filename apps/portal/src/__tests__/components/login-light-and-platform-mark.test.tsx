@@ -235,7 +235,9 @@ describe("the sheet's breakpoint is Tailwind's md", () => {
 
   it("is the width the record rails and the dock hand over at", () => {
     const sidebar = src("components/shared/layout/app-sidebar-v2.tsx");
-    expect(sidebar.match(/&& !isMobile\)/g)?.length).toBe(3);
+    // Five rails hand over to the phone layout: the three record rails, and
+    // since the phone work of Nov 2026 the Trax and Support rails as well.
+    expect(sidebar.match(/&& !isMobile\)/g)?.length).toBe(5);
     for (const page of [
       "components/rentals-v2/rental-detail/rental-detail-v2.tsx",
       "components/customers-v2/customer-detail/customer-detail-v2.tsx",

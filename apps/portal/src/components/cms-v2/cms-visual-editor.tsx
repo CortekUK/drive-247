@@ -238,14 +238,16 @@ export function CmsVisualEditor({
        fill the viewport from that top: 100dvh - 50 - 16 (main's bottom padding)
        = calc(100dvh - 66px). The old calc(100dvh - 1rem) predates the 64px top
        bar and overflowed the document by 50px at md+. Below md both unchanged. */
-    <div className="flex h-[calc(100dvh-1rem)] min-h-[600px] flex-col md:h-[calc(100dvh-66px)]">
+    <div className="flex h-[calc(100dvh-1rem)] min-h-[600px] flex-col md:h-[calc(100dvh-66px)] max-md:h-auto max-md:min-h-[480px] max-md:flex-1">
       {/* ── top bar ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 px-5 py-3 md:pt-[31.375px]">
-        <div className="min-w-0 flex-1">
+      {/* Phones: the title and its status take the first line, the buttons
+          wrap under it, Publish to the right. */}
+      <div className="flex items-center gap-3 px-5 py-3 md:pt-[31.375px] max-sm:flex-wrap max-sm:gap-x-1 max-sm:gap-y-2 max-sm:px-0 max-sm:pt-1">
+        <div className="min-w-0 flex-1 max-sm:basis-full">
           <h1 className="truncate font-heading text-[17px] font-medium leading-tight">
             {page?.name ?? slug}
           </h1>
-          <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
             <span
               className={cn(
                 "size-1.5 rounded-full",
@@ -311,6 +313,7 @@ export function CmsVisualEditor({
         {!readOnly && (
           <Button
             size="sm"
+            className="max-sm:ml-auto"
             disabled={isPublishing || isDiscarding || saving > 0 || (live && pending === 0)}
             onClick={async () => {
               await publish();

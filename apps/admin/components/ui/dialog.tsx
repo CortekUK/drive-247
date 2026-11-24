@@ -50,13 +50,16 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-[100] grid w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-4xl bg-popover p-6 text-popover-foreground shadow-xl ring-1 ring-foreground/10 max-sm:max-h-[calc(100svh-2rem)] max-sm:overflow-y-auto", MOTION_DIALOG,
+        "fixed left-[50%] top-[50%] z-[100] grid w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-4xl bg-popover p-6 text-popover-foreground shadow-xl ring-1 ring-foreground/10 max-md:max-h-[calc(100svh-2rem)] max-md:overflow-y-auto max-md:overscroll-contain", MOTION_DIALOG,
         className,
       )}
       {...props}
     >
       {children}
-      {showCloseButton && <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
+{/* The ring is for the keyboard only (`focus-visible`): the dialog focuses
+          this button as it opens, and a tap-opened dialog drew a ring round
+          the ✕ that no other dialog had. A 44px tap area on phones. */}
+      {showCloseButton && <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm text-muted-foreground opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none max-md:after:absolute max-md:after:-inset-3 max-md:after:content-['']">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>}
@@ -66,7 +69,7 @@ const DialogContent = React.forwardRef<
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col space-y-1.5 text-center sm:text-left", className)} {...props} />
+  <div className={cn("flex flex-col space-y-1.5 text-center sm:text-left max-sm:[&:not(.text-left)>h2.flex]:justify-center", className)} {...props} />
 );
 DialogHeader.displayName = "DialogHeader";
 

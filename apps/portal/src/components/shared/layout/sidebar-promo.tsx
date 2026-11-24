@@ -39,7 +39,11 @@ const PROMO = {
  * `chrome` gate ahead of `theme` degrades to a flat brand card rather than an
  * invalid gradient — which would paint white text onto nothing.
  */
-export function SidebarPromo() {
+/**
+ * `onNavigate` closes the phone menu: the link changes the page underneath,
+ * and with the full-screen menu still open over it, "Try it" looked dead.
+ */
+export function SidebarPromo({ onNavigate }: { onNavigate?: () => void } = {}) {
   const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
@@ -91,6 +95,7 @@ export function SidebarPromo() {
 
         <Link
           href={PROMO.href}
+          onClick={onNavigate}
           className="mt-2 inline-flex w-full cursor-pointer items-center justify-center gap-1 rounded-lg bg-white/20 px-2 py-1 text-[11px] font-semibold ring-1 ring-inset ring-white/30 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_3px_8px_-2px_rgba(0,0,0,0.4)] transition-all hover:bg-white/30 active:translate-y-px"
         >
           {PROMO.cta} <ArrowRight className="h-3 w-3" />

@@ -309,7 +309,7 @@ export function AdvisoryBoardTab({ canEdit }: { canEdit: boolean }) {
             <NoMatchState size="section" noun="operators" />
           ) : (
             <div className="overflow-x-auto">
-              <Table className="max-md:min-w-[860px]">
+              <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Operator</TableHead>

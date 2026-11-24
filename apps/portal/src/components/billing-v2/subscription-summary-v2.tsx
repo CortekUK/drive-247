@@ -246,7 +246,7 @@ export function SubscriptionSummaryV2({
                 11rem, inset by the rows' px-4). Upgrade in the accent; Cancel
                 a faint red.
                 Cancel is a request to the team, never a one-click cancel. */}
-            <span className="ml-auto flex items-baseline gap-2">
+            <span className="ml-auto flex items-baseline gap-2 max-sm:ml-0 max-sm:mt-3 max-sm:w-full max-sm:[&>*]:h-10 max-sm:[&>*]:flex-1 max-sm:[&>*]:justify-center">
               <button
                 type="button"
                 onClick={() => setPlanAction("upgrade")}

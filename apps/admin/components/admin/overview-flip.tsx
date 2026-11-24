@@ -175,7 +175,12 @@ export function OverviewFlip({ front, back, flipped, onFlipBack }: Props) {
     return () => clearTimeout(t);
   }, [settled, flipped, reduceMotion]);
 
-  const faceBase = 'col-start-1 row-start-1 w-full';
+  /* `p-1.5` on each face and `-m-1.5` on the frame: the cards' ring and
+     shadow sit OUTSIDE their box, and the frame's `overflow-hidden` cut them
+     off at its edges (the bottom row of stat cards read as sliced off, user
+     review Nov 2026). The room is inside the frame and the negative margin
+     gives it back, so nothing moves. */
+  const faceBase = 'col-start-1 row-start-1 w-full p-1.5';
   const hiddenFace = (isHidden: boolean) =>
     `${isHidden ? 'pointer-events-none ' : ''}${isHidden && settled ? 'invisible ' : ''}`;
 
@@ -205,7 +210,7 @@ export function OverviewFlip({ front, back, flipped, onFlipBack }: Props) {
     // space under the stat cards until the first flip. Starting from "auto"
     // gives motion something harmless to swallow.
     <motion.div
-      className="relative overflow-hidden"
+      className="relative -m-1.5 overflow-hidden"
       style={{ perspective: 1100 }}
       initial={false}
       animate={{ height: target ?? 'auto' }}

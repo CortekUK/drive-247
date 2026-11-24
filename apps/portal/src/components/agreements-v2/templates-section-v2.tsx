@@ -448,7 +448,7 @@ function TemplatesTableV2({
                       <FileText className="size-4" />
                     </span>
                     <div className="min-w-0">
-                      <p className={cn("truncate font-medium", status === "archived" ? "text-muted-foreground" : "text-foreground")} title={name}>
+                      <p className={cn("truncate font-medium max-sm:whitespace-normal max-sm:break-words", status === "archived" ? "text-muted-foreground" : "text-foreground")} title={name}>
                         {name}
                       </p>
                       {blank ? (

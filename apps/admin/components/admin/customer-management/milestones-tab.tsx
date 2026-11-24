@@ -450,7 +450,7 @@ export function MilestonesTab({ canEdit }: { canEdit: boolean }) {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="font-medium">{m.label}</p>
-                        <p className="mt-0.5 truncate text-sm text-muted-foreground">{m.subject}</p>
+                        <p className="mt-0.5 truncate text-sm text-muted-foreground max-sm:whitespace-normal max-sm:[overflow-wrap:anywhere]">{m.subject}</p>
                         <p className="mt-0.5 text-xs text-muted-foreground">
                           {m.enabled && m.active_since
                             ? `Automatic — on since ${formatDateTime(m.active_since)}`

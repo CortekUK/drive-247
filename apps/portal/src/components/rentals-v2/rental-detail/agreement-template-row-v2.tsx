@@ -46,7 +46,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui-v2/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
+import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, PHONE_FORM_DIALOG, PHONE_SCREEN_DIALOG } from "@/components/ui-v2/dialog";
 import { TemplatePickerV2 } from "@/components/agreements-v2/template-picker-v2";
 import { AgreementPreviewV2 } from "@/components/agreements-v2/agreement-preview-v2";
 import { AgreementEditorV2 } from "@/components/agreements-v2/editor/agreement-editor-v2";
@@ -495,7 +496,7 @@ export function AgreementTemplateRowV2({ rental, choice, mileage, canEdit, busy,
 
       {/* ── Change ──────────────────────────────────────────────────────── */}
       <Dialog open={picking} onOpenChange={setPicking}>
-        <DialogContent className="flex max-h-[85vh] flex-col gap-4 sm:max-w-lg">
+        <DialogContent className={cn("flex max-h-[85vh] flex-col gap-4 sm:max-w-lg", PHONE_FORM_DIALOG)}>
           <DialogHeader>
             <DialogTitle>Choose the template</DialogTitle>
             <DialogDescription>The next agreement for this rental is sent from the template you pick.</DialogDescription>
@@ -514,7 +515,7 @@ export function AgreementTemplateRowV2({ rental, choice, mileage, canEdit, busy,
 
       {/* ── Preview ─────────────────────────────────────────────────────── */}
       <Dialog open={previewing} onOpenChange={setPreviewing}>
-        <DialogContent className="flex h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
+        <DialogContent className={cn("flex h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl", PHONE_SCREEN_DIALOG)}>
           <DialogHeader className="shrink-0 gap-1 border-b px-6 py-4 pr-14">
             <DialogTitle className="truncate text-lg">{name}</DialogTitle>
             <DialogDescription>

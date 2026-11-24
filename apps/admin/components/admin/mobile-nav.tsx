@@ -1,54 +1,50 @@
 'use client';
 
 /**
- * Super Admin's phone navigation, drawn as Northwind's (apps/portal/src/
- * components/shared/layout/mobile-tab-bar.tsx and mobile-more-screen.tsx):
+ * Super Admin's phone navigation, as the operator portal's is now (apps/portal
+ * components/shared/layout/mobile-tab-bar.tsx, boss, Nov 2026): no "More"
+ * screen. Three places and one filled action in the CENTRE, then Search.
  *
- *   MobileTabBar     — a flat, native bottom tab bar: the first four pages of
- *                      the rail, then "More". Solid page colour, one hairline
- *                      on top, padded for the home indicator.
- *   MobileMoreScreen — "More" opens a full-screen page under the bar rather
- *                      than the desktop rail sliding in from the left: a large
- *                      title, the account card, the Admin | Retention switch,
- *                      every other page as grouped 52px rows, Preferences, and
- *                      Sign out.
+ *   MobileTabBar      — Home · Companies · (+ Company) · <third rail page> ·
+ *                       Search. The places are the head of the rail as this
+ *                       user arranged it (Customise sidebar), so the bar can
+ *                       never offer a page the rail would not. The plus starts
+ *                       a rental company, the way the operator's plus starts a
+ *                       rental: it opens Rental Companies' own "Add New
+ *                       Company" chooser. Search asks the top bar to open
+ *                       search (OPEN_PHONE_SEARCH_EVENT): the page's own field
+ *                       when the page lends one, otherwise ⌘K search.
+ *   The full menu     — the burger at the TOP LEFT of the top bar opens the
+ *                       desktop sidebar itself, full screen (ui/sidebar.tsx),
+ *                       so its order, the org row, the Admin | Retention
+ *                       switch, the customiser and the profile row (Settings,
+ *                       Dark Mode, Sign Out) are exactly the desktop's.
  *   PhoneSectionChips — a page's own sections (useRegisterSidebarSections),
- *                      which a desktop shows in the rail, as a row of chips
- *                      that scrolls sideways under the top bar.
+ *                       which a desktop shows in the rail, as a row of chips
+ *                       that scrolls sideways under the top bar.
  *
- * Phone only (`md:hidden`). The rows are not computed here: they are the
- * same `useAdminNav()` the sidebar draws, so this can never offer a page the
- * rail would not.
+ * Phone only (`md:hidden`). Flat and attached to the bottom edge — solid page
+ * colour, one hairline on top, no float, no shadow — padded for the home
+ * indicator. The active tab is marked by colour and weight alone.
  */
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Building2, ChevronRight, Ellipsis, LayoutGrid, LifeBuoy, LogOut, Moon, SlidersHorizontal, type LucideIcon } from 'lucide-react';
+import { Building2, LayoutGrid, Plus, Search, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAuthStore } from '@/store/authStore';
-import { useThemeMode } from '@/lib/theme';
-import { Switch } from '@/components/ui/switch';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ProfileDialog } from '@/components/admin/profile-dialog';
-import { SidebarCustomizerDialog } from '@/components/admin/sidebar-customizer-dialog';
 import { useSidebarSections } from '@/components/admin/sidebar-sections';
-import { RETENTION_ROOT, isNavActive, useAdminNav, viewOf, type AdminNavItem } from '@/components/admin/admin-nav';
+import { isNavActive, useAdminNav, type AdminNavItem } from '@/components/admin/admin-nav';
 
-// ─── Open state ─────────────────────────────────────────────────────────────
+/** The bar's Search asks the top bar to open search (TopBar.tsx). */
+export const OPEN_PHONE_SEARCH_EVENT = 'admin-open-phone-search';
 
-const MoreContext = createContext<{ open: boolean; setOpen: (open: boolean) => void } | null>(null);
+/** The bar's plus asks Rental Companies to open its "Add New Company" chooser. */
+export const OPEN_ADD_COMPANY_EVENT = 'admin-open-add-company';
+/** …or, from any other page, lands there with this asking the same. */
+export const ADD_COMPANY_PARAM = 'new';
 
-export function MobileNavProvider({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  return <MoreContext.Provider value={{ open, setOpen }}>{children}</MoreContext.Provider>;
-}
-
-function useMore() {
-  const ctx = useContext(MoreContext);
-  if (!ctx) throw new Error('useMore must be used within MobileNavProvider');
-  return ctx;
-}
+const COMPANIES = '/admin/rentals';
 
 // ─── Tab bar ────────────────────────────────────────────────────────────────
 
@@ -65,344 +61,76 @@ const SHORT: Record<string, { label: string; icon?: LucideIcon }> = {
   '/admin/sales': { label: 'Onboarding' },
 };
 
-/** The four pages the bar carries: the head of the rail as this user arranged it. */
-function useTabs(): AdminNavItem[] {
-  const nav = useAdminNav();
-  return nav.topLevel.filter((i) => !i.newTab).slice(0, 4);
-}
-
-/**
- * Marked by colour and weight alone — the icon goes bold and takes the accent,
- * the label follows. No background shape behind it, as in Northwind.
- */
 const ITEM =
-  'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-[5px] text-[11.5px] leading-none font-medium tracking-[0.01em] transition-[color,transform] duration-200 ease-out active:scale-[0.94] motion-reduce:transition-none';
+  'relative flex min-w-fit flex-1 flex-col whitespace-nowrap items-center justify-center gap-[5px] text-[11.5px] leading-none font-medium tracking-[0.01em] transition-[color,transform] duration-200 ease-out active:scale-[0.94] motion-reduce:transition-none';
 const ACTIVE_TEXT = 'font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]';
 const IDLE_TEXT = 'text-muted-foreground';
 
-export function MobileTabBar() {
-  const pathname = usePathname();
-  const { open, setOpen } = useMore();
-  const tabs = useTabs();
-
-  const anyTabActive = tabs.some((t) => isNavActive(pathname, t.href));
-  const moreLit = open || !anyTabActive;
-
+function TabLink({ item, active }: { item: AdminNavItem; active: boolean }) {
+  const short = SHORT[item.href];
+  const Icon = short?.icon ?? item.icon;
   return (
-    <>
-      <MobileMoreScreen />
-      <div
-        data-mobile-tab-bar=""
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background pb-[env(safe-area-inset-bottom,0px)] md:hidden"
-      >
-        <nav aria-label="Main" className="mx-auto flex h-[60px] max-w-lg items-stretch px-1">
-          {tabs.map((tab) => {
-            const short = SHORT[tab.href];
-            const Icon = short?.icon ?? tab.icon;
-            const active = !open && isNavActive(pathname, tab.href);
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                // A tab whose page is already open does not change the route,
-                // so the More screen's route-change close would never fire.
-                onClick={() => setOpen(false)}
-                aria-current={active ? 'page' : undefined}
-                className={cn(ITEM, active ? ACTIVE_TEXT : IDLE_TEXT)}
-              >
-                <Icon className="size-5" strokeWidth={active ? 2.4 : 1.75} aria-hidden />
-                <span className="max-w-full truncate px-0.5">{short?.label ?? tab.name}</span>
-              </Link>
-            );
-          })}
-          <button
-            type="button"
-            onClick={() => setOpen(!open)}
-            aria-label="More"
-            aria-expanded={open}
-            className={cn(ITEM, moreLit ? ACTIVE_TEXT : IDLE_TEXT)}
-          >
-            <Ellipsis className="size-5" strokeWidth={moreLit ? 2.4 : 1.75} aria-hidden />
-            More
-          </button>
-        </nav>
-      </div>
-    </>
-  );
-}
-
-// ─── More screen ────────────────────────────────────────────────────────────
-
-const MOTION_IN =
-  'visible translate-y-0 opacity-100 [transition:transform_200ms_ease-out,opacity_200ms_ease-out,visibility_0s]';
-const MOTION_OUT =
-  'invisible pointer-events-none translate-y-3 opacity-0 [transition:transform_200ms_ease-in,opacity_200ms_ease-in,visibility_0s_linear_200ms]';
-
-const CARD = 'overflow-hidden rounded-2xl border border-border bg-card';
-const ROW =
-  'flex h-[52px] w-full items-center gap-3 px-4 text-left text-[15px] font-medium transition-colors duration-200 active:bg-primary/[0.06]';
-/** Inset hairline between rows, starting under the label rather than the icon. */
-const DIVIDED =
-  '[&>*+*]:relative [&>*+*]:before:absolute [&>*+*]:before:left-12 [&>*+*]:before:right-0 [&>*+*]:before:top-0 [&>*+*]:before:h-px [&>*+*]:before:bg-border';
-
-function MobileMoreScreen() {
-  const { open, setOpen } = useMore();
-  const pathname = usePathname();
-
-  // Any navigation closes it — a row tap, a tab tap, a link elsewhere.
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname, setOpen]);
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="More"
-      aria-hidden={!open}
-      data-mobile-more=""
-      className={cn(
-        'fixed inset-0 z-[39] flex flex-col bg-background md:hidden motion-reduce:transition-none',
-        open ? MOTION_IN : MOTION_OUT,
-      )}
-    >
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pt-[env(safe-area-inset-top,0px)] pb-[calc(env(safe-area-inset-bottom,0px)+5.5rem)]">
-        <div className="mx-auto flex max-w-lg flex-col gap-5 px-4">
-          <h1 className="pt-4 text-[30px] font-medium leading-tight tracking-[-0.01em] text-foreground">More</h1>
-          <MoreBody />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MoreBody() {
-  const { setOpen } = useMore();
-  const nav = useAdminNav();
-  const tabs = useTabs();
-  const pathname = usePathname();
-  const router = useRouter();
-  const registration = useSidebarSections();
-  const close = () => setOpen(false);
-
-  const canRetention = nav.all.some((i) => i.href === RETENTION_ROOT);
-  const view = canRetention ? viewOf(pathname) : 'admin';
-  const onTabs = new Set(tabs.map((t) => t.href));
-  const rest = nav.topLevel.filter((i) => !onTabs.has(i.href) && !i.newTab);
-  const actions = registration?.actions ?? [];
-
-  return (
-    <>
-      <AccountCard onNavigate={close} />
-
-      {canRetention && (
-        <div className="grid grid-cols-2 rounded-full border border-border bg-card p-1" role="tablist">
-          {([
-            { key: 'admin', label: 'Admin', href: '/admin/dashboard' },
-            { key: 'retention', label: 'Retention', href: RETENTION_ROOT },
-          ] as const).map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              role="tab"
-              aria-selected={view === tab.key}
-              onClick={() => {
-                close();
-                if (view !== tab.key) router.push(tab.href);
-              }}
-              className={cn(
-                'h-10 rounded-full text-[14px] font-medium transition-colors duration-200',
-                view === tab.key ? 'bg-primary/10 text-primary' : 'text-muted-foreground',
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* What the open record lets you do — suspend, delete, reset password…
-          On a desktop these are in the account menu at the foot of the rail. */}
-      {actions.length > 0 && (
-        <Section label={registration?.title ?? 'This page'}>
-          {actions.map((action) => (
-            <button
-              key={action.id}
-              type="button"
-              onClick={() => {
-                close();
-                registration?.onAction?.(action.id);
-              }}
-              className={cn(ROW, 'pl-12', action.tone === 'destructive' ? 'text-destructive' : 'text-foreground')}
-            >
-              <span className="min-w-0 flex-1 truncate">{action.label}</span>
-              {action.tone === 'active' && <span className="text-[13px] text-primary">On</span>}
-            </button>
-          ))}
-        </Section>
-      )}
-
-      {rest.length > 0 && (
-        <Section>
-          {rest.map((item) => (
-            <NavRow key={item.href} item={item} active={isNavActive(pathname, item.href)} onNavigate={close} />
-          ))}
-        </Section>
-      )}
-
-      {nav.more.length > 0 && (
-        <Section label="More">
-          {nav.more.map((item) => (
-            <NavRow key={item.href} item={item} active={isNavActive(pathname, item.href)} onNavigate={close} />
-          ))}
-        </Section>
-      )}
-
-      {nav.groups.map((group) => (
-        <Section key={group.label} label={group.label}>
-          {group.items.map((item) => (
-            <NavRow key={item.href} item={item} active={isNavActive(pathname, item.href)} onNavigate={close} />
-          ))}
-        </Section>
-      ))}
-
-      {(nav.settings || nav.support) && (
-        <Section label="Account">
-          {nav.support && (
-            <NavRow
-              item={{ ...nav.support, icon: LifeBuoy }}
-              active={isNavActive(pathname, nav.support.href)}
-              onNavigate={close}
-            />
-          )}
-          {nav.settings && (
-            <NavRow item={nav.settings} active={isNavActive(pathname, nav.settings.href)} onNavigate={close} />
-          )}
-        </Section>
-      )}
-
-      <PreferencesSection />
-      <SignOutRow />
-    </>
-  );
-}
-
-function Section({ label, children }: { label?: string; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-2">
-      {label && <h2 className="truncate px-4 text-[12px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</h2>}
-      <div className={cn(CARD, DIVIDED)}>{children}</div>
-    </section>
-  );
-}
-
-function NavRow({ item, active, onNavigate }: { item: AdminNavItem; active: boolean; onNavigate: () => void }) {
-  const Icon = item.icon;
-  const badge = item.badge ?? 0;
-  return (
-    <Link
-      href={item.href}
-      onClick={onNavigate}
-      target={item.newTab ? '_blank' : undefined}
-      rel={item.newTab ? 'noopener noreferrer' : undefined}
-      aria-current={active ? 'page' : undefined}
-      className={cn(ROW, active ? 'text-primary' : 'text-foreground')}
-    >
-      <Icon className={cn('size-5 shrink-0', active ? '' : 'text-muted-foreground')} aria-hidden />
-      <span className="min-w-0 flex-1 truncate">{item.name}</span>
-      {(badge > 0 || item.badgeUnavailable) && (
-        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-semibold text-destructive-foreground">
-          {item.badgeUnavailable ? '?' : badge > 99 ? '99+' : badge}
-        </span>
-      )}
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground/60" aria-hidden />
+    <Link href={item.href} aria-current={active ? 'page' : undefined} className={cn(ITEM, active ? ACTIVE_TEXT : IDLE_TEXT)}>
+      <Icon className="size-5" strokeWidth={active ? 2.4 : 1.75} aria-hidden />
+      {/* Never cut: a tab is at least as wide as its label ("Integrations"),
+          and the others share what is left. */}
+      <span className="px-0.5">{short?.label ?? item.name}</span>
     </Link>
   );
 }
 
-/** Who is signed in, and where. */
-function AccountCard({ onNavigate }: { onNavigate: () => void }) {
-  const { user } = useAuthStore();
+export function MobileTabBar() {
+  const pathname = usePathname();
+  const router = useRouter();
   const nav = useAdminNav();
-  const [profileOpen, setProfileOpen] = useState(false);
-  if (!user) return null;
 
-  const initials = (user.name || user.email || 'A')
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
+  // The head of the rail, as this user arranged it. Support opens in its own
+  // tab, so it never takes a slot.
+  const tabs = nav.topLevel.filter((i) => !i.newTab).slice(0, 3);
+  // Sales-only accounts have no Rental Companies to add to.
+  const canAddCompany = !nav.salesOnly && nav.topLevel.some((i) => i.href === COMPANIES);
+
+  const addCompany = () => {
+    if (pathname === COMPANIES) window.dispatchEvent(new Event(OPEN_ADD_COMPANY_EVENT));
+    else router.push(`${COMPANIES}?${ADD_COMPANY_PARAM}=1`);
+  };
 
   return (
-    <>
-      <div className={cn(CARD, DIVIDED)}>
-        <div className="flex items-center gap-3 px-4 py-3.5">
-          <img src="/icons/icon-192.png" alt="" aria-hidden width={40} height={40} className="size-10 shrink-0 rounded-xl object-contain" />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[16px] font-medium text-foreground">Drive247</div>
-            <div className="truncate text-[13px] text-muted-foreground">{nav.salesOnly ? 'Sales' : 'Super Admin'}</div>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            onNavigate();
-            setProfileOpen(true);
-          }}
-          className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-200 active:bg-primary/[0.06]"
-        >
-          <Avatar className="size-8 shrink-0 overflow-hidden rounded-full">
-            <AvatarImage src={user.avatar_url || undefined} alt={user.name || 'Admin'} className="object-cover" />
-            <AvatarFallback className="bg-primary/10 text-[12px] font-medium text-primary">{initials}</AvatarFallback>
-          </Avatar>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[14px] font-medium text-foreground">{user.name || 'Admin'}</div>
-            <div className="truncate text-[12px] text-muted-foreground">{user.email}</div>
-          </div>
-          <ChevronRight className="size-4 shrink-0 text-muted-foreground/60" aria-hidden />
-        </button>
-      </div>
-      <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
-    </>
-  );
-}
+    <div
+      data-mobile-tab-bar=""
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background pb-[env(safe-area-inset-bottom,0px)] md:hidden"
+    >
+      <nav aria-label="Main" className="mx-auto flex h-[60px] max-w-lg items-stretch px-1">
+        {tabs.slice(0, 2).map((tab) => (
+          <TabLink key={tab.href} item={tab} active={isNavActive(pathname, tab.href)} />
+        ))}
 
-function PreferencesSection() {
-  const { isDark, setDark } = useThemeMode();
-  const nav = useAdminNav();
-  const [customizeOpen, setCustomizeOpen] = useState(false);
-  return (
-    <>
-      <Section label="Preferences">
-        <label className={cn(ROW, 'text-foreground')}>
-          <Moon className="size-5 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="min-w-0 flex-1">Dark mode</span>
-          <Switch checked={isDark} onCheckedChange={setDark} aria-label="Dark mode" />
-        </label>
-        {/* The rail's "Customise sidebar" lives on the org row, which a phone
-            never shows — and its order is also what fills the tab bar. */}
-        {!nav.salesOnly && (
-          <button type="button" onClick={() => setCustomizeOpen(true)} className={cn(ROW, 'text-foreground')}>
-            <SlidersHorizontal className="size-5 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="min-w-0 flex-1">Customise navigation</span>
-            <ChevronRight className="size-4 shrink-0 text-muted-foreground/60" aria-hidden />
+        {canAddCompany && (
+          <button type="button" onClick={addCompany} aria-label="Add New Company" className={cn(ITEM, IDLE_TEXT)}>
+            {/* The one filled control on the bar, the operator's: a 46×30 pill
+                a little above the other icons' row, so the label stays on one
+                line with the rest. */}
+            <span className="-mt-0.5 flex h-[30px] w-[46px] items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_4px_12px_-4px_hsl(var(--primary)/0.6)]">
+              <Plus className="size-[19px]" strokeWidth={2.5} aria-hidden />
+            </span>
+            Company
           </button>
         )}
-      </Section>
-      {!nav.salesOnly && <SidebarCustomizerDialog open={customizeOpen} onOpenChange={setCustomizeOpen} />}
-    </>
-  );
-}
 
-function SignOutRow() {
-  const { logout } = useAuthStore();
-  return (
-    <div className={CARD}>
-      <button type="button" onClick={() => void logout()} className={cn(ROW, 'justify-center text-destructive')}>
-        <LogOut className="size-5 shrink-0" aria-hidden />
-        Sign out
-      </button>
+        {tabs.slice(2).map((tab) => (
+          <TabLink key={tab.href} item={tab} active={isNavActive(pathname, tab.href)} />
+        ))}
+
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event(OPEN_PHONE_SEARCH_EVENT))}
+          aria-label="Search"
+          className={cn(ITEM, IDLE_TEXT)}
+        >
+          <Search className="size-5" strokeWidth={1.75} aria-hidden />
+          Search
+        </button>
+      </nav>
     </div>
   );
 }

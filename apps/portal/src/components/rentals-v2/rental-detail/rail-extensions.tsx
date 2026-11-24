@@ -57,13 +57,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { Button } from "@/components/ui-v2/button";
 import { Switch } from "@/components/ui-v2/switch";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui-v2/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, PHONE_FORM_DIALOG } from "@/components/ui-v2/dialog";
 import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
 // The two extend dialogs are v1's and are reused as they stand. They are the
 // only working route to `create-extension-checkout`, which is what actually
@@ -962,7 +956,7 @@ export function RailExtensions({
         {/* Wider than the ui-v2 default of 448px on purpose: four sections of
             real facts in one 448px column is where the unreadable nine-row
             stack came from. 768px is two columns of ~340px. */}
-        <DialogContent className="max-h-[85vh] overflow-y-auto no-scrollbar sm:max-w-3xl">
+        <DialogContent className={cn("max-h-[85vh] overflow-y-auto no-scrollbar sm:max-w-3xl", PHONE_FORM_DIALOG)}>
           {open && (
             <PeriodDetail
               period={open.period}

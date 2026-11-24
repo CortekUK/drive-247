@@ -745,7 +745,7 @@ export function SundayNewsletterTab({ canEdit }: { canEdit: boolean }) {
               body="Each Sunday issue you write is listed here, with when it went out and to how many operators."
             />
           ) : (
-            <Table className="max-md:min-w-[720px]">
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Sunday</TableHead>

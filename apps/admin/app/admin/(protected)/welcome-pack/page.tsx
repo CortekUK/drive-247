@@ -335,7 +335,7 @@ export default function WelcomePackAdminPage() {
           </div>
           <Card className="overflow-hidden">
             <CardContent className="p-0">
-              <Table className="max-md:min-w-[640px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
+              <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Title</TableHead>
@@ -406,7 +406,7 @@ export default function WelcomePackAdminPage() {
           </div>
           <Card className="overflow-hidden">
             <CardContent className="p-0">
-              <Table className="max-md:min-w-[640px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
+              <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Question</TableHead>
@@ -465,7 +465,7 @@ export default function WelcomePackAdminPage() {
           </div>
           <Card className="overflow-hidden">
             <CardContent className="p-0">
-              <Table className="max-md:min-w-[640px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
+              <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Title</TableHead>
@@ -583,7 +583,7 @@ export default function WelcomePackAdminPage() {
         <TabsContent value="readership" className="mt-4">
           <Card className="overflow-hidden">
             <CardContent className="p-0">
-              <Table className="max-md:min-w-[640px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
+              <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>User</TableHead>

@@ -60,7 +60,7 @@ import { useToast } from "@/hooks/use-toast";
 import { StartVerificationDialog } from "@/components/customers/start-verification-dialog";
 import { Button } from "@/components/ui-v2/button";
 import { Badge } from "@/components/ui-v2/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, PHONE_FORM_DIALOG } from "@/components/ui-v2/dialog";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui-v2/hover-card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { useCustomerReviews } from "@/hooks/use-customer-reviews";
@@ -558,14 +558,14 @@ export function StageCustomer({ detail, refetch }: StageProps) {
           }}
         />
       ) : (
-      <div className="flex h-full min-h-0 flex-col gap-4">
+      <div className="flex h-full min-h-0 flex-col gap-4 max-lg:h-auto">
         {/* ── who — brief; the full file is one click away ───────────────── */}
         <Surface className="shrink-0 px-5 py-4">
-          <div className="flex items-center gap-3.5">
+          <div className="flex items-center gap-3.5 max-sm:flex-wrap max-sm:gap-y-3">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-3xl bg-primary-light font-heading text-sm font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
               {initials(customer.name)}
             </span>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 max-sm:basis-[calc(100%-3.625rem)]">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-heading text-base font-semibold tracking-tight">{customer.name}</h3>
                 {customer.is_blocked && (
@@ -575,11 +575,11 @@ export function StageCustomer({ detail, refetch }: StageProps) {
                   </Badge>
                 )}
               </div>
-              <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
+              <p className="mt-0.5 truncate text-[13px] text-muted-foreground max-lg:whitespace-normal max-lg:break-words">
                 {customer.email || "No email on file"}
               </p>
             </div>
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" size="sm" asChild className="max-sm:ml-[3.625rem]">
               <Link href={`/customers/${customer.id}`}>
                 <ExternalLink />
                 Open profile
@@ -729,7 +729,7 @@ export function StageCustomer({ detail, refetch }: StageProps) {
               licence and face. */}
           <div
             onClick={(e) => e.stopPropagation()}
-            className="mt-4 grid min-h-28 flex-1 cursor-default grid-cols-[1.586fr_1.586fr_1fr] gap-3"
+            className="mt-4 grid min-h-28 flex-1 cursor-default grid-cols-[1.586fr_1.586fr_1fr] gap-3 max-lg:min-h-36"
           >
             {docSlots.map((d) => (
               <div key={d.label} className="flex min-h-0 min-w-0 flex-col">
@@ -764,7 +764,7 @@ export function StageCustomer({ detail, refetch }: StageProps) {
           properly — larger, beside everything the check extracted. */}
       <Dialog open={checkOpen} onOpenChange={setCheckOpen}>
         <DialogContent
-          className="max-h-[90vh] overflow-y-auto no-scrollbar sm:max-w-3xl"
+          className={cn("max-h-[90vh] overflow-y-auto no-scrollbar sm:max-w-3xl", PHONE_FORM_DIALOG)}
           // Radix focuses the first focusable thing on open — here the masked
           // number, which drew a focus box round it as if it had been clicked.
           onOpenAutoFocus={(e) => e.preventDefault()}
@@ -878,7 +878,7 @@ export function StageCustomer({ detail, refetch }: StageProps) {
 
       {/* ── reviews dialog ──────────────────────────────────────────────── */}
       <Dialog open={reviewsOpen} onOpenChange={setReviewsOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto no-scrollbar sm:max-w-xl">
+        <DialogContent className={cn("max-h-[85vh] overflow-y-auto no-scrollbar sm:max-w-xl", PHONE_FORM_DIALOG)}>
           <DialogHeader>
             <DialogTitle>Reviews of {customer.name}</DialogTitle>
             <DialogDescription>

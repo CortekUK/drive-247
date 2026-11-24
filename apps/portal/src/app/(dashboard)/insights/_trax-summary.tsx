@@ -598,7 +598,10 @@ export function TraxSummaryView({
    * The whole view scrolls inside the frame; the page itself never does.
    */
   return (
-    <div className="h-full overflow-y-auto">
+    // `-mx-1 px-1` below xl: the scroll box clips at its own edge, and the
+    // "Do this now" checkboxes' outline sat exactly on it, cut on the left.
+    // Four pixels of room, with the contents left where they were.
+    <div className="h-full overflow-y-auto max-xl:-mx-1 max-xl:px-1">
       {/* Flush with the page: the contents start under the "Insights" title,
           the review takes the rest of the width. Long text keeps a reading
           measure (see READ); charts and lists use the full width. */}

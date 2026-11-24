@@ -43,7 +43,7 @@ export const CREATE_TEMPLATE_BUSY_SUBTITLE = "Creating your template…";
 // own frame and did nothing, so on a phone Template Studio could not be opened
 // at all (QA sheet A3.16). A static button is hit-tested normally.
 const ACTION_CLASS =
-  "flex min-h-0 flex-1 flex-col justify-between rounded-2xl p-5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed";
+  "flex min-h-0 flex-1 flex-col justify-between gap-6 rounded-2xl p-5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed";
 
 export function CreateTemplateCardV2({
   onCreate,
@@ -70,7 +70,7 @@ export function CreateTemplateCardV2({
       data-tour="agreements-create-template"
       data-disabled={disabled ? "true" : undefined}
       // The shell deepens its border on hover; a card that does nothing must not.
-      className={cn("lg:min-h-0", inert && "hover:border-primary/20", disabled && "opacity-70", className)}
+      className={cn("lg:min-h-0 max-lg:min-h-0", inert && "hover:border-primary/20", disabled && "opacity-70", className)}
     >
       <button
         type="button"

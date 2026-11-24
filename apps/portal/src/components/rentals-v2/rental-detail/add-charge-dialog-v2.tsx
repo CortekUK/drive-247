@@ -27,7 +27,7 @@ import { useState } from "react";
 import { addDays, format } from "date-fns";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui-v2/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle, PHONE_SCREEN_DIALOG } from "@/components/ui-v2/dialog";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import { Textarea } from "@/components/ui-v2/textarea";
@@ -187,9 +187,9 @@ export function AddChargeDialogV2({
 
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent showCloseButton={false} className="flex flex-col gap-0 bg-white p-0 sm:max-w-2xl dark:bg-card">
+      <DialogContent showCloseButton={false} className={cn("flex flex-col gap-0 bg-white p-0 sm:max-w-2xl dark:bg-card", PHONE_SCREEN_DIALOG, "max-sm:overflow-y-auto")}>
         {/* Header: title, step, and the buttons — no footer band. */}
-        <div className="flex items-start justify-between gap-4 px-9 pb-5 pt-8">
+        <div className="flex items-start justify-between gap-4 px-9 pb-5 pt-8 max-sm:px-4 max-sm:pt-6">
           <div className="min-w-0">
             <DialogTitle className="text-lg font-semibold">Add a charge</DialogTitle>
             <DialogDescription className="mt-0.5">
@@ -213,13 +213,13 @@ export function AddChargeDialogV2({
           </div>
         </div>
 
-        <div className="px-9 pb-9">
+        <div className="px-9 pb-9 max-sm:px-4 max-sm:pb-6">
           {/* ── 1 · Basics ─────────────────────────────────────────────── */}
           {screen === 1 && (
             <div className="space-y-7">
               <div>
                 <FieldLabel>What is it for</FieldLabel>
-                <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="What is it for">
+                <div className="grid grid-cols-4 gap-2 max-sm:grid-cols-2" role="radiogroup" aria-label="What is it for">
                   {KINDS.map((o) => {
                     const on = kind === o.key;
                     return (
@@ -282,7 +282,7 @@ export function AddChargeDialogV2({
             <div className="space-y-7">
               <Section title={kind === "fine" ? "The notice" : KINDS.find((k) => k.key === kind)!.label}>
                 {kind === "fine" ? (
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-3 max-sm:grid-cols-1">
                     <div>
                       <FieldLabel>Violation</FieldLabel>
                       <Select value={violation} onValueChange={setViolation}>

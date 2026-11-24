@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Pencil, Star, Trash2, Upload } from 'lucide-react';
+import { Loader2, Pencil, Star, Trash2, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { SegmentedControl } from '@/components/announcements/segmented-control';
@@ -91,6 +91,14 @@ export function ContactDetailDialog({
             <IconAction label="Delete" onClick={() => onDelete(r)} danger>
               <Trash2 className="size-4" />
             </IconAction>
+            {/* Phones: a ✕ like every other dialog's, so there is a way back
+                that is not a tap on the thin strip of backdrop. */}
+            <DialogClose
+              aria-label="Close"
+              className="relative ml-1 inline-flex size-8 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+            >
+              <X className="size-4" />
+            </DialogClose>
           </div>
         </div>
 

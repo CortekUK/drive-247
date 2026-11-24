@@ -23,7 +23,9 @@ export const SETTINGS_PAGE_TITLE = 'text-2xl font-bold tracking-tight text-foreg
 /** A section title (and a panel title). */
 export const SETTINGS_SECTION_TITLE = 'text-base font-semibold tracking-tight text-foreground';
 /** The page column every settings screen sits in. */
-export const SETTINGS_COLUMN = 'w-full max-w-[1160px] space-y-9 pb-6';
+/* Phones: sections closer together (user review, Nov 2026: the desktop's
+   36px between sections and 16px around every row read as empty space). */
+export const SETTINGS_COLUMN = 'w-full max-w-[1160px] space-y-9 pb-6 max-md:space-y-6 max-md:pb-2';
 
 export function SettingsPageHeader({ title, description }: { title: string; description?: ReactNode }) {
   return (
@@ -49,7 +51,7 @@ export function SettingsSection({
   className?: string;
 }) {
   return (
-    <section className={cn('space-y-3', className)}>
+    <section className={cn('space-y-3 max-md:space-y-1', className)}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <h2 className={SETTINGS_SECTION_TITLE}>{title}</h2>
@@ -71,9 +73,9 @@ export function SettingsRowAlignProvider({ align, children }: { align: SettingsR
   return <SettingsRowAlignContext.Provider value={align}>{children}</SettingsRowAlignContext.Provider>;
 }
 
-const ROW_GRID_END = 'flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-x-10';
+const ROW_GRID_END = 'flex flex-col gap-3 max-md:gap-2.5 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-x-10';
 const ROW_GRID_START =
-  'flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,420px)_minmax(0,1fr)] md:items-center md:gap-x-10';
+  'flex flex-col gap-3 max-md:gap-2.5 md:grid md:grid-cols-[minmax(0,420px)_minmax(0,1fr)] md:items-center md:gap-x-10';
 
 /**
  * One setting: label and help on the left, the control beside it. Rows are
@@ -102,10 +104,18 @@ export function SettingsRow({
   return (
     <div
       data-settings-row=""
-      className={cn('border-b border-border/60 py-4 last:border-b-0', className)}
+      className={cn('border-b border-border/60 py-4 last:border-b-0 max-md:py-3', className)}
     >
-      <div className={end ? ROW_GRID_END : ROW_GRID_START}>
-        <div className={end ? 'min-w-0 md:max-w-2xl' : 'min-w-0'}>
+      {/* Phones: a row with no help text (an address and its Remove) keeps
+          its control on the same line, at the end, instead of a lone button
+          on the line under it. */}
+      <div
+        className={cn(
+          end ? ROW_GRID_END : ROW_GRID_START,
+          end && !description && 'max-md:flex-row max-md:items-center max-md:justify-between',
+        )}
+      >
+        <div className={cn(end ? 'min-w-0 md:max-w-2xl' : 'min-w-0', '[overflow-wrap:anywhere]')}>
           {htmlFor ? (
             <label htmlFor={htmlFor} className="text-sm font-medium text-foreground">
               {label}
@@ -121,7 +131,7 @@ export function SettingsRow({
           <div
             className={
               end
-                ? 'flex min-w-0 flex-wrap items-center justify-start gap-2 md:justify-end'
+                ? cn('flex min-w-0 flex-wrap items-center justify-start gap-2 md:justify-end', !description && 'max-md:shrink-0')
                 : 'flex min-w-0 flex-wrap items-center justify-start gap-2'
             }
           >

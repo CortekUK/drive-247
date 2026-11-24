@@ -311,7 +311,7 @@ export default function BonzahSubmissions() {
               <NoMatchState noun="submissions" onClear={() => setFilter('all')} />
             )
           ) : (
-            <Table className="max-md:min-w-[760px] max-md:[&_td:not([colspan])]:whitespace-nowrap">
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Business</TableHead>
@@ -933,7 +933,11 @@ function SubmissionDetailDialog({
     <Dialog open={!!submission} onOpenChange={(o) => !o && onClose()}>
       {/* grid-cols-1 on a phone: the content grid's implicit auto track grew to
           the tab strip's width and pushed the badge and Approve off the card. */}
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto max-md:grid-cols-1">
+      <DialogContent
+        className="max-w-4xl max-h-[90vh] overflow-y-auto max-md:grid-cols-1"
+        // No focus ring dropped on the first tab the moment it opens.
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-lg bg-primary/15 flex items-center justify-center">
@@ -1242,7 +1246,7 @@ function FieldGrid({
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider truncate">
               {label}
             </span>
-            <span className="text-sm font-medium text-right max-w-[60%] truncate">
+            <span className="text-sm font-medium text-right max-w-[60%] truncate max-sm:whitespace-normal max-sm:[overflow-wrap:anywhere]">
               {display}
             </span>
           </div>

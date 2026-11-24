@@ -452,10 +452,10 @@ function Row({
     <div
       className={cn(
         "gap-6 py-2.5",
-        wide ? "block" : "grid grid-cols-[152px_minmax(0,1fr)] items-start",
+        wide ? "block" : "grid grid-cols-[152px_minmax(0,1fr)] items-start max-sm:grid-cols-1 max-sm:gap-1.5",
       )}
     >
-      <label className={cn("block text-[13px] leading-snug text-muted-foreground", wide ? "mb-2" : "pt-2")}>
+      <label className={cn("block text-[13px] leading-snug text-muted-foreground", wide ? "mb-2" : "pt-2 max-sm:pt-0")}>
         {label}
       </label>
       <div className={cn("min-w-0", !wide && "max-w-md")}>{children}</div>

@@ -216,7 +216,7 @@ export function CustomerPicker({
                     }}
                     title={c.is_blocked ? `${c.name} is blocked${c.blocked_reason ? `: ${c.blocked_reason}` : ""}.` : undefined}
                     className={cn(
-                      "relative grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-6 rounded-2xl px-4 py-3 outline-none transition-colors duration-200 ease-out focus-visible:ring-2 focus-visible:ring-ring/40 motion-reduce:transition-none",
+                      "relative grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-6 rounded-2xl px-4 py-3 max-lg:grid-cols-3 max-lg:items-start max-lg:gap-x-3 max-lg:gap-y-2 max-lg:[&>*:first-child]:col-span-3 outline-none transition-colors duration-200 ease-out focus-visible:ring-2 focus-visible:ring-ring/40 motion-reduce:transition-none",
                       c.is_blocked
                         ? "cursor-not-allowed opacity-50"
                         : active
@@ -242,11 +242,11 @@ export function CustomerPicker({
                         {c.is_blocked ? (
                           // Said on the row, not only in a hover title: a blocked
                           // customer cannot be picked, and staff must see why (QA R2.2).
-                          <p className="truncate text-xs font-medium text-destructive">
+                          <p className="truncate text-xs font-medium text-destructive max-lg:whitespace-normal max-lg:break-words">
                             Blocked — cannot rent{c.blocked_reason ? `: ${c.blocked_reason}` : ""}
                           </p>
                         ) : (
-                          <p className="truncate text-xs text-muted-foreground">
+                          <p className="truncate text-xs text-muted-foreground max-lg:whitespace-normal max-lg:break-words">
                             {[c.email, c.phone].filter(Boolean).join(" · ") || "No contact details"}
                           </p>
                         )}
@@ -255,11 +255,11 @@ export function CustomerPicker({
 
                     {/* identity */}
                     <div className="min-w-0">
-                      <p className={cn("flex items-center gap-1.5 truncate text-xs font-medium", id.tone)}>
+                      <p className={cn("flex items-center gap-1.5 truncate text-xs font-medium max-lg:whitespace-normal", id.tone)}>
                         {id.ok ? <ShieldCheck className="size-3.5 shrink-0" /> : <ShieldAlert className="size-3.5 shrink-0" />}
                         {id.label}
                       </p>
-                      <p className="truncate text-[11px] text-muted-foreground">
+                      <p className="truncate text-[11px] text-muted-foreground max-lg:whitespace-normal">
                         {c.license_number ? "Licence on file" : "No licence on file"}
                       </p>
                     </div>
@@ -267,7 +267,7 @@ export function CustomerPicker({
                     {/* staff rating */}
                     <div className="min-w-0">
                       {rating != null ? (
-                        <p className="flex items-center gap-1 text-xs font-medium">
+                        <p className="flex items-center gap-1 text-xs font-medium max-lg:flex-wrap">
                           <Star className="size-3.5 shrink-0 fill-amber-400 text-amber-400" />
                           {rating.toFixed(1)}
                           <span className="font-normal text-muted-foreground">
@@ -284,7 +284,7 @@ export function CustomerPicker({
                       <p className="text-xs font-medium">
                         {count} {count === 1 ? "rental" : "rentals"}
                       </p>
-                      <p className="truncate text-[11px] text-muted-foreground">
+                      <p className="truncate text-[11px] text-muted-foreground max-lg:whitespace-normal">
                         {c.created_at ? `Since ${fmtDate(c.created_at)}` : "New"}
                       </p>
                     </div>

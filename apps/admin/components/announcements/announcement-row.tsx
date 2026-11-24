@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Copy, Info, Loader2, MoreVertical, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -359,6 +359,44 @@ export function AnnouncementCard({
   );
 }
 
+/**
+ * The card's width on the operator's desk (a third of the 1160px column). A
+ * phone's row is narrower, and the card's drawing then ran into its title
+ * ("Refer an operator", "Insurance at checkout"); there the card is drawn at
+ * this width and scaled down, so the preview is the real card, smaller.
+ */
+const DESK_CARD_WIDTH_PX = 373;
+
+function ScaledToFit({ width, className, children }: { width: number; className?: string; children: ReactNode }) {
+  const outer = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState<{ scale: number; height: number } | null>(null);
+  useEffect(() => {
+    const o = outer.current;
+    const i = inner.current;
+    if (!o || !i || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      const room = o.clientWidth;
+      setFit(room > 0 && room < width ? { scale: room / width, height: i.offsetHeight * (room / width) } : null);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(o);
+    observer.observe(i);
+    measure();
+    return () => observer.disconnect();
+  }, [width]);
+  return (
+    <div ref={outer} className={cn("w-full min-w-0 overflow-hidden", className)} style={fit ? { height: fit.height } : undefined}>
+      <div
+        ref={inner}
+        style={fit ? { width, transform: `scale(${fit.scale})`, transformOrigin: 'top left' } : undefined}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 /** The card's picture: the feature's image, or the system announcement's tone. */
 function CardPicture({ row, dimmed }: { row: AdminAnnouncementRow; dimmed: boolean }) {
   const ctaVisible = resolveInPortalCta((row.cta_url ?? '').trim()) !== null;
@@ -368,9 +406,9 @@ function CardPicture({ row, dimmed }: { row: AdminAnnouncementRow; dimmed: boole
   if (row.kind === 'feature') {
     return (
       <div className={cn(frame, 'bg-muted/40 p-3 pt-14')}>
-        <div className="pointer-events-none">
+        <ScaledToFit width={DESK_CARD_WIDTH_PX} className="pointer-events-none">
           <FeatureCardPreview title={row.title} summary={row.summary ?? ''} imageUrl={row.image_url} cardCount={1} onOpen={() => {}} />
-        </div>
+        </ScaledToFit>
       </div>
     );
   }

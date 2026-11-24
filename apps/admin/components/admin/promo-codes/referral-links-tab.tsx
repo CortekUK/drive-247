@@ -11,7 +11,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from '@/components/ui/sonner';
 import { FilterChip, FilterSearch, FilterSection, FilterShell } from '@/components/admin/filter-primitives';
 import { FilterReveal } from '@/components/admin/overview-flip';
-import { cn } from '@/lib/utils';
 import { promoApi, type PromoCode } from './api';
 import { CopyValue } from './shared';
 import { CodeTermsDialog } from './codes-tab';
@@ -136,7 +135,7 @@ export function ReferralLinksTab({
         <CardContent className="p-0">
           {/* With rows, scrolls sideways inside the card on phones rather than squashing;
               the empty state keeps the card's width. */}
-          <Table className={cn(!loading && codes.length > 0 && 'max-md:min-w-[760px] max-md:[&_td]:whitespace-nowrap max-md:[&_th]:whitespace-nowrap')}>
+          <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Code</TableHead>
@@ -167,7 +166,7 @@ export function ReferralLinksTab({
                 <TableRow key={c.id}>
                   <TableCell className="min-w-[220px]">
                     {/* Capped on phones so the link truncates instead of making this column screen-wide. */}
-                    <div className="space-y-1.5 max-md:max-w-[260px]">
+                    <div className="space-y-1.5">
                       <span className="font-mono text-sm font-semibold">{c.code}</span>
                       {c.link && c.status === 'active' && <CopyValue value={c.link} label="Link" className="py-1" />}
                     </div>

@@ -21,7 +21,7 @@
  * the upload exactly as before.
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ImagePlus, Plus, Star, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -48,6 +48,18 @@ export function VehiclePhotosPickerV2({
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
+  /* Touch screens (Nov 20 2026): a `draggable` tile swallowed the tap on
+     Android Chrome — the touch began a drag, so "Make cover" and the remove
+     button never got their click. On a touch screen the tiles are plain, and
+     the buttons do the reordering; desktop keeps drag-to-reorder. */
+  const [touch, setTouch] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(hover: none) and (pointer: coarse)");
+    const read = () => setTouch(mq.matches);
+    read();
+    mq.addEventListener("change", read);
+    return () => mq.removeEventListener("change", read);
+  }, []);
 
   const choose = () => fileRef.current?.click();
 
@@ -80,7 +92,7 @@ export function VehiclePhotosPickerV2({
     return (
       <div
         key={p.url}
-        draggable
+        draggable={!touch}
         onDragStart={(e) => {
           setDragFrom(i);
           e.dataTransfer.effectAllowed = "move";
@@ -89,7 +101,8 @@ export function VehiclePhotosPickerV2({
         onDragOver={(e) => e.preventDefault()}
         onDrop={dropOn(i)}
         className={cn(
-          "group relative size-full cursor-grab overflow-hidden rounded-2xl border border-foreground/10 bg-muted/30 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 active:cursor-grabbing motion-reduce:animate-none",
+          "group relative size-full overflow-hidden rounded-2xl border border-foreground/10 bg-muted/30 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 active:cursor-grabbing motion-reduce:animate-none",
+          !touch && "cursor-grab",
           dragFrom === i && "opacity-40",
         )}
       >
@@ -109,12 +122,12 @@ export function VehiclePhotosPickerV2({
         )}
 
         {/* Hover actions — fade only, per the motion standard. */}
-        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 p-1.5 opacity-0 max-md:opacity-100 transition-opacity duration-200 ease-in group-hover:opacity-100 group-hover:ease-out group-focus-within:opacity-100 motion-reduce:transition-none">
+        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 p-1.5 opacity-0 max-sm:top-0 max-sm:flex-col-reverse max-sm:items-stretch max-sm:[&>*:first-child]:self-center max-sm:[&>*:last-child]:self-end max-md:opacity-100 transition-opacity duration-200 ease-in group-hover:opacity-100 group-hover:ease-out group-focus-within:opacity-100 motion-reduce:transition-none">
           {!big ? (
             <button
               type="button"
               onClick={() => move(i, 0)}
-              className="v2-phone-hit inline-flex h-6 items-center gap-1 rounded-full bg-background/95 px-2 text-[10px] font-medium text-foreground hover:bg-background"
+              className="v2-phone-hit inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full bg-background/95 px-2 text-[10px] font-medium text-foreground hover:bg-background"
             >
               <Star className="size-2.5" /> Make cover
             </button>
@@ -188,13 +201,13 @@ export function VehiclePhotosPickerV2({
           setDragOver(false);
           if (dragFrom === null) onAdd(e.dataTransfer.files);
         }}
-        className="relative grid h-[176px] grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-2.5"
+        className="relative grid h-[176px] grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-2.5 max-sm:h-auto max-sm:grid-cols-1"
       >
-        <div className="min-h-0">{photos[0] ? tile(0, true) : empty(true, "cover")}</div>
-        <div className="grid min-h-0 grid-cols-2 grid-rows-2 gap-2.5">
+        <div className="min-h-0 max-sm:aspect-[16/10]">{photos[0] ? tile(0, true) : empty(true, "cover")}</div>
+        <div className="grid min-h-0 grid-cols-2 grid-rows-2 gap-2.5 max-sm:grid-cols-4 max-sm:grid-rows-1 max-sm:gap-2">
           {Array.from({ length: SIDE_SLOTS }, (_, k) => {
             const i = k + 1;
-            return <div key={i} className="min-h-0">{photos[i] ? tile(i, false) : empty(false, `e${i}`)}</div>;
+            return <div key={i} className="min-h-0 max-sm:aspect-square">{photos[i] ? tile(i, false) : empty(false, `e${i}`)}</div>;
           })}
         </div>
 
@@ -214,7 +227,9 @@ export function VehiclePhotosPickerV2({
       <span className={cn("min-h-[18px] px-0.5 text-[11px] leading-[18px]", error ? "text-destructive" : "text-muted-foreground")}>
         {error ??
           (photos.length
-            ? `${photos.length} photo${photos.length === 1 ? "" : "s"} · drag to reorder, or hover one to make it the cover`
+            ? touch
+              ? `${photos.length} photo${photos.length === 1 ? "" : "s"} · tap Make cover on one to make it the cover`
+              : `${photos.length} photo${photos.length === 1 ? "" : "s"} · drag to reorder, or hover one to make it the cover`
             : "JPG, PNG or WebP, up to 5 MB each")}
       </span>
     </div>

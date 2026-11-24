@@ -209,14 +209,23 @@ export function SidebarCustomizerDialog({ open, onOpenChange }: { open: boolean;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <PvDialogContent className="max-h-[92vh] gap-0 overflow-y-auto p-0 sm:max-w-3xl sm:p-0">
+      {/* Phones (boss, Nov 2026, the operator's sidebar-customizer-dialog):
+          not a floating dialog but the MENU ITSELF in edit mode, full screen
+          where the menu is, on the page colour: the rows first with their grips
+          and hide buttons, what is hidden after them, Save pinned at the bottom
+          within thumb reach. The shell reopens the menu when it closes. The
+          preview is already left out below md. */}
+      <PvDialogContent
+        data-sidebar-edit=""
+        className="max-h-[92vh] gap-0 overflow-y-auto p-0 sm:max-w-3xl sm:p-0 max-sm:inset-0 max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-none max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:overflow-hidden max-sm:rounded-none! max-sm:bg-pv-bg max-sm:pt-[env(safe-area-inset-top,0px)] max-sm:pb-[env(safe-area-inset-bottom,0px)] max-sm:shadow-none max-sm:ring-0"
+      >
         <PvDialogHeader
-          className="border-b border-pv-border px-7 pt-7 pb-5"
+          className="border-b border-pv-border px-7 pt-7 pb-5 max-sm:shrink-0 max-sm:px-5 max-sm:pt-5 max-sm:pb-4"
           title="Customise sidebar"
           description="Drag to reorder and hide anything you don't use. Rentals stays put. This only changes your own sidebar."
         />
 
-        <div className="grid gap-6 px-7 py-6 md:grid-cols-[minmax(0,1fr)_240px]">
+        <div className="grid gap-6 px-7 py-6 md:grid-cols-[minmax(0,1fr)_240px] max-sm:min-h-0 max-sm:flex-1 max-sm:content-start max-sm:overflow-y-auto max-sm:overscroll-contain max-sm:px-5 max-sm:py-5">
           <div className="flex min-w-0 flex-col gap-5">
             <div className="flex flex-col gap-2">
               <p className="text-[11px] font-semibold uppercase tracking-widest text-pv-muted-fg">In your sidebar</p>
@@ -263,7 +272,7 @@ export function SidebarCustomizerDialog({ open, onOpenChange }: { open: boolean;
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2 border-t border-pv-border px-7 py-4">
+        <div className="flex items-center justify-between gap-2 border-t border-pv-border px-7 py-4 max-sm:shrink-0 max-sm:px-5">
           <button type="button" className={V2_BUTTON_GHOST_SM} onClick={() => setDraft(toDraft(DEFAULT_NAV_PREFERENCES))}>
             Reset to default
           </button>

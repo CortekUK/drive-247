@@ -1982,7 +1982,8 @@ html[data-trax-panel] {
     font-size: 15px;
   }
   /* Status text and plain values share one size and baseline. */
-  .v2-theme [data-phone-cards] tbody td:not(:first-child) > span {
+  .v2-theme [data-phone-cards] tbody td:not(:first-child) > span,
+  .v2-theme [data-phone-cards] tbody td:not(:first-child) > div > span[class~="text-sm"] {
     font-size: 13px;
     line-height: 1.3;
   }

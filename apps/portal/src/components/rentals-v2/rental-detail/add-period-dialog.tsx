@@ -14,7 +14,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui-v2/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, PHONE_FORM_DIALOG } from "@/components/ui-v2/dialog";
 import { AutoExtensionArt, ManualExtensionArt } from "@/components/illustrations-v2/scenes/add-period";
 
 export type PeriodKind = "manual" | "auto";
@@ -53,7 +53,7 @@ export function AddPeriodDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="gap-5 sm:max-w-[560px]">
+      <DialogContent className={cn("gap-5 sm:max-w-[560px]", PHONE_FORM_DIALOG)}>
         <DialogHeader className="text-center sm:text-center">
           <DialogTitle className="text-[18px]">How should this rental continue?</DialogTitle>
           <DialogDescription className="text-[13px]">

@@ -293,8 +293,8 @@ function StepEditor({
             <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
           )}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{step.label}</p>
-            <p className="truncate text-xs text-muted-foreground">{step.subject}</p>
+            <p className="truncate text-sm font-medium max-sm:whitespace-normal">{step.label}</p>
+            <p className="truncate text-xs text-muted-foreground max-sm:whitespace-normal max-sm:[overflow-wrap:anywhere]">{step.subject}</p>
           </div>
         </button>
         {step.send_if && !isEventStep(step) && <RepeatEvery step={step} canEdit={canEdit} onSaved={onSaved} />}

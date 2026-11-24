@@ -80,10 +80,10 @@ export function LogEntry({
   const body = (
     <>
       <div className="flex items-start justify-between gap-3">
-        <span className="min-w-0 truncate text-sm font-medium">{who}</span>
+        <span className="min-w-0 truncate text-sm font-medium max-sm:whitespace-normal">{who}</span>
         {status ? <span className="shrink-0">{status}</span> : null}
       </div>
-      {what ? <div className="min-w-0 truncate text-xs">{what}</div> : null}
+      {what ? <div className="min-w-0 truncate text-xs max-sm:whitespace-normal max-sm:[overflow-wrap:anywhere]">{what}</div> : null}
       {when ? <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">{when}</div> : null}
       {detail ? <div className="break-words text-xs text-muted-foreground">{detail}</div> : null}
       {action ? <div className="pt-1">{action}</div> : null}

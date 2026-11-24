@@ -329,10 +329,10 @@ export function StageVehicle({ detail, refetch }: StageProps) {
       ) : (
         /* Island layout, the Customer stage's three cards: a slim identity
            strip, a compact summary, and the visual card filling the rest. */
-        <div className="flex h-full min-h-0 flex-col gap-4">
+        <div className="flex h-full min-h-0 flex-col gap-4 max-lg:h-auto">
           {/* ── which car — brief; its full file is one click away ──────── */}
           <Surface className="shrink-0 px-5 py-4">
-            <div className="flex items-center gap-3.5">
+            <div className="flex items-center gap-3.5 max-sm:flex-wrap max-sm:gap-y-3">
               <span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-3xl bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
                 {cover ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -341,7 +341,7 @@ export function StageVehicle({ detail, refetch }: StageProps) {
                   <Car className="size-5" />
                 )}
               </span>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 max-sm:basis-[calc(100%-3.625rem)]">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-heading text-base font-semibold tracking-tight">{name}</h3>
                   {/* The car's PRESENT status — a fact about the car, not this
@@ -351,12 +351,12 @@ export function StageVehicle({ detail, refetch }: StageProps) {
                     {vehicle.status || "No status"}
                   </HeroChip>
                 </div>
-                <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
+                <p className="mt-0.5 truncate text-[13px] text-muted-foreground max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere]">
                   <span className="font-mono tracking-wide">{vehicle.reg}</span>
                   {subline && <> · <span className="capitalize">{subline}</span></>}
                 </p>
               </div>
-              <Button variant="outline" size="sm" asChild>
+              <Button variant="outline" size="sm" asChild className="max-sm:ml-[3.625rem]">
                 <Link href={`/vehicles/${vehicle.id}`}>
                   <ExternalLink />
                   Open vehicle
