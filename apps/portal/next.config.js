@@ -9,6 +9,12 @@ dotenv.config({ path: path.join(workspaceRoot, '.env'), quiet: true });
 const MARKETING_URL =
   process.env.NEXT_PUBLIC_MARKETING_URL || 'https://drive-247.com';
 
+// Storage images come from whichever Supabase project this build talks to, so
+// a staging build allows staging's storage and a production build production's.
+const SUPABASE_HOST = new URL(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hviqoaokxvlancmftwuo.supabase.co',
+).hostname;
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -85,7 +91,7 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'hviqoaokxvlancmftwuo.supabase.co',
+        hostname: SUPABASE_HOST,
       },
     ],
   },

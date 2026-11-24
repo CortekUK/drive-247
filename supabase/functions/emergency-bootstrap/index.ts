@@ -24,10 +24,12 @@ serve(async (req) => {
       });
     }
 
-    const supabaseUrl = 'https://hviqoaokxvlancmftwuo.supabase.co';
+    // Read from the environment, never written in: the same function is deployed
+    // to production and to staging, and each must talk to its own project.
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
-    if (!serviceRoleKey) {
+    if (!supabaseUrl || !serviceRoleKey) {
       console.error('Service role key not found');
       return new Response(JSON.stringify({ error: 'Service configuration missing' }), {
         status: 500,

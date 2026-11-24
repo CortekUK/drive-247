@@ -13,6 +13,7 @@ export SUPABASE_ACCESS_TOKEN=...
 node evals/environments/database/nightly.mjs        # everything, one report
 node evals/environments/database/db-eval.mjs        # just the main comparison
 node evals/environments/database/rebuild.mjs --yes  # staging drifted: rebuild it from prod
+node evals/environments/database/reseed.mjs         # after a rebuild: tenant, logins and demo data back
 ```
 
 Exit code is 0 only when everything is identical. Every run writes a PDF to
@@ -29,7 +30,8 @@ Exit code is 0 only when everything is identical. Every run writes a PDF to
 | `door-test.mjs` | Does it behave the same from outside? Compares what the API offers and what each role may do. | No |
 | `settings-check.mjs` | Are the project dials the same? API, auth, pooler, storage and Postgres settings. | No |
 | `nightly.mjs` | Runs all of the above and writes one report. Add `--with-alarm` to include alarm-test. | Staging only, with `--with-alarm` |
-| `rebuild.mjs` | Staging drifted, how do I fix it? Empties staging's own schemas, builds them again from prod's blueprint (about 10 minutes), then runs db-eval. Needs `--yes`; `--dry-run` shows the plan. | Staging only. Wipes staging rows, so re-seed after |
+| `rebuild.mjs` | Staging drifted, how do I fix it? Empties staging's own schemas, builds them again from prod's blueprint (about 10 minutes), then runs db-eval. Needs `--yes`; `--dry-run` shows the plan. | Staging only. Wipes staging rows, so run `reseed.mjs` after |
+| `reseed.mjs` | Staging was rebuilt, how do I log in again? Puts back the northwind tenant (settings from prod, cleaned), its logo files, the two logins and the demo data. Safe to run again. | Staging only |
 | `accepted-differences.json` | Every difference we decided is fine, each with a reason. | |
 | `lib.mjs` | Shared plumbing: Supabase calls, exceptions, the report. | |
 
@@ -47,7 +49,7 @@ Exit code is 0 only when everything is identical. Every run writes a PDF to
 All 10 have one cause: staging was created in November 2026 on a newer Supabase
 platform image than prod. Supabase owns these objects; we cannot change them on
 either side. Each is one exact entry in `accepted-differences.json`. Status:
-**awaiting Ghulam's review.**
+**approved by Ghulam on 24 Nov 2026.**
 
 | # | Check | Object | What differs | Why it is fine |
 |---|---|---|---|---|

@@ -24,6 +24,7 @@ import { readMetaSignals, trackRegistration, trackStartTrial } from "@/lib/meta-
 import {
   isHeardAbout,
   type HeardAbout,
+  hasCompleteAttribution,
   type SignupAttribution,
 } from "@/lib/signup-attribution";
 import { DEFAULT_BRAND_COLOR, DEFAULT_SITE_THEME, isBrandColor, isSiteTheme } from "@/lib/signup-look";
@@ -1416,8 +1417,25 @@ export function OnboardingProvider({
         const passwordFirst =
           signup.resumeStep === "payment" && !signup.paid && (await passwordStillPending());
 
-        // No question screen on the way back: "How did you hear about us?" is
-        // optional since 2026-11-23, so a signup without an answer goes on.
+        // Heading for the card with no phone number on record: a Google signup
+        // that closed the question screen and came back, or a signup from before
+        // the phone became required (2026-11-24). Ask once, then carry on. "How
+        // did you hear about us?" stays optional and never stops anyone here.
+        if (
+          signup.resumeStep === "payment" &&
+          !signup.paid &&
+          !attributionAnsweredRef.current &&
+          !hasCompleteAttribution(await fetchSignupMeta())
+        ) {
+          dispatch({ type: "setAccount", account: { fullName: signup.fullName, email: signup.email } });
+          dispatch({ type: "signInPrompt", prompt: null });
+          afterAttributionRef.current = () =>
+            hydrateFromResume(signup, stateRef.current.planId ?? requestedPlanId, { passwordFirst });
+          setAccountMode("attribution");
+          dispatch({ type: "resumeTo", step: "account" });
+          return;
+        }
+
         hydrateFromResume(signup, requestedPlanId, { passwordFirst });
       } catch (e) {
         const error = toOnboardingError(e);
@@ -1696,7 +1714,7 @@ export function OnboardingProvider({
         let meta = await fetchSignupMeta();
         // A returning Google user is not stamped again, so an answer they gave
         // before pressing the button still has to be saved.
-        if (!isHeardAbout(meta?.heardAbout) && isHeardAbout(pending.attribution?.heardAbout)) {
+        if (!hasCompleteAttribution(meta) && pending.attribution) {
           await signupSaveAttribution(pending.attribution).catch((e) =>
             console.warn("[onboarding] could not save the signup answer", e),
           );
@@ -1739,8 +1757,16 @@ export function OnboardingProvider({
           await resolveResume(stateRef.current.planId ?? pending.planId);
         };
 
-        // The question is optional (2026-11-23), so Google is not stopped to
-        // ask it: an answer typed before pressing the button was saved above.
+        // The phone number is required (2026-11-24) and Google skips the form
+        // that asks for it. One typed before pressing the button was saved
+        // above; without one, the short question screen comes first.
+        if (!hasCompleteAttribution(meta)) {
+          afterAttributionRef.current = carryOn;
+          setAccountMode("attribution");
+          dispatch({ type: "resumeTo", step: "account" });
+          return;
+        }
+
         await carryOn();
       } catch (e) {
         const error = toOnboardingError(e);

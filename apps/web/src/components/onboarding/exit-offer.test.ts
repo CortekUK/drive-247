@@ -284,6 +284,14 @@ describe("phone number: required", () => {
     expect(hasCompleteAttribution({ heardAbout: "instagram", fleetSize: "21+", phone: "call me" })).toBe(false);
   });
 
+  it("a signup heading for the card with no phone on record is asked for it first", () => {
+    const provider = read("onboarding-provider.tsx");
+    // Google return: the question screen comes before the business and the card.
+    expect(provider).toMatch(/if \(!hasCompleteAttribution\(meta\)\) \{\s*afterAttributionRef\.current = carryOn;\s*setAccountMode\("attribution"\);/);
+    // Coming back later: asked once, never twice in the same visit.
+    expect(provider).toMatch(/!attributionAnsweredRef\.current &&\s*!hasCompleteAttribution\(await fetchSignupMeta\(\)\)/);
+  });
+
   it("the field no longer says optional", () => {
     const fields = read("heard-about-fields.tsx");
     expect(fields).not.toMatch(/Phone number <span[^>]*>\(optional\)/);

@@ -40,7 +40,7 @@ Shared plumbing (Supabase calls, exceptions, the report) lives in `../database/l
 - **A deploy is not trusted until read back.** `copy-from-prod.mjs` downloads each
   function from staging after uploading it and compares the bytes.
 
-## Accepted differences (2), awaiting Ghulam's review
+## Accepted differences (2), approved by Ghulam on 24 Nov 2026
 
 | Function | What | Why it is fine |
 |---|---|---|
