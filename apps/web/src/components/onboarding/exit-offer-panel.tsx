@@ -21,20 +21,64 @@ export type FinishLaterState = "idle" | "sending" | "sent" | "failed";
  * "Not ready just yet?" — drawn inside the signup card, in place of the card
  * step (which stays mounted behind it, so a half-typed card survives). The
  * owner's copy, word for word; no capitals, exclamation marks or timers.
+ *
+ * During Black Friday (`blackFriday`) every signup already has BF30, which is
+ * more than WELCOME20, so the popup offers no code: it says the price is kept
+ * and offers the "email me a link" (on every device). Neema's copy.
  */
 export const ExitOfferPanel = forwardRef<
   HTMLButtonElement,
   {
     applying: boolean;
-    /** Phones only: "Email me a link to finish later". */
+    /** Black Friday copy: no code to apply, the link is the main button. */
+    blackFriday?: boolean;
+    /** Phones only (every device during Black Friday): "Email me a link to finish later". */
     showFinishLater: boolean;
     finishLater: FinishLaterState;
     onAccept(): void;
     onFinishLater(): void;
     onDismiss(): void;
   }
->(function ExitOfferPanel({ applying, showFinishLater, finishLater, onAccept, onFinishLater, onDismiss }, ref) {
+>(function ExitOfferPanel({ applying, blackFriday = false, showFinishLater, finishLater, onAccept, onFinishLater, onDismiss }, ref) {
   const sent = finishLater === "sent";
+  if (blackFriday) {
+    return (
+      <section aria-labelledby="signup-exit-offer-title" aria-describedby="signup-exit-offer-lead">
+        <ScreenHead
+          titleId="signup-exit-offer-title"
+          title="Your Black Friday price is saved until Monday"
+          lead={
+            <span id="signup-exit-offer-lead">
+              30% off your first 3 months, plus 14 days free. Want us to email you a link to finish later?
+            </span>
+          }
+        />
+        <ColumnActions className="mt-10">
+          {sent ? (
+            <p role="status" className={cn("py-2 text-center text-[14px] text-muted-foreground", SIGNUP_ENTER)}>
+              Sent. Your Black Friday price is in the link.
+            </p>
+          ) : (
+            <>
+              <ColumnButton ref={ref} type="button" busy={finishLater === "sending"} onClick={onFinishLater}>
+                Email me a link to finish later
+              </ColumnButton>
+              {finishLater === "failed" && (
+                <p role="status" className="text-center text-[13px] text-muted-foreground">
+                  We couldn&apos;t send that just now. Please try again.
+                </p>
+              )}
+            </>
+          )}
+          <ColumnLinks>
+            <button type="button" onClick={onDismiss} className={cn(SIGNUP_QUIET, SIGNUP_HIT)}>
+              {sent ? "Close" : "Continue now"}
+            </button>
+          </ColumnLinks>
+        </ColumnActions>
+      </section>
+    );
+  }
   return (
     <section aria-labelledby="signup-exit-offer-title" aria-describedby="signup-exit-offer-lead">
       <ScreenHead

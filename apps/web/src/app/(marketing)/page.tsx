@@ -22,6 +22,15 @@ import { StoriesSection } from "@/components/sections/stories-section";
 import { BookDemoSection } from "@/components/sections/book-demo-section";
 import { BlogSection } from "@/components/sections/blog-section";
 import { connection } from "next/server";
+import { headers } from "next/headers";
+import { BlackFridayBanner } from "@/components/sections/black-friday-banner";
+import { RememberReferralCode } from "@/components/sections/remember-referral-code";
+import {
+  BLACK_FRIDAY_CODE,
+  isBlackFridayAt,
+  isProductionHost,
+  parseBlackFridayNow,
+} from "@/lib/black-friday";
 
 import { YourSite } from "@/components/sections/your-site";
 import { DemoIntro } from "@/components/sections/demo-intro";
@@ -42,7 +51,7 @@ import { SectionCta } from "@/components/sections/section-cta";
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ ref?: string; landing?: string }>;
+  searchParams: Promise<{ ref?: string; promo?: string; landing?: string; bf_now?: string }>;
 }) {
   // The pricing tier section (and with it self-serve signup) shows whenever at
   // least one plan is switched on in the admin Signup Plans page. There is no
@@ -71,8 +80,25 @@ export default async function Home({
    * standard price here, and still pays the discounted one. What it no longer
    * does is drive this page's chrome.
    */
-  const ref = normalizeReferralCode((await searchParams)?.ref);
-  const offer = ref ? await lookupPromoOffer(ref) : null;
+  const params = (await searchParams) ?? {};
+  // `?promo=BF30` (the Black Friday ad) is read exactly like `?ref=`.
+  const ref = normalizeReferralCode(params.ref ?? params.promo);
+
+  /*
+   * Black Friday (lib/black-friday.ts): while it is on, every visitor sees the
+   * bar and BF30's prices, whatever they arrived with, and the signup applies
+   * BF30. Decided here per request on the server's clock, so the bar and the
+   * prices go by themselves when it ends. `?bf_now=` fakes the clock on
+   * staging and locally, never on drive-247.com.
+   */
+  const host = (await headers()).get("host");
+  const bfNow = (!isProductionHost(host) && parseBlackFridayNow(params.bf_now)) || Date.now();
+  const blackFriday = isBlackFridayAt(bfNow);
+  const offer = blackFriday
+    ? await lookupPromoOffer(BLACK_FRIDAY_CODE)
+    : ref
+      ? await lookupPromoOffer(ref)
+      : null;
 
   const [catalogue, testimonials, enterprise, operators] = await Promise.all([
     fetchSignupPlans(),
@@ -97,15 +123,28 @@ export default async function Home({
   const version =
     parseLandingPreview((await searchParams)?.landing) ?? (await fetchLandingVersion());
 
+  // The ad's ?promo=BF30, kept in the code cookie like a /r/{code} link so it
+  // survives the Google return and "email me a link".
+  const rememberBf = blackFriday && ref === BLACK_FRIDAY_CODE ? <RememberReferralCode code={BLACK_FRIDAY_CODE} /> : null;
+
   if (version === "v2") {
-    return <LandingV2 plans={plans} offer={offer} />;
+    return (
+      <>
+        {blackFriday && <BlackFridayBanner />}
+        {rememberBf}
+        <LandingV2 plans={plans} offer={offer} />
+      </>
+    );
   }
 
   return (
     <LandingTheme>
+      {/* Above the header, in the flow: it pushes the hero down and never covers it. */}
+      {blackFriday && <BlackFridayBanner />}
+      {rememberBf}
       <Header overHero floatingTrial />
       <main id="main" className="min-h-[calc(100vh-4rem)]">
-        {offer && <ReferralBanner offer={offer} />}
+        {offer && !blackFriday && <ReferralBanner offer={offer} />}
         {/* Ghulam's order (2026-11-07). Keep it exactly as listed; change only on his word. */}
         <Hero trialDays={trialDays} />
         {/* Your own: portal, booking site, domain, renter portal */}

@@ -46,6 +46,14 @@ import {
 } from "@/components/onboarding/apple-pay-terms";
 import { formatPlanPriceUsd, type SignupPlan, type SignupPlanId } from "@/lib/plans";
 import type { PromoOffer } from "@/lib/promo-offer";
+import {
+  BLACK_FRIDAY_CODE,
+  BLACK_FRIDAY_FINE_PRINT,
+  BLACK_FRIDAY_HEADLINE,
+  BLACK_FRIDAY_MONTHS,
+  blackFridayCents,
+  formatUsdCents,
+} from "@/lib/black-friday";
 import { readReferralCodeFromDocument } from "@/lib/referral-cookie";
 import { ColumnButton, ScreenHead, SIGNUP_LABEL } from "@/components/onboarding/signup-ui";
 
@@ -256,6 +264,8 @@ export function PaymentStep({
   );
 
   const timeline = billingTimeline(plan, promo, amountDueCents);
+  // The server put BF30 on this subscription (Black Friday, lib/black-friday.ts).
+  const blackFriday = promo?.displayCode === BLACK_FRIDAY_CODE;
   const { resolvedTheme } = useTheme();
   const [stripeJs, setStripeJs] = React.useState<StripeJsState>("idle");
 
@@ -501,6 +511,7 @@ export function PaymentStep({
               plans={switchable}
               currentId={plan.id}
               busy={busy}
+              blackFriday={blackFriday}
               onPick={(id) => {
                 if (id !== plan.id) onChangePlan?.(id);
               }}
@@ -579,6 +590,23 @@ export function PaymentStep({
               : "Cancel before your trial ends and you won't be charged."}
           </p>
           <p>We&apos;ll email you 3 days before your trial ends.</p>
+        </div>
+      )}
+
+      {blackFriday && (
+        // Black Friday (lib/black-friday.ts). Shown only once the server has
+        // put BF30 on the subscription, so it never promises what Stripe won't
+        // charge. "No charge for 14 days" stays above it.
+        <div className="mt-3 rounded-2xl bg-indigo-600/[0.06] px-4 py-3 dark:bg-indigo-400/[0.10]" data-testid="bf-offer">
+          <p className="text-sm font-semibold text-foreground">{BLACK_FRIDAY_HEADLINE}</p>
+          <p className="mt-0.5 text-sm text-foreground">
+            <span className="text-muted-foreground line-through">
+              <span className="sr-only">Was </span>${plan.priceUsd}
+            </span>{" "}
+            <span className="font-semibold">{formatUsdCents(blackFridayCents(plan.amountCents))}/mo</span> for{" "}
+            {BLACK_FRIDAY_MONTHS} months, then ${plan.priceUsd}.
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{BLACK_FRIDAY_FINE_PRINT}</p>
         </div>
       )}
 
@@ -1466,11 +1494,14 @@ export function PlanPicker({
   plans,
   currentId,
   busy,
+  blackFriday = false,
   onPick,
 }: {
   plans: readonly SignupPlan[];
   currentId: SignupPlanId;
   busy: boolean;
+  /** Black Friday: the 30% price for the first 3 months, the plan price struck through. */
+  blackFriday?: boolean;
   onPick(id: SignupPlanId): void;
 }) {
   return (
@@ -1503,7 +1534,13 @@ export function PlanPicker({
               <span className="block text-xs text-muted-foreground">{p.fleetBand}</span>
             </span>
             <span className="flex shrink-0 items-center gap-2 text-sm font-semibold tabular-nums">
-              {formatPlanPriceUsd(p)}
+              {blackFriday && (
+                <span className="text-xs font-normal text-muted-foreground line-through">
+                  <span className="sr-only">Was </span>
+                  {formatPlanPriceUsd(p)}
+                </span>
+              )}
+              {blackFriday ? formatUsdCents(blackFridayCents(p.amountCents)) : formatPlanPriceUsd(p)}
               <span className="-ml-1.5 text-xs font-normal text-muted-foreground">/month</span>
               <span
                 aria-hidden

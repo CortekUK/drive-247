@@ -324,6 +324,15 @@ Deno.serve(async (req) => {
         stripeCustomerId = customer.id as string;
       }
       await stampStripeCustomer(stripe, stripeCustomerId, meta as SignupAttribution);
+      // The code on the customer too, so redemptions (BF30, Black Friday) can be
+      // counted from the customer list as well as the subscriptions.
+      if (promo) {
+        try {
+          await stripe.customers.update(stripeCustomerId, { metadata: { promo: promo.code } });
+        } catch (e) {
+          console.error(`${LOG} could not tag customer ${stripeCustomerId} with ${promo.code} (non-fatal):`, e);
+        }
+      }
 
       // 3. Price.
       const priceId = pinnedPriceId
@@ -361,7 +370,7 @@ Deno.serve(async (req) => {
             signup_email: meta.email,
             plan_id: plan.id,
             plan_name: plan.name,
-            ...(promo ? { d247_promo_code_id: promo.id, d247_promo_code: promo.code } : {}),
+            ...(promo ? { d247_promo_code_id: promo.id, d247_promo_code: promo.code, promo: promo.code } : {}),
             ...(trialDays > 0 ? { d247_trial_days: String(trialDays) } : {}),
           },
         } as never,
