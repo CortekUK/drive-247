@@ -13,7 +13,7 @@
  * the same id hold exactly the same code. Read the last line out loud to a
  * teammate: if theirs says the same, you are on the same thing.
  *
- * Takes about a minute. It only reads: it never pulls, pushes, or changes a
+ * Takes one to a few minutes. It only reads: it never pulls, pushes, or changes a
  * file, a database or a function.
  */
 import { execFileSync } from "node:child_process";
@@ -79,7 +79,7 @@ if (!process.env.SUPABASE_ACCESS_TOKEN) {
   console.log("  Database and edge functions were NOT checked: set SUPABASE_ACCESS_TOKEN and run again.\n");
   ok = false;
 } else {
-  console.log("  Comparing the staging database and edge functions with production (about a minute) ...\n");
+  console.log("  Comparing the staging database and edge functions with production (one to a few minutes) ...\n");
   for (const [label, file] of [
     ["Database", "evals/environments/database/db-eval.mjs"],
     ["Edge functions", "evals/environments/functions/fn-eval.mjs"],
