@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, ExternalLink, FileText, ImageIcon, Loader2, Paperclip, Pencil, Trash2, X } from 'lucide-react';
+import { ChevronDown, ExternalLink, FileText, ImageIcon, Loader2, Paperclip, Pencil, Star, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -237,13 +237,18 @@ export function PostDialog({
 
 export function PostDetailDialog({
   item,
+  starred,
   onClose,
+  onStar,
   onStatus,
   onEdit,
   onDelete,
 }: {
   item: TeamBoardItem | null;
+  /** Whether the person looking has starred this post. */
+  starred: boolean;
   onClose: () => void;
+  onStar: (item: TeamBoardItem) => void;
   onStatus: (item: TeamBoardItem, status: TeamBoardStatus) => void;
   onEdit: (item: TeamBoardItem) => void;
   onDelete: (item: TeamBoardItem) => void;
@@ -360,6 +365,15 @@ export function PostDetailDialog({
             Delete
           </Button>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              className="rounded-full"
+              aria-pressed={starred}
+              onClick={() => onStar(post)}
+            >
+              <Star className={cn('size-4', starred && 'fill-amber-400 text-amber-400')} />
+              {starred ? 'Favourite' : 'Add to favourites'}
+            </Button>
             <Button variant="outline" className="rounded-full" onClick={() => onEdit(post)}>
               <Pencil className="size-4" />
               Edit

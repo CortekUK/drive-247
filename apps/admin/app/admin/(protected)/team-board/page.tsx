@@ -6,11 +6,12 @@
  *
  * A post is text, optionally with one document or one image. Each has one of
  * three states, a date, who put it up and who it is for, and the list filters
- * on all of them. Staff only: the table and its bucket are `is_super_admin()`.
+ * on all of them. Anyone on the team can edit or delete a post; a star is
+ * personal, so each person keeps their own favourites. Staff only: the table and its bucket are `is_super_admin()`.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, FileText, ImageIcon, MoreVertical, Plus, StickyNote } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, FileText, ImageIcon, MoreVertical, Plus, Star, StickyNote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/sonner';
@@ -30,6 +31,7 @@ import {
   STATUS_TEXT,
   TEAM_BOARD_BUCKET,
   TEAM_BOARD_COLUMNS,
+  TEAM_BOARD_FAVORITES,
   TEAM_BOARD_STATUSES,
   TEAM_BOARD_TABLE,
   formatDate,
@@ -81,6 +83,8 @@ export default function TeamBoardPage() {
   const { user } = useAuthStore();
   const [items, setItems] = useState<TeamBoardItem[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
+  // The posts the person looking has starred. Stars are per person.
+  const [starred, setStarred] = useState<ReadonlySet<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<BoardFilters>(NO_FILTERS);
   const [page, setPage] = useState(0);
@@ -92,13 +96,16 @@ export default function TeamBoardPage() {
   usePageSearch({ placeholder: 'Search posts, files, people…', value: filters.query, onChange: (q) => setFilter('query', q), scopeLabel: 'Team Board' });
 
   const load = useCallback(async () => {
-    const [posts, team] = await Promise.all([
+    const [posts, team, stars] = await Promise.all([
       db.from(TEAM_BOARD_TABLE).select(TEAM_BOARD_COLUMNS).order('created_at', { ascending: false }).range(0, 999),
       db.from('app_users').select('id, name, email, avatar_url').is('tenant_id', null).eq('is_active', true).order('name', { ascending: true }),
+      // RLS returns only my own stars, so no filter on the person is needed.
+      db.from(TEAM_BOARD_FAVORITES).select('item_id'),
     ]);
     if (posts.error) toast.error(`Could not load the board: ${posts.error.message}`);
     else setItems((posts.data as TeamBoardItem[]) ?? []);
     if (!team.error) setMembers((team.data as TeamMember[]) ?? []);
+    if (!stars.error) setStarred(new Set(((stars.data as { item_id: string }[]) ?? []).map((r) => r.item_id)));
     setLoading(false);
   }, []);
 
@@ -116,6 +123,26 @@ export default function TeamBoardPage() {
     const { error } = await db.from(TEAM_BOARD_TABLE).update({ status }).eq('id', item.id);
     if (error) {
       patch(item.id, { status: item.status });
+      toast.error(`Could not save: ${error.message}`);
+    }
+  };
+
+  const toggleStar = async (item: TeamBoardItem) => {
+    if (!user) return;
+    const on = !starred.has(item.id);
+    const apply = (set: boolean) =>
+      setStarred((prev) => {
+        const next = new Set(prev);
+        if (set) next.add(item.id);
+        else next.delete(item.id);
+        return next;
+      });
+    apply(on);
+    const { error } = on
+      ? await db.from(TEAM_BOARD_FAVORITES).insert({ item_id: item.id, user_id: user.id })
+      : await db.from(TEAM_BOARD_FAVORITES).delete().eq('item_id', item.id).eq('user_id', user.id);
+    if (error) {
+      apply(!on);
       toast.error(`Could not save: ${error.message}`);
     }
   };
@@ -211,7 +238,8 @@ export default function TeamBoardPage() {
     return [...seen.values()].sort((a, b) => memberName(a).localeCompare(memberName(b)));
   }, [items]);
 
-  const filtered = useMemo(() => items.filter((i) => matchesFilters(i, filters)), [items, filters]);
+  const filtered = useMemo(() => items.filter((i) => matchesFilters(i, filters, starred)), [items, filters, starred]);
+  const starCount = useMemo(() => items.filter((i) => starred.has(i.id)).length, [items, starred]);
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const shown = filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
   const open = items.find((i) => i.id === openId) ?? null;
@@ -333,16 +361,30 @@ export default function TeamBoardPage() {
                 ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <button
+            type="button"
+            aria-pressed={filters.favouritesOnly}
+            onClick={() => setFilter('favouritesOnly', !filters.favouritesOnly)}
+            className={cn(
+              PILL,
+              filters.favouritesOnly ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200' : PILL_IDLE,
+            )}
+          >
+            <Star className={cn('size-3.5', filters.favouritesOnly && 'fill-amber-400 text-amber-400')} />
+            Favourites · {starCount}
+          </button>
         </div>
       </div>
 
       <div className="overflow-hidden rounded-3xl border border-border bg-card">
         {/* Below `lg` the rows are cards (lib/phone-cards.ts). */}
         <div className="overflow-x-auto" data-phone-cards="">
-          <table className="w-full min-w-[860px] text-sm">
+          <table className="w-full min-w-[900px] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <th className="py-3 pl-5 pr-3">Post</th>
+                <th className="w-12 py-3 pl-4" aria-label="Favourite" />
+                <th className="px-3 py-3">Post</th>
                 <th className="px-3 py-3">Type</th>
                 <th className="px-3 py-3">For</th>
                 <th className="px-3 py-3">Put up by</th>
@@ -355,7 +397,7 @@ export default function TeamBoardPage() {
               {loading
                 ? Array.from({ length: 6 }, (_, i) => (
                     <tr key={i}>
-                      <td colSpan={7} className="px-5 py-3">
+                      <td colSpan={8} className="px-5 py-3">
                         <div className="h-5 animate-pulse rounded-full bg-muted/60" />
                       </td>
                     </tr>
@@ -364,7 +406,18 @@ export default function TeamBoardPage() {
                     const Icon = KIND_ICON[item.kind];
                     return (
                       <tr key={item.id} onClick={() => setOpenId(item.id)} className="group cursor-pointer transition-colors hover:bg-muted/40">
-                        <td className="max-w-[380px] py-3 pl-5 pr-3" data-card-title="">
+                        <td className="py-3 pl-4" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            aria-label={starred.has(item.id) ? 'Remove from favourites' : 'Add to favourites'}
+                            aria-pressed={starred.has(item.id)}
+                            onClick={() => void toggleStar(item)}
+                            className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground/60 transition-colors hover:bg-muted hover:text-amber-500"
+                          >
+                            <Star className={cn('size-4', starred.has(item.id) && 'fill-amber-400 text-amber-400')} />
+                          </button>
+                        </td>
+                        <td className="max-w-[360px] px-3 py-3" data-card-title="">
                           <p className="truncate font-medium text-foreground">{titleOf(item.body)}</p>
                           {item.attachment_name && <p className="truncate text-xs text-muted-foreground">{item.attachment_name}</p>}
                         </td>
@@ -407,6 +460,7 @@ export default function TeamBoardPage() {
                             <DropdownMenuContent align="end" className="min-w-[150px]">
                               <DropdownMenuItem onSelect={() => setOpenId(item.id)}>Open</DropdownMenuItem>
                               <DropdownMenuItem onSelect={() => setEditing(item)}>Edit</DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => void toggleStar(item)}>{starred.has(item.id) ? 'Remove favourite' : 'Add to favourites'}</DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => void remove(item)}>
                                 Delete
@@ -465,6 +519,8 @@ export default function TeamBoardPage() {
       <PostDetailDialog
         item={open}
         onClose={() => setOpenId(null)}
+        starred={open ? starred.has(open.id) : false}
+        onStar={(i) => void toggleStar(i)}
         onStatus={(i, s) => void setStatusOf(i, s)}
         onEdit={(i) => {
           setOpenId(null);

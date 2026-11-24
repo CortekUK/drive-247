@@ -5,6 +5,8 @@
 -- track them. A post is some text, optionally with one document or one image
 -- attached (the text then says what the file is about). Each post has a state
 -- (not started, in progress, done), who put it up, who it is for, and a date.
+-- Anyone on the team can edit or delete a post, and star the ones they want
+-- to find again.
 --
 -- Platform staff only: every policy is `is_super_admin()`, the same rule as
 -- admin_todos. Tenants and customers never see this table or its files.
@@ -72,6 +74,40 @@ create policy "team board: staff delete" on public.team_board_items
 revoke all on table public.team_board_items from public, anon, authenticated;
 grant select, insert, update, delete on table public.team_board_items to authenticated;
 grant all on table public.team_board_items to service_role;
+
+-- Favourites ----------------------------------------------------------------
+-- Each person stars posts for themselves: my favourites are not yours.
+
+create table public.team_board_favorites (
+  item_id uuid not null references public.team_board_items (id) on delete cascade,
+  user_id uuid not null references public.app_users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (item_id, user_id)
+);
+
+comment on table public.team_board_favorites is
+  'Which Team Board posts each staff member has starred. One row per person per post.';
+
+create index team_board_favorites_user_idx on public.team_board_favorites (user_id);
+
+alter table public.team_board_favorites enable row level security;
+
+-- You read, add and remove only your own stars.
+create policy "team board favourites: own read" on public.team_board_favorites
+  for select to authenticated
+  using (public.is_super_admin() and user_id = (select u.id from public.app_users u where u.auth_user_id = auth.uid()));
+
+create policy "team board favourites: own add" on public.team_board_favorites
+  for insert to authenticated
+  with check (public.is_super_admin() and user_id = (select u.id from public.app_users u where u.auth_user_id = auth.uid()));
+
+create policy "team board favourites: own remove" on public.team_board_favorites
+  for delete to authenticated
+  using (public.is_super_admin() and user_id = (select u.id from public.app_users u where u.auth_user_id = auth.uid()));
+
+revoke all on table public.team_board_favorites from public, anon, authenticated;
+grant select, insert, delete on table public.team_board_favorites to authenticated;
+grant all on table public.team_board_favorites to service_role;
 
 -- The files -----------------------------------------------------------------
 

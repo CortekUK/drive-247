@@ -36,6 +36,7 @@ export interface TeamBoardItem {
 
 export const TEAM_BOARD_TABLE = 'team_board_items';
 export const TEAM_BOARD_BUCKET = 'team-board';
+export const TEAM_BOARD_FAVORITES = 'team_board_favorites';
 
 export const TEAM_BOARD_COLUMNS = `
   id, kind, body, attachment_path, attachment_name, attachment_type, attachment_size,
@@ -147,11 +148,15 @@ export interface BoardFilters {
   forWho: string;
   /** 'all' or a member's id. */
   postedBy: string;
+  /** Only the posts I have starred. */
+  favouritesOnly: boolean;
 }
 
-export const NO_FILTERS: BoardFilters = { query: '', status: 'all', kind: 'all', forWho: 'all', postedBy: 'all' };
+export const NO_FILTERS: BoardFilters = { query: '', status: 'all', kind: 'all', forWho: 'all', postedBy: 'all', favouritesOnly: false };
 
-export function matchesFilters(item: TeamBoardItem, f: BoardFilters): boolean {
+/** `starred` is the set of post ids the person looking has starred. */
+export function matchesFilters(item: TeamBoardItem, f: BoardFilters, starred: ReadonlySet<string>): boolean {
+  if (f.favouritesOnly && !starred.has(item.id)) return false;
   if (f.status !== 'all' && item.status !== f.status) return false;
   if (f.kind !== 'all' && item.kind !== f.kind) return false;
   if (f.forWho === 'team' && item.for_user_id !== null) return false;
