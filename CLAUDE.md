@@ -46,6 +46,30 @@ cp apps/portal/src/integrations/supabase/types.ts apps/booking/src/integrations/
 cp apps/portal/src/integrations/supabase/types.ts apps/admin/src/integrations/supabase/types.ts
 ```
 
+## "Relay to prod"
+
+When Ghulam says **"relay to prod"**, take the work on the current feature branch all the way to
+production, in this order. Each stage hands the same commit to the next; stop and report if any
+stage fails.
+
+1. **Branch**: everything committed on the feature branch (`<name>/feat/<feature>`), nothing uncommitted.
+2. **Staging database**: any new migration is already applied to staging. Run the whole migration
+   file there; never alter a table in place mid-feature, or its column order ends up different
+   from production and the database check fails.
+3. **Staging code**: fast-forward `staging` to the branch, push, wait for the four Vercel staging
+   builds (`drive247-booking`, `-portal`, `-admin`, `-web`) to succeed.
+4. **Production database**: apply the same migration file to production through the Supabase
+   Management API. (`docs/environments/database/lib.mjs` refuses production writes on purpose.)
+   Project settings the feature depends on (a storage cap, a secret) are changed here too, on both.
+5. **Production code**: fast-forward `main` to `staging`, push, wait for the four production builds.
+6. **Prove it**: `npm run synced` must end with `ALL SYNCED <commit id>`. Report that line.
+7. Go back to the feature branch. Do not delete it unless Ghulam says so.
+
+Edge functions changed by the feature: deploy to production one at a time and verify each (see
+"Deploying edge functions" below), then copy to staging with `docs/environments/functions/copy-from-prod.mjs`.
+
+Nothing is relayed without the words: finishing a feature is not permission to push.
+
 ## Architecture Overview
 
 This is a **Turborepo monorepo** for Drive247, a car rental platform with multi-tenant support. The `packages/*` workspace is declared but unused — each app has its own dependencies and UI components.
