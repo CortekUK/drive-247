@@ -61,6 +61,8 @@ export interface ProvisionRequest {
    */
   slug?: string;
   location?: string;
+  /** Added by signupProvision itself: this browser's IANA timezone. */
+  browserTimezone?: string;
   businessPhone?: string;
   fleetSize?: string;
   vehicleType?: string;
@@ -792,8 +794,20 @@ export function signupResetComplete(b: {
  * work continues — the milestone poller is what actually decides the outcome
  * (edge case 41).
  */
+/** This browser's IANA timezone ("Europe/London"), or nothing. */
+function browserTimezone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function signupProvision(b: ProvisionRequest): Promise<ProvisionResponse> {
-  return callFunction<ProvisionResponse>("signup-provision", b, {
+  // The browser's zone rides along as the company timezone's last resort (after
+  // "City and state" and a UK phone, worked out in signup-provision).
+  const tz = browserTimezone();
+  return callFunction<ProvisionResponse>("signup-provision", { ...b, ...(tz ? { browserTimezone: tz } : {}) }, {
     auth: "session",
     timeoutMs: 180_000,
     dedupeKey: "signup-provision",

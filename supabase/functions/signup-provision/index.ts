@@ -57,7 +57,8 @@ import {
 import {
   clean,
   cleanOrNull,
-  deriveTimezone,
+  regionColumnsForTimezone,
+  signupTimezone,
   isHttpUrl,
   deriveSlugFromName,
   isReservedSlug,
@@ -282,6 +283,8 @@ interface ProvisionRequest {
   companyName?: string;
   slug?: string;
   location?: string;
+  /** The signer's browser timezone (Intl), a last-resort hint for the company's timezone. */
+  browserTimezone?: string;
   businessPhone?: string;
   fleetSize?: string;
   vehicleType?: string;
@@ -1063,9 +1066,18 @@ Deno.serve(async (req) => {
     };
 
     // Only set the timezone when we could actually work it out; otherwise the
-    // column default stands rather than us guessing wrong.
-    const derivedTimezone = deriveTimezone(location);
-    const tzCols = derivedTimezone ? { timezone: derivedTimezone } : {};
+    // column default (America/New_York) stands rather than us guessing wrong.
+    //
+    // The web never sends `location`, so this used to get nothing and every
+    // self-serve company started on New York time, a UK one included (Neema,
+    // 2026-11-25). The signup's own "City and state" answer is on the account,
+    // then a UK phone, then the browser's zone (signupTimezone).
+    const derivedTimezone = signupTimezone({
+      locations: [location, typeof meta.cityState === "string" ? meta.cityState : null],
+      phones: [typeof meta.phone === "string" ? meta.phone : null, rawPhone],
+      browserTimezone: body.browserTimezone,
+    });
+    const tzCols = derivedTimezone ? { timezone: derivedTimezone, ...regionColumnsForTimezone(derivedTimezone) } : {};
 
     // The owner's given name, for `tenants.admin_name`. First token only — the
     // column is a display name, not a full legal name.
