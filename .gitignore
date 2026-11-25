@@ -42,7 +42,9 @@ out/
 *.prod.bak
 .env
 .env.example
-.claude/
+# Claude Code's local files stay out of git, except the team's shared skills.
+.claude/*
+!.claude/skills/
 
 helper-folder
 quality-assurance
