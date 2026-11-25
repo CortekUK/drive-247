@@ -443,66 +443,6 @@ export function deriveTimezone(location: string | null): string | null {
   return null;
 }
 
-/**
- * A UK phone number, as typed on the signup: +44... (or 0044...), or the
- * national 11-digit form starting 0 (07700 900123, 020 7946 0000). A US
- * number never starts with 0, so the national form cannot be mistaken for one.
- */
-export function isUkPhone(raw: string | null | undefined): boolean {
-  if (!raw) return false;
-  const typed = raw.trim();
-  const digits = typed.replace(/\D/g, "");
-  if (typed.startsWith("+")) return digits.startsWith("44");
-  if (digits.startsWith("0044")) return true;
-  return /^0[1-9]\d{9}$/.test(digits);
-}
-
-/**
- * The signer's browser timezone (Intl), when it is a real IANA zone. Only a
- * last resort: the business may not be where the person signing up is.
- */
-export function validBrowserTimezone(raw: unknown): string | null {
-  if (typeof raw !== "string") return null;
-  const tz = raw.trim();
-  if (!tz || tz.length > 64 || !/^[A-Za-z_]+(\/[A-Za-z0-9_+-]+)+$/.test(tz)) return null;
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: tz });
-    return tz;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * A new self-serve company's timezone, best signal first:
- *   1. where they said the business is (the signup's "City and state", or a
- *      business-page location),
- *   2. a UK phone number,
- *   3. the browser they signed up in.
- * Null when none of them says, and the column default stands.
- */
-export function signupTimezone(input: {
-  locations: Array<string | null | undefined>;
-  phones: Array<string | null | undefined>;
-  browserTimezone?: unknown;
-}): string | null {
-  for (const loc of input.locations) {
-    const tz = deriveTimezone(loc ?? null);
-    if (tz) return tz;
-  }
-  if (input.phones.some(isUkPhone)) return "Europe/London";
-  return validBrowserTimezone(input.browserTimezone);
-}
-
-/**
- * A UK company's money and country, set at creation so its portal, booking
- * site and receipts start in pounds. Miles are already the default. Changeable
- * in Settings like any company's.
- */
-export function regionColumnsForTimezone(timezone: string | null): Record<string, string> {
-  return timezone === "Europe/London" ? { currency_code: "GBP", country: "GB" } : {};
-}
-
 /** Symbol/prefix for a client-facing amount line. */
 // src: create-sales-onboarding/index.ts:871-885
 export function currencySymbol(currency: string): string {
