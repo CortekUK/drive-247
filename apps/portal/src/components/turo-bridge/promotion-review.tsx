@@ -72,6 +72,7 @@ export function PromotionReviewScreen({
   const [rowChecked, setRowChecked] = useState<Record<string, boolean>>({});
   const [ackPlaceholders, setAckPlaceholders] = useState(false);
   const [ackNoInvoices, setAckNoInvoices] = useState(false);
+  const [ackBlocks, setAckBlocks] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   // Any new plan invalidates every acknowledgement. Consent is given to a
@@ -87,6 +88,7 @@ export function PromotionReviewScreen({
     setRowChecked(fromPlan);
     setAckPlaceholders(false);
     setAckNoInvoices(false);
+    setAckBlocks(false);
   }, [currentPlan?.plan_hash]);
 
   const readyRows = useMemo(
@@ -139,6 +141,7 @@ export function PromotionReviewScreen({
     allRowsChecked &&
     ackPlaceholders &&
     ackNoInvoices &&
+    ackBlocks &&
     !apply.isPending;
 
   const handleApply = async () => {
@@ -150,6 +153,7 @@ export function PromotionReviewScreen({
           vehiclesConfirmed: allRowsChecked,
           placeholderGuests: ackPlaceholders,
           noInvoices: ackNoInvoices,
+          blocksReplaced: ackBlocks,
         },
         acknowledgedRowIds,
       });
@@ -406,6 +410,25 @@ export function PromotionReviewScreen({
                     </span>{" "}
                     for these bookings. Turo already collected the money; the trip total is
                     recorded for reference only.
+                  </span>
+                </label>
+
+                {/* The server's fourth acknowledgement (turo_blocks_replaced), in its
+                    own words. Without it every import is refused. */}
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <Checkbox
+                    checked={ackBlocks}
+                    onCheckedChange={(c) => setAckBlocks(c === true)}
+                    className="mt-0.5"
+                  />
+                  <span className="text-sm text-foreground dark:text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      Your own date blocks on these days are replaced by the booking.
+                    </span>{" "}
+                    Where one of your blocks covers one of these trips, the imported booking
+                    takes over exactly those days, so the car stays unavailable with the guest and
+                    trip recorded. Days outside the trip stay blocked, maintenance holds are never
+                    touched, and undoing the import restores every replaced block.
                   </span>
                 </label>
 

@@ -1147,6 +1147,14 @@ export interface TuroPromotionAcknowledgements {
   placeholderGuests: boolean;
   /** "No invoice, charge or receivable will be raised for these bookings." */
   noInvoices: boolean;
+  /**
+   * "Where one of your own date blocks covers one of these trips, the imported
+   * booking takes over exactly those days." turo-bridge-promote has required
+   * `turo_blocks_replaced` on every apply since it was written, and this screen
+   * never sent it, so every import was refused with "Please confirm:
+   * turo_blocks_replaced" (Rentalkingdom, 2026-11-25).
+   */
+  blocksReplaced: boolean;
 }
 
 export interface ApplyPromotionInput {
@@ -1182,6 +1190,7 @@ export function useApplyTuroPromotion() {
       if (!acknowledgements.vehiclesConfirmed) missing.push("vehicle confirmation");
       if (!acknowledgements.placeholderGuests) missing.push("placeholder guest acknowledgement");
       if (!acknowledgements.noInvoices) missing.push("no-invoice acknowledgement");
+      if (!acknowledgements.blocksReplaced) missing.push("date-block acknowledgement");
       if (missing.length) {
         throw new Error(`Cannot apply yet — still to acknowledge: ${missing.join(", ")}.`);
       }
@@ -1232,6 +1241,7 @@ export function useApplyTuroPromotion() {
           vehicles_confirmed: acknowledgements.vehiclesConfirmed,
           placeholder_guests: acknowledgements.placeholderGuests,
           no_invoices: acknowledgements.noInvoices,
+          turo_blocks_replaced: acknowledgements.blocksReplaced,
         },
         acknowledged_row_ids: Array.from(acked),
       });
