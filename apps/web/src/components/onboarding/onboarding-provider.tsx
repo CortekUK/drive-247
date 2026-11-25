@@ -773,7 +773,7 @@ export function OnboardingProvider({
   // its own pages), so PostHog shows where people stop, not only what they finish.
   useEffect(() => {
     if (isMockSignup()) return;
-    if (state.step === "verify") captureStepViewed(4);
+    if (state.step === "verify") captureStepViewed(3);
     else if (state.step === "payment") captureStepViewed(5);
   }, [state.step]);
   const [isOpen, setIsOpen] = useState(false);
@@ -2355,7 +2355,7 @@ export function OnboardingProvider({
         }
         setVerifyError(null);
         if (!isMockSignup()) {
-          captureStepCompleted(4);
+          captureStepCompleted(3);
           void saveLead("email_code");
         }
         // The code is spent: a reload from here is the ordinary resume path.

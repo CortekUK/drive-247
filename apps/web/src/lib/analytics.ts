@@ -81,14 +81,17 @@ export function captureSignup(event: SignupEvent, properties?: Record<string, un
 }
 
 /**
- * The signup's steps as the funnel counts them. Step 3 is the business page on
- * the password path and the business-only screen after a Google sign-in.
+ * The signup's steps as the funnel counts them. Step 2 is the business page,
+ * and also the business-only screen after a Google sign-in.
  */
+// In the order people see them since Tue 24 Nov (Neema, 2026-11-25): about
+// you → business → email code → password → card. Until then the numbers
+// followed the old order and PostHog showed the password as step 2.
 export const SIGNUP_STEP_NAMES = {
   1: "details",
-  2: "password",
-  3: "business",
-  4: "email_code",
+  2: "business",
+  3: "email_code",
+  4: "password",
   5: "card",
 } as const;
 export type SignupStep = keyof typeof SIGNUP_STEP_NAMES;

@@ -197,9 +197,9 @@ const PAGE_FIELDS: readonly (readonly AccountField[])[] = [
 /**
  * The funnel step each page reports as (lib/analytics.ts SIGNUP_STEP_NAMES).
  * Tied to what the page asks, not where it sits, so `step_name` keeps meaning
- * the same thing in PostHog whatever the order. The password screen reports 2.
+ * the same thing in PostHog whatever the order. The password screen reports 4.
  */
-const PAGE_STEP: readonly SignupStep[] = [1, 3];
+const PAGE_STEP: readonly SignupStep[] = [1, 2];
 /** The account check minus its password rule: the create pages ask no password. */
 function withoutPassword(found: FieldErrors<AccountField>): FieldErrors<AccountField> {
   const rest = { ...found };
@@ -256,7 +256,7 @@ export function AccountStep({
   React.useEffect(() => {
     if (isMockSignup()) return;
     const step: SignupStep | null =
-      mode === "password" ? 2 : mode === "tenant" ? 3 : mode === "attribution" ? 1 : mode === "create" ? PAGE_STEP[page] ?? null : null;
+      mode === "password" ? 4 : mode === "tenant" ? 2 : mode === "attribution" ? 1 : mode === "create" ? PAGE_STEP[page] ?? null : null;
     if (step) captureStepViewed(step, mode === "create" ? {} : { screen: mode });
   }, [mode, page]);
   const [password, setPassword] = React.useState("");
@@ -726,11 +726,11 @@ export function AccountStep({
     const found = tenantErrors(repairedSlug);
     setErrors(found ?? {});
     if (found) {
-      captureValidationErrors(3, found);
+      captureValidationErrors(2, found);
       focusFirst(found, TENANT_FIELD_ORDER);
       return;
     }
-    captureStepCompleted(3, { screen: "business_only" });
+    captureStepCompleted(2, { screen: "business_only" });
     onSubmitTenant(tenantValues(repairedSlug));
   };
 
@@ -744,19 +744,19 @@ export function AccountStep({
     if (!isPasswordAcceptable(password)) {
       const message = SIGNUP_ERROR_COPY.WEAK_PASSWORD;
       setErrors({ password: message });
-      captureValidationErrors(2, { password: message });
+      captureValidationErrors(4, { password: message });
       focusAndReveal(passwordRef.current);
       return;
     }
     if (confirmPassword !== password) {
       const message = confirmPassword ? "These passwords don't match." : "Type your password again to confirm it.";
       setConfirmError(message);
-      captureValidationErrors(2, { passwordConfirm: message });
+      captureValidationErrors(4, { passwordConfirm: message });
       focusAndReveal(confirmRef.current);
       return;
     }
     setErrors({});
-    captureStepCompleted(2);
+    captureStepCompleted(4);
     onSubmitPassword?.(password);
   };
 
