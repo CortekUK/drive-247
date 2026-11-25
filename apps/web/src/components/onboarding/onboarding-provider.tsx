@@ -1947,8 +1947,14 @@ export function OnboardingProvider({
       /* storage blocked: nothing to restore */
     }
     restoreCheckedRef.current = true;
-    // The Google and Stripe returns reopen the screen themselves.
-    if (new URLSearchParams(window.location.search).get("signup")) return;
+    // The Google and Stripe returns reopen the screen themselves. `?signup=start`
+    // does NOT skip this: it is the link people come back through (the ads,
+    // Bryan's link, every "Start free trial" off the home page), and someone
+    // who left to find their code must land back on the code screen, not on an
+    // empty form (Haris, 2026-11-25). The start handler below stands aside
+    // when there is a code screen to restore.
+    const signupMarker = new URLSearchParams(window.location.search).get("signup");
+    if (signupMarker && signupMarker !== "start") return;
 
     /*
      * Back on the code screen for the same address, if a code was sent from
@@ -1983,6 +1989,9 @@ export function OnboardingProvider({
       });
       return;
     }
+
+    // No code screen to restore: `?signup=start` is the start handler's to open.
+    if (signupMarker) return;
 
     if (!isSignupPlanId(planId)) return;
     const restorePlan = planId;
@@ -2032,7 +2041,10 @@ export function OnboardingProvider({
         "",
         `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
       );
-      window.setTimeout(() => openSignup(defaultPlan(), false), 0);
+      // A code screen this browser was on (pending-verify.ts) is reopened by the
+      // restore effect above; opening a fresh form here would race it and win,
+      // putting them back at the top. `?fresh=1` has already cleared it.
+      if (!readPendingVerify()) window.setTimeout(() => openSignup(defaultPlan(), false), 0);
     }
 
     return () => window.removeEventListener(OPEN_SIGNUP_EVENT, onRequest);
