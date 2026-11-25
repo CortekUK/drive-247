@@ -187,6 +187,10 @@
 }
 .hg-word.is-past { translate: 0 -0.28em; }
 .hg-word.is-on { opacity: 1; translate: 0 0; transition: opacity 200ms ease-out 100ms, translate 300ms cubic-bezier(0.16, 1, 0.3, 1) 100ms; }
+/* Until hydration measures the slot (no inline width yet), the showing word sizes it itself.
+   Absolutely positioned, it left the slot 0px wide: the line centred on "Your ." and the word
+   ran off the right edge of a phone. */
+.hg-words:not([style]) .hg-word.is-on { position: relative; }
 @media (prefers-reduced-motion: reduce) {
   .hg-forward::after, [data-landed] .hg-forward::after { animation: none; }
   .hg-word, .hg-words { transition: none; }

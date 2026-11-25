@@ -14,7 +14,7 @@
 /* Phones and small windows stack the row, so there is no gap for the thread to run in. */
 .pg-thread { display: none; }
 @media (min-width: 1200px) {
-  .pg-thread { display: block; position: absolute; z-index: -1; top: 0; left: 0; pointer-events: none; }
+  .pg-thread { display: block; position: absolute; z-index: -1; top: 0; left: 0; max-width: 100%; pointer-events: none; }
 }
 .pg-thread-rest { stroke: hsl(var(--v2-primary) / 0.22); stroke-width: 1.5; stroke-dasharray: 2 7; stroke-linecap: round; }
 .pg-thread-live { stroke: hsl(var(--v2-primary)); stroke-width: 1.5; stroke-dasharray: 1; stroke-dashoffset: 1; }

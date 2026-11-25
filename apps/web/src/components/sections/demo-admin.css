@@ -56,7 +56,11 @@
   border-radius: 99px;
   background: #dc2626;
   color: #fff;
-  font: 600 9px/1 inherit;
+  /* Longhands: `font: 600 9px/1 inherit` is invalid (inherit can't sit inside the shorthand),
+     so the browser dropped the whole line and the count rendered at ~14px in the 15px pill (QA-1). */
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
   font-style: normal;
 }
 

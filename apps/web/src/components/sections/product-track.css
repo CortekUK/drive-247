@@ -922,7 +922,12 @@
      short enough to sit whole on the screen. */
   .pt-panel .mc-window .pg-tabs,
   .pt-panel .mc-window .pg-address { display: none; }
-  .pt-panel .mc-app { zoom: 0.88; height: clamp(440px, calc(100svh - 150px), 700px); }
+  .pt-panel .mc-app { zoom: 0.88; height: clamp(500px, calc(100svh - 120px), 700px); }
+  /* Hold the conversation to the window's height, as the desktop track does, so the thread
+     scrolls inside it and the composer stays in view. Without these the grid row grew to the
+     whole thread (~930px) and the screen cut off the last messages and the composer (QA-1). */
+  .pt-panel .mc-app { grid-template-rows: minmax(0, 1fr); }
+  .pt-panel .mc-app > * { min-height: 0; }
 
   /* Insights: tighter, so the wave, the map and the fleet pulse fit about one screen. */
   .pt-panel .ia-bar { padding: 16px 16px 0; gap: 10px; }

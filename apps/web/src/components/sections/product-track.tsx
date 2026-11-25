@@ -252,7 +252,6 @@ export function ProductTrack({ children, stops = STOPS }: { children: ReactNode;
     const media = matchMedia(FLOW_MEDIA);
     let frame = 0;
     let io: IntersectionObserver | null = null;
-    let gone: IntersectionObserver | null = null;
     let calendarTaken = false;
     const panelEls = Array.from(el.querySelectorAll<HTMLElement>(".pt-panel"));
     const rail = el.querySelector<HTMLElement>(".pt-rail");
@@ -319,18 +318,19 @@ export function ProductTrack({ children, stops = STOPS }: { children: ReactNode;
 
     const start = () => {
       el.classList.add("is-flow");
-      // Each screen's words play in once it is well in view, and reset only once it has left
-      // the screen entirely, so they never vanish while still being read; they play again
-      // when it comes back.
+      // Each screen's words play in once it is well in view, and then stay: replaying them on
+      // the way back read as the page resetting (QA-1, 2026-11-25), and every other section on
+      // the page plays its entrance once.
       io = new IntersectionObserver(
-        (entries) => entries.forEach((e) => e.isIntersecting && e.target.classList.add("is-here")),
+        (entries) =>
+          entries.forEach((e) => {
+            if (!e.isIntersecting) return;
+            e.target.classList.add("is-here");
+            io?.unobserve(e.target);
+          }),
         { rootMargin: "-25% 0px -25% 0px" },
       );
-      gone = new IntersectionObserver((entries) => entries.forEach((e) => !e.isIntersecting && e.target.classList.remove("is-here")));
-      panelEls.forEach((p) => {
-        io!.observe(p);
-        gone!.observe(p);
-      });
+      panelEls.forEach((p) => io!.observe(p));
       addEventListener("scroll", onScroll, { passive: true });
       addEventListener("resize", onScroll);
       board?.addEventListener("pointerdown", take);
@@ -340,8 +340,7 @@ export function ProductTrack({ children, stops = STOPS }: { children: ReactNode;
     const stop = () => {
       el.classList.remove("is-flow");
       io?.disconnect();
-      gone?.disconnect();
-      io = gone = null;
+      io = null;
       removeEventListener("scroll", onScroll);
       removeEventListener("resize", onScroll);
       board?.removeEventListener("pointerdown", take);

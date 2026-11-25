@@ -97,8 +97,10 @@ const ROWS: {
 
 /*
  * True once the row's top is well into the screen, so the build happens where it can be
- * seen rather than at the bottom edge. False again once the row is back below the screen,
- * so scrolling down to it plays again; a row passed upward stays built.
+ * seen rather than at the bottom edge. It builds once and stays built, on every screen size:
+ * replaying it on scroll-back read as the page resetting (QA-1, 2026-11-25), the same reason
+ * phones already stopped replaying (boss, 2026-11-13: "when you scroll back up it glitches,
+ * like it tries re-animating"). It matches every other section on the page.
  */
 export function useReveal() {
   const ref = useRef<HTMLDivElement>(null);
@@ -109,26 +111,15 @@ export function useReveal() {
     if (!el) return;
     const trigger = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) setVisible(true);
+        if (!entry.isIntersecting) return;
+        setVisible(true);
+        trigger.disconnect();
       },
       // Phones: as soon as the row is a little way onto the screen, so nothing sits empty (user, 2026-11-12).
       { rootMargin: matchMedia("(max-width: 767.98px)").matches ? "0px 0px -6% 0px" : "0px 0px -30% 0px" },
     );
-    /*
-     * Phones build once and stay built (boss, 2026-11-13: "when you scroll back up it glitches,
-     * like it tries re-animating"). Scrolling up brings the browser's toolbar back, the screen
-     * gets shorter, and a section near its foot dropped out and back in, replaying its build.
-     */
-    const phone = matchMedia("(max-width: 767.98px)").matches;
-    const reset = new IntersectionObserver(([entry]) => {
-      if (!phone && !entry.isIntersecting && entry.boundingClientRect.top > 0) setVisible(false);
-    });
     trigger.observe(el);
-    reset.observe(el);
-    return () => {
-      trigger.disconnect();
-      reset.disconnect();
-    };
+    return () => trigger.disconnect();
   }, []);
 
   return { ref, visible };
@@ -216,7 +207,10 @@ function useThread() {
         const mid = (py + y) / 2;
         return `${path}C${px} ${mid} ${x} ${mid} ${x} ${y}`;
       }, "");
-      setThread({ w: section.offsetWidth, h, d, stops });
+      // Rounded down, never up: offsetWidth rounds to the nearest pixel, and on a scaled display
+      // (125%/150%) the section is fractional (e.g. 1264.67px), so the line came out 0.33px wider
+      // than the page and Chrome added a horizontal scrollbar to the whole page (QA-1).
+      setThread({ w: Math.floor(section.getBoundingClientRect().width), h, d, stops });
     };
 
     measure();

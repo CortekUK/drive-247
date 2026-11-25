@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, type CSSProperties, type ReactNode } from "react";
-import { Maximize2, Minus, Plus } from "lucide-react";
+import { LocateFixed, Minus, Plus } from "lucide-react";
 import { TrackLabel } from "./track-label";
 import { InsightsMap, type MapPlace } from "./insights-map";
 import "./insights-gallery.css";
@@ -102,10 +102,11 @@ function Places() {
   const [mode, setMode] = useState<"earth" | "map">("earth");
   const [google, setGoogle] = useState(true);
   const [zoom, setZoom] = useState<{ dir: 1 | -1; at: number } | null>(null);
+  const [reset, setReset] = useState(0);
   const fail = useCallback(() => setGoogle(false), []);
   return (
     <section className={`ia-panel ia-places is-${mode}${google ? " has-google" : ""}`} aria-label="Where your renters go">
-      {google && <InsightsMap places={GEO} earth={mode === "earth"} zoom={zoom} onFail={fail} />}
+      {google && <InsightsMap places={GEO} earth={mode === "earth"} zoom={zoom} reset={reset} onFail={fail} />}
       <span className="ia-map-anchor is-google">
         <TrackLabel n={3} way="down">
           See where renters go
@@ -151,9 +152,19 @@ function Places() {
           </TrackLabel>
         </span>
       </div>
-      <button type="button" className="ia-map-btn is-expand" tabIndex={-1} aria-hidden>
-        <Maximize2 />
-      </button>
+      {/* Was a decorative expand icon that did nothing when pressed (QA-1). Now it brings back
+          every place after zooming or dragging; only shown on the live Google map. */}
+      {google && (
+        <button
+          type="button"
+          className="ia-map-btn is-expand"
+          aria-label="Show all places"
+          title="Show all places"
+          onClick={() => setReset((n) => n + 1)}
+        >
+          <LocateFixed />
+        </button>
+      )}
       <div className="ia-mode" role="radiogroup" aria-label="Map style">
         {(["earth", "map"] as const).map((m) => (
           <button key={m} type="button" role="radio" aria-checked={mode === m} className={mode === m ? "is-on" : ""} onClick={() => setMode(m)}>

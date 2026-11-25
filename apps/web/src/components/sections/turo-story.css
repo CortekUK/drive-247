@@ -2,7 +2,9 @@
  * The Turo story: one held, dark screen, five slides as you scroll (turo-story.tsx).
  * --p (0 to 1) is how far through the hold it is.
  */
-.tso { --tso-a: #a5a0ff; --tso-red: #fca5a5; position: relative; margin-top: clamp(80px, 10vw, 160px); }
+/* Top margin trimmed (was clamp(80px, 10vw, 160px)) so the gap after Integrations matches the
+   other section gaps (QA-1: 215px at 1440 wide, against 128-188px elsewhere). */
+.tso { --tso-a: #a5a0ff; --tso-red: #fca5a5; position: relative; margin-top: clamp(56px, 7vw, 112px); }
 .tso-track { position: relative; height: 700svh; }
 .tso-stage {
   --p: 0;
@@ -147,8 +149,10 @@
 .tso-reveal-soon svg { width: 16px; height: 16px; opacity: 0.7; }
 
 /* ── Where you are ── */
-.tso-progress { position: absolute; bottom: clamp(20px, 4svh, 36px); left: 50%; display: flex; gap: clamp(12px, 2vw, 28px); translate: -50% 0; }
-.tso-progress li { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 11px; letter-spacing: 0.06em; color: rgb(255 255 255 / 0.32); transition: color 400ms ease-out; }
+/* width: max-content and nowrap: centred from left: 50%, the row could only use half the screen,
+   so on tablets the names wrapped onto two lines, left-aligned under centred bars (QA-1). */
+.tso-progress { position: absolute; bottom: clamp(20px, 4svh, 36px); left: 50%; display: flex; gap: clamp(12px, 2vw, 28px); width: max-content; translate: -50% 0; }
+.tso-progress li { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 11px; letter-spacing: 0.06em; white-space: nowrap; text-align: center; color: rgb(255 255 255 / 0.32); transition: color 400ms ease-out; }
 .tso-progress i { width: 44px; height: 2px; border-radius: 2px; background: rgb(255 255 255 / 0.16); transition: background-color 400ms ease-out; }
 .tso-progress li.is-done i { background: rgb(165 160 255 / 0.5); }
 .tso-progress li.is-on { color: #fff; }

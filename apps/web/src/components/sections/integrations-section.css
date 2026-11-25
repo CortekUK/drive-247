@@ -348,8 +348,9 @@
 .ig-tile:hover .ig-back > *,
 .ig-tile:focus-visible .ig-back > * { translate: 0 0; transition: opacity 900ms ease 500ms, translate 1200ms cubic-bezier(0.25, 1, 0.5, 1) 450ms; }
 
-/* More room above, and the heading on the left edge with the cards (Ghulam, 2026-11-10). */
-.ig-section { margin-top: clamp(64px, 9svh, 120px); }
+/* The heading on the left edge with the cards (Ghulam, 2026-11-10). The extra room above it
+   (a top margin up to 120px) is gone: on top of the phones section's own space below it, the gap
+   ran to 302-352px, against 128-188px between the other sections (QA-1). */
 /* Two lines: "Integrations", then the accent on its own line. */
 .sh-title.ig-title-two { line-height: 1.04; }
 .sh-title.ig-title-two .sh-accent { display: block; }
