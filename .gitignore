@@ -69,3 +69,4 @@ testing-qa.env
 .staging-credentials.local
 docs/environments/*/reports/*.pdf
 docs/environments/functions/.fingerprints.json
+docs/application/*/evals/.vitest-result.json

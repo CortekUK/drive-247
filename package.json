@@ -23,7 +23,8 @@
     "v1:check": "node scripts/v1-check/check.mjs",
     "glass:check": "node scripts/glass-check/check.cjs",
     "v1:snapshot": "node scripts/v1-check/snapshot.mjs",
-    "dev:staging": "node scripts/db-switch.mjs staging && node scripts/kill-dev-ports.mjs portal && turbo run dev --filter=portal"
+    "dev:staging": "node scripts/db-switch.mjs staging && node scripts/kill-dev-ports.mjs portal && turbo run dev --filter=portal",
+    "eval": "node scripts/eval.mjs"
   },
   "devDependencies": {
     "pg": "^8.16.3",
