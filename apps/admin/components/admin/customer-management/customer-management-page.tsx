@@ -58,6 +58,7 @@ import { CreatorRewardsTab } from './creator-rewards-tab';
 import { TenureRewardsTab } from './tenure-rewards-tab';
 import { CustomDomainTab } from './custom-domain-tab';
 import { OnboardingCallsTab } from './onboarding-calls-tab';
+import { SignupsTab } from './signups-tab';
 import { ScopeCard } from './scope-card';
 import { CustomerHealthTab } from './customer-health-tab';
 import { LogRailLayout } from './log-rail';
@@ -65,11 +66,11 @@ import { SendLog } from './logs-table';
 import { PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 import { cn } from '@/lib/utils';
 
-type Section = AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory' | 'pausing' | 'testimonials' | 'rewards' | 'tenure' | 'domain' | 'health' | 'onboarding-calls';
+type Section = AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory' | 'pausing' | 'testimonials' | 'rewards' | 'tenure' | 'domain' | 'health' | 'onboarding-calls' | 'signup-list';
 
 const SECTION_IDS = new Set<string>([
   'health', 'cancellations', 'retention', 'lifecycle', 'poll', 'marketing', 'webinars', 'milestones',
-  'abandoned', 'nps', 'newsletter', 'advisory', 'pausing', 'testimonials', 'rewards', 'tenure', 'domain', 'onboarding-calls',
+  'abandoned', 'nps', 'newsletter', 'advisory', 'pausing', 'testimonials', 'rewards', 'tenure', 'domain', 'onboarding-calls', 'signup-list',
   ...AUTOMATIONS.map((a) => a.id),
 ]);
 
@@ -118,6 +119,9 @@ function CustomerManagementSections() {
     [
       // 0–100 per company: who might leave, so someone calls them first.
       { id: 'health', label: 'Customer Health Score' },
+      // Everyone who signed up on drive-247.com, finished or not, with their
+      // phone and answers (Bryan, 2026-11-25).
+      { id: 'signup-list', label: 'Signups' },
       ...AUTOMATIONS.map((a) => ({ id: a.id, label: a.label })),
       { id: 'cancellations', label: 'Cancellations' },
       { id: 'retention', label: 'Tiered retention offers' },
@@ -173,6 +177,9 @@ function CustomerManagementSections() {
   // (or on the module being installed).
   if (tab === 'health') {
     return <CustomerHealthTab />;
+  }
+  if (tab === 'signup-list') {
+    return <SignupsTab />;
   }
   if (tab === 'cancellations') {
     return <CancellationsTab canEdit={canEdit} />;

@@ -226,6 +226,8 @@ function useBuildNav(): AdminNav {
       // The Retention side of the switch. In `all` so ⌘K search and the
       // section rail can still name it.
       ...(isSuper ? [{ name: 'Customer Management', href: RETENTION_ROOT, icon: MailCheck }] : []),
+      // Every drive-247.com signup with its phone and answers, so ⌘K finds it.
+      ...(isSuper ? [{ name: 'Signups', href: '/admin/customer-management?section=signup-list', icon: MailCheck }] : []),
       // Opened from the Settings index.
       { name: 'OpenAI Usage', href: '/admin/openai-usage', icon: Sparkles },
       ...(isSuper ? [{ name: 'Notifications', href: '/admin/notifications', icon: BellRing }] : []),
