@@ -59,7 +59,7 @@ export function useFirstSteps({ poll = false }: { poll?: boolean } = {}): FirstS
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("tenants")
-        .select("stripe_onboarding_complete, stripe_account_status, own_stripe_account_id, own_stripe_test_account_id")
+        .select("stripe_onboarding_complete, stripe_account_status, own_stripe_account_id, own_stripe_test_account_id, payment_provider")
         .eq("id", tenant!.id)
         .single();
       if (error) throw error;
@@ -113,7 +113,11 @@ export function useFirstSteps({ poll = false }: { poll?: boolean } = {}): FirstS
     ready: !lean || (!stripe.isLoading && !callLoading),
     fake: false,
     // Unknown counts as connected: never nag about Stripe on a failed read.
-    stripeConnected: stripe.data ? isStripeConnectUsable(stripe.data) : true,
+    // A Square company takes payments through Square, so "connect Stripe" is
+    // never a step for it (Rentalkingdom, 2026-11-26).
+    stripeConnected: stripe.data
+      ? (stripe.data as StripeConnectTenant).payment_provider === "square" || isStripeConnectUsable(stripe.data)
+      : true,
     call,
     callTime: call === "booked" && state?.callScheduledFor ? formatCallTime(state.callScheduledFor, tenant?.timezone) : null,
     callState: onOffer ? state : null,

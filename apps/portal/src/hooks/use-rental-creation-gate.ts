@@ -65,7 +65,7 @@ export function useRentalCreationGate() {
       const { data, error } = await (supabase as any)
         .from("tenants")
         .select(
-          "stripe_onboarding_complete, stripe_account_status, own_stripe_account_id, own_stripe_test_account_id",
+          "stripe_onboarding_complete, stripe_account_status, own_stripe_account_id, own_stripe_test_account_id, payment_provider",
         )
         .eq("id", tenant!.id)
         .single();

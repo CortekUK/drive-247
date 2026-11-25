@@ -37,6 +37,8 @@ export interface StripeConnectTenant {
   stripe_account_status?: string | null;
   own_stripe_account_id?: string | null;
   own_stripe_test_account_id?: string | null;
+  /** 'square' companies take every payment through Square and never connect Stripe. */
+  payment_provider?: string | null;
 }
 
 export function isStripeConnectUsable(
@@ -93,5 +95,10 @@ export function isRentalCreationBlocked(
 ): boolean {
   if (!isLeanTenant(tenantSlug, onV2)) return false;
   if (!tenant) return false;
+  // A Square company takes its payments through Square; its Stripe columns stay
+  // at their defaults for good. Blocking it on Stripe stopped Rentalkingdom (v2,
+  // Square connected and taking payments) from creating any rental
+  // (2026-11-26). Same rule as the connect-Stripe banner.
+  if (tenant.payment_provider === "square") return false;
   return !isStripeConnectUsable(tenant);
 }
