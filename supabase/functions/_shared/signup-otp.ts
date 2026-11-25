@@ -27,7 +27,10 @@ import { logoImgs } from "./drive247-email.ts";
 const CODE_LENGTH = 6;
 
 /** Long enough to find the email, short enough that a leaked code goes stale. */
-export const OTP_TTL_MS = 10 * 60 * 1000;
+// 30 minutes since 2026-11-25 (Neema): people who leave Instagram or Facebook to
+// find the code often take longer than 10. Still at most OTP_MAX_ATTEMPTS tries
+// per code, so a longer life does not make guessing practical.
+export const OTP_TTL_MS = 30 * 60 * 1000;
 
 /**
  * Five tries against a 6-digit code is a 1-in-200,000 chance of a blind guess.

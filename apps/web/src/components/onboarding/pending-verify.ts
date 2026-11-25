@@ -9,17 +9,31 @@
  * This keeps just enough to put them back on "Check your inbox" for the same
  * address: who they are, the plan, and when the code was sent. Never the
  * password and never the code. It lives in `localStorage` (this browser only,
- * survives a closed tab) and lasts exactly as long as the code does: a code
- * is good for OTP_TTL_MS after it is sent (supabase/functions/_shared/
- * signup-otp.ts), so once it has expired the record is ignored and removed.
+ * survives a closed tab) for a day (PENDING_VERIFY_TTL_MS), longer than a code
+ * lasts (CODE_TTL_MS), so someone back after their code expired still lands here
+ * and asks for a new one.
  *
  * The password is held in memory only, so after a reload the code screen still
  * works but the sign-in after it asks for the password once (see
  * `verifyEmailCode` in the provider).
  */
 
-/** Mirrors OTP_TTL_MS in supabase/functions/_shared/signup-otp.ts (10 minutes). */
-export const PENDING_VERIFY_TTL_MS = 10 * 60 * 1000;
+/** Mirrors OTP_TTL_MS in supabase/functions/_shared/signup-otp.ts (30 minutes). */
+export const CODE_TTL_MS = 30 * 60 * 1000;
+
+/**
+ * How long the code screen itself is remembered: a day, like the stand-in
+ * password (signup-stand-in.ts), and much longer than one code lasts (Neema,
+ * 2026-11-25). Someone who comes back after their code expired lands on the code
+ * screen with their business details kept, and asks for a new code there,
+ * instead of starting the form again.
+ */
+export const PENDING_VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** True once the code sent at `sentAt` can no longer be used: ask for a new one. */
+export function isCodeExpired(sentAt: number | null | undefined, now: number = Date.now()): boolean {
+  return Boolean(sentAt) && now - (sentAt as number) >= CODE_TTL_MS;
+}
 
 /** Mirrors OTP_RESEND_COOLDOWN_MS in the same file. */
 export const RESEND_COOLDOWN_MS = 60 * 1000;

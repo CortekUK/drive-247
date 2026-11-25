@@ -36,7 +36,7 @@ import {
   SIGNUP_QUIET,
   UNDER_HEAD,
 } from "@/components/onboarding/signup-ui";
-import { resendCooldownSeconds } from "@/components/onboarding/pending-verify";
+import { isCodeExpired, resendCooldownSeconds } from "@/components/onboarding/pending-verify";
 import { MAIL_WEB_URL, openMailApp, type MailProvider } from "@/components/onboarding/mail-apps";
 
 /** Mirrors OTP_RESEND_COOLDOWN_MS in supabase/functions/_shared/signup-otp.ts. */
@@ -130,6 +130,16 @@ export function VerifyStep({
   // browser): the web inbox is then offered as a link to tap.
   const [mailFallback, setMailFallback] = React.useState<MailProvider | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
+
+  // Codes last 30 minutes. Someone who comes back later (the screen is kept for
+  // a day) is told plainly and given "Send a new code", with everything they
+  // typed kept (Neema, 2026-11-25). Re-checked every 30 seconds while open.
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+  const expired = isCodeExpired(sentAt, now);
 
   React.useEffect(() => {
     inputRef.current?.focus();
@@ -329,6 +339,12 @@ export function VerifyStep({
         </div>
       ) : null}
 
+      {expired && (
+        <p role="status" className="mt-3 text-sm text-amber-700 dark:text-amber-400">
+          This code has expired. Tap &quot;Send a new code&quot; and we&apos;ll email you a fresh one. Everything you typed is kept.
+        </p>
+      )}
+
       <ColumnActions>
         <ColumnButton
           type="button"
@@ -345,7 +361,7 @@ export function VerifyStep({
             disabled={cooldown > 0 || busy || submitting}
             className={cn(SIGNUP_HIT, "text-sm font-medium text-indigo-600 underline-offset-4 hover:underline disabled:text-muted-foreground disabled:no-underline dark:text-indigo-400")}
           >
-            {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
+            {cooldown > 0 ? `Resend in ${cooldown}s` : expired ? "Send a new code" : "Resend code"}
           </button>
           <button
             type="button"
