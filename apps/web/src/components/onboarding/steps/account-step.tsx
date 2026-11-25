@@ -51,9 +51,13 @@ import {
 import { HeardAboutFields } from "@/components/onboarding/heard-about-fields";
 import {
   captureStepCompleted,
+  captureStepViewed,
   captureValidationErrors,
+  registerSignupLead,
   type SignupStep,
 } from "@/lib/analytics";
+import { readLead, saveLead } from "@/lib/signup-lead";
+import { isMockSignup } from "@/components/onboarding/mock-signup";
 import {
   attributionFromDraft,
   EMPTY_ATTRIBUTION,
@@ -246,6 +250,15 @@ export function AccountStep({
   const [fullName, setFullName] = React.useState(initialValues.fullName);
   const [email, setEmail] = React.useState(initialValues.email);
   const [attribution, setAttribution] = React.useState<AttributionDraft>(EMPTY_ATTRIBUTION);
+
+  // `signup_step_viewed` as each screen opens (Neema, 2026-11-25), numbered
+  // like `signup_step_completed` so the two line up in PostHog.
+  React.useEffect(() => {
+    if (isMockSignup()) return;
+    const step: SignupStep | null =
+      mode === "password" ? 2 : mode === "tenant" ? 3 : mode === "attribution" ? 1 : mode === "create" ? PAGE_STEP[page] ?? null : null;
+    if (step) captureStepViewed(step, mode === "create" ? {} : { screen: mode });
+  }, [mode, page]);
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
   const [confirmPassword, setConfirmPassword] = React.useState("");
@@ -507,6 +520,34 @@ export function AccountStep({
     setEmail(initialValues.email);
   }, [initialValues.email]);
 
+  /*
+   * Back where they left off (Neema, 2026-11-25). Inside Instagram or Facebook,
+   * leaving to fetch the email code often reloads the page and empties the
+   * form. The first page's answers were saved as a lead (lib/signup-lead.ts),
+   * so an empty first page is filled from it. Only ever fills empty fields.
+   */
+  React.useEffect(() => {
+    if (mode !== "create" || isMockSignup()) return;
+    if (initialValues.fullName.trim() || initialValues.email.trim()) return;
+    let cancelled = false;
+    void readLead().then((lead) => {
+      if (cancelled || !lead) return;
+      setFullName((v) => v || lead.fullName || "");
+      setEmail((v) => v || lead.email || "");
+      setAttribution((a) => ({
+        ...a,
+        heardAbout: a.heardAbout || (lead.heardAbout as AttributionDraft["heardAbout"]) || "",
+        heardAboutOther: a.heardAboutOther || lead.heardAboutOther || "",
+        phone: a.phone || lead.phone || "",
+      }));
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Once, when the form opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /**
    * A server error is about the values that produced it. The moment the user
    * edits anything, that error is stale and must stop being shown under a field
@@ -610,6 +651,21 @@ export function AccountStep({
       // reported was about the old one, so it must not block the last page.
       if (repairedSlug !== undefined) setSlugState({ kind: "idle" });
       captureStepCompleted(PAGE_STEP[page]);
+      // The lead: saved the moment the first page is done, before any account
+      // exists, so Bryan can call someone who stops here (lib/signup-lead.ts).
+      if (page === 0 && !isMockSignup()) {
+        void saveLead("details", {
+          fullName: fullName.trim(),
+          email: normalizeEmail(email),
+          phone: attribution.phone.trim(),
+          heardAbout: attribution.heardAbout || undefined,
+          heardAboutOther: attribution.heardAboutOther.trim() || undefined,
+          fleetSize: attribution.fleetSize || null,
+          planId: plan.id,
+        }).then((leadId) => {
+          if (leadId) registerSignupLead(leadId);
+        });
+      }
       setPage(page + 1);
       return;
     }

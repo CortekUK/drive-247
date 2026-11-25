@@ -55,11 +55,15 @@ export type SignupEvent =
   // The end of every step, and every error a visitor is shown (Neema,
   // 2026-11-22: step 3 broke on a Saturday and the funnel could not show where).
   | "signup_step_completed"
+  // Each step as it opens, so the funnel shows where people stop, not only
+  // what they finished (Neema, 2026-11-25).
+  | "signup_step_viewed"
   | "signup_validation_error";
 
 type PostHog = {
   capture: (event: string, properties?: Record<string, unknown>) => void;
   identify: (id: string, properties?: Record<string, unknown>) => void;
+  register?: (properties: Record<string, unknown>) => void;
 };
 
 function posthog(): PostHog | null {
@@ -88,6 +92,27 @@ export const SIGNUP_STEP_NAMES = {
   5: "card",
 } as const;
 export type SignupStep = keyof typeof SIGNUP_STEP_NAMES;
+
+/** `signup_step_viewed`, when a step opens. */
+export function captureStepViewed(step: SignupStep, properties?: Record<string, unknown>): void {
+  captureSignup("signup_step_viewed", { step, step_name: SIGNUP_STEP_NAMES[step], ...properties });
+}
+
+/**
+ * Tie this visitor's events to their signup lead (lib/signup-lead.ts) once the
+ * first page is saved: an internal id only, never an email or phone.
+ *
+ * A super property rather than `identify`: the account is identified by its own
+ * id once it exists (identifyAccount), and PostHog cannot merge two identified
+ * ids, so identifying the lead first would split each person in two.
+ */
+export function registerSignupLead(leadId: string): void {
+  try {
+    posthog()?.register?.({ signup_lead_id: leadId });
+  } catch {
+    /* analytics never gets in the way */
+  }
+}
 
 /** `signup_step_completed`, once a step's answers are accepted. */
 export function captureStepCompleted(step: SignupStep, properties?: Record<string, unknown>): void {

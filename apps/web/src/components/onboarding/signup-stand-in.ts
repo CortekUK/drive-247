@@ -30,7 +30,7 @@ export const PASSWORD_PENDING_META_KEY = "d247_signup_password_pending";
 
 /**
  * 32 random bytes, base64url, plus a letter and a digit so it always passes
- * `signup-begin`'s rule (10+ characters, a letter and a number).
+ * `signup-begin`'s rule (8+ characters, a letter and a number).
  */
 export function makeStandInPassword(): string {
   const bytes = new Uint8Array(32);

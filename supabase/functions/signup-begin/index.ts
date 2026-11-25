@@ -256,7 +256,8 @@ Deno.serve(async (req) => {
     // Length and composition only. No maximum-complexity theatre: this password
     // is typed once and then used to sign into a portal, and every extra rule
     // pushes operators towards reusing one they already have.
-    if (password.length < 10 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+    // 8 since 2026-11-25, the same rule as the signup form's password screen.
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
       return signupError("WEAK_PASSWORD", "Password does not meet the requirements", 400, {
         field: "password",
       });

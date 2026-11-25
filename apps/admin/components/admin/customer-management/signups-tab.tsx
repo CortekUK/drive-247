@@ -27,7 +27,8 @@ import { cn } from '@/lib/utils';
 const db = supabase as any;
 
 interface SignupRow {
-  auth_user_id: string;
+  /** Null for a lead: they stopped before the business page, so no account exists. */
+  auth_user_id: string | null;
   email: string | null;
   full_name: string | null;
   phone: string | null;
@@ -47,13 +48,31 @@ interface SignupRow {
   paid_at: string | null;
   last_sign_in_at: string | null;
   exit_offer_seen_at: string | null;
+  /** The furthest screen the signup reached (signup_leads.last_step). */
+  lead_step: string | null;
+  lead_id: string | null;
 }
 
-type Group = 'no_card' | 'signed_up' | 'failed';
+type Group = 'lead' | 'no_card' | 'signed_up' | 'failed';
 
 /** Where a signup got to, in words Bryan uses, and which filter it falls under. */
+/** Where a lead stopped, as the person saw it. */
+const LEAD_STEP_LABEL: Record<string, string> = {
+  details: 'after their details',
+  business: 'on the business page',
+  email_code: 'at the email code',
+  password: 'at the password',
+  card: 'at the card step',
+};
+
 function stageOf(r: SignupRow): { label: string; cls: string; group: Group } {
   switch (r.signup_status) {
+    case 'lead':
+      return {
+        label: `Started signup, not finished${r.lead_step && LEAD_STEP_LABEL[r.lead_step] ? `: stopped ${LEAD_STEP_LABEL[r.lead_step]}` : ''}`,
+        cls: 'text-orange-700 dark:text-orange-400',
+        group: 'lead',
+      };
     case 'provisioned':
       return { label: 'Portal live', cls: 'text-green-700 dark:text-green-400', group: 'signed_up' };
     case 'paid':
@@ -70,6 +89,7 @@ function stageOf(r: SignupRow): { label: string; cls: string; group: Group } {
 
 const FILTERS: Array<{ id: Group | 'all'; label: string; cls: string }> = [
   { id: 'all', label: 'All signups', cls: 'text-foreground' },
+  { id: 'lead', label: 'Started, not finished', cls: 'text-orange-700 dark:text-orange-400' },
   { id: 'no_card', label: 'No card yet', cls: 'text-amber-700 dark:text-amber-400' },
   { id: 'signed_up', label: 'Signed up', cls: 'text-green-700 dark:text-green-400' },
   { id: 'failed', label: 'Setup failed', cls: 'text-red-700 dark:text-red-400' },
@@ -141,7 +161,7 @@ export function SignupsTab() {
   }, [load]);
 
   const counts = useMemo(() => {
-    const c = { all: 0, no_card: 0, signed_up: 0, failed: 0 };
+    const c = { all: 0, lead: 0, no_card: 0, signed_up: 0, failed: 0 };
     for (const r of rows ?? []) {
       c.all += 1;
       c[stageOf(r).group] += 1;
@@ -189,8 +209,8 @@ export function SignupsTab() {
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Signups</h1>
           <p className={cn('max-w-2xl text-sm text-muted-foreground', PAGE_DESCRIPTION)}>
             Everyone who signed up on drive-247.com, newest first, with the details they gave: phone, location, fleet
-            size and how they heard about us. People who stopped before adding a card are here too, so you can call
-            them.
+            size and how they heard about us. People who stopped part-way are here too, from the moment they finish the
+            first page, so you can call them.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
@@ -199,7 +219,7 @@ export function SignupsTab() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {FILTERS.map((f) => (
           <button
             key={f.id}
@@ -253,7 +273,7 @@ export function SignupsTab() {
                 const heard = heardText(r);
                 const plan = r.plan_id ? PLAN_LABEL[r.plan_id] ?? r.plan_id : null;
                 return (
-                  <li key={r.auth_user_id} className="flex flex-col gap-3 px-6 py-4 lg:flex-row lg:items-center lg:gap-6">
+                  <li key={r.auth_user_id ?? `lead-${r.lead_id ?? r.email}`} className="flex flex-col gap-3 px-6 py-4 lg:flex-row lg:items-center lg:gap-6">
                     <div className="min-w-0 lg:w-[32%]">
                       <p className="truncate text-sm font-medium max-sm:whitespace-normal">
                         {r.full_name || r.email || 'No name'}

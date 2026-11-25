@@ -548,11 +548,12 @@ Deno.serve(async (req) => {
   // endpoint that is anon-callable must not be a softer door into the same
   // account than the one that created it — otherwise the reset becomes a
   // password-policy downgrade you can drive from curl.
-  if (newPassword.length < 10 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
+  // 8 since 2026-11-25, the same rule as the signup form.
+  if (newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
     return done(
       signupError(
         "RESET_PASSWORD_WEAK",
-        "Use at least 10 characters, including a letter and a number.",
+        "Use at least 8 characters, including a letter and a number.",
         400,
       ),
     );

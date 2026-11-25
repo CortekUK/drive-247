@@ -188,7 +188,8 @@ export function suggestEmailCorrection(raw: string): string | null {
 // Password
 // ---------------------------------------------------------------------------
 
-export const PASSWORD_MIN_LENGTH = 10;
+// 8 since 2026-11-25 (Neema): 10 stopped people at the password screen.
+export const PASSWORD_MIN_LENGTH = 8;
 
 export interface PasswordRule {
   id: "length" | "mix";

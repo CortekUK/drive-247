@@ -111,7 +111,7 @@ export const SIGNUP_ERROR_COPY: Record<SignupErrorCode, string> = {
   INVALID_BODY: "Something went wrong sending that. Please try again.",
   VALIDATION_FAILED: "Please check the highlighted fields and try again.",
   WEAK_PASSWORD:
-    "Choose a password with at least 10 characters, including a letter and a number.",
+    "Choose a password with at least 8 characters, including a letter and a number.",
   EMAIL_INVALID: "That doesn't look like a valid email address.",
   EMAIL_DISPOSABLE:
     "Please use a permanent business email address — this is the login for your portal.",
@@ -151,7 +151,7 @@ export const SIGNUP_ERROR_COPY: Record<SignupErrorCode, string> = {
   // (10+, a letter, a number). It previously said 8, which contradicted the
   // checklist rendered directly above it in the same panel.
   RESET_PASSWORD_WEAK:
-    "Use at least 10 characters, including a letter and a number.",
+    "Use at least 8 characters, including a letter and a number.",
   RESET_FAILED:
     "We couldn't set your new password. Request a new code and try again.",
   FINISH_LINK_INVALID:

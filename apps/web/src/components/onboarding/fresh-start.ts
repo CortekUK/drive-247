@@ -49,6 +49,8 @@ export function consumeFreshStart(): void {
   clearByPrefix(() => window.sessionStorage, SESSION_PREFIXES);
   // A promo code carried in from an earlier run would otherwise ride along.
   document.cookie = `${REFERRAL_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`;
+  // And the signup lead's token (lib/signup-lead.ts; its localStorage copy goes above).
+  document.cookie = `d247_lead=; Max-Age=0; Path=/; SameSite=Lax`;
 }
 
 function clearByPrefix(getStore: () => Storage, prefixes: string[]): void {

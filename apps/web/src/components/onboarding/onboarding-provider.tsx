@@ -19,7 +19,8 @@ import {
   type SignupPlan,
   type SignupPlanId,
 } from "@/lib/plans";
-import { captureSignup, captureStepCompleted, identifyAccount } from "@/lib/analytics";
+import { captureSignup, captureStepCompleted, captureStepViewed, identifyAccount } from "@/lib/analytics";
+import { inAppBrowser, saveLead } from "@/lib/signup-lead";
 import { readMetaSignals, trackRegistration, trackStartTrial } from "@/lib/meta-tracking";
 import {
   isHeardAbout,
@@ -759,6 +760,22 @@ export function OnboardingProvider({
   plans = SIGNUP_PLANS,
 }: OnboardingProviderProps) {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
+
+  // Inside Instagram or Facebook's own browser Google refuses to sign anyone
+  // in, so its button is hidden there and the email form is the way in
+  // (Neema, 2026-11-25). Read after mount: the server has no user agent here.
+  const [inApp, setInApp] = useState(false);
+  useEffect(() => {
+    setInApp(Boolean(inAppBrowser()));
+  }, []);
+
+  // `signup_step_viewed` for the code and card screens (the account step logs
+  // its own pages), so PostHog shows where people stop, not only what they finish.
+  useEffect(() => {
+    if (isMockSignup()) return;
+    if (state.step === "verify") captureStepViewed(4);
+    else if (state.step === "payment") captureStepViewed(5);
+  }, [state.step]);
   const [isOpen, setIsOpen] = useState(false);
   const [hasResumableSignup, setHasResumableSignup] = useState(false);
   const [resolving, setResolving] = useState(false);
@@ -2110,6 +2127,8 @@ export function OnboardingProvider({
       // rate limit) does not also throw away the business name and address the
       // operator just typed — the step re-renders from this.
       dispatch({ type: "business", patch: draftToBusiness(tenant) });
+      // The lead moves to "business" (lib/signup-lead.ts), with the city they gave.
+      if (!isMockSignup()) void saveLead("business", { cityState: cityState || undefined, planId });
       /*
        * THE PASSWORD COMES AFTER THE CODE (Ghulam, 2026-11-23).
        *
@@ -2335,7 +2354,10 @@ export function OnboardingProvider({
           return false;
         }
         setVerifyError(null);
-        if (!isMockSignup()) captureStepCompleted(4);
+        if (!isMockSignup()) {
+          captureStepCompleted(4);
+          void saveLead("email_code");
+        }
         // The code is spent: a reload from here is the ordinary resume path.
         clearPendingVerify();
         setVerifySentAt(null);
@@ -2456,6 +2478,7 @@ export function OnboardingProvider({
         }
         pendingPasswordRef.current = null;
         forgetStandIn();
+        if (!isMockSignup()) void saveLead("password");
 
         if (!tenantValuesFrom(stateRef.current.business)) {
           setAccountMode("tenant");
@@ -2929,7 +2952,10 @@ export function OnboardingProvider({
       dispatch({ type: "payment", patch: { paid: Boolean(dto?.paid) } });
       // The card went through on Stripe's side. `confirmed` is whether our
       // server had seen the subscription go active by now (see the loop above).
-      if (!isMockSignup()) captureStepCompleted(5, { confirmed: Boolean(dto?.paid) });
+      if (!isMockSignup()) {
+        captureStepCompleted(5, { confirmed: Boolean(dto?.paid) });
+        void saveLead("card");
+      }
 
       // Advance even when the server could not confirm yet: an async payment
       // method sits in `processing` for minutes, and holding a paying customer
@@ -3173,7 +3199,7 @@ export function OnboardingProvider({
       planSwitchBlocked,
       plans,
       accountMode,
-      googleEnabled: GOOGLE_ENABLED,
+      googleEnabled: GOOGLE_ENABLED && !inApp,
       verifySentAt,
       changePlan,
       chooseFleetSize,
@@ -3187,6 +3213,7 @@ export function OnboardingProvider({
       planSwitchBlocked,
       plans,
       accountMode,
+      inApp,
       verifySentAt,
       changePlan,
       chooseFleetSize,
