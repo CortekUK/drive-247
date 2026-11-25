@@ -46,13 +46,80 @@ cp apps/portal/src/integrations/supabase/types.ts apps/booking/src/integrations/
 cp apps/portal/src/integrations/supabase/types.ts apps/admin/src/integrations/supabase/types.ts
 ```
 
+## How a feature is built
+
+Every feature goes through the same four steps, and there is a skill for each, so everyone's
+work has the same shape. The order is a guide: a skill does not refuse to run out of order.
+
+| Step | Skill | What it makes | Where |
+|---|---|---|---|
+| 1 | `prd` | The feature's section in the one PRD, in plain business language | `docs/application/PRD.md` (read as `PRD.pdf`) |
+| 2 | `spec` | Several technical specs, each with numbered Behaviour statements | `docs/application/feat-NNN-name/specs/` |
+| 3 | `eval` | One eval per spec, proving its statements on staging; money math in Vitest | `docs/application/feat-NNN-name/evals/` |
+| 4 | `qa-report` | What a person checks by hand, ticked off with their own words | `docs/application/feat-NNN-name/qa-report.md` |
+| 5 | (no skill) | A pull request with all of the above. Sometimes Ghulam says to merge without one. | |
+
+`npm run eval -- feat-NNN` runs a feature's evals and ends with `EVALS feat-NNN  23/23 statements proved`.
+
+**A feature is complete when every statement is proved and every item on the QA report is ticked.**
+
+**Money gets extra care.** Any spec with a number that ends on a bill, a refund, a payout or a
+discount carries a table of examples worked out by hand. Vitest runs every row, and the QA report
+has a person redo rows on a calculator and compare with the screen and the bill.
+
+A QA pass on something that already exists (no new feature) still gets a PRD section and a QA
+report; specs and evals are written where they are worth it.
+
+### Where work is tested: `ray1` and `ray2`
+
+Besides `main` (production) and `staging`, there are two permanent personal branches. Each has
+its own live sites, on the **staging database**, so a person tests on a real deployed site without
+waiting for a merge and without meeting someone else's unfinished work.
+
+| | `ray1` (Haris) | `ray2` (Hamza) |
+|---|---|---|
+| Landing page | `ray1.drive-247.com` | `ray2.drive-247.com` |
+| Super admin | `admin.ray1.drive-247.com` | `admin.ray2.drive-247.com` |
+| Portal | `northwind.portal.ray1.drive-247.com` | `northwind.portal.ray2.drive-247.com` |
+| Booking site | `northwind.ray1.drive-247.com` | `northwind.ray2.drive-247.com` |
+
+Pushing to a ray branch deploys its sites in about five minutes. Log in with the staging accounts.
+
+The cycle:
+
+1. **Start level with `main`.** Bring `main` into your ray branch before you begin and before you test.
+2. **Build** on your ray branch (or on a feature branch you merge into it). Write the PRD section,
+   the specs and the evals; run the evals.
+3. **Push.** Your ray sites deploy.
+4. **Do part 1 of the QA report on your ray sites**, never on `localhost`.
+5. **Raise the pull request** from your ray branch, and say so in the group.
+6. **Ghulam** opens your ray site, reads the report, and says "relay to prod".
+7. **During the relay** you tick part 2 (a quick look at the staging site), and **straight after**,
+   part 3 (one or two real tests on the northwind tenant in production; a small real payment,
+   refunded the same day, when the feature changes what someone is charged).
+8. **After the relay** your ray branch is brought back level with `main`.
+
+Rules:
+
+- **While building, you may apply your own migration and deploy your own edge functions to
+  STAGING.** Never to production: production only changes during a relay. Say it in the group
+  first, because the staging database is shared by `staging`, `ray1`, `ray2` and every local
+  machine. Until the relay, `npm run synced` will say the database or functions are DIFFERENT;
+  that is expected and clears when the relay finishes.
+- One piece of work at a time on a ray branch. Whatever is on it goes out together.
+- You break staging's data or a shared function, you fix it or take it back the same day.
+- Nobody but Ghulam decides what reaches `main`.
+
 ## "Relay to prod"
 
-When Ghulam says **"relay to prod"**, take the work on the current feature branch all the way to
-production, in this order. Each stage hands the same commit to the next; stop and report if any
+When Ghulam says **"relay to prod"**, take the work on the branch he names (a ray branch or a
+feature branch; the current one if he names none) all the way to production, in this order. Each stage hands the same commit to the next; stop and report if any
 stage fails.
 
-1. **Branch**: everything committed on the feature branch (`<name>/feat/<feature>`), nothing uncommitted.
+0. **Look first**: list everything on `staging` that is not on `main`, and everything on the branch
+   that is not on `staging`, with whose it is. Tell Ghulam before moving anything that he did not name.
+1. **Branch**: everything committed on the branch, nothing uncommitted. Its evals pass
+   (`npm run eval -- feat-NNN`) and part 1 of its QA report is ticked, or Ghulam has said to go anyway.
 2. **Staging database**: any new migration is already applied to staging. Run the whole migration
    file there; never alter a table in place mid-feature, or its column order ends up different
    from production and the database check fails.
@@ -63,7 +130,8 @@ stage fails.
    Project settings the feature depends on (a storage cap, a secret) are changed here too, on both.
 5. **Production code**: fast-forward `main` to `staging`, push, wait for the four production builds.
 6. **Prove it**: `npm run synced` must end with `ALL SYNCED <commit id>`. Report that line.
-7. Go back to the feature branch. Do not delete it unless Ghulam says so.
+7. Bring `ray1` and `ray2` level with `main` when the relayed work came from them. Go back to the
+   branch you were on. Do not delete a feature branch unless Ghulam says so.
 
 Edge functions changed by the feature: deploy to production one at a time and verify each (see
 "Deploying edge functions" below), then copy to staging with `docs/environments/functions/copy-from-prod.mjs`.
