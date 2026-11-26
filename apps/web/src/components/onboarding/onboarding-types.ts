@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { SignupPlan, SignupPlanId } from "@/lib/plans";
 import type { PromoOffer } from "@/lib/promo-offer";
 import type { SignupAttribution } from "@/lib/signup-attribution";
@@ -570,6 +571,11 @@ export interface PaymentStepProps {
   planPickerOpen?: boolean;
   /** The step asks to open or close the "Change plan" list. */
   onPlanPickerOpenChange?(open: boolean): void;
+  /**
+   * Shown under the heading, above both columns: the "Pay with Apple Pay in
+   * Safari" panel inside the Facebook / Instagram app.
+   */
+  topSlot?: ReactNode;
 }
 
 // ---------------------------------------------------------------------------

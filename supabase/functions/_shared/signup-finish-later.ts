@@ -28,6 +28,19 @@ export const FINISH_LATER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const FINISH_LATER_SENDS_PER_HOUR = 3;
 
 /**
+ * "Open in Safari / Chrome" from inside the Facebook or Instagram app (Neema,
+ * 2026-11-26): Apple Pay and Google Pay never show in those apps' own browser,
+ * so the card step offers to carry on in the phone's real browser. Same token,
+ * same redeem, but no email: the page builds the link on its own address and
+ * hands it straight to Safari or Chrome, so it only needs to live long enough
+ * to be opened.
+ */
+export const BROWSER_HANDOFF_TTL_MS = 2 * 60 * 60 * 1000;
+
+/** Handoff links per account per hour: a tap or two, plus retries. */
+export const BROWSER_HANDOFF_PER_HOUR = 10;
+
+/**
  * Opens per link. The link is not single-use on purpose: a mail app's link
  * preview, or tapping it on the phone first, must not burn it before they reach
  * the computer. Capped so a forwarded link is not a standing key.
@@ -65,8 +78,8 @@ export async function hashFinishLaterToken(token: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function finishLaterExpiry(now: Date = new Date()): string {
-  return new Date(now.getTime() + FINISH_LATER_TTL_MS).toISOString();
+export function finishLaterExpiry(now: Date = new Date(), ttlMs: number = FINISH_LATER_TTL_MS): string {
+  return new Date(now.getTime() + ttlMs).toISOString();
 }
 
 export interface FinishLaterTokenRow {

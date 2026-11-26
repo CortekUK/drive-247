@@ -568,6 +568,22 @@ export function signupFinishLaterSend(code: string | null): Promise<{ success: t
   });
 }
 
+/**
+ * A 2-hour token for carrying this signup out of the Facebook or Instagram app
+ * into Safari or Chrome, where Apple Pay and Google Pay show. The page builds
+ * the link itself (`/?signup=finish&t=…`), so it works on any of our hosts.
+ */
+export function signupBrowserHandoff(
+  code: string | null,
+  app: string | null,
+): Promise<{ success: true; token: string }> {
+  return callFunction("signup-finish-later", { action: "handoff", code, app }, {
+    auth: "session",
+    timeoutMs: 15_000,
+    dedupeKey: "signup-finish-later:handoff",
+  });
+}
+
 export interface FinishLaterRedeemResponse {
   success: true;
   email: string;

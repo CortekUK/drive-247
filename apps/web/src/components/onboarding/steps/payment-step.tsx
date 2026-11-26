@@ -250,6 +250,7 @@ export function PaymentStep({
   onWideChange,
   plans = [],
   onChangePlan,
+  topSlot = null,
 }: PaymentStepProps) {
   // Plans you can switch to: the live catalogue, with the current plan in it.
   const switchable = plans.length > 1 && onChangePlan ? plans : [];
@@ -486,6 +487,9 @@ export function PaymentStep({
       <ScreenHead
         title={ownerName.trim() ? `Last step, ${ownerName.trim().split(/\s+/)[0]}` : "Last step"}
       />
+
+      {/* "Pay with Apple Pay in Safari" inside the Facebook / Instagram app. */}
+      {topSlot ? <div className="mx-auto mt-6 w-full max-w-[34rem] lg:max-w-[66rem]">{topSlot}</div> : null}
 
       <div className="mx-auto mt-10 w-full max-w-[66rem] lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] lg:items-start lg:gap-16">
       <div className="min-w-0">

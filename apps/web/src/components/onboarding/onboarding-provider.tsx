@@ -21,6 +21,7 @@ import {
 } from "@/lib/plans";
 import { captureSignup, captureStepCompleted, captureStepViewed, identifyAccount } from "@/lib/analytics";
 import { inAppBrowser, saveLead } from "@/lib/signup-lead";
+import { handoffLink } from "@/lib/open-in-browser";
 import { readMetaSignals, trackRegistration, trackStartTrial } from "@/lib/meta-tracking";
 import {
   isHeardAbout,
@@ -55,6 +56,7 @@ import {
   signupExitOfferSeen,
   signupFinishLaterRedeem,
   signupFinishLaterSend,
+  signupBrowserHandoff,
   signupSaveAttribution,
   signupSaveCityState,
   signupVerifyOtp,
@@ -402,6 +404,17 @@ interface OnboardingShellValue {
   trackExitOffer(event: "exit_offer_accepted" | "exit_offer_dismissed" | "finish_later_requested"): void;
   /** "Email me a link to finish later". Resolves true once the email is on its way. */
   sendFinishLaterLink(): Promise<boolean>;
+  /**
+   * The app whose own browser this page is open in ("facebook", "instagram",
+   * ...), or null in a real browser. Apple Pay and Google Pay never show in
+   * those, so the card step offers to carry on in Safari or Chrome.
+   */
+  inAppBrowser: string | null;
+  /**
+   * A link that opens this signup, signed in and on the card step, in another
+   * browser (2 hours). Null when it could not be made.
+   */
+  makeBrowserHandoffLink(): Promise<string | null>;
 }
 
 /**
@@ -423,6 +436,8 @@ const OnboardingShellContext = createContext<OnboardingShellValue>({
   noteExitOfferShown: () => {},
   trackExitOffer: () => {},
   sendFinishLaterLink: async () => false,
+  inAppBrowser: null,
+  makeBrowserHandoffLink: async () => null,
 });
 
 export function useOnboarding(): OnboardingContextValue {
@@ -764,9 +779,9 @@ export function OnboardingProvider({
   // Inside Instagram or Facebook's own browser Google refuses to sign anyone
   // in, so its button is hidden there and the email form is the way in
   // (Neema, 2026-11-25). Read after mount: the server has no user agent here.
-  const [inApp, setInApp] = useState(false);
+  const [inApp, setInApp] = useState<string | null>(null);
   useEffect(() => {
-    setInApp(Boolean(inAppBrowser()));
+    setInApp(inAppBrowser());
   }, []);
 
   // `signup_step_viewed` for the code and card screens (the account step logs
@@ -1850,7 +1865,7 @@ export function OnboardingProvider({
    * A portal that is already built gets its portal instead.
    */
   const completeFinishLater = useCallback(
-    async (token: string, urlCode: string | null) => {
+    async (token: string, urlCode: string | null, via: string | null = null) => {
       setIsOpen(true);
       setResolving(true);
       dispatch({ type: "goto", step: "account" });
@@ -1867,7 +1882,11 @@ export function OnboardingProvider({
           writeReferralCodeInDocument(code);
           promoDroppedRef.current = false;
         }
-        if (!isMockSignup()) captureSignup("finish_later_link_opened", { plan: res.planId ?? undefined });
+        if (!isMockSignup()) {
+          captureSignup(via === "app" ? "browser_handoff_opened" : "finish_later_link_opened", {
+            plan: res.planId ?? undefined,
+          });
+        }
 
         const meta = await fetchSignupMeta();
         resumeHintRef.current = meta;
@@ -1909,11 +1928,13 @@ export function OnboardingProvider({
     if (params.get("signup") !== "finish") return;
     const token = params.get("t");
     const code = params.get("code");
+    const via = params.get("via");
     // Out of the address bar before anything else: the token is a key to the
     // account for a week and must not sit in history or the next Referer.
     params.delete("signup");
     params.delete("t");
     params.delete("code");
+    params.delete("via");
     const query = params.toString();
     window.history.replaceState(
       null,
@@ -1921,7 +1942,7 @@ export function OnboardingProvider({
       `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
     );
     if (!token) return;
-    void completeFinishLater(token, code);
+    void completeFinishLater(token, code, via);
     // Mount only: the link is read once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -2876,6 +2897,22 @@ export function OnboardingProvider({
     }
   }, []);
 
+  /*
+   * "Open in Safari / Chrome" from inside Facebook or Instagram (Neema,
+   * 2026-11-26). The code on the card step rides along so the other browser
+   * opens on the same price; the server drops it when it is not live.
+   */
+  const makeBrowserHandoffLink = useCallback(async (): Promise<string | null> => {
+    const s = stateRef.current;
+    try {
+      const res = await signupBrowserHandoff(s.payment.promo?.displayCode ?? null, inApp);
+      return handoffLink(res.token);
+    } catch (e) {
+      console.warn("[onboarding] could not make the browser handoff link", toOnboardingError(e));
+      return null;
+    }
+  }, [inApp]);
+
   const applyPromoCode = useCallback(
     async (raw: string | null): Promise<string | null> => {
       const s = stateRef.current;
@@ -3212,6 +3249,8 @@ export function OnboardingProvider({
       plans,
       accountMode,
       googleEnabled: GOOGLE_ENABLED && !inApp,
+      inAppBrowser: inApp,
+      makeBrowserHandoffLink,
       verifySentAt,
       changePlan,
       chooseFleetSize,
@@ -3233,6 +3272,7 @@ export function OnboardingProvider({
       noteExitOfferShown,
       trackExitOffer,
       sendFinishLaterLink,
+      makeBrowserHandoffLink,
     ],
   );
 

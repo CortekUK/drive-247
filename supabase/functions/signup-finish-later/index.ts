@@ -13,6 +13,16 @@
 //                                   account. The link carries a random token of
 //                                   ours, good for 7 days; only its SHA-256 is
 //                                   kept (public.signup_finish_later_tokens).
+//   handoff     (signed-in signup)  "Open in Safari / Chrome" from inside the
+//                                   Facebook or Instagram app, where Apple Pay
+//                                   and Google Pay never show (Neema,
+//                                   2026-11-26). The same kind of token, good
+//                                   for 2 hours and not emailed: the page puts
+//                                   it in a link on its own address and opens
+//                                   that in the phone's real browser, which
+//                                   redeems it like an emailed one. Carries the
+//                                   code on the card step when it is live.
+//                                   10 per hour per account.
 //   redeem      (no session)        The link was opened. A valid, unexpired
 //                                   token for an account whose portal is NOT
 //                                   built yet is exchanged for a one-time
@@ -42,6 +52,8 @@ import {
   writeSignupMeta,
 } from "../_shared/signup-state.ts";
 import {
+  BROWSER_HANDOFF_PER_HOUR,
+  BROWSER_HANDOFF_TTL_MS,
   buildFinishLaterEmail,
   buildFinishLaterLink,
   checkFinishLaterToken,
@@ -59,7 +71,7 @@ const HOUR_MS = 60 * 60 * 1000;
 /** Link opens per IP per hour. Generous: a shared office is one IP. */
 const REDEEMS_PER_IP_PER_HOUR = 30;
 
-type Action = "offer_seen" | "send" | "redeem";
+type Action = "offer_seen" | "send" | "handoff" | "redeem";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -85,7 +97,7 @@ Deno.serve(async (req) => {
 
   try {
     if (action === "redeem") return await redeem(supabase, req, body);
-    if (action === "offer_seen" || action === "send") {
+    if (action === "offer_seen" || action === "send" || action === "handoff") {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader?.startsWith("Bearer ")) {
         return signupError("UNAUTHENTICATED", "Missing authorization header", 401);
@@ -103,6 +115,7 @@ Deno.serve(async (req) => {
         await markExitOfferSeen(supabase, { authUserId: user.id, email: meta.email, at });
         return jsonResponse({ success: true, exitOfferSeenAt: at });
       }
+      if (action === "handoff") return await handoff(supabase, req, user.id, meta, body);
       return await send(supabase, req, user.id, meta, body);
     }
     return signupError("INVALID_BODY", "Unknown action", 400);
@@ -196,6 +209,67 @@ async function send(
     metadata: { code },
   });
   return jsonResponse({ success: true, sent: true });
+}
+
+/**
+ * A short-lived token for carrying this signup into the phone's own browser.
+ * The code typed on the card step rides along (stored on the row, handed back
+ * by redeem) only while it is live for this plan.
+ */
+async function handoff(
+  supabase: any,
+  req: Request,
+  authUserId: string,
+  meta: NonNullable<ReturnType<typeof readSignupMeta>>,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  if (finishLaterSignupState(meta) !== "open") {
+    return signupError("ALREADY_PROVISIONED", "Your portal is already set up.", 409);
+  }
+
+  const rule = { scope: "signup_browser_handoff", key: authUserId, limit: BROWSER_HANDOFF_PER_HOUR, windowMs: HOUR_MS };
+  const allowed = await checkThrottle(supabase, [rule]);
+  const app = typeof body.app === "string" && /^[a-z]{1,20}$/.test(body.app) ? body.app : null;
+  await recordAttempt(supabase, {
+    scope: "browser_handoff",
+    ip_address: clientIp(req),
+    email: meta.email,
+    auth_user_id: authUserId,
+    plan_id: meta.planId,
+    outcome: allowed ? "allowed" : "blocked",
+    throttleScope: rule.scope,
+    throttleKey: rule.key,
+    metadata: { app },
+  });
+  if (!allowed) return signupError("RATE_LIMITED", "Too many attempts. Please try again later.", 429);
+
+  let code: string | null = typeof body.code === "string" ? body.code.trim().toUpperCase().slice(0, 40) : null;
+  if (code) {
+    try {
+      const found = await findCode(supabase, code);
+      const usable = found.ok
+        ? await checkCodeUsable(supabase, found.code, { channel: "self_serve", planKey: meta.planId })
+        : found;
+      if (!found.ok || !usable.ok) code = null;
+    } catch (e) {
+      console.warn(`${LOG} promo check failed; handing off without the code:`, e);
+      code = null;
+    }
+  }
+
+  const token = mintFinishLaterToken();
+  const { error: insertError } = await supabase.from("signup_finish_later_tokens").insert({
+    auth_user_id: authUserId,
+    token_hash: await hashFinishLaterToken(token),
+    email: meta.email,
+    promo_code: code,
+    expires_at: finishLaterExpiry(new Date(), BROWSER_HANDOFF_TTL_MS),
+  });
+  if (insertError) {
+    console.error(`${LOG} could not store the handoff for ${authUserId}:`, insertError);
+    return signupError("INTERNAL", "Could not create your link", 500);
+  }
+  return jsonResponse({ success: true, token });
 }
 
 async function redeem(supabase: any, req: Request, body: Record<string, unknown>): Promise<Response> {

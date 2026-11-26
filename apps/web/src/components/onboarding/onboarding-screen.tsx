@@ -19,6 +19,7 @@ import { EXIT_OFFER_CODE, isExitIntent, isPhoneLike, shouldShowExitOffer } from 
 import { ExitOfferPanel, type FinishLaterState } from "./exit-offer-panel";
 import { isBlackFridayInBrowser } from "@/lib/black-friday";
 import { PaymentStep } from "./steps/payment-step";
+import { OpenInBrowserPanel } from "./open-in-browser-panel";
 import { VerifyStep } from "./steps/verify-step";
 import {
   FooterSlotProvider,
@@ -612,6 +613,7 @@ export function OnboardingScreen() {
                           onChangePlan={changePlan}
                           planPickerOpen={planPickerOpen}
                           onPlanPickerOpenChange={setPlanPickerOpen}
+                          topSlot={state.payment.paid ? null : <OpenInBrowserPanel />}
                         />
                       ) : null}
                     </div>

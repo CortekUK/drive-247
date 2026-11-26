@@ -52,6 +52,10 @@ export type SignupEvent =
   // "Email me a link to finish later", and that link being opened.
   | "finish_later_requested"
   | "finish_later_link_opened"
+  // "Open in Safari / Chrome" from inside Facebook or Instagram, and the
+  // signup arriving in that browser (Neema, 2026-11-26).
+  | "browser_handoff_tapped"
+  | "browser_handoff_opened"
   // The end of every step, and every error a visitor is shown (Neema,
   // 2026-11-22: step 3 broke on a Saturday and the funnel could not show where).
   | "signup_step_completed"

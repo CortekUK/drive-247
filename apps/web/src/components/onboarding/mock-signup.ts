@@ -561,6 +561,8 @@ export async function mockFunction(name: string, body: unknown): Promise<unknown
         return { success: true, exitOfferSeenAt: at };
       }
       if (b.action === "send") return { success: true, sent: true };
+      // Any token will do: the rehearsal's redeem below opens its own signup.
+      if (b.action === "handoff") return { success: true, token: "mock-handoff-token-".padEnd(43, "x") };
       if (b.action === "redeem") {
         // Any token opens the rehearsal's own signup, as a real link opens its account.
         const store = readStore();
