@@ -248,6 +248,7 @@ const INITIAL_STATE: OnboardingState = {
     intentType: "payment",
     trialDays: 0,
     trialEndsAt: null,
+    bill: null,
   },
   business: freshBusinessDraft(),
   provisioning: { completed: [], phase: "idle", failure: null, activeSince: null },
@@ -1147,6 +1148,7 @@ export function OnboardingProvider({
             intentType: res.intentType ?? "payment",
             trialDays: res.trialDays ?? 0,
             trialEndsAt: res.trialEndsAt ?? null,
+            bill: res.bill ?? null,
           },
         });
       } catch (e) {

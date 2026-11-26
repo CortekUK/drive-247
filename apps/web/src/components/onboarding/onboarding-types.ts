@@ -374,6 +374,8 @@ export interface OnboardingState {
     trialDays?: number;
     /** When the trial ends and the card is first charged (ISO). */
     trialEndsAt?: string | null;
+    /** The server's money figures for this subscription (feat-001 spec 08.12). */
+    bill?: SignupBillView | null;
   };
   business: BusinessDraft;
   provisioning: ProvisioningState;
@@ -458,6 +460,21 @@ export interface TenantFormValues {
  * stand-in the browser keeps until this screen replaces it (see
  * `submitAccount`). Google signups never see it.
  */
+/**
+ * What signup-payment-intent-v2 says about the money (feat-001 spec 08.12).
+ * Mirrors `SignupBill` in supabase/functions/_shared/platform-promo-rules.ts,
+ * where every figure is worked out. Whole cents; dates "YYYY-MM-DD" UTC.
+ */
+export interface SignupBillView {
+  todayCents: number;
+  firstChargeAt: string;
+  firstChargeCents: number;
+  /** 0 without a code; null for a code that never ends. */
+  discountedBills: number | null;
+  discountedBillCents: number;
+  fullPriceCents: number;
+}
+
 export type AccountStepMode = "create" | "tenant" | "attribution" | "password";
 
 /** The identity providers a signup can start with. */
@@ -547,6 +564,8 @@ export interface PaymentStepProps {
   trialDays?: number;
   /** When the trial ends and the card is first charged (ISO). */
   trialEndsAt?: string | null;
+  /** The server's money figures; the step shows these, not its own math. */
+  bill?: SignupBillView | null;
   /** "Have a promo code?": apply a code, or remove the applied one with null. Resolves to a message, or null. */
   onApplyPromo?(code: string | null): Promise<string | null>;
   /** The owner's name, so the screen can address them. Display only. */

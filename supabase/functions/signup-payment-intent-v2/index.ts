@@ -54,6 +54,7 @@ import {
   trialTermsChanged,
 } from "../_shared/signup-trial.ts";
 import { stampStripeCustomer, type SignupAttribution } from "../_shared/signup-attribution.ts";
+import { signupBill } from "../_shared/platform-promo-rules.ts";
 
 const LOG = "[signup-payment-intent-v2]";
 const HOUR_MS = 60 * 60 * 1000;
@@ -144,6 +145,24 @@ Deno.serve(async (req) => {
       promo = found.code;
     }
     const promoView = promo ? await publicCodeView(supabase, promo) : null;
+
+    // feat-001 spec 08.12: the card step shows these numbers instead of working
+    // the discount out itself. `startUnix` is a reused subscription's own start,
+    // so its dates match what Stripe will charge; a new one starts today.
+    const billFor = (startUnix?: number | null) =>
+      signupBill(
+        plan.amountCents,
+        trialDays,
+        (startUnix ? new Date(startUnix * 1000) : new Date()).toISOString().slice(0, 10),
+        promo
+          ? {
+            discountType: promo.discount_type,
+            discountValue: Number(promo.discount_value),
+            duration: promo.duration,
+            durationMonths: promo.duration_months ?? null,
+          }
+          : null,
+      );
 
     const mode = meta.mode ?? getSignupStripeMode();
     // The price the super admin pinned on a plan lives in the LIVE Stripe account.
@@ -247,6 +266,7 @@ Deno.serve(async (req) => {
                 intentType: "setup",
                 trialDays,
                 trialEndsAt: trialEndIso(existing),
+                bill: billFor(existing.start_date),
               });
             }
             console.warn(`${LOG} trialing ${existing.id} has no usable setup intent — replacing it`);
@@ -275,6 +295,7 @@ Deno.serve(async (req) => {
                 intentType: "payment",
                 trialDays: 0,
                 trialEndsAt: null,
+                bill: billFor(existing.start_date),
               });
             }
             console.warn(`${LOG} subscription ${existing.id} is incomplete with no client secret`);
@@ -346,7 +367,7 @@ Deno.serve(async (req) => {
       if (promo) {
         const productId = await productForPrice(stripe as never, priceId);
         const { couponId } = await ensureCodeCoupon(supabase, stripe as never, promo, {
-          account: "uae", mode, productId, trialDays,
+          account: "uae", mode, productId, trialDays, signupISO: new Date().toISOString().slice(0, 10),
         });
         discounts = [{ coupon: couponId }];
       }
@@ -419,6 +440,7 @@ Deno.serve(async (req) => {
         intentType: trialDays > 0 ? "setup" : "payment",
         trialDays,
         trialEndsAt: trialEndIso(subscription),
+        bill: billFor(subscription.start_date),
       });
     } catch (e) {
       console.error(`${LOG} Stripe call failed:`, e);

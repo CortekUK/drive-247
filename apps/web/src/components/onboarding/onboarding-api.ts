@@ -10,6 +10,7 @@ import {
   SIGNUP_ERROR_COPY,
   type OnboardingError,
   type ProvisionMilestone,
+  type SignupBillView,
   type SignupErrorCode,
   type SlugCheckResult,
 } from "./onboarding-types";
@@ -134,6 +135,8 @@ export interface PaymentIntentResponse {
   trialDays?: number;
   /** When the trial ends and the card is first charged (ISO), or null. */
   trialEndsAt?: string | null;
+  /** signup-payment-intent-v2 only: the money figures the card step shows. */
+  bill?: SignupBillView | null;
 }
 export interface ResumeSignupDTO {
   planId: SignupPlanId;

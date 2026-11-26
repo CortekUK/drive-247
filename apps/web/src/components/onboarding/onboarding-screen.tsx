@@ -605,6 +605,7 @@ export function OnboardingScreen() {
                           intentType={state.payment.intentType}
                           trialDays={state.payment.trialDays}
                           trialEndsAt={state.payment.trialEndsAt}
+                          bill={state.payment.bill}
                           onApplyPromo={blackFriday ? undefined : applyPromoCode}
                           ownerName={state.account?.fullName ?? ""}
                           companyName={state.business.companyName}

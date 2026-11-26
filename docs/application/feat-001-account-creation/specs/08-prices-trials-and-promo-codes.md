@@ -31,8 +31,13 @@ touch this math; this spec records it so it can be proved.
 - 08.11 Removing the code returns the full price.
 - 08.12 *(Defect to fix)* The discount is worked out in two places: in the browser for display
   (`apps/web/src/lib/black-friday.ts`, `promo-offer.ts`) and on the server for Stripe
-  (`_shared/platform-promo.ts`). The one place is `_shared/platform-promo-rules.ts`; the card step
-  shows the amount the server returns.
+  (`_shared/platform-promo.ts`). The one place is `_shared/platform-promo-rules.ts`
+  (`signupBill`); the card step shows the chosen plan's amount the server returns (`bill`). The
+  browser keeps a preview only for prices the server has not been asked about yet (the pricing
+  cards, the "Change plan" list), and that preview gives the same cents as the server for every
+  worked example (08.18).
+- 08.18 The browser's previews (`blackFridayCents`, `discountedPrice`) give the same whole cents as
+  `promoBillCents` for every row, and never a fraction of a cent.
 - 08.13 *(Defect to fix)* With a trial, the coupon is stretched by `floor(trialDays / 30)` months
   (`deferredCouponMonths`). Stripe counts a repeating coupon's months from the subscription start
   and stops at that end date, so a 60-day trial gets 4 discounted bills (row 13). The coupon length

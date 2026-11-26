@@ -23,7 +23,7 @@ import { getSubscriptionStripeClientForAccount, type SubscriptionAccount } from 
 import { siteBaseUrl } from "./subscription-link.ts";
 import {
   brandPrefixFrom,
-  deferredCouponMonths,
+  couponMonthsFor,
   discountText,
   durationText,
   effectiveTiers,
@@ -31,7 +31,6 @@ import {
   LIVE_SUBSCRIPTION_STATUSES,
   normalizePromoCode,
   planTierDiscounts,
-  promoVariant,
   referralCodeCandidate,
   resolveTier,
   tierCouponId,
@@ -343,10 +342,25 @@ export async function ensureCodeCoupon(
   supabase: any,
   stripe: Stripe,
   code: PromoCodeRow,
-  ctx: { account: SubscriptionAccount; mode: StripeMode; productId: string; trialDays: number },
+  ctx: {
+    account: SubscriptionAccount;
+    mode: StripeMode;
+    productId: string;
+    trialDays: number;
+    /** The subscription's start, "YYYY-MM-DD" UTC. Defaults to today. */
+    signupISO?: string;
+  },
 ): Promise<{ couponId: string; variant: string }> {
   const stretches = code.duration !== "forever" && ctx.trialDays > 0;
-  const variant = stretches ? promoVariant(ctx.trialDays) : "standard";
+  const months = code.duration === "once" ? 1 : (code.duration_months ?? 1);
+  // feat-001 spec 08.13: the coupon's length comes from the real bill dates, so
+  // "3 months" is 3 paid bills. The variant names the extra months, so a coupon
+  // already minted for the same stretch is reused (14-day trials: deferred_0m,
+  // exactly as before).
+  const extraMonths = stretches
+    ? couponMonthsFor(ctx.signupISO ?? new Date().toISOString().slice(0, 10), ctx.trialDays, months) - months
+    : 0;
+  const variant = stretches ? `deferred_${extraMonths}m` : "standard";
 
   const { data: existing, error: readError } = await supabase
     .from("platform_promo_code_stripe")
@@ -366,7 +380,6 @@ export async function ensureCodeCoupon(
     ownerName = owner?.company_name ?? null;
   }
 
-  const months = code.duration === "once" ? 1 : (code.duration_months ?? 1);
   const duration: Stripe.CouponCreateParams.Duration = stretches ? "repeating" : code.duration;
   const params: Stripe.CouponCreateParams = {
     ...(code.discount_type === "percent"
@@ -374,7 +387,7 @@ export async function ensureCodeCoupon(
       : { amount_off: Math.round(code.discount_value * 100), currency: (code.currency || "usd").toLowerCase() }),
     duration,
     ...(duration === "repeating"
-      ? { duration_in_months: stretches ? deferredCouponMonths(months, ctx.trialDays) : months }
+      ? { duration_in_months: months + extraMonths }
       : {}),
     applies_to: { products: [ctx.productId] },
     name: codeCouponName(code, ownerName),

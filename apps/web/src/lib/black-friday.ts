@@ -90,9 +90,15 @@ export function signupCodeFor(carried: string | null, offerOn: boolean): string 
   return offerOn ? BLACK_FRIDAY_CODE : carried;
 }
 
-/** 30% off, rounded to the cent like Stripe rounds the invoice. */
+/**
+ * 30% off in whole cents, half up: a PREVIEW for plans the server has not been
+ * asked about yet (the "Change plan" list). The card step shows the server's
+ * figure (feat-001 spec 08.12). Same rule as `promoBillCents` in
+ * supabase/functions/_shared/platform-promo-rules.ts; the spec 08 eval checks
+ * the two agree. (It used to return a fraction of a cent for odd amounts.)
+ */
 export function blackFridayCents(amountCents: number): number {
-  return Math.round(amountCents * (100 - BLACK_FRIDAY_PERCENT)) / 100;
+  return Math.floor((amountCents * (100 - BLACK_FRIDAY_PERCENT) + 50) / 100);
 }
 
 /** "$160.30" / "$229" from cents. */

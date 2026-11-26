@@ -696,6 +696,21 @@ export async function mockFunction(name: string, body: unknown): Promise<unknown
         intentType: trial ? "setup" : "payment",
         trialDays,
         trialEndsAt: trial ? new Date(Date.now() + trialDays * 86_400_000).toISOString() : null,
+        // The money figures, the way signup-payment-intent-v2 sends them
+        // (feat-001 spec 08.12): the card step shows these.
+        bill: (() => {
+          const discounted = promo ? discountedCents(terms.amountCents, promo) : terms.amountCents;
+          const discountedBills = !promo ? 0 : promo.duration === "forever" ? null : promo.duration === "once" ? 1 : (promo.durationMonths ?? 1);
+          const first = discountedBills === 0 ? terms.amountCents : discounted;
+          return {
+            todayCents: trial ? 0 : first,
+            firstChargeAt: new Date(Date.now() + trialDays * 86_400_000).toISOString().slice(0, 10),
+            firstChargeCents: first,
+            discountedBills,
+            discountedBillCents: discounted,
+            fullPriceCents: terms.amountCents,
+          };
+        })(),
       };
     }
 

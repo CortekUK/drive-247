@@ -243,6 +243,7 @@ export function PaymentStep({
   intentType = "payment",
   trialDays = 0,
   trialEndsAt = null,
+  bill = null,
   onApplyPromo,
   ownerName = "",
   companyName = "",
@@ -607,7 +608,11 @@ export function PaymentStep({
             <span className="text-muted-foreground line-through">
               <span className="sr-only">Was </span>${plan.priceUsd}
             </span>{" "}
-            <span className="font-semibold">{formatUsdCents(blackFridayCents(plan.amountCents))}/mo</span> for{" "}
+            {/* The server's figure (feat-001 spec 08.12); the preview only
+                covers an older deploy that does not send `bill`. */}
+            <span className="font-semibold">
+              {formatUsdCents(bill?.discountedBillCents ?? blackFridayCents(plan.amountCents))}/mo
+            </span>{" "}for{" "}
             {BLACK_FRIDAY_MONTHS} months, then ${plan.priceUsd}.
           </p>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{BLACK_FRIDAY_FINE_PRINT}</p>

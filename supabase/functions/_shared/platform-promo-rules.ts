@@ -141,41 +141,20 @@ export function planTierDiscounts(
   return { changed: !unchanged, discounts };
 }
 
-/**
- * Whole extra months a trial needs on a repeating coupon, so that "3 months"
- * means exactly 3 PAID bills.
+/*
+ * How long a code's coupon runs on a checkout with a free trial is
+ * `couponMonthsFor` (below, feat-001 spec 08.13). It replaced "whole months of
+ * trial" (trial days / 30), which gave 30-, 60-, 61- and 90-day trials the
+ * wrong number of discounted bills. A repeating coupon counts from signup and
+ * stops at its end date: WELCOME20 on Ashkun's subscription ran 23 Nov to 23 Mar
+ * and covered 7 Dec, 7 Jan, 7 Feb AND 7 Mar (Neema, 2026-11-25).
  *
- * A repeating coupon counts months from signup, not from the first paid bill.
- * With a 14-day trial the bills fall on day 14, then a month apart, so a
- * 3-month coupon from signup already covers bills 1 to 3 and ends before the
- * 4th. Rounding the trial UP to a whole month (the old rule) gave every trial
- * signup a 4th discounted bill nobody advertised: WELCOME20 on Ashkun's
- * subscription runs 23 Nov to 23 Mar and covers 7 Dec, 7 Jan, 7 Feb AND 7 Mar
- * (Neema, 2026-11-25: "set to 3 months from signup").
- *
- * So only whole months of trial count: a trial under 30 days adds nothing, a
- * 30 to 59 day trial adds one. Coupons already on subscriptions (variant
- * deferred_1m) are left exactly as they are.
+ * The Stripe mirror table's variant is `standard` without a trial and
+ * `deferred_{k}m` with one (k = the extra months), even at k = 0, so a "once"
+ * code's trial coupon (repeating, 1 month, to land on the first PAID bill)
+ * never shares a row with its no-trial `standard` coupon (duration once, which
+ * would be spent on the $0 trial invoice). 14-day trials stay deferred_0m.
  */
-export function trialExtraMonths(trialDays: number): number {
-  return Math.max(0, Math.floor(trialDays / 30));
-}
-
-/** The coupon's duration_in_months on a checkout that starts with a free trial. */
-export function deferredCouponMonths(months: number, trialDays: number): number {
-  return months + trialExtraMonths(trialDays);
-}
-
-/**
- * Variant name for the Stripe mirror table: `standard` without a trial,
- * `deferred_{k}m` with one. Always `deferred_` once there is a trial, even at
- * k = 0, so a "once" code's trial coupon (repeating, 1 month, to land on the
- * first PAID bill) never shares a row with its no-trial `standard` coupon
- * (duration once, which would be spent on the $0 trial invoice).
- */
-export function promoVariant(trialDays: number): string {
-  return trialDays > 0 ? `deferred_${trialExtraMonths(trialDays)}m` : "standard";
-}
 
 /* ------------------------------------------------------------------------- */
 /* feat-001 spec 08: the one place the signup bill math lives.               */
@@ -271,6 +250,41 @@ export function couponMonthsFor(signupISO: string, trialDays: number, months: nu
 export function discountedBillDates(signupISO: string, trialDays: number, months: number): string[] {
   const end = addMonthsKeepingDay(signupISO, couponMonthsFor(signupISO, trialDays, months));
   return paidBillDates(signupISO, trialDays, months + 2).filter((day) => day < end);
+}
+
+/** What the card step shows about the money (spec 08.3, 08.4, 08.12). */
+export interface SignupBill {
+  /** Charged when the card is entered: 0 during a free trial. */
+  todayCents: number;
+  /** "YYYY-MM-DD" of the first paid bill. */
+  firstChargeAt: string;
+  firstChargeCents: number;
+  /** How many paid bills get the discount: 0 without a code, null for "forever". */
+  discountedBills: number | null;
+  /** One discounted bill (equals fullPriceCents without a code). */
+  discountedBillCents: number;
+  /** The plan price, charged once the discount ends. */
+  fullPriceCents: number;
+}
+
+export function signupBill(
+  priceCents: number,
+  trialDays: number,
+  signupISO: string,
+  promo: { discountType: PromoDiscountType; discountValue: number; duration: PromoDuration; durationMonths: number | null } | null,
+): SignupBill {
+  const [firstChargeAt] = paidBillDates(signupISO, trialDays, 1);
+  const discountedBillCents = promo ? promoBillCents(priceCents, promo.discountType, promo.discountValue) : priceCents;
+  const discountedBills = !promo ? 0 : promo.duration === "forever" ? null : promo.duration === "once" ? 1 : (promo.durationMonths ?? 1);
+  const firstChargeCents = discountedBills === 0 ? priceCents : discountedBillCents;
+  return {
+    todayCents: trialDays > 0 ? 0 : firstChargeCents,
+    firstChargeAt,
+    firstChargeCents,
+    discountedBills,
+    discountedBillCents,
+    fullPriceCents: priceCents,
+  };
 }
 
 /** What a stored code looks like (matches the table's CHECK). */

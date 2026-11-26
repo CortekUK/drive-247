@@ -24,10 +24,13 @@ statement("08.8", "BF30 ends on 1 Dec 2026 04:59:59 UTC and is 30% for 3 months"
   equal(new Date(c.expires_at).toISOString(), "2026-12-01T04:59:59.000Z", "expires_at");
 });
 
-statement("08.12", "The card step shows the server's amounts, not its own discount math", async () => {
+statement("08.12", "The card step shows the server's amount; the server works it out in the one place", async () => {
   const step = source("apps/web/src/components/onboarding/steps/payment-step.tsx");
-  ok(!/blackFridayCents|discountedPrice/.test(step), "payment-step.tsx still works the discount out itself");
-  ok(/firstChargeCents/.test(step), "payment-step.tsx does not show firstChargeCents from the server");
+  ok(/bill\?\.discountedBillCents\s*\?\?/.test(step), "the BF30 box does not show the server's bill.discountedBillCents");
+  const fnSrc = source("supabase/functions/signup-payment-intent-v2/index.ts");
+  ok(/signupBill\(/.test(fnSrc) && (fnSrc.match(/bill:\s*billFor\(/g) || []).length >= 3, "signup-payment-intent-v2 does not return `bill` on every card-step answer");
+  const promo = source("supabase/functions/_shared/platform-promo.ts");
+  ok(/couponMonthsFor\(/.test(promo) && !/deferredCouponMonths|promoVariant\(/.test(promo), "the coupon length is not taken from couponMonthsFor");
 });
 
 await run(import.meta.url);

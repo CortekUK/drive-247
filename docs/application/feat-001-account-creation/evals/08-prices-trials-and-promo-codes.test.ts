@@ -4,6 +4,8 @@
 //   discountedBillDates(signupISO, trialDays, months) -> the dates of the bills that get the discount
 import { describe, expect, it } from "vitest";
 import * as rules from "../../../../supabase/functions/_shared/platform-promo-rules";
+import { blackFridayCents } from "../../../../apps/web/src/lib/black-friday";
+import { discountedPrice } from "../../../../apps/web/src/lib/promo-offer";
 
 const need = (name: string) => {
   const f = (rules as Record<string, unknown>)[name];
@@ -83,6 +85,39 @@ describe("08 prices, trials and promo codes", () => {
     [18, 12900, 200, 0],
   ])("08.15 #%i %i cents with $%i off is %i cents", (_row, cents, dollars, expected) => {
     expect(need("promoBillCents")(cents, "fixed", dollars)).toBe(expected);
+  });
+
+  // 08.18: the browser's previews agree with the server's math, to the cent.
+  it.each([[12900], [22900], [34900], [9999], [5], [1], [0], [12345], [418800]])(
+    "08.18 #%i cents: the BF30 preview equals the server's bill",
+    (cents) => {
+      const server = rules.promoBillCents(cents, "percent", 30);
+      expect(blackFridayCents(cents)).toBe(server);
+      expect(Number.isInteger(blackFridayCents(cents))).toBe(true);
+      expect(Math.round(discountedPrice(cents / 100, { discountType: "percent", discountValue: 30 }) * 100)).toBe(server);
+    },
+  );
+
+  it("08.18 #fixed the fixed-amount preview equals the server's bill", () => {
+    for (const [cents, dollars] of [[12900, 20], [12900, 200], [999, 9.99], [5, 0.01]]) {
+      expect(Math.round(discountedPrice(cents / 100, { discountType: "fixed", discountValue: dollars }) * 100))
+        .toBe(rules.promoBillCents(cents, "fixed", dollars));
+    }
+  });
+
+  it("08.3 #signupBill a 14-day trial with BF30: $0 today, the discounted bill on day 14", () => {
+    const bf30 = { discountType: "percent" as const, discountValue: 30, duration: "repeating" as const, durationMonths: 3 };
+    expect(rules.signupBill(22900, 14, "2026-11-26", bf30)).toEqual({
+      todayCents: 0, firstChargeAt: "2026-12-10", firstChargeCents: 16030,
+      discountedBills: 3, discountedBillCents: 16030, fullPriceCents: 22900,
+    });
+  });
+
+  it("08.4 #signupBill no trial, no code: the plan price today", () => {
+    expect(rules.signupBill(12900, 0, "2026-11-26", null)).toEqual({
+      todayCents: 12900, firstChargeAt: "2026-11-26", firstChargeCents: 12900,
+      discountedBills: 0, discountedBillCents: 12900, fullPriceCents: 12900,
+    });
   });
 
   it("08.6 #refuse broken input is refused, never charged", () => {

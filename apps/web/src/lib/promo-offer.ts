@@ -15,10 +15,19 @@ export interface PromoOffer {
   currency: string;
 }
 
-/** A plan price after the offer, in whole dollars (never below zero). */
+/**
+ * A plan price after the offer, in dollars (never below zero). A preview for
+ * the pricing cards. Worked in whole cents, half up, with the same rule as
+ * `promoBillCents` in supabase/functions/_shared/platform-promo-rules.ts so a
+ * card never shows a cent the bill will not (feat-001 spec 08.6).
+ */
 export function discountedPrice(priceUsd: number, offer: Pick<PromoOffer, "discountType" | "discountValue">): number {
-  const off = offer.discountType === "percent" ? (priceUsd * offer.discountValue) / 100 : offer.discountValue;
-  return Math.max(0, Math.round((priceUsd - off) * 100) / 100);
+  const cents = Math.round(priceUsd * 100);
+  const after =
+    offer.discountType === "percent"
+      ? Math.floor((cents * (10000 - Math.round(offer.discountValue * 100)) + 5000) / 10000)
+      : cents - Math.round(offer.discountValue * 100);
+  return Math.max(0, after) / 100;
 }
 
 /** The banner line: "Sunset Rentals invited you: 20% off for your first 3 months." */
