@@ -403,7 +403,7 @@ function RetirementSection({
 
   if (!open) {
     return (
-      <div className="flex items-center justify-between gap-4 px-1 pb-2">
+      <div data-tour="vehicle-retire" className="flex items-center justify-between gap-4 px-1 pb-2">
         <p className="text-xs text-muted-foreground">
           Sold it? Record the sale and take it off the fleet. Nothing is deleted.
         </p>

@@ -221,7 +221,7 @@ export function RentalDrafts() {
   return (
     // Phones: one row that swipes sideways, so ten drafts do not push the list
     // a screen further down. Every chip is still there.
-    <div className="no-scrollbar flex flex-wrap items-center gap-2 max-sm:-mx-4 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:px-4">
+    <div data-tour="rental-drafts" className="no-scrollbar flex flex-wrap items-center gap-2 max-sm:-mx-4 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:px-4">
       <span className="flex shrink-0 items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
         <FilePen className="size-3.5" />
         Drafts

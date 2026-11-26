@@ -77,6 +77,7 @@ import { timezoneCountry, timezoneFlag } from './timezone-flags';
 import { AutoSkeleton } from '@/components/skeleton-v2/auto-skeleton';
 import { useSkeletonLoading } from '@/hooks/use-skeleton-loading';
 import { useAvailabilitySave } from './use-availability-save';
+import { TabTourButton } from '@/components/onboarding/tab-tour-button';
 import { useIsLean } from '@/lib/lean-context';
 import { useForcedEmptyState } from '@/hooks/use-forced-empty-state';
 import { BlockedDatesEmptyState } from '@/components/empty-states/blocked-dates-empty-state';
@@ -364,7 +365,7 @@ export function AvailabilityV2() {
             directly under the title and gets that row back.
 
             Order: the settings that shape the week (weekly hours — Open 24
-            hours is inside its dialog — and timezone) · the week navigator. No tour button, no Save, no Reset
+            hours is inside its dialog, and timezone) · the week navigator. No Save, no Reset
             and no save-status marker (Ghulam, Oct 1 2026): every edit saves
             itself (see AUTOSAVE above) and only a failure speaks up, as a toast. */}
         <div
@@ -372,6 +373,7 @@ export function AvailabilityV2() {
           data-tour="availability-controls"
           className={`flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-1 sm:justify-end ${HEADER_ACTIONS_V2} sm:max-lg:h-auto sm:max-lg:basis-full sm:max-lg:justify-start`}
         >
+          <TabTourButton tour="availability" />
           {/* The weekly pattern opens in its dialog; the tooltip carries the
               one-line summary the old pill showed. `availability-pattern` is
               the tour's anchor for the pattern step. */}
@@ -569,7 +571,7 @@ export function AvailabilityV2() {
           pattern is deliberate and occasional; it does not need to occupy a
           third of the workspace while somebody looks at next week. */}
       <Dialog open={hoursOpen} onOpenChange={setHoursOpen}>
-        <DialogContent className={cn("max-h-[85vh] overflow-y-auto no-scrollbar sm:max-w-[520px]", PHONE_SCREEN_DIALOG, "max-sm:overflow-y-auto max-sm:px-4 max-sm:pt-[calc(env(safe-area-inset-top,0px)+1.5rem)] max-sm:pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)]")}>
+        <DialogContent data-tour="availability-hours-dialog" className={cn("max-h-[85vh] overflow-y-auto no-scrollbar sm:max-w-[520px]", PHONE_SCREEN_DIALOG, "max-sm:overflow-y-auto max-sm:px-4 max-sm:pt-[calc(env(safe-area-inset-top,0px)+1.5rem)] max-sm:pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)]")}>
           <DialogHeader>
             <DialogTitle>Weekly hours</DialogTitle>
           </DialogHeader>
@@ -595,7 +597,7 @@ export function AvailabilityV2() {
             />
           </label>
           <WeeklyHoursCard defaults={defaults} onChange={setDraft} canEdit={editable} />
-          <p className="text-[12px] text-muted-foreground">
+          <p data-tour="availability-hours-saves" className="text-[12px] text-muted-foreground">
             Your changes save automatically when you close this.
           </p>
         </DialogContent>

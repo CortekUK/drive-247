@@ -125,6 +125,7 @@ export function ReportsView({
         {REPORTS.map((report) => (
           <button
             key={report.id}
+            data-tour="insights-report"
             type="button"
             onClick={() => setViewing(report.id)}
             disabled={!data}
@@ -157,7 +158,7 @@ export function ReportsView({
         {/* Phones: a floating card no taller than the screen that scrolls inside.
             Taller than the screen and centred, its top (title, close) sat
             above the screen where nothing could scroll to it. */}
-        <DialogContent className="sm:max-w-4xl max-sm:max-h-[calc(100dvh-2rem)] max-sm:overflow-y-auto max-sm:overscroll-contain">
+        <DialogContent data-tour="insights-report-dialog" className="sm:max-w-4xl max-sm:max-h-[calc(100dvh-2rem)] max-sm:overflow-y-auto max-sm:overscroll-contain">
           {viewed && opened ? (
             <>
               <DialogHeader>
@@ -173,7 +174,7 @@ export function ReportsView({
                   </div>
                   {/* The downloads sit with the title — the reason most people
                       open a report. `mr-10` clears the dialog's close button. */}
-                  <div className="mr-10 flex shrink-0 flex-wrap items-center gap-1.5 max-sm:mr-0 max-sm:basis-full max-sm:[&>button]:h-9 max-sm:[&>button]:flex-1">
+                  <div data-tour="insights-report-downloads" className="mr-10 flex shrink-0 flex-wrap items-center gap-1.5 max-sm:mr-0 max-sm:basis-full max-sm:[&>button]:h-9 max-sm:[&>button]:flex-1">
                     <Button size="sm" variant="outline" className="h-7 gap-1 px-2.5 text-xs [&_svg]:size-3.5" onClick={() => actions.pdf(opened.id)} disabled={busyPdf}>
                       {busyPdf ? (
                           <Loader2 data-icon="inline-start" className="animate-spin" />

@@ -153,7 +153,7 @@ export function ProfitCalculator({
        card fills the column and the parts spread through it. */
     <section className="flex flex-col gap-5 overflow-hidden rounded-4xl bg-card p-3.5 xl:!overflow-hidden [@media(max-height:860px)]:gap-3 ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(0_0_0/0.05),0_12px_32px_-16px_rgb(0_0_0/0.18)] dark:ring-foreground/15 dark:shadow-none xl:h-full xl:justify-between [&>*:not(:first-child)]:px-1">
       {/* ── Display ─────────────────────────────────────────────────────── */}
-      <div className="relative shrink-0 overflow-hidden rounded-3xl bg-primary px-6 pt-5 pb-5 text-primary-foreground [@media(max-height:860px)]:px-5 [@media(max-height:860px)]:pt-4 [@media(max-height:860px)]:pb-4">
+      <div data-tour="insights-calc-display" className="relative shrink-0 overflow-hidden rounded-3xl bg-primary px-6 pt-5 pb-5 text-primary-foreground [@media(max-height:860px)]:px-5 [@media(max-height:860px)]:pt-4 [@media(max-height:860px)]:pb-4">
         {/* Quiet decoration: faint concentric rings off the top-right corner,
             in the on-accent ink, so the display is never a flat slab. */}
         <svg aria-hidden className="pointer-events-none absolute -top-16 -right-16 size-56 opacity-[0.14]" viewBox="0 0 200 200">
@@ -209,7 +209,7 @@ export function ProfitCalculator({
       {/* Rows are never forced into the space left: a squeezed row overlaps
           the one below it. They take their own height and grow when there is
           more. */}
-      <div className="grid grid-cols-2 gap-3">
+      <div data-tour="insights-calc-keys" className="grid grid-cols-2 gap-3">
         <Key label="Cars" hint="on the fleet" value={inputs.cars} max={carsMax} onChange={set('cars')} />
         <Key
           label="Days rented"
@@ -240,7 +240,7 @@ export function ProfitCalculator({
       </div>
 
       {/* ── Function keys ───────────────────────────────────────────────── */}
-      <div className="flex shrink-0 flex-wrap gap-2 px-1">
+      <div data-tour="insights-calc-functions" className="flex shrink-0 flex-wrap gap-2 px-1">
         {FUNCTIONS.map((f) => (
           <button
             key={f.label}
@@ -476,7 +476,7 @@ function Knob({
 function BreakEven({ breakEven, days }: { breakEven: number | null; days: number }) {
   const cover = breakEven == null ? 0 : Math.min(30, Math.ceil(breakEven));
   return (
-    <div className="shrink-0 px-1">
+    <div data-tour="insights-calc-breakeven" className="shrink-0 px-1">
       <div className="flex gap-[3px]" aria-hidden>
         {Array.from({ length: 30 }, (_, i) => {
           const rented = i < days;

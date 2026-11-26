@@ -264,7 +264,7 @@ export function ReceiptView({
 
       {/* Actions, off the paper. */}
       <div className="flex justify-center print:hidden">
-        <Button onClick={() => window.print()} className="rounded-xl">
+        <Button onClick={() => window.print()} className="rounded-xl" data-tour="receipt-print">
           <Printer className="h-4 w-4" />
           Print receipt
         </Button>

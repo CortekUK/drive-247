@@ -393,12 +393,14 @@ export function StageInsurance({ detail, onStage, refetch }: StageProps) {
       title="Insurance"
       description="Cover for the hire — Bonzah, or the customer's own policy checked by Trax."
       action={
-        <StageAction
-          icon={ShieldCheck}
-          label={buyLabel}
-          onClick={openBuy}
-          disabledReason={canBuy && !eligibilityLoading ? null : (blockedReason ?? "Checking whether Bonzah can cover this car…")}
-        />
+        <span data-tour="rental-insurance-buy" className="inline-flex">
+          <StageAction
+            icon={ShieldCheck}
+            label={buyLabel}
+            onClick={openBuy}
+            disabledReason={canBuy && !eligibilityLoading ? null : (blockedReason ?? "Checking whether Bonzah can cover this car…")}
+          />
+        </span>
       }
     >
       {/* Island layout, the Customer stage's grammar: the two ways a hire is
@@ -446,7 +448,7 @@ export function StageInsurance({ detail, onStage, refetch }: StageProps) {
 
         {/* ── the customer's own policy, checked by Trax ──────────────────── */}
         <Surface className="flex min-h-0 flex-1 flex-col p-5">
-          <div className="flex items-center gap-2.5 max-lg:flex-wrap max-lg:gap-y-2">
+          <div data-tour="rental-own-policy" className="flex items-center gap-2.5 max-lg:flex-wrap max-lg:gap-y-2">
             <h3 className="font-heading text-sm font-semibold">Customer&rsquo;s own policy</h3>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-light px-2 py-0.5 text-[11px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
               <TraxMark size="xs" className="-ml-1 size-4" />

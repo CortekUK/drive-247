@@ -936,7 +936,7 @@ export function AgreementTemplatesSectionV2({
             </label>
           )}
           {inDialog && canEdit && !loading && templates.length > 0 && (
-            <Button type="button" onClick={() => void startCreate()} disabled={creating} className="sm:order-last">
+            <Button data-tour="agreement-templates-new" type="button" onClick={() => void startCreate()} disabled={creating} className="sm:order-last">
               {creating ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Plus data-icon="inline-start" />}
               {creating ? "Creating…" : "New template"}
             </Button>

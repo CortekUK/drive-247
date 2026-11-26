@@ -182,6 +182,7 @@ export function AgreementsListTableV2({
         onOpen={onView}
         phoneCards
         rowProps={(row) => ({
+          "data-tour": "agreement-row",
           "data-agreement-kind": row.kind,
           "data-agreement-status": row.status,
           "aria-label": `Open the agreement for ${row.customerName || row.customerEmail || "this agreement"}`,

@@ -184,7 +184,7 @@ export function CardManagerDialogV2({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={`flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 ${inForm ? "sm:max-w-3xl" : "sm:max-w-xl"}`}>
+      <DialogContent data-tour="billing-cards" className={`flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 ${inForm ? "sm:max-w-3xl" : "sm:max-w-xl"}`}>
         <DialogHeader className="shrink-0 px-7 pb-2 pt-7 text-left">
           <DialogTitle>{editingCard ? "Edit card" : adding ? "Add a card" : "Cards"}</DialogTitle>
           <DialogDescription>

@@ -23,7 +23,7 @@ export function AgreementTemplatesDialogV2({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(88dvh,56rem)] flex-col gap-5 sm:max-w-5xl">
+      <DialogContent data-tour="agreement-templates-dialog" className="flex max-h-[min(88dvh,56rem)] flex-col gap-5 sm:max-w-5xl">
         <DialogHeader className="pr-10">
           <DialogTitle className="font-heading text-xl font-semibold tracking-tight">{MANAGE_TEMPLATES_TITLE}</DialogTitle>
           <DialogDescription>{TEMPLATES_SECTION_DESCRIPTION}</DialogDescription>

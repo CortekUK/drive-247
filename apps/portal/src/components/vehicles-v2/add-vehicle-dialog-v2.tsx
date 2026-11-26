@@ -589,6 +589,7 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
         </DialogTrigger>
       )}
       <DialogContent
+        data-tour="add-vehicle-dialog"
         className={cn("gap-0 overflow-hidden p-0 sm:max-w-[720px]", PHONE_SCREEN_DIALOG)}
         style={FORM_DIALOG_WASH}
         showCloseButton={false}
@@ -659,7 +660,7 @@ export function AddVehicleDialogV2({ open, onOpenChange }: { open?: boolean; onO
               {screenLine}
             </p>
 
-            <div className="mt-5 grid w-full grid-cols-2 gap-x-5 gap-y-1">
+            <div data-tour="add-vehicle-fields" className="mt-5 grid w-full grid-cols-2 gap-x-5 gap-y-1">
               {step === 0 && (
                 <>
                   <Cell label="Make" required error={err("make")}>{text("make", "e.g. Toyota")}</Cell>

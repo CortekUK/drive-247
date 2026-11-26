@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { HEADER_ACTIONS_V2 } from "@/components/shared/header-icon-button-v2";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { TabTourButton } from "@/components/onboarding/tab-tour-button";
 import { InvoicesTab } from "./invoices-tab";
 
 /**
@@ -37,7 +38,10 @@ export function FinancesView() {
             Every invoice, the payments made against it, and a receipt for each
           </p>
         </div>
-        <div ref={setActionsSlot} className={`flex items-center gap-2 ${HEADER_ACTIONS_V2}`} />
+        <div className={`flex items-center gap-2 ${HEADER_ACTIONS_V2}`}>
+          <TabTourButton tour="finances" />
+          <div ref={setActionsSlot} className="flex flex-1 items-center gap-2 sm:flex-none" />
+        </div>
       </div>
 
       <InvoicesTab actionsSlot={actionsSlot} />

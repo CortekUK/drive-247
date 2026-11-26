@@ -305,7 +305,9 @@ export function StageVehicle({ detail, refetch }: StageProps) {
           /* Same place, same grammar as Customer's "Clear customer". Allowed
              while the rental is pending or active (v1's rule — a car can be
              swapped mid-hire, e.g. a breakdown). */
-          <StageAction icon={X} label="Clear vehicle" onClick={() => setPicking(true)} disabledReason={swapBlocked} />
+          <span data-tour="rental-vehicle-action" className="inline-flex">
+            <StageAction icon={X} label="Clear vehicle" onClick={() => setPicking(true)} disabledReason={swapBlocked} />
+          </span>
         )
       }
     >
@@ -332,7 +334,7 @@ export function StageVehicle({ detail, refetch }: StageProps) {
         <div className="flex h-full min-h-0 flex-col gap-4 max-lg:h-auto">
           {/* ── which car — brief; its full file is one click away ──────── */}
           <Surface className="shrink-0 px-5 py-4">
-            <div className="flex items-center gap-3.5 max-sm:flex-wrap max-sm:gap-y-3">
+            <div data-tour="rental-car" className="flex items-center gap-3.5 max-sm:flex-wrap max-sm:gap-y-3">
               <span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-3xl bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
                 {cover ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -371,6 +373,7 @@ export function StageVehicle({ detail, refetch }: StageProps) {
               photos filling what is left. Mileage and pricing are read-only. */}
               {/* ── mileage — one slim line: the tiers, then the terms ─────────
                   Little to read here, so it gives the height to the photos. */}
+              <div data-tour="rental-vehicle-mileage">
               <Surface className="flex flex-none flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5">
                 <h3 className="w-16 shrink-0 font-heading text-sm font-semibold">Mileage</h3>
                 <TierRow
@@ -437,8 +440,10 @@ export function StageVehicle({ detail, refetch }: StageProps) {
                   />
                 </span>
               </Surface>
+              </div>
 
               {/* ── pricing — the same slim line ──────────────────────────────── */}
+              <div data-tour="rental-vehicle-pricing">
               <Surface className="flex flex-none flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5">
                 <h3 className="w-16 shrink-0 font-heading text-sm font-semibold">Pricing</h3>
                 <TierRow
@@ -462,6 +467,7 @@ export function StageVehicle({ detail, refetch }: StageProps) {
                   {detail.days != null && ` for ${detail.days} ${detail.days === 1 ? "day" : "days"}`}
                 </span>
               </Surface>
+              </div>
 
             {/* ── photos — the car, filling what is left ───────────────────── */}
             <Surface className="flex min-h-0 flex-1 flex-col p-5">

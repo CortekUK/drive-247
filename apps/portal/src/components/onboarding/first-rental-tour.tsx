@@ -10,10 +10,15 @@ import { cn } from '@/lib/utils';
 import { useFirstRentalTour } from '@/hooks/use-first-rental-tour';
 import { useSystemAnnouncementPriority } from '@/lib/announcements/system-priority';
 import { findAnchor, isTourStop, routePathname, type ResolvedStep, type TourAction, type TourSide, type TourStep } from '@/lib/first-rental-tour';
-import { CustomersEmptyArt, VehiclesEmptyArt } from '@/components/illustrations-v2/empty-scenes';
-import { PaymentsEmptyArt } from '@/components/illustrations-v2/scenes/payments';
+import {
+  RentalNeedCarArt,
+  RentalNeedCustomerArt,
+  RentalNeedStripeArt,
+} from '@/components/illustrations-v2/scenes/rental-needs';
 import { MOTION_IN, MOTION_OFFSET, MOTION_OUT } from '@/lib/motion';
 import { endFakeQuickTour } from '@/lib/fake-quick-tour';
+import { useFirstRentalTourEligible } from '@/hooks/use-first-rental-tour';
+import { TourSync } from '@/components/onboarding/tour-sync';
 
 /**
  * The first-rental walkthrough — eleven steps across six pages, canary only.
@@ -57,6 +62,17 @@ import { endFakeQuickTour } from '@/lib/fake-quick-tour';
  * never leaves `idle`, so none of this mounts.
  */
 export function FirstRentalTour({ suppressed = false }: { suppressed?: boolean }) {
+  // Tour progress kept in the database, so it follows the person (Northwind v2 only).
+  const syncEnabled = useFirstRentalTourEligible();
+  return (
+    <>
+      <TourSync enabled={syncEnabled} />
+      <FirstRentalTourLayer suppressed={suppressed} />
+    </>
+  );
+}
+
+function FirstRentalTourLayer({ suppressed }: { suppressed: boolean }) {
   const tour = useFirstRentalTour(suppressed);
   const [mounted, setMounted] = useState(false);
   // The hook steps an untouched run aside in an effect; this keeps it off screen from the
@@ -70,7 +86,7 @@ export function FirstRentalTour({ suppressed = false }: { suppressed?: boolean }
   // The pointed-at thing, as the card layer measured it: the veil leaves it
   // clear. Kept here, not in the card layer, because that layer remounts on
   // every step and the veil must NOT, or the page would flash between steps.
-  const [spot, setSpot] = useState<Rect | null>(null);
+  const [spot, setSpot] = useState<Rect[] | null>(null);
   useEffect(() => {
     // A new page (a tab tour moving on) or the end of the run: no hole.
     if (tour.phase === 'navigating' || tour.phase === 'idle') setSpot(null);
@@ -108,14 +124,18 @@ export function FirstRentalTour({ suppressed = false }: { suppressed?: boolean }
   // the step change (same element, same place in both branches below, so
   // React keeps it). Off while a tab tour navigates.
   const veil = tour.phase !== 'navigating' ? <TourVeil spot={spot} /> : null;
+  // A required run: the page behind takes no clicks, so the only way on is
+  // the card. Transparent, so the look is the same as any other run.
+  const blocker = tour.required ? <div aria-hidden className="fixed inset-0 z-[64]" data-tour-blocker="" /> : null;
 
   if (tour.phase === 'transit' || tour.phase === 'navigating' || tour.phase === 'waiting') {
     return createPortal(
       <>
         {veil}
+        {blocker}
         <TransitPill
           label={tour.steps[tour.index]?.label}
-          onSkip={tour.end}
+          onSkip={tour.required ? undefined : tour.end}
           yieldsToSystem={tour.yieldsToSystem}
         />
       </>,
@@ -127,7 +147,10 @@ export function FirstRentalTour({ suppressed = false }: { suppressed?: boolean }
     return createPortal(
       <>
         {veil}
+        {blocker}
         <TourLayer
+          topic={tour.tabTopic}
+          required={tour.required}
           onSpot={setSpot}
           resolved={tour.current}
           steps={tour.steps}
@@ -183,22 +206,65 @@ const VEIL = 'hsl(0 0% 4% / 0.28)';
 const VEIL_PAD = 6;
 const VEIL_RADIUS = 10;
 
-/** The viewport minus a rounded hole (even-odd), for `clip-path`. */
-function veilPath(r: Rect, viewportW: number, viewportH: number): string {
+/** One rounded hole (a closed sub-path). */
+function holePath(r: Rect, viewportW: number, viewportH: number): string {
   const x = Math.max(0, r.left - VEIL_PAD);
   const y = Math.max(0, r.top - VEIL_PAD);
   const w = Math.min(viewportW, r.left + r.width + VEIL_PAD) - x;
   const h = Math.min(viewportH, r.top + r.height + VEIL_PAD) - y;
   const rad = Math.max(0, Math.min(VEIL_RADIUS, w / 2, h / 2));
-  const hole =
+  return (
     `M${x + rad},${y} H${x + w - rad} A${rad},${rad} 0 0 1 ${x + w},${y + rad} ` +
     `V${y + h - rad} A${rad},${rad} 0 0 1 ${x + w - rad},${y + h} ` +
     `H${x + rad} A${rad},${rad} 0 0 1 ${x},${y + h - rad} ` +
-    `V${y + rad} A${rad},${rad} 0 0 1 ${x + rad},${y} Z`;
-  return `path(evenodd, "M0,0 H${viewportW} V${viewportH} H0 Z ${hole}")`;
+    `V${y + rad} A${rad},${rad} 0 0 1 ${x + rad},${y} Z`
+  );
 }
 
-function TourVeil({ spot }: { spot: Rect | null }) {
+/** The viewport minus rounded holes (even-odd), for `clip-path`. Holes must not overlap. */
+function veilPath(holes: readonly Rect[], viewportW: number, viewportH: number): string {
+  const cut = holes.map((r) => holePath(r, viewportW, viewportH)).join(' ');
+  return `path(evenodd, "M0,0 H${viewportW} V${viewportH} H0 Z ${cut}")`;
+}
+
+const union = (a: Rect, b: Rect): Rect => {
+  const top = Math.min(a.top, b.top);
+  const left = Math.min(a.left, b.left);
+  return {
+    top,
+    left,
+    width: Math.max(a.left + a.width, b.left + b.width) - left,
+    height: Math.max(a.top + a.height, b.top + b.height) - top,
+  };
+};
+
+/**
+ * Holes for the pointed-at things. Two that would touch once padded become
+ * one (even-odd would fill their overlap back in), so neighbouring sidebar
+ * rows read as one block while the phone's Vehicles and Customers tabs, with
+ * Rental between them, stay two.
+ */
+function mergeHoles(rects: readonly Rect[]): Rect[] {
+  const out: Rect[] = [];
+  const near = (a: Rect, b: Rect) =>
+    a.left - VEIL_PAD * 2 <= b.left + b.width &&
+    b.left - VEIL_PAD * 2 <= a.left + a.width &&
+    a.top - VEIL_PAD * 2 <= b.top + b.height &&
+    b.top - VEIL_PAD * 2 <= a.top + a.height;
+  for (const r of rects) {
+    let merged = r;
+    for (let i = out.length - 1; i >= 0; i -= 1) {
+      if (near(out[i], merged)) {
+        merged = union(out[i], merged);
+        out.splice(i, 1);
+      }
+    }
+    out.push(merged);
+  }
+  return out;
+}
+
+function TourVeil({ spot }: { spot: Rect[] | null }) {
   const reduceMotion = useReducedMotion();
   const viewportW = window.innerWidth;
   const viewportH = window.innerHeight;
@@ -212,7 +278,7 @@ function TourVeil({ spot }: { spot: Rect | null }) {
       transition={reduceMotion ? { duration: 0 } : MOTION_IN}
       style={{
         background: VEIL,
-        clipPath: spot ? veilPath(spot, viewportW, viewportH) : undefined,
+        clipPath: spot && spot.length > 0 ? veilPath(spot, viewportW, viewportH) : undefined,
         pointerEvents: 'none',
       }}
     />
@@ -248,6 +314,9 @@ let lastTip: { x: number; y: number } | null = null;
  * the very thing it was describing.)
  */
 function tipFor(r: Rect, side: TourSide): { x: number; y: number } {
+  // A small control (a menu button, a tab): point at its lower right, so the
+  // arrow does not sit on top of the icon it is pointing at.
+  if (r.width < 64 && r.height < 64) return { x: r.left + r.width * 0.74, y: r.top + r.height * 0.8 };
   if (side === 'bottom') return { x: r.left + r.width / 2, y: r.top + r.height * 0.72 };
   if (side === 'top') return { x: r.left + r.width / 2, y: r.top + r.height * 0.3 };
   const inset = Math.min(18, r.width / 3);
@@ -356,34 +425,65 @@ function TourCursor({ x, y, reduceMotion }: { x: number; y: number; reduceMotion
  * rest comes with the rental itself, and the line under the tiles says so.
  */
 const RENTAL_NEEDS = [
-  { id: 'car', label: 'A car', caption: 'With its prices and photos, added in Vehicles.', Art: VehiclesEmptyArt },
-  { id: 'customer', label: 'A customer', caption: 'Who is renting. Bookings on your site add them for you.', Art: CustomersEmptyArt },
-  { id: 'stripe', label: 'Your Stripe account', caption: 'Your customers pay you directly into it. Connect it under Integrations.', Art: PaymentsEmptyArt },
+  { id: 'car', label: 'A car', caption: 'With its prices and photos, added in Vehicles.', Art: RentalNeedCarArt },
+  { id: 'customer', label: 'A customer', caption: 'Who is renting. I check their licence and face.', Art: RentalNeedCustomerArt },
+  { id: 'stripe', label: 'Your Stripe account', caption: 'Customers pay you directly into it. Connect it under Integrations.', Art: RentalNeedStripeArt },
 ] as const;
 
 function RentalNeeds() {
   return (
     <div className="mt-2 flex flex-col gap-3">
-      <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-        {RENTAL_NEEDS.map(({ id, label, caption, Art }) => (
+      <ul className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-2.5" data-tour-rental-needs="">
+        {RENTAL_NEEDS.map(({ id, label, caption, Art }, i) => (
           <li
             key={id}
-            className="flex items-center gap-3 overflow-hidden rounded-lg border border-foreground/[0.08] bg-foreground/[0.02] pr-3 sm:flex-col sm:items-stretch sm:gap-0 sm:pr-0"
+            className="flex items-center gap-3 overflow-hidden rounded-xl border border-foreground/[0.08] bg-card pr-3 sm:flex-col sm:items-stretch sm:gap-0 sm:pr-0"
           >
-            <div className="w-24 shrink-0 bg-card px-2 py-1.5 sm:w-full sm:border-b sm:border-foreground/[0.06] sm:px-3 sm:pb-0 sm:pt-2">
-              <Art className="w-full max-w-[180px]" />
+            <div className="relative w-[118px] shrink-0 self-stretch bg-primary/[0.04] px-1.5 py-1 sm:w-full sm:border-b sm:border-foreground/[0.06] sm:px-2.5 sm:pb-0.5 sm:pt-2 dark:bg-primary/[0.08]">
+              <span className="absolute left-2 top-2 z-[1] inline-flex size-[22px] items-center justify-center rounded-full bg-primary text-[12px] font-semibold tabular-nums text-primary-foreground sm:left-2.5 sm:top-2.5">
+                {i + 1}
+              </span>
+              {/* Short screens (a phone on its side): smaller pictures, so the card fits without scrolling. */}
+              <Art className="flex h-full w-full max-w-[200px] items-center sm:[@media(max-height:560px)]:max-w-[118px]" />
             </div>
-            <div className="flex flex-col gap-0.5 py-2.5 sm:px-3">
-              <span className="text-[13px] font-semibold text-foreground">{label}</span>
-              <span className="text-[12px] leading-snug text-muted-foreground">{caption}</span>
+            <div className="flex min-w-0 flex-col gap-0.5 py-2.5 sm:px-3 sm:pb-3">
+              <span className="text-[14px] font-semibold leading-snug text-foreground">{label}</span>
+              <span className="text-[12.5px] leading-snug text-muted-foreground">{caption}</span>
             </div>
           </li>
         ))}
       </ul>
-      <p className="text-[12.5px] leading-relaxed text-muted-foreground">
+      <p className="text-[12.5px] leading-relaxed text-muted-foreground [@media(max-height:560px)]:leading-snug">
         The driver check, the agreement and insurance come with the rental itself. I will show you where each one
         lives.
       </p>
+    </div>
+  );
+}
+
+/**
+ * The last card's handover to the tab tours: the same compass button the
+ * tabs carry, drawn as it looks, so it is recognised when they meet it.
+ */
+function TabTourHint() {
+  return (
+    <div
+      data-tour-tab-hint=""
+      className="mt-1.5 flex items-start gap-3 rounded-xl border border-primary/25 bg-primary/[0.06] p-3 dark:bg-primary/[0.12]"
+    >
+      <span
+        aria-hidden
+        className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/5 text-primary dark:bg-primary/10 dark:text-[hsl(var(--v2-link,var(--primary)))]"
+      >
+        <Compass className="size-3.5" />
+      </span>
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-[14px] font-semibold leading-snug text-foreground">Every tab has its own tour</span>
+        <span className="text-[13px] leading-snug text-muted-foreground">
+          Look for this button at the top of any tab. Each tour is split into short topics you can take one at a
+          time, whenever you like.
+        </span>
+      </span>
     </div>
   );
 }
@@ -404,9 +504,15 @@ function TourLayer({
   onPause,
   onSpot,
   yieldsToSystem = false,
+  required = false,
+  topic = null,
 }: {
+  /** A tab tour topic: its name above the title, and "2 of 6" in the footer. */
+  topic?: { tourLabel: string; topicTitle: string } | null;
+  /** A required run: no close button, and Esc does nothing. */
+  required?: boolean;
   /** Tells the veil what to leave clear (null: nothing, the card is centred). */
-  onSpot?: (spot: Rect | null) => void;
+  onSpot?: (spot: Rect[] | null) => void;
   resolved: ResolvedStep;
   steps: readonly TourStep[];
   index: number;
@@ -427,6 +533,9 @@ function TourLayer({
 }) {
   const { step, element, notes } = resolved;
   const [rect, setRect] = useState<Rect | null>(null);
+  /** The anchor alone (the cursor points here), and the clear holes. */
+  const [anchorBox, setAnchorBox] = useState<Rect | null>(null);
+  const [holes, setHoles] = useState<Rect[]>([]);
   const [cardH, setCardH] = useState(200);
   const cardRef = useRef<HTMLDivElement>(null);
   const reduceMotion = useReducedMotion();
@@ -447,20 +556,20 @@ function TourLayer({
     }
     // Take in the step's neighbours (`span`): Customers with Vehicles, the
     // money and paperwork rows as one block.
-    let top = box.top;
-    let left = box.left;
-    let right = box.right;
-    let bottom = box.bottom;
+    const own: Rect = { top: box.top, left: box.left, width: box.width, height: box.height };
+    const parts: Rect[] = [own];
+    let all = own;
     for (const selector of step.span ?? []) {
       const other = findAnchor([selector], document);
-      if (!other) continue;
+      if (!other || other === element) continue;
       const o = other.getBoundingClientRect();
-      top = Math.min(top, o.top);
-      left = Math.min(left, o.left);
-      right = Math.max(right, o.right);
-      bottom = Math.max(bottom, o.bottom);
+      const r = { top: o.top, left: o.left, width: o.width, height: o.height };
+      parts.push(r);
+      all = union(all, r);
     }
-    setRect({ top, left, width: right - left, height: bottom - top });
+    setRect(all);
+    setAnchorBox(own);
+    setHoles(mergeHoles(parts));
   }, [element, onAnchorLost, step.span]);
 
   // Measure before paint so the cursor never lands in the wrong place for a
@@ -485,6 +594,22 @@ function TourLayer({
     };
   }, [element, measure]);
 
+  // The phone record dock scrolls with the page, so it can land on the target.
+  // Hide it while it covers what is being pointed at.
+  useEffect(() => {
+    const root = document.documentElement;
+    const dock = document.querySelector('[data-record-dock] > *');
+    const off =
+      !!rect && !!dock && !!element && !element.closest('[data-record-dock]') &&
+      (() => {
+        const d = dock.getBoundingClientRect();
+        return d.top < rect.top + rect.height && d.bottom > rect.top && d.left < rect.left + rect.width && d.right > rect.left;
+      })();
+    if (off) root.setAttribute('data-tour-dock-off', '');
+    else root.removeAttribute('data-tour-dock-off');
+  }, [rect, element]);
+  useEffect(() => () => document.documentElement.removeAttribute('data-tour-dock-off'), []);
+
   // The card's real height, so it is kept inside the viewport by the truth
   // rather than a guess. The equality guard keeps this from looping.
   useLayoutEffect(() => {
@@ -497,7 +622,17 @@ function TourLayer({
   // Bring the anchor into view if it is off screen (a long sidebar, a small
   // laptop). Only on the step change, never on every measure.
   useEffect(() => {
-    element?.scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
+    if (!element) return;
+    const behavior = reduceMotion ? 'auto' : 'smooth';
+    // A phone has no room beside the target, so the card goes above or below it:
+    // a small target near the top or bottom edge is brought to the middle first.
+    const r = element.getBoundingClientRect();
+    const vh = window.innerHeight;
+    const phone = window.innerWidth < 640;
+    const small = r.height < vh * 0.35;
+    const cramped = r.top < vh * 0.15 || r.bottom > vh * 0.62;
+    const fixed = element.closest('[data-mobile-tab-bar], [data-record-dock], header, [data-sidebar="sidebar"]');
+    element.scrollIntoView({ block: phone && small && cramped && !fixed ? 'center' : 'nearest', behavior });
   }, [element, reduceMotion]);
 
   // Clicking the thing being pointed at. On a look-at-this step whose next
@@ -524,8 +659,10 @@ function TourLayer({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        // A step that closes a dialog sends its own Escape; that one is not the operator's.
+        if ((e as KeyboardEvent & { __tour?: boolean }).__tour) return;
         e.preventDefault();
-        onEnd();
+        if (!required) onEnd();
       } else if (e.key === 'ArrowRight') {
         onNext();
       } else if (e.key === 'ArrowLeft') {
@@ -534,7 +671,7 @@ function TourLayer({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onEnd, onNext, onBack]);
+  }, [onEnd, onNext, onBack, required]);
 
   // Tell the veil what to leave clear: the anchor, unless this card is centred.
   useEffect(() => {
@@ -544,8 +681,25 @@ function TourLayer({
       return;
     }
     const tooBig = (rect.width * rect.height) / (window.innerWidth * window.innerHeight) > OVERSIZE;
-    onSpot(tooBig ? null : rect);
-  }, [element, rect, step.side, onSpot]);
+    onSpot(tooBig ? null : holes);
+  }, [element, rect, holes, step.side, onSpot]);
+
+  // A tab tour step can sit beside an open dialog. Radix closes a dialog on a
+  // press or focus outside it, and this card is outside it, so its presses and
+  // focus stop here instead of reaching the document.
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    const stop = (e: Event) => e.stopPropagation();
+    card.addEventListener('pointerdown', stop);
+    card.addEventListener('focusin', stop);
+    card.addEventListener('focusout', stop);
+    return () => {
+      card.removeEventListener('pointerdown', stop);
+      card.removeEventListener('focusin', stop);
+      card.removeEventListener('focusout', stop);
+    };
+  });
 
   // A fresh run starts the cursor fresh: it fades in at the first stop
   // instead of gliding over from wherever the last run left it.
@@ -573,7 +727,8 @@ function TourLayer({
 
   const oversized = rect !== null && (rect.width * rect.height) / (viewportW * viewportH) > OVERSIZE;
   const centered = !hasAnchor || oversized || step.side === 'center';
-  const tip = !centered && rect ? tipFor(rect, step.side) : null;
+  // The cursor points at the anchor itself, even when neighbours are cleared with it.
+  const tip = !centered && rect ? tipFor(anchorBox ?? rect, step.side) : null;
 
   const cardW = Math.min(
     centered ? (isWelcome ? WELCOME_WIDTH : CENTERED_WIDTH) : CARD_WIDTH,
@@ -588,8 +743,9 @@ function TourLayer({
   // not stops and carry none, and the hello card says how many there are.
   const stops = steps.filter(isTourStop);
   const stopNumber = stops.findIndex((s) => s.id === step.id) + 1;
-  const counter =
-    stopNumber > 0
+  const counter = topic
+    ? `${index + 1} of ${steps.length}`
+    : stopNumber > 0
       ? `${stopNumber} of ${stops.length}`
       : isFirst && stops.length > 0
         ? `${stops.length} quick stops`
@@ -603,6 +759,7 @@ function TourLayer({
       style={{ pointerEvents: 'none' }}
       aria-live="polite"
     >
+      <style>{'html[data-tour-dock-off] [data-record-dock] { visibility: hidden; }'}</style>
       {tip && <TourCursor x={tip.x} y={tip.y} reduceMotion={reduceMotion} />}
 
       <AnimatePresence mode="wait">
@@ -623,10 +780,20 @@ function TourLayer({
           // accent halo, and a glow under it in the same colour. The veil
           // behind it does the rest.
           className="absolute flex flex-col overflow-hidden rounded-xl border border-primary/35 bg-card text-card-foreground shadow-[0_0_0_4px_hsl(var(--primary)/0.10),0_24px_50px_-14px_hsl(var(--primary)/0.45),0_4px_12px_-4px_rgba(15,23,42,0.16)] outline-none"
-          style={{ top, left, width: cardW, pointerEvents: 'auto' }}
+          style={{ top, left, width: cardW, maxHeight: viewportH - GAP * 2, pointerEvents: 'auto' }}
         >
-          <div className={cn('flex flex-col gap-2', isWelcome ? 'px-6 pb-5 pt-5' : 'px-5 pb-4 pt-4')}>
+          <div
+            className={cn(
+              'flex min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain',
+              isWelcome ? 'px-6 pb-5 pt-5 max-sm:px-5 max-sm:pb-4 max-sm:pt-4' : 'px-5 pb-4 pt-4',
+            )}
+          >
             {/* Title and the way out. The X ends the tour, as Escape does. */}
+            {topic && (
+              <p className="-mb-1 text-[11.5px] font-medium uppercase tracking-[0.06em] text-primary" data-tour-topic="">
+                {topic.tourLabel} · {topic.topicTitle}
+              </p>
+            )}
             <div className="flex items-start justify-between gap-3">
               <h2
                 className={cn(
@@ -636,20 +803,24 @@ function TourLayer({
               >
                 {step.title}
               </h2>
-              <button
-                type="button"
-                onClick={onEnd}
-                aria-label="Close the tour"
-                title="Close"
-                className="-mr-1.5 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
-              >
-                <X className="size-4" aria-hidden="true" />
-              </button>
+              {!required && (
+                <button
+                  type="button"
+                  onClick={onEnd}
+                  aria-label="Close the tour"
+                  title="Close"
+                  className="v2-phone-hit -mr-1.5 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+                >
+                  <X className="size-4" aria-hidden="true" />
+                </button>
+              )}
             </div>
 
             <p className="text-[14px] leading-relaxed text-muted-foreground">{body || step.body}</p>
 
             {isWelcome && <RentalNeeds />}
+
+            {step.tabTourHint && <TabTourHint />}
 
             {detail && (
               <p className="mt-0.5 inline-flex w-fit items-center gap-1.5 rounded-full bg-primary/[0.07] px-2.5 py-1 text-[12px] font-medium text-primary ring-1 ring-primary/10">
@@ -690,7 +861,7 @@ function TourLayer({
                 each ends the tour, then does its thing. The first is primary.
                 "Later" in the footer closes the tour without either. */}
             {isLast && actions.length > 0 && onAction && (
-              <div className="mt-1.5 flex flex-wrap gap-2">
+              <div className="mt-1.5 flex flex-wrap gap-2 [&_button]:max-sm:h-10 [&_button]:max-sm:text-[14px]">
                 {actions.map((action, i) => (
                   <Button
                     key={action.id}
@@ -708,7 +879,7 @@ function TourLayer({
           </div>
 
           {/* Footer: where you are, and the way on. */}
-          <div className="flex items-center justify-between gap-2 border-t border-primary/15 bg-primary/[0.05] px-5 py-3">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-t border-primary/15 bg-primary/[0.05] px-5 py-3 max-sm:px-4 max-sm:py-2.5 [&_button]:max-sm:h-10 [&_button]:max-sm:min-w-[72px] [&_button]:max-sm:px-4 [&_button]:max-sm:text-[14px]">
             <span className="text-[13px] tabular-nums text-muted-foreground">{counter}</span>
             <div className="flex items-center gap-1.5">
               {!isFirst && (
@@ -716,7 +887,12 @@ function TourLayer({
                   Back
                 </Button>
               )}
-              {isLast ? (
+              {isLast && topic ? (
+                <Button type="button" variant={actions.length > 0 ? 'ghost' : 'default'} size="sm" onClick={onNext}>
+                  Done
+                  {actions.length === 0 && <Check className="size-3.5" />}
+                </Button>
+              ) : isLast ? (
                 actions.length > 0 ? (
                   <Button type="button" variant="ghost" size="sm" onClick={onEnd}>
                     Later
@@ -739,7 +915,7 @@ function TourLayer({
                 )
               ) : (
                 <Button type="button" size="sm" onClick={onNext}>
-                  {isFirst ? "Let's go" : 'Next'}
+                  {isFirst && !topic ? "Let's go" : 'Next'}
                 </Button>
               )}
             </div>
@@ -763,7 +939,8 @@ function TransitPill({
   yieldsToSystem = false,
 }: {
   label?: string;
-  onSkip: () => void;
+  /** Absent on a required run: there is no skipping it. */
+  onSkip?: () => void;
   yieldsToSystem?: boolean;
 }) {
   const [visible, setVisible] = useState(false);
@@ -781,10 +958,12 @@ function TransitPill({
         className="pointer-events-auto flex items-center gap-2.5 rounded-full bg-card py-1.5 pl-3.5 pr-1.5 text-[13px] text-foreground shadow-md ring-1 ring-foreground/10 dark:ring-foreground/15"
       >
         <Loader2 className="size-3.5 animate-spin text-primary" />
-        <span>{label ? `Heading to ${label}…` : 'One moment…'}</span>
-        <Button type="button" variant="ghost" size="xs" className="text-muted-foreground" onClick={onSkip}>
-          Skip tour
-        </Button>
+        <span className={onSkip ? undefined : 'pr-2'}>{label ? `Heading to ${label}…` : 'One moment…'}</span>
+        {onSkip && (
+          <Button type="button" variant="ghost" size="xs" className="text-muted-foreground" onClick={onSkip}>
+            Skip tour
+          </Button>
+        )}
       </div>
     </div>
   );

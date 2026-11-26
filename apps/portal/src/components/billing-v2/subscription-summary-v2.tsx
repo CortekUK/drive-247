@@ -237,7 +237,7 @@ export function SubscriptionSummaryV2({
             renders under <AutoSkeleton>, so the bone is the figure's own size. */}
         <AutoSkeleton loading={loading}>
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="text-5xl font-bold tracking-tighter">
+            <span data-tour="billing-price" className="text-5xl font-bold tracking-tighter">
               {total != null ? formatMoney(total, cur) : "Custom"}
             </span>
             {total != null && <span className="text-base text-muted-foreground">/ {per}</span>}
@@ -249,6 +249,7 @@ export function SubscriptionSummaryV2({
             <span className="ml-auto flex items-baseline gap-2 max-sm:ml-0 max-sm:mt-3 max-sm:w-full max-sm:[&>*]:h-10 max-sm:[&>*]:flex-1 max-sm:[&>*]:justify-center">
               <button
                 type="button"
+                data-tour="billing-upgrade"
                 onClick={() => setPlanAction("upgrade")}
                 className="inline-flex h-8 items-center rounded-lg border border-primary bg-primary px-3.5 text-sm font-medium text-primary-foreground transition-opacity duration-200 ease-out hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 motion-reduce:transition-none"
               >
@@ -257,6 +258,7 @@ export function SubscriptionSummaryV2({
               {canPause && (
                 <button
                   type="button"
+                  data-tour="billing-pause"
                   onClick={() => setPauseOpen(true)}
                   className="inline-flex h-8 items-center rounded-lg border border-border bg-background px-3.5 text-sm font-medium text-foreground transition-colors duration-200 ease-out hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 motion-reduce:transition-none"
                 >
@@ -265,6 +267,7 @@ export function SubscriptionSummaryV2({
               )}
               <button
                 type="button"
+                data-tour="billing-cancel"
                 onClick={() => setPlanAction("cancel")}
                 className="inline-flex h-8 items-center rounded-lg border border-red-100 bg-red-50/60 px-3.5 text-sm font-medium text-red-600 transition-colors duration-200 ease-out hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 motion-reduce:transition-none dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/15"
               >

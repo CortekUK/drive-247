@@ -533,14 +533,16 @@ export function StageCustomer({ detail, refetch }: StageProps) {
         ) : (
           /* Clear who is renting — only while the rental is still in its first
              four stages; the database says when it is not, and why. */
-          <StageAction
-            icon={X}
-            label="Clear customer"
-            onClick={() => setPicking(true)}
-            disabledReason={
-              switchable.data?.ok ? null : (switchable.data?.reason ?? "Checking whether the customer can still change…")
-            }
-          />
+          <span data-tour="rental-customer-action" className="inline-flex">
+            <StageAction
+              icon={X}
+              label="Clear customer"
+              onClick={() => setPicking(true)}
+              disabledReason={
+                switchable.data?.ok ? null : (switchable.data?.reason ?? "Checking whether the customer can still change…")
+              }
+            />
+          </span>
         )
       }
       description="Who is renting. Everything else on this rental is addressed to them."
@@ -561,7 +563,7 @@ export function StageCustomer({ detail, refetch }: StageProps) {
       <div className="flex h-full min-h-0 flex-col gap-4 max-lg:h-auto">
         {/* ── who — brief; the full file is one click away ───────────────── */}
         <Surface className="shrink-0 px-5 py-4">
-          <div className="flex items-center gap-3.5 max-sm:flex-wrap max-sm:gap-y-3">
+          <div data-tour="rental-customer-who" className="flex items-center gap-3.5 max-sm:flex-wrap max-sm:gap-y-3">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-3xl bg-primary-light font-heading text-sm font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
               {initials(customer.name)}
             </span>
@@ -598,7 +600,7 @@ export function StageCustomer({ detail, refetch }: StageProps) {
             and the count ride in the header for now (to be reworked); the full
             list opens from the count. */}
         <Surface className="flex flex-none flex-col p-5">
-          <div className="flex items-center gap-2.5">
+          <div data-tour="rental-customer-reviews" className="flex items-center gap-2.5">
             <h3 className="flex-1 font-heading text-sm font-semibold">Reviews summary</h3>
             {rentalClosed && customerId && (
               <Button size="sm" variant={thisReview ? "ghost" : "outline"} onClick={() => setRateOpen(true)}>
@@ -664,6 +666,7 @@ export function StageCustomer({ detail, refetch }: StageProps) {
           role={verification ? "button" : undefined}
           tabIndex={verification ? 0 : undefined}
           aria-label={verification ? "Open the full identity check" : undefined}
+          data-tour="rental-customer-verification"
           onClick={verification ? () => setCheckOpen(true) : undefined}
           onKeyDown={
             verification

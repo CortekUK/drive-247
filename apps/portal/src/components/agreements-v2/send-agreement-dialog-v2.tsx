@@ -470,13 +470,13 @@ export function SendAgreementDialogV2({ open, onOpenChange, onSent }: SendAgreem
     <>
       {/* Hidden (not closed: every value here is kept) while the full-screen editor is up, so only one modal is ever on screen. */}
       <Dialog open={open && !editor} onOpenChange={(nextOpen) => !nextOpen && !sending && onOpenChange(false)}>
-        <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+        <DialogContent data-tour="send-agreement-dialog" className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
           <DialogHeader className="shrink-0 gap-2 border-b px-6 py-4 pr-14">
             <DialogTitle className="text-lg">Send agreement</DialogTitle>
             <DialogDescription>
               Step {stepIndex + 1} of {STEPS.length}: {STEPS[stepIndex].label}
             </DialogDescription>
-            <ol className="flex items-center gap-2 pt-1 text-xs" aria-label="Steps">
+            <ol data-tour="send-agreement-steps" className="flex items-center gap-2 pt-1 text-xs" aria-label="Steps">
               {STEPS.map((s, i) => (
                 <li
                   key={s.key}
@@ -516,7 +516,7 @@ export function SendAgreementDialogV2({ open, onOpenChange, onSent }: SendAgreem
             )}
             {step === "details" && (
               <div className="grid gap-5">
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div data-tour="send-agreement-recipient" className="grid gap-4 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <Label htmlFor={fieldId("recipientName")}>Recipient name*</Label>
                     <Input

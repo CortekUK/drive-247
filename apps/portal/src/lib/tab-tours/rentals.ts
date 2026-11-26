@@ -1,480 +1,838 @@
 /**
- * The Rentals tab tour — four stops on the list, then seven inside one rental,
- * or five different ones when the tab has nothing in it yet.
+ * The Rentals tab tour: eleven topics, in the order an operator meets them.
  *
- * THE CURATION PROBLEM, which is worse on this tab than on the other two.
- * Ghulam's own words about rental detail: "aadhi application sirf usi ek tab ke
- * andar hai" — half the application is inside that one tab — and "wahan toh
- * teen chaar tour lag jaayenge", it would take three or four tours to do it
- * justice. He then ruled that we do NOT go deep here: this tab gets the same
- * ~ten stops as Vehicles and Customers, and the things it leaves out are listed
- * at the foot of this comment so the next person knows they were left out on
- * purpose rather than missed.
+ *   1 list       the list page: graph, card, search, filters, rows, statuses, calendar, export
+ *   2 new        what New Rental does, and the order a rental is filled in
+ *   3 record     the eight stages, how a rental saves, the panels beside it
+ *   4 customer   who is renting: profile, changing them, reviews, the ID check
+ *   5 car        the car, swapping it, mileage, pricing, add-ons, other drivers
+ *   6 dates      when and where: dates, how it changes hands, the map, locking
+ *   7 agreement  sending it, where it got to, the template, when it goes stale
+ *   8 insurance  Bonzah cover, the four covers, the customer's own policy
+ *   9 payments   what is owed, the deposit, taking money, charges, cancelling
+ *  10 handover   the car going out and coming back, photos, damage
+ *  11 elsewhere  messages, notifications, activity, Trax, and the emails sent
  *
- * So every record step names a DOOR and says in one sentence what is behind it.
- * None of them explains how to fill anything in.
+ * Topics 3 to 11 open a real rental: the first row the list has drawn (see
+ * `readSampleIds`, which reads `data-record-id` off the rows). The tour only
+ * points: New Rental creates a draft the moment it is clicked, so no step
+ * clicks it, and nothing that moves money or sends anything is ever opened.
  *
- * ---------------------------------------------------------------------------
- * WHY THE RECORD HALF ANCHORS ON THE STAGE RAIL
+ * The v2 rental record is eight stages in the left rail (`rental-detail/stages.ts`).
+ * On a phone that rail is a closed sheet, so its steps point at the dock's
+ * middle button instead. Stage anchors are `data-tour` markers in the
+ * `rentals-v2/rental-detail/stage-*.tsx` files.
  *
- * The v2 rental detail is not a page of cards, it is eight STAGES — one
- * decision each — and opening a rental REPLACES the app sidebar with a rail of
- * those eight (`shared/layout/app-sidebar-v2.tsx`, the `isRentalDetailPage`
- * branch). Each row is a real link whose href comes from `stageHref()` in
- * `rental-detail/stages.ts`, so `[data-sidebar="sidebar"] a[href*="stage=…"]`
- * is:
+ * Extensions are left out on purpose: `SHOW_MULTI_PERIOD` is false in
+ * `rental-detail/multi-period.ts`, so the screen has nothing to point at.
  *
- *   - present on FIRST PAINT, before any query settles, for every rental
- *   - present in both the expanded rail and the collapsed icon rail
- *   - correct BY IDENTITY — each step falls back to its own stage's row, so a
- *     step that resolves before the new panel has repainted still points at the
- *     right door rather than at the outgoing one
- *   - small: a ~40px pill, nowhere near the two-thirds-of-viewport threshold at
- *     which the spotlight degrades to a centred wash
- *
- * That last property is what makes this tour safe. Once ONE step on a route
- * times out waiting for an anchor, every later step on that SAME route gets
- * 1.5s instead of 6s — and seven of these eleven steps sit on one pathname. An
- * anchor that resolves on the first poll is the only thing keeping a slow
- * ledger from starving the five steps behind it.
- *
- * Only two record steps aim at the panel first: Payments, where the outstanding
- * figure is the whole point, and Handover, where the two halves are. Both fall
- * back to their own rail row, so a slow panel costs the run nothing. Every
- * other stage panel is built from `Panel`, `Section` and `Surface`, none of
- * which spread props — there is no raw element in them to hang a `data-tour`
- * on without adding markup, and adding markup to a screen shared by the canary
- * to make a tour prettier is not a trade worth making.
- *
- * The final fallback on the stage steps is `h2.font-heading` — the panel's own
- * title, which `Panel` renders in every state including loading and error. It
- * is reached only when the rail is not on screen at all, which in practice
- * means a phone, where the sidebar is an off-canvas Sheet with no rect.
- *
- * ---------------------------------------------------------------------------
- * WHERE THE RENTAL ID COMES FROM
- *
- * `ctx.sampleIds.rentalId` comes from `readSampleIds()`. The v2 rentals list
- * draws no `a[href^="/rentals/<uuid>"]` for it to read — its rows are
- * `<TableRow>` elements with `onClick={() => router.push(…)}` and no anchor
- * anywhere — so the id comes off the inert `data-record-kind="rentals"` /
- * `data-record-id` pair on the row instead (`rentals-list-v2.tsx`). Launched
- * from a rental detail page the stage rail supplies eight real hrefs, and the
- * same reader picks the id out of those.
- *
- * Either way it is null on a tenant who has taken no booking — which is not a
- * failure but the normal state of the operator this tour is written for.
- *
- * ---------------------------------------------------------------------------
- * WHAT AN EMPTY TAB GETS — the other half of this tour
- *
- * A brand-new tenant has NO rentals, and on this tab that is not even a
- * backlog: a rental needs a vehicle AND a customer, so on day one it cannot be
- * filled even in principle. The order agreed in the meeting was vehicle first.
- * So the one step list below serves both states and `buildTour` picks the half
- * that applies.
- *
- * Every step that points at a row or lives inside a rental carries
- * `requires: { record: 'rentalId' }`. The seven `routeFor` steps would drop on
- * their own — the helper returns null — but the guard is stated on them too, so
- * the dependency is declared in one place rather than being an emergent
- * property of a route helper. `rentals.open` is the one that genuinely needs
- * it: its route is perfectly valid and its anchor is never coming, so without
- * the guard the operator watches the full anchor budget expire on a table that
- * has been REPLACED by `RentalsTeachingEmptyState`, and then a skip. Six
- * seconds of nothing.
- *
- * `rentals.find` and `rentals.new` carry it as a product judgement rather than
- * a mechanical one. A search box over an empty table teaches nothing, and New
- * Rental is not available work on a tab that cannot be filled yet — the empty
- * run gets `rentals.empty.start` on that same button instead, with copy that
- * sends them to Vehicles first. Only one of each twin is ever built.
- *
- * In their place, four `noRecord` steps. With the shared opener that is five
- * stops, all five anchored — `MIN_TOUR_STOPS` counts ANCHORED steps, and a
- * tour under it silently refuses to launch.
- *
- * The last of them says the rest unlocks once one rental exists, because that
- * is exactly what happens: `hasTakenTabTour` treats a taken empty tour as
- * unseen again the moment there is a record, and the launch button re-brightens
- * and relabels itself "See what is inside". Without that line a five-step tour
- * reads as the whole thing and nobody comes back for the half that matters.
- *
- * The empty copy has to sit beside `RentalsTeachingEmptyState`, which is what
- * has replaced the table at that moment. It paraphrases that card rather than
- * contradicting it — its footnote is where the "creates the car or the customer
- * inline" line comes from. That card, like this whole v2 list, is canary-only,
- * and it is not drawn at all when a FILTER matched nothing, so every empty step
- * also falls back to the page title.
- *
- * ---------------------------------------------------------------------------
- * ONE NOTE ON HISTORY. The stage rail navigates with `replace` on purpose
- * (`_kit.tsx` StageItem, and the comment in `rental-detail-v2.tsx`) so that
- * looking at eight stages does not cost eight presses of Back. The tour uses
- * `push`, so this run leaves six entries behind it. That is accepted rather
- * than overlooked: the alternative is a per-step replace option on the hook,
- * and the record step names "All rentals" as the way out, which is one click
- * instead of six.
- *
- * ---------------------------------------------------------------------------
- * WHAT IS DELIBERATELY LEFT OUT — Ghulam's "we do not go deep" rule, itemised
- *
- *  - EXTENSIONS, auto-extend, pay-as-you-go and instalment plans. Not on this
- *    screen at all: `SHOW_MULTI_PERIOD` is false in `rental-detail/multi-period.ts`
- *    and gates the Extensions rail tab, the extension reads in Payments, the
- *    extension agreements block and the extension cover block. A step about
- *    them would point at nothing. The v1 components are all still on disk and
- *    still serve the other 56 tenants, which is how this gets got wrong by grep.
- *  - The CUSTOMER stage. Verification, licence checks and staff reviews are a
- *    subject of their own and the Customers tour owns them.
- *  - The WHEN & WHERE stage. Its rail row already reads "When and where?" and
- *    carries the dates; the record step names it as one of the four decisions
- *    that make up the rental, which is as much as a first pass needs.
- *  - Damage analysis, and the lockbox. Damage only appears once photographs
- *    exist on BOTH halves; the lockbox block renders only for tenants who have
- *    lockboxes switched on. Both are named in passing by the Handover step
- *    rather than given a stop that would be blank on most rentals.
- *  - Agreement version history and terms drift. Genuinely the cleverest thing
- *    on the screen, and second-visit material.
- *  - The charge and payment lists, the stuck-charge warning and the v1 drift
- *    check on Payments. The outstanding figure is the surface-level point; the
- *    rest is depth.
- *  - The rentals calendar and `/rentals/analytics`. The calendar rides as a
- *    note on the search step; analytics was removed from the list header on
- *    purpose and is not somewhere to send anybody.
- *  - The overview graph. Its label and number carry `rentals-chart`, but no
- *    step stops on it: a first pass needs the Calendar View card beside it
- *    more, and that card already rides as the note named above.
+ * The empty-tab steps in topic 1 only run if the Tour button is shown on an
+ * empty list. Today the list hides it there (`teachEmptyRentals`).
  */
 
-import type { TourBuildContext, TourStep } from '@/lib/first-rental-tour';
-import { recordRoute, type TabTour } from './index';
+import type { TourStep } from '@/lib/first-rental-tour';
+import { recordRoute, type TabTour, type TabTourTopic } from './index';
 
-/**
- * A stage's row in the rail — the fallback under every record step, and the
- * primary anchor for the four that are only naming a door.
- *
- * `stage=` values are a contract with `rental-detail/stages.ts` in two places
- * on the same step: the route AND this selector. Renaming a `StageId` breaks
- * both together, so there is no half-working state to miss.
- */
-const rail = (stage: string) => `[data-sidebar="sidebar"] a[href*="stage=${stage}"]`;
-
-/**
- * The stage panel's own title. `Panel` draws it in every state — loading,
- * loaded, and the rental-not-found screen — so it is the one thing on the
- * detail route that cannot be absent. Last resort only: unlike a rail row it is
- * not identity-correct while a stage change is repainting.
- */
-const PANEL_TITLE = '[data-slot="sidebar-inset"] h2.font-heading';
-
-/** The list page's heading. Unconditional on `/rentals`, and its last resort. */
+/** The list page's heading: the last resort under every list step. */
 const LIST_HEADING = ['[data-slot="sidebar-inset"] h1', 'main h1'] as const;
+/** A stage panel's own title, drawn on every stage in every state. */
+const PANEL_TITLE = '[data-slot="sidebar-inset"] h2.font-heading';
+/** A stage's row in the left rail (laptop). */
+const rail = (stage: string) => `[data-sidebar="sidebar"] a[href*="stage=${stage}"]`;
+/** The whole stage rail (laptop). */
+const RAIL = '[data-sidebar="sidebar"] [data-sidebar="content"]';
+/** The dock on a phone. Its middle button lists the stages. */
+const DOCK_STAGES = '[data-record-dock]';
+/** A panel button on the phone dock (Management, Messages…). */
+const dockTab = (label: string) => `[data-record-dock] button[aria-label="${label}"]`;
+/** A tab of the right-hand column (wide laptop). */
+const railTab = (id: string) => `[data-tour="rental-right-rail"] [role="tab"][id$="-trigger-${id}"]`;
+const sec = (id: string) => `[data-tour="${id}"]`;
 
-/**
- * `RentalsTeachingEmptyState`, which REPLACES the table on a tab with no
- * rentals. Two anchors INTO it and never the card itself: that card runs the
- * full width of the content column and is around 450px tall, so a spotlight on
- * it has nowhere to stand its own card and degrades to the centred wash the
- * Welcome step uses — an even dim that points at nothing.
- *
- * Canary-only, and not drawn at all when a FILTER matched nothing (that branch
- * keeps the "No rentals found" card), so every step using these keeps
- * `LIST_HEADING` under it.
- */
-const EMPTY_HEADLINE = '[data-tour="rentals-empty"] h3';
-const EMPTY_POINTS = '[data-tour="rentals-empty-points"]';
+/** A step that lives on one stage of the sample rental. */
+const at = (stage: string): Pick<TourStep, 'route' | 'routeFor' | 'requires'> => ({
+  route: '/rentals',
+  routeFor: (ctx) => recordRoute(ctx.sampleIds?.rentalId, '/rentals', `stage=${stage}`),
+  requires: { record: 'rentalId' },
+});
+/** The same, for a step that points at a control only an editor may use. */
+const atEdit = (stage: string): Pick<TourStep, 'route' | 'routeFor' | 'requires'> => ({
+  ...at(stage),
+  requires: { record: 'rentalId', tab: 'rentals', edit: true },
+});
 
-/**
- * The teaching card's own CTA. It is the FIRST button inside that card whenever
- * the card is drawn at all, and it runs the same handler as the header button —
- * including the Connect dialog on a tenant without a usable Stripe account.
- */
-const EMPTY_CTA = '[data-tour="rentals-empty"] button';
+const NEEDS_RENTAL = { record: 'rentalId' } as const;
+const NEEDS_RENTAL_TEXT = 'Once you have a rental, this topic opens.';
 
-/** `/rentals/<id>?stage=…`, or null on a tenant with nothing to open. */
-const stageRoute = (stage?: string) => (ctx: TourBuildContext) =>
-  recordRoute(ctx.sampleIds?.rentalId, '/rentals', stage ? `stage=${stage}` : undefined);
+const list: TabTourTopic = {
+  id: 'rentals.list',
+  title: 'Your rentals at a glance',
+  summary: 'The list page: the graph, finding a rental, and what each status means.',
+  steps: [
+    {
+      id: 'rentals.list.chart',
+      label: 'Booked value',
+      title: 'How much you have booked',
+      body: 'This graph shows what you booked over the period you pick, with what was picked up as a lighter line and the period before dotted. The menu above it switches to counting new bookings.',
+      route: '/rentals',
+      anchors: ['[data-tour="rentals-chart"]', ...LIST_HEADING],
+      side: 'bottom',
+      requires: { record: 'rentalId' },
+      notes: [{ text: 'Booked value is what rentals were written for, not money collected.' }],
+    },
+    {
+      id: 'rentals.list.card',
+      label: 'The card',
+      title: 'One useful place at a time',
+      body: 'This card points you to one place worth a look, like Calendar View. Open takes you straight there.',
+      route: '/rentals',
+      anchors: ['[data-tour="rentals-featured"]'],
+      side: 'bottom',
+      requires: { record: 'rentalId' },
+    },
+    {
+      id: 'rentals.list.search',
+      label: 'Search',
+      title: 'Find a rental fast',
+      body: 'I search this list by customer, registration or rental number as you type. The slider button inside the box opens the filters.',
+      route: '/rentals',
+      anchors: ['[data-tour="rentals-search"]', 'button[aria-label="Search this page"]'],
+      mobileAnchors: ['[data-mobile-tab-bar] button[aria-label="Search"]', 'button[aria-label="Search this page"]'],
+      mobileBody: 'Search is at the bottom. Here it finds a rental by customer, registration or rental number.',
+      side: 'bottom',
+      requires: { record: 'rentalId' },
+    },
+    {
+      id: 'rentals.list.filters',
+      label: 'Filters',
+      title: 'Narrow it down',
+      body: 'Filters turn the graph card over: status, how it is paid, insurance, a start date range and cancellation requests. A number on this button means the list is filtered.',
+      route: '/rentals',
+      anchors: ['button[aria-label="Show filters"]', 'button[aria-label="Hide filters"]'],
+      side: 'bottom',
+      // On a phone the filter button only shows once search is open.
+      requires: { record: 'rentalId', desktop: true },
+    },
+    {
+      id: 'rentals.list.row',
+      label: 'A rental',
+      title: 'One entry per rental',
+      body: 'Its number, the customer and car, pickup and return, the total and the status. Click anywhere on the row to open it. Newest come first.',
+      mobileBody: 'Each card is one rental: its number, the customer and car, pickup and return, the total and the status. Tap a card to open it.',
+      route: '/rentals',
+      anchors: ['[data-tour="rental-row"]'],
+      // Set so the phone wording is used (it only applies with phone anchors).
+      mobileAnchors: ['[data-tour="rental-row"]'],
+      side: 'bottom',
+      requires: { record: 'rentalId' },
+    },
+    {
+      id: 'rentals.list.status',
+      label: 'Status',
+      title: 'What the status means',
+      body: 'Pending has not started yet, Upcoming is booked for a later date, Active is under way and Completed is over. Cancelled and Rejected never ran.',
+      route: '/rentals',
+      anchors: ['[data-tour="rental-row"]'],
+      side: 'bottom',
+      requires: { record: 'rentalId' },
+      notes: [{ text: 'A tinted row needs a look: a cancellation request, or Bonzah cover that is still quoted or needs balance.' }],
+    },
+    {
+      id: 'rentals.list.calendar',
+      label: 'Calendar',
+      title: 'See them on a timeline',
+      body: 'Calendar view lays your fleet and its rentals out on a timeline. The same button brings you back to the list.',
+      route: '/rentals',
+      anchors: ['[data-tour="rentals-calendar"]'],
+      side: 'bottom',
+      requires: { record: 'rentalId' },
+    },
+    {
+      id: 'rentals.list.export',
+      label: 'Export',
+      title: 'Take the list with you',
+      body: 'This downloads the rentals you are looking at as a spreadsheet, with your search and filters applied.',
+      route: '/rentals',
+      anchors: ['button[aria-label="Export CSV"]'],
+      side: 'bottom',
+      requires: { record: 'rentalId' },
+    },
+    // An empty tab: the page is one teaching card, so the topic teaches from it.
+    {
+      id: 'rentals.list.empty-what',
+      label: 'No rentals yet',
+      title: 'Where the business runs',
+      body: 'Each rental ties one customer to one car, with its payment, agreement and handover. This page fills up as you take bookings.',
+      route: '/rentals',
+      anchors: ['[data-tour="rentals-empty"] h3', ...LIST_HEADING],
+      side: 'bottom',
+      requires: { noRecord: 'rentalId' },
+    },
+    {
+      id: 'rentals.list.empty-first',
+      label: 'The first one',
+      title: 'A car and a customer first',
+      body: 'A rental needs a car and a customer, so add those first. Then this button starts your first rental.',
+      route: '/rentals',
+      anchors: ['[data-tour="rentals-empty"] button', ...LIST_HEADING],
+      side: 'top',
+      requires: { noRecord: 'rentalId', tab: 'rentals', edit: true },
+    },
+    {
+      id: 'rentals.list.empty-later',
+      label: 'When it fills',
+      title: 'What this page becomes',
+      body: 'Once you have rentals, this page shows what you booked, a search, filters and one row per rental. I will walk you through it then.',
+      route: '/rentals',
+      anchors: ['[data-tour="rentals-empty"]', ...LIST_HEADING],
+      side: 'bottom',
+      requires: { noRecord: 'rentalId' },
+    },
+  ],
+};
 
-const STEPS: readonly TourStep[] = [
-  {
-    id: 'rentals.list',
-    label: 'Rentals',
-    title: 'Every hire, in one list',
-    body: 'A rental ties one customer to one car for a set of dates, and carries the money and the paperwork with it. Most of what the portal reports on starts here.',
-    route: '/rentals',
-    anchors: ['[data-tour="rentals-header"]', ...LIST_HEADING],
-    side: 'bottom',
-    showOutline: true,
-  },
-  /**
-   * ---------------------------------------------------------------------
-   * THE EMPTY TAB. Four steps, offered only when there is no rental to open,
-   * and dropped the moment there is one. They sit interleaved with the shared
-   * steps rather than in a block because `buildTour` keeps this array's order
-   * and the empty run has to READ in order: what turns up here, what one
-   * carries, what has to exist first, then the door.
-   */
-  {
-    id: 'rentals.empty.arrive',
-    label: 'How one appears',
-    title: 'Two ways a rental appears',
-    body: 'You make one here, or a customer books on your public site and it arrives waiting for your approval. Either way it becomes the same record.',
-    route: '/rentals',
-    anchors: [EMPTY_HEADLINE, ...LIST_HEADING],
-    // `left` first: the card then sits in the gap between the sidebar and the
-    // teaching state rather than over the button inside it. `placementsFor`
-    // falls through to right, bottom and top on a narrower window.
-    side: 'left',
-    requires: { noRecord: 'rentalId' },
-  },
-  {
-    id: 'rentals.empty.holds',
-    label: 'What it carries',
-    title: 'What one rental carries',
-    body: 'The charge, the deposit hold, the signed agreement and the cover all hang off the rental, and every one of them is settled from inside it.',
-    route: '/rentals',
-    anchors: [EMPTY_POINTS, ...LIST_HEADING],
-    side: 'left',
-    requires: { noRecord: 'rentalId' },
-  },
-  {
-    /**
-     * The honest step, and the one this tab needs that the other two do not.
-     * A rental needs a vehicle AND a customer, so an empty Rentals tab on day
-     * one is not a backlog — it is the correct state until the other two tabs
-     * have something in them. Pointing at New Rental here instead would be
-     * offering work that cannot be done yet.
-     */
-    id: 'rentals.empty.needs',
-    label: 'A car first',
-    title: 'A car and a person come first',
-    body: 'This tab fills last, because a rental needs both. Add a vehicle, then a customer. Each of those tabs has its own tour, and Vehicles is the one for today.',
-    route: '/rentals',
-    // The sidebar row, then its own link, then the page title for a phone —
-    // where the rail is an off-canvas Sheet with no rect. The body names both
-    // tabs in words, so it still reads correctly on the heading.
-    anchors: [
-      '[data-tour="nav-vehicles"]',
-      '[data-sidebar="sidebar"] a[href="/vehicles"]',
-      ...LIST_HEADING,
-    ],
-    side: 'right',
-    requires: { noRecord: 'rentalId' },
-    notes: [
-      {
-        text: 'Customers comes after that. Anyone who books on your site is added there on their own.',
-        anchors: ['[data-tour="nav-customers"]', '[data-sidebar="sidebar"] a[href="/customers"]'],
-      },
-    ],
-  },
-  {
-    id: 'rentals.find',
-    label: 'Finding one',
-    title: 'Search, then narrow',
-    body: 'Type a customer, a registration or a rental number. The slider inside the box opens the filters, and its badge means you are not reading the whole list.',
-    route: '/rentals',
-    anchors: ['[data-tour="rentals-search"]', ...LIST_HEADING],
-    side: 'bottom',
-    // Searching nothing teaches nothing, and the calendar note below points at
-    // the header's calendar button, which is not drawn while the rentals are
-    // still loading. Both are worth a stop only once there is a list to narrow.
-    requires: { record: 'rentalId' },
-    notes: [
-      {
-        // The header's calendar button. Anchored, so it is not promised in
-        // calendar view, where that button becomes the way back to the list.
-        text: 'Calendar view lays the same rentals on a timeline, one row per car.',
-        anchors: ['[data-tour="rentals-calendar"]'],
-      },
-    ],
-  },
-  {
-    id: 'rentals.new',
-    label: 'New rental',
-    title: 'Starting one',
-    body: 'Four steps: how it is billed, who is renting, which car, then the details. Everything after that happens inside the rental itself.',
-    route: '/rentals',
-    anchors: ['[data-tour="new-rental"]', ...LIST_HEADING],
-    side: 'bottom',
-    // The empty tab gets `rentals.empty.start` on this same button instead,
-    // with copy that sends them to Vehicles first. Only one of the twins is
-    // ever built.
-    requires: { tab: 'rentals', edit: true, record: 'rentalId' },
-    // Clicking it is the operator doing the thing. Stand aside.
-    pauseOnAnchorClick: true,
-    // On a lean tenant without a usable Stripe Connect account this button
-    // opens a "connect Stripe" dialog INSTEAD of the flow, so the body must not
-    // promise a form. Said only to the tenants it is true for.
-    detail: (ctx) => (ctx.rentalCreationBlocked ? 'Connect payments first' : null),
-  },
-  {
-    /**
-     * The empty tab's last stop, and the twin of `rentals.new` rather than a
-     * second visit to it.
-     *
-     * It ends the empty run because `pauseOnAnchorClick` steps the tour aside
-     * so the operator can actually open the thing, and anything after it would
-     * be a step they never reach.
-     */
-    id: 'rentals.empty.start',
-    label: 'Start one',
-    title: 'Where your first one starts',
-    body: 'This is where one starts. Get a car and a customer in first, then come back — and the rest of this tour unlocks, inside the rental itself.',
-    route: '/rentals',
-    // The teaching card's own CTA first: on an empty tab it is the biggest
-    // thing on the page, and it is the same handler as the header button. The
-    // header button is the fallback for a tenant not shown that card — a filter
-    // that matched nothing — and the heading is the last resort.
-    anchors: [EMPTY_CTA, '[data-tour="new-rental"]', ...LIST_HEADING],
-    side: 'top',
-    // `edit` for the same reason `rentals.new` carries it: never spotlight a
-    // mutation control for someone who is not allowed to use it. A view-only
-    // manager on an empty tab keeps the three steps above this one.
-    requires: { noRecord: 'rentalId', tab: 'rentals', edit: true },
-    pauseOnAnchorClick: true,
-    // Same gate as `rentals.new`, and the reason this body does not promise a
-    // form: on a tenant without a usable Stripe Connect account both buttons
-    // open the Connect dialog instead.
-    detail: (ctx) => (ctx.rentalCreationBlocked ? 'Connect payments first' : null),
-    notes: [
-      // From the teaching card's own footnote, so the two cannot disagree.
-      { text: 'You need both, though the rental flow can create either one inline as you go.' },
-      { text: 'Once one rental exists, the tour button in the header relabels itself See what is inside.' },
-    ],
-  },
-  {
-    id: 'rentals.open',
-    // The hinge. Last of the list steps on purpose, and no heading fallback
-    // either: with no rows there is nothing to click, and pointing at the page
-    // title while saying "click a row" would be a lie. On an empty tab it is
-    // not merely unanchored but DROPPED — see `requires` below — because a
-    // timeout here would also shorten the anchor budget for the rest of
-    // `/rentals`, and it is the last step that could afford one.
-    label: 'Open one',
-    title: 'One row is one rental',
-    body: 'Click any row to go inside. Nothing on the row says so, and inside is where the rest of the work actually happens.',
-    route: '/rentals',
-    anchors: [
-      '[data-tour="rental-row"]',
-      '[data-slot="sidebar-inset"] table tbody tr',
-      '[data-slot="sidebar-inset"] table thead',
-    ],
-    // A row runs the full width of the content column, so neither side has room
-    // for the card and `placeCard` would fall through to bottom anyway.
-    side: 'bottom',
-    // Without this the step has a perfectly valid route and no way to know its
-    // anchor is never coming: the full anchor budget expires on a table that is
-    // not there, and only then does it skip. See the header note.
-    requires: { record: 'rentalId' },
-  },
-  {
-    id: 'rentals.record',
-    label: 'The record',
-    title: 'The sidebar becomes the rental',
-    body: 'Eight decisions, top to bottom. The first four are the rental itself; the last four are what comes out of it. Each row shows its answer once it has one.',
-    route: '/rentals',
-    routeFor: stageRoute(),
-    anchors: ['[data-sidebar="sidebar"] [data-sidebar="content"]', '[data-sidebar="sidebar"]'],
-    side: 'right',
-    // On a phone the rail is an off-canvas Sheet with no rect, so there is
-    // nothing to point at. The stage steps after this one fall back to the
-    // panel title and still run.
-    requires: { desktop: true, record: 'rentalId' },
-    notes: [
-      { text: 'Nothing here is a form you submit. The rental already exists; an edit lands as you make it.' },
-      {
-        // The aside is `hidden … xl:flex`, so this line is dropped rather than
-        // shown on a narrow laptop where the rail is not on screen.
-        text: 'Beside the rental: Management (the booking and its plans), your thread with the customer, Trax for questions about this rental, its notifications, and everything it has done.',
-        anchors: ['[data-tour="rental-right-rail"]'],
-      },
-    ],
-  },
-  {
-    id: 'rentals.vehicle',
-    label: 'Vehicle',
-    title: 'The car, and its mileage',
-    body: 'Which car went out, and the mileage allowance this hire was sold on. Swapping the car here re-checks the dates and re-prices the rental.',
-    route: '/rentals',
-    routeFor: stageRoute('vehicle'),
-    anchors: [rail('vehicle'), PANEL_TITLE],
-    side: 'right',
-    requires: { record: 'rentalId' },
-  },
-  {
-    id: 'rentals.extras',
-    label: 'Extras',
-    title: 'Add-ons and other drivers',
-    body: 'What rides along on top of the car. A second driver is a second name on the agreement and on the cover, and needs their own ID check.',
-    route: '/rentals',
-    routeFor: stageRoute('extras'),
-    anchors: [rail('extras'), PANEL_TITLE],
-    side: 'right',
-    requires: { record: 'rentalId' },
-  },
-  {
-    id: 'rentals.agreement',
-    label: 'Agreement',
-    title: 'The contract lives here',
-    body: 'Send it for signature from the rental, and send it again whenever the terms move. It tells you itself when it no longer matches them.',
-    route: '/rentals',
-    routeFor: stageRoute('agreement'),
-    anchors: [rail('agreement'), PANEL_TITLE],
-    side: 'right',
-    requires: { record: 'rentalId' },
-  },
-  {
-    id: 'rentals.insurance',
-    label: 'Insurance',
-    title: 'Cover for these dates',
-    body: 'Buy cover priced from this car and this hire, or record the policy the customer already holds and mark it checked. Either way it sits on the rental.',
-    route: '/rentals',
-    routeFor: stageRoute('insurance'),
-    anchors: [rail('insurance'), PANEL_TITLE],
-    side: 'right',
-    requires: { record: 'rentalId' },
-  },
-  {
-    id: 'rentals.payments',
-    label: 'Payments',
-    title: 'What is owed, and what is held',
-    body: 'Outstanding is what is still to come in, with the charges and payments under it. The deposit sits apart, because a hold on a card is not money received.',
-    route: '/rentals',
-    routeFor: stageRoute('payments'),
-    // The band, if the ledger has landed; this stage's own rail row if it has
-    // not. The sentence is written to read correctly against either.
-    anchors: ['[data-tour="rental-outstanding"]', rail('payments'), PANEL_TITLE],
-    side: 'left',
-    requires: { record: 'rentalId' },
-  },
-  {
-    id: 'rentals.handover',
-    label: 'Handover',
-    title: 'Keys, photographs, odometer',
-    body: 'Confirm the car went out, then confirm it came back. The photographs and readings on both halves are what damage and excess mileage get settled from.',
-    route: '/rentals',
-    routeFor: stageRoute('handover'),
-    anchors: ['[data-tour="rental-handover-half"]', rail('handover'), PANEL_TITLE],
-    side: 'left',
-    requires: { record: 'rentalId' },
-    notes: [
-      // Both are conditional on the screen — damage needs photographs on both
-      // halves, the lockbox needs the tenant to run lockboxes — so neither is
-      // worth a stop, and both are worth a line.
-      { text: 'With photographs on both sides it will compare them for you. Lockbox collection is set up here too.' },
-    ],
-  },
-];
+const start: TabTourTopic = {
+  id: 'rentals.new',
+  title: 'Starting a new rental',
+  summary: 'What New Rental does, and the order to fill a rental in.',
+  steps: [
+    {
+      id: 'rentals.new.button',
+      label: 'New Rental',
+      title: 'No long form',
+      body: 'New Rental makes an empty rental straight away and opens it. You then fill it in stage by stage, on the rental itself.',
+      route: '/rentals',
+      anchors: ['[data-tour="new-rental"]'],
+      side: 'bottom',
+      requires: { tab: 'rentals', edit: true, record: 'rentalId' },
+      // Clicking it is the operator doing the thing. Stand aside.
+      pauseOnAnchorClick: true,
+      detail: (ctx) => (ctx.rentalCreationBlocked ? 'Connect payments first' : null),
+      notes: [
+        { text: 'A rental you started but have not finished waits under Drafts, above the list.', anchors: ['[data-tour="rental-drafts"]'] },
+        { text: 'If you leave a new rental without picking anything, I throw it away.' },
+      ],
+    },
+    {
+      id: 'rentals.new.order',
+      label: 'The stages',
+      title: 'Fill it in from the top',
+      body: 'A new rental opens on Customer. Work down the stages: who, which car, when and where, extras, then the paperwork, the money and the handover.',
+      ...at('customer'),
+      anchors: [RAIL, rail('customer'), PANEL_TITLE],
+      mobileAnchors: [DOCK_STAGES, PANEL_TITLE],
+      mobileBody: 'A new rental opens on Customer. The button in the middle of this bar lists the stages: who, which car, when and where, extras, then the paperwork, the money and the handover.',
+      side: 'right',
+    },
+    {
+      id: 'rentals.new.customer',
+      label: 'Customer',
+      title: 'Who is renting',
+      body: 'On a new rental this stage is a search over your customers. Pick one and they go on the rental.',
+      ...at('customer'),
+      anchors: [rail('customer'), PANEL_TITLE],
+      side: 'right',
+    },
+    {
+      id: 'rentals.new.vehicle',
+      label: 'Vehicle',
+      title: 'Then the car',
+      body: 'Pick the car next. The list tells you when a car cannot be used for your dates, like already booked or blocked, before you choose it.',
+      ...at('vehicle'),
+      anchors: [rail('vehicle'), PANEL_TITLE],
+      side: 'right',
+    },
+    {
+      id: 'rentals.new.when',
+      label: 'When & where',
+      title: 'Then the dates',
+      body: 'Pick pickup and return on the car’s own calendar, and how the car changes hands at each end. I show the new price before you save.',
+      ...at('when'),
+      anchors: [rail('when'), PANEL_TITLE],
+      side: 'right',
+    },
+    {
+      id: 'rentals.new.ready',
+      label: 'Ready',
+      title: 'When it can go out',
+      body: 'The rental stays Pending until the car goes out. Confirm collection on Handover opens once the agreement is signed and nothing is owed.',
+      ...at('handover'),
+      anchors: [rail('handover'), PANEL_TITLE],
+      side: 'right',
+    },
+  ],
+};
+
+const record: TabTourTopic = {
+  id: 'rentals.record',
+  title: 'Inside a rental',
+  summary: 'The eight stages, how a rental saves, and the panels beside it.',
+  requires: NEEDS_RENTAL,
+  unavailableText: NEEDS_RENTAL_TEXT,
+  steps: [
+    {
+      id: 'rentals.record.stages',
+      label: 'Stages',
+      title: 'Eight stages, one rental',
+      body: 'The first four describe the rental: who, which car, when and where, and extras. The last four come out of it: agreement, insurance, payments and handover.',
+      ...at('customer'),
+      anchors: [RAIL, rail('customer')],
+      mobileAnchors: [DOCK_STAGES],
+      mobileBody: 'The button in the middle of this bar lists the eight stages and shows which one you are on. The first four describe the rental; the last four are the agreement, insurance, payments and handover.',
+      side: 'right',
+    },
+    {
+      id: 'rentals.record.answers',
+      label: 'Answers',
+      title: 'An answer, or a question',
+      body: 'A stage shows its answer once it has one, like the customer’s name. Until then it asks its question in grey, like Add cover?',
+      ...at('customer'),
+      anchors: [rail('insurance'), rail('customer')],
+      side: 'right',
+      // The phone's stage list shows names only.
+      requires: { record: 'rentalId', desktop: true },
+    },
+    {
+      id: 'rentals.record.jump',
+      label: 'Moving around',
+      title: 'Open any stage',
+      body: 'Stages do not have to be done in order. Click any one to open it. The address keeps the stage, so a saved link opens it again.',
+      mobileBody: 'Stages do not have to be done in order. Open the list from the middle button and tap any one. The address keeps the stage, so a saved link opens it again.',
+      ...at('customer'),
+      anchors: [rail('payments'), PANEL_TITLE],
+      mobileAnchors: [DOCK_STAGES, PANEL_TITLE],
+      side: 'right',
+    },
+    {
+      id: 'rentals.record.saving',
+      label: 'Saving',
+      title: 'Nothing to submit',
+      body: 'The rental already exists, so each stage saves its own changes. Who, which car, the dates and extras can change only while it is Pending and nothing has gone out yet.',
+      ...at('customer'),
+      anchors: [PANEL_TITLE],
+      side: 'bottom',
+      notes: [{ text: 'If your role can only view rentals, you see every stage but cannot change anything.' }],
+    },
+    {
+      id: 'rentals.record.beside',
+      label: 'Beside it',
+      title: 'The panels beside it',
+      body: 'Management shows how this rental is booked. Messages, Notifications, Activity and Trax are about this rental only.',
+      ...at('customer'),
+      anchors: ['[data-tour="rental-right-rail"]'],
+      mobileAnchors: [dockTab('Management')],
+      mobileSpan: [dockTab('Messages'), dockTab('Notifications'), dockTab('Activity'), dockTab('Trax')],
+      mobileBody: 'These buttons open the panels beside the rental: Management, Messages, Notifications, Activity and Trax, all about this rental only.',
+      side: 'left',
+    },
+  ],
+};
+
+const customer: TabTourTopic = {
+  id: 'rentals.customer',
+  title: 'The customer and their checks',
+  summary: 'Who is renting, changing them, what your team said, and their ID check.',
+  requires: NEEDS_RENTAL,
+  unavailableText: NEEDS_RENTAL_TEXT,
+  steps: [
+    {
+      id: 'rentals.customer.who',
+      label: 'Who',
+      title: 'Who is renting',
+      body: 'Their name and email. Open profile takes you to everything about them in Customers.',
+      ...at('customer'),
+      anchors: [sec('rental-customer-who'), PANEL_TITLE],
+      side: 'bottom',
+      notes: [{ text: 'A blocked customer shows a red Blocked tag here, with the reason.' }],
+    },
+    {
+      id: 'rentals.customer.change',
+      label: 'Changing them',
+      title: 'Putting someone else on it',
+      body: 'Clear customer lets you pick another person. It only works while the rental is Pending, before any agreement, cover, payment or handover.',
+      ...atEdit('customer'),
+      anchors: [sec('rental-customer-action')],
+      side: 'bottom',
+      notes: [{ text: 'When it is greyed out, hover it and I tell you why.' }],
+    },
+    {
+      id: 'rentals.customer.reviews',
+      label: 'Reviews',
+      title: 'What your team said',
+      body: 'After a rental closes your team rates the customer, and I sum up every review here. Rate this rental shows up once this one is closed.',
+      ...at('customer'),
+      anchors: [sec('rental-customer-reviews'), PANEL_TITLE],
+      side: 'bottom',
+    },
+    {
+      id: 'rentals.customer.check',
+      label: 'ID check',
+      title: 'Their ID check',
+      body: 'I check their licence and that their selfie matches it. The tag says how it went: verified, in review, failed, or link sent.',
+      ...at('customer'),
+      anchors: [sec('rental-customer-verification'), PANEL_TITLE],
+      side: 'top',
+      notes: [{ text: 'When a check is on file, open the card to see all of it.' }],
+    },
+    {
+      id: 'rentals.customer.photos',
+      label: 'Documents',
+      title: 'Licence and selfie',
+      body: 'The front and back of the licence and the selfie sit here. They stay blurred until you open one, because they are someone’s ID.',
+      ...at('customer'),
+      anchors: [sec('rental-customer-verification'), PANEL_TITLE],
+      side: 'top',
+    },
+    {
+      id: 'rentals.customer.link',
+      label: 'New link',
+      title: 'Check them again',
+      body: 'The link button beside Verification sends them a new verification link. When photos are on file, the arrow next to it runs my check again.',
+      ...atEdit('customer'),
+      anchors: [sec('rental-customer-verification'), PANEL_TITLE],
+      side: 'top',
+    },
+  ],
+};
+
+const car: TabTourTopic = {
+  id: 'rentals.car',
+  title: 'The car and its extras',
+  summary: 'Which car, swapping it, mileage and price, add-ons and other drivers.',
+  requires: NEEDS_RENTAL,
+  unavailableText: NEEDS_RENTAL_TEXT,
+  steps: [
+    {
+      id: 'rentals.car.which',
+      label: 'The car',
+      title: 'Which car goes out',
+      body: 'The car on this rental, its plate, and its status in your fleet right now. Open vehicle takes you to its record.',
+      ...at('vehicle'),
+      anchors: [sec('rental-car'), PANEL_TITLE],
+      side: 'bottom',
+    },
+    {
+      id: 'rentals.car.swap',
+      label: 'Swapping',
+      title: 'Swapping the car',
+      body: 'Clear vehicle lets you pick another car while the rental is Pending or Active. The price stays as it was.',
+      ...atEdit('vehicle'),
+      anchors: [sec('rental-vehicle-action')],
+      side: 'bottom',
+      notes: [{ text: 'Once the keys are out, a swap counts as a breakdown and I ask you what happened.' }],
+    },
+    {
+      id: 'rentals.car.mileage',
+      label: 'Mileage',
+      title: 'How far it can go',
+      body: 'The allowance for each hire length, with this hire’s one marked, and what going over costs. Anything over is worked out from the odometer readings at handover.',
+      ...at('vehicle'),
+      anchors: [sec('rental-vehicle-mileage'), PANEL_TITLE],
+      side: 'bottom',
+    },
+    {
+      id: 'rentals.car.pricing',
+      label: 'Pricing',
+      title: 'What it rents for',
+      body: 'The car’s daily, weekly and monthly rates, with this hire’s rate marked, and what this rental is priced at.',
+      ...at('vehicle'),
+      anchors: [sec('rental-vehicle-pricing'), PANEL_TITLE],
+      side: 'bottom',
+    },
+    {
+      id: 'rentals.car.addons',
+      label: 'Add-ons',
+      title: 'Extras on top',
+      body: 'Child seats, toll passes and anything else from your catalogue. While the rental can still change, add them here and Save extras adds the charge.',
+      ...at('extras'),
+      anchors: [sec('rental-addons'), PANEL_TITLE],
+      side: 'bottom',
+      notes: [{ text: 'Once it is locked, they show as they were booked.' }],
+    },
+    {
+      id: 'rentals.car.drivers',
+      label: 'Drivers',
+      title: 'Anyone else driving',
+      body: 'Other drivers on this rental. Each one gets their own ID check and signs too.',
+      ...at('extras'),
+      anchors: [sec('rental-drivers'), PANEL_TITLE],
+      side: 'top',
+      notes: [{ text: 'A driver the renter added from their own portal is listed only. They are not on the agreement or the insurance.' }],
+    },
+  ],
+};
+
+const dates: TabTourTopic = {
+  id: 'rentals.dates',
+  title: 'Dates and places',
+  summary: 'When it goes out and comes back, how it changes hands, and where.',
+  requires: NEEDS_RENTAL,
+  unavailableText: NEEDS_RENTAL_TEXT,
+  steps: [
+    {
+      id: 'rentals.dates.when',
+      label: 'Dates',
+      title: 'Out and back',
+      body: 'Pickup and drop-off, with their times, in your time zone. While the rental can still change, open this bar to pick new dates on the car’s own calendar.',
+      ...at('when'),
+      anchors: [sec('rental-dates'), PANEL_TITLE],
+      side: 'bottom',
+    },
+    {
+      id: 'rentals.dates.how',
+      label: 'How',
+      title: 'How it changes hands',
+      body: 'For each end: they come to you, use one of your saved locations, or you deliver and collect. Your choices and their fees come from Settings, under Locations.',
+      ...at('when'),
+      anchors: [sec('rental-places'), PANEL_TITLE],
+      side: 'bottom',
+      notes: [{ text: 'While the rental can still change, a promo code can be added here too.' }],
+    },
+    {
+      id: 'rentals.dates.map',
+      label: 'Map',
+      title: 'On the map',
+      body: 'P is pickup and R is drop-off. Your own places are shown too, with your delivery area if you have one.',
+      ...at('when'),
+      anchors: [sec('rental-map'), PANEL_TITLE],
+      side: 'top',
+    },
+    {
+      id: 'rentals.dates.money',
+      label: 'Price',
+      title: 'Changing it moves the money',
+      body: 'Change something and a bar shows the new price before you save. New dates re-price the whole rental; a new place only changes its fee.',
+      ...at('when'),
+      anchors: [sec('rental-places'), PANEL_TITLE],
+      side: 'bottom',
+    },
+    {
+      id: 'rentals.dates.locked',
+      label: 'Locked',
+      title: 'When it locks',
+      body: 'Once the rental is no longer Pending, or the agreement, cover, a payment or the handover has happened, the dates are fixed. A Locked note then shows up here and tells you why.',
+      ...at('when'),
+      anchors: [sec('rental-stage-locked'), PANEL_TITLE],
+      side: 'bottom',
+    },
+  ],
+};
+
+const agreement: TabTourTopic = {
+  id: 'rentals.agreement',
+  title: 'The agreement',
+  summary: 'Sending it to sign, where it got to, its template, and when it goes stale.',
+  requires: NEEDS_RENTAL,
+  unavailableText: NEEDS_RENTAL_TEXT,
+  steps: [
+    {
+      id: 'rentals.agreement.send',
+      label: 'Send',
+      title: 'Send it to sign',
+      body: 'I email the customer a link to sign the agreement online. After the first send, this reads Send an updated agreement.',
+      ...atEdit('agreement'),
+      anchors: [sec('rental-agreement-send')],
+      side: 'bottom',
+      notes: [{ text: 'It needs the customer’s name and email address.' }],
+    },
+    {
+      id: 'rentals.agreement.status',
+      label: 'Status',
+      title: 'Where it got to',
+      body: 'The tag says Not sent, Awaiting signature, Opened not signed, or Signed. Open shows the document, and Signed copy is the one they signed.',
+      ...at('agreement'),
+      anchors: [sec('rental-agreement-doc'), PANEL_TITLE],
+      side: 'bottom',
+      notes: [{ text: 'A Test tag means it was sent in test mode: watermarked, and deleted after 14 days.' }],
+    },
+    {
+      id: 'rentals.agreement.template',
+      label: 'Template',
+      title: 'Which template it uses',
+      body: 'The template the next send will use. Change picks another, Preview shows it filled in with this rental, and Edit changes the template itself.',
+      ...at('agreement'),
+      anchors: [sec('rental-agreement-template'), PANEL_TITLE],
+      side: 'top',
+      notes: [{ text: 'Saving an edit changes that template for every later agreement that uses it.' }],
+    },
+    {
+      id: 'rentals.agreement.stale',
+      label: 'Out of date',
+      title: 'When the terms move',
+      body: 'If the dates or the car change after it was sent, I put a banner here saying it no longer matches. Send an updated one, or keep the one they have.',
+      ...at('agreement'),
+      anchors: [sec('rental-agreement-doc'), PANEL_TITLE],
+      side: 'bottom',
+      notes: [{ text: 'Earlier versions are kept, because a customer may have signed one of them.' }],
+    },
+    {
+      id: 'rentals.agreement.keys',
+      label: 'Before the keys',
+      title: 'Signed before the keys go',
+      body: 'The car cannot go out until the agreement is signed. Handover tells you if it is still waiting.',
+      ...at('agreement'),
+      anchors: [rail('handover'), sec('rental-agreement-doc'), PANEL_TITLE],
+      mobileAnchors: [sec('rental-agreement-doc'), PANEL_TITLE],
+      side: 'right',
+    },
+  ],
+};
+
+const insurance: TabTourTopic = {
+  id: 'rentals.insurance',
+  title: 'Insurance',
+  summary: 'Bonzah cover for these dates, or the customer’s own policy.',
+  requires: NEEDS_RENTAL,
+  unavailableText: NEEDS_RENTAL_TEXT,
+  steps: [
+    {
+      id: 'rentals.insurance.buy',
+      label: 'Buy cover',
+      title: 'Cover for this hire',
+      body: 'Add Bonzah cover opens a quote priced for this car and these dates. If Bonzah cannot cover it, hover the button and I tell you why.',
+      ...atEdit('insurance'),
+      anchors: [sec('rental-insurance-buy')],
+      side: 'bottom',
+      notes: [{ text: 'Cover you buy is added to the rental as a charge, to take on Payments.' }],
+    },
+    {
+      id: 'rentals.insurance.facts',
+      label: 'The policy',
+      title: 'The policy at a glance',
+      body: 'The policy number, the dates it covers, how many days and the premium. Before anything is bought, it shows what the cover would cost.',
+      ...at('insurance'),
+      anchors: [sec('rental-bonzah-facts'), PANEL_TITLE],
+      side: 'bottom',
+    },
+    {
+      id: 'rentals.insurance.covers',
+      label: 'Covers',
+      title: 'Four kinds of cover',
+      body: 'Collision damage, liability to others, extra liability up to $1M, and personal accident. Each tile says what it pays for and what it costs.',
+      ...at('insurance'),
+      anchors: [sec('rental-bonzah-covers'), PANEL_TITLE],
+      side: 'bottom',
+    },
+    {
+      id: 'rentals.insurance.stale',
+      label: 'Out of date',
+      title: 'If the dates move',
+      body: 'A policy covers fixed dates. If the rental now runs longer, I say how many days the car is not covered and offer to re-quote.',
+      ...at('insurance'),
+      anchors: [sec('rental-bonzah-facts'), PANEL_TITLE],
+      side: 'bottom',
+    },
+    {
+      id: 'rentals.insurance.own',
+      label: 'Their own',
+      title: 'Their own insurance',
+      body: 'If the customer has their own policy, upload the certificate here, as a PDF or a photo. I read it and check it.',
+      ...at('insurance'),
+      anchors: [sec('rental-own-policy'), PANEL_TITLE],
+      side: 'top',
+    },
+  ],
+};
+
+const payments: TabTourTopic = {
+  id: 'rentals.payments',
+  title: 'Payments and the deposit',
+  summary: 'What is owed, the deposit hold, taking money, and cancelling.',
+  requires: NEEDS_RENTAL,
+  unavailableText: NEEDS_RENTAL_TEXT,
+  steps: [
+    {
+      id: 'rentals.payments.owed',
+      label: 'Owed',
+      title: 'What is still owed',
+      body: 'The big number is what is left to pay, or Settled when nothing is. Beside it, the sum: total charged, minus what was paid.',
+      ...at('payments'),
+      anchors: [sec('rental-outstanding'), PANEL_TITLE],
+      side: 'bottom',
+      notes: [{ text: 'It reads Overdue when a charge is past its due date and still not paid.' }],
+    },
+    {
+      id: 'rentals.payments.deposit',
+      label: 'Deposit',
+      title: 'The deposit sits apart',
+      body: 'A hold on a card is not money received, so the deposit is never in the totals. Charge or release a hold here, or take one if there is none.',
+      ...at('payments'),
+      anchors: [sec('rental-deposit'), sec('rental-outstanding'), PANEL_TITLE],
+      side: 'bottom',
+    },
+    {
+      id: 'rentals.payments.take',
+      label: 'Take a payment',
+      title: 'Taking money',
+      body: 'Take a payment first asks what it is for and shows the amount before anything moves. Then you charge the card on file, send a link, or record it by hand.',
+      ...atEdit('payments'),
+      anchors: [sec('rental-payment-actions')],
+      side: 'bottom',
+      notes: [{ text: 'Add a charge puts a fine or another cost on the rental.' }],
+    },
+    {
+      id: 'rentals.payments.charges',
+      label: 'Charges',
+      title: 'Every charge',
+      body: 'What the rental owes, the ones still owed first, each with what is paid and what is left. Open the card to see them all.',
+      ...at('payments'),
+      anchors: ['[aria-label="Open all charges"]', PANEL_TITLE],
+      side: 'top',
+    },
+    {
+      id: 'rentals.payments.received',
+      label: 'Payments',
+      title: 'Every payment',
+      body: 'Money that came in, and how it was paid. A payment someone typed in by hand says so. Open the card for the full list.',
+      ...at('payments'),
+      anchors: ['[aria-label="Open all payments"]', PANEL_TITLE],
+      side: 'top',
+    },
+    {
+      id: 'rentals.payments.cancel',
+      label: 'Cancel',
+      title: 'Cancelling a rental',
+      body: 'Cancel rental works only before the car goes out. You pick a full, part or no refund, and I email the customer.',
+      ...atEdit('payments'),
+      anchors: [sec('rental-cancel')],
+      side: 'bottom',
+      notes: [{ text: 'Once the car is out, end the rental on Handover instead.' }],
+    },
+  ],
+};
+
+const handover: TabTourTopic = {
+  id: 'rentals.handover',
+  title: 'Handover and return',
+  summary: 'The car going out and coming back: photos, readings, damage.',
+  requires: NEEDS_RENTAL,
+  unavailableText: NEEDS_RENTAL_TEXT,
+  steps: [
+    {
+      id: 'rentals.handover.ready',
+      label: 'Before the keys',
+      title: 'Before the keys go',
+      body: 'Confirm collection opens once the agreement is signed and nothing is owed. Until then I list what is missing, each with a link to fix it.',
+      ...at('handover'),
+      anchors: [sec('rental-handover-missing'), sec('rental-handover-giving'), PANEL_TITLE],
+      side: 'bottom',
+    },
+    {
+      id: 'rentals.handover.out',
+      label: 'Going out',
+      title: 'When the car goes out',
+      body: 'Add photos, the odometer reading and any notes. Photos are numbered in the order taken, so shoot the same angles in the same order both times.',
+      ...at('handover'),
+      anchors: [sec('rental-handover-giving'), PANEL_TITLE],
+      side: 'bottom',
+      notes: [{ text: 'If you use lockboxes, how the keys are collected is chosen on this page too.' }],
+    },
+    {
+      id: 'rentals.handover.back',
+      label: 'Coming back',
+      title: 'When it comes back',
+      body: 'The same photos, reading and notes for the return. This half stays locked until the car has gone out.',
+      ...at('handover'),
+      anchors: [sec('rental-handover-receiving'), PANEL_TITLE],
+      side: 'top',
+      notes: [{ text: 'With both readings in, I work out how far it went against the allowance.' }],
+    },
+    {
+      id: 'rentals.handover.confirm',
+      label: 'Confirm',
+      title: 'Confirm out, then back',
+      body: 'Confirm collection records the car going out and, once approved and paid, makes the rental Active, emails the customer and places the deposit hold. Confirm return closes it and releases the hold.',
+      ...atEdit('handover'),
+      anchors: [sec('rental-handover-confirm')],
+      side: 'top',
+      notes: [{ text: 'A confirmed handover can be undone if it was a mistake.' }],
+    },
+    {
+      id: 'rentals.handover.damage',
+      label: 'Damage',
+      title: 'Spotting new damage',
+      body: 'With photos on both sides, I can compare them pair by pair and flag new damage. It is a prompt to go and look, and it charges nobody.',
+      ...at('handover'),
+      anchors: [sec('rental-damage'), PANEL_TITLE],
+      side: 'top',
+    },
+  ],
+};
+
+const elsewhere: TabTourTopic = {
+  id: 'rentals.elsewhere',
+  title: 'Messages, history and emails',
+  summary: 'The panels beside a rental, and what the customer is sent.',
+  requires: NEEDS_RENTAL,
+  unavailableText: NEEDS_RENTAL_TEXT,
+  steps: [
+    {
+      id: 'rentals.elsewhere.management',
+      label: 'Management',
+      title: 'How it is booked',
+      body: 'Management shows the original booking: its dates, how many days and what it comes to.',
+      ...at('customer'),
+      anchors: [railTab('management'), '[data-tour="rental-right-rail"]'],
+      mobileAnchors: [dockTab('Management')],
+      side: 'left',
+    },
+    {
+      id: 'rentals.elsewhere.messages',
+      label: 'Messages',
+      title: 'Talk to the customer',
+      body: 'Your conversation with this customer, by in-app chat, text, email or a call, without leaving the rental.',
+      ...at('customer'),
+      anchors: [railTab('messages'), '[data-tour="rental-right-rail"]'],
+      mobileAnchors: [dockTab('Messages')],
+      side: 'left',
+    },
+    {
+      id: 'rentals.elsewhere.notifications',
+      label: 'Notifications',
+      title: 'Alerts for this rental',
+      body: 'Only the notifications about this rental: the booking, payments, signing, refunds and deposit holds.',
+      ...at('customer'),
+      anchors: [railTab('notifications'), '[data-tour="rental-right-rail"]'],
+      mobileAnchors: [dockTab('Notifications')],
+      side: 'left',
+    },
+    {
+      id: 'rentals.elsewhere.activity',
+      label: 'Activity',
+      title: 'What has happened',
+      body: 'Everything this rental has done, in order: created, the agreement sent and signed, payments and refunds, the car going out and coming back.',
+      ...at('customer'),
+      anchors: [railTab('activity'), '[data-tour="rental-right-rail"]'],
+      mobileAnchors: [dockTab('Activity')],
+      side: 'left',
+    },
+    {
+      id: 'rentals.elsewhere.trax',
+      label: 'Trax',
+      title: 'Ask me about it',
+      body: 'Ask me anything about this rental here. I already know which one you mean, and this chat is kept apart from your main one.',
+      ...at('customer'),
+      anchors: [railTab('trax'), '[data-tour="rental-right-rail"]'],
+      mobileAnchors: [dockTab('Trax')],
+      side: 'left',
+    },
+    {
+      id: 'rentals.elsewhere.emails',
+      label: 'Emails',
+      title: 'What the customer gets',
+      body: 'I email the customer along the way: the agreement to sign, when the hire starts, when it is complete, and if it is cancelled.',
+      ...at('customer'),
+      anchors: [],
+      side: 'center',
+    },
+  ],
+};
 
 export const RENTALS_TAB_TOUR: TabTour = {
   id: 'rentals',
   label: 'Rentals',
   homeRoute: '/rentals',
-  // Said when too few ANCHORED steps survive. No longer the empty-tab case —
-  // that has four steps of its own — so in practice this is a permissions
-  // shortfall: someone who cannot reach this list at all.
   emptyMessage:
-    'There is nothing on your Rentals tab to walk through yet. Take a booking, or make one yourself, and I will show you around it.',
-  steps: STEPS,
+    'There is not enough of this tab open to you to walk through. A head admin can widen your access to Rentals.',
+  topics: [list, start, record, customer, car, dates, agreement, insurance, payments, handover, elsewhere],
 };

@@ -56,6 +56,7 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { BILLING_READ_ONLY_COPY } from "@/components/settings-v2/billing-states-v2";
 import { useIntegrationBilling, useInvoiceLines } from "@/lib/integration-billing/hooks";
 import { NextInvoiceCard } from "@/components/integration-billing/next-invoice-card";
+import { TabTourButton } from "@/components/onboarding/tab-tour-button";
 
 /**
  * Billing, v2 (v2-chrome tenants only — the route picks this or the untouched
@@ -318,7 +319,7 @@ export function BillingPageV2() {
   ) {
     return (
       <div className="p-6 space-y-6">
-        <Card className="max-w-2xl mx-auto">
+        <Card data-tour="billing-past-due" className="max-w-2xl mx-auto">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-500" />
@@ -413,7 +414,8 @@ export function BillingPageV2() {
     }
 
     return (
-      <div className="p-6">
+      <div data-tour="billing-empty" className="relative p-6">
+        <TabTourButton tour="billing" className="absolute right-6 top-6" />
         <div className="mb-10 text-center max-w-2xl mx-auto">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
             <Crown className="h-7 w-7 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />
@@ -432,7 +434,7 @@ export function BillingPageV2() {
         ) : hasPlans ? (
           <>
             {readOnlyWrap(
-              <div className={`flex flex-wrap justify-center gap-8 ${plans.length === 1 ? "" : "max-w-5xl mx-auto"}`}>
+              <div data-tour="billing-plans" className={`flex flex-wrap justify-center gap-8 ${plans.length === 1 ? "" : "max-w-5xl mx-auto"}`}>
                 {plans.map((plan) => (
                   <PricingCard
                     key={plan.id}
@@ -461,7 +463,7 @@ export function BillingPageV2() {
             </div>
           </>
         ) : (
-          <div className="text-center py-12 max-w-md mx-auto">
+          <div data-tour="billing-no-plans" className="text-center py-12 max-w-md mx-auto">
             <p className="text-muted-foreground">
               No subscription plans are available yet. Please contact us to get started.
             </p>
@@ -497,7 +499,10 @@ export function BillingPageV2() {
           stay one element for the card to size); the header is kept real. */}
       <AutoSkeleton loading={pageLoading} className="flex flex-col gap-6 md:h-[calc(100svh-7rem)] md:min-h-[600px]">
         <div className="shrink-0" data-skeleton-keep>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Billing</h1>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Billing</h1>
+            <TabTourButton tour="billing" />
+          </div>
           <p className="mt-1 text-muted-foreground">
             Your plan, your card, and your referral savings.
           </p>

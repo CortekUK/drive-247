@@ -197,6 +197,10 @@ export function InsurancePoliciesTableV2<T extends InsurancePolicyRowV2>({
             return (
               <ListRow
                 key={doc.id}
+                // Tour anchor; the rental id lets the tour know the list has policies.
+                data-tour="insurance-row"
+                data-record-kind={doc.rental_id ? "rentals" : undefined}
+                data-record-id={doc.rental_id ?? undefined}
                 // The rentals list's flag treatment: a faint tint and a 2px rail,
                 // in place of v1's 4px amber border on a non-live INSHUR row.
                 className={cn(notLive && "bg-amber-500/5 border-l-2 border-l-amber-500")}

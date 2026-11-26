@@ -233,6 +233,7 @@ export function TraxBriefCard(perms: {
       role={canTalk ? 'button' : undefined}
       tabIndex={canTalk && !isLoading ? 0 : undefined}
       aria-label={canTalk ? 'Continue with Trax' : undefined}
+      data-tour="dash-brief"
       onClick={go}
       onKeyDown={(e) => {
         if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
@@ -285,13 +286,13 @@ export function TraxBriefCard(perms: {
           <p className="text-[13px] text-[var(--pv-ink-3)]">Looking over the business…</p>
         ) : (
           <div aria-live="polite" className="flex min-h-0 flex-1 flex-col">
-            <p className="text-[15px] font-extrabold leading-snug tracking-[-0.02em] text-[var(--pv-accent-ink)] md:text-[17px]">
+            <p data-tour="dash-brief-headline" className="text-[15px] font-extrabold leading-snug tracking-[-0.02em] text-[var(--pv-accent-ink)] md:text-[17px]">
               {shown}
               {!typed && <Caret />}
             </p>
             {/* As many whole points as the card has room for: the rest are
                 hidden, never cut in half, and nothing scrolls. */}
-            <div ref={fitRef} className="relative mt-3 min-h-0 flex-1 overflow-hidden">
+            <div ref={fitRef} data-tour="dash-brief-points" className="relative mt-3 min-h-0 flex-1 overflow-hidden">
             {typed && brief.points.length > 0 && (
               <ul className="space-y-2">
                 {brief.points.map((point, i) => (
@@ -310,7 +311,7 @@ export function TraxBriefCard(perms: {
             )}
             </div>
             {typed && canTalk && (
-              <div className="flex animate-in flex-nowrap gap-1 pt-3 fade-in-0 duration-200 motion-reduce:animate-none max-md:-mx-6 max-md:overflow-x-auto max-md:px-6 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden max-md:[&>button]:shrink-0">
+              <div data-tour="dash-brief-questions" className="flex animate-in flex-nowrap gap-1 pt-3 fade-in-0 duration-200 motion-reduce:animate-none max-md:-mx-6 max-md:overflow-x-auto max-md:px-6 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden max-md:[&>button]:shrink-0">
                 {brief.suggestions.map((q) => (
                   <button
                     key={q.label}

@@ -684,6 +684,7 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
       title="Agreement"
       description="Produced from the terms. Re-issue it whenever they move."
       action={
+        <span data-tour="rental-agreement-send" className="inline-flex">
         <StageAction
           icon={sending ? Loader2 : Send}
           label={rank === 0 ? "Send the agreement" : "Send an updated agreement"}
@@ -696,6 +697,7 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
                 : "BoldSign needs a name and an email address to address the document to. Add them on the customer's profile."
           }
         />
+        </span>
       }
     >
       {/* Island layout, the Customer stage's grammar: full-width cards stacked
@@ -725,7 +727,7 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
 
         {/* ── the document ────────────────────────────────────────────────── */}
         <Surface className="shrink-0 px-5 py-4">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div data-tour="rental-agreement-doc" className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <h3 className="font-heading text-sm font-semibold">Rental agreement</h3>
             <StateChip state={state} />
             {/* Test-mode documents are watermarked and BoldSign deletes them
@@ -800,7 +802,7 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
         {/* ── the template the next send uses (Agreements v2) ─────────────── */}
         {agreementsV2 && (
           /* Fills the rest of the pane — no dead space under it. */
-          <div className="flex min-h-0 flex-1 flex-col [&>*]:flex-1">
+          <div data-tour="rental-agreement-template" className="flex min-h-0 flex-1 flex-col [&>*]:flex-1">
             <AgreementTemplateRowV2
               rental={rental}
               choice={templateChoice}

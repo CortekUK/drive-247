@@ -57,6 +57,7 @@ import {
 } from "@/lib/integration-billing/hooks";
 import { freeEntry, isPreviewOnly, keyForBoardName, type CatalogEntry } from "@/lib/integration-billing/catalog";
 import { BetaPill, IntegrationDialogBody, AddOnPill } from "./premium-integration";
+import { TabTourButton } from "@/components/onboarding/tab-tour-button";
 
 // logo.dev — publishable key (safe for client-side img.logo.dev)
 const LOGO_TOKEN = "pk_EmodMTbiSPiHDa2fIPUo3w";
@@ -200,6 +201,7 @@ function IntegrationCard({
   return (
     <Card
       onClick={onOpen}
+      data-tour={`integration-${it.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
       className={cn(
         "group relative isolate flex cursor-pointer flex-col items-center gap-2 border bg-transparent py-6 text-center shadow-none transition-colors duration-200 ease-in hover:border-primary/30 hover:ease-out motion-reduce:transition-none",
         // Not available: dimmed slightly, still readable and still opens.
@@ -218,7 +220,7 @@ function IntegrationCard({
           UNAVAILABLE), plus a "!" when the integration needs attention.
           Centred on the pin (a 28px button at top-3; the tag is 24px, so top-3.5) so the two corners read
           as one row. This replaced the status chip that sat under the text. */}
-      <div className="absolute left-4 top-3.5 z-10 flex items-center gap-1.5">
+      <div data-tour="integration-tag" className="absolute left-4 top-3.5 z-10 flex items-center gap-1.5">
         {fixedTag ? (
           <CardTag kind={fixedTag} />
         ) : CardStatus && tenant ? (
@@ -460,11 +462,14 @@ export function IntegrationsBoard() {
        at 50, under the 64px top bar. Below md there is still no top padding. */
     <div className="mx-auto w-full max-w-[1200px] space-y-6 px-1 pb-6 md:pt-[23.25px]">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-semibold leading-tight tracking-tight">Integrations</h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          Connect the tools that power payments, documents, messaging and more.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-semibold leading-tight tracking-tight">Integrations</h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Connect the tools that power payments, documents, messaging and more.
+          </p>
+        </div>
+        <TabTourButton tour="integrations" className="mt-1.5" />
       </div>
 
       {/* Grid.
@@ -562,6 +567,7 @@ export function IntegrationsBoard() {
             `[&>*]:min-w-0` stops the dialog's grid tracks from growing to fit
             an unbreakable child, so content wraps instead of being clipped. */}
         <DialogContent
+          data-tour="integration-dialog"
           // Screen-led panels drop the corner ×: the status chip owns that
           // corner, and Esc or a click outside still closes the dialog.
           showCloseButton={!(selected && SCREEN_LED.has(selected.name))}
