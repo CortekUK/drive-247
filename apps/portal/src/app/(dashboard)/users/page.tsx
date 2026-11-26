@@ -121,23 +121,35 @@ export default function UsersManagement() {
   });
   const { data: users, isLoading, refetch } = usersQuery;
 
-  // Generate random password
+  // Generate a temporary password. It guards an account, so every random pick
+  // comes from crypto.getRandomValues, a secure source (feat-001 spec 06.10).
   const generatePassword = () => {
+    // A uniform whole number in [0, max), without modulo bias.
+    const randomBelow = (max: number) => {
+      const limit = Math.floor(0x100000000 / max) * max;
+      const buf = new Uint32Array(1);
+      do crypto.getRandomValues(buf); while (buf[0] >= limit);
+      return buf[0] % max;
+    };
+    const pick = (set: string) => set[randomBelow(set.length)];
+
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
-    let password = '';
-    // Ensure we have at least one of each required type
-    password += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)]; // uppercase
-    password += 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)]; // lowercase
-    password += '0123456789'[Math.floor(Math.random() * 10)]; // number
-    password += '!@#$%^&*'[Math.floor(Math.random() * 8)]; // special
-
+    // At least one of each required type
+    const password = [
+      pick('ABCDEFGHIJKLMNOPQRSTUVWXYZ'),
+      pick('abcdefghijklmnopqrstuvwxyz'),
+      pick('0123456789'),
+      pick('!@#$%^&*'),
+    ];
     // Fill the rest
-    for (let i = 4; i < 16; i++) {
-      password += chars[Math.floor(Math.random() * chars.length)];
-    }
+    while (password.length < 16) password.push(pick(chars));
 
-    // Shuffle the password
-    return password.split('').sort(() => Math.random() - 0.5).join('');
+    // Shuffle (Fisher-Yates)
+    for (let i = password.length - 1; i > 0; i--) {
+      const j = randomBelow(i + 1);
+      [password[i], password[j]] = [password[j], password[i]];
+    }
+    return password.join('');
   };
 
   // Create user mutation
