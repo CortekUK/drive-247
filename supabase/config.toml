@@ -480,6 +480,15 @@ verify_jwt = false
 [functions.signup-verify-otp]
 verify_jwt = false
 
+# feat-001: the portal's "check your email" window and first password, for an
+# account made by the 3-step signup. The person is signed in, so both are
+# JWT-verified, and each also calls auth.getUser() and acts only on that user.
+[functions.signup-verify-email]
+verify_jwt = true
+
+[functions.signup-set-password]
+verify_jwt = true
+
 # The Google half of step 1. NOT DEPLOYED — see the banner at the top of
 # supabase/functions/signup-begin-oauth/index.ts. Listed here so that whenever it
 # IS deployed it lands with the right setting: JWT-verified, because it acts on

@@ -46,12 +46,20 @@ None. Codes stay where `_shared/signup-otp.ts` keeps them (hashed, in the user's
 
 ## Functions
 
-- `signup-verify-otp` (JWT required from now on, the caller's own user only): actions `verify`,
-  `resend`, and a new `change_email { newEmail }`. Errors: `OTP_INVALID` (+ `attemptsRemaining`),
-  `OTP_LOCKED` (429), `OTP_EXPIRED`, `RESEND_COOLDOWN` (429, + seconds), `EMAIL_TAKEN`,
-  `EMAIL_INVALID`, `ALREADY_CONFIRMED`.
-- New `signup-set-password` (JWT required): `{ password }`; checks the rule, sets it, clears the
-  flag. Errors: `PASSWORD_RULE`, `EMAIL_NOT_CONFIRMED` (a password is only set after the code).
+- New `signup-verify-email` (`verify_jwt = true`, and it calls `auth.getUser()`; acts on the
+  caller's own account only, never by email): actions `verify { code }`, `resend`, and
+  `change_email { newEmail }`. Errors: `UNAUTHORIZED` (401), `OTP_INVALID` (+ `attemptsRemaining`),
+  `OTP_LOCKED` (429), `OTP_EXPIRED`, `RESEND_COOLDOWN` (429, + `retryAfterSeconds`), `EMAIL_TAKEN`,
+  `EMAIL_INVALID`, `EMAIL_SAME`, `ALREADY_CONFIRMED`. `verify` on a proved email answers
+  `alreadyVerified`.
+- New `signup-set-password` (`verify_jwt = true`): `{ password }`; checks the rule, sets it, clears
+  the flag. Errors: `UNAUTHORIZED` (401), `PASSWORD_RULE`, `EMAIL_NOT_CONFIRMED` (a password is only
+  set after the code), `NOT_PENDING` (a password already exists: the profile changes it).
+- The rules both use are `_shared/signup-account-rules.ts` (the flag names, the password rule, the
+  email check), pure and shared.
+- *(Changed from the first draft)* `signup-verify-otp` is left as it is: today's 5-step signup
+  still calls it by email without a session, so changing it before step 4 would break signups on
+  staging. It is retired with the old steps.
 
 ## Screens
 
@@ -69,7 +77,7 @@ so it cannot be used to take over a confirmed account.
 
 | Statement | Proved by |
 |---|---|
-| 03.1, 03.2, 03.4 – 03.11 | `evals/03-verify-and-password-window.mjs` |
+| 03.1, 03.2, 03.4 – 03.11 | `evals/03-verify-and-password-window.mjs` (staging, once deployed) and, before that, `supabase/functions/_tests/signup-verify-window_test.ts` (the real functions in Deno, no network) |
 | 03.13 | `evals/03-verify-and-password-window.mjs` (reads the source) |
 | 03.3, 03.12, 03.14 | QA report (keyboard, autofill and password managers are on the phone) |
 

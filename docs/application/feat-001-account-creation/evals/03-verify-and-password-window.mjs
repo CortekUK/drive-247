@@ -15,12 +15,12 @@ async function newOperator(tag, flags = { [PENDING_EMAIL]: true, [PENDING_PASSWO
   return { ...u, token: s.token };
 }
 
-const verifyCall = (body, token) => fn("signup-verify-otp", body, { as: token });
+const verifyCall = (body, token) => fn("signup-verify-email", body, { as: token });
 const setPassword = (password, token) => fn("signup-set-password", { password }, { as: token });
 
 statement("03.1", "The window's functions refuse someone who is not signed in", async () => {
-  const a = await fn("signup-verify-otp", { action: "verify", code: "123456" });
-  ok(a.status === 401 || a.status === 403, `signup-verify-otp let a visitor in (${a.status})`);
+  const a = await fn("signup-verify-email", { action: "verify", code: "123456" });
+  ok(a.status === 401 || a.status === 403, `signup-verify-email let a visitor in (${a.status})`);
   const b = await fn("signup-set-password", { password: "Chosen12345" });
   ok(b.status === 401 || b.status === 403, `signup-set-password let a visitor in (${b.status})`);
 });
