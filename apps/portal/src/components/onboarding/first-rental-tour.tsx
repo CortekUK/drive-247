@@ -789,27 +789,33 @@ function TourLayer({
             )}
           >
             {/* Title and the way out. The X ends the tour, as Escape does. */}
-            {topic && (
-              <p className="-mb-1 text-[11.5px] font-medium uppercase tracking-[0.06em] text-primary" data-tour-topic="">
-                {topic.tourLabel} · {topic.topicTitle}
-              </p>
-            )}
             <div className="flex items-start justify-between gap-3">
-              <h2
-                className={cn(
-                  'font-heading font-semibold text-foreground',
-                  isWelcome ? 'text-[21px] leading-tight tracking-[-0.01em]' : 'text-[17px] leading-snug',
+              <div className="flex min-w-0 flex-col gap-1">
+                {topic && (
+                  <p className="text-[11.5px] font-medium uppercase tracking-[0.06em] text-primary" data-tour-topic="">
+                    {topic.tourLabel} · {topic.topicTitle}
+                  </p>
                 )}
-              >
-                {step.title}
-              </h2>
+                <h2
+                  className={cn(
+                    'font-heading font-semibold text-foreground',
+                    isWelcome ? 'text-[21px] leading-tight tracking-[-0.01em]' : 'text-[17px] leading-snug',
+                  )}
+                >
+                  {step.title}
+                </h2>
+              </div>
               {!required && (
                 <button
                   type="button"
                   onClick={onEnd}
                   aria-label="Close the tour"
                   title="Close"
-                  className="v2-phone-hit -mr-1.5 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+                  // Sits in the top corner, level with the first line of the header.
+                  className={cn(
+                    'v2-phone-hit -mr-1.5 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground',
+                    topic ? '-mt-1.5' : '-mt-0.5',
+                  )}
                 >
                   <X className="size-4" aria-hidden="true" />
                 </button>
