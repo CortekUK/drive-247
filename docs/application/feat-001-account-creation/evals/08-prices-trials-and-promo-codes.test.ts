@@ -53,6 +53,46 @@ describe("08 prices, trials and promo codes", () => {
     expect(need("discountedBillDates")("2026-11-26", 0, 3)).toEqual(["2026-11-26", "2026-12-26", "2027-01-26"]);
   });
 
+  // Rows 13-16: the edges of the date math, each with its 4th (full price) bill.
+  it.each([
+    [13, "2026-11-26", 60, ["2027-01-25", "2027-02-25", "2027-03-25"], "2027-04-25"],
+    [14, "2027-01-31", 0, ["2027-01-31", "2027-02-28", "2027-03-31"], "2027-04-30"],
+    [15, "2028-01-30", 30, ["2028-02-29", "2028-03-29", "2028-04-29"], "2028-05-29"],
+    [16, "2026-11-26", 90, ["2027-02-24", "2027-03-24", "2027-04-24"], "2027-05-24"],
+  ])("08.13 #%i signup %s, %i-day trial: 3 discounted bills, then full price", (_row, signup, trial, discounted, fourth) => {
+    expect(need("discountedBillDates")(signup, trial, 3)).toEqual(discounted);
+    expect(need("paidBillDates")(signup, trial, 4)[3]).toBe(fourth);
+  });
+
+  it("08.14 #14 a bill on the 31st falls on the month's last day in shorter months", () => {
+    expect(need("paidBillDates")("2027-01-31", 0, 4)).toEqual(["2027-01-31", "2027-02-28", "2027-03-31", "2027-04-30"]);
+  });
+
+  it("08.13 #all every trial from 0 to 90 days gets exactly 3 discounted bills", () => {
+    for (const signup of ["2026-11-26", "2027-01-31", "2028-02-29", "2026-12-31"]) {
+      for (let trial = 0; trial <= 90; trial++) {
+        const got = need("discountedBillDates")(signup, trial, 3);
+        expect(got, `${signup} + ${trial} days`).toEqual(need("paidBillDates")(signup, trial, 3));
+      }
+    }
+  });
+
+  // Rows 17-18: fixed discounts.
+  it.each([
+    [17, 12900, 20, 10900],
+    [18, 12900, 200, 0],
+  ])("08.15 #%i %i cents with $%i off is %i cents", (_row, cents, dollars, expected) => {
+    expect(need("promoBillCents")(cents, "fixed", dollars)).toBe(expected);
+  });
+
+  it("08.6 #refuse broken input is refused, never charged", () => {
+    expect(() => need("promoBillCents")(129.5, "percent", 30)).toThrow();
+    expect(() => need("promoBillCents")(-100, "percent", 30)).toThrow();
+    expect(() => need("promoBillCents")(12900, "percent", 101)).toThrow();
+    expect(() => need("promoBillCents")(12900, "percent", -5)).toThrow();
+    expect(() => need("paidBillDates")("2026-02-30", 0, 1)).toThrow();
+  });
+
   // Row 11 and 08.7.
   it.each([
     [11, " bf30 ", "BF30"],

@@ -34,9 +34,20 @@ touch this math; this spec records it so it can be proved.
   (`_shared/platform-promo.ts`). The one place is `_shared/platform-promo-rules.ts`; the card step
   shows the amount the server returns.
 - 08.13 *(Defect to fix)* With a trial, the coupon is stretched by `floor(trialDays / 30)` months
-  (`deferredCouponMonths`). Stripe counts a repeating coupon's months from the subscription start,
-  so for a trial of 30 days or more the 3rd discounted bill can fall on the coupon's last day. The
-  stretch is changed so that exactly 3 paid bills are discounted for every trial length (08.5).
+  (`deferredCouponMonths`). Stripe counts a repeating coupon's months from the subscription start
+  and stops at that end date, so a 60-day trial gets 4 discounted bills (row 13). The coupon length
+  is instead the smallest whole number of months from signup that passes the last discounted bill
+  (`couponMonthsFor`), so exactly 3 paid bills are discounted for every trial length (08.5).
+- 08.14 Monthly bills keep the day of the first bill; in a month without that day, the bill falls on
+  the month's last day (rows 14, 15).
+- 08.15 A fixed discount takes whole dollars off and never takes a bill below $0.00 (rows 17, 18).
+- 08.17 *(Open, asked of Ghulam 26 Nov 2026)* A coupon counted from signup cannot give exactly 3
+  discounted bills for every case: a signup on the 29th–31st with a trial of 30 days or more can
+  get a 4th (44 of 99,645 signup-day × trial combinations, none with today's 14-day trials). The
+  sweep test in the eval stays strict and fails on these until it is decided: either no plan has
+  such a trial, or the coupon starts at the trial's end (a Stripe subscription schedule).
+- 08.16 A bill dated on the coupon's end date is not discounted. (This is how Stripe ends a
+  repeating coupon; the QA report checks it on a Stripe test subscription.)
 
 ## Worked examples
 
@@ -56,6 +67,12 @@ Live staging plans (26 Nov 2026): Starter $129.00, Growth $229.00, Scale $349.00
 | 10 | Growth + BF30, changed to Scale | $349.00 × 0.70 = $244.30 | $244.30, not $160.30 |
 | 11 | " bf30 " typed | trims and uppercases to BF30 | Same as row 3 |
 | 12 | BF30 after 1 Dec 2026 04:59:59 UTC | expired | Refused; $229.00 |
+| 13 | 60-day trial + BF30, signup 26 Nov 2026 | 26 Nov + 60 days: 4 to 30 Nov, 31 in Dec (35), 25 in Jan (60) = 25 Jan | 25 Jan, 25 Feb, 25 Mar discounted; 25 Apr full price |
+| 14 | No trial, signup 31 Jan 2027 (month end) | Bills keep day 31, or the month's last day | 31 Jan, 28 Feb, 31 Mar discounted; 30 Apr full price |
+| 15 | 30-day trial, signup 30 Jan 2028 (leap year) | 30 Jan + 30 days: 1 to 31 Jan, 29 in Feb = 29 Feb | 29 Feb, 29 Mar, 29 Apr discounted; 29 May full price |
+| 16 | 90-day trial (the most allowed), signup 26 Nov 2026 | 4 + 31 + 31 + 24 = 90: 24 Feb 2027 | 24 Feb, 24 Mar, 24 Apr discounted; 24 May full price |
+| 17 | $20 off (fixed), Starter | $129.00 − $20.00 = $109.00 | $109.00 |
+| 18 | $200 off (fixed), Starter | $129.00 − $200.00 is below 0 | $0.00 |
 
 ## Database
 
@@ -79,7 +96,8 @@ a calculator against the card step, the Stripe test dashboard and the invoice.
 
 | Statement | Proved by |
 |---|---|
-| 08.1, 08.5, 08.6, 08.7, 08.13 (rows 1–12) | `evals/08-prices-trials-and-promo-codes.test.ts` (Vitest) |
+| 08.1, 08.5, 08.6, 08.7, 08.13, 08.14, 08.15 (rows 1–18) | `evals/08-prices-trials-and-promo-codes.test.ts` (Vitest) |
+| 08.16 | QA report (only a real Stripe subscription shows where the coupon stops) |
 | 08.2, 08.3, 08.4, 08.8, 08.9, 08.10, 08.11, 08.12 | `evals/08-prices-trials-and-promo-codes.mjs` (staging, Stripe test mode) |
 | Rows 2–5, 9 on the screen and invoice | QA report |
 

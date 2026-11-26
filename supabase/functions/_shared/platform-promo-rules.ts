@@ -177,6 +177,102 @@ export function promoVariant(trialDays: number): string {
   return trialDays > 0 ? `deferred_${trialExtraMonths(trialDays)}m` : "standard";
 }
 
+/* ------------------------------------------------------------------------- */
+/* feat-001 spec 08: the one place the signup bill math lives.               */
+/* Money is whole cents in and out. Dates are calendar days in UTC, written  */
+/* "YYYY-MM-DD". Monthly bills keep the day of the first bill and fall back  */
+/* to the month's last day when that day does not exist (Stripe's rule).     */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * One bill after a discount, in whole cents (spec 08.1, 08.6).
+ * Percent: rounded to the cent, half up, using whole-number arithmetic so a
+ * half is never lost to floating point. Fixed: `value` is in dollars. Never
+ * below 0.
+ */
+export function promoBillCents(priceCents: number, type: PromoDiscountType, value: number): number {
+  if (!Number.isInteger(priceCents) || priceCents < 0) throw new Error(`priceCents must be whole cents, got ${priceCents}`);
+  if (!Number.isFinite(value) || value < 0) throw new Error(`discount value must be 0 or more, got ${value}`);
+  if (type === "percent") {
+    if (value > 100) throw new Error(`a percent discount cannot be over 100, got ${value}`);
+    const keepBasisPoints = 10000 - Math.round(value * 100); // 30% -> keep 7000 of 10000
+    return Math.floor((priceCents * keepBasisPoints + 5000) / 10000);
+  }
+  return Math.max(0, priceCents - Math.round(value * 100));
+}
+
+function parseDay(iso: string): { y: number; m: number; d: number } {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) throw new Error(`a date must look like 2026-11-26, got ${iso}`);
+  const [y, m, d] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const check = new Date(Date.UTC(y, m - 1, d));
+  if (check.getUTCFullYear() !== y || check.getUTCMonth() !== m - 1 || check.getUTCDate() !== d) {
+    throw new Error(`${iso} is not a real date`);
+  }
+  return { y, m, d };
+}
+
+function formatDay(y: number, m: number, d: number): string {
+  return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** `months` calendar months after `iso`, kept on the same day or the month's last day. */
+export function addMonthsKeepingDay(iso: string, months: number): string {
+  const { y, m, d } = parseDay(iso);
+  const index = y * 12 + (m - 1) + months;
+  const ny = Math.floor(index / 12);
+  const nm = (index % 12) + 1;
+  const lastDay = new Date(Date.UTC(ny, nm, 0)).getUTCDate();
+  return formatDay(ny, nm, Math.min(d, lastDay));
+}
+
+/** `days` days after `iso`. */
+export function addDays(iso: string, days: number): string {
+  const { y, m, d } = parseDay(iso);
+  const t = new Date(Date.UTC(y, m - 1, d + days));
+  return formatDay(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate());
+}
+
+/**
+ * The dates of the first `count` paid monthly bills (spec 08.4). Without a
+ * trial the first is charged at signup; with one, on the day the trial ends.
+ */
+export function paidBillDates(signupISO: string, trialDays: number, count: number): string[] {
+  if (!Number.isInteger(trialDays) || trialDays < 0) throw new Error(`trialDays must be a whole number of days, got ${trialDays}`);
+  const first = addDays(signupISO, trialDays);
+  return Array.from({ length: count }, (_, i) => addMonthsKeepingDay(first, i));
+}
+
+/**
+ * The coupon's `duration_in_months` so that a "`months` months" code discounts
+ * exactly `months` PAID bills (spec 08.5, 08.13).
+ *
+ * Stripe counts a repeating coupon's months from the subscription's start
+ * (signup), and stops discounting at that end date. So the coupon must end
+ * after the last discounted bill and no later than the next one: the smallest
+ * whole number of months from signup that passes the last discounted bill.
+ * This replaces "trial days / 30", which gives a 60-day trial 4 discounted
+ * bills (signup 26 Nov, bills 25 Jan, 25 Feb, 25 Mar, 25 Apr all before 26 Apr).
+ */
+export function couponMonthsFor(signupISO: string, trialDays: number, months: number): number {
+  if (!Number.isInteger(months) || months < 1) throw new Error(`months must be 1 or more, got ${months}`);
+  const bills = paidBillDates(signupISO, trialDays, months);
+  const lastDiscounted = bills[months - 1];
+  let m = months;
+  while (addMonthsKeepingDay(signupISO, m) <= lastDiscounted) m++;
+  return m;
+}
+
+/**
+ * Which paid bills the coupon from `couponMonthsFor` really discounts: those
+ * dated before the coupon ends. Spec 08's worked examples check this, so the
+ * test proves the coupon length, not a list built to match it.
+ */
+export function discountedBillDates(signupISO: string, trialDays: number, months: number): string[] {
+  const end = addMonthsKeepingDay(signupISO, couponMonthsFor(signupISO, trialDays, months));
+  return paidBillDates(signupISO, trialDays, months + 2).filter((day) => day < end);
+}
+
 /** What a stored code looks like (matches the table's CHECK). */
 export const PROMO_CODE_PATTERN = /^[A-Z0-9]+(-[A-Z0-9]+)*$/;
 
