@@ -18,9 +18,10 @@ landing in the portal is spec 02.
   The person never sees or types it. Supabase is told the email is confirmed (it gives no session
   otherwise); whether the person has really proved the address is `d247_signup_email_pending`
   (01.4), and that flag is the only thing any app reads for it.
-- 01.3 `signup-begin` returns a session for the new user (an access and a refresh token) so the
-  browser is signed in without the email being confirmed. The business and card steps use that
-  session as today.
+- 01.3 `signup-begin` answers `requiresVerification: false, threeStep: true`, and the browser signs
+  in at once with the stand-in it sent (the account is ready to sign in, 01.2). The business and card
+  steps use that session as today. *(Changed from the first draft, which had the server hand back
+  tokens: the browser already holds the stand-in, so no credential crosses the wire twice.)*
 - 01.4 The new user is marked `d247_signup_password_pending: true` and
   `d247_signup_email_pending: true` in `app_metadata` (server-set, not editable by the person).
 - 01.5 The six-digit email code is sent by `signup-begin` when the account is created, so it is
@@ -51,11 +52,13 @@ None. The pending flags live in `auth.users.raw_app_meta_data`.
 ## Functions
 
 - `signup-begin` (JWT not required, as today): now always creates `email_confirm: true` with the
-  pending flags, returns
-  `{ session: { access_token, refresh_token }, requiresVerification: false }`, and sends the code.
+  pending flags, returns `{ requiresVerification: false, threeStep: true }`, and sends the code.
   The `SIGNUP_OTP_ENABLED` / `admin_settings.signup_otp_enabled` switch no longer decides whether a
   code step is shown; it is removed.
-- `signup-verify-otp`: unchanged contract; now called from the portal (spec 03).
+- `signup-verify-otp`: unchanged; only a signup started before this change still reaches it. The
+  portal uses `signup-verify-email` (spec 03).
+- An older browser that has not loaded the new web yet reads `requiresVerification: false`, takes
+  its no-code path (sign in, then the password screen) and still finishes.
 - `signup-payment-intent-v2`, `signup-provision`, `signup-resume`, `signup-finish-later`: still
   require a Bearer session; they must accept a user whose email is not yet confirmed.
 
@@ -77,7 +80,7 @@ No card is charged during a trial (spec 08).
 
 | Statement | Proved by |
 |---|---|
-| 01.2, 01.3, 01.4, 01.5, 01.6, 01.10 | `evals/01-signup-steps.mjs` (calls the functions on staging) |
+| 01.2, 01.3, 01.4, 01.5, 01.6, 01.10 | `evals/01-signup-steps.mjs` (calls the functions on staging, once deployed) and, before that, `supabase/functions/_tests/signup-begin-3step_test.ts` (the real `signup-begin` in Deno, no network) |
 | 01.13 | `evals/01-signup-steps.mjs` (reads the source for storage writes) |
 | 01.1, 01.7, 01.8, 01.9, 01.11, 01.12 | QA report (a flow through screens, on real phones) |
 

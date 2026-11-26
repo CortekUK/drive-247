@@ -24,7 +24,6 @@ import {
   type MetaBrowserSignals,
 } from "../_shared/meta-conversions.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { fetchSignupPlan } from "../_shared/signup-plans.ts";
 import { isParkedRow, readRehearsalFor, signupModeFor } from "../_shared/signup-rehearsal.ts";
 import { mintOtp, otpEmailHtml, otpEmailText, otpSubject } from "../_shared/signup-otp.ts";
@@ -41,6 +40,7 @@ import {
   type SignupMetadata,
 } from "../_shared/signup-state.ts";
 import { clean, EMAIL_RE, MAX } from "../_shared/tenant-provisioning.ts";
+import { PENDING_EMAIL, PENDING_PASSWORD } from "../_shared/signup-account-rules.ts";
 import {
   phoneForMeta,
   readSignupAttribution,
@@ -48,54 +48,6 @@ import {
 } from "../_shared/signup-attribution.ts";
 
 const LOG = "[signup-begin]";
-
-/**
- * Email verification, off by default.
- *
- * ON means a new account is created UNCONFIRMED and must clear
- * `signup-verify-otp` before it can go further. Only turn it on once the client
- * can render the verification screen — an unconfirmed user with nowhere to go
- * is the dead end the old `email_confirm: true` comment warned about.
- *
- * ── WHY A TABLE AND NOT A SECRET ───────────────────────────────────────────
- *
- * This read `SIGNUP_OTP_ENABLED` from the function environment. That slot was
- * not available — the project's secret limit is full — and a database flag
- * turns out to be the better home anyway: it is the same place
- * `subscription_gate_disabled` and `subscription_grace_days` already live, it
- * can be flipped from the Super Admin settings page, and flipping it needs no
- * redeploy. If a verification email provider goes down at 2am, the switch is a
- * checkbox rather than a deploy.
- *
- * The env var is still honoured, so freeing a slot later changes nothing.
- *
- * FAILS OFF, deliberately. A read that errors means the account is created
- * CONFIRMED — exactly today's behaviour. The other direction would mint
- * unconfirmed users during a database blip, and nothing could verify them.
- */
-async function otpEnabled(supabase: SupabaseClient): Promise<boolean> {
-  if (Deno.env.get("SIGNUP_OTP_ENABLED") === "true") return true;
-  try {
-    const { data, error } = await supabase.from("admin_settings").select("signup_otp_enabled");
-    if (error) {
-      console.error(`${LOG} admin_settings read failed, OTP treated as OFF: ${error.message}`);
-      return false;
-    }
-    /*
-     * "True if any row is true", the same reading `landing_pricing_enabled`
-     * uses, and the same reading the admin switch shows. admin_settings holds
-     * four rows; the switch writes all of them in one statement. The agreement
-     * between this and the switch is the point — a flag the super admin sees as
-     * on while this reads off is worse than either value.
-     */
-    return (data ?? []).some((row: { signup_otp_enabled?: boolean | null }) =>
-      row.signup_otp_enabled === true
-    );
-  } catch (e) {
-    console.error(`${LOG} admin_settings read threw, OTP treated as OFF:`, e);
-    return false;
-  }
-}
 
 /** A human cannot type a name, an email and a 10-char password this fast. */
 const MIN_DWELL_MS = 1500;
@@ -170,8 +122,6 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, serviceKey);
   const ip = clientIp(req);
-  // Resolved once per request; every use below reads this.
-  const OTP_ENABLED = await otpEnabled(supabase);
 
   try {
     let body: BeginRequest;
@@ -403,23 +353,21 @@ Deno.serve(async (req) => {
       email,
       password,
       /*
-       * OTP, BEHIND A FLAG.
+       * feat-001 (spec 01.2, 01.4): THE 3-STEP SIGNUP.
        *
-       * This was an unconditional `true`, with the note: "apps/web has NO
-       * confirmation route to send anyone to, and `custom-auth-email`
-       * explicitly skips signup emails — a pending confirmation would be a dead
-       * end nobody could clear." Both halves of that are now addressed: the
-       * route is `signup-verify-otp`, and the code is sent from here rather
-       * than by GoTrue, so `custom-auth-email` is not involved at all.
+       * The code and the password now come AFTER the card, inside the portal
+       * (signup-verify-email, signup-set-password). So the account is created
+       * ready to sign in, and two flags say what is still owed. They are the
+       * only thing any app reads for "email proved" / "password chosen";
+       * `email_confirm` here only lets GoTrue issue the session the browser
+       * needs for the business and card steps.
        *
-       * It stays flag-gated because the dead end it describes is real: if the
-       * verification screen is not deployed, an unconfirmed user has nowhere to
-       * go. SIGNUP_OTP_ENABLED must only be turned on once the client can show
-       * that screen.
+       * The OTP switch no longer decides anything here (it read
+       * admin_settings.signup_otp_enabled); a code is always sent below.
        */
-      email_confirm: !OTP_ENABLED,
+      email_confirm: true,
       user_metadata: { name: fullName, role: "head_admin" },
-      app_metadata: { [SIGNUP_META_KEY]: meta },
+      app_metadata: { [SIGNUP_META_KEY]: meta, [PENDING_EMAIL]: true, [PENDING_PASSWORD]: true },
     });
 
     if (createError || !created?.user) {
@@ -469,7 +417,8 @@ Deno.serve(async (req) => {
      * signup that actually succeeded. They land on the verification screen and
      * use Resend, which is the same path as "it went to spam".
      */
-    if (OTP_ENABLED) {
+    // Always, for the portal's "check your email" window (spec 01.5).
+    {
       try {
         const { code: otpCode, otp } = await mintOtp();
         await supabase.auth.admin.updateUserById(created.user.id, {
@@ -485,9 +434,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // With no code to wait for, the account is real already: tell Meta now.
-    // When a code IS coming, `signup-verify-otp` sends this once it is right.
-    if (!OTP_ENABLED && shouldTrackSignup(meta)) {
+    // The account is real now (the code is checked later, in the portal):
+    // tell Meta while the browser's ad-click cookies are still in this request.
+    if (shouldTrackSignup(meta)) {
       await sendCompleteRegistration({
         userId: created.user.id,
         email,
@@ -514,7 +463,11 @@ Deno.serve(async (req) => {
        * unconfirmed user into payment. This server is the only place that knows
        * — it is the one that minted and sent the code.
        */
-      requiresVerification: OTP_ENABLED,
+      // feat-001: never a code screen in signup any more. An older browser
+      // reading `false` takes its no-code path (sign in, then the password
+      // screen), so it keeps working until the new web is deployed.
+      requiresVerification: false,
+      threeStep: true,
     });
   } catch (error) {
     console.error(`${LOG} unexpected error:`, error);

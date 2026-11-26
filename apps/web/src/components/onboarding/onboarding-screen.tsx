@@ -56,7 +56,8 @@ import {
  * card. The Google return's business-only screen sits on the business line;
  * Google skips the code and the password.
  */
-const PROGRESS_LABELS = ["You", "Your business", "Email code", "Password", "Card"] as const;
+// feat-001: three steps. The email code and the password moved into the portal.
+const PROGRESS_LABELS = ["You", "Your business", "Card"] as const;
 
 type DialogStep = "account" | "payment";
 
@@ -423,18 +424,16 @@ export function OnboardingScreen() {
   const onPasswordScreen =
     dialogStep === "account" && step !== "verify" && !state.signInPrompt && accountMode === "password";
 
+  // The code and password screens only appear for a signup started before the
+  // 3-step change; they sit between the business and the card (index 1).
   const progressIndex =
     dialogStep === "payment"
-      ? 4
-      : onPasswordScreen
-        ? 3
-        : step === "verify"
-          ? 2
-          : accountMode === "tenant"
-            ? 1
-            : paging
-              ? accountPage
-              : 0;
+      ? 2
+      : onPasswordScreen || step === "verify" || accountMode === "tenant"
+        ? 1
+        : paging
+          ? Math.min(accountPage, 1)
+          : 0;
 
   /*
    * No button in the footer any more (Ghulam, 2026-11-23). Every screen draws

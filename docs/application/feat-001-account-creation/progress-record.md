@@ -1,7 +1,9 @@
 # feat-001 · Account creation — progress record
 
-**Branch:** `ray2` · **Built by:** Hamza · **Last updated:** 26 Nov 2026
-**Status:** steps 1–3 of 9 done and committed locally. Nothing pushed, nothing deployed to staging.
+**Branch:** `ray2` · **Built by:** Hamza · **Last updated:** 27 Nov 2026
+**Status:** steps 1–4 done and committed locally.
+Nothing pushed, nothing deployed to staging. Roughly a third of Ghulam's task is done; the portal
+window (step 5) and the real-phone QA (step 9) are the biggest parts left.
 
 What each finished step changed: how it was before, what is new, how it works now, and how it was
 proved. The plan for the whole feature is in the PRD (`docs/application/PRD.md`, feat-001) and the
@@ -17,8 +19,8 @@ specs (`specs/`).
 | 1 | Safe temporary passwords for invited staff | **Done** | `728cf4b1` |
 | 2a | BF30 / promo math in one place | **Done** | `ce170a44` |
 | 2b | Card step shows the server's figures; coupon length fixed | **Done** | `546b91f9` |
-| 3 | Server side of the portal "verify your email" window | **Done** | `5db8d77e` |
-| 4 | Signup in 3 steps (About you → Business → Card) | Not started | |
+| 3 | Server side of the portal "verify your email" window | **Done** | `5db8d77e`, `d353164a` |
+| 4 | Signup in 3 steps (About you → Business → Card) | **Done** (needs 2 Supabase settings to go live) | see git log |
 | 5 | The verify-and-password window in the portal, reminder, 3-day block | Not started | |
 | 6 | "Email me a sign-in code" on the portal login | Not started | |
 | 7 | Connect / disconnect Google in the profile | Not started | |
@@ -176,12 +178,78 @@ starts the wait.
 
 ---
 
+## Step 4 · Signup in 3 steps
+
+**Before.** Signup is 5 steps: About you → Business → Email code → Password → Card. The progress
+bar has 5 dots. After the card, the person is sent to the portal's login page (a one-time sign-in
+link only if a setting is switched on), at an address hard-coded to the production portal.
+
+**New (written).**
+
+| Part | Change |
+|---|---|
+| `signup-begin` | The account is created ready to sign in, with two flags: email still to confirm, password still to choose. The code is always emailed, so it waits in the inbox for the portal window. The old code on/off switch is removed. An older browser still works with this server (it shows the password screen and skips the code) |
+| Signup in the browser | After "Your business" it goes straight to the card: no code screen, no password screen |
+| Progress bar | 3 dots: "Step 1 of 3: You", "Step 2 of 3: Your business", "Step 3 of 3: Card" |
+| Landing page test mode | Answers like the new server |
+| `signup-provision` | Always makes the one-time sign-in link to the portal (there is no password now). The portal address comes from the shared portal-domain setting instead of the hard-coded production address |
+
+**Proved by.**
+- **The real `signup-begin` run in Deno** against an in-memory Supabase and a fake email sender:
+  **9/9** (account ready to sign in with the stand-in, both flags set, no code screen, the emailed
+  code is the stored one, signup continues if the email fails, a taken email or portal staff refused
+  with no second account, honeypot makes nothing, bad email or weak password refused). Run once
+  against the old `signup-begin`: 4 of them fail, as they should.
+- **In Chrome, locally (test mode):** About you → Your business → straight to Card ("Step 3 of 3:
+  Card", 3 dots), no code or password screen; the card step shows $90.30 / $160.30 / $244.30 and
+  $0 today as before.
+- All local Deno tests still pass together: **37/37**. Spec 08 unchanged (12/13, the open
+  long-trial case).
+- `signup-begin` compiles in Deno; the changed web files have no syntax errors. `signup-provision`
+  has 3 type errors that were already in the committed code; the change adds none.
+- Spec 01 and eval 01 updated to match: the browser signs itself in with the stand-in, rather than
+  the server handing back a session.
+
+**Before it works on `ray2` or staging:** the two Supabase settings in "Waiting on Ghulam".
+
+**Note.** During testing, a real signup ran against staging by mistake (test mode was not on yet),
+creating the test account `mock-3step@example.com`. It never reached the card and was deleted.
+
+---
+
+## Waiting on Ghulam
+
+| # | Question | Why it matters |
+|---|---|---|
+| 1 | **Redirect allow-list**: add the portal addresses to Supabase Auth's allowed redirects (empty on staging) | Without it, the sign-in link after payment lands on `localhost:3000` instead of the portal |
+| 2 | **Portal domain per environment**: `ray2` and staging share the same edge functions, so one `PORTAL_ROOT_DOMAIN` cannot send each to its own portal | Staging signups were being sent to the production portal |
+| 3 | **PRD decisions** to confirm: Google with a different email refused; changing email disconnects Google; "Email me a sign-in code" for locked-out users; 3 days counted from signup; invited staff keep the temporary-password flow | These are my proposals, built into the specs |
+| 4 | **BF30 long trials**: will any plan have a trial of 60+ days? | If yes, the coupon must start at the trial's end so it is always exactly 3 bills |
+| 5 | **Keep the extras?** Step 1 (staff passwords) and the code fixes in step 2 were not asked for | He decides whether they stay |
+| 6 | **OK to deploy** the signup functions to staging once steps 4–6 are ready | Staging is shared with Haris and Hamna |
+
+---
+
+## Work left (from Ghulam's document)
+
+| # | What | Size |
+|---|---|---|
+| 5 | The verify-and-password window in the portal, reminder every visit, block after 3 days | Big |
+| 6 | "Email me a sign-in code" on the portal login page | Medium |
+| 7 | Connect and disconnect Google in the profile | Medium–big |
+| 8 | Signups list in Super admin: new step names | Small |
+| – | Deploy steps 3–6 to staging together | Small |
+| 9 | QA report: section 4 on a real iPhone, Android, inside Instagram and Facebook, then a laptop; Stripe dashboard check | Big |
+| – | Pull request from `ray2` | Small |
+
+---
+
 ## Found along the way (for Ghulam, outside these steps)
 
 | # | Finding | Where |
 |---|---|---|
 | 1 | **Stuck at "Check your inbox."** An already-confirmed signup reopens on the code screen; the code is spent and "Send a new code" is refused. Only "Use a different email" gets past it | Live 5-step signup |
-| 2 | **A staging signup sends people to the production portal** (`{slug}.portal.drive-247.com`), where the staging company does not exist | `signup-provision` |
+| 2 | **A staging signup sends people to the production portal** (`{slug}.portal.drive-247.com`), where the staging company does not exist. Step 4 makes it use the portal-domain setting; the setting itself is waiting on Ghulam | `signup-provision` |
 | 3 | Plan list shows **"1â€"5 vehicles"** instead of "1–5 vehicles" (garbled dash in the plan data) | Card step, staging data |
 | 4 | **staging.drive-247.com shows no Black Friday offer**: its deployed site looks older than the code | Staging web deploy |
 | 5 | Welcome email for a new staff member failed on staging ("Edge Function returned a non-2xx") | Portal → Users |

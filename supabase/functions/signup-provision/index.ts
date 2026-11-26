@@ -32,6 +32,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { extractBrandColorsFromText, buildTenantPalette } from "../_shared/brand-colors.ts";
 import { readBrandColor, readSiteTheme } from "../_shared/signup-look.ts";
 import { fetchSignupPlan } from "../_shared/signup-plans.ts";
+import { portalBaseUrl } from "../_shared/subscription-link.ts";
 import {
   getOrCreateSignupPrice,
   getSignupStripeClient,
@@ -503,7 +504,7 @@ Deno.serve(async (req) => {
           // Same reason as the idempotency hit above: this tenant was INSERTED by
           // whichever build died mid-run, which may not have set the column.
           await ensureV2Experience(supabase, pendingId, LOG, meta?.business?.brandColor);
-          const portalUrl = meta.portalUrl ?? `https://${pendingTenant.slug}.portal.drive-247.com`;
+          const portalUrl = meta.portalUrl ?? portalBaseUrl(pendingTenant.slug);
           const bookingUrl = meta.bookingUrl ?? `https://${pendingTenant.slug}.drive-247.com`;
           meta = await writeSignupMeta(supabase, authUserId, {
             status: "provisioned",
@@ -1017,7 +1018,10 @@ Deno.serve(async (req) => {
     // =====================================================================
     // 4. Tenant.
     // =====================================================================
-    const portalUrl = `https://${slug}.portal.drive-247.com`;
+    // The portal origin for this environment (PORTAL_ROOT_DOMAIN, default the
+    // production portal), the same helper payment links use. feat-001 finding:
+    // a hard-coded production domain sent staging signups to the live portal.
+    const portalUrl = portalBaseUrl(slug);
     const bookingUrl = `https://${slug}.drive-247.com`;
     const isProduction = mode === "live";
 
@@ -1634,8 +1638,16 @@ Deno.serve(async (req) => {
     // =====================================================================
     // 9. Optional magic link, final state, unlock.
     // =====================================================================
+    /*
+     * feat-001 (spec 02.1): ALWAYS. The 3-step signup gives the account no
+     * password, so this one-time link is how the person reaches their portal.
+     * It needs the portal origins on the Supabase Auth redirect allow-list
+     * (a project setting, outside this repo); if making it fails, the person
+     * is sent to /login?email= and signs in with an emailed code (spec 05).
+     * The old SIGNUP_PORTAL_MAGICLINK switch is gone.
+     */
     let portalSignInUrl: string | null = null;
-    if (Deno.env.get("SIGNUP_PORTAL_MAGICLINK") === "true") {
+    {
       try {
         const { data: link, error: linkError } = await supabase.auth.admin.generateLink({
           type: "magiclink",

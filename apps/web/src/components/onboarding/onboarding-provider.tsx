@@ -2284,8 +2284,23 @@ export function OnboardingProvider({
          * while they read their inbox, and the verify step is the one place
          * that knows when they are through.
          */
-        // No code was needed, so the password screen comes straight away: the
-        // stand-in must not be what this account is left with.
+        /*
+         * feat-001 (spec 01.1): THE 3-STEP SIGNUP. About you → business → card.
+         * The code and the password are owed to the portal now (it asks for
+         * both after the quick tour), so there is no password screen here.
+         * The stand-in has done its job — it signed this tab in — and is
+         * dropped: the session carries the signup from here.
+         */
+        if (begun?.threeStep && !values.password) {
+          forgetStandIn();
+          dispatch({ type: "goto", step: "payment" });
+          handedOff = true;
+          void startPaymentInternal(planId);
+          return;
+        }
+
+        // An older server (no `threeStep`) and no code: the password screen
+        // comes straight away, so the stand-in is not what the account keeps.
         if (!values.password) {
           rememberStandIn(values.email, password);
           await markPasswordPending();

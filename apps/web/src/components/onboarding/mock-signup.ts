@@ -535,7 +535,9 @@ export async function mockFunction(name: string, body: unknown): Promise<unknown
         email: String(b.email ?? "").trim().toLowerCase(),
         planId: b.planId,
         stage: "account_created",
-        requiresVerification: true,
+        // feat-001: as signup-begin now answers — no code screen, card next.
+        requiresVerification: false,
+        threeStep: true,
       };
     }
 

@@ -92,6 +92,11 @@ export interface SignupBeginResponse {
   stage: "account_created";
   /** True when a verification code was emailed and `verify` is the next step. */
   requiresVerification?: boolean;
+  /**
+   * feat-001: the 3-step signup. The account is signed in now, and the code
+   * and the password come later, in the portal. The next step is the card.
+   */
+  threeStep?: boolean;
 }
 export interface SignupBeginOauthRequest extends Partial<SignupAttribution> {
   planId: SignupPlanId;

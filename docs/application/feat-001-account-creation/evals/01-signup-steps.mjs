@@ -28,11 +28,11 @@ statement("01.2", "signup-begin makes the user with a stand-in password and the 
   ok(user.email_confirmed_at, "Supabase does not treat the email as confirmed, so no session can be made");
 });
 
-statement("01.3", "signup-begin returns a session for the new user", async () => {
-  const { res } = await begin();
-  ok(res.data?.session?.access_token, "no access_token in the answer");
-  ok(res.data?.session?.refresh_token, "no refresh_token in the answer");
-  equal(res.data?.requiresVerification, false, "requiresVerification");
+statement("01.3", "signup-begin sends the browser straight on, and the account signs in at once", async () => {
+  const { res, email } = await begin();
+  equal([res.data?.requiresVerification, res.data?.threeStep], [false, true], "answer");
+  const { passwordSignIn } = await import("./lib/account.mjs");
+  equal((await passwordSignIn(email, "Evalstandin1")).status, 200, "signing in with the password the browser sent");
 });
 
 statement("01.4", "The new user is marked email-pending and password-pending in app_metadata", async () => {
