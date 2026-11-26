@@ -71,7 +71,7 @@ The same work also makes sure everything a person does with their account afterw
 
 **Staff members**
 
-24. **An operator invites a staff member.** The staff member confirms their email and chooses a password the same way as the operator in story 7.
+24. **An operator invites a staff member.** The staff member is given a temporary password. The first time they sign in, they are asked to choose their own password, with a code sent to their email first. They do not see the window from story 7.
 
 ### The rules
 
@@ -100,6 +100,6 @@ The same work also makes sure everything a person does with their account afterw
 
 ### How we know it is working
 
-- On Super admin → Retention → Signups, the share of visitors from ads who finish signup goes back up. The list shows each attempt and the step where it stopped, using the three new step names.
+- On Super admin → Customer management → Signups, the share of visitors from ads who finish signup goes back up. The list shows each attempt and the step where it stopped, using the three new step names.
 - On the same list, our team can see how many new operators have confirmed their email and chosen a password, and how many are past the three days without doing it.
 - In the Stripe test dashboard, every price, trial and discount matches what the card step showed.
