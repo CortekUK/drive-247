@@ -25,12 +25,15 @@ const emails: Array<{ to: string; subject: string }> = [];
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
 const view = (u: User) => ({ id: u.id, email: u.email, app_metadata: u.app_metadata, user_metadata: u.user_metadata, email_confirmed_at: u.email_confirmed_at, aud: "authenticated", role: "authenticated" });
 
+/** Flip to make the email sender fail, to test what the person is told. */
+let resendDown = false;
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (input: any, init?: any) => {
   const req = input instanceof Request && !init ? input : new Request(input, init);
   const url = new URL(req.url);
   if (url.protocol === "file:" || url.host.endsWith("esm.sh") || url.host === "deno.land") return realFetch(input, init);
   if (url.host === "api.resend.com") {
+    if (resendDown) return json({ message: "service unavailable" }, 503);
     const b = await req.json();
     emails.push({ to: Array.isArray(b.to) ? b.to[0] : b.to, subject: b.subject });
     return json({ id: `em_${emails.length}` });
@@ -72,13 +75,17 @@ for (const name of ["signup-verify-email", "signup-set-password"]) {
   await import(`../${name}/index.ts`);
 }
 
-async function call(name: string, body: unknown, token?: string) {
+async function call(name: string, body: unknown, token?: string, opts: { method?: string; raw?: string } = {}) {
+  const method = opts.method ?? "POST";
   const res = await handlers.get(name)!(new Request(`http://supabase.test/functions/v1/${name}`, {
-    method: "POST",
+    method,
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: JSON.stringify(body),
+    body: method === "GET" || method === "OPTIONS" ? undefined : opts.raw ?? JSON.stringify(body),
   }));
-  return { status: res.status, json: await res.json() };
+  const text = await res.text();
+  let parsed: any = null;
+  try { parsed = text ? JSON.parse(text) : null; } catch { parsed = text; }
+  return { status: res.status, json: parsed ?? {}, headers: res.headers };
 }
 
 /** A person straight out of the 3-step signup: signed in, both flags set. */
@@ -206,4 +213,113 @@ Deno.test("03.11 saving the password replaces the stand-in and clears the flag",
   eq(u.password, "Chosen12345", "the new password is set");
   eq(u.app_metadata.d247_signup_password_pending, false, "flag cleared");
   eq((await call("signup-set-password", { password: "Another12345" }, token)).json.code, "NOT_PENDING", "a second time goes to the profile instead");
+});
+
+// ── edge cases ──────────────────────────────────────────────────────────────
+Deno.test("edge: a browser's CORS check is answered, and only POST is accepted", async () => {
+  for (const name of ["signup-verify-email", "signup-set-password"]) {
+    const pre = await call(name, null, undefined, { method: "OPTIONS" });
+    if (pre.status >= 300 || !pre.headers.get("access-control-allow-origin")) throw new Error(`${name}: CORS preflight ${pre.status}`);
+    const { token } = newOperator();
+    eq((await call(name, null, token, { method: "GET" })).status, 405, `${name}: GET`);
+  }
+});
+
+Deno.test("edge: a broken or empty request body is refused cleanly, never a crash", async () => {
+  const { token } = newOperator();
+  const broken = await call("signup-verify-email", null, token, { raw: "{not json" });
+  eq([broken.status, broken.json.code], [400, "INVALID_BODY"], "broken JSON");
+  eq((await call("signup-verify-email", {}, token)).json.code, "INVALID_BODY", "no action");
+  eq((await call("signup-verify-email", { action: "delete_everything" }, token)).json.code, "INVALID_BODY", "unknown action");
+  eq((await call("signup-set-password", null, token, { raw: "{not json" })).json.code, "EMAIL_NOT_CONFIRMED", "set-password checks the order before the body");
+});
+
+Deno.test("edge: codes typed with spaces work; letters, short or long codes are refused without spending a try", async () => {
+  const { u, token } = newOperator();
+  await plant(u, "482913");
+  for (const bad of ["48291", "4829133", "48291a", "", "      "]) {
+    eq((await call("signup-verify-email", { action: "verify", code: bad }, token)).json.code, "OTP_INVALID", JSON.stringify(bad));
+  }
+  eq(u.app_metadata.d247_signup.otp.attempts, 0, "badly typed codes do not spend tries");
+  eq((await call("signup-verify-email", { action: "verify", code: " 482913 " }, token)).json.verified, true, "spaces around the code");
+});
+
+Deno.test("edge: one person's token can never touch another person's account", async () => {
+  const a = newOperator();
+  const b = newOperator();
+  await plant(a.u, "111111");
+  await plant(b.u, "222222", { minutesAgo: 2 }); // past B's 60 s wait, so B may change their email
+  eq((await call("signup-verify-email", { action: "verify", code: "111111" }, b.token)).json.code, "OTP_INVALID", "B using A's code");
+  eq(a.u.app_metadata.d247_signup_email_pending, true, "A untouched");
+  eq(a.u.app_metadata.d247_signup.otp.attempts, 0, "A's tries untouched");
+  await call("signup-verify-email", { action: "change_email", newEmail: "b-new@example.com" }, b.token);
+  eq(a.u.email.startsWith("op"), true, "A's email untouched");
+  eq(b.u.email, "b-new@example.com", "only B's email changed");
+});
+
+Deno.test("edge: after a lock or an expiry, a new code works", async () => {
+  const { u, token } = newOperator();
+  await plant(u, "111111", { attempts: 5, minutesAgo: 2 });
+  eq((await call("signup-verify-email", { action: "verify", code: "111111" }, token)).json.code, "OTP_LOCKED", "locked");
+  eq((await call("signup-verify-email", { action: "resend" }, token)).json.resent, true, "a new code is allowed");
+  const subject = emails.at(-1)!.subject;
+  const fresh = subject.match(/\d{6}/)![0];
+  const r = await call("signup-verify-email", { action: "verify", code: fresh }, token);
+  eq(r.json.verified, true, "the new code from the email works");
+});
+
+Deno.test("edge: the full journey: wrong email, corrected, new code, password, done", async () => {
+  const { u, token } = newOperator();
+  await plant(u, "000000", { minutesAgo: 2 }); // the first code went to the mistyped address
+  const fix = await call("signup-verify-email", { action: "change_email", newEmail: "right@example.com" }, token);
+  eq(fix.json.ok, true, "email corrected");
+  const code = emails.at(-1)!.subject.match(/\d{6}/)![0];
+  eq(emails.at(-1)!.to, "right@example.com", "code sent to the corrected address");
+  eq((await call("signup-verify-email", { action: "verify", code: "000000" }, token)).json.code, "OTP_INVALID", "the old code is dead");
+  eq((await call("signup-verify-email", { action: "verify", code }, token)).json.verified, true, "the new code proves it");
+  eq((await call("signup-set-password", { password: "Chosen12345" }, token)).json.ok, true, "password saved");
+  eq([u.email, u.password, u.app_metadata.d247_signup_email_pending, u.app_metadata.d247_signup_password_pending], ["right@example.com", "Chosen12345", false, false], "end state");
+});
+
+Deno.test("edge: if the email can't be sent, the person is told, and no code is left waiting silently", async () => {
+  const { u, token } = newOperator();
+  await plant(u, "333333", { minutesAgo: 2 });
+  resendDown = true;
+  try {
+    const r = await call("signup-verify-email", { action: "resend" }, token);
+    eq([r.status, r.json.code], [502, "EMAIL_NOT_SENT"], "resend while email is down");
+    // A failed send must not start the 60 s wait.
+    const c = await call("signup-verify-email", { action: "change_email", newEmail: "down@example.com" }, token);
+    eq([c.json.ok, c.json.delivered], [true, false], "straight after: the email change is kept, and it says the code did not go");
+  } finally {
+    resendDown = false;
+  }
+  const again = await call("signup-verify-email", { action: "resend" }, token);
+  eq(again.json.resent, true, "once email works, a new code can be sent at once");
+  eq(emails.at(-1)!.to, "down@example.com", "to the corrected address");
+});
+
+Deno.test("edge: password length limits are exact", async () => {
+  for (const [pw, ok] of [["abcdefg1", true], ["abcdef1", false], ["a".repeat(71) + "1", true], ["a".repeat(72) + "1", false]] as const) {
+    const { token } = newOperator({ d247_signup_password_pending: true });
+    const r = await call("signup-set-password", { password: pw }, token);
+    eq(r.json.ok === true, ok, `${pw.length} characters`);
+  }
+  const { token } = newOperator({ d247_signup_password_pending: true });
+  eq((await call("signup-set-password", { password: 12345678 }, token)).json.code, "PASSWORD_RULE", "a number, not text");
+});
+
+Deno.test("edge: an account from the old signup or from Google (no flags) can do nothing here", async () => {
+  const { token } = newOperator({});
+  eq((await call("signup-verify-email", { action: "verify", code: "123456" }, token)).json.alreadyVerified, true, "verify: nothing to do");
+  eq((await call("signup-verify-email", { action: "change_email", newEmail: "x@example.com" }, token)).json.code, "ALREADY_CONFIRMED", "no email change");
+  eq((await call("signup-set-password", { password: "Chosen12345" }, token)).json.code, "NOT_PENDING", "no password change through this door");
+});
+
+Deno.test("edge: the flags are read fresh, not from an old token", async () => {
+  const { u, token } = newOperator();
+  await plant(u, "482913");
+  await call("signup-verify-email", { action: "verify", code: "482913" }, token);
+  // Same token, issued before the code: set-password must see the email as proved.
+  eq((await call("signup-set-password", { password: "Chosen12345" }, token)).json.ok, true, "password allowed straight after the code");
 });

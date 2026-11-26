@@ -92,8 +92,23 @@ Deno.serve(async (req) => {
       const sent = await sendResendEmail(
         { to, subject: otpSubject(code), html: otpEmailHtml(code), text: otpEmailText(code), ...DRIVE247_SENDER, source: "signup-verify-email" },
         supabase,
-      );
-      return { error: null, delivered: !!sent?.success };
+      ).catch(() => null);
+      const delivered = !!sent?.success;
+      if (!delivered) {
+        // The code never left: do not make the person wait 60 s to try again.
+        // Back-date it so "Send a new code" works at once (it stays checkable
+        // in case the email arrives late after all).
+        await supabase.auth.admin.updateUserById(user.id, {
+          app_metadata: {
+            d247_signup: {
+              ...meta, ...extraMeta,
+              otp: { ...otp, sentAt: new Date(Date.now() - OTP_RESEND_COOLDOWN_MS).toISOString() },
+              updatedAt: new Date().toISOString(),
+            },
+          },
+        });
+      }
+      return { error: null, delivered };
     };
 
     if (action === "resend" || action === "change_email") {
