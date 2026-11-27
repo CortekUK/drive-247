@@ -37,7 +37,7 @@ None new: `auth.signInWithOtp({ email, options: { shouldCreateUser: false } })` 
 
 ## Screens
 
-Portal `app/(auth)/login/page.tsx` / `LoginV2`, and `components/auth-v2/forgot-password-dialog-v2.tsx`.
+Portal `app/(auth)/login/page.tsx` (v1) and `LoginV2`, both opening `components/auth-v2/sign-in-code-dialog.tsx`; and `components/auth-v2/forgot-password-dialog-v2.tsx`.
 
 ## Money and safety
 

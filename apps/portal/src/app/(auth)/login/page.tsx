@@ -36,6 +36,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useTheme } from "next-themes";
 import { useV2 } from "@/lib/v2-context";
 import { LoginV2 } from "@/components/auth-v2/login-v2";
+import { SignInCodeDialog } from "@/components/auth-v2/sign-in-code-dialog";
 import { WRONG_PORTAL_MESSAGE, flagWrongPortal, isWrongPortal, takeWrongPortal } from "@/lib/wrong-portal";
 
 import { PLATFORM_PRIVACY_URL, PLATFORM_TERMS_URL } from "@/lib/legal/urls";
@@ -60,6 +61,7 @@ function LoginPageContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [resetEmail, setResetEmail] = useState("");
+  const [codeOpen, setCodeOpen] = useState(false);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -449,6 +451,23 @@ function LoginPageContent() {
                       <FormMessage />
                     </FormItem>
                   )}
+                />
+
+                {/* feat-001 spec 05.1: the way in without a password
+                    (signInWithOtp with shouldCreateUser: false, in the dialog). */}
+                <Button
+                  type="button"
+                  variant="link"
+                  className="-mt-2 h-auto px-0 py-1 text-sm"
+                  onClick={() => { setError(""); setCodeOpen(true); }}
+                  disabled={isSubmitting}
+                >
+                  Email me a sign-in code
+                </Button>
+                <SignInCodeDialog
+                  open={codeOpen}
+                  onOpenChange={setCodeOpen}
+                  initialEmail={form.getValues("email") ?? ""}
                 />
 
                 <div className="flex items-center justify-between">

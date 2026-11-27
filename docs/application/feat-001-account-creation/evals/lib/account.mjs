@@ -60,8 +60,8 @@ export function forgetEmail(email) {
 }
 
 /** Make a user directly (the admin API), for statements that start after signup. */
-export async function makeUser({ tag = "user", password, confirmed = true, appMeta = {} } = {}) {
-  const email = testEmail(tag);
+export async function makeUser({ tag = "user", password, confirmed = true, appMeta = {}, email: given } = {}) {
+  const email = given ?? testEmail(tag);
   forgetEmail(email);
   const res = await auth("admin/users", {
     method: "POST",
@@ -143,3 +143,12 @@ export async function updateSelf(token, body) {
 
 export const PENDING_EMAIL = "d247_signup_email_pending";
 export const PENDING_PASSWORD = "d247_signup_password_pending";
+
+/**
+ * An address the email service really delivers to (Resend's test inbox, which
+ * keeps nothing). For a statement that needs an auth email SENT: the auth email
+ * hook fails with a 500 when Resend refuses `@example.com`.
+ */
+export function deliverableTestEmail(tag) {
+  return `delivered+feat001-${tag}-${randomBytes(4).toString("hex")}@resend.dev`;
+}

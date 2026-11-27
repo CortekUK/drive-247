@@ -42,6 +42,7 @@ import { toast } from "@/hooks/use-toast";
 import { useRateLimiting } from "@/hooks/use-rate-limiting";
 import { supabase } from "@/integrations/supabase/client";
 import { ForgotPasswordDialogV2 } from "./forgot-password-dialog-v2";
+import { SignInCodeDialog } from "./sign-in-code-dialog";
 import { HeroTypedHeadline } from "@/components/shared/layout/hero-typed-headline";
 import {
   brandInk,
@@ -147,6 +148,7 @@ function LoginV2Content() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [forgotOpen, setForgotOpen] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -712,6 +714,23 @@ function LoginV2Content() {
                       <FormMessage />
                     </FormItem>
                   )}
+                />
+
+                {/* feat-001 spec 05.1: the way in without a password. */}
+                <Button
+                  type="button"
+                  variant="link"
+                  className="-mt-2 h-auto px-0 py-1 text-sm"
+                  style={{ color: ink }}
+                  onClick={() => { setError(""); setCodeOpen(true); }}
+                  disabled={isSubmitting}
+                >
+                  Email me a sign-in code
+                </Button>
+                <SignInCodeDialog
+                  open={codeOpen}
+                  onOpenChange={setCodeOpen}
+                  initialEmail={form.getValues("email") ?? ""}
                 />
 
                 <div className="flex items-center justify-between">

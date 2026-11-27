@@ -3,12 +3,13 @@
 // The code itself arrives by email, so "a code signs in" (05.3) uses a
 // one-time token of the same kind, made by the admin API.
 import { statement, run, equal, ok, sql } from "../../eval-kit.mjs";
-import { makeUser, testEmail, askSignInCode, linkSignIn, passwordSignIn, updateUser, source } from "./lib/account.mjs";
+import { makeUser, testEmail, deliverableTestEmail, askSignInCode, linkSignIn, passwordSignIn, updateUser, source } from "./lib/account.mjs";
 
 statement("05.2", "The login page asks for a code without making users, and a known email is accepted", async () => {
-  const page = source("apps/portal/src/app/(auth)/login/page.tsx");
+  const page = source("apps/portal/src/components/auth-v2/sign-in-code-dialog.tsx");
+  ok(/SignInCodeDialog/.test(source("apps/portal/src/app/(auth)/login/page.tsx")) && /SignInCodeDialog/.test(source("apps/portal/src/components/auth-v2/login-v2.tsx")), "a login page does not offer the sign-in code");
   ok(/signInWithOtp/.test(page) && /shouldCreateUser:\s*false/.test(page), "the login page has no sign-in code with shouldCreateUser: false");
-  const known = await makeUser({ tag: "known", password: "Known12345x" });
+  const known = await makeUser({ tag: "known", password: "Known12345x", email: deliverableTestEmail("known") });
   ok((await askSignInCode(known.email)).status < 300, "a known email was refused");
 });
 

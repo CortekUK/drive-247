@@ -23,7 +23,7 @@ specs (`specs/`).
 | 3 | Server side of the portal "verify your email" window | **Done** | `5db8d77e`, `d353164a` |
 | 4 | Signup in 3 steps (About you → Business → Card) | **Done** (needs 2 Supabase settings to go live) | `3d349f6d` |
 | 5 | The verify-and-password window in the portal, reminder, 3-day block | **Done** (tested locally) | `545d1b3e` |
-| 6 | "Email me a sign-in code" on the portal login | Not started | |
+| 6 | "Email me a sign-in code" on the portal login | **Done** (tested locally) | see step 6 |
 | 7 | Connect / disconnect Google in the profile | Not started | |
 | 8 | Signups list: new step names | Not started | |
 | 9 | QA report on real phones, then the pull request | Not started | |
@@ -291,6 +291,46 @@ password set to an unknown random one.
 
 ---
 
+## Step 6 · "Email me a sign-in code" on the portal login
+
+**What it does.** Under the password field there is now **"Email me a sign-in code"**, on both
+the new login (Northwind) and the old one (the other companies). It opens a small window:
+type the email → a 6-digit code is emailed → type it → you are in. This is the way back in for a
+person who has no password yet.
+
+**How.** No new server code. The window uses Supabase's own sign-in code
+(`signInWithOtp` with `shouldCreateUser: false`, then `verifyOtp`). Our existing email hook
+already sends staff a code rather than a link. New file:
+`apps/portal/src/components/auth-v2/sign-in-code-dialog.tsx`.
+
+**Safety.**
+- The window says the same thing whether or not the email has an account, so nobody can use it to find out who works where.
+- Every error from step 1 is hidden for the same reason. The 60-second wait before another code applies to every address alike.
+- No account is ever created.
+- A person from another company is signed out at once, with the usual "different company's portal" message.
+
+**Tested locally, against staging:**
+
+| Edge case | Result |
+|---|---|
+| Unknown email → "If … has an account here, a code is on its way" (same as a real one) | ✅ |
+| Wrong code → "That code didn't work, or it has expired …" | ✅ after fix 1 |
+| Right code → signed in, taken into the portal | ✅ |
+| Account still waiting to confirm / choose a password → the step-5 window follows at once | ✅ |
+| Staff of another company → signed out, "This login belongs to a different company's portal" | ✅ |
+| Wait 60 s before another code, shown as a countdown | ✅ |
+| Phone, 360 wide, long email → no overflow, 44 px button | ✅ |
+| Eval 05 (staging) | **4/4** |
+
+**Fixed while testing:**
+1. Supabase answers a mistyped code and an expired one with the same words, so a typo said "That code has expired". It now gives one message that covers both.
+2. Eval 05.2 failed because the email service refuses `@example.com` addresses, and our email hook then fails. That was the test, not the product. The eval now uses Resend's test inbox (`delivered+…@resend.dev`), which keeps nothing.
+
+**Not tested here:** the old v1 login screen live (it compiles, and the eval checks that it
+offers the window). Also, the real email arriving in a real inbox: that goes in the QA report.
+
+---
+
 ## Waiting on Ghulam
 
 | # | Question | Why it matters |
@@ -300,8 +340,9 @@ password set to an unknown random one.
 | 3 | **PRD decisions** to confirm: Google with a different email refused; changing email disconnects Google; "Email me a sign-in code" for locked-out users; 3 days counted from signup; invited staff keep the temporary-password flow | These are my proposals, built into the specs |
 | 4 | **BF30 long trials**: will any plan have a trial of 60+ days? | If yes, the coupon must start at the trial's end so it is always exactly 3 bills |
 | 5 | **Keep the extras?** Step 1 (staff passwords) and the code fixes in step 2 were not asked for | He decides whether they stay |
-| 6 | **OK to deploy** the signup functions to staging once steps 4–6 are ready | Staging is shared with Haris and Hamna |
+| 6 | **OK to deploy** the signup functions to staging (steps 3–6 are ready; step 6 itself needs no deploy) | Staging is shared with Haris and Hamna |
 | 7 | **The new 7-card quick tour** (being built by someone else) should carry a mark like `data-first-rental-tour`, so the verify window can wait for it | The window reads the page to know a tour is showing |
+| 8 | **A code sign-in proves the email.** Someone who signs in with an emailed code has shown they own the inbox, yet the verify window still asks for a second code. Should the code sign-in clear "email not confirmed"? (needs a small server change) | One code instead of two for a person locked out before confirming |
 
 ---
 
@@ -309,7 +350,6 @@ password set to an unknown random one.
 
 | # | What | Size |
 |---|---|---|
-| 6 | "Email me a sign-in code" on the portal login page | Medium |
 | 7 | Connect and disconnect Google in the profile | Medium–big |
 | 8 | Signups list in Super admin: new step names | Small |
 | – | Deploy steps 3–6 to staging together | Small |
