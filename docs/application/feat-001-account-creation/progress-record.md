@@ -457,7 +457,14 @@ so is "manual linking". Both are needed (question 9 below). Real Google goes in 
 | … unknown step refused | ✅ |
 | Wording, 9 cases (lead, old function, done, 3 days / 2 days / 23 hours / 1 hour left, passed at 72 h, 10 days) | **9/9** |
 | Eval 09 (signup-lead served locally) | **3/4**: 09.4 needs the migration on staging |
-| Admin page in the browser | not opened: it would be a second dev server, and the new line only shows once the migration is on staging. It goes in the QA report on ray2. |
+| **Admin page in the browser** (admin app run locally on staging, portal stopped meanwhile): | |
+| … 5 test leads show "stopped at about you / at the business / at the card / at the email code (old signup) / at the password (old signup)" | ✅ |
+| … with today's function (no new columns) accounts show **no** verify line, not a wrong one | ✅ |
+| … with the two new fields added in the browser only (staging untouched): grey "Email confirmed, password set", amber "… 2 days left / 23 hours left / 1 hour left", red "… 3-day point passed" | ✅ |
+| … leads never show the line | ✅ |
+| … search finds the 5 test leads; "Started, not finished" counts 5 and shows only leads | ✅ |
+| … phone 360 wide: no sideways scroll; dark mode: lighter red and amber | ✅ |
+| … console errors: only `/api/trax-messaging` (503, no local keys, not this step) | – |
 
 ---
 
