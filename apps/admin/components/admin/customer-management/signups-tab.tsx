@@ -9,10 +9,16 @@
  * `admin_signups()` (migration 20261125150000), a super-admin-only read of
  * the signup answers (signup_attribution), the signup's own state and, once
  * the portal is built, the company and its subscription.
+ *
+ * Haris (2026-11-27): each row has a Delete button. A row with a company opens
+ * the same Delete company dialog as the Rental Companies page, because only
+ * admin-delete-tenant cancels the Stripe subscription first. Any other row is
+ * removed by `admin_delete_signup()` (migration 20261127170000): the lead, or
+ * the signup login and its answers.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Copy, ExternalLink, Loader2, Mail, Phone, RefreshCw, Search } from 'lucide-react';
+import { Copy, ExternalLink, Loader2, Mail, Phone, RefreshCw, Search, Trash2 } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
@@ -20,6 +26,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { confirmDialog } from '@/components/ui/confirm';
+import { DeleteTenantDialog } from '@/components/admin/delete-tenant-dialog';
 import { PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 import { cn } from '@/lib/utils';
 
@@ -123,6 +131,11 @@ function fmtPhone(raw: string): string {
   return m ? `+1 ${m[1]}-${m[2]}-${m[3]}` : raw;
 }
 
+/** The same key the list uses for the row. */
+function rowKey(r: SignupRow): string {
+  return r.auth_user_id ?? `lead-${r.lead_id ?? r.email}`;
+}
+
 function heardText(r: SignupRow): string | null {
   if (!r.heard_about) return null;
   if (r.heard_about === 'other' && r.heard_about_other) return `Other: ${r.heard_about_other}`;
@@ -135,6 +148,10 @@ export function SignupsTab() {
   const [notInstalled, setNotInstalled] = useState(false);
   const [filter, setFilter] = useState<Group | 'all'>('all');
   const [query, setQuery] = useState('');
+  /** The company whose Delete company dialog is open (a signup that has one). */
+  const [companyToDelete, setCompanyToDelete] = useState<{ id: string; company_name: string } | null>(null);
+  /** The row being deleted, so its button shows a spinner and cannot be pressed twice. */
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -188,6 +205,51 @@ export function SignupsTab() {
       toast.error(`Could not copy the ${what.toLowerCase()}`);
     }
   }, []);
+
+  const remove = useCallback(
+    async (r: SignupRow) => {
+      if (r.tenant_id) {
+        setCompanyToDelete({ id: r.tenant_id, company_name: r.company_name || r.tenant_slug || 'this company' });
+        return;
+      }
+      if (!r.auth_user_id && !r.lead_id) {
+        toast.error('This signup cannot be deleted from here');
+        return;
+      }
+      const who = r.full_name || r.email || 'this signup';
+      const ok = await confirmDialog({
+        title: `Delete ${who}?`,
+        description: r.auth_user_id
+          ? `This removes their signup details and their login${r.email ? ` (${r.email})` : ''}. It cannot be undone. They can sign up again with the same email.`
+          : 'This removes the details they typed on the signup form. It cannot be undone.',
+        confirmLabel: 'Delete',
+        destructive: true,
+      });
+      if (!ok) return;
+
+      const key = rowKey(r);
+      setDeletingKey(key);
+      try {
+        const { error } = await db.rpc(
+          'admin_delete_signup',
+          r.auth_user_id ? { p_auth_user_id: r.auth_user_id } : { p_lead_id: r.lead_id },
+        );
+        if (error) {
+          if (error.code === 'PGRST202' || error.code === '42883') {
+            throw new Error('needs the database function from migration 20261127170000_admin_delete_signup.sql');
+          }
+          throw error;
+        }
+        setRows((prev) => (prev ?? []).filter((x) => rowKey(x) !== key));
+        toast.success(`${who} deleted`);
+      } catch (e) {
+        toast.error(`Could not delete: ${(e as Error).message}`);
+      } finally {
+        setDeletingKey(null);
+      }
+    },
+    [],
+  );
 
   if (notInstalled) {
     return (
@@ -273,7 +335,7 @@ export function SignupsTab() {
                 const heard = heardText(r);
                 const plan = r.plan_id ? PLAN_LABEL[r.plan_id] ?? r.plan_id : null;
                 return (
-                  <li key={r.auth_user_id ?? `lead-${r.lead_id ?? r.email}`} className="flex flex-col gap-3 px-6 py-4 lg:flex-row lg:items-center lg:gap-6">
+                  <li key={rowKey(r)} className="flex flex-col gap-3 px-6 py-4 lg:flex-row lg:items-center lg:gap-6">
                     <div className="min-w-0 lg:w-[32%]">
                       <p className="truncate text-sm font-medium max-sm:whitespace-normal">
                         {r.full_name || r.email || 'No name'}
@@ -336,14 +398,29 @@ export function SignupsTab() {
                       </p>
                     </div>
 
-                    {r.tenant_id && (
-                      <Button variant="outline" size="sm" asChild className="shrink-0 self-start lg:self-center">
-                        <a href={`/admin/rentals/${r.tenant_id}`}>
-                          <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                          Company
-                        </a>
-                      </Button>
-                    )}
+                    <div className="flex shrink-0 items-center gap-2 self-start lg:self-center">
+                      {r.tenant_id && (
+                        <Button variant="outline" size="sm" asChild>
+                          <a href={`/admin/rentals/${r.tenant_id}`}>
+                            <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                            Company
+                          </a>
+                        </Button>
+                      )}
+                      {(r.tenant_id || r.auth_user_id || r.lead_id) && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => void remove(r)}
+                          disabled={deletingKey === rowKey(r)}
+                          aria-label={`Delete ${r.full_name || r.email || 'signup'}`}
+                          title={r.tenant_id ? 'Delete company' : 'Delete signup'}
+                        >
+                          {deletingKey === rowKey(r) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        </Button>
+                      )}
+                    </div>
                   </li>
                 );
               })}
@@ -356,6 +433,12 @@ export function SignupsTab() {
           )}
         </CardContent>
       </Card>
+
+      <DeleteTenantDialog
+        tenant={companyToDelete}
+        onOpenChange={(open) => !open && setCompanyToDelete(null)}
+        onDeleted={() => void load()}
+      />
     </div>
   );
 }
