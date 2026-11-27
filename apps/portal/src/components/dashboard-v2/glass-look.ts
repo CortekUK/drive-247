@@ -484,6 +484,44 @@ export const GLASS_PALETTE = `
     }
   }
 
+  /* A record page (a rental, a car) has a fixed dock at the bottom. A blur on
+     the sheet would make the sheet the dock's containing block, so the dock
+     would scroll away with the page. The sheet stays, without its blur. */
+  ${ROOT} .v2-theme main[data-scrollport]:has([data-record-dock]) {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  /* The record dock, matched to the phone tab bar: an opaque capsule tinted
+     with the accent, bare icons, the centre stage button a bead of accent. */
+  ${ROOT} body [data-record-dock][data-record-dock] > nav[aria-label] {
+    border: 1px solid rgb(255 255 255 / 0.85);
+    background: linear-gradient(150deg,
+      color-mix(in oklab, var(--lg-accent) 16%, rgb(246 246 252)),
+      color-mix(in oklab, var(--lg-accent) 24%, rgb(232 232 246)));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.95),
+      0 1px 2px color-mix(in oklab, var(--lg-accent) 24%, rgb(10 10 30 / 0.14)),
+      0 18px 36px -14px color-mix(in oklab, var(--lg-accent) 24%, rgb(10 10 30 / 0.36));
+  }
+  ${ROOT}.dark body [data-record-dock][data-record-dock] > nav[aria-label] {
+    border-color: rgb(255 255 255 / 0.16);
+    background: linear-gradient(150deg,
+      color-mix(in oklab, var(--lg-accent) 18%, rgb(28 29 48)),
+      color-mix(in oklab, var(--lg-accent) 12%, rgb(18 19 34)));
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 18px 36px -14px rgb(0 0 0 / 0.7);
+  }
+  /* Its icon buttons carry active:bg-foreground/10, which the status chip
+     rule below would otherwise paint as a grey disc. */
+  ${ROOT} .v2-theme main [data-record-dock][data-record-dock] nav[aria-label] :is(a, button)[class]:not([class~="bg-primary"]) {
+    background-color: transparent;
+  }
+  ${ROOT} .v2-theme main [data-record-dock][data-record-dock] nav[aria-label] :is(a, button)[class]:not([class~="bg-primary"]):active {
+    background-color: color-mix(in oklab, var(--lg-accent) 14%, transparent);
+  }
+
   /* Secondary text is written at part strength (muted/70, primary/60) for a
      white page; on glass it gets its full strength back. */
   ${ROOT} .v2-theme main [class*="text-muted-foreground/"] { color: hsl(var(--muted-foreground)); }
