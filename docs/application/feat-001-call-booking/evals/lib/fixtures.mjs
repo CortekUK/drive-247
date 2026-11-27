@@ -25,7 +25,7 @@ export async function rpc(name, args = {}, as = "anon") {
 }
 
 /** A staging auth user and its app_users row. Removed at the end. */
-async function makeUser({ tenantId, role, name }) {
+export async function makeUser({ tenantId, role, name }) {
   const email = `eval+${randomUUID().slice(0, 8)}@example.com`;
   const password = `Eval-${randomUUID()}`;
   const res = await fetch(`${STAGING_URL}/auth/v1/admin/users`, {
@@ -99,11 +99,11 @@ export function book(token, startsAt, extra = {}) {
   }, token);
 }
 
-/** The settings row as it is, put back at the end whatever the eval changed. */
+/** The settings row as it is, put back at the end whatever the eval changed. Returns the put-back, to call sooner. */
 export async function keepSettings() {
   const [s] = await sql(`select row_to_json(s) as r from public.onboarding_call_settings s where id`);
   const [blocks] = await sql(`select coalesce(json_agg(b), '[]') as r from public.onboarding_call_blocks b`);
-  cleanup(async () => {
+  const restore = async () => {
     const r = s.r;
     await sql(`update public.onboarding_call_settings set
       host_name = ${q(r.host_name)}, host_title = ${q(r.host_title)}, host_email = ${q(r.host_email)},
@@ -117,8 +117,9 @@ export async function keepSettings() {
       await sql(`insert into public.onboarding_call_blocks (id, starts_at, ends_at, label, created_at)
                  values (${q(b.id)}, ${q(b.starts_at)}, ${q(b.ends_at)}, ${q(b.label)}, ${q(b.created_at)})`);
     }
-  });
-  return s.r;
+  };
+  cleanup(restore);
+  return restore;
 }
 
 /** A SQL literal. */

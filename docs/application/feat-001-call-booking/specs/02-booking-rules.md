@@ -41,7 +41,7 @@ first problem in this order, or none:
 - 02.13 The free times are every grid start (02.7) from Bryan's today to the last day ahead that has no problem, earliest first.
 - 02.14 A time that the list offers is always accepted by the check at the same `now`, and a time the check accepts is always in the list. There is no second calculator.
 - 02.15 With today's settings and nothing booked, a weekday offers 16 times: 09:00, 09:30, … 16:30 New York time.
-- 02.16 Changing the call length to 45 minutes offers 09:00, 09:45, … 15:45 (11 times), and leaves calls already booked at 30 minutes as they are.
+- 02.16 Changing the call length to 45 minutes offers 09:00, 09:45, … 15:45 (10 times: 480 minutes ÷ 45 = 10, and 16:30 would end at 17:15), and leaves calls already booked at 30 minutes as they are.
 - 02.17 A local time that does not exist (02:00 to 02:59 on 14 March 2027 in New York) is never offered and never accepted.
 - 02.18 A local time that happens twice (01:00 to 01:59 on 7 November 2027 in New York) is offered once, at its second occurrence (after the clocks go back, 06:00 UTC for 01:00), and nothing fails. The first occurrence is refused as `off_grid`.
 - 02.19 The calculator takes `now` as an input, so a check can stand on any date.
@@ -80,7 +80,7 @@ Two functions, in the migration of spec 01:
 
 ## Functions
 
-- `preview_onboarding_call_slots(p_settings jsonb default null, p_now timestamptz default now(), p_skip_notice boolean default false) returns jsonb`: super admin only (`42501` otherwise). Settings are the live row with `p_settings` laid over it. Returns `{ "slots": [...], "problems": {} }`. Used by spec 06's preview and by the evals.
+- `preview_onboarding_call_slots(p_settings jsonb default null, p_now timestamptz default now(), p_skip_notice boolean default false) returns jsonb`: super admin only (`42501` otherwise). Settings are the live row with `p_settings` laid over it. Returns `{ "slots": [...] }`. Used by spec 06's preview and by the evals.
 - `check_onboarding_call_slot(p_starts_at timestamptz, p_settings jsonb default null, p_now timestamptz default now()) returns text`: super admin only. The code or null. Used by the evals.
 
 ## Screens
