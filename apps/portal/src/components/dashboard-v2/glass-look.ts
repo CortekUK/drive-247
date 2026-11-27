@@ -355,8 +355,8 @@ export const GLASS_PALETTE = `
   /* ── The phone tab bar: a floating glass capsule, as on iOS ───────────
      (shared/layout/mobile-tab-bar.tsx, reached from here, not edited.) The
      full-width strip with a top border becomes a capsule that floats clear of
-     the screen edges, the page scrolling underneath it, fully clear like
-     every other pane. */
+     the screen edges, the page scrolling underneath it. Opaque and tinted
+     with the accent so the labels stay readable over busy content. */
   @media (max-width: 767px) {
     html[data-portal-look="glass"] body [data-mobile-tab-bar] {
       background: transparent;
@@ -372,9 +372,10 @@ export const GLASS_PALETTE = `
       max-width: 400px;
       border-radius: 999px;
       border: 1px solid rgb(255 255 255 / 0.85);
-      background: var(--lg-glass);
-      -webkit-backdrop-filter: var(--lg-frost);
-      backdrop-filter: var(--lg-frost);
+      /* Opaque, tinted with the accent, so nothing behind shows through the labels. */
+      background: linear-gradient(150deg,
+        color-mix(in oklab, var(--lg-accent) 16%, rgb(246 246 252)),
+        color-mix(in oklab, var(--lg-accent) 24%, rgb(232 232 246)));
       box-shadow:
         inset 0 1px 0 rgb(255 255 255 / 0.95),
         0 1px 2px color-mix(in oklab, var(--lg-accent) 24%, rgb(10 10 30 / 0.14)),
@@ -383,7 +384,9 @@ export const GLASS_PALETTE = `
     }
     html[data-portal-look="glass"].dark body [data-mobile-tab-bar] > nav {
       border-color: rgb(255 255 255 / 0.16);
-      background: linear-gradient(150deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.04));
+      background: linear-gradient(150deg,
+        color-mix(in oklab, var(--lg-accent) 18%, rgb(28 29 48)),
+        color-mix(in oklab, var(--lg-accent) 12%, rgb(18 19 34)));
       box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 18px 36px -14px rgb(0 0 0 / 0.7);
     }
     /* Idle tabs are bare icons and labels on the bar (Ghulam, Nov 2026: no
