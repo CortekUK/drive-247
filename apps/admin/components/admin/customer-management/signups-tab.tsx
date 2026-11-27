@@ -22,6 +22,12 @@
  * filter by tag, so qualified leads are easy to pick out. Stored per person
  * (lower-cased email) by migration 20261127180000, so they carry over when a
  * lead later creates an account.
+ *
+ * Sales team (2026-11-27): filter by the exact status line a row shows
+ * ("At the card step, no card yet", "Portal live · canceled", "Started signup,
+ * not finished: stopped after their details", …) and by the day they signed
+ * up (today, yesterday, last 7 / 30 days, this month, or a date range). Every
+ * count on the page follows the date filter.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -149,6 +155,56 @@ function stageOf(r: SignupRow): { label: string; cls: string; group: Group } {
   }
 }
 
+/** The whole status line a row shows, e.g. "Portal live · canceled". */
+function statusLine(r: SignupRow): string {
+  const st = stageOf(r);
+  return r.subscription_status && r.signup_status === 'provisioned' ? `${st.label} · ${r.subscription_status}` : st.label;
+}
+
+type DatePreset = 'any' | 'today' | 'yesterday' | '7d' | '30d' | 'month' | 'custom';
+
+const DATE_PRESETS: Array<{ id: DatePreset; label: string }> = [
+  { id: 'any', label: 'Any time' },
+  { id: 'today', label: 'Today' },
+  { id: 'yesterday', label: 'Yesterday' },
+  { id: '7d', label: 'Last 7 days' },
+  { id: '30d', label: 'Last 30 days' },
+  { id: 'month', label: 'This month' },
+  { id: 'custom', label: 'Pick dates…' },
+];
+
+/** [from, to) in the viewer's own time zone; null = open-ended. */
+function dateWindow(preset: DatePreset, from: string, to: string): [number | null, number | null] {
+  const now = new Date();
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const today = startOfDay(now);
+  const day = 24 * 60 * 60 * 1000;
+  switch (preset) {
+    case 'today':
+      return [today, null];
+    case 'yesterday':
+      return [startOfDay(new Date(today - day / 2)), today];
+    case '7d':
+      return [startOfDay(new Date(today - 6 * day + day / 2)), null];
+    case '30d':
+      return [startOfDay(new Date(today - 29 * day + day / 2)), null];
+    case 'month':
+      return [new Date(now.getFullYear(), now.getMonth(), 1).getTime(), null];
+    case 'custom': {
+      // <input type="date"> gives YYYY-MM-DD; read it as a local day.
+      const parse = (v: string) => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+        return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime() : null;
+      };
+      const f = parse(from);
+      const t = parse(to);
+      return [f, t === null ? null : t + day];
+    }
+    default:
+      return [null, null];
+  }
+}
+
 const FILTERS: Array<{ id: Group | 'all'; label: string; cls: string }> = [
   { id: 'all', label: 'All signups', cls: 'text-foreground' },
   { id: 'lead', label: 'Started, not finished', cls: 'text-orange-700 dark:text-orange-400' },
@@ -208,6 +264,11 @@ export function SignupsTab() {
   const [notInstalled, setNotInstalled] = useState(false);
   const [filter, setFilter] = useState<Group | 'all'>('all');
   const [query, setQuery] = useState('');
+  /** One exact status line ("Portal live · canceled"), or all. */
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [datePreset, setDatePreset] = useState<DatePreset>('any');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   /** The company whose Delete company dialog is open (a signup that has one). */
   const [companyToDelete, setCompanyToDelete] = useState<{ id: string; company_name: string } | null>(null);
   /** The row being deleted, so its button shows a spinner and cannot be pressed twice. */
@@ -273,6 +334,41 @@ export function SignupsTab() {
     [tags],
   );
 
+  /** Rows inside the signed-up date filter; every count and list below starts from these. */
+  const dated = useMemo(() => {
+    const [from, to] = dateWindow(datePreset, dateFrom, dateTo);
+    if (from === null && to === null) return rows ?? [];
+    return (rows ?? []).filter((r) => {
+      const t = new Date(r.signed_up_at).getTime();
+      return (from === null || t >= from) && (to === null || t < to);
+    });
+  }, [rows, datePreset, dateFrom, dateTo]);
+
+  /** Every status line in view, with how many rows show it (most common first). */
+  const statusOptions = useMemo(() => {
+    const m = new Map<string, { count: number; cls: string }>();
+    for (const r of dated) {
+      if (filter !== 'all' && stageOf(r).group !== filter) continue;
+      if (followFilter !== 'all' && (tagOf(r) ?? 'none') !== followFilter) continue;
+      const line = statusLine(r);
+      const cur = m.get(line);
+      m.set(line, { count: (cur?.count ?? 0) + 1, cls: stageOf(r).cls });
+    }
+    return [...m.entries()].map(([label, v]) => ({ label, ...v })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [dated, filter, followFilter, tagOf]);
+
+  const filtersOn = statusFilter !== 'all' || datePreset !== 'any' || followFilter !== 'all' || filter !== 'all' || query.trim() !== '';
+
+  const clearFilters = () => {
+    setFilter('all');
+    setFollowFilter('all');
+    setStatusFilter('all');
+    setDatePreset('any');
+    setDateFrom('');
+    setDateTo('');
+    setQuery('');
+  };
+
   /** Tag counts within the stage card that is picked, so the two filters read together. */
   const followCounts = useMemo(() => {
     const c: Record<FollowFilter, number> = {
@@ -287,28 +383,30 @@ export function SignupsTab() {
       onboarding_completed: 0,
       onboarding_not_reachable: 0,
     };
-    for (const r of rows ?? []) {
+    for (const r of dated) {
       if (filter !== 'all' && stageOf(r).group !== filter) continue;
+      if (statusFilter !== 'all' && statusLine(r) !== statusFilter) continue;
       c.all += 1;
       c[tagOf(r) ?? 'none'] += 1;
     }
     return c;
-  }, [rows, filter, tagOf]);
+  }, [dated, filter, statusFilter, tagOf]);
 
   const counts = useMemo(() => {
     const c = { all: 0, lead: 0, no_card: 0, signed_up: 0, failed: 0 };
-    for (const r of rows ?? []) {
+    for (const r of dated) {
       c.all += 1;
       c[stageOf(r).group] += 1;
     }
     return c;
-  }, [rows]);
+  }, [dated]);
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     const digits = q.replace(/\D/g, '');
-    return (rows ?? []).filter((r) => {
+    return dated.filter((r) => {
       if (filter !== 'all' && stageOf(r).group !== filter) return false;
+      if (statusFilter !== 'all' && statusLine(r) !== statusFilter) return false;
       if (followFilter !== 'all' && (tagOf(r) ?? 'none') !== followFilter) return false;
       if (!q) return true;
       const k = signupKey(r);
@@ -316,7 +414,7 @@ export function SignupsTab() {
       const hay = [r.full_name, r.email, r.company_name, r.city_state, r.tenant_slug, noteText].filter(Boolean).join(' ').toLowerCase();
       return hay.includes(q) || (digits.length >= 3 && (r.phone ?? '').replace(/\D/g, '').includes(digits));
     });
-  }, [rows, filter, followFilter, query, tagOf, notesByKey]);
+  }, [dated, filter, statusFilter, followFilter, query, tagOf, notesByKey]);
 
   const setTag = useCallback(
     async (r: SignupRow, value: string) => {
@@ -467,7 +565,10 @@ export function SignupsTab() {
             key={f.id}
             type="button"
             aria-pressed={filter === f.id}
-            onClick={() => setFilter(f.id)}
+            onClick={() => {
+              setFilter(f.id);
+              setStatusFilter('all');
+            }}
             className="rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Card className={cn('h-full transition-colors hover:bg-muted/40', filter === f.id && 'border-primary')}>
@@ -478,6 +579,67 @@ export function SignupsTab() {
             </Card>
           </button>
         ))}
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3" role="group" aria-label="Filter by status and signup date">
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">Status</p>
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => {
+              setStatusFilter(v);
+              // A status line already names its stage; a stage card that disagrees would empty the list.
+              if (v !== 'all') setFilter('all');
+            }}
+          >
+            <SelectTrigger className="h-9 w-[320px] max-w-full text-sm" aria-label="Filter by status">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {statusFilter !== 'all' && !statusOptions.some((o) => o.label === statusFilter) && (
+                <SelectItem value={statusFilter}>{statusFilter} (0)</SelectItem>
+              )}
+              {statusOptions.map((o) => (
+                <SelectItem key={o.label} value={o.label} className={o.cls}>
+                  {o.label} ({o.count})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">Signed up</p>
+          <Select value={datePreset} onValueChange={(v) => setDatePreset(v as DatePreset)}>
+            <SelectTrigger className="h-9 w-[170px] text-sm" aria-label="Filter by signup date">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DATE_PRESETS.map((d) => (
+                <SelectItem key={d.id} value={d.id}>
+                  {d.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {datePreset === 'custom' && (
+          <div className="flex items-end gap-2">
+            <label className="space-y-1">
+              <span className="block text-xs font-medium text-muted-foreground">From</span>
+              <Input type="date" value={dateFrom} max={dateTo || undefined} onChange={(e) => setDateFrom(e.target.value)} className="h-9 w-[150px]" />
+            </label>
+            <label className="space-y-1">
+              <span className="block text-xs font-medium text-muted-foreground">To</span>
+              <Input type="date" value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} className="h-9 w-[150px]" />
+            </label>
+          </div>
+        )}
+        {filtersOn && (
+          <Button variant="ghost" size="sm" className="h-9" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        )}
       </div>
 
       {followReady && (
@@ -504,7 +666,10 @@ export function SignupsTab() {
       <Card>
         <CardHeader className="gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1.5">
-            <CardTitle>People</CardTitle>
+            <CardTitle>
+              People{' '}
+              {rows && <span className="text-sm font-normal tabular-nums text-muted-foreground">{shown.length} shown</span>}
+            </CardTitle>
             <CardDescription>Tap a phone number to call, or copy it.</CardDescription>
           </div>
           <div className="relative w-full sm:w-72">
@@ -527,7 +692,7 @@ export function SignupsTab() {
             </div>
           ) : shown.length === 0 ? (
             <p className="px-6 pb-6 text-sm text-muted-foreground">
-              {query || filter !== 'all' ? 'Nobody matches.' : 'No signups yet.'}
+              {filtersOn ? 'Nobody matches.' : 'No signups yet.'}
             </p>
           ) : (
             <ul className="divide-y">
@@ -600,8 +765,7 @@ export function SignupsTab() {
 
                     <div className="lg:flex-1">
                       <p className={cn('text-xs font-medium', st.cls)}>
-                        {st.label}
-                        {r.subscription_status && r.signup_status === 'provisioned' && ` · ${r.subscription_status}`}
+                        {statusLine(r)}
                       </p>
                       <p className="text-[11px] text-muted-foreground">
                         Signed up {fmtWhen(r.signed_up_at)}
