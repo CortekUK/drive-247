@@ -2,8 +2,9 @@
 
 **Branch:** `ray2` · **Built by:** Hamza · **Last updated:** 27 Nov 2026
 **Status:** steps 1–5 done and committed locally.
-Nothing pushed, nothing deployed to staging. Roughly a third of Ghulam's task is done; the portal
-window (step 5) and the real-phone QA (step 9) are the biggest parts left.
+Nothing pushed, nothing deployed to staging. More than half of the build is done: the 3-step
+signup and the portal window work end to end locally. Left: the sign-in code (6), Google linking
+(7), the signups list (8), and the real-phone QA report (9), the biggest part left.
 
 What each finished step changed: how it was before, what is new, how it works now, and how it was
 proved. The plan for the whole feature is in the PRD (`docs/application/PRD.md`, feat-001) and the
@@ -20,8 +21,8 @@ specs (`specs/`).
 | 2a | BF30 / promo math in one place | **Done** | `ce170a44` |
 | 2b | Card step shows the server's figures; coupon length fixed | **Done** | `546b91f9` |
 | 3 | Server side of the portal "verify your email" window | **Done** | `5db8d77e`, `d353164a` |
-| 4 | Signup in 3 steps (About you → Business → Card) | **Done** (needs 2 Supabase settings to go live) | see git log |
-| 5 | The verify-and-password window in the portal, reminder, 3-day block | **Done** (tested locally) | see git log |
+| 4 | Signup in 3 steps (About you → Business → Card) | **Done** (needs 2 Supabase settings to go live) | `3d349f6d` |
+| 5 | The verify-and-password window in the portal, reminder, 3-day block | **Done** (tested locally) | `545d1b3e` |
 | 6 | "Email me a sign-in code" on the portal login | Not started | |
 | 7 | Connect / disconnect Google in the profile | Not started | |
 | 8 | Signups list: new step names | Not started | |
@@ -276,6 +277,7 @@ password set to an unknown random one.
 | 4 | **BF30 long trials**: will any plan have a trial of 60+ days? | If yes, the coupon must start at the trial's end so it is always exactly 3 bills |
 | 5 | **Keep the extras?** Step 1 (staff passwords) and the code fixes in step 2 were not asked for | He decides whether they stay |
 | 6 | **OK to deploy** the signup functions to staging once steps 4–6 are ready | Staging is shared with Haris and Hamna |
+| 7 | **The new 7-card quick tour** (being built by someone else) should carry a mark like `data-first-rental-tour`, so the verify window can wait for it | The window reads the page to know a tour is showing |
 
 ---
 
@@ -324,4 +326,6 @@ npm run eval -- feat-001                                   # all evals (staging)
 npm run eval -- feat-001 08                                # the money math
 deno test -A --no-check supabase/functions/_tests/signup-promo-coupon_test.ts
 deno test -A --no-check supabase/functions/_tests/signup-verify-window_test.ts
+deno test -A --no-check supabase/functions/_tests/signup-begin-3step_test.ts
+npm run eval -- feat-001 04                                # the 72-hour rule and wording
 ```
