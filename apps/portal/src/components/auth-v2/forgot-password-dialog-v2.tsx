@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
+import { callAccountFn } from "@/lib/account-functions";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import { CodeInput } from "@/components/ui-v2/code-input";
@@ -116,6 +117,12 @@ export function ForgotPasswordDialogV2({
 
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) throw updateError;
+
+      // feat-001: a password now exists. Tell the server (it also ends a 3-step
+      // signup's "password still owed" flag) and bring that into the session,
+      // or the portal would keep treating this account as having none.
+      await callAccountFn("account-identity-check", { action: "password_set" });
+      await supabase.auth.refreshSession().catch(() => {});
 
       toast({ title: "Password updated", description: "You're signed in with your new password." });
       onOpenChange(false);

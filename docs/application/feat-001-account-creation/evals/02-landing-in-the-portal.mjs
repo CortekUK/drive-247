@@ -8,7 +8,8 @@ import { makeUser, magicLinkHash, useMagicLink, source } from "./lib/account.mjs
 
 statement("02.1", "signup-provision always returns a portal sign-in link (no switch)", async () => {
   const src = source("supabase/functions/signup-provision/index.ts");
-  ok(!/SIGNUP_PORTAL_MAGICLINK/.test(src), "signup-provision still reads SIGNUP_PORTAL_MAGICLINK");
+  // A read of the switch, not the word: the code's own comment says it is gone.
+  ok(!/Deno\.env\.get\(\s*["']SIGNUP_PORTAL_MAGICLINK/.test(src), "signup-provision still reads SIGNUP_PORTAL_MAGICLINK");
   ok(/generateLink\(\s*\{[\s\S]{0,80}type:\s*["']magiclink["']/.test(src), "signup-provision does not make a magic link");
 });
 

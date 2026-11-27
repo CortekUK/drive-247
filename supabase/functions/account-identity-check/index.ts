@@ -82,11 +82,20 @@ Deno.serve(async (req) => {
       googles: googles.map((g: { id: string; email: string | null }) => ({ id: g.id, email: g.email })),
       googleEmailOwnedByOther: ownedByOther,
     };
-    // 07.2: the profile saved a password for an account that may have had
-    // only Google. Taken on the person's word: getting it wrong could only lock
-    // themselves out of Google, and "Email me a sign-in code" still lets them in.
+    // 07.2: the profile (or Forgot password) saved a password, for an account
+    // that may have had only Google or a signup stand-in. Taken on the person's
+    // word: getting it wrong could only lock themselves out of Google, and
+    // "Email me a sign-in code" still lets them in.
+    //
+    // It also ends the signup's "password still owed" flag. Without that, a
+    // 3-step signup who chose a password in the profile rather than in the
+    // verify window still read as "no password": Disconnect Google and email
+    // changes were refused, and the window kept asking (review finding 1).
+    // The email flag is left alone: only the window's own code clears it.
     if (action === "password_set") {
-      const { error } = await supabase.auth.admin.updateUserById(userId, { app_metadata: { [PASSWORD_SET]: true } });
+      const { error } = await supabase.auth.admin.updateUserById(userId, {
+        app_metadata: { [PASSWORD_SET]: true, [PENDING_PASSWORD]: false },
+      });
       if (error) return answer(500, "UNAVAILABLE", "Something went wrong. Please try again.");
       return jsonResponse({ ok: true, password: true });
     }

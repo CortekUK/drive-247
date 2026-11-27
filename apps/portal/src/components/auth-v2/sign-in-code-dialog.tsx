@@ -127,6 +127,7 @@ export function SignInCodeDialog({
       // without them a deactivated person, or one with no portal profile (a
       // booking-site customer), was left signed in on the login page with no
       // word of why (found testing step 6).
+      let signedIn: { id: string; tenant_id: string | null } | null = null;
       if (verified?.user) {
         const profile = await fetchAppUserResult(verified.user);
         if (profile.status === "unavailable") {
@@ -143,11 +144,16 @@ export function SignInCodeDialog({
           setError("Your account has been deactivated. Please contact your system administrator.");
           return;
         }
+        signedIn = profile.appUser;
       }
-      // Signed in: the login page takes it from here.
+      // Signed in: the login page takes it from here. The row names the person
+      // and their company, as the password sign-in's does: Health Score counts
+      // only identified login rows as engagement (review finding 2).
       try {
         await supabase.from("audit_logs").insert({
           action: "login_success",
+          tenant_id: signedIn?.tenant_id ?? null,
+          actor_id: signedIn?.id ?? null,
           entity_type: "session",
           details: { email: email.trim(), method: "email_code", user_agent: navigator.userAgent },
         });

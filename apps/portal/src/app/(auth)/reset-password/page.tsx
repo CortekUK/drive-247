@@ -9,6 +9,7 @@ import { AuthBrandShell } from "@/components/auth-v2/auth-brand-shell";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { callAccountFn } from "@/lib/account-functions";
 
 /**
  * Reset Password
@@ -61,6 +62,9 @@ export default function ResetPasswordPage() {
     try {
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) throw updateError;
+      // feat-001: a password now exists; also ends a 3-step signup's
+      // "password still owed" flag (account-identity-check password_set).
+      await callAccountFn("account-identity-check", { action: "password_set" });
 
       toast({
         title: "Password updated",

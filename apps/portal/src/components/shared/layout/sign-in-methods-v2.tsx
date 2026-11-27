@@ -185,6 +185,34 @@ export function SignInMethodsV2({
  * account that already belongs to someone else as an error in the address.
  */
 export function GoogleLinkReturn() {
+  /*
+   * Every portal visit (review finding 3): the return trip above can fail to
+   * reach the portal (no redirect allow-list, a closed tab), and Supabase has
+   * linked the Google account by then. So whenever the dashboard loads, a
+   * Google identity whose email differs from the account's is sent to the
+   * server, which removes it (07.4). Only then does a call go out; an ordinary
+   * visit costs one read of the signed-in user.
+   */
+  useEffect(() => {
+    if (new URL(window.location.href).searchParams.has(RETURN_FLAG)) return; // handled below
+    void (async () => {
+      const { data } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+      const user = data?.user;
+      if (!user?.email) return;
+      const wrong = (user.identities ?? []).some(
+        (i) =>
+          i.provider === "google" &&
+          String((i.identity_data as { email?: string } | undefined)?.email ?? "").trim().toLowerCase() !==
+            user.email!.trim().toLowerCase(),
+      );
+      if (!wrong) return;
+      const r = await callAccountFn("account-identity-check", { action: "check_google" });
+      if (r.code === "GOOGLE_EMAIL_MISMATCH") {
+        toast({ title: "Google disconnected", description: r.error, variant: "destructive" });
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     const url = new URL(window.location.href);
     const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
@@ -193,7 +221,10 @@ export function GoogleLinkReturn() {
 
     url.searchParams.delete(RETURN_FLAG);
     for (const k of ["error", "error_code", "error_description"]) url.searchParams.delete(k);
-    window.history.replaceState(null, "", url.pathname + (url.search || "") );
+    // Keep a hash that is not an error: Supabase may still be reading a new
+    // session from it (review finding 5).
+    const keepHash = url.hash && !hash.has("error_description") ? url.hash : "";
+    window.history.replaceState(null, "", url.pathname + (url.search || "") + keepHash);
 
     void (async () => {
       if (errorText) {

@@ -409,7 +409,10 @@ export function ProfileSheetV2({
       }
 
       // 07.2: a Google-only account now has a password too.
+      // It also ends a signup's "password still owed" flag; the refresh brings
+      // that into this session so the verify window stops asking.
       await callAccountFn("account-identity-check", { action: "password_set" });
+      await supabase.auth.refreshSession().catch(() => {});
       void refreshMethods();
 
       toast({ title: "Password updated", description: "Your new password is live." });

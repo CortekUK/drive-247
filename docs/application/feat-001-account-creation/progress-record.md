@@ -468,6 +468,29 @@ so is "manual linking". Both are needed (question 9 below). Real Google goes in 
 
 ---
 
+## Whole-branch check and review (before pushing)
+
+On `hamza/feat-001/account-creation` (from staging), 27 Nov:
+
+| Check | Result |
+|---|---|
+| Type check: portal, admin | 0 errors |
+| Type check: web | 1, in `trax-showcase.tsx` (not touched by this branch) |
+| Type check: booking | 77, all already there (this branch touches no booking file) |
+| Type check: the 7 changed edge functions | 0, except `signup-provision`'s 3, which staging's own copy has too |
+| Deno tests | **61/61** |
+| All evals, with the changed functions served locally | **55/57**: 09.4 waits for the migration on staging, 08.13 is the BF30 long-trial question |
+| Eval 02.1 | was failing on a comment that says the old switch is gone; it now looks for a real read of the switch, and passes |
+
+**The code review found 3 real bugs, all fixed and tested locally:**
+1. **A password set from the profile or "Forgot password" didn't count** for a 3-step signup: the "password still owed" flag stayed on, so Sign-in methods said "No password yet", Disconnect Google and email changes were refused, and the verify window kept asking. Now every place that sets a password (profile, forgot-password window, old reset page) tells the server, which clears that flag (the email flag is left alone), and the session is refreshed. Tested: 5/5 by script; in the browser the profile shows "Set" and the window does not come back after a reload.
+2. **"Email me a sign-in code" wrote login records with no company**, so they didn't count in the Health Score. They now carry the company and the person, like a password sign-in. Tested: the row has northwind's id and the person's id.
+3. **A wrong-email Google link was only removed if the person came back to the portal from Google, or opened their profile.** Now every portal visit checks it: a plain visit removed the test link and said so.
+
+**Minor findings, left for now:** many wrong codes sent at the exact same moment can get past the 5-try limit; the "password set" mark is taken on the person's word (the only harm is to themselves); the database types need regenerating once the migration is on staging. The return from Google no longer clears the end of the address unless it is an error.
+
+---
+
 ## Waiting on Ghulam
 
 | # | Question | Why it matters |
