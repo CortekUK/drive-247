@@ -536,6 +536,52 @@ Signup on localhost against the changed functions served locally, staging data, 
 
 ---
 
+## Live check on ray2 (27 Nov, in Chrome)
+
+`ray2` was pushed at `415cc619`. The four sites in CLAUDE.md built (`drive247-web`, `-portal`, `-admin`, `-booking`). `drive-247-admin` and `drive247-booking-v2` failed, as they do on `main` too: extra projects outside that list.
+
+**The new edge functions and the migration are not on staging** (deploying them is Ghulam's step at the relay), so on ray2 the new screens run against the old signup functions.
+
+**Tested on ray2:**
+
+| Item | Result |
+|---|---|
+| Landing plan cards: $90.30 / $160.30 / $244.30 = 30% off $129 / $229 / $349 | ✅ checked on a calculator |
+| Way in from a plan card (Growth) | ✅ Growth selected on the card step |
+| About you: empty-field messages | ✅ |
+| Business: taken address, free address, city list, terms | ✅ |
+| Card step loads Stripe (test mode), "Due today $0", first payment 11 Dec (27 Nov + 14 days) | ✅ |
+| BF30: "$160.30/mo for 3 months, then $229", "30% off your first 3 monthly payments after the 14-day free trial" | ✅ |
+| Promo plus plan change: Scale → "$244.30/mo for 3 months, then $349" | ✅ |
+| Leave offer, "plus 14 days free" matches the card step | ✅ |
+| Finish-later email sent to +3 | ✅ sent (Hamza to check the link opens ray2, not www) |
+| Portal: "Email me a sign-in code": unknown email, 60 s wait, real code signs in | ✅ |
+| Admin signups list: +3 "At the card step", +2 "stopped at the business" | ✅ |
+
+**Found on ray2 (all already on `main`, not from this branch):**
+- "today · then **discounted**/month" under the $0: says "discounted" instead of the price.
+- Switching plan briefly shows "**Saving your card…**" on the main button while the form reloads, though no card was entered.
+- "1â€"5 vehicles" garbled on the landing plan cards as well as the card step.
+
+**Not tested on ray2, and why:**
+
+| Item | Why |
+|---|---|
+| 3-step signup (no code or password in signup) | needs the new `signup-begin` on staging; ray2 still shows the old code and password screens |
+| Verify window in the portal, reminder, 3-day block | needs the new `signup-begin`, `signup-verify-email`, `signup-set-password` |
+| Correcting a mistyped email in the verify window | needs the new `signup-verify-email` |
+| Sign-in methods, connect / disconnect Google | needs the new `account-identity-check`; Google also needs the Google provider and "manual linking" on in Supabase Auth |
+| Coming back after a reset (password and email flags cleared) | needs the new `signup-password-reset` |
+| Signups list "email confirmed / password set" line; the new step order recorded | needs migration `20261127000000` and the new `signup-lead` |
+| The server's own BF30 bill figures and coupon length | needs the new `signup-payment-intent-v2` |
+| Paying with test cards: pass, decline, 3-D Secure; Apple / Google Pay | Claude does not submit payments on a hosted site, even test ones; Hamza enters the test cards (4242…, 4000 0000 0000 0002, 4000 0025 0000 3155) |
+| The sign-in link after payment lands on the ray2 portal | needs the redirect allow-list and the portal address per environment (Ghulam's Supabase settings) |
+| Real phones, inside Instagram / Facebook | done by Hamza on the phones |
+
+All of these were tested locally with the new functions (see the sections above) and are proved by the evals.
+
+---
+
 ## Waiting on Ghulam
 
 | # | Question | Why it matters |
