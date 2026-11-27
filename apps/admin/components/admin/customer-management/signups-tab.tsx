@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 import { cn } from '@/lib/utils';
+import { verifyText } from '@/lib/signup-verify-text';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -51,19 +52,29 @@ interface SignupRow {
   /** The furthest screen the signup reached (signup_leads.last_step). */
   lead_step: string | null;
   lead_id: string | null;
+  /**
+   * feat-001 spec 09.4: whether the person finished the portal's "check your
+   * email, then choose a password" window. Null for a lead (no account).
+   */
+  email_confirmed: boolean | null;
+  password_set: boolean | null;
 }
 
 type Group = 'lead' | 'no_card' | 'signed_up' | 'failed';
 
 /** Where a signup got to, in words Bryan uses, and which filter it falls under. */
 /** Where a lead stopped, as the person saw it. */
+
 const LEAD_STEP_LABEL: Record<string, string> = {
-  details: 'after their details',
-  business: 'on the business page',
-  email_code: 'at the email code',
-  password: 'at the password',
-  card: 'at the card step',
+  // The 3-step signup (feat-001): About you → Your business → Card.
+  details: 'at about you',
+  business: 'at the business',
+  card: 'at the card',
+  // Rows saved by the old 5-step form keep their meaning (spec 09.3).
+  email_code: 'at the email code (old signup)',
+  password: 'at the password (old signup)',
 };
+
 
 function stageOf(r: SignupRow): { label: string; cls: string; group: Group } {
   switch (r.signup_status) {
@@ -330,6 +341,14 @@ export function SignupsTab() {
                         {st.label}
                         {r.subscription_status && r.signup_status === 'provisioned' && ` · ${r.subscription_status}`}
                       </p>
+                      {(() => {
+                        const v = verifyText(r);
+                        return v ? (
+                          <p className={cn('text-[11px]', v.late ? 'text-red-700 dark:text-red-400' : v.done ? 'text-muted-foreground' : 'text-amber-700 dark:text-amber-400')}>
+                            {v.text}
+                          </p>
+                        ) : null;
+                      })()}
                       <p className="text-[11px] text-muted-foreground">
                         Signed up {fmtWhen(r.signed_up_at)}
                         {r.trial_end && r.subscription_status === 'trialing' && ` · trial until ${fmtWhen(r.trial_end).split(',')[0]}`}

@@ -25,7 +25,7 @@ specs (`specs/`).
 | 5 | The verify-and-password window in the portal, reminder, 3-day block | **Done** (tested locally) | `545d1b3e` |
 | 6 | "Email me a sign-in code" on the portal login | **Done** (tested locally) | see step 6 |
 | 7 | Connect / disconnect Google in the profile | **Done** (tested locally; needs deploy + 2 Supabase settings) | see step 7 |
-| 8 | Signups list: new step names | Not started | |
+| 8 | Signups list: new step names | **Done** (tested locally; migration not yet on staging) | see step 8 |
 | 9 | QA report on real phones, then the pull request | Not started | |
 
 ---
@@ -426,6 +426,41 @@ so is "manual linking". Both are needed (question 9 below). Real Google goes in 
 
 ---
 
+## Step 8 · Signups list in Super admin: the new steps
+
+**What it does.** Super admin → Customer management → Signups:
+- **Where a person stopped** now uses the 3 steps: "stopped at about you / at the business / at the card".
+- **Older rows** saved by the 5-step form keep their meaning: "at the email code (old signup)" and "at the password (old signup)".
+- **Each account** gets a line saying whether the person finished the portal's verify window:
+  - "Email confirmed, password set", or
+  - for example "No password yet · 23 hours left" (amber), or
+  - "… · 3-day point passed" (red).
+
+**How.**
+- `signup-lead`'s step order is now details 1, business 2, card 3, done 4. An old page that still sends `email_code` or `password` is counted as the business step, so it never moves a lead backwards or past it.
+- Migration `20261127000000_signup_steps_three.sql`:
+  - puts older lead rows on the new numbers (email code / password → 2, card → 3, done → 4);
+  - gives `admin_signups()` two new columns, `email_confirmed` and `password_set`, read from the signup's flags.
+- The wording is in `apps/admin/lib/signup-verify-text.ts`. Before the migration runs, the columns are missing and the line simply doesn't show. Without that, every account would have read "not confirmed".
+
+**Tested locally:**
+
+| Edge case | Result |
+|---|---|
+| Migration run on staging inside a transaction that was **rolled back** (staging unchanged, checked after) | ✅ |
+| … old rows renumbered: email_code 3→2, password 4→2, card 5→3, done 6→4, details stays 1 | ✅ |
+| … flagged account → `email_confirmed` false, `password_set` false; leads → empty | ✅ |
+| `signup-lead`: details → business → card → done records 3, then 4 | ✅ |
+| … card after done does not move back | ✅ |
+| … old "email_code" from a stale page is taken as business | ✅ |
+| … old "password" after card does not move back | ✅ |
+| … unknown step refused | ✅ |
+| Wording, 9 cases (lead, old function, done, 3 days / 2 days / 23 hours / 1 hour left, passed at 72 h, 10 days) | **9/9** |
+| Eval 09 (signup-lead served locally) | **3/4**: 09.4 needs the migration on staging |
+| Admin page in the browser | not opened: it would be a second dev server, and the new line only shows once the migration is on staging. It goes in the QA report on ray2. |
+
+---
+
 ## Waiting on Ghulam
 
 | # | Question | Why it matters |
@@ -446,8 +481,7 @@ so is "manual linking". Both are needed (question 9 below). Real Google goes in 
 
 | # | What | Size |
 |---|---|---|
-| 8 | Signups list in Super admin: new step names | Small |
-| – | Deploy steps 3–7 to staging together (step 7 adds `account-identity-check`) | Small |
+| – | Deploy steps 3–8 to staging together: functions `signup-verify-email`, `signup-set-password`, `signup-begin`, `signup-provision`, `account-identity-check`, `signup-lead`, and migration `20261127000000` | Small |
 | 9 | QA report: section 4 on a real iPhone, Android, inside Instagram and Facebook, then a laptop; Stripe dashboard check | Big |
 | – | Pull request from `ray2` | Small |
 

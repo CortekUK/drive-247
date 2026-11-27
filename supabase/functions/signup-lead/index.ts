@@ -27,15 +27,24 @@ import { normalizeSignupPhone } from "../_shared/signup-attribution.ts";
 const LOG = "[signup-lead]";
 const HOUR_MS = 60 * 60 * 1000;
 
-/** The signup's screens in the order people meet them. */
+/**
+ * The signup's screens in the order people meet them: the 3-step signup
+ * (feat-001 spec 09). The email code and the password moved into the portal.
+ */
 const STEP_ORDER: Record<string, number> = {
   details: 1,
   business: 2,
-  email_code: 3,
-  password: 4,
-  card: 5,
-  done: 6,
+  card: 3,
+  done: 4,
 };
+
+/**
+ * Steps of the old 5-step form. A browser still holding that page may send
+ * them for a while; they sat between the business page and the card, so they
+ * count as the business step and never move a lead backwards or forwards past
+ * it. Matches the migration that renumbered older rows (20261127000000).
+ */
+const OLD_STEPS: Record<string, string> = { email_code: "business", password: "business" };
 
 const FLEET = new Set(["1-5", "6-20", "21+"]);
 const IN_APP = new Set(["instagram", "facebook", "messenger", "tiktok", "other"]);
@@ -118,7 +127,8 @@ Deno.serve(async (req) => {
   }
 
   // ── save ────────────────────────────────────────────────────────────────
-  const step = typeof body.step === "string" && STEP_ORDER[body.step] ? body.step : null;
+  const asked = typeof body.step === "string" ? (OLD_STEPS[body.step] ?? body.step) : null;
+  const step = asked && STEP_ORDER[asked] ? asked : null;
   if (!step) return signupError("INVALID_BODY", "Unknown step", 400);
 
   // 60 saves an hour per IP: a person makes a handful, a script many more.
