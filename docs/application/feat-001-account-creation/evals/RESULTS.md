@@ -1,8 +1,8 @@
 # Eval results · feat-001-account-creation
 
-**FAIL** · 55/57 statements proved · 98 checks · 2026-11-27 15:34 UTC
+**FAIL** · 55/57 statements proved · 98 checks · 2026-11-27 18:12 UTC
 
-Run on staging by `npm run eval -- feat-001`, at commit `464f68fb` on `hamza/feat-001/account-creation` (with uncommitted changes).
+Run on staging by `npm run eval -- feat-001`, at commit `cce716d7` on `hamza/feat-001/account-creation` (with uncommitted changes).
 This file is written by the command. Do not edit it by hand.
 
 | Statement | Result | Checks | Eval |
@@ -18,7 +18,7 @@ This file is written by the command. Do not edit it by hand.
 | 02.3 | pass | 1 | `02-landing-in-the-portal.mjs` |
 | 03.1 | pass | 1 | `03-verify-and-password-window.mjs` |
 | 03.2 | pass | 1 | `03-verify-and-password-window.mjs` |
-| 03.4 | pass | 1 | `03-verify-and-password-window.mjs` |
+| 03.4 | FAIL | 1 | `03-verify-and-password-window.mjs` |
 | 03.5 | pass | 1 | `03-verify-and-password-window.mjs` |
 | 03.6 | pass | 1 | `03-verify-and-password-window.mjs` |
 | 03.7 | pass | 1 | `03-verify-and-password-window.mjs` |
@@ -63,9 +63,9 @@ This file is written by the command. Do not edit it by hand.
 | 09.1 | pass | 1 | `09-signups-list.mjs` |
 | 09.2 | pass | 1 | `09-signups-list.mjs` |
 | 09.3 | pass | 1 | `09-signups-list.mjs` |
-| 09.4 | FAIL | 1 | `09-signups-list.mjs` |
+| 09.4 | pass | 1 | `09-signups-list.mjs` |
 
 ## What failed
 
-- **09.4** The signups list says whether the email is verified and a password is set (`09-signups-list.mjs`): admin_signups has no email_confirmed / password_set
+- **03.4** The right code clears the email flag and records when (`03-verify-and-password-window.mjs`): the right code was refused: {"ok":false,"code":"OTP_INVALID","error":"That code is not right. 4 tries left.","attemptsRemaining":4}
 - **08.13** #all every trial from 0 to 90 days gets exactly 3 discounted bills (`08-prices-trials-and-promo-codes.test.ts`): AssertionError: 2027-01-31 + 89 days: expected [ '2027-04-30', '2027-05-30', …(2) ] to deeply equal [ '2027-04-30', '2027-05-30', …(1) ]
