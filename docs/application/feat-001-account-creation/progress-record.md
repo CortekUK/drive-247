@@ -491,6 +491,30 @@ On `hamza/feat-001/account-creation` (from staging), 27 Nov:
 
 ---
 
+## Click-through of Ghulam's document, locally in Chrome (27 Nov)
+
+Signup on localhost against the changed functions served locally, staging data, test address `hamza.shafique12123+1@gmail.com`. The card step can't run on this laptop (no Stripe test key here), so everything from the card on is checked on `ray2`.
+
+| Ghulam's item | Result |
+|---|---|
+| Ways in: landing button, `?signup=start`, `?signup=start&promo=BF30` | ✅ (the plan-card way in: on ray2) |
+| About you: empty, wrong, too long | ✅ clear message for each; email/phone keyboards right; name max 60 |
+| Required marks | ⚠️ **Phone is required but has no `*`** (Name and Email have one) |
+| Back and forward | ✅ nothing lost |
+| Business: empty, taken web address (3 suggestions), reserved ("admin"), messy text cleaned, city list | ✅ |
+| Terms tick | ✅ Continue stays off until ticked |
+| 3 steps, no code or password in signup | ✅ About you → Business → Card; account made with both flags owed; code emailed at once |
+| Leave offer shows once | ✅ (this Chrome had seen it on 26 Nov; after clearing, it shows) |
+| Finish-later email and its link from a signed-out browser | ✅ signs back in at the card step. ⚠️ link points at www.drive-247.com when the site address isn't set: check on ray2 |
+| Coming back in the same browser | ✅ straight to the card step |
+| Same email signs up again | ⚠️→✅ **fixed**: "Welcome back" asked for a password the person never chose. Now it says to use "Forgot password?"; and that reset now also clears both owed flags, so the portal stops asking |
+| Promo codes: valid, wrong case, spaces, invalid, each plan | ✅ (expired / removed: on ray2) |
+| Card step, test cards, 3-D Secure, trial wording, BF30 on the bill, Apple/Google Pay | ray2 (needs Stripe) |
+| ⚠️ Leave offer says "plus 14 days free" while the card timeline said "Today $129" | check on ray2 once the card step loads |
+| Local landing page slow (60–100 s) | this laptop's server times out asking staging for the landing version; not this branch |
+
+---
+
 ## Waiting on Ghulam
 
 | # | Question | Why it matters |
