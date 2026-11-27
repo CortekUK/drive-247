@@ -25,6 +25,7 @@ const emails: Array<{ to: string; subject: string }> = [];
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
 const view = (u: User) => ({ id: u.id, email: u.email, app_metadata: u.app_metadata, user_metadata: u.user_metadata, email_confirmed_at: u.email_confirmed_at, aud: "authenticated", role: "authenticated" });
 
+const restWrites: Array<{ table: string; method: string; body: any; filter: string }> = [];
 /** Flip to make the email sender fail, to test what the person is told. */
 let resendDown = false;
 const realFetch = globalThis.fetch;
@@ -39,7 +40,17 @@ globalThis.fetch = async (input: any, init?: any) => {
     return json({ id: `em_${emails.length}` });
   }
   if (url.host === "supabase.test") {
-    if (url.pathname.startsWith("/rest/v1/")) return json([], 201); // email_send_log and friends
+    if (url.pathname.startsWith("/rest/v1/")) {
+      // email_send_log and friends; app_users updates are recorded for the checks.
+      if (req.method === "PATCH") {
+        restWrites.push({ table: url.pathname.slice(9), method: "PATCH", body: await req.json().catch(() => null), filter: url.search.replace(/^\?/, "") });
+      }
+      return json([], 201);
+    }
+    if (url.pathname === "/auth/v1/admin/users" && req.method === "GET") {
+      const f = (url.searchParams.get("filter") ?? "").toLowerCase();
+      return json({ users: [...users.values()].filter((u) => u.email.toLowerCase().includes(f)).map(view) });
+    }
     if (url.pathname === "/auth/v1/user" && req.method === "GET") {
       const id = tokens.get((req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/, ""));
       const u = id ? users.get(id) : undefined;
@@ -53,7 +64,9 @@ globalThis.fetch = async (input: any, init?: any) => {
       if (req.method === "PUT") {
         const b = await req.json();
         if (b.email && b.email !== u.email) {
-          if ([...users.values()].some((x) => x.email === b.email)) return json({ code: "email_exists", msg: "A user with this email address has already been registered" }, 422);
+          // What staging's real GoTrue answers when the email is changed together
+          // with app_metadata (seen in feat-001 step 5): a bare 500, no reason.
+          if ([...users.values()].some((x) => x.email === b.email)) return json({ code: "unexpected_failure", msg: "Error updating user" }, 500);
           u.email = b.email;
         }
         if (b.password) u.password = b.password;
@@ -186,6 +199,8 @@ Deno.test("03.8 wrong email: refused if invalid, the same, or taken; a good one 
   eq([r.status, r.json.email], [200, "fixed.address@example.com"], "answer");
   eq(u.email, "fixed.address@example.com", "the account's email");
   eq(u.app_metadata.d247_signup.email, "fixed.address@example.com", "the signup record's email");
+  const staffUpdate = restWrites.find((w) => w.table === "app_users" && w.method === "PATCH");
+  eq([staffUpdate?.body?.email, staffUpdate?.filter], ["fixed.address@example.com", `auth_user_id=eq.${u.id}`], "the portal staff record follows");
   eq(emails.length, before + 1, "one email sent");
   eq(emails.at(-1)!.to, "fixed.address@example.com", "the code went to the new address only");
   eq(u.app_metadata.d247_signup_email_pending, true, "still to be proved at the new address");

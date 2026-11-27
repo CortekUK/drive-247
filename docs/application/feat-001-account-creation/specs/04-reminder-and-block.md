@@ -10,14 +10,19 @@ the portal waits for it.
 ## Behaviour
 
 - 04.1 On the first visit the window opens straight after the quick tour ends or is skipped. If
-  the tour is not shown, it opens on load.
+  the tour is not shown, it opens on load. It waits for the first-run questions and for any tour
+  card, prompt or transit on screen (`data-first-rental-tour`, `data-tour-prompt`,
+  `data-tour-transit`), read from the page so the tours themselves are not changed. *(Found testing
+  step 5: without this, the verify window opened underneath the Trax tour card.)*
 - 04.2 Closing the window lets the person use the portal.
 - 04.3 On every later visit (each new page load or sign-in) the window opens again while a pending
   flag is set.
 - 04.4 The deadline is 72 hours after the account was created (`auth.users.created_at`), in UTC.
 - 04.5 After the deadline the window cannot be closed, and the rest of the portal is not usable
   until both parts are done. `/settings` and `/subscription` are not exempt; only signing out is.
-- 04.6 Before the deadline the window says how long is left ("2 days left").
+- 04.6 Before the deadline the window says how long is left. Over a day left, whole days are
+  counted up ("3 days left" straight after signup); under a day, whole hours ("23 hours left"),
+  then "Less than an hour left".
 - 04.7 A person with no pending flag (Google signups, people who finished) never sees the window.
 - 04.8 The deadline is checked on the server too: after it, `signup-verify-otp` and
   `signup-set-password` are the only signup-flag functions a pending account may call, and the

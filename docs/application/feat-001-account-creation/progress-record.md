@@ -1,7 +1,7 @@
 # feat-001 · Account creation — progress record
 
 **Branch:** `ray2` · **Built by:** Hamza · **Last updated:** 27 Nov 2026
-**Status:** steps 1–4 done and committed locally.
+**Status:** steps 1–5 done and committed locally.
 Nothing pushed, nothing deployed to staging. Roughly a third of Ghulam's task is done; the portal
 window (step 5) and the real-phone QA (step 9) are the biggest parts left.
 
@@ -21,7 +21,7 @@ specs (`specs/`).
 | 2b | Card step shows the server's figures; coupon length fixed | **Done** | `546b91f9` |
 | 3 | Server side of the portal "verify your email" window | **Done** | `5db8d77e`, `d353164a` |
 | 4 | Signup in 3 steps (About you → Business → Card) | **Done** (needs 2 Supabase settings to go live) | see git log |
-| 5 | The verify-and-password window in the portal, reminder, 3-day block | Not started | |
+| 5 | The verify-and-password window in the portal, reminder, 3-day block | **Done** (tested locally) | see git log |
 | 6 | "Email me a sign-in code" on the portal login | Not started | |
 | 7 | Connect / disconnect Google in the profile | Not started | |
 | 8 | Signups list: new step names | Not started | |
@@ -217,6 +217,55 @@ creating the test account `mock-3step@example.com`. It never reached the card an
 
 ---
 
+## Step 5 · The "check your email, then choose a password" window in the portal
+
+**Before.** Nothing in the portal asked a new operator to prove their email or choose a password.
+
+**New.**
+
+| Part | What it does |
+|---|---|
+| The window (`verify-account-dialog-v2.tsx`) | "Check your email": 6 code boxes (number keyboard, the phone's code autofill), wrong code shows tries left, "Send a new code" with a countdown, "Wrong email?" to correct the address. Then "Choose a password" with the signup rule (8+, a letter, a number) |
+| When it shows (`lib/signup-verify.ts`) | Every visit while a flag is set; after the first-run questions and after any tour; "Not now" until 72 hours after signup ("3 days left"…), then it cannot be closed |
+| Password panel | The portal's own `PasswordChangePanelV2` reused, with two new options (signup rules, password only). The profile's use of it is unchanged |
+
+**Proved by (all local; nothing deployed).** The 2 server functions were run on this laptop with
+Deno against staging's data (emails printed, not sent), and the local portal pointed at them by a
+development-only setting. A test staff member on staging's northwind was used.
+
+| Case | Result |
+|---|---|
+| Window waits for the Trax tour, appears when it closes | ✅ (after fix 1) |
+| "3 days left" straight after signup | ✅ (after fix 2) |
+| Wrong code → "That code is not right. 4 tries left." | ✅ |
+| Send a new code → countdown; old code refused; new code works | ✅ |
+| Wrong email? → wait while a code was just sent; broken address stopped; taken address refused; good address changes it and the code goes only there | ✅ (after fix 3) |
+| Portal staff record follows the corrected email | ✅ (after fix 4) |
+| Right code → "Choose a password" | ✅ |
+| Too-short password / passwords that don't match → Save disabled | ✅ |
+| Save password → stays signed in; old temporary password refused, new one works; flags cleared | ✅ (after fix 5) |
+| Not now → closes; reload → back, at the step they were on | ✅ |
+| 3 days passed → no close, no Not now, Escape and clicking outside do nothing | ✅ |
+| Done → never shows again | ✅ |
+| Console errors from the window | None (only a browser extension's warning) |
+| Spec 04 rules (Vitest) | 3/3, 17 checks |
+| Step 3 functions (Deno) | 20/20 |
+
+**Found and fixed while testing.**
+1. The window opened underneath the Trax tour card. It now waits for any tour on screen.
+2. "2 days left" straight after signup (rounded down). Days now count up: "3 days left".
+3. A taken address showed a generic error: real Supabase answers "Error updating user", not
+   "already registered". The function now looks the address up first.
+4. "Wrong email?" left the portal's staff record on the old email. It now follows.
+5. Saving the password signed the person out (Supabase ends sessions on a password change). The
+   window now signs them straight back in.
+
+**Clean-up.** The test staff member could not be deleted (the portal's audit log refers to it,
+and audit entries are kept), so it was deactivated through the portal's own function and its
+password set to an unknown random one.
+
+---
+
 ## Waiting on Ghulam
 
 | # | Question | Why it matters |
@@ -234,7 +283,6 @@ creating the test account `mock-3step@example.com`. It never reached the card an
 
 | # | What | Size |
 |---|---|---|
-| 5 | The verify-and-password window in the portal, reminder every visit, block after 3 days | Big |
 | 6 | "Email me a sign-in code" on the portal login page | Medium |
 | 7 | Connect and disconnect Google in the profile | Medium–big |
 | 8 | Signups list in Super admin: new step names | Small |

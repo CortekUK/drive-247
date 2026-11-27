@@ -35,6 +35,15 @@ spec 04.
   (`autocomplete="new-password"` with the email as `username`).
 - 03.13 The password part reuses `PasswordChangePanelV2`; there is no second password form.
 - 03.14 Buttons show they are working and cannot be pressed twice while a request is running.
+- 03.15 When the email is corrected, the portal's staff record (`app_users.email`) changes with it,
+  so the sidebar, staff list and notifications show the new address. *(Found testing step 5.)*
+- 03.16 After the password is saved, the person stays signed in: Supabase ends the account's
+  sessions on a password change, so the window signs straight back in with the new password.
+  *(Found testing step 5.)*
+- 03.17 A taken address is recognised by looking it up before the change, not from Supabase's
+  error, which for this kind of update is a bare "Error updating user". *(Found testing step 5.)*
+- 03.18 The password part uses the signup rule (8+ characters, a letter and a number), not the
+  portal's own 12-character rule for changing a password from the profile.
 
 ## Worked examples
 

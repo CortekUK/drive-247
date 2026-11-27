@@ -34,10 +34,12 @@ export const PASSWORD_RULES: ReadonlyArray<{ label: string; test: (password: str
   { label: "A number", test: (p) => /\d/.test(p) },
 ];
 
-function strengthOf(password: string): { score: 0 | 1 | 2 | 3 | 4; label: string } {
+type PasswordRule = { label: string; test: (password: string) => boolean };
+
+function strengthOf(password: string, rules: ReadonlyArray<PasswordRule> = PASSWORD_RULES): { score: 0 | 1 | 2 | 3 | 4; label: string } {
   if (!password) return { score: 0, label: "" };
-  const met = PASSWORD_RULES.filter((rule) => rule.test(password)).length;
-  if (met < 4) return { score: met <= 1 ? 1 : 2, label: met <= 1 ? "Weak" : "Fair" };
+  const met = rules.filter((rule) => rule.test(password)).length;
+  if (met < rules.length) return { score: met <= 1 ? 1 : 2, label: met <= 1 ? "Weak" : "Fair" };
   const extra = password.length >= 16 || /[^A-Za-z0-9]/.test(password);
   return extra ? { score: 4, label: "Strong" } : { score: 3, label: "Good" };
 }
@@ -123,6 +125,8 @@ export function PasswordChangePanelV2({
   onSendCode,
   onSave,
   onCancel,
+  rules = PASSWORD_RULES,
+  passwordOnly = false,
 }: {
   /** Where the code goes. */
   email: string;
@@ -131,6 +135,14 @@ export function PasswordChangePanelV2({
   onSendCode: (password: string) => Promise<string | null>;
   onSave: (password: string, code: string) => Promise<string | null>;
   onCancel: () => void;
+  /** The rule list to tick off. Defaults to the portal's own. */
+  rules?: ReadonlyArray<PasswordRule>;
+  /**
+   * feat-001: the first password after signup. The email is already proved
+   * (its code came first), so there is no code step: "Save password" calls
+   * `onSave(password, "")` straight away, and `onSendCode` is not used.
+   */
+  passwordOnly?: boolean;
 }) {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -146,13 +158,21 @@ export function PasswordChangePanelV2({
     return () => clearTimeout(timer);
   }, [cooldown]);
 
-  const strength = strengthOf(password);
-  const rulesMet = PASSWORD_RULES.every((rule) => rule.test(password));
+  const strength = strengthOf(password, rules);
+  const rulesMet = rules.every((rule) => rule.test(password));
   const matches = confirm.length > 0 && confirm === password;
   const mismatch = confirm.length > 0 && confirm !== password && !password.startsWith(confirm);
 
   const sendCode = useCallback(async () => {
     if (!rulesMet || !matches) return;
+    if (passwordOnly) {
+      setBusy(true);
+      setError(null);
+      const problem = await onSave(password, "");
+      setBusy(false);
+      if (problem) setError(problem);
+      return;
+    }
     setBusy(true);
     setError(null);
     const problem = await onSendCode(password);
@@ -161,7 +181,7 @@ export function PasswordChangePanelV2({
     setCode("");
     setStep(2);
     setCooldown(30);
-  }, [matches, onSendCode, password, rulesMet]);
+  }, [matches, onSave, onSendCode, password, passwordOnly, rulesMet]);
 
   const save = useCallback(
     async (token: string) => {
@@ -180,7 +200,7 @@ export function PasswordChangePanelV2({
 
   return (
     <div className="space-y-5 rounded-xl border border-border p-4">
-      <Stepper step={step} />
+      {!passwordOnly && <Stepper step={step} />}
 
       {step === 1 ? (
         <form
@@ -192,7 +212,14 @@ export function PasswordChangePanelV2({
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2.5">
-              <PasswordField id="new-password" label="New password" value={password} onChange={setPassword} placeholder="At least 12 characters" autoFocus />
+              <PasswordField
+                id="new-password"
+                label={passwordOnly ? "Password" : "New password"}
+                value={password}
+                onChange={setPassword}
+                placeholder={passwordOnly ? "At least 8 characters" : "At least 12 characters"}
+                autoFocus
+              />
               <div className="flex items-center gap-2" aria-live="polite">
                 <div className="grid flex-1 grid-cols-4 gap-1" aria-hidden>
                   {[1, 2, 3, 4].map((segment) => (
@@ -220,7 +247,7 @@ export function PasswordChangePanelV2({
           </div>
 
           <ul className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
-            {PASSWORD_RULES.map((rule) => {
+            {rules.map((rule) => {
               const ok = rule.test(password);
               return (
                 <li key={rule.label} className={cn("flex items-center gap-2 text-[12.5px]", ok ? "text-foreground" : "text-muted-foreground")}>
@@ -240,7 +267,7 @@ export function PasswordChangePanelV2({
             })}
           </ul>
 
-          {required && <p className="text-[12px] font-medium text-destructive">A password change is required before continuing.</p>}
+          {required && !passwordOnly && <p className="text-[12px] font-medium text-destructive">A password change is required before continuing.</p>}
           {error && (
             <p role="alert" className="text-[12px] text-destructive">
               {error}
@@ -248,14 +275,20 @@ export function PasswordChangePanelV2({
           )}
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-            <p className="text-[12px] text-muted-foreground">Next, I email a code to {email} to confirm it&apos;s you.</p>
+            {passwordOnly ? (
+              <p className="text-[12px] text-muted-foreground">You&apos;ll sign in with {email} and this password.</p>
+            ) : (
+              <p className="text-[12px] text-muted-foreground">Next, I email a code to {email} to confirm it&apos;s you.</p>
+            )}
             <div className="ml-auto flex gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={busy}>
-                Cancel
-              </Button>
+              {!(passwordOnly && required) && (
+                <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={busy}>
+                  {passwordOnly ? "Not now" : "Cancel"}
+                </Button>
+              )}
               <Button type="submit" size="sm" disabled={!rulesMet || !matches || busy}>
                 {busy && <Loader2 className="animate-spin" aria-hidden />}
-                {busy ? "Sending code…" : "Continue"}
+                {passwordOnly ? (busy ? "Saving…" : "Save password") : busy ? "Sending code…" : "Continue"}
               </Button>
             </div>
           </div>

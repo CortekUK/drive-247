@@ -42,6 +42,25 @@ const LOG = "[signup-verify-email]";
 const answer = (status: number, code: string, error: string, extra: Record<string, unknown> = {}) =>
   jsonResponse({ ok: false, code, error, ...extra }, status);
 
+/**
+ * Does another account already use this address? Asked BEFORE changing it:
+ * GoTrue's refusal for a taken address, when the email is updated together
+ * with app_metadata, is a bare "Error updating user" (found testing feat-001
+ * step 5), so the error cannot be relied on to say why. Same server-side
+ * filter signup-begin uses, re-checked exactly (the filter is a partial match).
+ */
+async function emailBelongsToSomeoneElse(email: string, selfId: string): Promise<boolean> {
+  const url = Deno.env.get("SUPABASE_URL")!;
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const res = await fetch(`${url}/auth/v1/admin/users?filter=${encodeURIComponent(email)}&per_page=50`, {
+    headers: { apikey: key, Authorization: `Bearer ${key}` },
+  });
+  if (!res.ok) throw new Error(`account lookup failed (${res.status})`);
+  const body = await res.json().catch(() => null);
+  const users: Array<{ id?: string; email?: string }> = Array.isArray(body?.users) ? body.users : [];
+  return users.some((u) => String(u.email ?? "").toLowerCase() === email && u.id !== selfId);
+}
+
 /** Seconds until another code may be sent. */
 function cooldownLeft(otp: { sentAt?: string } | undefined | null): number {
   if (!otp?.sentAt) return 0;
@@ -132,6 +151,9 @@ Deno.serve(async (req) => {
       if (newEmail === String(user.email).toLowerCase()) {
         return answer(400, "EMAIL_SAME", "That is the email we already sent the code to.");
       }
+      if (await emailBelongsToSomeoneElse(newEmail, user.id)) {
+        return answer(400, "EMAIL_TAKEN", "That email already has a Drive247 account.");
+      }
       const r = await sendCode(newEmail, { email: newEmail, emailCorrectedAt: new Date().toISOString() }, newEmail);
       if (r.error) {
         const msg = String((r.error as { message?: string }).message ?? "");
@@ -142,6 +164,13 @@ Deno.serve(async (req) => {
         console.error(`${LOG} change_email failed for ${user.id}: ${msg}`);
         return answer(500, "UNAVAILABLE", "We could not change your email. Please try again.");
       }
+      // The portal's own staff record shows the email too (sidebar, staff list,
+      // notifications). Keep it in step with the login (found testing step 5).
+      const { error: staffError } = await supabase
+        .from("app_users")
+        .update({ email: newEmail })
+        .eq("auth_user_id", user.id);
+      if (staffError) console.error(`${LOG} app_users email not updated for ${user.id}: ${staffError.message}`);
       console.log(`${LOG} ${user.id} corrected their email`);
       return jsonResponse({ ok: true, email: newEmail, delivered: r.delivered });
     }
