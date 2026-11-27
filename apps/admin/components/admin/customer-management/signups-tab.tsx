@@ -15,10 +15,16 @@
  * admin-delete-tenant cancels the Stripe subscription first. Any other row is
  * removed by `admin_delete_signup()` (migration 20261127170000): the lead, or
  * the signup login and its answers.
+ *
+ * Bryan's team (2026-11-27): a follow-up tag (Contacted – Interested /
+ * Undecided / Not interested, Not reachable) and dated notes on each row, and a
+ * filter by tag, so qualified leads are easy to pick out. Stored per person
+ * (lower-cased email) by migration 20261127180000, so they carry over when a
+ * lead later creates an account.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Copy, ExternalLink, Loader2, Mail, Phone, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { Copy, ExternalLink, Loader2, Mail, NotebookPen, Phone, RefreshCw, Search, Trash2, X } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
@@ -28,6 +34,9 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { confirmDialog } from '@/components/ui/confirm';
 import { DeleteTenantDialog } from '@/components/admin/delete-tenant-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { PAGE_DESCRIPTION } from '@/components/admin/header-buttons';
 import { cn } from '@/lib/utils';
 
@@ -62,6 +71,38 @@ interface SignupRow {
 }
 
 type Group = 'lead' | 'no_card' | 'signed_up' | 'failed';
+
+/** The follow-up tag the sales team sets after calling someone. */
+type FollowStatus = 'interested' | 'undecided' | 'not_interested' | 'not_reachable';
+type FollowFilter = FollowStatus | 'none' | 'all';
+
+const FOLLOW: Array<{ id: FollowStatus; label: string; cls: string }> = [
+  { id: 'interested', label: 'Contacted – Interested', cls: 'text-green-700 dark:text-green-400' },
+  { id: 'undecided', label: 'Contacted – Undecided', cls: 'text-amber-700 dark:text-amber-400' },
+  { id: 'not_interested', label: 'Contacted – Not interested', cls: 'text-red-700 dark:text-red-400' },
+  { id: 'not_reachable', label: 'Not reachable', cls: 'text-slate-600 dark:text-slate-400' },
+];
+const FOLLOW_BY_ID = Object.fromEntries(FOLLOW.map((f) => [f.id, f])) as Record<FollowStatus, (typeof FOLLOW)[number]>;
+
+const FOLLOW_FILTERS: Array<{ id: FollowFilter; label: string; cls: string }> = [
+  { id: 'all', label: 'All', cls: 'text-foreground' },
+  { id: 'none', label: 'Not contacted', cls: 'text-muted-foreground' },
+  ...FOLLOW,
+];
+
+interface FollowTag {
+  status: FollowStatus;
+  by: string | null;
+  at: string;
+}
+
+interface SignupNote {
+  id: string;
+  key: string;
+  body: string;
+  by: string | null;
+  at: string;
+}
 
 /** Where a signup got to, in words Bryan uses, and which filter it falls under. */
 /** Where a lead stopped, as the person saw it. */
@@ -131,6 +172,12 @@ function fmtPhone(raw: string): string {
   return m ? `+1 ${m[1]}-${m[2]}-${m[3]}` : raw;
 }
 
+/** Who a tag or note belongs to: the email (lower-cased), or the lead id when there is none. */
+function signupKey(r: SignupRow): string | null {
+  if (r.email && r.email.trim()) return r.email.trim().toLowerCase();
+  return r.lead_id ? `lead:${r.lead_id}` : null;
+}
+
 /** The same key the list uses for the row. */
 function rowKey(r: SignupRow): string {
   return r.auth_user_id ?? `lead-${r.lead_id ?? r.email}`;
@@ -152,6 +199,16 @@ export function SignupsTab() {
   const [companyToDelete, setCompanyToDelete] = useState<{ id: string; company_name: string } | null>(null);
   /** The row being deleted, so its button shows a spinner and cannot be pressed twice. */
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  /** Follow-up tags by signup key, and every note (newest first). */
+  const [tags, setTags] = useState<Record<string, FollowTag>>({});
+  const [notes, setNotes] = useState<SignupNote[]>([]);
+  /** False until migration 20261127180000 is on this database: tags and notes stay hidden. */
+  const [followReady, setFollowReady] = useState(false);
+  const [followFilter, setFollowFilter] = useState<FollowFilter>('all');
+  /** The row whose notes dialog is open. */
+  const [notesFor, setNotesFor] = useState<SignupRow | null>(null);
+  const [draft, setDraft] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -166,6 +223,18 @@ export function SignupsTab() {
       }
       setNotInstalled(false);
       setRows((data ?? []) as SignupRow[]);
+
+      const fu = await db.rpc('admin_signup_followups');
+      if (fu.error) {
+        setFollowReady(false);
+        if (fu.error.code !== 'PGRST202' && fu.error.code !== '42883') {
+          toast.error(`Could not load tags and notes: ${fu.error.message}`);
+        }
+      } else {
+        setFollowReady(true);
+        setTags((fu.data?.tags ?? {}) as Record<string, FollowTag>);
+        setNotes((fu.data?.notes ?? []) as SignupNote[]);
+      }
     } catch (e) {
       toast.error(`Could not load signups: ${(e as Error).message}`);
     } finally {
@@ -176,6 +245,31 @@ export function SignupsTab() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const notesByKey = useMemo(() => {
+    const m: Record<string, SignupNote[]> = {};
+    for (const n of notes) (m[n.key] ??= []).push(n);
+    return m;
+  }, [notes]);
+
+  const tagOf = useCallback(
+    (r: SignupRow): FollowStatus | null => {
+      const k = signupKey(r);
+      return k ? tags[k]?.status ?? null : null;
+    },
+    [tags],
+  );
+
+  /** Tag counts within the stage card that is picked, so the two filters read together. */
+  const followCounts = useMemo(() => {
+    const c: Record<FollowFilter, number> = { all: 0, none: 0, interested: 0, undecided: 0, not_interested: 0, not_reachable: 0 };
+    for (const r of rows ?? []) {
+      if (filter !== 'all' && stageOf(r).group !== filter) continue;
+      c.all += 1;
+      c[tagOf(r) ?? 'none'] += 1;
+    }
+    return c;
+  }, [rows, filter, tagOf]);
 
   const counts = useMemo(() => {
     const c = { all: 0, lead: 0, no_card: 0, signed_up: 0, failed: 0 };
@@ -191,11 +285,70 @@ export function SignupsTab() {
     const digits = q.replace(/\D/g, '');
     return (rows ?? []).filter((r) => {
       if (filter !== 'all' && stageOf(r).group !== filter) return false;
+      if (followFilter !== 'all' && (tagOf(r) ?? 'none') !== followFilter) return false;
       if (!q) return true;
-      const hay = [r.full_name, r.email, r.company_name, r.city_state, r.tenant_slug].filter(Boolean).join(' ').toLowerCase();
+      const k = signupKey(r);
+      const noteText = k ? (notesByKey[k] ?? []).map((n) => n.body).join(' ') : '';
+      const hay = [r.full_name, r.email, r.company_name, r.city_state, r.tenant_slug, noteText].filter(Boolean).join(' ').toLowerCase();
       return hay.includes(q) || (digits.length >= 3 && (r.phone ?? '').replace(/\D/g, '').includes(digits));
     });
-  }, [rows, filter, query]);
+  }, [rows, filter, followFilter, query, tagOf, notesByKey]);
+
+  const setTag = useCallback(
+    async (r: SignupRow, value: string) => {
+      const k = signupKey(r);
+      if (!k) return;
+      const status = value === 'none' ? null : (value as FollowStatus);
+      const before = tags[k];
+      // Show the change at once; put it back if the save fails.
+      setTags((prev) => {
+        const next = { ...prev };
+        if (status) next[k] = { status, by: null, at: new Date().toISOString() };
+        else delete next[k];
+        return next;
+      });
+      const { error } = await db.rpc('admin_signup_set_status', { p_key: k, p_status: status });
+      if (error) {
+        toast.error(`Could not save the tag: ${error.message}`);
+        setTags((prev) => {
+          const next = { ...prev };
+          if (before) next[k] = before;
+          else delete next[k];
+          return next;
+        });
+      }
+    },
+    [tags],
+  );
+
+  const addNote = useCallback(async () => {
+    if (!notesFor) return;
+    const k = signupKey(notesFor);
+    const body = draft.trim();
+    if (!k || !body) return;
+    setSavingNote(true);
+    try {
+      const { data, error } = await db.rpc('admin_signup_add_note', { p_key: k, p_body: body });
+      if (error) throw error;
+      setNotes((prev) => [data as SignupNote, ...prev]);
+      setDraft('');
+    } catch (e) {
+      toast.error(`Could not save the note: ${(e as Error).message}`);
+    } finally {
+      setSavingNote(false);
+    }
+  }, [notesFor, draft]);
+
+  const deleteNote = useCallback(async (n: SignupNote) => {
+    const ok = await confirmDialog({ title: 'Delete this note?', confirmLabel: 'Delete', destructive: true });
+    if (!ok) return;
+    const { error } = await db.rpc('admin_signup_delete_note', { p_id: n.id });
+    if (error) {
+      toast.error(`Could not delete the note: ${error.message}`);
+      return;
+    }
+    setNotes((prev) => prev.filter((x) => x.id !== n.id));
+  }, []);
 
   const copy = useCallback(async (text: string, what: string) => {
     try {
@@ -251,6 +404,9 @@ export function SignupsTab() {
     [],
   );
 
+  const dialogKey = notesFor ? signupKey(notesFor) : null;
+  const dialogNotes = dialogKey ? notesByKey[dialogKey] ?? [] : [];
+
   if (notInstalled) {
     return (
       <Card>
@@ -300,6 +456,27 @@ export function SignupsTab() {
         ))}
       </div>
 
+      {followReady && (
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by follow-up">
+          <span className="text-xs font-medium text-muted-foreground">Follow-up:</span>
+          {FOLLOW_FILTERS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              aria-pressed={followFilter === f.id}
+              onClick={() => setFollowFilter(f.id)}
+              className={cn(
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                f.cls,
+                followFilter === f.id && 'border-primary bg-primary/5',
+              )}
+            >
+              {f.label} <span className="tabular-nums text-muted-foreground">{followCounts[f.id]}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <Card>
         <CardHeader className="gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1.5">
@@ -311,7 +488,7 @@ export function SignupsTab() {
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search name, email, phone, city"
+              placeholder="Search name, email, phone, city, notes"
               className="pl-8"
               aria-label="Search signups"
             />
@@ -334,6 +511,10 @@ export function SignupsTab() {
                 const st = stageOf(r);
                 const heard = heardText(r);
                 const plan = r.plan_id ? PLAN_LABEL[r.plan_id] ?? r.plan_id : null;
+                const key = signupKey(r);
+                const rowNotes = key ? notesByKey[key] ?? [] : [];
+                const latest = rowNotes[0];
+                const tag = tagOf(r);
                 return (
                   <li key={rowKey(r)} className="flex flex-col gap-3 px-6 py-4 lg:flex-row lg:items-center lg:gap-6">
                     <div className="min-w-0 lg:w-[32%]">
@@ -346,6 +527,12 @@ export function SignupsTab() {
                           .filter(Boolean)
                           .join(' · ') || 'No answers yet'}
                       </p>
+                      {followReady && latest && (
+                        <p className="mt-1 truncate text-xs text-foreground/80 max-sm:whitespace-normal" title={latest.body}>
+                          <NotebookPen className="mr-1 inline h-3 w-3 text-muted-foreground" aria-hidden />
+                          {latest.body}
+                        </p>
+                      )}
                     </div>
 
                     <div className="min-w-0 space-y-1 text-sm lg:w-[34%]">
@@ -396,6 +583,40 @@ export function SignupsTab() {
                         Signed up {fmtWhen(r.signed_up_at)}
                         {r.trial_end && r.subscription_status === 'trialing' && ` · trial until ${fmtWhen(r.trial_end).split(',')[0]}`}
                       </p>
+                      {followReady && key && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <Select value={tag ?? 'none'} onValueChange={(v) => void setTag(r, v)}>
+                            <SelectTrigger
+                              className={cn('h-7 w-[200px] text-xs', tag ? FOLLOW_BY_ID[tag].cls : 'text-muted-foreground')}
+                              aria-label={`Follow-up for ${r.full_name || r.email || 'this signup'}`}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none" className="text-xs text-muted-foreground">
+                                Not contacted
+                              </SelectItem>
+                              {FOLLOW.map((f) => (
+                                <SelectItem key={f.id} value={f.id} className={cn('text-xs', f.cls)}>
+                                  {f.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => {
+                              setDraft('');
+                              setNotesFor(r);
+                            }}
+                          >
+                            <NotebookPen className="mr-1 h-3.5 w-3.5" />
+                            Notes{rowNotes.length ? ` (${rowNotes.length})` : ''}
+                          </Button>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex shrink-0 items-center gap-2 self-start lg:self-center">
@@ -433,6 +654,60 @@ export function SignupsTab() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!notesFor} onOpenChange={(open) => !open && !savingNote && setNotesFor(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Notes · {notesFor?.full_name || notesFor?.email || 'Signup'}</DialogTitle>
+            <DialogDescription>
+              {[notesFor?.email, notesFor?.phone ? fmtPhone(notesFor.phone) : null].filter(Boolean).join(' · ') ||
+                'Only super admins see these.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="What happened on the call? Next step?"
+              rows={3}
+              maxLength={4000}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void addNote();
+              }}
+            />
+            <div className="flex justify-end">
+              <Button size="sm" onClick={() => void addNote()} disabled={savingNote || !draft.trim()}>
+                {savingNote && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                Add note
+              </Button>
+            </div>
+          </div>
+          <ul className="max-h-[50vh] space-y-3 overflow-y-auto">
+            {dialogNotes.map((n) => (
+              <li key={n.id} className="rounded-lg border px-3 py-2">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="whitespace-pre-wrap text-sm [overflow-wrap:anywhere]">{n.body}</p>
+                  <button
+                    type="button"
+                    onClick={() => void deleteNote(n)}
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                    aria-label="Delete note"
+                    title="Delete note"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {fmtWhen(n.at)}
+                  {n.by && ` · ${n.by}`}
+                </p>
+              </li>
+            ))}
+            {notesFor && dialogNotes.length === 0 && <li className="text-sm text-muted-foreground">No notes yet.</li>}
+          </ul>
+        </DialogContent>
+      </Dialog>
 
       <DeleteTenantDialog
         tenant={companyToDelete}
