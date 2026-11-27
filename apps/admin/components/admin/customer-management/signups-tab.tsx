@@ -17,7 +17,8 @@
  * the signup login and its answers.
  *
  * Bryan's team (2026-11-27): a follow-up tag (Contacted – Interested /
- * Undecided / Not interested, Not reachable) and dated notes on each row, and a
+ * Undecided / Not interested, Not reachable; later Completed sign up and
+ * Onboarding – Scheduled / Completed / Not reachable) and dated notes on each row, and a
  * filter by tag, so qualified leads are easy to pick out. Stored per person
  * (lower-cased email) by migration 20261127180000, so they carry over when a
  * lead later creates an account.
@@ -73,7 +74,15 @@ interface SignupRow {
 type Group = 'lead' | 'no_card' | 'signed_up' | 'failed';
 
 /** The follow-up tag the sales team sets after calling someone. */
-type FollowStatus = 'interested' | 'undecided' | 'not_interested' | 'not_reachable';
+type FollowStatus =
+  | 'interested'
+  | 'undecided'
+  | 'not_interested'
+  | 'not_reachable'
+  | 'completed_signup'
+  | 'onboarding_scheduled'
+  | 'onboarding_completed'
+  | 'onboarding_not_reachable';
 type FollowFilter = FollowStatus | 'none' | 'all';
 
 const FOLLOW: Array<{ id: FollowStatus; label: string; cls: string }> = [
@@ -81,6 +90,10 @@ const FOLLOW: Array<{ id: FollowStatus; label: string; cls: string }> = [
   { id: 'undecided', label: 'Contacted – Undecided', cls: 'text-amber-700 dark:text-amber-400' },
   { id: 'not_interested', label: 'Contacted – Not interested', cls: 'text-red-700 dark:text-red-400' },
   { id: 'not_reachable', label: 'Not reachable', cls: 'text-slate-600 dark:text-slate-400' },
+  { id: 'completed_signup', label: 'Completed sign up', cls: 'text-blue-700 dark:text-blue-400' },
+  { id: 'onboarding_scheduled', label: 'Onboarding – Scheduled', cls: 'text-indigo-700 dark:text-indigo-400' },
+  { id: 'onboarding_completed', label: 'Onboarding – Completed', cls: 'text-emerald-700 dark:text-emerald-400' },
+  { id: 'onboarding_not_reachable', label: 'Onboarding – Not reachable', cls: 'text-zinc-600 dark:text-zinc-400' },
 ];
 const FOLLOW_BY_ID = Object.fromEntries(FOLLOW.map((f) => [f.id, f])) as Record<FollowStatus, (typeof FOLLOW)[number]>;
 
@@ -262,7 +275,18 @@ export function SignupsTab() {
 
   /** Tag counts within the stage card that is picked, so the two filters read together. */
   const followCounts = useMemo(() => {
-    const c: Record<FollowFilter, number> = { all: 0, none: 0, interested: 0, undecided: 0, not_interested: 0, not_reachable: 0 };
+    const c: Record<FollowFilter, number> = {
+      all: 0,
+      none: 0,
+      interested: 0,
+      undecided: 0,
+      not_interested: 0,
+      not_reachable: 0,
+      completed_signup: 0,
+      onboarding_scheduled: 0,
+      onboarding_completed: 0,
+      onboarding_not_reachable: 0,
+    };
     for (const r of rows ?? []) {
       if (filter !== 'all' && stageOf(r).group !== filter) continue;
       c.all += 1;
@@ -587,7 +611,7 @@ export function SignupsTab() {
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <Select value={tag ?? 'none'} onValueChange={(v) => void setTag(r, v)}>
                             <SelectTrigger
-                              className={cn('h-7 w-[200px] text-xs', tag ? FOLLOW_BY_ID[tag].cls : 'text-muted-foreground')}
+                              className={cn('h-7 w-[220px] text-xs', tag ? FOLLOW_BY_ID[tag].cls : 'text-muted-foreground')}
                               aria-label={`Follow-up for ${r.full_name || r.email || 'this signup'}`}
                             >
                               <SelectValue />
