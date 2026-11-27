@@ -763,7 +763,7 @@ begin
   if b.status = 'cancelled' then
     s := public.onboarding_call_settings_row();
     v_code := public.onboarding_call_slot_problem(s, b.starts_at, now(), true, b.id);
-    if v_code = 'taken' then perform public.onboarding_call_refuse(v_code); end if;
+    if v_code is not null then perform public.onboarding_call_refuse(v_code); end if;
   end if;
   update public.onboarding_call_bookings
      set status = 'booked', cancelled_at = null, cancelled_by = null, cancel_reason = null
@@ -909,7 +909,7 @@ begin
   v_today := (p_now at time zone tz)::date;
   return jsonb_build_object(
     'today', (select count(*) from public.onboarding_call_bookings
-               where status = 'booked' and (starts_at at time zone tz)::date = v_today),
+               where status <> 'cancelled' and (starts_at at time zone tz)::date = v_today),
     'week', (select count(*) from public.onboarding_call_bookings
                where status = 'booked'
                  and date_trunc('week', starts_at at time zone tz) = date_trunc('week', p_now at time zone tz)),
@@ -1096,7 +1096,8 @@ begin
         else null end;
       if v_problem is not null then
         v_clashes := v_clashes || jsonb_build_object(
-          'id', b.id, 'name', b.name, 'starts_at', b.starts_at, 'problem', v_problem,
+          'id', b.id, 'tenant_id', b.tenant_id, 'name', b.name, 'starts_at', b.starts_at, 'problem', v_problem,
+          'customer_timezone', b.customer_timezone,
           'company_name', (select coalesce(company_name, slug) from public.tenants where id = b.tenant_id));
       end if;
     end loop;

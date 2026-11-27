@@ -11,6 +11,8 @@
  *             button, and its hover is the hint. Opens his live calendar.
  *   booked    "Onboarding call booked" and its time: opens the short pre-call
  *             checklist (add a vehicle, upload a logo, preview the website).
+ *   waiting   the call's time has passed and Bryan has not marked it yet:
+ *             "Waiting for Bryan to confirm" (feat-001 spec 09.4).
  *   collapsed rail: Bryan's photo alone, same click, the words in a tooltip.
  *
  * Bryan's photo is `public/team/bryan.jpg` (the landing page's own).
@@ -27,7 +29,7 @@
  * Move the call and Cancel it.
  */
 import { useEffect, useState } from "react";
-import { ArrowUpRight, Loader2 } from "lucide-react";
+import { ArrowUpRight, Loader2, Video } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui-v2/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
@@ -37,9 +39,11 @@ import { useAuth } from "@/stores/auth-store";
 import { getBookingBaseUrl } from "@/lib/booking-url";
 import { type OnboardingCallStep } from "@/hooks/use-onboarding-call";
 import { OPEN_ONBOARDING_CALL_EVENT, useFirstSteps } from "@/hooks/use-first-steps";
-import { useOnboardingCallCalendar } from "@/hooks/use-onboarding-call-calendar";
+import { useCallZone, useOnboardingCallCalendar } from "@/hooks/use-onboarding-call-calendar";
 import { ChecklistLink } from "@/components/dashboard-v2/onboarding-call-card";
-import { OnboardingCallBooking } from "@/components/onboarding/onboarding-call-booking";
+import { AddToCalendar, OnboardingCallBooking } from "@/components/onboarding/onboarding-call-booking";
+import { Textarea } from "@/components/ui-v2/textarea";
+import { formatCallFull } from "@/lib/onboarding-call-time";
 import { HOME_PALETTE } from "@/components/dashboard-v2/home/ui";
 
 export function OnboardingCallSidebarCard({ collapsed = false }: { collapsed?: boolean }) {
@@ -49,6 +53,10 @@ export function OnboardingCallSidebarCard({ collapsed = false }: { collapsed?: b
   const [detailsOpen, setDetailsOpen] = useState(false);
   /** "Cancel the call?" asked inline, never with a browser popup. */
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [reason, setReason] = useState("");
+  const zone = useCallZone();
+  /** `?call=open` from an email, waiting for the call state to load. */
+  const [openFromEmail, setOpenFromEmail] = useState(false);
   // Our own calendar (no more GoHighLevel): a booking lands in the database
   // the moment it is made, so there is nothing to poll for.
   const first = useFirstSteps();
@@ -65,6 +73,15 @@ export function OnboardingCallSidebarCard({ collapsed = false }: { collapsed?: b
     setCalendarOpen(true);
   }, []);
 
+  // The call emails' "Move or cancel" link is `/?call=open` (spec 09.19).
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("call") !== "open") return;
+    url.searchParams.delete("call");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    setOpenFromEmail(true);
+  }, []);
+
   // The quick tour's last card asks for Bryan's calendar.
   useEffect(() => {
     const open = () => setCalendarOpen(true);
@@ -73,6 +90,14 @@ export function OnboardingCallSidebarCard({ collapsed = false }: { collapsed?: b
   }, []);
 
   const booked = first.call === "booked";
+  const waiting = first.waiting;
+
+  useEffect(() => {
+    if (!openFromEmail || !first.ready) return;
+    setOpenFromEmail(false);
+    if (first.call === "booked") setDetailsOpen(true);
+    else if (first.call === "offer") setCalendarOpen(true);
+  }, [openFromEmail, first.ready, first.call]);
 
   // The owner's decision, not every staff login's.
   const isOwner = appUser?.role === "head_admin" || appUser?.role === "admin";
@@ -97,6 +122,8 @@ export function OnboardingCallSidebarCard({ collapsed = false }: { collapsed?: b
     { id: "site", label: "Preview your rental website", done: !!state?.sitePreviewedAt, href: siteUrl, external: true },
   ];
   const doneCount = steps.filter((s) => s.done).length;
+  const booking = state?.booking ?? null;
+  const fullTime = state?.callScheduledFor ? formatCallFull(state.callScheduledFor, zone) : null;
   const open = () => (booked ? setDetailsOpen(true) : setCalendarOpen(true));
 
   return (
@@ -117,7 +144,11 @@ export function OnboardingCallSidebarCard({ collapsed = false }: { collapsed?: b
             </button>
           </TooltipTrigger>
           <TooltipContent side="right" sideOffset={8}>
-            {booked ? first.callTime ?? "Onboarding call booked" : "Free onboarding call with Bryan"}
+            {waiting
+              ? "Waiting for Bryan to confirm"
+              : booked
+                ? first.callTime ?? "Onboarding call booked"
+                : "Free onboarding call with Bryan"}
           </TooltipContent>
         </Tooltip>
       ) : (
@@ -142,7 +173,7 @@ export function OnboardingCallSidebarCard({ collapsed = false }: { collapsed?: b
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[13px] font-semibold leading-tight text-foreground">
-                {booked ? "Onboarding call booked" : "Free onboarding call"}
+                {waiting ? "Waiting for Bryan to confirm" : booked ? "Onboarding call booked" : "Free onboarding call"}
               </span>
               <span className="mt-0.5 block truncate text-[11.5px] font-medium leading-tight text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
                 {booked ? first.callTime ?? "With Bryan" : "With Bryan · 30 minutes"}
@@ -169,15 +200,49 @@ export function OnboardingCallSidebarCard({ collapsed = false }: { collapsed?: b
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="text-left">
             <DialogTitle className="text-xl font-semibold tracking-tight">
-              {doneCount === steps.length ? "You are ready for your call" : "Before your call with Bryan"}
+              {waiting
+                ? "Waiting for Bryan to confirm"
+                : doneCount === steps.length
+                  ? "You are ready for your call"
+                  : "Before your call with Bryan"}
             </DialogTitle>
             <DialogDescription>
-              {first.callTime ? `${first.callTime}. ` : ""}
-              {doneCount === steps.length
-                ? "Bryan can spend the 30 minutes showing you how everything works together."
-                : "A few quick steps make the 30 minutes count, so the call is about how it all works, not typing in basics."}
+              {waiting
+                ? fullTime
+                  ? `Your call was for ${fullTime}. Bryan will mark it shortly.`
+                  : "Bryan will mark your call shortly."
+                : doneCount === steps.length
+                  ? "Bryan can spend the 30 minutes showing you how everything works together."
+                  : "A few quick steps make the 30 minutes count, so the call is about how it all works, not typing in basics."}
             </DialogDescription>
           </DialogHeader>
+          {!waiting && fullTime && (
+            <div className="flex flex-col gap-2 rounded-xl border px-3.5 py-3">
+              <p className="text-[14px] font-semibold text-foreground">{fullTime}</p>
+              {booking?.meetingUrl ? (
+                <a
+                  href={booking.meetingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex w-fit items-center gap-1.5 text-[13px] font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  <Video className="size-3.5" aria-hidden="true" />
+                  The call link
+                </a>
+              ) : (
+                <p className="text-[13px] text-muted-foreground">Bryan will send you the call link by email before the call.</p>
+              )}
+              {booking && (
+                <div className="[&>div]:justify-start">
+                  <AddToCalendar
+                    booking={{ starts_at: booking.startsAt, ends_at: booking.endsAt, meeting_url: booking.meetingUrl }}
+                    title="Drive247 onboarding call with Bryan"
+                    icsToken={booking.icsToken}
+                  />
+                </div>
+              )}
+            </div>
+          )}
           {/* `ChecklistLink` draws with the home's `.pv` palette, and this
               dialog can open on any page, so it brings the palette along. */}
           <style>{HOME_PALETTE}</style>
@@ -199,10 +264,32 @@ export function OnboardingCallSidebarCard({ collapsed = false }: { collapsed?: b
               </li>
             ))}
           </ol>
-          {confirmCancel ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/60 px-3 py-2.5">
+          {waiting ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setDetailsOpen(false);
+                  setCalendarOpen(true);
+                }}
+              >
+                Book a new time
+              </Button>
+            </div>
+          ) : confirmCancel ? (
+            <div className="flex flex-col gap-2.5 rounded-lg bg-muted/60 px-3 py-2.5">
               <p className="text-[13px] text-foreground">Cancel your call with Bryan?</p>
-              <div className="flex gap-1.5">
+              <Textarea
+                rows={2}
+                value={reason}
+                maxLength={500}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Reason (optional)"
+                aria-label="Reason (optional)"
+                className="bg-background text-[13px]"
+              />
+              <div className="flex justify-end gap-1.5">
                 <Button variant="ghost" size="sm" onClick={() => setConfirmCancel(false)}>
                   Keep it
                 </Button>
@@ -211,9 +298,10 @@ export function OnboardingCallSidebarCard({ collapsed = false }: { collapsed?: b
                   size="sm"
                   disabled={cancel.isPending}
                   onClick={() =>
-                    cancel.mutate(undefined, {
+                    cancel.mutate(reason, {
                       onSuccess: () => {
                         setConfirmCancel(false);
+                        setReason("");
                         setDetailsOpen(false);
                         toast.success("Your call is cancelled", {
                           description: fake ? "On the fake run nothing is saved." : "You can book a new time whenever suits you.",

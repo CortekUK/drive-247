@@ -231,6 +231,12 @@ verify_jwt = false
 [functions.onboarding-call-booked]
 verify_jwt = false
 
+[functions.onboarding-call-mailer]
+verify_jwt = false
+
+[functions.onboarding-call-ics]
+verify_jwt = false
+
 # GHL is an external provider and cannot present a Supabase JWT. The handler
 # verifies the raw-body X-GHL-Signature with Ed25519 before parsing/persisting.
 [functions.ghl-strategy-call-webhook]

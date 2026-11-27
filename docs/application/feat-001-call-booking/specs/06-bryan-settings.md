@@ -35,7 +35,7 @@ In the migration of spec 01. Revoke `update` on `onboarding_call_settings` from 
 ## Functions
 
 `admin_save_onboarding_call_settings(p_settings jsonb, p_blocks jsonb default null, p_decisions jsonb default '{}')`
-returns `{ saved: boolean, clashes: [{ id, company_name, name, starts_at, problem }] }`.
+returns `{ saved: boolean, clashes: [{ id, tenant_id, company_name, name, starts_at, customer_timezone, problem }] }`.
 
 - `p_settings`: any subset of the settings' columns. Unknown keys are refused with `Unknown setting <key>`.
 - `p_blocks`: null keeps the list as it is; an array replaces it: `[{ date, from, to, label }]`.

@@ -529,9 +529,10 @@ export default function DashboardLayout({
 
   useEffect(() => {
     if (!loading) {
-      // Signed out — go to login.
+      // Signed out — go to login. The query is kept, so an email link such
+      // as `/?call=open` still works after signing in (feat-001 spec 09.20).
       if (!user) {
-        router.replace(`/login?from=${encodeURIComponent(pathname)}`);
+        router.replace(`/login?from=${encodeURIComponent(pathname + window.location.search)}`);
         return;
       }
 
@@ -545,7 +546,7 @@ export default function DashboardLayout({
 
       // Valid session, and the profile genuinely does not exist.
       if (!appUser) {
-        router.replace(`/login?from=${encodeURIComponent(pathname)}`);
+        router.replace(`/login?from=${encodeURIComponent(pathname + window.location.search)}`);
         return;
       }
 

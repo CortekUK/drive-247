@@ -129,6 +129,8 @@ Deno.serve(async (req) => {
             callBookedAt: c?.call_booked_at,
             callCompletedAt: c?.call_completed_at,
             dismissedAt: c?.dismissed_at,
+            callCancelledAt: c?.call_cancelled_at,
+            callMissedAt: c?.call_missed_at,
             welcomeSentAt: c?.welcome_sent_at,
             reminderSentAt: c?.reminder_sent_at,
             followUpSentAt: c?.follow_up_sent_at,
@@ -136,6 +138,7 @@ Deno.serve(async (req) => {
       const reason =
         c?.call_completed_at ? "call done"
         : c?.call_booked_at ? "already booked"
+        : c?.call_cancelled_at || c?.call_missed_at ? "call cancelled or missed"
         : !only && c?.dismissed_at ? "card hidden"
         : !only && sub !== "trialing" && sub !== "active" ? `subscription ${sub ?? "none"}`
         : !step ? "nothing due yet"

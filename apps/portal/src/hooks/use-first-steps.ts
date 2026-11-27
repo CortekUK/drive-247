@@ -8,6 +8,8 @@ import { useIsLean } from "@/lib/lean-context";
 import { isStripeConnectUsable, type StripeConnectTenant } from "@/lib/stripe-connect-status";
 import { useOnboardingCall, type OnboardingCallState } from "@/hooks/use-onboarding-call";
 import { useFakeQuickTourProfile } from "@/lib/fake-quick-tour";
+import { useCallZone } from "@/hooks/use-onboarding-call-calendar";
+import { formatCallShort } from "@/lib/onboarding-call-time";
 
 /**
  * A new company's first steps, as ONE answer for every place that talks about
@@ -21,8 +23,9 @@ import { useFakeQuickTourProfile } from "@/lib/fake-quick-tour";
  *            for a visit, which would make the card say "connected" when it
  *            is not.
  *   The call the free 30-minute onboarding call with Bryan. On offer, booked
- *            (with its time, when the calendar sent one), or not on offer
- *            (done, hidden, not eligible, or this login is not the owner).
+ *            (with its time, in the zone the person sees times in), or not on
+ *            offer (done, hidden, not eligible, or this login is not the
+ *            owner). A booked call whose time has passed is `waiting`.
  *
  * On a `/fake-quick-tour` run, northwind answers as the pretend new company
  * its profile describes, so every version can be looked at. Nothing about the
@@ -40,7 +43,9 @@ export interface FirstSteps {
   fake: boolean;
   stripeConnected: boolean;
   call: CallStatus;
-  /** "Wednesday, 26 November at 3:00 PM", when the call is booked with a time. */
+  /** Booked, and its time has passed: waiting for Bryan to mark it. */
+  waiting: boolean;
+  /** "Wed 26 Nov, 3:00 PM Karachi time", when the call is booked with a time. */
   callTime: string | null;
   /** The call row as the card reads it; synthesised on a fake run. */
   callState: OnboardingCallState | null;
@@ -72,6 +77,7 @@ export function useFirstSteps({ poll = false }: { poll?: boolean } = {}): FirstS
   });
 
   const { state, isLoading: callLoading, mark } = useOnboardingCall({ poll, enabled: lean });
+  const zone = useCallZone();
 
   if (fake) {
     const booked = fake.call === "booked";
@@ -85,14 +91,17 @@ export function useFirstSteps({ poll = false }: { poll?: boolean } = {}): FirstS
       fake: true,
       stripeConnected: fake.stripe === "connected",
       call: fake.call,
-      callTime: booked ? formatCallTime(iso, tenant?.timezone) : null,
+      waiting: false,
+      callTime: booked ? formatCallShort(iso, zone) : null,
       callState:
         fake.call === "none"
           ? null
           : {
               eligible: true,
+              callState: booked ? "booked" : "offer",
               callBookedAt: booked ? new Date().toISOString() : null,
               callScheduledFor: booked ? iso : null,
+              booking: null,
               callCompletedAt: null,
               sitePreviewedAt: null,
               dismissedAt: null,
@@ -106,8 +115,8 @@ export function useFirstSteps({ poll = false }: { poll?: boolean } = {}): FirstS
 
   // The owner's decision, not every staff login's.
   const isOwner = appUser?.role === "head_admin" || appUser?.role === "admin";
-  const onOffer = isOwner && !!state && state.eligible && !state.dismissedAt && !state.callCompletedAt;
-  const call: CallStatus = !onOffer ? "none" : state!.callBookedAt ? "booked" : "offer";
+  const onOffer = isOwner && !!state && state.callState !== "none";
+  const call: CallStatus = !onOffer ? "none" : state!.callState === "offer" ? "offer" : "booked";
 
   return {
     ready: !lean || (!stripe.isLoading && !callLoading),
@@ -119,27 +128,11 @@ export function useFirstSteps({ poll = false }: { poll?: boolean } = {}): FirstS
       ? (stripe.data as StripeConnectTenant).payment_provider === "square" || isStripeConnectUsable(stripe.data)
       : true,
     call,
-    callTime: call === "booked" && state?.callScheduledFor ? formatCallTime(state.callScheduledFor, tenant?.timezone) : null,
+    waiting: onOffer && state!.callState === "waiting",
+    callTime: call === "booked" && state?.callScheduledFor ? formatCallShort(state.callScheduledFor, zone) : null,
     callState: onOffer ? state : null,
     mark,
   };
-}
-
-/** "Wednesday, 26 November at 3:00 PM" in the tenant's timezone, else the browser's. */
-export function formatCallTime(iso: string, timeZone: string | null | undefined): string {
-  const options: Intl.DateTimeFormatOptions = {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    hour: "numeric",
-    minute: "2-digit",
-  };
-  try {
-    return new Date(iso).toLocaleString(undefined, timeZone ? { ...options, timeZone } : options);
-  } catch {
-    // An unknown timezone name throws; fall back to the browser's own.
-    return new Date(iso).toLocaleString(undefined, options);
-  }
 }
 
 /** Ask the top bar's call button to open Bryan's calendar (the tour's last card does). */

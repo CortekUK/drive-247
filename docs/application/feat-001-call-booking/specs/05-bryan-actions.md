@@ -48,7 +48,7 @@ them. The page itself is spec 10.
 
 **The list, the counts and the details**
 
-- 05.19 The counts are, in Bryan's zone: live calls today, live calls this week (Monday to Sunday), calls waiting to be marked (live, start passed), and missed calls whose time was in this calendar month.
+- 05.19 The counts are, in Bryan's zone: calls today that are not cancelled (the same calls the Today view lists), live calls this week (Monday to Sunday), calls waiting to be marked (live, start passed), and missed calls whose time was in this calendar month.
 - 05.20 The list takes a view: `upcoming` (live, start in the future, soonest first; the default), `today`, `needs_marking` (live, start passed, oldest first), `done`, `missed`, `cancelled`, `all` (the last four newest first).
 - 05.21 The list takes a date range, read as whole days in Bryan's zone, inclusive.
 - 05.22 The list takes a search, matched without case against the company name, the person's name, the email and the phone.

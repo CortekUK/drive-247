@@ -3,47 +3,37 @@ import { supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 
 /**
- * The free 30-minute onboarding call (Nov 2026) — Portal V2 only.
+ * The free 30-minute onboarding call: the card's state (feat-001 spec 04.27).
  *
- * Reads `get_my_onboarding_call()`, which resolves the caller's own tenant on
- * the server and returns NULL for anyone without one (a super admin looking at
- * a tenant), so the card simply does not render for them. Writes go through
- * `mark_my_onboarding_call(step)` only: an operator can say they booked, that
- * they previewed their site, or hide the card — never that the call happened,
- * which is Bryan's to record from the admin app.
- *
- * Bookings normally arrive by themselves: LeadConnector calls the
- * `onboarding-call-booked` edge function, which marks the row booked with the
- * call's time. `poll` re-reads every few seconds while the calendar is open so
- * the card switches to the checklist as soon as that lands.
+ * Reads `get_my_onboarding_call()`, which finds the caller's own company on the
+ * server and returns NULL for anyone without one (a super admin looking at a
+ * company), so the card does not render for them. `mark_my_onboarding_call`
+ * lets an owner say they previewed their site or hide the card, never that the
+ * call happened: that is Bryan's to record.
  */
 
-/** Bryan's live booking calendar (LeadConnector). */
-export const ONBOARDING_CALL_BOOKING_URL =
-  "https://api.leadconnectorhq.com/widget/bookings/drive247-onboarding-call";
+/** offer: not booked. booked: booked, in the future. waiting: its time passed, Bryan has not marked it. none: done, hidden or not on offer. */
+export type CallState = "offer" | "booked" | "waiting" | "none";
 
-/**
- * The calendar, pre-filled with who is booking. The email is what the webhook
- * matches the booking to a tenant by, so pre-filling it with the signed-in
- * login's address is what makes the match reliable.
- */
-export function onboardingCallBookingUrl(person: { email?: string | null; name?: string | null }): string {
-  const url = new URL(ONBOARDING_CALL_BOOKING_URL);
-  const [first, ...rest] = (person.name ?? "").trim().split(/\s+/).filter(Boolean);
-  if (person.email) url.searchParams.set("email", person.email);
-  if (first) url.searchParams.set("first_name", first);
-  if (rest.length) url.searchParams.set("last_name", rest.join(" "));
-  return url.toString();
+export interface CallBookingSummary {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  customerTimezone: string | null;
+  icsToken: string | null;
+  meetingUrl: string | null;
 }
 
 export interface OnboardingCallState {
   eligible: boolean;
+  callState: CallState;
   callBookedAt: string | null;
-  /** When the call is, if the booking came from the calendar. */
+  /** When the call is. */
   callScheduledFor: string | null;
   callCompletedAt: string | null;
   sitePreviewedAt: string | null;
   dismissedAt: string | null;
+  booking: CallBookingSummary | null;
   vehicleCount: number;
   hasLogo: boolean;
 }
@@ -54,13 +44,26 @@ function parse(raw: unknown): OnboardingCallState | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const r = raw as Record<string, unknown>;
   const str = (v: unknown) => (typeof v === "string" && v ? v : null);
+  const b = r.booking && typeof r.booking === "object" ? (r.booking as Record<string, unknown>) : null;
+  const state = str(r.call_state);
   return {
     eligible: r.eligible === true,
+    callState: state === "offer" || state === "booked" || state === "waiting" ? state : "none",
     callBookedAt: str(r.call_booked_at),
     callScheduledFor: str(r.call_scheduled_for),
     callCompletedAt: str(r.call_completed_at),
     sitePreviewedAt: str(r.site_previewed_at),
     dismissedAt: str(r.dismissed_at),
+    booking: b
+      ? {
+          id: String(b.id),
+          startsAt: String(b.starts_at),
+          endsAt: String(b.ends_at),
+          customerTimezone: str(b.customer_timezone),
+          icsToken: str(b.ics_token),
+          meetingUrl: str(b.meeting_url),
+        }
+      : null,
     vehicleCount: Number(r.vehicle_count) || 0,
     hasLogo: r.has_logo === true,
   };
@@ -77,13 +80,12 @@ export function useOnboardingCall({ poll = false, enabled = true }: { poll?: boo
     // dashboard layout) keep this off outside the canary.
     enabled: !!tenant?.id && enabled,
     staleTime: 60 * 1000,
-    // Coming back from adding a vehicle or a logo in another tab ticks the box.
+    // Coming back from adding a vehicle or a logo in another tab ticks the box,
+    // and a move or cancel by Bryan shows on return.
     refetchOnWindowFocus: true,
-    // ...and so does coming back in the SAME tab. With only the staleTime, an
-    // operator who added their first car and returned to the dashboard saw
-    // "Add your first vehicle" still undone for up to a minute (QA sheet 15.2).
     refetchOnMount: "always",
-    refetchInterval: poll ? 4000 : false,
+    // A booked call turns into "waiting" when its time comes: read again each minute.
+    refetchInterval: poll ? 4000 : 60_000,
     queryFn: async () => {
       const { data, error } = await supabaseUntyped.rpc("get_my_onboarding_call");
       // A missing function (migration not applied) is "no card", never an error screen.

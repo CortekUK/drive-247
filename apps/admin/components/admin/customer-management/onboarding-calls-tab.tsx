@@ -20,6 +20,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { CalendarCheck, CalendarDays, Check, ExternalLink, Loader2, Mail, RefreshCw, Search, StickyNote } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase';
@@ -35,7 +36,6 @@ import { cn } from '@/lib/utils';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
-const BOOKING_URL = 'https://api.leadconnectorhq.com/widget/bookings/drive247-onboarding-call';
 const DAY = 86_400_000;
 
 interface Row {
@@ -274,10 +274,10 @@ export function OnboardingCallsTab({ canEdit }: { canEdit: boolean }) {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" asChild>
-            <a href={BOOKING_URL} target="_blank" rel="noreferrer">
+            <Link href="/admin/call-calendar">
               <CalendarDays className="mr-2 h-4 w-4" />
-              Booking calendar
-            </a>
+              Open calendar
+            </Link>
           </Button>
           <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'animate-spin')} />

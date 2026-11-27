@@ -52,11 +52,39 @@ function setup() {
 
 /* ------------------------------- talking to staging ------------------------------- */
 
-/** Run SQL on the staging database. Needs SUPABASE_ACCESS_TOKEN in the environment. */
+let pgClient = null;
+
+/** Without a token: the staging database itself, through the IPv4 pooler, with STAGING_DB_PASS. */
+async function sqlDirect(query) {
+  const pass = credential("STAGING_DB_PASS");
+  if (!pass) throw new Error("Set SUPABASE_ACCESS_TOKEN (or STAGING_DB_PASS) to run SQL in an eval.");
+  if (!pgClient) {
+    const { default: pg } = await import("pg");
+    pgClient = new pg.Client({
+      host: credential("STAGING_POOLER_HOST") || "aws-1-eu-west-2.pooler.supabase.com",
+      port: 5432,
+      user: `postgres.${STAGING_REF}`,
+      password: pass,
+      database: "postgres",
+      ssl: { rejectUnauthorized: false },
+    });
+    await pgClient.connect();
+  }
+  try {
+    const res = await pgClient.query(query);
+    const last = Array.isArray(res) ? res[res.length - 1] : res;
+    // The same shape as the Management API: rows of plain JSON values.
+    return JSON.parse(JSON.stringify(last?.rows ?? []));
+  } catch (e) {
+    throw new Error(`SQL failed: ${String(e?.message || e).slice(0, 400)}`);
+  }
+}
+
+/** Run SQL on the staging database. Uses SUPABASE_ACCESS_TOKEN, else STAGING_DB_PASS. */
 export async function sql(query) {
   setup();
   const token = process.env.SUPABASE_ACCESS_TOKEN;
-  if (!token) throw new Error("Set SUPABASE_ACCESS_TOKEN to run SQL in an eval.");
+  if (!token) return sqlDirect(query);
   for (let attempt = 1; ; attempt++) {
     const res = await fetch(`https://api.supabase.com/v1/projects/${STAGING_REF}/database/query`, {
       method: "POST",
@@ -177,6 +205,7 @@ export async function run(metaUrl) {
     if (!r.pass) console.log(`        ${r.why}`);
   }
   if (!cleaned) console.log("  FAIL  clean-up: something this eval created is still on staging");
+  if (pgClient) await pgClient.end().catch(() => {});
   const passed = results.filter((r) => r.pass).length;
   console.log(`${name}: ${passed}/${results.length} statements proved`);
   // One machine-readable line for scripts/eval.mjs.

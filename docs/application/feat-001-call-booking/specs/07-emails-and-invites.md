@@ -42,9 +42,9 @@ link. When they are queued is in specs 04 to 06; how they are sent is spec 08.
 **The invite**
 
 - 07.16 `booked_*` and `moved_*` carry `invite.ics` with `METHOD:REQUEST`; `cancelled_*` with `METHOD:CANCEL` and `STATUS:CANCELLED`. The attachment's type is `text/calendar; method=REQUEST` (or `CANCEL`).
-- 07.17 The invite's `UID` is `<booking id>@drive-247.com`, the same for the life of the booking, so a move updates the same event and a cancel removes it.
+- 07.17 The company's invite `UID` is `<booking id>@drive-247.com` (Bryan's is in 07.19), the same for the life of the booking, so a move updates the same event and a cancel removes it.
 - 07.18 Its `SEQUENCE` is the booking's `sequence` at the time.
-- 07.19 `ORGANIZER` is Bryan (his name and settings email, else `support@drive-247.com`); `ATTENDEE` is the booking's person and email, `RSVP=TRUE`.
+- 07.19 In the company's invite, `ORGANIZER` is Bryan (his name and settings email, else `support@drive-247.com`) and `ATTENDEE` is the booking's person and email, `RSVP=TRUE`. Bryan's own invite is a separate event (`UID` `<booking id>-host@drive-247.com`) with Drive247 (`support@drive-247.com`) as `ORGANIZER` and Bryan as `ATTENDEE`, because Outlook does not add an invite by itself for its own organiser.
 - 07.20 `DTSTART` and `DTEND` are in UTC (spec 03.12). The invite has `SUMMARY`, the call link as `LOCATION` and in `DESCRIPTION`, and lines no longer than 75 octets, folded as RFC 5545 says.
 - 07.21 Text in the invite is escaped (`\`, `;`, `,`, new lines).
 

@@ -30,14 +30,18 @@ export interface JourneyState {
   callBookedAt?: string | null;
   callCompletedAt?: string | null;
   dismissedAt?: string | null;
+  /** A cancelled or missed call has its own "book again" email (feat-001). */
+  callCancelledAt?: string | null;
+  callMissedAt?: string | null;
   welcomeSentAt?: string | null;
   reminderSentAt?: string | null;
   followUpSentAt?: string | null;
 }
 
-/** The one email this tenant is due now, or null. Booking stops all of them. */
+/** The one email this tenant is due now, or null. Booking stops all of them, for good. */
 export function nextJourneyEmail(s: JourneyState, now: number = Date.now()): JourneyEmail | null {
   if (s.callCompletedAt || s.callBookedAt || s.dismissedAt) return null;
+  if (s.callCancelledAt || s.callMissedAt) return null;
   if (s.subscriptionStatus !== "trialing" && s.subscriptionStatus !== "active") return null;
 
   const age = now - new Date(s.tenantCreatedAt).getTime();

@@ -24,6 +24,8 @@ interface EmailOptions {
   source?: string;
   /** The notification catalogue key, for the send log. */
   notificationKey?: string;
+  /** Files sent with the email. `content` is base64. */
+  attachments?: Array<{ filename: string; content: string; contentType?: string }>;
 }
 
 interface SendLogEntry {
@@ -416,6 +418,14 @@ export async function sendResendEmail(
 
   if (options.replyTo) {
     emailData.reply_to = options.replyTo;
+  }
+
+  if (options.attachments?.length) {
+    emailData.attachments = options.attachments.map((a) => ({
+      filename: a.filename,
+      content: a.content,
+      ...(a.contentType ? { content_type: a.contentType } : {}),
+    }));
   }
 
   try {
