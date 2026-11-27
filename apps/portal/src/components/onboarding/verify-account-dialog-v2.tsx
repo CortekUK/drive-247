@@ -224,7 +224,9 @@ export function VerifyAccountDialogV2({ suppressed = false }: { suppressed?: boo
     >
       <DialogContent
         showCloseButton={!overdue}
-        className="sm:max-w-lg"
+        // minmax(0,1fr): the content may shrink to the window, so nothing in it
+        // (code boxes, a long email) can push past the edge on a 360px phone.
+        className="grid-cols-[minmax(0,1fr)] sm:max-w-lg max-sm:px-5"
         onEscapeKeyDown={(e) => overdue && e.preventDefault()}
         onPointerDownOutside={(e) => overdue && e.preventDefault()}
         onInteractOutside={(e) => overdue && e.preventDefault()}
@@ -307,7 +309,7 @@ export function VerifyAccountDialogV2({ suppressed = false }: { suppressed?: boo
               <DialogTitle className="text-xl">Check your email</DialogTitle>
               <DialogDescription>
                 <Mail aria-hidden className="mr-1 inline size-3.5 align-[-2px]" />
-                We sent a 6-digit code to <span className="font-medium text-foreground">{email}</span>. {deadlineLine}
+                We sent a 6-digit code to <span className="font-medium text-foreground [overflow-wrap:anywhere]">{email}</span>. {deadlineLine}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">

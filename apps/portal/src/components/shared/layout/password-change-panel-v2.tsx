@@ -282,11 +282,12 @@ export function PasswordChangePanelV2({
             )}
             <div className="ml-auto flex gap-2">
               {!(passwordOnly && required) && (
-                <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={busy}>
+                <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={busy} className={passwordOnly ? "max-sm:min-h-11" : undefined}>
                   {passwordOnly ? "Not now" : "Cancel"}
                 </Button>
               )}
-              <Button type="submit" size="sm" disabled={!rulesMet || !matches || busy}>
+              {/* 44px on a phone in the signup window: a thumb, not a cursor. */}
+              <Button type="submit" size="sm" disabled={!rulesMet || !matches || busy} className={passwordOnly ? "max-sm:min-h-11" : undefined}>
                 {busy && <Loader2 className="animate-spin" aria-hidden />}
                 {passwordOnly ? (busy ? "Saving…" : "Save password") : busy ? "Sending code…" : "Continue"}
               </Button>

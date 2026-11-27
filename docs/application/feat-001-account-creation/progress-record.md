@@ -261,6 +261,30 @@ development-only setting. A test staff member on staging's northwind was used.
 5. Saving the password signed the person out (Supabase ends sessions on a password change). The
    window now signs them straight back in.
 
+**Edge cases, second round (also local).**
+
+| Case | Result |
+|---|---|
+| 5 wrong codes on screen: "4 tries left" … "1 try left" → "Too many tries. Ask for a new code."; the right code is refused after that | ✅ |
+| Code older than 30 minutes → "That code has expired. Ask for a new one." | ✅ |
+| Email sending down → "We could not send the code. Please try again.", and "Send a new code" is ready again at once | ✅ |
+| An account without the flags (staging head admin) never sees the window | ✅ |
+| Phone 360 wide: window fits, nothing sticks out, buttons 44px | ✅ (after fixes 6 and 7) |
+| Phone 430 wide: both steps fit | ✅ |
+| Double tap on "Save password" → sent once | ✅ |
+| Two tabs: the out-of-date tab moves on to the password step by itself | ✅ |
+| Signed out mid-way (password changed in another tab) → sent to the login page, not stuck | ✅ |
+| Dark mode: readable | ✅ |
+| 3-day block while a tour shows: the tour is on top (layer 65 over 50), the block waits underneath | ✅ by the code; the tour could not be brought back live |
+| Waiting for the first-run questions screen | Not reproduced: it only shows for a company that has not answered it; covered by the same rule as the tour |
+
+6. At 360 wide the code boxes and the Verify button ran past the window's edge (6 fixed 44px boxes
+   need 304px; the window has ~280). The boxes now share the space (shared code-box part, so the
+   profile's code boxes benefit too), and the window's content may shrink; long emails wrap.
+7. "Not now" and "Save password" were 32px tall on a phone; now 44px.
+
+Outside this task, for Ghulam: the **Trax tour card is cut off at 360 wide**.
+
 **Clean-up.** The test staff member could not be deleted (the portal's audit log refers to it,
 and audit entries are kept), so it was deactivated through the portal's own function and its
 password set to an unknown random one.

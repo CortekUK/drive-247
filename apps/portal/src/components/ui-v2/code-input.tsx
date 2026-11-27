@@ -45,7 +45,10 @@ export function CodeInput({
       pattern={REGEXP_ONLY_DIGITS}
       inputMode="numeric"
       autoComplete="one-time-code"
-      containerClassName={cn("flex items-center gap-2 has-[:disabled]:opacity-50", className)}
+      // Up to 6 × 44px + gaps (304px), but the boxes shrink to share a narrower
+      // space: on a 360px phone a dialog has ~280px inside, and fixed boxes ran
+      // past its edge (feat-001 step 5, found at 360 wide).
+      containerClassName={cn("flex w-full max-w-[304px] items-center gap-2 max-[400px]:gap-1.5 has-[:disabled]:opacity-50", className)}
       render={({ slots }) => (
         <>
           {slots.map((slot, index) => (
@@ -61,7 +64,7 @@ function CodeSlot({ char, isActive, hasFakeCaret }: SlotProps) {
   return (
     <div
       className={cn(
-        "relative flex h-12 w-11 items-center justify-center rounded-2xl border border-transparent bg-input/50 text-lg font-medium tabular-nums text-foreground",
+        "relative flex h-12 min-w-0 max-w-11 flex-1 items-center justify-center rounded-2xl border border-transparent bg-input/50 text-lg font-medium tabular-nums text-foreground",
         "[transition:border-color_200ms_ease-out,box-shadow_200ms_ease-out] motion-reduce:transition-none",
         isActive && "border-ring ring-3 ring-ring/30",
       )}
