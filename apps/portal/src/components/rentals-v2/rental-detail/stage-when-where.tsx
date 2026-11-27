@@ -462,7 +462,9 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
       action={
         !canEdit && editable.data ? (
           /* Locked past Extras — say so, in the stage-action spot. */
-          <StageAction icon={Lock} label="Locked" onClick={() => {}} disabledReason={editable.data.reason ?? null} />
+          <span data-tour="rental-stage-locked" className="inline-flex">
+            <StageAction icon={Lock} label="Locked" onClick={() => {}} disabledReason={editable.data.reason ?? null} />
+          </span>
         ) : null
       }
     >
@@ -495,7 +497,7 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
 
         {/* ── picker two: pickup and drop-off places, over their map ──────── */}
         <Surface className="relative flex min-h-0 flex-1 flex-col overflow-hidden p-0">
-          <div className="shrink-0 space-y-3 px-5 py-4">
+          <div data-tour="rental-places" className="shrink-0 space-y-3 px-5 py-4">
             <PlaceRow
               side="out"
               title="Pickup"
@@ -543,7 +545,7 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
             />
           </div>
 
-          <div className="relative min-h-40 flex-1 border-t border-foreground/5 max-lg:h-72 max-lg:flex-none">
+          <div data-tour="rental-map" className="relative min-h-40 flex-1 border-t border-foreground/5 max-lg:h-72 max-lg:flex-none">
             <WhereMap places={mapPlaces} area={area} />
             <div className={cn("pointer-events-none absolute bottom-4 left-4 flex flex-wrap gap-1.5", canEdit && dirty && "hidden")}>
               <Legend dot="bg-primary" label="P pickup · R drop-off" />
@@ -759,12 +761,13 @@ function DateBar({
     <button
       type="button"
       onClick={onOpen}
+      data-tour="rental-dates"
       className={cn(cls, "transition-shadow duration-200 ease-out hover:ring-primary/30 motion-reduce:transition-none")}
     >
       {body}
     </button>
   ) : (
-    <div className={cls}>{body}</div>
+    <div data-tour="rental-dates" className={cls}>{body}</div>
   );
 }
 

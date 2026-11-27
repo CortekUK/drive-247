@@ -92,6 +92,7 @@ export function ViewSwitch({ value, onChange }: { value: InsightsViewId; onChang
             }}
             type="button"
             role="tab"
+            data-tour={`insights-tab-${v.id}`}
             aria-selected={active}
             onClick={() => onChange(v.id)}
             className={cn(

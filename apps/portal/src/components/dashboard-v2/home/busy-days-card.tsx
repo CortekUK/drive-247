@@ -135,11 +135,11 @@ export function BusyDaysCard({ data: loadedData, isLoading }: { data: BusyDays |
   const nothingYet = !isLoading && !!data && data.days.every((d) => d.rented === 0);
 
   return (
-    <div className="flex flex-col rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)] p-5 md:p-6 lg:col-span-2">
+    <div className="flex flex-col rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)] p-5 md:p-6 lg:col-span-2" data-tour="dash-busy">
       {/* Phones (boss, Nov 2026: smaller graphs and boxes): a little less
           padding, and day tiles 28px tall instead of square (~42px), so a
           month is about a third shorter. Same months, same tiles, same swipe. */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4" data-tour="dash-busy-head">
         <div>
           <Eyebrow>Busy days</Eyebrow>
           <p className="mt-1 text-[12px] text-[var(--pv-ink-3)]">How much of the fleet was out, day by day</p>
@@ -168,7 +168,7 @@ export function BusyDaysCard({ data: loadedData, isLoading }: { data: BusyDays |
             </div>
           ) : (
           /* Three plain highlights. */
-          <dl className="mt-5 grid grid-cols-3 gap-3 border-b border-[var(--pv-line)] pb-5 sm:gap-4">
+          <dl data-tour="dash-busy-highlights" className="mt-5 grid grid-cols-3 gap-3 border-b border-[var(--pv-line)] pb-5 sm:gap-4">
             <div>
               <dt className="text-[11px] text-[var(--pv-ink-3)]">Busiest day</dt>
               <dd className="mt-1 text-[13px] font-semibold leading-snug text-[var(--pv-ink)] sm:text-[15px]">
@@ -195,6 +195,7 @@ export function BusyDaysCard({ data: loadedData, isLoading }: { data: BusyDays |
               swiped sideways and opening on the current month. */}
           <div
             ref={monthsRef}
+            data-tour="dash-busy-months"
             className="mt-5 grid grid-cols-1 gap-6 sm:grid-cols-3 max-sm:flex max-sm:snap-x max-sm:snap-mandatory max-sm:overflow-x-auto max-sm:[scrollbar-width:none] max-sm:[&::-webkit-scrollbar]:hidden"
           >
             {view.months.map((month) => (

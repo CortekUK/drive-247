@@ -58,6 +58,7 @@ import {
 import { AutoSkeleton } from '@/components/skeleton-v2/auto-skeleton';
 import { useSkeletonLoading } from '@/hooks/use-skeleton-loading';
 import { skeletonFaker } from '@/lib/skeleton-data';
+import { TabTourButton } from '@/components/onboarding/tab-tour-button';
 
 /**
  * Placeholder 30-day series for the skeleton: a climbing running total with a
@@ -426,6 +427,7 @@ export function RevenueLineCard({ className }: { className?: string }) {
       // The Glass look (dashboard-v2/glass-look.ts) gives the chart a pane of
       // its own; the Standard look draws nothing for this attribute.
       data-pv-pane=""
+      data-tour="dash-revenue"
       className={cn(
         // Shorter on a phone (boss, Nov 2026: compact, not in your face).
         'grid h-[196px] min-w-0 grid-rows-[minmax(0,1fr)] md:h-[240px]',
@@ -437,6 +439,9 @@ export function RevenueLineCard({ className }: { className?: string }) {
         {/* No "Revenue" title (Sep 29 2026): the figure says what it is. The
             header keeps only the ⋮ menu, at the right. */}
         <span aria-hidden="true" />
+        {/* The dashboard tour's button: the page has no title row, so it sits on the first card's. */}
+        <span className="ml-auto flex items-center gap-1">
+        <TabTourButton tour="dashboard" className="translate-y-[6px]" />
         <ChartMenu
           range={range}
           onRange={setRange}
@@ -445,9 +450,10 @@ export function RevenueLineCard({ className }: { className?: string }) {
           showForecast={showForecast}
           onShowForecast={setShowForecast}
         />
+        </span>
       </header>
 
-      <div className="pt-2">
+      <div className="pt-2" data-tour="dash-revenue-total">
         <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
           <span className="text-[26px] font-semibold leading-none tracking-[-0.03em] tabular-nums text-[var(--pv-ink)] md:text-[32px]">
             {data ? headline : '—'}

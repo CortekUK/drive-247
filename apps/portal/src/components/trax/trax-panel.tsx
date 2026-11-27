@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, History, LifeBuoy, Maximize2, Minimize2, Plus, SquarePen, X } from "lucide-react";
+import { ArrowLeft, Compass, History, LifeBuoy, Maximize2, Minimize2, Plus, SquarePen, X } from "lucide-react";
+import { replayFirstRentalTour, useFirstRentalTourEligible } from "@/hooks/use-first-rental-tour";
 import { Button } from "@/components/ui-v2/button";
 import { SIDEBAR_HIGHLIGHT_ACTIVE, SIDEBAR_HIGHLIGHT_FOCUS, SIDEBAR_HIGHLIGHT_HOVER } from "@/components/ui-v2/sidebar";
 import { cn } from "@/lib/utils";
@@ -134,6 +135,8 @@ function PanelAction({
 }
 
 export function TraxPanel() {
+  // Help is where the quick tour is replayed from (Northwind v2 only).
+  const canReplayTour = useFirstRentalTourEligible();
   /* Optional: the provider is v2-only, and a panel is never worth throwing for. */
   const trax = useTraxOptional();
   /* The TRAX workspace this panel shows: one conversation and its history.
@@ -459,6 +462,17 @@ export function TraxPanel() {
                   disabled={!workspace}
                   onClick={() => workspace?.setView(view === "history" ? "conversation" : "history")}
                 />
+                {canReplayTour && (
+                  <PanelAction
+                    label="Replay the quick tour"
+                    tip="Replay the quick tour"
+                    icon={<Compass />}
+                    onClick={() => {
+                      closeSheet();
+                      replayFirstRentalTour();
+                    }}
+                  />
+                )}
                 <PanelAction
                   label="New conversation"
                   tip="New conversation"

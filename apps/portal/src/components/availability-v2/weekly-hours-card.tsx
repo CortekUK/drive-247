@@ -273,7 +273,7 @@ export function WeeklyHoursCard({
   };
 
   return (
-    <section className="rounded-2xl border border-border bg-card">
+    <section data-tour="availability-weekly-hours" className="rounded-2xl border border-border bg-card">
       <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
         <h2 className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
           Weekly hours
@@ -282,7 +282,7 @@ export function WeeklyHoursCard({
         {/* Most businesses do not set five days one at a time. */}
         <Popover open={bulkOpen} onOpenChange={setBulkOpen}>
           <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-[12px]" disabled={!interactive}>
+            <Button data-tour="availability-set-weekdays" variant="outline" size="sm" className="h-7 gap-1.5 text-[12px]" disabled={!interactive}>
               <CalendarRange className="size-3.5" />
               Set weekdays
             </Button>

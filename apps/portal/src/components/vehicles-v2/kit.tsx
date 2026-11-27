@@ -216,7 +216,7 @@ export function Panel({
     <div className="flex h-full min-h-0 w-full max-w-3xl flex-col">
       <div className="flex shrink-0 items-start justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="font-heading text-2xl font-medium tracking-tight">{title}</h2>
+          <h2 data-tour="vehicle-panel" className="font-heading text-2xl font-medium tracking-tight">{title}</h2>
           {description && <p className="mt-1.5 text-sm text-muted-foreground">{description}</p>}
         </div>
         {action}
@@ -232,6 +232,10 @@ export function Panel({
 export function Surface({ className, children }: { className?: string; children: React.ReactNode }) {
   return <div className={cn(cardCls, "p-6", className)}>{children}</div>;
 }
+
+/** A section without its own `tourId` is marked from its title: "Blocked periods" is `vsec-blocked-periods`. */
+const sectionTourId = (title?: string) =>
+  title ? `vsec-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}` : undefined;
 
 export function Section({
   title,
@@ -265,7 +269,7 @@ export function Section({
   return (
     <div className={cn(cardCls, "p-6 max-sm:p-4", className)}>
       {(title || action) && (
-        <div data-tour={tourId} className="mb-5 flex items-start justify-between gap-4">
+        <div data-tour={tourId ?? sectionTourId(title)} className="mb-5 flex items-start justify-between gap-4">
           <div className="min-w-0">
             {title && <h3 className="font-heading text-sm font-semibold tracking-tight">{title}</h3>}
             {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}

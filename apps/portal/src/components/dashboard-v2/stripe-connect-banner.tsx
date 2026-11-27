@@ -31,6 +31,7 @@ export function StripeConnectBanner() {
   return (
     <div
       role="status"
+      data-tour="dash-stripe"
       // md:mt-3.5 cancels the layout's pull-up on the page's first child
       // (`md:[header+&>*:first-child]:-mt-3.5` on <main>, there to line the
       // first band up with the sidebar switch): without it the banner's top

@@ -1,448 +1,354 @@
 /**
- * Tab tours — one in-depth walkthrough per main tab, launched from a button on
- * that tab rather than fired at anybody.
+ * Tab tours: one deep tour per tab, launched from the Tour button on that tab.
  *
- * THE PRODUCT DECISION, restated because the shape of this directory follows
- * from it. `lib/first-rental-tour.ts` is the first-run ORIENTATION: eight
- * shallow steps across five routes whose whole job is to say WHERE THINGS LIVE
- * and then get out of the way. What it cannot do is explain a tab, because a
- * step that stopped to teach the vehicle record would derail the run for
- * everyone who only wanted to know where things are.
+ * THE RULE (Ghulam, task guide 26 Nov 2026), which replaces the old one
+ * ("about ten steps, surface only, no resume"):
  *
- * (It used to try. It was an eleven-step walkthrough that crossed six pages and
- * marched a new operator through making a first rental before they had a car to
- * rent — which is exactly what these files exist to replace, and why that one
- * was cut back rather than extended.)
+ *  - Every tab has a tour, and it teaches the tab properly: the list, adding
+ *    one, the record page, every dialog, every status, what happens elsewhere.
+ *  - A tour is split into TOPICS, in learning order. A topic is 4 to 8 steps
+ *    about one subject, short enough to finish in a minute or two.
+ *  - The Tour button opens a menu of the topics. Each shows not started, in
+ *    progress or done, with Continue and Start from the beginning at the top.
+ *  - Progress is saved per person, per topic, and follows them to another
+ *    device (`lib/tour-sync.ts`). They can stop at any step and carry on.
+ *  - Optional: a tab tour can always be closed.
+ *  - One look: a tab tour is drawn by the quick tour's own card and pointer.
  *
- * So Ghulam asked for the other half: "har tab ke andar uske paas ek tour ka
- * button hai, jise wo apni convenience pe dekh lega" — inside every tab there
- * is a tour button, which they take when it suits them. Two reasons he gave:
- * someone who wants to learn one tab can learn just that tab, and someone who
- * does not want Customers today can leave it, instead of being made to hold
- * the whole application in their head at once.
- *
- * ---------------------------------------------------------------------------
- * THE FOUR RULES THESE TOURS ARE BUILT TO
- *
- *  1. AROUND TEN STEPS, and no more. His number, and his reason: "taake wo
- *     banda fatigue bhi na kare" — so they do not tire walking around. A tour
- *     that outlasts the operator's patience teaches nothing after the point
- *     they stopped reading.
- *
- *  2. SURFACE, NOT DEPTH. His worked example is the one to copy: an operator
- *     does not know what weekend pricing IS, so bring them to it, say what it
- *     means in a sentence, and let them explore the feature themselves. We are
- *     pointing at doors, not walking through them.
- *
- *  3. INTO THE RECORD, not just the list. He named vehicle detail explicitly —
- *     its stats, its maintenance, its date selection — because that is where
- *     the things a first-timer cannot guess actually live. Stopping at the
- *     "Add" button would teach the easy half. See `routeFor` below.
- *
- *  4. RENTAL DETAIL STAYS SHALLOW. "Aadhi application sirf usi ek tab ke andar
- *     hai" — half the application is inside that one tab, and doing it justice
- *     would take three or four tours. It gets the same ~10 steps as the others
- *     and deliberately leaves things out; what was left out is listed in
- *     `rentals.ts` so the next person does not think it was forgotten.
- *
- * ---------------------------------------------------------------------------
- * WHY IDS ARE NAMESPACED — this one is load-bearing
- *
- * `buildTour` used to REWRITE a step by id: on a canary without a usable Stripe
- * Connect account it swapped `rental` for `BLOCKED_RENTAL_STEP` (the quick tour
- * v4 has no swap; the namespacing still guards the next one). (It used to drop
- * `insurance` and `agreement` too; those steps left the first-run tour when it
- * shrank to an orientation, and they live in `rentals.ts` now.) `rental` is
- * exactly the word a Rentals tour wants for its own steps. A collision would
- * not crash — it would silently show the operator the first-rental tour's copy
- * on a different route, and portal ships with `ignoreBuildErrors: true`, so
- * nothing would catch it.
- *
- * The reroute is now scoped to the canonical list (see `buildTour`), and every
- * id here is additionally prefixed with its tour. Two independent guards,
- * because the failure is invisible.
- *
- * ---------------------------------------------------------------------------
- * WHAT THESE TOURS DELIBERATELY DO NOT HAVE
- *
- *  - NO AUTOSTART. They are launched from the button, and only from it. That
- *    keeps `shouldAutostartTour` untouched, needs no per-tour "seen" gate to
- *    decide whether to fire, and means a blocked localStorage (Safari private
- *    mode, where `hasSeenTour` deliberately fails to TRUE) can never suppress
- *    a tour the operator explicitly asked for.
- *
- *  - NO RESUME. Ten steps that mostly sit on one route is not a journey worth
- *    restoring, and resume is what forces the "home is the dashboard"
- *    assumption in four separate places. The button is always there to start
- *    again, which is a better answer than a prompt.
- *
- * "Seen" IS still recorded, but only to dim the button — never to gate a run.
+ * A step is a `TourStep` (`lib/first-rental-tour.ts`), so the anchors, the
+ * permission rules (`requires`) and the record routes (`routeFor`) work the
+ * same way in both kinds of tour.
  */
 
-import type { TourBuildContext, TourStep } from '@/lib/first-rental-tour';
+import { noteTourWrite } from '@/lib/tour-sync';
+import type { TourBuildContext, TourRequirement, TourStep } from '@/lib/first-rental-tour';
+import { AGREEMENTS_TAB_TOUR } from './agreements';
+import { BILLING_TAB_TOUR } from './billing';
+import { DASHBOARD_TAB_TOUR } from './dashboard';
+import { FINANCES_TAB_TOUR } from './finances';
+import { INSIGHTS_TAB_TOUR } from './insights';
+import { INSURANCES_TAB_TOUR } from './insurances';
+import { INTEGRATIONS_TAB_TOUR } from './integrations';
 import { AVAILABILITY_TAB_TOUR } from './availability';
 import { CUSTOMERS_TAB_TOUR } from './customers';
 import { PAYMENTS_TAB_TOUR } from './payments';
 import { RENTALS_TAB_TOUR } from './rentals';
 import { VEHICLES_TAB_TOUR } from './vehicles';
 
-/**
- * The tabs that have a tour today.
- *
- * The order is not meaningful and nothing reads it as such: `tabTourForPath`
- * resolves by longest match and `readEmptyTabs` returns a set. It is NOT the
- * sidebar's order — that is Rentals, Vehicles, Customers with money under More.
- *
- * FIVE, and five is the whole list Ghulam asked for. Billing, Integrations and
- * Dashboard were ruled out by name; Payments becomes the Finances tour when
- * that tab lands (see the signpost at the head of `payments.ts`).
- */
+/** The tabs that have a tour. */
 export const TAB_TOUR_IDS = [
+  'dashboard',
+  'rentals',
   'customers',
   'vehicles',
-  'rentals',
-  'payments',
   'availability',
+  'agreements',
+  'finances',
+  'payments',
+  'insights',
+  'insurances',
+  'integrations',
+  'billing',
 ] as const;
 
 export type TabTourId = (typeof TAB_TOUR_IDS)[number];
 
-export interface TabTour {
-  id: TabTourId;
-  /** The tab's name, as the button and the toast say it. */
-  label: string;
-  /**
-   * Where this tour belongs. The launch button renders on this path and on any
-   * path beneath it, so it is present on both `/vehicles` and
-   * `/vehicles/<id>`.
-   */
-  homeRoute: string;
-  /**
-   * What to say when the tour will not run — fewer than `MIN_TOUR_STOPS`
-   * anchored steps survived the permission filter.
-   *
-   * Per-tour on purpose. The first-rental tour's failure toast is hardcoded to
-   * name "Vehicles, Customers and Rentals", which would be a strange thing to
-   * tell someone whose Customers tour just declined to start.
-   */
-  emptyMessage: string;
+export interface TabTourTopic {
+  /** Stable, namespaced: `vehicles.photos`. Saved in progress. */
+  id: string;
+  /** In the topic menu and above the card's title. */
+  title: string;
+  /** One line under the title in the menu: what you will learn. */
+  summary: string;
   steps: readonly TourStep[];
+  /**
+   * What the topic needs before it can run (a car to open, say). When it is
+   * not met the menu shows the topic with `unavailableText` instead of a start.
+   */
+  requires?: Pick<TourRequirement, 'record' | 'tabHasData'>;
+  /** Shown in the menu when `requires` is not met. */
+  unavailableText?: string;
 }
 
-const TOURS: Record<TabTourId, TabTour> = {
+export interface TabTour {
+  id: TabTourId;
+  /** The tab's name, as the menu and the toast say it. */
+  label: string;
+  /**
+   * Where this tour belongs. The Tour button renders on this path and on any
+   * path beneath it, so it is present on both `/vehicles` and `/vehicles/<id>`.
+   */
+  homeRoute: string;
+  /** Said when a topic has nothing on screen to point at for this user. */
+  emptyMessage: string;
+  topics: readonly TabTourTopic[];
+}
+
+const TOURS: Partial<Record<TabTourId, TabTour>> = {
+  agreements: AGREEMENTS_TAB_TOUR,
+  billing: BILLING_TAB_TOUR,
+  dashboard: DASHBOARD_TAB_TOUR,
+  finances: FINANCES_TAB_TOUR,
+  insights: INSIGHTS_TAB_TOUR,
+  insurances: INSURANCES_TAB_TOUR,
+  integrations: INTEGRATIONS_TAB_TOUR,
+  rentals: RENTALS_TAB_TOUR,
   customers: CUSTOMERS_TAB_TOUR,
   vehicles: VEHICLES_TAB_TOUR,
-  rentals: RENTALS_TAB_TOUR,
-  payments: PAYMENTS_TAB_TOUR,
   availability: AVAILABILITY_TAB_TOUR,
+  payments: PAYMENTS_TAB_TOUR,
 };
 
-/** Look up a tour by id. Returns null for anything unknown — never throws. */
+/** Look up a tour by id. Returns null for anything unknown, never throws. */
 export function getTabTour(id: string | null | undefined): TabTour | null {
   if (!id) return null;
   return (TOURS as Record<string, TabTour | undefined>)[id] ?? null;
 }
 
+export function getTopic(tour: TabTour, topicId: string | null | undefined): TabTourTopic | null {
+  if (!topicId) return null;
+  return tour.topics.find((t) => t.id === topicId) ?? null;
+}
+
 /**
- * The tour that belongs to a pathname, or null.
- *
- * Longest match wins so a future `/rentals/new` tour would beat `/rentals`.
- * Matching is on a path SEGMENT boundary: `/customers-archive` must not be
- * read as being inside `/customers`.
+ * The tour that belongs to a pathname, or null. Longest match wins, on a path
+ * segment boundary: `/customers-archive` is not inside `/customers`. The
+ * dashboard (`/`) only matches itself.
  */
 export function tabTourForPath(pathname: string | null | undefined): TabTour | null {
   if (!pathname) return null;
   let best: TabTour | null = null;
   for (const id of TAB_TOUR_IDS) {
     const tour = TOURS[id];
+    if (!tour) continue;
     const home = tour.homeRoute;
-    if (pathname !== home && !pathname.startsWith(`${home}/`)) continue;
+    const inside = home === '/' ? pathname === '/' : pathname === home || pathname.startsWith(`${home}/`);
+    if (!inside) continue;
     if (!best || home.length > best.homeRoute.length) best = tour;
   }
   return best;
 }
 
-/**
- * Bump when a tour's STEPS change enough that someone who has taken it should
- * be offered it again — which here means only that the button brightens back
- * up. Deliberately separate from `FIRST_RENTAL_TOUR_VERSION`: sharing that
- * constant would mean a typo fix in a Customers step also discarded every
- * in-flight first-rental run.
- */
-export const TAB_TOUR_VERSION = 1;
+// ── Progress ────────────────────────────────────────────────────────────────
 
 /**
- * Where "taken" is remembered, per USER rather than per browser.
- *
- * Same reasoning as the first-rental tour's key: a portal login is shared
- * between an operator and their ops staff more often than it should be, and
- * the second person to sign in on that machine deserves their own run.
- *
- * The `d247.tour.` prefix is not cosmetic — `dev-actions.ts` clears that whole
- * namespace, so every tab tour is re-armed by the /dev reset for free, and the
- * first-run demo loop needs no per-tour teardown of its own.
+ * Bump when a tour's topics change so much that saved progress would point at
+ * the wrong steps. The version is part of the key, so a bump starts everyone
+ * fresh. Version 1 was the single-run tour, which kept no progress.
  */
-export function tabTourSeenKey(id: TabTourId, appUserId: string | null | undefined): string {
+export const TAB_TOUR_VERSION = 2;
+
+export interface TopicProgress {
+  /** The step they were on, when the topic is in progress. */
+  at?: string;
+  done?: boolean;
+  updatedAt: string;
+}
+
+export interface TabTourProgress {
+  topics: Record<string, TopicProgress>;
+  /** The topic they last worked on: what Continue opens. */
+  last?: string;
+}
+
+export type TopicStatus = 'not-started' | 'in-progress' | 'done';
+
+/** Where a tab tour's progress is kept, per user. The `d247.tour.` prefix is synced. */
+export function tabTourProgressKey(id: TabTourId, appUserId: string | null | undefined): string {
   const who = appUserId && appUserId.length > 0 ? appUserId : 'anon';
   return `d247.tour.tab.${id}.v${TAB_TOUR_VERSION}.${who}`;
 }
 
-type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
+type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 function storage(): StorageLike | null {
   try {
-    if (typeof window === 'undefined') return null;
-    return window.localStorage;
+    return typeof window === 'undefined' ? null : window.localStorage;
   } catch {
     return null;
   }
 }
 
-/**
- * Which version of a tab's tour is available right now.
- *
- * `empty` — the tab holds nothing, so the tour is the short one: what this tab
- * is for, and how to get the first one in.
- * `full`  — there is a record to open, so the walkthrough can go inside it,
- * which is where everything worth teaching actually lives.
- */
-export type TabTourVariant = 'empty' | 'full';
-
-/**
- * Has this user taken the tour that is available to them NOW?
- *
- * The subtlety, and the reason this takes a variant. Someone who takes the
- * Customers tour on their first day sees four steps, because they have no
- * customers — that is all there is to show. The moment they add one, seven
- * more steps become real: what a customer record holds, where an invoice comes
- * from, what verification means. Treating "took the empty tour" as "has seen
- * the tour" would hide that behind a dimmed button forever, and the operator
- * would never learn the half that matters.
- *
- * So taking the empty tour dims the button only until there is something more
- * to show. Taking the full tour dims it for good.
- *
- * Fails to TRUE — the DIMMED state — when storage throws or is absent. This is
- * the OPPOSITE direction of caution from the first-rental tour, and for the
- * opposite reason: there, failing to "unseen" prevents an unwanted autostart;
- * here nothing autostarts, so this only decides how loud a button is, and a
- * browser with blocked site data would otherwise show a permanent "new"
- * treatment on every single page load. Quiet is the safe failure.
- *
- * Values written before variants existed are ISO timestamps, which read as
- * `full` — the conservative answer, since it never re-brightens a button for
- * someone who has already been round.
- */
-export function hasTakenTabTour(
-  id: TabTourId,
-  appUserId: string | null | undefined,
-  available: TabTourVariant = 'full',
-  store: StorageLike | null = storage(),
-): boolean {
-  if (!store) return true;
-  try {
-    const raw = store.getItem(tabTourSeenKey(id, appUserId));
-    if (raw === null) return false;
-    const takenEmptyOnly = raw === 'empty';
-    // More to show than last time — offer it again.
-    if (takenEmptyOnly && available === 'full') return false;
-    return true;
-  } catch {
-    return true;
-  }
-}
-
-/**
- * Which variant this user last took, or null if they never have.
- *
- * Distinct from `hasTakenTabTour`, which answers "is there anything new for
- * them" — this answers "what did they see", which is what the button's LABEL
- * needs. The two differ for exactly one person: someone who took the short
- * empty-tab tour and has since added their first record.
- */
-export function takenTabTourVariant(
+/** Saved progress, or an empty record. Never throws. */
+export function readTabTourProgress(
   id: TabTourId,
   appUserId: string | null | undefined,
   store: StorageLike | null = storage(),
-): TabTourVariant | null {
-  if (!store) return null;
+): TabTourProgress {
+  const empty: TabTourProgress = { topics: {} };
+  if (!store) return empty;
   try {
-    const raw = store.getItem(tabTourSeenKey(id, appUserId));
-    if (raw === null) return null;
-    return raw === 'empty' ? 'empty' : 'full';
+    const raw = store.getItem(tabTourProgressKey(id, appUserId));
+    if (!raw) return empty;
+    const parsed = JSON.parse(raw) as Partial<TabTourProgress>;
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.topics !== 'object' || !parsed.topics) return empty;
+    return { topics: parsed.topics as Record<string, TopicProgress>, last: typeof parsed.last === 'string' ? parsed.last : undefined };
   } catch {
-    return null;
+    return empty;
   }
 }
 
-/** Record that this user has taken it. Silent on a storage that refuses. */
-export function markTabTourTaken(
+function writeTabTourProgress(
   id: TabTourId,
   appUserId: string | null | undefined,
-  variant: TabTourVariant = 'full',
+  progress: TabTourProgress,
   store: StorageLike | null = storage(),
 ): void {
   if (!store) return;
+  const key = tabTourProgressKey(id, appUserId);
   try {
-    // `empty` is a sentinel the reader checks for; anything else means full, so
-    // the full case keeps storing a timestamp and stays debuggable.
-    store.setItem(
-      tabTourSeenKey(id, appUserId),
-      variant === 'empty' ? 'empty' : new Date().toISOString(),
-    );
+    store.setItem(key, JSON.stringify(progress));
+    noteTourWrite(key);
   } catch {
-    /* A tour that cannot be remembered is still a tour worth having run. */
+    /* storage full or blocked: the tour still runs, it just will not remember */
   }
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(TAB_TOUR_PROGRESS_EVENT));
+}
+
+/** Fired after any tab tour progress write, so open menus redraw. */
+export const TAB_TOUR_PROGRESS_EVENT = 'd247:tab-tour-progress';
+
+/** They are on `stepId` of `topicId`. A done topic stays done. */
+export function saveTopicStep(id: TabTourId, appUserId: string | null | undefined, topicId: string, stepId: string): void {
+  const p = readTabTourProgress(id, appUserId);
+  const prev = p.topics[topicId];
+  p.topics[topicId] = { ...prev, at: stepId, updatedAt: new Date().toISOString() };
+  p.last = topicId;
+  writeTabTourProgress(id, appUserId, p);
+}
+
+/** They reached the end of `topicId`. */
+export function markTopicDone(id: TabTourId, appUserId: string | null | undefined, topicId: string): void {
+  const p = readTabTourProgress(id, appUserId);
+  p.topics[topicId] = { done: true, updatedAt: new Date().toISOString() };
+  p.last = topicId;
+  writeTabTourProgress(id, appUserId, p);
+}
+
+/** Forget this tab's progress ("Start from the beginning"). */
+export function resetTabTourProgress(id: TabTourId, appUserId: string | null | undefined): void {
+  writeTabTourProgress(id, appUserId, { topics: {} });
+}
+
+export function topicStatus(progress: TabTourProgress, topicId: string): TopicStatus {
+  const t = progress.topics[topicId];
+  if (t?.done) return 'done';
+  if (t?.at) return 'in-progress';
+  return 'not-started';
 }
 
 /**
- * Which tab tours have a RECORD to walk into, and which id names it.
- *
- * `null` means the tab has no record dimension at all, and there are two of
- * those. Payments has no `/payments/<id>` route, so nothing on the page names a
- * payment. Availability has no records whatsoever — it is one screen that draws
- * the same seven columns on a tenant's first day as on their thousandth rental.
- * For both, the full run IS the only run.
- *
- * WHY THIS IS A TABLE AND NOT A CHAIN OF TERNARIES, which is what it replaced.
- * The old tail was `: ids.rentalId`, so it answered for every id it did not
- * name — and the moment a fifth tab was added it started deciding that tab's
- * variant from whether a `/rentals/<uuid>` link happened to be somewhere on the
- * page. That decides whether the launch button re-brightens and relabels itself
- * "See what is inside", so the failure would have been a button changing its
- * mind for a reason belonging to a different tab, with nothing to catch it.
+ * What Continue opens: the topic they were last in, if it is unfinished;
+ * otherwise the first topic not yet done (that they can take). Null when
+ * every available topic is done.
  */
-const RECORD_FIELD: Record<TabTourId, 'vehicleId' | 'customerId' | 'rentalId' | null> = {
-  customers: 'customerId',
-  vehicles: 'vehicleId',
-  rentals: 'rentalId',
-  payments: null,
-  availability: null,
-};
-
-/**
- * Which variant a tour would run as right now, from what is on the page.
- *
- * Same DOM read as `readSampleIds` — no query, and it answers correctly from
- * either the list or a record page.
- */
-export function tabTourVariant(id: TabTourId): TabTourVariant {
-  // The teaching empty state is the most direct answer available: the page puts
-  // it up precisely when it has nothing to show. It is checked FIRST because it
-  // is the only signal Payments has — there is no /payments/<id> route, so no
-  // record id exists to look for on any account, busy or bare.
-  if (readEmptyTabs().includes(id)) return 'empty';
-  const field = RECORD_FIELD[id];
-  // No record dimension: nothing will ever unlock later, so the button dims
-  // once and stays dim rather than re-offering the same run forever.
-  if (!field) return 'full';
-  return readSampleIds()[field] ? 'full' : 'empty';
+export function continueTarget(
+  tour: TabTour,
+  progress: TabTourProgress,
+  available: (topic: TabTourTopic) => boolean = () => true,
+): { topicId: string; stepId?: string } | null {
+  const last = progress.last ? getTopic(tour, progress.last) : null;
+  if (last && available(last) && topicStatus(progress, last.id) === 'in-progress') {
+    return { topicId: last.id, stepId: progress.topics[last.id]?.at };
+  }
+  const next = tour.topics.find((t) => available(t) && topicStatus(progress, t.id) !== 'done');
+  if (!next) return null;
+  return { topicId: next.id, stepId: progress.topics[next.id]?.at };
 }
 
+/** The topic after `topicId` that this user can take, or null. */
+export function nextTopic(
+  tour: TabTour,
+  topicId: string,
+  available: (topic: TabTourTopic) => boolean = () => true,
+): TabTourTopic | null {
+  const i = tour.topics.findIndex((t) => t.id === topicId);
+  if (i === -1) return null;
+  return tour.topics.slice(i + 1).find(available) ?? null;
+}
+
+/** Can this topic run with what is on the page now? */
+export function topicAvailable(
+  topic: TabTourTopic,
+  ctx: Pick<TourBuildContext, 'sampleIds' | 'emptyTabs'>,
+): boolean {
+  const req = topic.requires;
+  if (!req) return true;
+  if (req.record && !ctx.sampleIds?.[req.record]) return false;
+  if (req.tabHasData && (ctx.emptyTabs ?? []).includes(req.tabHasData)) return false;
+  return true;
+}
+
+/** How many of a topic's steps apply to this page (an empty tab drops the full-tab steps, and back). */
+export function topicStepCount(
+  topic: TabTourTopic,
+  ctx: Pick<TourBuildContext, 'sampleIds' | 'emptyTabs'>,
+): number {
+  // Same data and screen checks the tour itself runs, so the menu count matches the card counter.
+  const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
+  const empty = ctx.emptyTabs ?? [];
+  return topic.steps.filter((st) => {
+    const r = st.requires;
+    if (!r) return true;
+    if (r.desktop && isMobile) return false;
+    if (r.record && !ctx.sampleIds?.[r.record]) return false;
+    if (r.noRecord && ctx.sampleIds?.[r.noRecord]) return false;
+    if (r.tabHasData && empty.includes(r.tabHasData)) return false;
+    if (r.tabIsEmpty && !empty.includes(r.tabIsEmpty)) return false;
+    return true;
+  }).length;
+}
+
+// ── Launching ───────────────────────────────────────────────────────────────
 
 /**
- * Ask the mounted tour machine to run a tab tour.
- *
- * Carries the tour id in `detail` rather than using one event per tour: the
- * machine is mounted once, and a bare event with three listeners would start
- * three tours at once, stacking three cards on one screen.
+ * Ask the mounted tour machine to run a tab tour topic. One event carrying
+ * the ids, because the machine is mounted once.
  */
 export const RUN_TAB_TOUR_EVENT = 'run-tab-tour';
 
 export interface RunTabTourDetail {
   tourId: TabTourId;
+  topicId: string;
+  /** Start on this step (Continue); absent starts the topic at its first step. */
+  stepId?: string;
 }
 
-export function runTabTour(tourId: TabTourId): void {
+export function runTabTour(tourId: TabTourId, topicId: string, stepId?: string): void {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(
-    new CustomEvent<RunTabTourDetail>(RUN_TAB_TOUR_EVENT, { detail: { tourId } }),
-  );
+  window.dispatchEvent(new CustomEvent<RunTabTourDetail>(RUN_TAB_TOUR_EVENT, { detail: { tourId, topicId, stepId } }));
 }
 
-/**
- * A route inside a record, or null when the tenant has no such record yet.
- *
- * Shared by the three tour files so they cannot disagree about what an empty
- * tab means. Null DROPS the step (see `buildTour`), which is exactly right for
- * the brand-new tenant this feature exists to serve: there is no vehicle to
- * open, so the steps about the vehicle record simply are not offered, and the
- * tour is the shorter list-only one rather than a walk into `/vehicles/null`.
- */
-export function recordRoute(
-  id: string | null | undefined,
-  base: string,
-  query?: string,
-): string | null {
+// ── Reading the page ────────────────────────────────────────────────────────
+
+/** A route inside a record, or null when the tenant has no such record yet. */
+export function recordRoute(id: string | null | undefined, base: string, query?: string): string | null {
   if (!id) return null;
   return query ? `${base}/${id}?${query}` : `${base}/${id}`;
 }
 
-/**
- * One real record id per tab, read out of the links the page has already drawn.
- *
- * WHY THE DOM AND NOT A QUERY. The tours need a record to walk into, and the
- * obvious way to get one is to select the tenant's first vehicle. That would
- * mean a new query on a shared layout, which would then need its own canary
- * gate to avoid running for the other 56 tenants — the exact mistake
- * `use-first-run-questions.ts` currently makes, where an ungated lookup fires
- * on every dashboard mount for every tenant against a table that does not
- * exist in production.
- *
- * The list page has already fetched and rendered those rows, and each one is an
- * anchor to `/vehicles/<uuid>`. Reading the first href costs one querySelector,
- * runs only at launch, and cannot execute for a tenant who is not looking at
- * the page. No query, no gate, nothing to keep in sync.
- *
- * It returns null whenever the tab is empty — which is not a failure but the
- * normal state of the brand-new tenant this feature is built to demonstrate.
- * `buildTour` drops the record steps, and the operator gets the shorter
- * list-only tour instead of being marched into `/vehicles/undefined`.
- *
- * The uuid shape is asserted rather than assumed: these hrefs also carry
- * `/vehicles/new` and `/vehicles/analytics`, which are routes, not records.
- */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * NOT EVERY LIST IS MADE OF LINKS, and that is why there are two strategies.
- *
- * `/vehicles` renders a real `<Link href="/vehicles/<uuid>">` on each row, so
- * the href is right there. `/rentals` and `/customers` do not: their rows are
- * `<TableRow onClick={router.push}>` and `<button onClick>` respectively — they
- * navigate imperatively and emit no href anywhere in the row.
- *
- * Read hrefs alone and the Vehicles tour walks into a vehicle record while the
- * other two silently collapse to their four list steps, with no error and
- * nothing in the console — they would simply look thin, and "the tour is a bit
- * short" is not a symptom anyone traces back to a missing anchor tag.
- *
- * The fix is an explicit `data-record-id`, which is inert markup and can be
- * added to a row without changing how it behaves. Turning those rows into real
- * links would be the better product change — middle-click and open-in-new-tab
- * are worth having — but it alters navigation on pages every canary operator
- * uses, which is more than a tour is entitled to change.
+ * One real record id per tab, read out of what the page has already drawn:
+ * a `data-record-id` marker first, then hrefs like `/vehicles/<uuid>`. A
+ * record page's own rail links to its sections, so this also works from
+ * inside a record. No query: nothing runs for a tenant not looking at the page.
  */
 function firstRecordId(base: string): string | null {
   if (typeof document === 'undefined') return null;
   const kind = base.replace(/^\//, '');
   try {
-    // Explicit marker first: it is unambiguous, and where it exists it is on
-    // the row the operator is actually looking at.
-    const marked = document.querySelectorAll<HTMLElement>(
-      `[data-record-kind="${kind}"][data-record-id]`,
-    );
+    // Standing inside a record: that record.
+    const here = window.location.pathname.split('/');
+    if (here[1] === kind && UUID_RE.test(here[2] ?? '')) return here[2];
+    const marked = document.querySelectorAll<HTMLElement>(`[data-record-kind="${kind}"][data-record-id]`);
     for (const el of Array.from(marked)) {
       const id = el.getAttribute('data-record-id') ?? '';
       if (UUID_RE.test(id)) return id;
     }
-
-    // Then hrefs, which cover the link-based lists and — importantly — the
-    // record pages themselves, whose rails link to sibling sections of the same
-    // record. That is what lets a tour be launched from inside a record.
     const links = document.querySelectorAll<HTMLAnchorElement>(`a[href^="${base}/"]`);
     for (const link of Array.from(links)) {
-      // getAttribute, not .href — the property resolves to an absolute URL.
       const href = link.getAttribute('href') ?? '';
       const id = href.slice(base.length + 1).split(/[?#/]/)[0];
       if (UUID_RE.test(id)) return id;
@@ -454,32 +360,9 @@ function firstRecordId(base: string): string | null {
 }
 
 /**
- * Which tabs are showing their teaching empty state right now.
- *
- * WHY THIS EXISTS ALONGSIDE `readSampleIds`. The other three tab tours decide
- * "is there anything here" by whether a record id could be found, because they
- * need that id anyway to walk into a record. Payments cannot: there is no
- * `/payments/<id>` route, so there is no id to find, and a tour that keyed on
- * one would conclude the tab was empty even on a busy account.
- *
- * The page already answers the question in the DOM. Each list swaps its table
- * for a `TeachingEmptyState` when it has nothing, and those cards carry
- * `data-tour="<tab>-empty"`. Its presence IS the signal, it needs no query, and
- * it is the same element the empty-state steps point at — so a step guarded on
- * emptiness and a step anchored to the empty card can never disagree.
- *
- * Note this reads "the teaching empty state is up", which is narrower than "the
- * table has no rows": a filtered-to-nothing list shows the ordinary no-results
- * message instead, and correctly does NOT count as empty. Someone who has
- * filtered their payments down to zero should get the real tour, not the
- * beginner's one.
- *
- * It is narrower again for Availability, which draws no teaching empty state at
- * all — there is nothing for one to replace, since the screen renders a full
- * week off `FALLBACK_DEFAULTS` with no hours set and no dates blocked. So the
- * lookup for `availability-empty` below is one querySelector that can never
- * match, and that tour is deliberately a single run. See the header of
- * `./availability`, which explains why faking a signal was the wrong fix.
+ * Tabs showing their teaching empty state right now (`data-tour="<tab>-empty"`).
+ * A list filtered down to nothing shows the ordinary no-results message
+ * instead, and correctly does not count as empty.
  */
 export function readEmptyTabs(): string[] {
   if (typeof document === 'undefined') return [];
@@ -489,8 +372,6 @@ export function readEmptyTabs(): string[] {
       if (document.querySelector(`[data-tour="${id}-empty"]`)) out.push(id);
     }
   } catch {
-    // A DOM that refuses to be queried is not an empty tab — say nothing rather
-    // than claiming every tab is bare.
     return [];
   }
   return out;

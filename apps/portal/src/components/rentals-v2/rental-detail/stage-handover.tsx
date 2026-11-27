@@ -436,7 +436,8 @@ export function StageHandover({ detail, onStage, refetch }: StageProps) {
       title="Handover & condition"
       description="What the car looked like when it left, what it looked like when it came back, and what changed in between."
       footer={
-        !wentOut ? (
+        <div data-tour="rental-handover-confirm">
+        {!wentOut ? (
           <ActionButton
             onClick={() => setConfirming("giving")}
             disabled={markKeyHanded.isPending || missing.length > 0}
@@ -472,11 +473,12 @@ export function StageHandover({ detail, onStage, refetch }: StageProps) {
             <Check className="size-4" />
             The car is back — settle up
           </ActionButton>
-        )
+        )}
+        </div>
       }
     >
       {!wentOut && missing.length > 0 && (
-        <div role="status" className="rounded-3xl border border-warning/40 bg-warning/10 px-5 py-4 text-sm">
+        <div role="status" data-tour="rental-handover-missing" className="rounded-3xl border border-warning/40 bg-warning/10 px-5 py-4 text-sm">
           <p className="font-medium">The car can&apos;t go out yet</p>
           <ul className="mt-2 space-y-1.5">
             {missing.map((m) => (
@@ -606,6 +608,7 @@ export function StageHandover({ detail, onStage, refetch }: StageProps) {
       )}
 
       {/* ── the analysis ────────────────────────────────────────────────── */}
+      <div data-tour="rental-damage">
       <Section
         title="Damage analysis"
         description="The two sets of photographs, compared in the order they were taken."
@@ -750,6 +753,7 @@ export function StageHandover({ detail, onStage, refetch }: StageProps) {
           </div>
         )}
       </Section>
+      </div>
 
       {/* ── lockbox ─────────────────────────────────────────────────────── */}
       {lockboxOn && (
@@ -975,7 +979,7 @@ function HandoverCard({
     <Surface className={cn(locked && "opacity-60")}>
       <div
         className="mb-5 flex flex-wrap items-center justify-between gap-3"
-        data-tour="rental-handover-half"
+        data-tour={`rental-handover-${kind}`}
       >
         <div className="flex items-center gap-2.5">
           <span

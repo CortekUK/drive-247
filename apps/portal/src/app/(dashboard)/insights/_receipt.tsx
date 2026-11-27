@@ -82,6 +82,7 @@ function EquationRow({
   money,
   loading,
   onOpen,
+  tour,
 }: {
   /** An operator, or an icon for a line that sits beside the sum, not in it. */
   op: '+' | '−' | ReactNode;
@@ -92,6 +93,8 @@ function EquationRow({
   money: (n: number) => string;
   loading: boolean;
   onOpen: () => void;
+  /** Tour anchor. */
+  tour?: string;
 }) {
   const isZero = Math.abs(amount) < 0.005;
   const clickable = !loading && !isZero;
@@ -148,6 +151,7 @@ function EquationRow({
     <button
       type="button"
       onClick={onOpen}
+      data-tour={tour}
       className={cn(
         shell,
         'group cursor-pointer transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none motion-reduce:transition-none',
@@ -157,7 +161,7 @@ function EquationRow({
       {inner}
     </button>
   ) : (
-    <div className={shell}>{inner}</div>
+    <div data-tour={tour} className={shell}>{inner}</div>
   );
 }
 
@@ -220,6 +224,7 @@ export function MoneyReceipt({
             */}
             <button
               type="button"
+              data-tour="insights-categories"
               onClick={() => setOpenRow('categories')}
               className="flex h-9 cursor-pointer items-center gap-1.5 rounded-full px-3 text-[13px] text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none motion-reduce:transition-none"
             >
@@ -250,6 +255,7 @@ export function MoneyReceipt({
                 money={money}
                 loading={loading}
                 onOpen={() => setOpenRow('tookIn')}
+                tour="insights-took-in"
               />
               <EquationRow
                 op="−"
@@ -259,6 +265,7 @@ export function MoneyReceipt({
                 money={money}
                 loading={loading}
                 onOpen={() => setOpenRow('gaveBack')}
+                tour="insights-gave-back"
               />
               <EquationRow
                 op="−"
@@ -268,6 +275,7 @@ export function MoneyReceipt({
                 money={money}
                 loading={loading}
                 onOpen={() => setOpenRow('neverYours')}
+                tour="insights-never-yours"
               />
               <EquationRow
                 op="−"
@@ -277,6 +285,7 @@ export function MoneyReceipt({
                 money={money}
                 loading={loading}
                 onOpen={() => setOpenRow('spent')}
+                tour="insights-spent"
               />
             </div>
 
@@ -286,6 +295,7 @@ export function MoneyReceipt({
             {/* The answer: the same row as every other line, on a light green
                 wash (light red for a loss) — the tint marks it, not the type. */}
             <div
+              data-tour="insights-kept"
               className={cn(
                 'mt-1 grid grid-cols-[28px_minmax(0,1fr)_auto_16px] items-center gap-x-4 rounded-2xl px-4 py-3.5 max-sm:gap-x-3 max-sm:px-3 [@media(max-height:860px)]:py-2.5',
                 kept < 0 ? 'bg-destructive/[0.07]' : 'bg-success/[0.09]',
@@ -326,6 +336,7 @@ export function MoneyReceipt({
               money={money}
               loading={loading}
               onOpen={() => setOpenRow('owed')}
+              tour="insights-owed"
             />
           </section>
 

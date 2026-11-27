@@ -154,8 +154,8 @@ export function BookingSourcesCard({ data: loadedData, isLoading }: { data: Book
   const total = (Object.values(counts) as number[]).reduce((s, n) => s + n, 0);
 
   return (
-    <div className="flex flex-col rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)] p-6">
-      <div className="flex items-start justify-between gap-3">
+    <div className="flex flex-col rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)] p-6" data-tour="dash-sources">
+      <div className="flex items-start justify-between gap-3" data-tour="dash-sources-head">
         <div>
           <Eyebrow>Where bookings come from</Eyebrow>
           <p className="mt-1 text-[12px] text-[var(--pv-ink-3)]">The last {data?.days ?? 90} days</p>

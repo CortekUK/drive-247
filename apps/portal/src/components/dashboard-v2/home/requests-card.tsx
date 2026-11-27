@@ -320,6 +320,7 @@ export function RequestsCard() {
     <div
       className="flex flex-col overflow-hidden rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)]"
       style={{ backgroundImage: CARD_WASH }}
+      data-tour="dash-requests"
     >
       <header className="flex items-center justify-between gap-3 px-6 pt-4">
         <Eyebrow>Requests</Eyebrow>

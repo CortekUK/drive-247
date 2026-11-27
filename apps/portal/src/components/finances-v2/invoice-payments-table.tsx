@@ -114,6 +114,7 @@ function AmountSum({ total, paid, remaining, money, widths, status, detail }: {
       <HoverCardTrigger asChild>
         <span
           tabIndex={0}
+          data-tour="invoice-amount"
           aria-label={spoken}
           className={cn(
             "relative inline-flex cursor-pointer items-baseline whitespace-nowrap rounded tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -309,6 +310,7 @@ export function InvoicePaymentsTable<T extends FinanceInvoice>({
                 key={invoice.id}
                 onOpen={() => setOpenId(invoice.id)}
                 className="group/copy"
+                data-tour="invoice-row"
                 aria-label={cancelled ? `Invoice ${invoice.invoice_number}, cancelled` : undefined}
               >
                 <ListCell>
@@ -321,7 +323,9 @@ export function InvoicePaymentsTable<T extends FinanceInvoice>({
                   </span>
                 </ListCell>
                 <ListCell>
-                  <ListMetaChip>{entityLabel(invoice)}</ListMetaChip>
+                  <span data-tour="invoice-entity">
+                    <ListMetaChip>{entityLabel(invoice)}</ListMetaChip>
+                  </span>
                 </ListCell>
                 <ListCell>
                   {invoice.entity_ref ? (
@@ -344,6 +348,7 @@ export function InvoicePaymentsTable<T extends FinanceInvoice>({
                 <ListCell className="tabular-nums">
                   {dueDate ? (
                     <span
+                      data-tour="invoice-due"
                       className={cn(
                         "font-medium",
                         cancelled ? "text-muted-foreground" : overdue ? LIST_TONES.danger : "text-foreground",
@@ -391,6 +396,7 @@ export function InvoicePaymentsTable<T extends FinanceInvoice>({
                           variant="ghost"
                           size="icon"
                           className={LIST_ROW_ACTION}
+                          data-tour="invoice-row-menu"
                           aria-label={`Actions for invoice ${invoice.invoice_number}`}
                         >
                           <MoreHorizontal className="h-4 w-4" />

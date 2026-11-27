@@ -355,8 +355,8 @@ export const GLASS_PALETTE = `
   /* ── The phone tab bar: a floating glass capsule, as on iOS ───────────
      (shared/layout/mobile-tab-bar.tsx, reached from here, not edited.) The
      full-width strip with a top border becomes a capsule that floats clear of
-     the screen edges, the page scrolling underneath it, fully clear like
-     every other pane. */
+     the screen edges, the page scrolling underneath it. Opaque and tinted
+     with the accent so the labels stay readable over busy content. */
   @media (max-width: 767px) {
     html[data-portal-look="glass"] body [data-mobile-tab-bar] {
       background: transparent;
@@ -372,9 +372,10 @@ export const GLASS_PALETTE = `
       max-width: 400px;
       border-radius: 999px;
       border: 1px solid rgb(255 255 255 / 0.85);
-      background: var(--lg-glass);
-      -webkit-backdrop-filter: var(--lg-frost);
-      backdrop-filter: var(--lg-frost);
+      /* Opaque, tinted with the accent, so nothing behind shows through the labels. */
+      background: linear-gradient(150deg,
+        color-mix(in oklab, var(--lg-accent) 16%, rgb(246 246 252)),
+        color-mix(in oklab, var(--lg-accent) 24%, rgb(232 232 246)));
       box-shadow:
         inset 0 1px 0 rgb(255 255 255 / 0.95),
         0 1px 2px color-mix(in oklab, var(--lg-accent) 24%, rgb(10 10 30 / 0.14)),
@@ -383,7 +384,9 @@ export const GLASS_PALETTE = `
     }
     html[data-portal-look="glass"].dark body [data-mobile-tab-bar] > nav {
       border-color: rgb(255 255 255 / 0.16);
-      background: linear-gradient(150deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.04));
+      background: linear-gradient(150deg,
+        color-mix(in oklab, var(--lg-accent) 18%, rgb(28 29 48)),
+        color-mix(in oklab, var(--lg-accent) 12%, rgb(18 19 34)));
       box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 18px 36px -14px rgb(0 0 0 / 0.7);
     }
     /* Idle tabs are bare icons and labels on the bar (Ghulam, Nov 2026: no
@@ -462,7 +465,8 @@ export const GLASS_PALETTE = `
      out: its panes sit straight on the room, as approved. */
   @media (min-width: 768px) {
     ${ROOT} .v2-theme main[data-scrollport]:not(:has(.pv)) {
-      margin: 0 10px 10px 0;
+      /* Left margin keeps the sheet clear of the sidebar pane. */
+      margin: 0 10px 10px 10px;
       padding-top: 18px;
       border-radius: 28px;
       border: 1px solid var(--lg-rim);
@@ -478,6 +482,54 @@ export const GLASS_PALETTE = `
       -webkit-backdrop-filter: var(--lg-frost);
       backdrop-filter: var(--lg-frost);
     }
+  }
+
+  /* A record page (a rental, a car) has a fixed dock at the bottom. A blur on
+     the sheet would make the sheet the dock's containing block, so the dock
+     would scroll away with the page. The sheet stays, without its blur. */
+  ${ROOT} .v2-theme main[data-scrollport]:has([data-record-dock]) {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  /* The record dock, matched to the phone tab bar: an opaque capsule tinted
+     with the accent, bare icons, the centre stage button a bead of accent. */
+  ${ROOT} body [data-record-dock][data-record-dock] > nav[aria-label] {
+    border: 1px solid rgb(255 255 255 / 0.85);
+    background: linear-gradient(150deg,
+      color-mix(in oklab, var(--lg-accent) 16%, rgb(246 246 252)),
+      color-mix(in oklab, var(--lg-accent) 24%, rgb(232 232 246)));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.95),
+      0 1px 2px color-mix(in oklab, var(--lg-accent) 24%, rgb(10 10 30 / 0.14)),
+      0 18px 36px -14px color-mix(in oklab, var(--lg-accent) 24%, rgb(10 10 30 / 0.36));
+  }
+  ${ROOT}.dark body [data-record-dock][data-record-dock] > nav[aria-label] {
+    border-color: rgb(255 255 255 / 0.16);
+    background: linear-gradient(150deg,
+      color-mix(in oklab, var(--lg-accent) 18%, rgb(28 29 48)),
+      color-mix(in oklab, var(--lg-accent) 12%, rgb(18 19 34)));
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 18px 36px -14px rgb(0 0 0 / 0.7);
+  }
+  /* Seven buttons at full size need 350px, wider than a 360 to 375 phone
+     leaves, so the last one hit the edge. They shrink with the screen instead. */
+  ${ROOT} body [data-record-dock][data-record-dock] > nav[aria-label] :is(a, button)[class]:not([class~="bg-primary"]) {
+    width: clamp(34px, 10.4vw, 44px);
+    height: clamp(34px, 10.4vw, 44px);
+  }
+  ${ROOT} body [data-record-dock][data-record-dock] > nav[aria-label] button[class~="bg-primary"] {
+    width: clamp(42px, 11.6vw, 48px);
+    height: clamp(42px, 11.6vw, 48px);
+  }
+  /* Its icon buttons carry active:bg-foreground/10, which the status chip
+     rule below would otherwise paint as a grey disc. */
+  ${ROOT} .v2-theme main [data-record-dock][data-record-dock] nav[aria-label] :is(a, button)[class]:not([class~="bg-primary"]) {
+    background-color: transparent;
+  }
+  ${ROOT} .v2-theme main [data-record-dock][data-record-dock] nav[aria-label] :is(a, button)[class]:not([class~="bg-primary"]):active {
+    background-color: color-mix(in oklab, var(--lg-accent) 14%, transparent);
   }
 
   /* Secondary text is written at part strength (muted/70, primary/60) for a

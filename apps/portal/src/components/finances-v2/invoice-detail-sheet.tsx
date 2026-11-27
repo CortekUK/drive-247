@@ -239,6 +239,7 @@ export function InvoiceDetailSheet({
     <li key="add-payment" className={treeNode(last, "18px")}>
       <button
         type="button"
+        data-tour="invoice-add-payment"
         onClick={() =>
           FINANCES_PREVIEW
             ? setPayFor({ only: charge.id })
@@ -274,6 +275,7 @@ export function InvoiceDetailSheet({
           // No ✕: the sheet closes on a click outside it or on Esc, and the
           // receipt has its own "Back to" link.
           showCloseButton={false}
+          data-tour="invoice-sheet"
           // max-h + overflow on the panel itself, as well as on its body: if
           // the body is ever not held to the panel's height, the panel scrolls
           // rather than letting the receipt run off the bottom of the screen.
@@ -290,8 +292,8 @@ export function InvoiceDetailSheet({
           className="bg-app-gradient [background-color:hsl(var(--popover))] transform-gpu max-h-dvh gap-0 overflow-y-auto overscroll-contain data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
         >
           {receiptFor ? (
-            <div className="min-h-0 flex-1 overflow-y-auto p-6">
-              <Button variant="ghost" size="sm" className="-ml-2 mb-3 h-7 px-2" onClick={() => setReceiptFor(null)}>
+            <div className="min-h-0 flex-1 overflow-y-auto p-6" data-tour="invoice-receipt">
+              <Button variant="ghost" size="sm" className="-ml-2 mb-3 h-7 px-2" onClick={() => setReceiptFor(null)} data-tour="invoice-receipt-back">
                 <ArrowLeft className="h-4 w-4" />
                 Back to {invoice.invoice_number}
               </Button>
@@ -323,11 +325,12 @@ export function InvoiceDetailSheet({
                     notes, cancel (or restore) it, delete it. Payments are taken
                     from each charge's "Add payment" row. */}
                 {canEdit("invoices") && (
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-2" data-tour="invoice-actions">
                     {/* Pay: on an issued invoice that still owes money. */}
                     {canEdit("payments") && !isDraft && !isCancelled && owes > EPS && (
                       <Button
                         size="sm"
+                        data-tour="invoice-pay"
                         className="h-8 rounded-full px-3.5 text-[13px]"
                         // Live: the real Add Payment dialog, so the money lands in
                         // `payments` (and from there in Xero / Zoho).
@@ -379,6 +382,7 @@ export function InvoiceDetailSheet({
                   <div className="flex items-center">
                   <button
                     type="button"
+                    data-tour="invoice-details"
                     aria-expanded={detailsOpen}
                     onClick={() => setDetailsOpen((v) => !v)}
                     className="-ml-1 inline-flex items-center gap-1 rounded px-1 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -483,7 +487,7 @@ export function InvoiceDetailSheet({
                       operators, nothing else. It ends over the charges' amount
                       column, so the answer sits above the figures it adds up.
                       The words are for screen readers and the hover titles. */}
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-border/70 bg-card px-4 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                  <div data-tour="invoice-sum" className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-border/70 bg-card px-4 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                       Line items
                     </span>
@@ -517,7 +521,7 @@ export function InvoiceDetailSheet({
                         : "Standalone invoice: it is not tied to a rental, so it has no rental charges."}
                     </p>
                   ) : (
-                    <ul className="ml-1.5">
+                    <ul className="ml-1.5" data-tour="invoice-charges">
                       {charges.map((charge, ci) => {
                         // The line as billed: its original amount plus any debit notes.
                         // Credits are forgiven off it. So the sum below always adds up:
@@ -563,6 +567,7 @@ export function InvoiceDetailSheet({
                             <div
                               role="button"
                               tabIndex={0}
+                              data-tour="invoice-charge"
                               aria-expanded={isOpen}
                               aria-label={`${charge.category ?? "Charge"}, ${money(cAmount)}, ${summary}`}
                               onClick={() => toggleCharge(charge.id)}
@@ -652,7 +657,7 @@ export function InvoiceDetailSheet({
                             {/* pb-5, not mb-5: padding stays inside the charge's <li>, so its
                                 branch line runs on through the gap to the next charge. */}
                             {isOpen && (
-                              <ul className="ml-3.5 pb-5">
+                              <ul className="ml-3.5 pb-5" data-tour="invoice-charge-open">
                                 {allocs.length === 0 && cNotes === 0 && canPay && cOwes > EPS ? (
                                   addPaymentRow(charge, cOwes, true)
                                 ) : allocs.length === 0 && cNotes === 0 ? (
@@ -680,6 +685,7 @@ export function InvoiceDetailSheet({
                                             says so. A payment whose money has not landed (Pending,
                                             Reversed) has no receipt, so its row is not interactive. */}
                                         <div
+                                          data-tour={landed ? "invoice-payment" : "invoice-payment-pending"}
                                           {...(landed
                                             ? {
                                                 role: "button",
@@ -773,7 +779,7 @@ export function InvoiceDetailSheet({
                                             back — the same Stripe / Square / manual mark as payments,
                                             and "−". A split payment's refund is split pro rata. */}
                                         {refund && refunded > EPS && (
-                                          <div className="flex h-7 items-center gap-3 px-1.5 text-sm">
+                                          <div className="flex h-7 items-center gap-3 px-1.5 text-sm" data-tour="invoice-refund">
                                             <span className="flex min-w-0 flex-1 items-center gap-1.5 pl-3 text-muted-foreground">
                                               <CornerDownRight aria-hidden className="h-3 w-3 shrink-0 text-muted-foreground/60" />
                                               <PaymentSourceIcon provider={refund.provider} />
@@ -909,7 +915,7 @@ export function InvoiceDetailSheet({
               paid, whether it is late — and when it was created on the right. */}
           {!receiptFor && (
             <div className="flex items-center justify-between gap-3 border-t px-6 py-3">
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5" data-tour="invoice-pills">
                 <Pill tone="muted">{entityLabel(invoice)}</Pill>
                 <Pill tone={payment.tone}>{payment.label}</Pill>
                 {due && <Pill tone={due.tone}>{due.label}</Pill>}

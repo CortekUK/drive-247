@@ -124,7 +124,7 @@ function ReceiptDialog({
   const noMatches = !!search && search.query.trim() !== '' && search.matches === 0;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent data-tour="insights-dialog" className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

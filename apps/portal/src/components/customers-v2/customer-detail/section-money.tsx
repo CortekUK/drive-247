@@ -132,7 +132,7 @@ export function SectionMoney({ c, onJump, canEdit, currency }: SectionProps) {
              * customer to charge against, and the methods this customer has
              * actually paid with before.
              */}
-            <div className={cn(cardCls, "p-6")}>
+            <div className={cn(cardCls, "p-6")} data-tour="customer-money-billing">
               <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Billing</p>
               <div className="mt-2.5 flex items-center gap-3">
                 <span className="flex h-9 w-12 items-center justify-center rounded-2xl bg-muted">

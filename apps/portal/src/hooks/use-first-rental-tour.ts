@@ -2,8 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 
 import { useTenant } from '@/contexts/TenantContext';
+import { supabase } from '@/integrations/supabase/client';
+import {
+  TOUR_SYNC_READY_EVENT,
+  isTourSyncReady,
+  noteTourWrite,
+} from '@/lib/tour-sync';
 import { useAuth } from '@/stores/auth-store';
 import { useV2 } from '@/lib/v2-context';
 import { useIsLean } from '@/lib/lean-context';
@@ -25,6 +32,7 @@ import {
   clearTourProgress,
   decideResume,
   hasSeenTour,
+  isRequiredTourCompany,
   isTourWorthRunning,
   markTourSeen,
   readTourProgress,
@@ -38,6 +46,7 @@ import {
   tourSeenKey,
   writeTourProgress,
   MAX_RESUME_PROMPTS,
+  type ReplayTourDetail,
   type ResolvedStep,
   type TourAction,
   type TourBuildContext,
@@ -46,13 +55,16 @@ import {
 import {
   RUN_TAB_TOUR_EVENT,
   getTabTour,
-  markTabTourTaken,
+  getTopic,
+  markTopicDone,
+  nextTopic,
   readEmptyTabs,
   readSampleIds,
-  tabTourVariant,
+  saveTopicStep,
+  topicAvailable,
   type RunTabTourDetail,
   type TabTour,
-  type TabTourVariant,
+  type TabTourTopic,
 } from '@/lib/tab-tours';
 
 /**
@@ -136,6 +148,8 @@ export const ANCHOR_WAIT_MS = 6_000;
  */
 export const ANCHOR_WAIT_SHORT_MS = 1_500;
 export const ANCHOR_POLL_MS = 250;
+/** A tab tour step's wait: records load their sections after the page itself. */
+export const TAB_ANCHOR_WAIT_MS = 12_000;
 /** How long a `router.push` may take before we assume it did not happen. */
 export const NAV_TIMEOUT_MS = 10_000;
 /**
@@ -177,6 +191,18 @@ export interface FirstRentalTourState {
   dismissPrompt: () => void;
   /** Is this user/tenant eligible at all? Drives the menu item's visibility. */
   isEligible: boolean;
+  /** The step's words for this company (`bodyFor`), when they differ from `step.body`. */
+  body?: string;
+  /** Buttons on the card that do something (Connect Stripe, Book a call, Next topic). */
+  actions: readonly TourAction[];
+  runAction: (id: TourAction['id']) => void;
+  /** The tab tour topic on screen, for the card's heading. Null on the quick tour. */
+  tabTopic: { tourLabel: string; topicTitle: string } | null;
+  /**
+   * A required run (a new company's first visit): no close, no Skip, no Esc,
+   * the page behind is not clickable, and the last card is the only way out.
+   */
+  required: boolean;
   /**
    * The run on screen started by itself and the operator has not touched it, so
    * it steps aside for a system announcement dialog. Rendered as
@@ -212,6 +238,7 @@ function restoreRaw(key: string, raw: string | null): void {
   try {
     if (raw === null) storage.removeItem(key);
     else storage.setItem(key, raw);
+    noteTourWrite(key);
   } catch {
     // Blocked storage: nothing was written in the first place.
   }
@@ -236,6 +263,43 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
   // Stripe and the call with Bryan, for the quick tour's last card. On a
   // /fake-quick-tour run this is the pretend new company.
   const firstSteps = useFirstSteps();
+
+  // Was this company created after the required quick tour went live?
+  const createdAtQuery = useQuery({
+    queryKey: ['tenant-created-at', tenant?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('tenants')
+        .select('created_at')
+        .eq('id', tenant!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.created_at as string | null) ?? null;
+    },
+    enabled: !!tenant?.id,
+    staleTime: Infinity,
+    retry: 1,
+  });
+  // A failed read counts as an existing company: closable, as before.
+  const companySettled = !tenant?.id || !createdAtQuery.isLoading;
+  const isNewCompany = isRequiredTourCompany(createdAtQuery.data);
+
+  // The saved tour state has come back from the database (TourSync).
+  const [syncReady, setSyncReady] = useState(isTourSyncReady);
+  useEffect(() => {
+    const sync = () => setSyncReady(isTourSyncReady());
+    sync();
+    window.addEventListener(TOUR_SYNC_READY_EVENT, sync);
+    return () => window.removeEventListener(TOUR_SYNC_READY_EVENT, sync);
+  }, []);
+
+  /** The run on screen is required. A ref for the callbacks, state for the card. */
+  const requiredRef = useRef(false);
+  const [required, setRequiredState] = useState(false);
+  const setRequired = useCallback((value: boolean) => {
+    requiredRef.current = value;
+    setRequiredState(value);
+  }, []);
 
   const [phase, setPhase] = useState<TourPhase>('idle');
   const [steps, setSteps] = useState<readonly TourStep[]>([]);
@@ -266,7 +330,8 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
   // actually has, or route the rental steps the wrong way. Non-managers never
   // wait (their query is disabled), and non-lean tenants never wait on the
   // gate (same).
-  const gatesSettled = (!isManager || !permissionsLoading) && !rentalGateLoading;
+  const gatesSettled =
+    (!isManager || !permissionsLoading) && !rentalGateLoading && companySettled && syncReady;
 
   // Eligible to be OFFERED the tour — the menu item's gate. Deliberately looser
   // than the autostart gate: it ignores `alreadySeen` (replaying is the whole
@@ -325,7 +390,11 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
    * not re-create themselves when it changes, and every place that reads it
    * already re-renders for its own reasons.
    */
-  const activeTabTourRef = useRef<{ tour: TabTour; variant: TabTourVariant } | null>(null);
+  const activeTabTourRef = useRef<{ tour: TabTour; topic: TabTourTopic } | null>(null);
+  /** The same, as state, for the card's heading. */
+  const [tabTopic, setTabTopic] = useState<{ tourLabel: string; topicTitle: string } | null>(null);
+  /** A dialog a tab tour step opened, to close when the tour moves out of it. */
+  const openedDialogRef = useRef<string | null>(null);
 
   // --- Transitions -------------------------------------------------------
 
@@ -333,12 +402,18 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     navRef.current = null;
     timedOutRouteRef.current = null;
     activeTabTourRef.current = null;
+    setTabTopic(null);
+    if (openedDialogRef.current) {
+      closeDialog(openedDialogRef.current);
+      openedDialogRef.current = null;
+    }
     setAutoRun(null);
+    setRequired(false);
     setCurrent(null);
     setSteps([]);
     setIndex(0);
     setPhase('idle');
-  }, [setAutoRun]);
+  }, [setAutoRun, setRequired]);
 
   /** Make step `i` of `list` current. Persists first, then transits. */
   const goTo = useCallback(
@@ -350,8 +425,11 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
       // the dashboard" into four separate places — a paused Customers tour
       // would otherwise offer to resume itself on the dashboard. The launch
       // button is always on screen, which is a better answer than a prompt.
-      if (!activeTabTourRef.current) {
-        writeTourProgress(appUserId, { stepId: step.id, status: 'active' });
+      const tab = activeTabTourRef.current;
+      if (!tab) {
+        writeTourProgress(appUserId, { stepId: step.id, status: 'active', required: requiredRef.current });
+      } else {
+        saveTopicStep(tab.tour.id, appUserId, tab.topic.id, step.id);
       }
       navRef.current = null;
       setCurrent(null);
@@ -363,17 +441,8 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
 
   /** Finishing, skipping and dismissing are the same act: the run is over. */
   const finish = useCallback(() => {
-    const tabTour = activeTabTourRef.current;
-    if (tabTour) {
-      // Only dims the button. It never gates a run — the operator can take a
-      // tab tour as often as they like.
-      //
-      // The variant is the one captured at LAUNCH, not re-read here. By the
-      // time a run finishes the operator is often standing inside a record, so
-      // re-reading would report `full` for a tour that actually ran as the
-      // short empty version — and the button would dim on a tenant who has
-      // still never been shown the record half.
-      markTabTourTaken(tabTour.tour.id, appUserId, tabTour.variant);
+    // A tab tour closed part way: its topic stays in progress at this step.
+    if (activeTabTourRef.current) {
       clearAll();
       return;
     }
@@ -382,7 +451,11 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     clearAll();
   }, [appUserId, clearAll]);
 
-  const end = finish;
+  /** Close, Esc, Skip, Later. A required run only ends from its last card. */
+  const end = useCallback(() => {
+    if (requiredRef.current && indexRef.current < stepsRef.current.length - 1) return;
+    finish();
+  }, [finish]);
 
   const finishToDashboard = useCallback(() => {
     // A tab tour ends where it ran. Sending someone back to the dashboard after
@@ -396,7 +469,9 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
   /** Step aside, remembering where we were. The dashboard offers to resume. */
   const pause = useCallback(() => {
     const step = stepsRef.current[indexRef.current];
-    if (step) writeTourProgress(appUserId, { stepId: step.id, status: 'paused' });
+    if (step && !activeTabTourRef.current) {
+      writeTourProgress(appUserId, { stepId: step.id, status: 'paused', required: requiredRef.current });
+    }
     clearAll();
   }, [appUserId, clearAll]);
 
@@ -404,11 +479,13 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
   const advance = useCallback(() => {
     const i = indexRef.current;
     if (i >= stepsRef.current.length - 1) {
+      const tab = activeTabTourRef.current;
+      if (tab) markTopicDone(tab.tour.id, appUserId, tab.topic.id);
       finish();
       return;
     }
     goTo(i + 1);
-  }, [finish, goTo]);
+  }, [finish, goTo, appUserId]);
 
   const next = useCallback(() => {
     // The operator is driving now; a system dialog waits for the tour to end.
@@ -448,8 +525,13 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
       markSeen: boolean;
       fromIndex?: number;
       tour?: TabTour | null;
+      /** The tab tour topic to run, and where in it to start. */
+      topic?: TabTourTopic | null;
+      fromStepId?: string;
       /** Launched by the page itself rather than by the operator. */
       auto?: AutoRun['kind'];
+      /** A new company's first visit (quick tour only). */
+      required?: boolean;
     }): boolean => {
       if (typeof document === 'undefined') return false;
       const tabTour = opts.tour ?? null;
@@ -461,8 +543,11 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
       const ctx: TourBuildContext = tabTour
         ? { ...ctxRef.current, sampleIds, emptyTabs: readEmptyTabs() }
         : ctxRef.current;
-      const built = buildTour(ctx, tabTour ? tabTour.steps : undefined);
-      if (!isTourWorthRunning(built)) return false;
+      const topic = tabTour ? opts.topic ?? null : null;
+      if (tabTour && (!topic || !topicAvailable(topic, ctx))) return false;
+      const built = buildTour(ctx, topic ? topic.steps : undefined);
+      // A topic only needs one step on screen; the quick tour needs two stops.
+      if (topic ? built.length === 0 : !isTourWorthRunning(built)) return false;
       // Before anything below writes: what to put back if this run has to step
       // aside, untouched, for a system announcement dialog.
       const auto: AutoRun | null =
@@ -476,25 +561,23 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
       // UP FRONT, before any state flips — so a re-render, a second effect pass
       // or another tab cannot fire this twice.
       if (opts.markSeen && !tabTour) markTourSeen(appUserId);
-      const start = Math.min(Math.max(0, opts.fromIndex ?? 0), built.length - 1);
+      const fromStep = opts.fromStepId ? built.findIndex((st) => st.id === opts.fromStepId) : -1;
+      const start = Math.min(Math.max(0, fromStep >= 0 ? fromStep : opts.fromIndex ?? 0), built.length - 1);
       timedOutRouteRef.current = null;
-      activeTabTourRef.current = tabTour
-        ? {
-            tour: tabTour,
-            // Which half of the tab exists TODAY. Delegated rather than
-            // recomputed here: the button reads the same function to decide how
-            // loud to be, and two copies of this rule would drift — Payments in
-            // particular has no record id, so an id-only test would mark every
-            // run of it "empty" and the button would never settle.
-            variant: tabTourVariant(tabTour.id),
-          }
-        : null;
+      // A new topic replaces a dialog the last one left open.
+      if (openedDialogRef.current) {
+        closeDialog(openedDialogRef.current);
+        openedDialogRef.current = null;
+      }
+      activeTabTourRef.current = tabTour && topic ? { tour: tabTour, topic } : null;
+      setTabTopic(tabTour && topic ? { tourLabel: tabTour.label, topicTitle: topic.title } : null);
+      setRequired(!tabTour && !!opts.required);
       setSteps(built);
       goTo(start, built);
       setAutoRun(auto);
       return true;
     },
-    [appUserId, goTo, setAutoRun],
+    [appUserId, goTo, setAutoRun, setRequired],
   );
 
   // --- Resume-prompt actions ----------------------------------------------
@@ -504,7 +587,7 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     const built = buildTour(ctxRef.current);
     const decision = decideResume(progress, pathnameRef.current, built);
     const from = decision.kind === 'none' ? 0 : decision.index;
-    if (!launch({ markSeen: false, fromIndex: from })) finish();
+    if (!launch({ markSeen: false, fromIndex: from, required: !!progress?.required })) finish();
   }, [appUserId, launch, finish]);
 
   const startOver = useCallback(() => {
@@ -587,11 +670,30 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     let elapsed = 0;
     // A step that can stand without its anchor only waits briefly: on the
     // dashboard the chrome it points at is already there, or it is not coming.
-    const budget =
-      step.centerIfMissing ||
-      (step.route && timedOutRouteRef.current === routePathname(step.route))
+    // A tab tour step often stands inside a record that is still loading, and
+    // one record's sections are not another's, so it waits longer and the
+    // "same route timed out" shortcut does not apply to it.
+    const budget = activeTabTourRef.current
+      ? step.centerIfMissing
+        ? ANCHOR_WAIT_SHORT_MS
+        : TAB_ANCHOR_WAIT_MS
+      : step.centerIfMissing ||
+          (step.route && timedOutRouteRef.current === routePathname(step.route))
         ? ANCHOR_WAIT_SHORT_MS
         : ANCHOR_WAIT_MS;
+
+    // A step inside a dialog: open it first (once). A step that is not in that
+    // dialog closes the one an earlier step opened.
+    if (step.opens) {
+      if (!document.querySelector(step.opens.dialog)) {
+        const trigger = findVisible(step.opens.trigger);
+        if (trigger instanceof HTMLElement) trigger.click();
+      }
+      openedDialogRef.current = step.opens.dialog;
+    } else if (openedDialogRef.current || step.closesDialogs) {
+      closeDialog(openedDialogRef.current ?? '[role="dialog"]:not([data-first-rental-tour])');
+      openedDialogRef.current = null;
+    }
 
     const attempt = () => {
       if (cancelled) return;
@@ -647,6 +749,7 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
       blockingGateOpen: suppressed,
       wizardPending,
       alreadySeen: hasSeenTour(appUserId),
+      syncReady,
     });
     if (!go) return;
 
@@ -664,7 +767,7 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     const timer = setTimeout(() => {
       if (autostartDone.current || phaseRef.current !== 'idle') return;
       if (getSystemAnnouncementPriority() !== 'idle') return;
-      if (launch({ markSeen: true, auto: 'autostart' })) autostartDone.current = true;
+      if (launch({ markSeen: true, auto: 'autostart', required: isNewCompany })) autostartDone.current = true;
     }, wait);
     return () => clearTimeout(timer);
   }, [
@@ -679,6 +782,8 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     wizardPending,
     appUserId,
     launch,
+    syncReady,
+    isNewCompany,
   ]);
 
   // --- Resume ------------------------------------------------------------
@@ -711,7 +816,7 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     }
     const decision = decideResume(progress, pathname, built);
     if (decision.kind === 'resume') {
-      launch({ markSeen: false, fromIndex: decision.index, auto: 'resume' });
+      launch({ markSeen: false, fromIndex: decision.index, auto: 'resume', required: !!progress.required });
       return;
     }
     if (decision.kind === 'prompt') {
@@ -740,12 +845,15 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
   // --- Replay, from the user menu ----------------------------------------
   useEffect(() => {
     if (!isEligible) return;
-    const onReplay = () => {
+    const onReplay = (event: Event) => {
       // An explicit request bypasses `alreadySeen` and the dashboard-route
       // check — the walkthrough navigates itself home — but not the step
       // filter, which is a correctness rule rather than a preference.
+      const detail = (event as CustomEvent<ReplayTourDetail | undefined>).detail ?? {};
       clearTourProgress(appUserId);
-      if (!launch({ markSeen: true })) {
+      const built = buildTour(ctxRef.current);
+      const from = detail.stepId ? Math.max(0, built.findIndex((s) => s.id === detail.stepId)) : 0;
+      if (!launch({ markSeen: true, fromIndex: from, required: !!detail.required })) {
         toast({
           title: 'Nothing to walk through just yet',
           description:
@@ -768,11 +876,14 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
       const detail = (event as CustomEvent<RunTabTourDetail>).detail;
       const tour = getTabTour(detail?.tourId);
       if (!tour) return;
-      // An explicit request wins over whatever is on screen. The first-rental
-      // walkthrough may be mid-run or sitting on its resume prompt; leaving it
-      // in place would put two cards on one screen, both at z-[65].
-      clearTourProgress(appUserId);
-      if (!launch({ markSeen: false, tour })) {
+      const topic = getTopic(tour, detail.topicId);
+      if (!topic) return;
+      // Never over a required quick tour: the new company finishes that first.
+      if (requiredRef.current) return;
+      // An explicit request wins over whatever else is on screen; two cards
+      // on one screen would both sit at z-[65].
+      if (phaseRef.current !== 'idle') clearAll();
+      if (!launch({ markSeen: false, tour, topic, fromStepId: detail.stepId })) {
         toast({
           title: 'Nothing to walk through just yet',
           description: tour.emptyMessage,
@@ -781,7 +892,7 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     };
     window.addEventListener(RUN_TAB_TOUR_EVENT, onRunTab);
     return () => window.removeEventListener(RUN_TAB_TOUR_EVENT, onRunTab);
-  }, [isEligible, launch, appUserId]);
+  }, [isEligible, launch, appUserId, clearAll]);
 
   // A system announcement dialog became due while something of ours that
   // opened BY ITSELF is on screen and untouched: step aside, recording nothing.
@@ -819,18 +930,40 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
   const detail = current?.step.detail ? current.step.detail(ctxRef.current) : null;
   // Worked out at draw time, like `detail`, so state that lands mid-tour is used.
   const body = current ? (current.step.bodyFor ? current.step.bodyFor(ctxRef.current) : current.step.body) : '';
-  const actions = current?.step.actionsFor ? current.step.actionsFor(ctxRef.current) : [];
+  const tabNow = activeTabTourRef.current;
+  const isLastTabStep = !!tabNow && index === steps.length - 1;
+  const upNext =
+    isLastTabStep && tabNow
+      ? nextTopic(tabNow.tour, tabNow.topic.id, (t) =>
+          topicAvailable(t, { sampleIds: readSampleIds(), emptyTabs: readEmptyTabs() }),
+        )
+      : null;
+  const actions: readonly TourAction[] = upNext
+    ? [{ id: 'next-topic', label: `Next: ${upNext.title}` }]
+    : current?.step.actionsFor
+      ? current.step.actionsFor(ctxRef.current)
+      : [];
 
   /** A button on the card: the tour ends, then the thing happens. */
   const runAction = useCallback(
     (id: TourAction['id']) => {
+      if (id === 'next-topic') {
+        const tab = activeTabTourRef.current;
+        if (!tab) return;
+        markTopicDone(tab.tour.id, appUserId, tab.topic.id);
+        const ctx = { sampleIds: readSampleIds(), emptyTabs: readEmptyTabs() };
+        const following = nextTopic(tab.tour, tab.topic.id, (t) => topicAvailable(t, ctx));
+        clearAll();
+        if (following) launch({ markSeen: false, tour: tab.tour, topic: following });
+        return;
+      }
       finish();
       if (id === 'connect-stripe') router.push(CONNECT_STRIPE_HREF);
       // The call button in the top bar owns Bryan's calendar; the top bar is
       // on every page, so it is always there to hear this.
       if (id === 'book-call') openOnboardingCall();
     },
-    [finish, router],
+    [finish, router, appUserId, clearAll, launch],
   );
 
   return {
@@ -853,6 +986,8 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     startOver,
     dismissPrompt,
     isEligible,
+    tabTopic,
+    required,
     yieldsToSystem: phase === 'prompt' || (phase !== 'idle' && autoRun !== null),
   };
 }
@@ -878,7 +1013,42 @@ export function useFirstRentalTourEligible(): boolean {
 }
 
 /** Ask the mounted tour to run again. See `REPLAY_TOUR_EVENT`. */
-export function replayFirstRentalTour(): void {
+export function replayFirstRentalTour(detail?: ReplayTourDetail): void {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(new Event(REPLAY_TOUR_EVENT));
+  window.dispatchEvent(new CustomEvent<ReplayTourDetail>(REPLAY_TOUR_EVENT, { detail: detail ?? {} }));
+}
+
+/** First visible element for any of the selectors, in order. */
+function findVisible(selectors: readonly string[]): Element | null {
+  for (const sel of selectors) {
+    let list: NodeListOf<Element>;
+    try {
+      list = document.querySelectorAll(sel);
+    } catch {
+      continue;
+    }
+    for (const el of Array.from(list)) {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0 && !el.closest('[inert]')) return el;
+    }
+  }
+  return null;
+}
+
+/**
+ * Close a dialog a tour step opened, the way a person would: Escape on it.
+ * Marked, so the tour's own Escape handler knows it was not the operator.
+ */
+function closeDialog(selector: string): void {
+  if (typeof document === 'undefined') return;
+  let el: Element | null = null;
+  try {
+    el = document.querySelector(selector);
+  } catch {
+    return;
+  }
+  if (!el) return;
+  const event = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true });
+  (event as KeyboardEvent & { __tour?: boolean }).__tour = true;
+  el.dispatchEvent(event);
 }

@@ -46,6 +46,8 @@ interface Row {
   /** The next bill: drawn as the row that matters, not as a status. */
   featured?: boolean;
   note?: string | null;
+  /** The bill's status key, for the tour. */
+  state?: string;
 }
 
 /** "in 18 days", "tomorrow", "today" — null when it has passed or can't be read. */
@@ -103,6 +105,7 @@ export function RecentPaymentsV2({
       actions: onExplainPrice ? (
         <button
           type="button"
+          data-tour="billing-breakdown"
           onClick={onExplainPrice}
           className="mr-7 whitespace-nowrap text-sm font-medium text-primary underline decoration-dotted underline-offset-4 transition-opacity duration-200 ease-out hover:opacity-70 motion-reduce:transition-none dark:text-[hsl(var(--v2-link,var(--primary)))]"
         >
@@ -126,6 +129,7 @@ export function RecentPaymentsV2({
       date: formatBillDate(paidish ? inv.paid_at ?? inv.period_start : inv.due_date ?? inv.period_start) ?? "—",
       title: period(inv),
       status: BILLING_STATUS_LABEL[st],
+      state: st,
       tone: TONE[st],
       amount: formatMoney(paidish ? inv.amount_paid : inv.amount_due, inv.currency),
       actions: (
@@ -211,6 +215,7 @@ export function RecentPaymentsV2({
        doesn't hand the wheel to the page. Phones: a plain 20rem box. */
     <div
       ref={scroller}
+      data-tour="billing-payments"
       onScroll={measure}
       className="max-h-[20rem] min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:none] md:max-h-none md:flex-1 [&::-webkit-scrollbar]:hidden"
       style={fade ? { WebkitMaskImage: fade, maskImage: fade } : undefined}
@@ -219,6 +224,8 @@ export function RecentPaymentsV2({
         {rows.slice(0, shown).map((r) => (
           <li
             key={r.key}
+            data-tour={r.featured ? "billing-next-bill" : "billing-bill"}
+            data-bill-state={r.state}
             className={`grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-4 sm:grid-cols-[minmax(8rem,1fr)_5.5rem_5.5rem_11rem] ${
               r.featured
                 ? "mb-1 rounded-xl border border-primary/20 bg-primary/[0.06] px-4 py-3 text-foreground"

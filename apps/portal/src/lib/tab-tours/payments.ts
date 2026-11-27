@@ -220,7 +220,7 @@ const STEPS: readonly TourStep[] = [
     id: 'payments.empty.what',
     label: 'What lands here',
     title: 'What this page will hold',
-    body: 'Once money starts moving, every card charge, refund, deposit and cash entry lands here in one ledger. Nothing is missing today — none of it has happened yet.',
+    body: 'Once money starts moving, every card charge, refund, deposit and cash entry lands here in one ledger. Nothing is missing today. None of it has happened yet.',
     route: '/payments',
     // The headline, never the card: that card runs the full width of the
     // content column and is around 450px tall, so a spotlight on it has
@@ -256,7 +256,7 @@ const STEPS: readonly TourStep[] = [
     // unpaid links and uncaptured holds, which is the fix that stopped this
     // card reporting $1,101.25 for a month that took $751.25).
     title: 'Today, and the month so far',
-    body: 'These two ignore the filters underneath them, and count only money you have actually received — an unpaid link or a reversed payment never lifts them.',
+    body: 'These two ignore the filters underneath them, and count only money you have actually received. An unpaid link or a reversed payment never lifts them.',
     route: '/payments',
     anchors: [
       '[data-tour="payments-stat-today"]',
@@ -291,6 +291,8 @@ const STEPS: readonly TourStep[] = [
     body: 'Type any part of a customer name and the list narrows to them. It matches the name on the payment, so a first name is usually enough.',
     route: '/payments',
     anchors: ['[data-tour="payments-search"]', ...LIST_HEADING],
+    // On a phone the search sits behind the tab bar's Search button.
+    mobileAnchors: ['[data-mobile-tab-bar] button[aria-label="Search"]', 'button[aria-label="Search this page"]'],
     side: 'bottom',
   },
   {
@@ -358,7 +360,7 @@ const STEPS: readonly TourStep[] = [
         // Only meaningful with a row on screen, and the line itself only
         // renders where the rental has a rate to quote — so it is a note with
         // its own anchor, and it drops rather than describing thin air.
-        text: 'Under the amount is the agreed rate it came from — the weekly or monthly figure, and how many.',
+        text: 'Under the amount is the agreed rate it came from: the weekly or monthly figure, and how many.',
         anchors: ['[data-tour="payments-rate"]'],
       },
     ],
@@ -388,7 +390,7 @@ const STEPS: readonly TourStep[] = [
         // The warning is worth its 100 characters: reject does not reject a
         // payment, it closes the rental. Anchored to a row so it is only said
         // where those two buttons can actually be seen.
-        text: 'The tick and cross on a pending row approve or reject it — and rejecting closes the whole rental.',
+        text: 'The tick and cross on a pending row approve or reject it, and rejecting closes the whole rental.',
         anchors: ['[data-tour="payment-row"]'],
       },
     ],
@@ -449,7 +451,7 @@ const STEPS: readonly TourStep[] = [
     id: 'payments.empty.record',
     label: 'Record a payment',
     title: 'For money that came in elsewhere',
-    body: 'Cash in hand, or a transfer to your bank, whenever one turns up. Nothing to record today — and once payments start arriving, the rest of this tour opens up.',
+    body: 'Cash in hand, or a transfer to your bank, whenever one turns up. Nothing to record today, and once payments start arriving, the rest of this tour opens up.',
     route: '/payments',
     // The teaching card's own CTA first: on an empty tab it is the biggest
     // thing on the page, and it is the same handler as the header button. The
@@ -474,6 +476,8 @@ const STEPS: readonly TourStep[] = [
   },
 ];
 
+const pick = (ids: string[]): TourStep[] => STEPS.filter((s) => ids.includes(s.id));
+
 export const PAYMENTS_TAB_TOUR: TabTour = {
   id: 'payments',
   label: 'Payments',
@@ -484,5 +488,19 @@ export const PAYMENTS_TAB_TOUR: TabTour = {
   // permissions shortfall: someone who cannot reach this list at all.
   emptyMessage:
     'There is not enough on your Payments tab to walk through yet. Take a payment, or record one yourself, and I will show you around it.',
-  steps: STEPS,
+  // Placeholder until this tab's topics are written: one topic, the old steps.
+  topics: [
+    {
+      id: 'payments.finding',
+      title: 'Finding a payment',
+      summary: 'The totals, the period, search and the filters.',
+      steps: pick(['payments.welcome', 'payments.empty.what', 'payments.empty.arrive', 'payments.money-in', 'payments.period', 'payments.search', 'payments.method', 'payments.status', 'payments.dates']),
+    },
+    {
+      id: 'payments.rows',
+      title: 'Rows, export and recording',
+      summary: 'What a row says, what you can do to it, and cash or transfers.',
+      steps: pick(['payments.row', 'payments.actions', 'payments.export', 'payments.record', 'payments.empty.record']),
+    },
+  ],
 };

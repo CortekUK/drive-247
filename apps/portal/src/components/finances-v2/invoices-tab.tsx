@@ -349,7 +349,7 @@ export const InvoicesTab = ({
         <>
           {activeTab === "invoices" && !teachEmptyInvoices && (
             v2Chrome ? (
-              <HeaderIconButton label="Export CSV" onClick={handleExportCSV} disabled={isLoading || !filteredInvoices.length}>
+              <HeaderIconButton label="Export CSV" onClick={handleExportCSV} disabled={isLoading || !filteredInvoices.length} data-tour="finances-export">
                 <Download className="h-4 w-4" />
               </HeaderIconButton>
             ) : (
@@ -389,7 +389,7 @@ export const InvoicesTab = ({
             </>
           )}
           {!FINANCES_PREVIEW && canEdit('payments') && (
-            <Button onClick={() => setShowAddPayment(true)} className={`bg-gradient-primary flex-1 sm:flex-none ${HEADER_PRIMARY_V2}`}>
+            <Button onClick={() => setShowAddPayment(true)} className={`bg-gradient-primary flex-1 sm:flex-none ${HEADER_PRIMARY_V2}`} data-tour="finances-record">
               <Plus className="h-4 w-4 mr-2" />
               Record Payment
             </Button>
@@ -414,7 +414,9 @@ export const InvoicesTab = ({
       {/* Invoices Table */}
       {!filteredInvoices || filteredInvoices.length === 0 || teachEmptyInvoices ? (
         teachEmptyInvoices ? (
-          <InvoicesTeachingEmptyState onCreateRental={() => router.push("/rentals/new")} />
+          <div data-tour="finances-empty">
+            <InvoicesTeachingEmptyState onCreateRental={() => router.push("/rentals/new")} />
+          </div>
         ) : (
         <EmptyState
           icon={FileText}

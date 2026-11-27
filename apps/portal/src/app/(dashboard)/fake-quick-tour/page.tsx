@@ -18,6 +18,10 @@ import { FAKE_QUICK_TOUR_TENANT, profileFromSearch, startFakeQuickTour } from "@
  *   /fake-quick-tour?call=booked         no Stripe, call booked
  *   /fake-quick-tour?stripe=connected    Stripe connected
  *   /fake-quick-tour?call=none           no call on offer
+ *   /fake-quick-tour?required=no         the closable replay (as from Help)
+ *
+ * By default it runs REQUIRED, as a company created after the required tour
+ * went live meets it: no close, no Skip, no Esc, only Back and Next.
  */
 
 const TOUR_ON_SCREEN = "[data-first-rental-tour], [data-tour-transit]";
@@ -39,6 +43,7 @@ export default function FakeQuickTourPage() {
     // `?stripe=connected` / `?call=booked|none` try the other versions of the
     // last card and the dashboard card. The default is a brand-new company.
     startFakeQuickTour(profileFromSearch(window.location.search));
+    const required = new URLSearchParams(window.location.search).get("required") !== "no";
     // The tour's listener attaches in the same commit as this page, and may
     // not be ready on the first try. Ask again until its card or its
     // "Heading to…" pill is on screen. Starting it navigates home, which
@@ -51,7 +56,7 @@ export default function FakeQuickTourPage() {
         return true;
       }
       tries += 1;
-      replayFirstRentalTour();
+      replayFirstRentalTour({ required });
       return false;
     };
     if (ask()) return;

@@ -404,7 +404,9 @@ export function StageExtras({ detail }: StageProps) {
       description="What rides along on top of the car — add-ons, and anyone else driving it."
       action={
         !canEdit && editable.data ? (
-          <StageAction icon={Lock} label="Locked" onClick={() => {}} disabledReason={editable.data.reason ?? null} />
+          <span data-tour="rental-stage-locked" className="inline-flex">
+            <StageAction icon={Lock} label="Locked" onClick={() => {}} disabledReason={editable.data.reason ?? null} />
+          </span>
         ) : null
       }
     >
@@ -414,7 +416,7 @@ export function StageExtras({ detail }: StageProps) {
       <div className="flex h-full min-h-0 flex-col gap-4 max-lg:h-auto">
         {/* ── add-ons ──────────────────────────────────────────────────────── */}
         <Surface className="relative flex min-h-0 flex-1 flex-col p-5">
-          <div className="flex items-center gap-2.5">
+          <div data-tour="rental-addons" className="flex items-center gap-2.5">
             <h3 className="font-heading text-sm font-semibold">Add-ons</h3>
             <span className="flex-1 text-xs text-muted-foreground">
               {canEdit ? "From your catalogue, priced as it stands today" : "Priced as they were on the day"}
@@ -532,7 +534,7 @@ export function StageExtras({ detail }: StageProps) {
 
         {/* ── additional drivers ───────────────────────────────────────────── */}
         <Surface className="flex min-h-0 flex-1 flex-col p-5">
-          <div className="flex items-center gap-2.5">
+          <div data-tour="rental-drivers" className="flex items-center gap-2.5">
             <h3 className="font-heading text-sm font-semibold">Additional drivers</h3>
             <span className="flex-1 text-xs text-muted-foreground">Each needs their own ID check and signature</span>
             {drivers && drivers.length > 0 && (
