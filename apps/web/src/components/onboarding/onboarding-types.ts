@@ -128,7 +128,9 @@ export const SIGNUP_ERROR_COPY: Record<SignupErrorCode, string> = {
   EMAIL_IS_CUSTOMER:
     "This email is already registered as a renter on a Drive247 booking site. Please use a different email address for your operator account.",
   EMAIL_IN_SIGNUP:
-    "You already started signing up with this email. Enter your password to pick up where you left off.",
+    // feat-001: since the 3-step signup, most people here never chose a
+    // password (that happens in the portal), so say how to get in without one.
+    "You already started signing up with this email. Enter your password, or if you haven't chosen one yet, tap \"Forgot password?\" and we'll email you a code.",
   EMAIL_EXISTS_SIGN_IN:
     "An account already exists for this email. Enter your password to continue, or use a different email address.",
   ALREADY_PROVISIONED: "Your portal is already set up.",

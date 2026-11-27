@@ -47,6 +47,7 @@ import {
   signupError,
 } from "../_shared/signup-state.ts";
 import { sendResendEmail } from "../_shared/resend-service.ts";
+import { PENDING_EMAIL, PENDING_PASSWORD } from "../_shared/signup-account-rules.ts";
 
 const LOG = "[signup-password-reset]";
 
@@ -671,6 +672,11 @@ Deno.serve(async (req) => {
     const { error: pwErr } = await admin.auth.admin.updateUserById(user.id, {
       password: newPassword,
       email_confirm: true,
+      // feat-001: the 3-step signup leaves both of these owed to the portal's
+      // window. A correct emailed code proves the inbox and this sets the
+      // password, so neither is owed any more. Without this the portal asked
+      // again for a password this person had just chosen.
+      app_metadata: { [PENDING_EMAIL]: false, [PENDING_PASSWORD]: false },
     });
     if (pwErr) {
       // The code is already spent — say so plainly rather than pretend it can
