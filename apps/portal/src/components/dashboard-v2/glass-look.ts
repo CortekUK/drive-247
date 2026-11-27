@@ -465,7 +465,8 @@ export const GLASS_PALETTE = `
      out: its panes sit straight on the room, as approved. */
   @media (min-width: 768px) {
     ${ROOT} .v2-theme main[data-scrollport]:not(:has(.pv)) {
-      margin: 0 10px 10px 0;
+      /* Left margin keeps the sheet clear of the sidebar pane. */
+      margin: 0 10px 10px 10px;
       padding-top: 18px;
       border-radius: 28px;
       border: 1px solid var(--lg-rim);
