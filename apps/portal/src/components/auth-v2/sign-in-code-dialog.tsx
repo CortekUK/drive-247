@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAppUserResult } from "@/stores/auth-store";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import { CodeInput } from "@/components/ui-v2/code-input";
@@ -106,7 +107,7 @@ export function SignInCodeDialog({
     setError("");
     setBusy(true);
     try {
-      const { error: codeError } = await supabase.auth.verifyOtp({
+      const { data: verified, error: codeError } = await supabase.auth.verifyOtp({
         type: "email",
         email: email.trim(),
         token: value.trim(),
@@ -121,6 +122,27 @@ export function SignInCodeDialog({
             : "That code didn't work, or it has expired. Check it, or ask for a new one.",
         );
         return;
+      }
+      // The same profile checks a password sign-in makes (auth-store signIn):
+      // without them a deactivated person, or one with no portal profile (a
+      // booking-site customer), was left signed in on the login page with no
+      // word of why (found testing step 6).
+      if (verified?.user) {
+        const profile = await fetchAppUserResult(verified.user);
+        if (profile.status === "unavailable") {
+          setError("We could not load your account just now. Please check your connection and try again.");
+          return;
+        }
+        if (profile.status === "absent") {
+          await supabase.auth.signOut({ scope: "local" });
+          setError("There is no portal account for this email. Ask your administrator to invite you.");
+          return;
+        }
+        if (!profile.appUser.is_super_admin && !profile.appUser.is_active) {
+          await supabase.auth.signOut({ scope: "local" });
+          setError("Your account has been deactivated. Please contact your system administrator.");
+          return;
+        }
       }
       // Signed in: the login page takes it from here.
       try {

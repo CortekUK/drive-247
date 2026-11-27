@@ -320,14 +320,28 @@ already sends staff a code rather than a link. New file:
 | Staff of another company → signed out, "This login belongs to a different company's portal" | ✅ |
 | Wait 60 s before another code, shown as a countdown | ✅ |
 | Phone, 360 wide, long email → no overflow, 44 px button | ✅ |
+| Bad email format → "Enter the email address you sign in with.", nothing sent | ✅ |
+| Email typed on the login carries into the window | ✅ |
+| Close and reopen → back to the email step, old error gone | ✅ |
+| "Use a different email" → back, address kept | ✅ |
+| After the 60 s wait, "Send a new code" sends once and the countdown restarts | ✅ |
+| Triple tap on "Email me a code" → one request | ✅ |
+| **Deactivated staff** → signed out, "Your account has been deactivated…" | ✅ after fix 3 |
+| **Login but no portal profile** (e.g. a booking customer) → signed out, "There is no portal account for this email…" | ✅ after fix 3 |
+| **Pasting "634 822", "634-822" or "Your code: 634822."** → the six digits | ✅ after fix 4 |
+| Dark mode: the login stays light, window readable | ✅ |
+| "Forgot password?" still opens its own window | ✅ |
+| **Old v1 login** (company `test`) → code signs in to the portal | ✅ |
 | Eval 05 (staging) | **4/4** |
 
 **Fixed while testing:**
 1. Supabase answers a mistyped code and an expired one with the same words, so a typo said "That code has expired". It now gives one message that covers both.
 2. Eval 05.2 failed because the email service refuses `@example.com` addresses, and our email hook then fails. That was the test, not the product. The eval now uses Resend's test inbox (`delivered+…@resend.dev`), which keeps nothing.
+3. **A deactivated person, or someone with no portal profile, was left signed in on the login page with no message.** The window now makes the same checks as a password sign-in: it signs them out and says why.
+4. **A code pasted with a space or dash filled nothing.** The code boxes now keep only the digits of what is pasted. This also fixes the other code boxes (profile, verify window, forgot password).
 
-**Not tested here:** the old v1 login screen live (it compiles, and the eval checks that it
-offers the window). Also, the real email arriving in a real inbox: that goes in the QA report.
+**Not tested here** (real phones, in the QA report): the real email arriving in a real inbox, the code being
+offered by the phone keyboard ("from Mail"), and a code past its expiry time (Supabase sets that; an hour is too long to wait here).
 
 ---
 

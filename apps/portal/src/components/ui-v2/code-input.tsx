@@ -43,6 +43,9 @@ export function CodeInput({
       disabled={disabled}
       autoFocus={autoFocus}
       pattern={REGEXP_ONLY_DIGITS}
+      // A code copied as "634 822" or "634-822" was refused whole by the digits
+      // pattern, leaving the boxes empty (feat-001 step 6). Keep the digits.
+      pasteTransformer={(pasted) => pasted.replace(/\D/g, "").slice(0, length)}
       inputMode="numeric"
       autoComplete="one-time-code"
       // Up to 6 × 44px + gaps (304px), but the boxes shrink to share a narrower

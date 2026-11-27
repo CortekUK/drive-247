@@ -75,7 +75,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * that looks like a transport problem is retried with backoff before we give up,
  * because giving up locks the user out of the product.
  */
-const fetchAppUserResult = async (
+export const fetchAppUserResult = async (
   authUser: User,
   attempts = 3
 ): Promise<ProfileResult> => {
