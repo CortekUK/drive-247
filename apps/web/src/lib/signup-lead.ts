@@ -114,6 +114,9 @@ export function inAppBrowser(ua: string | undefined = typeof navigator !== "unde
 
 function functionsUrl(): string | null {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  // Local testing only (scripts/dev-account-functions.ts), as in onboarding-api.ts.
+  const localFns = process.env.NODE_ENV === "development" ? process.env.NEXT_PUBLIC_SIGNUP_FUNCTIONS_URL : "";
+  if (localFns) return `${localFns.replace(/\/+$/, "")}/signup-lead`;
   return base ? `${base.replace(/\/$/, "")}/functions/v1/signup-lead` : null;
 }
 

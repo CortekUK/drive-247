@@ -344,7 +344,11 @@ async function requestOnce<T>(
 
   let response: Response;
   try {
-    response = await fetch(`${url}/functions/v1/${name}`, {
+    // Local testing only (scripts/dev-account-functions.ts): NEXT_PUBLIC_SIGNUP_FUNCTIONS_URL
+    // in apps/web/.env.local. NODE_ENV is "production" in every build, so this
+    // branch does not exist outside `next dev`. Same switch as the portal's.
+    const localFns = process.env.NODE_ENV === "development" ? process.env.NEXT_PUBLIC_SIGNUP_FUNCTIONS_URL : "";
+    response = await fetch(localFns ? `${localFns.replace(/\/+$/, "")}/${name}` : `${url}/functions/v1/${name}`, {
       method: "POST",
       headers: { ...headers, "Content-Type": "application/json" },
       body: JSON.stringify(body ?? {}),
