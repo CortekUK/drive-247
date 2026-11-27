@@ -33,6 +33,9 @@ statement("07.5", "A Google account already linked to another user is refused", 
 
 statement("07.6", "Disconnect Google is refused while there is no password", async () => {
   const u = await makeUser({ tag: "gonly", confirmed: true });
+  // A Google-only signup has no email identity. (Supabase stores a random
+  // password hash even for an account made without one, so the hash proves nothing.)
+  await sql(`delete from auth.identities where user_id = '${u.id}' and provider = 'email'`);
   await addGoogle(u.id, u.email);
   const token = await linkSignIn(u.email);
   equal((await check({ action: "unlink_google" }, token)).data?.code, "NO_PASSWORD", "code");

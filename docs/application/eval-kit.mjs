@@ -109,7 +109,9 @@ export async function rest(path, { method = "GET", body, as = "anon", headers = 
 
 /** Call an edge function. Returns { status, data }. */
 export async function fn(slug, body, { as = "anon", headers = {} } = {}) {
-  const res = await fetch(`${STAGING_URL}/functions/v1/${slug}`, {
+  // EVAL_FUNCTIONS_URL: run against a function served locally before it is deployed.
+  const base = process.env.EVAL_FUNCTIONS_URL || `${STAGING_URL}/functions/v1`;
+  const res = await fetch(`${base}/${slug}`, {
     method: "POST",
     headers: { ...headersFor(as), ...headers },
     body: JSON.stringify(body ?? {}),

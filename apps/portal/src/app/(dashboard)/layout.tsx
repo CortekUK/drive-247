@@ -62,6 +62,7 @@ import { FeedbackForcePrompt } from "@/components/feedback/feedback-force-prompt
 import { WelcomePackPrompt } from "@/components/welcome/welcome-pack-prompt";
 import { FirstRunWizard } from "@/components/onboarding/first-run-wizard";
 import { VerifyAccountDialogV2 } from "@/components/onboarding/verify-account-dialog-v2";
+import { GoogleLinkReturn } from "@/components/shared/layout/sign-in-methods-v2";
 import { FirstRunHandoffGate } from "@/components/onboarding/first-run-handoff-gate";
 import { LightUntilChosen } from "@/components/onboarding/light-until-chosen";
 import { FirstRentalTour } from "@/components/onboarding/first-rental-tour";
@@ -1042,6 +1043,8 @@ export default function DashboardLayout({
             questions above; can be closed until 72 hours after signup.
             Renders nothing for anyone else. */}
         <VerifyAccountDialogV2 suppressed={promptsSuppressed || fakeTourQuiet} />
+        {/* feat-001 spec 07: back from connecting Google. */}
+        <GoogleLinkReturn />
 
         {/* First-rental walkthrough — step 7, immediately after the wizard
             above. Eleven steps across six pages (dashboard, Vehicles,

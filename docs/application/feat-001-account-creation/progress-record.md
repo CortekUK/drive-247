@@ -24,7 +24,7 @@ specs (`specs/`).
 | 4 | Signup in 3 steps (About you → Business → Card) | **Done** (needs 2 Supabase settings to go live) | `3d349f6d` |
 | 5 | The verify-and-password window in the portal, reminder, 3-day block | **Done** (tested locally) | `545d1b3e` |
 | 6 | "Email me a sign-in code" on the portal login | **Done** (tested locally) | see step 6 |
-| 7 | Connect / disconnect Google in the profile | Not started | |
+| 7 | Connect / disconnect Google in the profile | **Done** (tested locally; needs deploy + 2 Supabase settings) | see step 7 |
 | 8 | Signups list: new step names | Not started | |
 | 9 | QA report on real phones, then the pull request | Not started | |
 
@@ -345,6 +345,58 @@ offered by the phone keyboard ("from Mail"), and a code past its expiry time (Su
 
 ---
 
+## Step 7 · Connect and disconnect Google in the profile
+
+**What it does.** The profile has a new **"Sign-in methods"** part. It shows "Email and password"
+(Set / No password yet) and "Google" (Connected with which email / Not connected), with
+**Connect Google**, **Disconnect** and **Set a password**.
+
+**How.**
+- A new edge function, **`account-identity-check`**, makes every decision on the server. Its actions are `status`, `check_google`, `unlink_google`, `email_changed` and `password_set`.
+- The rules sit in `_shared/account-identity-rules.ts`, a pure file tested on its own.
+- Connecting is Supabase's `linkIdentity`, a trip to Google and back. The portal checks the link on the way back, and again every time the profile opens.
+
+**Rules.**
+- **07.4:** a Google account with a different email is removed at once, with "This Google account uses a different email from your Drive247 account."
+- **07.5:** a Google account that belongs to another user is refused.
+- **07.6:** Disconnect is refused without a password: "Set a password first", and the password panel opens.
+- **07.9:** changing the email removes Google, and says so. With Google and no password, the email change is refused.
+- **07.10:** inside Instagram and Facebook, the buttons are replaced by "Open this page in your browser to change Google."
+
+**Found while building:** "has a password" can't be read from the database. Supabase stores a
+random password hash even for an account made without one. So:
+- an account **has a password** if it has an email sign-in identity (email signups and invited staff have one, Google-only signups do not), or if it set a password in the profile, which records a marker;
+- it **never** has one while its signup stand-in is still waiting to be replaced.
+
+**Tested locally** (the function served on this machine against staging, the portal in the browser):
+
+| Edge case | Result |
+|---|---|
+| Rules, unit test | **15/15** |
+| Eval 07 against the local function | **6/6** |
+| Profile shows "Email and password: Set" and "Google: Not connected" | ✅ |
+| Connect Google on staging → "Connecting Google is not switched on for this portal yet." | ✅ after fix 1 |
+| Google with the same email → "Connected (email)" | ✅ |
+| Disconnect with a password → removed, "Google disconnected" | ✅ |
+| Google with a different email → removed, with the message | ✅ |
+| Google-only, no password → "No password yet"; Disconnect refused, password panel opens | ✅ |
+| Google-only → changing the email refused, "Set a password first" | ✅ |
+| Set a password in the profile → "Set", and the password signs in | ✅ |
+| Change the email with Google + password → Google removed, toast says why | ✅ |
+| Inside Instagram (user agent) → buttons replaced by "Open this page in your browser…" | ✅ |
+| Phone 360 wide | ✅ after fix 2 |
+| Back from Google with "already linked to another user" → clear message, address cleaned | ✅ |
+| Back from Google, linked → "Google connected" | ✅ |
+
+**Fixed while testing:**
+1. On staging, Connect Google showed Supabase's raw "Unsupported provider: provider is not enabled". It now says it is not switched on yet.
+2. **The whole profile ran past the screen edge at 360 wide**, cutting off "Confirm change" and the Save button. This was already there before this step. The profile now fits a phone.
+
+**Not tested here:** Google's real sign-in page. The Google provider is off on staging, and
+so is "manual linking". Both are needed (question 9 below). Real Google goes in the QA report.
+
+---
+
 ## Waiting on Ghulam
 
 | # | Question | Why it matters |
@@ -357,6 +409,7 @@ offered by the phone keyboard ("from Mail"), and a code past its expiry time (Su
 | 6 | **OK to deploy** the signup functions to staging (steps 3–6 are ready; step 6 itself needs no deploy) | Staging is shared with Haris and Hamna |
 | 7 | **The new 7-card quick tour** (being built by someone else) should carry a mark like `data-first-rental-tour`, so the verify window can wait for it | The window reads the page to know a tour is showing |
 | 8 | **A code sign-in proves the email.** Someone who signs in with an emailed code has shown they own the inbox, yet the verify window still asks for a second code. Should the code sign-in clear "email not confirmed"? (needs a small server change) | One code instead of two for a person locked out before confirming |
+| 9 | **Google on staging**: turn on the Google provider and "manual linking" in Supabase Auth (staging now, production at the relay) | Without both, "Connect Google" cannot work |
 
 ---
 
@@ -364,9 +417,8 @@ offered by the phone keyboard ("from Mail"), and a code past its expiry time (Su
 
 | # | What | Size |
 |---|---|---|
-| 7 | Connect and disconnect Google in the profile | Medium–big |
 | 8 | Signups list in Super admin: new step names | Small |
-| – | Deploy steps 3–6 to staging together | Small |
+| – | Deploy steps 3–7 to staging together (step 7 adds `account-identity-check`) | Small |
 | 9 | QA report: section 4 on a real iPhone, Android, inside Instagram and Facebook, then a laptop; Stripe dashboard check | Big |
 | – | Pull request from `ray2` | Small |
 

@@ -43,7 +43,10 @@ None. Links are `auth.identities` rows.
 - New `account-identity-check` (JWT required): after the Google redirect, compares the linked
   identity's email with the account email; on a mismatch it unlinks it at once and returns
   `GOOGLE_EMAIL_MISMATCH`. Also `unlink` with the 07.6 check. Errors: `GOOGLE_EMAIL_MISMATCH`,
-  `IDENTITY_IN_USE`, `NO_PASSWORD`, `LAST_METHOD`.
+  `IDENTITY_IN_USE`, `NO_PASSWORD`, `NOT_LINKED`. Also `status` (07.1) and `password_set` (07.2).
+- "Has a password" = an `email` identity, or the `d247_password_set` marker the profile sets, and
+  never while `d247_signup_password_pending` is on. Supabase stores a random hash even for an
+  account made without a password, so `encrypted_password` proves nothing.
 
 ## Screens
 

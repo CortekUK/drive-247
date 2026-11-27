@@ -21,6 +21,8 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { AvatarCropDialogV2 } from "./avatar-crop-dialog-v2";
 import { PasswordChangePanelV2 } from "./password-change-panel-v2";
+import { SignInMethodsV2, useSignInMethods } from "./sign-in-methods-v2";
+import { callAccountFn } from "@/lib/account-functions";
 
 /**
  * The v2 profile — photo, display name, email and password, in a centred
@@ -103,6 +105,8 @@ export function ProfileSheetV2({
   const [verifyingEmail, setVerifyingEmail] = useState(false);
 
   const [showPassword, setShowPassword] = useState(false);
+  // feat-001 spec 07: how this account signs in, checked on the server.
+  const { methods, failed: methodsFailed, refresh: refreshMethods } = useSignInMethods(open && !appUser?.is_super_admin);
 
   const [uploading, setUploading] = useState(false);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
@@ -284,6 +288,19 @@ export function ProfileSheetV2({
       return;
     }
 
+    // 07.9: a new email ends the Google link (Google still carries the old
+    // address), so an account with Google and no password would be left with
+    // no way in. The server refuses this too, after the change.
+    if (methods?.google !== null && methods?.google !== undefined && !methods.password) {
+      toast({
+        title: "Set a password first",
+        description: "Changing your email disconnects Google, so you need a password to sign in with.",
+        variant: "destructive",
+      });
+      setShowPassword(true);
+      return;
+    }
+
     setSavingEmail(true);
     try {
       // Supabase emails a code to the new address. Nothing changes until it
@@ -329,7 +346,15 @@ export function ProfileSheetV2({
       useAuthStore.setState({ appUser: { ...appUser, email: confirmed } });
       setEmail(confirmed);
       resetEmailChange();
-      toast({ title: "Email updated", description: `You now sign in with ${confirmed}.` });
+      // 07.9: Google goes with the old address.
+      const moved = await callAccountFn("account-identity-check", { action: "email_changed", newEmail: confirmed });
+      void refreshMethods();
+      toast({
+        title: "Email updated",
+        description: moved.googleRemoved
+          ? `You now sign in with ${confirmed}. Google was disconnected because your email changed; connect it again with a Google account on the new address.`
+          : `You now sign in with ${confirmed}.`,
+      });
     } catch (error: any) {
       toast({
         title: "Couldn't confirm your email",
@@ -383,6 +408,10 @@ export function ProfileSheetV2({
         useAuthStore.setState({ appUser: { ...appUser, must_change_password: false } });
       }
 
+      // 07.2: a Google-only account now has a password too.
+      await callAccountFn("account-identity-check", { action: "password_set" });
+      void refreshMethods();
+
       toast({ title: "Password updated", description: "Your new password is live." });
       setShowPassword(false);
       return null;
@@ -401,7 +430,7 @@ export function ProfileSheetV2({
         {/* `max-h` + `overflow-y-auto` so a small laptop screen still reaches
             the password section rather than clipping it. */}
         <DialogContent
-          className="max-h-[90vh] overflow-y-auto sm:max-w-lg"
+          className="max-h-[90vh] grid-cols-[minmax(0,1fr)] overflow-y-auto sm:max-w-lg max-sm:px-5"
           data-testid="profile-sheet"
         >
           <DialogHeader>
@@ -411,7 +440,7 @@ export function ProfileSheetV2({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid w-full gap-6">
+          <div className="grid w-full grid-cols-[minmax(0,1fr)] gap-6">
             {/* Photo — the avatar itself is the control: hover shows a camera,
                 click picks a file. No separate "Change photo" button. */}
             <div className="flex items-center">
@@ -462,6 +491,7 @@ export function ProfileSheetV2({
               <div className="flex gap-2">
                 <Input
                   id="profile-name"
+                  className="min-w-0"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -484,6 +514,7 @@ export function ProfileSheetV2({
               <div className="flex gap-2">
                 <Input
                   id="profile-email"
+                  className="min-w-0"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -541,6 +572,16 @@ export function ProfileSheetV2({
                 </p>
               )}
             </div>
+
+            {/* Sign-in methods (feat-001 spec 07) */}
+            {!appUser.is_super_admin && (
+              <SignInMethodsV2
+                methods={methods}
+                failed={methodsFailed}
+                onChanged={() => void refreshMethods()}
+                onSetPassword={() => setShowPassword(true)}
+              />
+            )}
 
             {/* Password */}
             {!appUser.is_super_admin && (

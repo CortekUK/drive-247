@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Loader2, Mail } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
+import { callAccountFn, type AccountAnswer } from "@/lib/account-functions";
 import { useAuth } from "@/stores/auth-store";
 import { useFirstRunWizard } from "@/hooks/use-first-run-wizard";
 import { Button } from "@/components/ui-v2/button";
@@ -61,41 +62,8 @@ function useTourOnScreen(): boolean {
   return onScreen;
 }
 
-type Answer = { ok?: boolean; code?: string; error?: string; attemptsRemaining?: number; retryAfterSeconds?: number; email?: string; delivered?: boolean };
-
-/**
- * Local testing only: `NEXT_PUBLIC_SIGNUP_FUNCTIONS_URL` in apps/portal/.env.local
- * points these two calls at functions served on this machine (Deno), so the
- * window can be tested before anything is deployed. `NODE_ENV` folds to
- * "production" in every build, so this branch does not exist outside `next dev`.
- */
-const LOCAL_FUNCTIONS_URL =
-  process.env.NODE_ENV === "development" ? process.env.NEXT_PUBLIC_SIGNUP_FUNCTIONS_URL || "" : "";
-
-/** Calls one of the two signup functions and returns its JSON, even on a refusal. */
-async function callSignupFn(name: "signup-verify-email" | "signup-set-password", body: Record<string, unknown>): Promise<Answer> {
-  if (LOCAL_FUNCTIONS_URL) {
-    const { data: s } = await supabase.auth.getSession();
-    const res = await fetch(`${LOCAL_FUNCTIONS_URL.replace(/\/+$/, "")}/${name}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.session?.access_token ?? ""}` },
-      body: JSON.stringify(body),
-    }).catch(() => null);
-    if (!res) return { ok: false, code: "UNAVAILABLE", error: "Could not reach the local functions." };
-    return (await res.json().catch(() => ({ ok: false, code: "UNAVAILABLE" }))) as Answer;
-  }
-  const { data, error } = await supabase.functions.invoke(name, { body });
-  if (!error) return (data ?? {}) as Answer;
-  const response = (error as { context?: Response }).context;
-  if (response && typeof response.json === "function") {
-    try {
-      return (await response.clone().json()) as Answer;
-    } catch {
-      /* not JSON */
-    }
-  }
-  return { ok: false, code: "UNAVAILABLE", error: "Something went wrong. Please try again." };
-}
+type Answer = AccountAnswer;
+const callSignupFn = (name: "signup-verify-email" | "signup-set-password", body: Record<string, unknown>) => callAccountFn(name, body);
 
 export function VerifyAccountDialogV2({ suppressed = false }: { suppressed?: boolean }) {
   const { user } = useAuth();
