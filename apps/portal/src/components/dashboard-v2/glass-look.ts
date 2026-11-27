@@ -513,6 +513,16 @@ export const GLASS_PALETTE = `
       color-mix(in oklab, var(--lg-accent) 12%, rgb(18 19 34)));
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 18px 36px -14px rgb(0 0 0 / 0.7);
   }
+  /* Seven buttons at full size need 350px, wider than a 360 to 375 phone
+     leaves, so the last one hit the edge. They shrink with the screen instead. */
+  ${ROOT} body [data-record-dock][data-record-dock] > nav[aria-label] :is(a, button)[class]:not([class~="bg-primary"]) {
+    width: clamp(34px, 10.4vw, 44px);
+    height: clamp(34px, 10.4vw, 44px);
+  }
+  ${ROOT} body [data-record-dock][data-record-dock] > nav[aria-label] button[class~="bg-primary"] {
+    width: clamp(42px, 11.6vw, 48px);
+    height: clamp(42px, 11.6vw, 48px);
+  }
   /* Its icon buttons carry active:bg-foreground/10, which the status chip
      rule below would otherwise paint as a grey disc. */
   ${ROOT} .v2-theme main [data-record-dock][data-record-dock] nav[aria-label] :is(a, button)[class]:not([class~="bg-primary"]) {
