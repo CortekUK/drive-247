@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -70,9 +70,14 @@ export function SignInMethodsV2({
   onSetPassword: () => void;
 }) {
   const [busy, setBusy] = useState<"connect" | "disconnect" | null>(null);
+  // `busy` disables the buttons only after a redraw; quick taps landed first
+  // and sent the request three times (found testing step 7).
+  const working = useRef(false);
   const inApp = isInAppBrowser();
 
   const connect = async () => {
+    if (working.current) return;
+    working.current = true;
     setBusy("connect");
     const url = new URL(window.location.href);
     url.searchParams.set(RETURN_FLAG, "1");
@@ -82,6 +87,7 @@ export function SignInMethodsV2({
     });
     // On success the browser is already on its way to Google.
     if (error) {
+      working.current = false;
       setBusy(null);
       toast({
         title: "Couldn't connect Google",
@@ -95,8 +101,11 @@ export function SignInMethodsV2({
   };
 
   const disconnect = async () => {
+    if (working.current) return;
+    working.current = true;
     setBusy("disconnect");
     const r: AccountAnswer = await callAccountFn("account-identity-check", { action: "unlink_google" });
+    working.current = false;
     setBusy(null);
     if (r.ok) {
       toast({ title: "Google disconnected", description: "You now sign in with your email and password." });

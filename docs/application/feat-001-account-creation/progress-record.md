@@ -392,6 +392,35 @@ random password hash even for an account made without one. So:
 1. On staging, Connect Google showed Supabase's raw "Unsupported provider: provider is not enabled". It now says it is not switched on yet.
 2. **The whole profile ran past the screen edge at 360 wide**, cutting off "Confirm change" and the Save button. This was already there before this step. The profile now fits a phone.
 
+
+**Second round of edge cases (all local, against staging):**
+
+| Edge case | Result |
+|---|---|
+| Server: no sign-in, or a bad token → 401 | ✅ |
+| Server: unknown action → 400 | ✅ |
+| Same Google email in other capitals / with spaces → kept | ✅ |
+| Email held by another user, asked in other capitals → refused | ✅ |
+| An email that looks like SQL → harmless | ✅ |
+| Google with no email at all → removed | ✅ |
+| Two Google links, one wrong → only the wrong one removed | ✅ |
+| Signup still waiting to choose a password → counts as "no password"; Disconnect and email change refused | ✅ |
+| Disconnect with nothing linked → "Google is not connected" | ✅ |
+| **Triple tap on Disconnect → one request** | ✅ after fix 3 |
+| Facebook's in-app browser → buttons replaced by the note | ✅ |
+| Back from Google with a different email → refused with the message | ✅ |
+| Function unreachable → "We couldn't load your sign-in methods just now", rest of profile works | ✅ |
+| Dark mode readable | ✅ |
+| Step 5 window still works (its helper moved to `lib/account-functions.ts`) | ✅ |
+| Super admin → section hidden | checked in the code only |
+
+3. **Three quick taps on Disconnect sent three requests**, so the 2nd and 3rd showed a false "Google is not connected". Now one tap counts until the answer comes back (also on Connect).
+
+**Known gap (small):** if the sign-in methods can't load and someone with Google and no
+password changes their email, the change goes through. The server then keeps Google, and the
+next check removes it because the emails differ. They can still get in with "Email me a sign-in
+code" (step 6).
+
 **Not tested here:** Google's real sign-in page. The Google provider is off on staging, and
 so is "manual linking". Both are needed (question 9 below). Real Google goes in the QA report.
 
