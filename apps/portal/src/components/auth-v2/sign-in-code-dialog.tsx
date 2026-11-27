@@ -201,6 +201,7 @@ export function SignInCodeDialog({
               <Label htmlFor="code-digits">Six-digit code</Label>
               <CodeInput
                 id="code-digits"
+                className="mx-auto"
                 value={code}
                 onChange={setCode}
                 onComplete={(v) => void checkCode(v)}

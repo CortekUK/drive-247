@@ -515,6 +515,27 @@ Signup on localhost against the changed functions served locally, staging data, 
 
 ---
 
+### Phone layout (360 and 430 wide, in Chrome)
+
+| Screen | Result |
+|---|---|
+| Signup: About you | ✅ centred, no sideways scroll, "Sign up" 44px and visible without scrolling, inputs 17px (no iPhone zoom) |
+| Signup: Business | ✅ fits; "Continue" visible without scrolling |
+| Signup: card step | ✅ fits (decorative glows are clipped, no scroll) |
+| Portal login | ✅ fits; "Sign In" visible without scrolling |
+| Sign-in code window | ✅ 16px margins, 44px button. **Fixed:** the six code boxes now sit centred (they were pinned left at 430) |
+| Verify window | ✅ 16px margins, nothing outside. **Fixed:** code boxes centred, as above |
+| "Email me a sign-in code" link | **Fixed:** 29px tall, now 44px on phones |
+| Profile | ✅ (checked at 360 in step 7, when it was fixed) |
+
+**Small things on the signup screens, for Ghulam** (the guide says those screens are not to be redesigned, only tested):
+- **Phone is required but has no `*`** (Name and Email have one).
+- Small tap targets on the business step: colour dots 24×24, Light/Dark 34×28, **terms box 16×16**, suggested addresses and "Back" about 20px tall. "Already started? Sign in" is 20px tall.
+- A restored draft shows the phone as "+15550100102" rather than as typed.
+- The dialogs' close (✕) button is 32px.
+
+---
+
 ## Waiting on Ghulam
 
 | # | Question | Why it matters |

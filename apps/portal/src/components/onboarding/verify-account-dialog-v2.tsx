@@ -281,7 +281,7 @@ export function VerifyAccountDialogV2({ suppressed = false }: { suppressed?: boo
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <CodeInput id="verify-code" value={code} onChange={setCode} onComplete={(v) => void verify(v)} disabled={busy} autoFocus />
+              <CodeInput id="verify-code" className="mx-auto" value={code} onChange={setCode} onComplete={(v) => void verify(v)} disabled={busy} autoFocus />
               {message && (
                 <p role={message.tone === "error" ? "alert" : "status"} className={message.tone === "error" ? "text-[13px] text-destructive" : "text-[13px] text-muted-foreground"}>
                   {message.text}

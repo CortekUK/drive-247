@@ -720,7 +720,7 @@ function LoginV2Content() {
                 <Button
                   type="button"
                   variant="link"
-                  className="-mt-2 h-auto px-0 py-1 text-sm"
+                  className="-mt-2 h-auto px-0 py-1 text-sm max-sm:min-h-11"
                   style={{ color: ink }}
                   onClick={() => { setError(""); setCodeOpen(true); }}
                   disabled={isSubmitting}
