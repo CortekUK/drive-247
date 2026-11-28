@@ -418,6 +418,20 @@ export function OnboardingScreen() {
     return out;
   }, [planSwitchBlocked, plan]);
 
+// The page behind the signup keeps its own scrollbar while the signup is open.
+  // A dropdown (Radix Select) hides it on open, the full-screen signup grew by
+  // its width and the screen jumped sideways (Hamza, 28 Nov). Hide the page's
+  // scrollbar for as long as the signup is open, so a dropdown changes nothing.
+  useEffect(() => {
+    if (!open) return;
+    const root = document.documentElement;
+    const before = root.style.overflow;
+    root.style.overflow = "hidden";
+    return () => {
+      root.style.overflow = before;
+    };
+  }, [open]);
+
   if (!plan || !dialogStep) return null;
 
   const paging = dialogStep === "account" && step !== "verify" && !state.signInPrompt && accountMode === "create";
@@ -446,20 +460,6 @@ export function OnboardingScreen() {
   // this wrapper by page would remount the step and throw away everything
   // typed on the pages before.
   const screenKey = exitOffer ? "offer" : step;
-
-  // The page behind the signup keeps its own scrollbar while the signup is open.
-  // A dropdown (Radix Select) hides it on open, the full-screen signup grew by
-  // its width and the screen jumped sideways (Hamza, 28 Nov). Hide the page's
-  // scrollbar for as long as the signup is open, so a dropdown changes nothing.
-  useEffect(() => {
-    if (!open) return;
-    const root = document.documentElement;
-    const before = root.style.overflow;
-    root.style.overflow = "hidden";
-    return () => {
-      root.style.overflow = before;
-    };
-  }, [open]);
 
   return (
     <DialogPrimitive.Root
