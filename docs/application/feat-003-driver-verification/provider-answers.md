@@ -73,3 +73,14 @@ such as `approve`, `decline_document_expired`, `decline_minimum_age`,
 | A6 | One account for many companies | Allowed; Drive247 is the permissible-purpose user and keeps each company's consent record | spec 06.11 |
 | A7 | Async check accepted then `failed` | Not charged (only `complete` is charged) | spec 09.7 |
 | A8 | Forcing RentID outcomes in tests | Recorded answers fed to the result handler | spec 08 Proof |
+
+## Didit account (set up 28 Nov 2026)
+
+- Sandbox application under Neema's Cortek Gmail. Workflow **Basic KYC** (`d11038b4-602c-45ef-a280-8d9e353e3824`),
+  published: ID verification (passport and driver's licence), passive liveness, face match, device and IP. $0.33 per
+  completed session live, free in the sandbox.
+- Staging secrets set: `DIDIT_WEBHOOK_SECRET`, `DIDIT_WORKFLOW_ID`. `DIDIT_API_KEY` still to come.
+- Didit's own integration notes, which correct spec 07.6 and 07.10: check freshness against the **signed body
+  `timestamp`**, never the `X-Timestamp` header; de-duplicate on `event_id`; canonicalise as
+  shortenFloats → sortKeys → `JSON.stringify`. Balance: `GET /v3/billing/balance/`. Webhook destinations can be
+  listed with `GET /v3/webhook/destinations/` (used to confirm the URL points at staging).

@@ -20,11 +20,11 @@ customer. Facts about Didit are from `provider-answers.md`; each must be proved 
 
 **Receiving the result**
 
-- **07.6** `verification-v2-didit-webhook` refuses with 401 a request whose `X-Signature-V2` is not the HMAC-SHA256, keyed with `DIDIT_WEBHOOK_SECRET`, of the body as canonical JSON (keys sorted, compact), or whose `X-Timestamp` is more than 300 seconds from now.
+- **07.6** `verification-v2-didit-webhook` refuses with 401 a request whose `X-Signature-V2` is not the HMAC-SHA256, keyed with `DIDIT_WEBHOOK_SECRET`, of the body canonicalised as Didit does it (whole-number floats to integers, keys sorted recursively, `JSON.stringify` with Unicode unescaped), compared in constant time, or whose **signed body field `timestamp`** is more than 300 seconds from now. The unsigned `X-Timestamp` header is never used for freshness, because a replayed body could carry a fresh one.
 - **07.7** The webhook never trusts its body as the result. It finds our session by `vendor_data`, checks the Didit session id matches, then fetches `GET /v3/session/{id}/decision/` and uses that.
 - **07.8** The company comes from our own session row, never from a field in the webhook.
 - **07.9** A webhook for a session that is already finished, replaced or cancelled changes nothing and returns 200.
-- **07.10** The same webhook delivered twice gives one result and one set of moments.
+- **07.10** The same webhook delivered twice gives one result and one set of moments. Deliveries are de-duplicated on Didit's `event_id`, which every retry keeps.
 - **07.11** The sweep (spec 05) fetches the decision for every session `in_progress` for more than 3 minutes with a Didit session and no result, so a lost webhook never leaves a customer on In progress.
 
 **The ten lines** (each line is `{ check, result, reason }` in the standard check's `lines`)
