@@ -56,6 +56,8 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { BILLING_READ_ONLY_COPY } from "@/components/settings-v2/billing-states-v2";
 import { useIntegrationBilling, useInvoiceLines } from "@/lib/integration-billing/hooks";
 import { NextInvoiceCard } from "@/components/integration-billing/next-invoice-card";
+import { VerificationUsageCard } from "@/components/verification-v2/verification-usage-card";
+import { useV2 } from "@/lib/v2-context";
 
 /**
  * Billing, v2 (v2-chrome tenants only — the route picks this or the untouched
@@ -175,7 +177,8 @@ export function BillingPageV2() {
     : savedCards.map((c, i) => ({ ...c, id: `${c.last4}-${i}`, name: holder }));
   const primaryCard = wallet.find((c) => c.isPrimary) ?? wallet[0] ?? null;
 
-  /* Integration billing: the bill is shown line by line. Never against sample data. */
+  /* Integration billing: the bill is shown line by line. Never against sample data. */
+  const verificationV2 = useV2("verification");
   const lineByLine = useIntegrationBilling() && !previewActive;
   const viewingLines = useInvoiceLines(lineByLine ? viewingInvoice?.stripe_invoice_id : null);
 
@@ -578,6 +581,9 @@ export function BillingPageV2() {
 
       <div className="space-y-8 [&:not(:empty)]:mt-8">
         {lineByLine && <NextInvoiceCard />}
+
+        {/* feat-003: this month's verification checks (spec 10.15). */}
+        {verificationV2 && <VerificationUsageCard />}
 
         {invoiceViewer}
 

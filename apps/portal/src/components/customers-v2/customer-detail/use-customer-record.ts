@@ -64,6 +64,7 @@ const CUSTOMER_COLUMNS = `
   address_street, address_city, address_state, address_zip,
   customer_type, company_name, company_registration,
   license_number, license_state, id_number, is_gig_driver,
+  licence_expiry_date, identity_details_source,
   nok_full_name, nok_relationship, nok_phone, nok_email, nok_address,
   is_blocked, blocked_at, blocked_reason,
   rejection_reason, rejected_at,
@@ -589,7 +590,8 @@ export function useCustomerRecord(id: string) {
         state: s(row.license_state) || s(cmdLicense?.licenseState),
         idNumber: s(row.id_number),
         issued: v?.document_issuing_date ?? null,
-        expiry: v?.document_expiry_date ?? cmdLicense?.licenseExpiryDate ?? null,
+        expiry: row.licence_expiry_date ?? v?.document_expiry_date ?? cmdLicense?.licenseExpiryDate ?? null,
+        source: row.identity_details_source === "typed" || row.identity_details_source === "verified" ? row.identity_details_source : null,
         isGigDriver: !!row.is_gig_driver,
         gigProofs: (gigQ.data || []).map((g: any) => ({
           id: g.id,

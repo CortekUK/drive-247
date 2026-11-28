@@ -1,0 +1,46 @@
+// feat-003 (spec 02.5): the v2 add-customer schema. A fork of customer-form-modal.ts, which the v1 modal
+// keeps using unchanged. The one difference: email and phone are both optional, because adding a customer
+// no longer sends anything (D1); the Verify dialog offers "show a code" and "copy the link" without either.
+import { z } from "zod";
+
+export const customerFormSchemaV2 = z.object({
+  // Individual (default) or Company. For a Company, `name` is the contact person
+  // and the business details live in the company_* fields below.
+  customer_type: z.enum(['Individual', 'Company']).optional(),
+  company_name: z.string().optional(),
+  company_registration: z.string().optional(),
+  name: z.string()
+    .min(1, "Name is required")
+    .refine((val) => !/\d/.test(val), "Name cannot contain numbers"),
+  email: z.string().email("Invalid email format").optional().or(z.literal("")),
+  phone: z.string()
+    .optional()
+    .refine((val) => !val || /^[0-9\s\-\(\)\+]+$/.test(val), "Phone number can only contain numbers and formatting characters"),
+  date_of_birth: z.string().optional(),
+  license_number: z.string().optional(),
+  id_number: z.string().optional(),
+  is_gig_driver: z.boolean(),
+  status: z.enum(['Active', 'Inactive']),
+  notes: z.string().optional(),
+  nok_full_name: z.string()
+    .optional()
+    .refine((val) => !val || !/\d/.test(val), "Name cannot contain numbers"),
+  nok_relationship: z.string()
+    .optional()
+    .refine((val) => !val || /^[a-zA-Z\s]+$/.test(val), "Relationship can only contain letters"),
+  nok_phone: z.string()
+    .optional()
+    .refine((val) => !val || /^[0-9\s\-\(\)\+]+$/.test(val), "Phone number can only contain numbers and formatting characters"),
+  nok_email: z.string().email("Invalid email format").optional().or(z.literal("")),
+  nok_address: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.customer_type === 'Company' && !data.company_name?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Company name is required",
+      path: ["company_name"],
+    });
+  }
+});
+
+export type CustomerFormValuesV2 = z.infer<typeof customerFormSchemaV2>;

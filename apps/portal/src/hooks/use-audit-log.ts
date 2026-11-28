@@ -24,6 +24,7 @@ export type AuditAction =
   // Customer actions
   | "customer_created"
   | "customer_updated"
+  | "customer_details_typed"
   | "customer_deleted"
   | "customer_blocked"
   | "customer_unblocked"

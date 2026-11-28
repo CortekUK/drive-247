@@ -34,6 +34,9 @@ import { useAuditLog } from "@/hooks/use-audit-log";
 import { useResendCmdLink, type CmdChannel } from "@/hooks/use-cmd-verification";
 import { Button } from "@/components/ui-v2/button";
 import { StartVerificationDialog } from "@/components/customers/start-verification-dialog";
+import { VerifyDialogV2 } from "@/components/verification-v2/verify-dialog-v2";
+import { VerificationPanel } from "@/components/verification-v2/verification-panel";
+import { useV2 } from "@/lib/v2-context";
 import { currentBaseline } from "./derive";
 import {
   EmptyHint,
@@ -76,6 +79,8 @@ const CHANNEL_ICON: Record<string, ComponentType<{ className?: string }>> = {
 export function SectionVerification({ c, onJump, canEdit, drift }: SectionProps & { drift: Drift[] }) {
   const [provider, setProvider] = useState<"ai" | "cmd">(c.cmd.present && !c.ai.extracted ? "cmd" : "ai");
   const [startOpen, setStartOpen] = useState(false);
+  // feat-003: Northwind sends checks through the new module (spec 03.7).
+  const verificationV2 = useV2("verification");
   const { logAction } = useAuditLog();
   const { tenant } = useTenant();
   const { toast } = useToast();
@@ -154,6 +159,14 @@ export function SectionVerification({ c, onJump, canEdit, drift }: SectionProps 
           Licence &amp; driving
         </button>
       </p>
+
+      {verificationV2 && (
+        <VerificationPanel
+          customerId={c.id}
+          customerName={c.identity.name}
+          canEdit={canEdit}
+        />
+      )}
 
       {stale && (
         <OutOfDateBanner
@@ -447,12 +460,18 @@ export function SectionVerification({ c, onJump, canEdit, drift }: SectionProps 
         </>
       )}
 
-      <StartVerificationDialog
-        open={startOpen}
-        onOpenChange={setStartOpen}
-        customerId={c.id}
-        customerName={c.identity.name}
-      />
+      {verificationV2 ? (
+        startOpen && (
+          <VerifyDialogV2 open={startOpen} onOpenChange={setStartOpen} customerId={c.id} customerName={c.identity.name} />
+        )
+      ) : (
+        <StartVerificationDialog
+          open={startOpen}
+          onOpenChange={setStartOpen}
+          customerId={c.id}
+          customerName={c.identity.name}
+        />
+      )}
     </Panel>
   );
 }

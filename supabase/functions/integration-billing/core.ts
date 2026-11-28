@@ -643,6 +643,18 @@ async function upcoming(ctx: OperatorContext, deps: IntegrationBillingDeps): Pro
       lines = (await stripe.invoices.listUpcomingLines({ subscription: plan.stripe_subscription_id, limit: 100 }))?.data ?? lines;
     }
     const summary: InvoiceSummaryV2 = summarizeInvoice(invoice, lines);
+    // feat-003 (spec 10.13, 10.14): the free standard checks of this period, from our own tables.
+    try {
+      const since = toIso(invoice?.period_start); // the start of the period this bill covers
+      if (since) {
+        const { count } = await deps.db.from('verification_session_checks').select('id', { count: 'exact', head: true })
+          .eq('tenant_id', ctx.tenant.id).eq('service_key', 'standard')
+          .in('result', ['pass', 'fail', 'could_not_check']).gte('finished_at', since);
+        if (count && count > 0) {
+          summary.lines.push({ kind: 'verification', label: `Standard check, ${count} check${count === 1 ? '' : 's'} · Free`, amount: 0 });
+        }
+      }
+    } catch { /* the table is not on this database yet: show the bill without the line */ }
     const date =
       (plan.status === 'trialing' ? plan.trial_end : null) ??
       plan.current_period_end ??

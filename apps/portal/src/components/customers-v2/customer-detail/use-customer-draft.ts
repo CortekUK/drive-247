@@ -34,6 +34,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hviqoaokxv
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/use-audit-log";
 import type { EditableColumn } from "./types";
 import { patchProblems, type Problem } from "./customer-patch-rules";
 
@@ -58,6 +59,7 @@ export function useCustomerDraft(id: string) {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { logAction } = useAuditLog();
 
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -115,6 +117,10 @@ export function useCustomerDraft(id: string) {
       if (Object.keys(patch).length === 0) return;
     }
 
+    // feat-003 (D4, spec 02.8, 02.13): details typed by hand are marked "typed, not verified".
+    const typedFields = ["date_of_birth", "license_number", "license_state", "licence_expiry_date"].filter((k) => k in patch);
+    if (typedFields.length) (patch as Record<string, unknown>).identity_details_source = "typed";
+
     setSaving(true);
     const { error } = await (supabase as any)
       .from("customers")
@@ -137,6 +143,9 @@ export function useCustomerDraft(id: string) {
     }
 
     setSavedAt(Date.now());
+    if (typedFields.length) {
+      logAction({ action: "customer_details_typed", entityType: "customer", entityId: id, details: { fields: typedFields } }); // spec 02.14
+    }
     // Other screens read this customer through the v1 keys. They are not
     // invalidated on every keystroke — only once a write actually lands.
     queryClient.invalidateQueries({ queryKey: ["customer", id] });

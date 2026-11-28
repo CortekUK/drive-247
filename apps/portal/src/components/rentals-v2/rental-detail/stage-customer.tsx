@@ -70,6 +70,8 @@ import { RentalReviewDialog } from "@/components/reviews/rental-review-dialog";
 import type { StageProps } from "./stages";
 import { CustomerPicker, useCustomerSwitchable } from "./customer-picker";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useV2 } from "@/lib/v2-context";
+import { RentalVerificationNotice } from "@/components/verification-v2/rental-verification-notice";
 import {
   StageAction,
   cardCls,
@@ -387,6 +389,7 @@ export function StageCustomer({ detail, refetch }: StageProps) {
   const { canEdit } = useManagerPermissions();
   const canWrite = canEdit("rentals");
   const customer = detail.customer;
+  const verificationV2 = useV2("verification");
   const customerId = customer?.id ?? null;
 
   const [reviewsOpen, setReviewsOpen] = useState(false);
@@ -719,6 +722,13 @@ export function StageCustomer({ detail, refetch }: StageProps) {
               />
             )}
           </div>
+
+          {/* feat-003: the customer's check against this rental's return date (spec 11.1 to 11.4). */}
+          {verificationV2 && (
+            <span onClick={(e) => e.stopPropagation()} className="mt-3 block">
+              <RentalVerificationNotice customerId={customer?.id} returnDate={detail.rental.end_date} />
+            </span>
+          )}
 
           {/* The documents ARE the card. Real proportions: a licence is an
               ID-1 card (85.6 × 54mm, so 1.586:1) and a selfie is square; the

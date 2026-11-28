@@ -13,7 +13,14 @@
  */
 import { integrationByKey, keyFromProductId, productNameFor } from './catalog.ts';
 
-export type InvoiceLineKind = 'platform' | 'integration' | 'integration_credit' | 'usage' | 'discount' | 'tax' | 'other';
+export type InvoiceLineKind = 'platform' | 'integration' | 'integration_credit' | 'usage' | 'verification' | 'discount' | 'tax' | 'other';
+
+/** feat-003: premium verification checks, put on the bill by _shared/verification/billing.ts (spec 10.12). */
+const VERIFICATION_NAMES: Record<string, string> = {
+  licence_status: 'Licence active with the state',
+  driving_record: 'Driving record',
+  criminal_record: 'Criminal record',
+};
 
 export interface InvoiceLineV2 {
   kind: InvoiceLineKind;
@@ -54,6 +61,12 @@ export function labelInvoiceLine(line: Any): InvoiceLineV2 | null {
   const key = integrationKeyOf(line);
   const info = key ? integrationByKey(key) : null;
 
+  // feat-003: one premium verification check (spec 10.12). Grouped by check in summarizeInvoice.
+  if (line?.metadata?.d247_kind === 'verification_check') {
+    const service = String(line?.metadata?.service_key ?? '');
+    return { kind: 'verification', label: VERIFICATION_NAMES[service] ?? 'Verification check', amount };
+  }
+
   // Our own one-off credit for a free first month (D7).
   if (line?.metadata?.d247_kind === 'first_month_free' && info) {
     return { kind: 'integration_credit', label: `${productNameFor(info)}: first month free`, amount, integrationKey: info.key };
@@ -81,7 +94,17 @@ const sumAmounts = (list: Any): number =>
 /** The whole invoice, labelled. `lines` defaults to the invoice's own first page. */
 export function summarizeInvoice(invoice: Any, lines?: Any[]): InvoiceSummaryV2 {
   const source: Any[] = lines ?? invoice?.lines?.data ?? [];
-  const rows = source.map(labelInvoiceLine).filter((r): r is InvoiceLineV2 => r !== null);
+  const labelled = source.map(labelInvoiceLine).filter((r): r is InvoiceLineV2 => r !== null);
+
+  // feat-003 (spec 10.13): premium checks as one row per check, with the count.
+  const rows: InvoiceLineV2[] = [];
+  const checks = new Map<string, { count: number; amount: number }>();
+  for (const r of labelled) {
+    if (r.kind !== 'verification') { rows.push(r); continue; }
+    const g = checks.get(r.label) ?? { count: 0, amount: 0 };
+    checks.set(r.label, { count: g.count + 1, amount: g.amount + r.amount });
+  }
+  for (const [label, g] of checks) rows.push({ kind: 'verification', label: `${label} × ${g.count}`, amount: g.amount });
 
   // Stripe's line `amount` is before discounts and tax; both are shown as rows
   // of their own so the column adds up to the total printed under it.

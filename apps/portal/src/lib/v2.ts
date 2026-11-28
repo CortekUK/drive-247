@@ -72,7 +72,9 @@ export type V2Area =
   | 'availability'
   | 'turo'
   | 'agreements'
-  | 'finances';
+  | 'finances'
+  /** feat-003 driver verification: the Verify dialog, the one status, typed details. */
+  | 'verification';
 
 /**
  * One entry per v2 area. Today every list is just the canary.
@@ -99,6 +101,8 @@ const V2_AREAS: Record<V2Area, readonly string[]> = {
   rentals: [NORTHWIND],
   /** The customer record — a scoped rail in place of the sidebar, no Save. */
   customers: [NORTHWIND],
+  /** feat-003 driver verification (Northwind only until Ghulam widens it, brief 12.3). */
+  verification: [NORTHWIND],
   /** Website Content — the CMS overview and the per-page section editor. */
   cms: [NORTHWIND],
   /** The vehicle record — a scoped rail in place of the sidebar. LIST is still v1. */

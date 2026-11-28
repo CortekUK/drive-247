@@ -296,8 +296,10 @@ async function status(sb: Sb, c: Caller, body: any) {
     sb.from("verification_session_events").select("kind, detail, at").eq("session_id", session.id).order("at"),
     sb.from("verification_session_checks").select("service_key, result, lines, reason, finished_at, provider_cost_cents, margin_cents, state_fee_cents").eq("session_id", session.id),
   ]);
+  const { data: cust } = await sb.from("customers").select("verification_warning").eq("id", session.customer_id).maybeSingle();
   return jsonResponse({
     status: shownStatus(session),
+    warning: cust?.verification_warning ?? null,
     session: {
       id: session.id, createdAt: session.created_at, expiresAt: session.expires_at, finishedAt: session.finished_at,
       sentVia: session.sent_via, sentTo: session.sent_to, remindersSent: session.reminders_sent,

@@ -52,7 +52,8 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { cn } from "@/lib/utils";
-import { customerFormModalSchema, type CustomerFormModalFormValues } from "@/client-schemas/customers/customer-form-modal";
+import { type CustomerFormModalFormValues } from "@/client-schemas/customers/customer-form-modal";
+import { customerFormSchemaV2 } from "@/client-schemas/customers/customer-form-v2";
 import { Button } from "@/components/ui-v2/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, PHONE_SCREEN_DIALOG } from "@/components/ui-v2/dialog";
 import { Cell, CONTROL, FORM_DIALOG_WASH, Segmented, StepFooter, ToggleTile, TWINKLE_CSS } from "@/components/shared/form-grid-v2";
@@ -62,10 +63,8 @@ import {
   AddCustomerEmergencyArt,
   AddCustomerEmergencyReachArt,
   AddCustomerExtrasArt,
-  AddCustomerLicenceArt,
   AddCustomerWhoArt,
 } from "@/components/illustrations-v2/scenes/add-customer";
-import { BonzahDateField } from "@/app/(dashboard)/integrations/_panels/bonzah-date-field";
 import { VerifyIdScreenV2 } from "@/components/customers-v2/verify-id-screen-v2";
 import GigDriverUploadDialog from "@/components/customers/gig-driver-upload-dialog";
 import { DevAutofillButton } from "@/components/dev/dev-autofill-button";
@@ -112,24 +111,16 @@ const STEPS: Step[] = [
     narrow: true,
     art: AddCustomerWhoArt,
     title: "Who's renting?",
-    line: "Their name and date of birth, as they appear on their licence.",
-    fields: ["name", "date_of_birth"],
+    line: "Their full name, as it appears on their licence. The ID check reads the rest.",
+    fields: ["name"],
   },
   {
     name: "Contact",
     narrow: true,
     art: AddCustomerContactArt,
     title: "How do I reach them?",
-    line: "Email or phone. I need at least one to send their bookings and receipts.",
+    line: "Email or phone, so I can send their bookings and their ID check. Both are optional.",
     fields: ["email", "phone"],
-  },
-  {
-    name: "Licence",
-    narrow: true,
-    art: AddCustomerLicenceArt,
-    title: "Their licence",
-    line: "I check every number against your blocklist the moment you enter it.",
-    fields: ["license_number", "id_number"],
   },
   {
     name: "Details",
@@ -247,7 +238,7 @@ export function CustomerFormDialogV2({
     enabled: !!customer?.id && open,
   });
 
-  const form = useForm<Values>({ resolver: zodResolver(customerFormModalSchema), defaultValues: EMPTY });
+  const form = useForm<Values>({ resolver: zodResolver(customerFormSchemaV2), defaultValues: EMPTY });
 
   /* The business's minimum driver age (blank means 21, as on the booking site). */
   const { data: minAge = 21 } = useQuery({
@@ -471,11 +462,13 @@ export function CustomerFormDialogV2({
         const { data: row, error } = await supabase.from("customers").insert(payload as never).select("id").single();
         if (error) throw error;
         logAction({ action: "customer_created", entityType: "customer", entityId: row.id, details: { customer_name: data.name } });
-        // No toast: the dialog itself turns into the "{name} is in." screen.
         refresh();
         if (data.is_gig_driver) setGigCustomerId(row.id);
-        setCreated({ id: row.id, name: data.name, email: data.email || null });
+        // feat-003 (D1): adding a customer has nothing to do with verifying. They are saved as
+        // Not verified, and the Verify button on their row starts a check when staff are ready.
+        toast({ title: `${data.name} is in.`, description: "Not verified yet. Press Verify on their row when you're ready." });
         form.reset(EMPTY);
+        onOpenChange(false);
       } catch {
         fail("Couldn't save", `Failed to ${isEditing ? "update" : "add"} the customer. Please try again.`);
       } finally {
@@ -653,7 +646,7 @@ export function CustomerFormDialogV2({
                 // A blocked licence / ID stops the licence step itself (QA C1.9) —
                 // it used to show the warning and still let Next through.
                 else if (blocked && (screen.fields as readonly string[]).includes("license_number")) return;
-                else void form.trigger(screen.fields).then((ok) => ok && (step !== 0 || dobOk(form.getValues("date_of_birth"))) && setStep(step + 1));
+                else void form.trigger(screen.fields).then((ok) => ok && setStep(step + 1));
               }}
               className="flex flex-col max-sm:min-h-0 max-sm:flex-1"
             >
@@ -678,14 +671,6 @@ export function CustomerFormDialogV2({
                       <Cell label="Full name" required className="col-span-2" error={err("name")}>
                         {text("name", "e.g. Jordan Ellis", { filter: (s) => s.replace(/\d/g, "") })}
                       </Cell>
-                      <Cell label="Date of birth" className="col-span-2" error={err("date_of_birth")}>
-                        <BonzahDateField
-                          value={v.date_of_birth ?? ""}
-                          invalid={!!err("date_of_birth")}
-                          triggerClassName={CONTROL}
-                          onChange={(s) => set("date_of_birth", s)}
-                        />
-                      </Cell>
                     </>
                   )}
 
@@ -701,21 +686,6 @@ export function CustomerFormDialogV2({
                   )}
 
                   {step === 2 && (
-                    <>
-                      <Cell
-                        label="Driver's license"
-                        className="col-span-2"
-                        error={blocked?.type === "license" ? `Blocked: ${blocked.reason}` : err("license_number")}
-                      >
-                        {text("license_number", "License number", { upper: true, onBlur: () => void checkBlocked() })}
-                      </Cell>
-                      <Cell label="ID number" className="col-span-2" error={blocked && blocked.type !== "license" ? `Blocked: ${blocked.reason}` : err("id_number")}>
-                        {text("id_number", "Passport or national ID", { upper: true, onBlur: () => void checkBlocked() })}
-                      </Cell>
-                    </>
-                  )}
-
-                  {step === 3 && (
                     <>
                       <Cell label="Status" className="col-span-2">
                         <Segmented
@@ -733,7 +703,7 @@ export function CustomerFormDialogV2({
                     </>
                   )}
 
-                  {step === 4 && (
+                  {step === 3 && (
                     <>
                       <Cell label="Full name" className="col-span-2" error={err("nok_full_name")}>
                         {text("nok_full_name", "Who to call", { filter: (s) => s.replace(/\d/g, "") })}
@@ -744,7 +714,7 @@ export function CustomerFormDialogV2({
                     </>
                   )}
 
-                  {step === 5 && (
+                  {step === 4 && (
                     <>
                       <Cell label="Phone" className="max-sm:col-span-2" error={err("nok_phone")}>
                         {text("nok_phone", "+1 555 123 4567", { type: "tel", inputMode: "tel", filter: phoneFilter })}

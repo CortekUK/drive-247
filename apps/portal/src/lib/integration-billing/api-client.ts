@@ -11,7 +11,7 @@ export const INTEGRATION_BILLING_FUNCTION = 'integration-billing';
 
 export const SERVICE_MISSING = "Premium integrations aren't switched on yet. Nothing was charged.";
 
-export type InvoiceLineKind = 'platform' | 'integration' | 'integration_credit' | 'usage' | 'discount' | 'tax' | 'other';
+export type InvoiceLineKind = 'platform' | 'integration' | 'integration_credit' | 'usage' | 'verification' | 'discount' | 'tax' | 'other';
 
 export interface InvoiceLine {
   kind: InvoiceLineKind;

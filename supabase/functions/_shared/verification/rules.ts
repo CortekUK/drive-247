@@ -46,11 +46,7 @@ export function notExpiredLine(expiry: string | null | undefined, today: string)
     : { check: "not_expired", result: "fail", reason: "The licence is out of date" };
 }
 
-/** True when the licence is still valid on the return date (spec 11.4, 11.5). Unknown expiry: false. */
-export function licenceValidThrough(expiry: string | null | undefined, returnDate: string): boolean {
-  if (!isIso(expiry) || !isIso(returnDate)) return false;
-  return expiry >= returnDate;
-}
+export { licenceValidThrough } from "./expiry.ts";
 
 /** Line 7, name matches (spec 07.17), reusing the secondary-driver rule. */
 export function nameLine(customerName: string, first: string | null | undefined, last: string | null | undefined): Line {

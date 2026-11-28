@@ -1,5 +1,6 @@
 "use client";
 
+import { VerificationCell } from "@/components/verification-v2/verification-cell";
 import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { parseLocalDate } from "@/lib/date-utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -186,6 +187,7 @@ const CustomersList = () => {
   // and the filter button live in the top bar, and the filter panel is the back
   // face of the stat cards. `filtersOpen` is only ever read on the v2 path.
   const v2Chrome = useV2("chrome");
+  const verificationV2 = useV2("verification");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Modal state
@@ -1104,10 +1106,18 @@ const CustomersList = () => {
                         <ListMetaChip>{customer.user_type || 'Guest'}</ListMetaChip>
                       </ListCell>
                       <ListCell>
-                        {/* manually_verified is an operator's hand check, which New
+                        {verificationV2 ? (
+                          // feat-003: the one status with Verify / Remind (spec 03.4 to 03.6).
+                          <VerificationCell
+                            customerId={customer.id}
+                            customerName={customer.name}
+                            status={(customer as any).verification_status}
+                            warning={(customer as any).verification_warning}
+                          />
+                        ) : /* manually_verified is an operator's hand check, which New
                             Rental accepts as verified; the overview graph's
-                            Verified line counts the same two. */}
-                        {verification === 'verified' || verification === 'manually_verified' ? (
+                            Verified line counts the same two. */
+                        verification === 'verified' || verification === 'manually_verified' ? (
                           <ListStatusText tone="success">Verified</ListStatusText>
                         ) : verification === 'pending' ? (
                           <ListStatusText tone="warning">Pending</ListStatusText>

@@ -34,7 +34,7 @@ export function SectionLicence({ c, set, onJump, canEdit }: SectionProps) {
       title="Licence & driving"
       description="The document the identity verdict is issued against, and the reason insurance is priced the way it is."
     >
-      <Section title="Driving licence">
+      <Section title={c.licence.source === "typed" ? "Driving licence · Typed, not verified" : c.licence.source === "verified" ? "Driving licence · Verified" : "Driving licence"}>
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="Licence number">
             <input
@@ -43,6 +43,15 @@ export function SectionLicence({ c, set, onJump, canEdit }: SectionProps) {
               value={c.licence.number}
               placeholder="A000-0000-XX"
               onChange={(e) => set({ license_number: e.target.value })}
+            />
+          </Field>
+          <Field label="Licence expiry" hint={c.licence.source === "verified" ? "Verified from the licence" : c.licence.source === "typed" ? "Typed, not verified" : undefined}>
+            <input
+              className={inputCls}
+              type="date"
+              disabled={!canEdit}
+              value={c.licence.expiry ?? ""}
+              onChange={(e) => set({ licence_expiry_date: e.target.value || null })}
             />
           </Field>
           <Field label="Issuing state">

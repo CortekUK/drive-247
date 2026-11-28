@@ -64,7 +64,7 @@ import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
 // inserts the `rental_extensions` row (RLS blocks a client insert) and rolls
 // the dates back if it fails. A v2 copy would be a second call-site for that
 // edge function that has to be kept in step with the first.
-import { AdminExtendRentalDialog } from "@/components/rentals/AdminExtendRentalDialog";
+import { AdminExtendRentalDialogV2 as AdminExtendRentalDialog } from "@/components/rentals-v2/rental-detail/admin-extend-rental-dialog-v2";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
 import type { RentalDetailV2 } from "./use-rental-detail-v2";
 import { fmtDate, money } from "./_kit";

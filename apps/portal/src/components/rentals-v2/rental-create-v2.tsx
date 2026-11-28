@@ -91,6 +91,8 @@ import {
 } from "@/components/rentals/additional-drivers-form";
 import { BookingModeGrid, type BookingMode } from "@/components/rentals-v2/booking-mode-selector";
 import { RentalOnboardingShell } from "@/components/rentals-v2/rental-onboarding-shell";
+import { useV2 } from "@/lib/v2-context";
+import { RentalVerificationNotice } from "@/components/verification-v2/rental-verification-notice";
 import { CustomerList } from "@/components/rentals-v2/customer-step";
 import { VehicleList } from "@/components/rentals-v2/vehicle-step";
 
@@ -652,6 +654,7 @@ export const RentalCreateV2 = () => {
   // Watch specific form values for live updates - watching individual fields prevents infinite loops
   // Using form.watch() without arguments returns a new object on every render, causing infinite loops
   const selectedCustomerId = form.watch("customer_id");
+  const verificationV2 = useV2("verification");
   const selectedVehicleId = form.watch("vehicle_id");
   const watchedStartDate = form.watch("start_date");
   const watchedEndDate = form.watch("end_date");
@@ -3574,6 +3577,11 @@ export const RentalCreateV2 = () => {
                             {creatingVerification ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating Session...</>) : (<><Shield className="h-4 w-4 mr-2" />Start Verification</>)}
                           </Button>
                         </div>
+                      )}
+
+                      {/* feat-003: what the rental screen says about the customer's check (spec 11.1 to 11.4). */}
+                      {verificationV2 && selectedCustomerId && (
+                        <RentalVerificationNotice customerId={selectedCustomerId} returnDate={watchedEndDate} />
                       )}
 
                       {/* Privileged manual verification — available whether the session is

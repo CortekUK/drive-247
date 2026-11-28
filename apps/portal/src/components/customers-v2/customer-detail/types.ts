@@ -62,6 +62,11 @@ export type Licence = {
    */
   issued: string | null;
   expiry: string | null;
+  /**
+   * feat-003: `customers.identity_details_source`. "typed" when staff typed the details by hand,
+   * "verified" when a check read them off the licence (D4). Null when there are none.
+   */
+  source: "typed" | "verified" | null;
   isGigDriver: boolean;
   gigProofs: { id: string; label: string; url: string | null }[];
 };
@@ -302,6 +307,7 @@ export type EditableColumn =
   | "nok_address"
   | "license_number"
   | "license_state"
+  | "licence_expiry_date"
   | "id_number"
   | "is_gig_driver"
   | "sms_consent"
