@@ -79,7 +79,12 @@ create table if not exists public.verification_sessions (
   cancelled_by uuid references public.app_users(id) on delete set null,
   consent_text_version text,
   reminders_sent integer not null default 0 check (reminders_sent >= 0),
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- The booking site this session's link and Didit's return point at (spec 05.7).
+  booking_origin text not null check (booking_origin ~ '^https://'),
+  -- A simple per-link request limit for the renter's page (spec 06.20).
+  link_hits integer not null default 0 check (link_hits >= 0),
+  link_window_started_at timestamptz
 );
 
 create unique index if not exists verification_sessions_one_open_per_customer
@@ -115,6 +120,9 @@ create table if not exists public.verification_session_events (
   at timestamptz not null default now()
 );
 create index if not exists verification_session_events_session_at on public.verification_session_events (session_id, at);
+-- A provider's retried webhook is recorded once (spec 07.10): its event id is unique.
+create unique index if not exists verification_session_events_provider_event
+  on public.verification_session_events ((detail->>'provider_event_id')) where detail ? 'provider_event_id';
 
 -- ── Charges ──────────────────────────────────────────────────────────────────
 create table if not exists public.verification_charges (

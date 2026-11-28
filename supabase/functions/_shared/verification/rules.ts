@@ -54,6 +54,8 @@ export function licenceValidThrough(expiry: string | null | undefined, returnDat
 
 /** Line 7, name matches (spec 07.17), reusing the secondary-driver rule. */
 export function nameLine(customerName: string, first: string | null | undefined, last: string | null | undefined): Line {
+  // No name read is a check we could not make, never a fail or a pass (spec 07.23).
+  if (!`${first ?? ""}${last ?? ""}`.trim()) return { check: "name_matches", result: "could_not_check", reason: "The name on the licence could not be read" };
   if (driverNameMatchesDocument(customerName, first, last)) return { check: "name_matches", result: "pass", reason: null };
   const onLicence = `${first ?? ""} ${last ?? ""}`.trim() || "no name read";
   return { check: "name_matches", result: "fail", reason: `On file: ${customerName}. On the licence: ${onLicence}` };

@@ -587,3 +587,16 @@ verify_jwt = false
 
 [functions.push-operator-notification]
 verify_jwt = false
+
+# feat-003 driver verification: public endpoints that check their own token or signature.
+[functions.verification-v2-link]
+verify_jwt = false
+
+[functions.verification-v2-didit-webhook]
+verify_jwt = false
+
+[functions.verification-v2-rentid-webhook]
+verify_jwt = false
+
+[functions.verification-v2-sweep]
+verify_jwt = false

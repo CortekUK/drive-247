@@ -43,6 +43,11 @@ describe("07 the standard check's rules", () => {
     expect(fail.reason).toBe("On file: Mike Hill. On the licence: Michael James Hill");
   });
 
+  it("07.23 no name read on the licence is could_not_check, not a fail", () => {
+    expect(nameLine("Mike Hill", null, null).result).toBe("could_not_check");
+    expect(nameLine("Mike Hill", "", "  ").result).toBe("could_not_check");
+  });
+
   it.each([
     ["Driver's License", "TEXAS_DRIVER_LICENSE_GENERIC", "drivers_license", "pass"],
     ["Driver's License", "TEXAS_COMMERCIAL_DL", "drivers_license", "pass"],
