@@ -172,7 +172,7 @@ export function HeardAboutFields({
               )}
             >
               <SelectPrimitive.Value>
-                {phoneParts.country.flag} +{phoneParts.country.dial}
+                {phoneParts.country.iso} +{phoneParts.country.dial}
               </SelectPrimitive.Value>
               <SelectPrimitive.Icon asChild>
                 <ChevronDown aria-hidden className="size-4 shrink-0 text-muted-foreground" />
@@ -184,17 +184,17 @@ export function HeardAboutFields({
                 side="bottom"
                 align="start"
                 sideOffset={6}
-                className="signup-pop z-[250] max-h-[var(--radix-select-content-available-height)] w-56 overflow-hidden rounded-2xl border border-indigo-100 bg-white/95 p-1 text-[15px] text-zinc-900 shadow-[0_8px_24px_-12px_rgba(67,56,202,0.25)] backdrop-blur-md dark:border-white/10 dark:bg-[#17171f]/95 dark:text-zinc-100"
+                className="signup-pop z-[250] max-h-[var(--radix-select-content-available-height)] w-72 overflow-hidden rounded-2xl border border-indigo-100 bg-white/95 p-1 text-[15px] text-zinc-900 shadow-[0_8px_24px_-12px_rgba(67,56,202,0.25)] backdrop-blur-md dark:border-white/10 dark:bg-[#17171f]/95 dark:text-zinc-100"
               >
                 <SelectPrimitive.Viewport>
                   {PHONE_COUNTRIES.map((c) => (
                     <SelectPrimitive.Item
                       key={c.iso}
                       value={c.iso}
-                      className="relative flex cursor-pointer select-none items-center gap-2 rounded-lg py-2 pr-9 pl-3 outline-none data-[highlighted]:bg-indigo-50 data-[highlighted]:text-indigo-700 dark:data-[highlighted]:bg-indigo-500/15 dark:data-[highlighted]:text-indigo-200"
+                      className="relative flex cursor-pointer select-none items-center gap-2 whitespace-nowrap rounded-lg py-2 pr-9 pl-3 outline-none data-[highlighted]:bg-indigo-50 data-[highlighted]:text-indigo-700 dark:data-[highlighted]:bg-indigo-500/15 dark:data-[highlighted]:text-indigo-200"
                     >
                       <SelectPrimitive.ItemText>
-                        {c.flag} +{c.dial}
+                        {c.iso} +{c.dial}
                       </SelectPrimitive.ItemText>
                       <span className="text-muted-foreground">{new Intl.DisplayNames(["en"], { type: "region" }).of(c.iso)}</span>
                       <SelectPrimitive.ItemIndicator className="absolute right-3 inline-flex items-center text-indigo-600 dark:text-indigo-300">
