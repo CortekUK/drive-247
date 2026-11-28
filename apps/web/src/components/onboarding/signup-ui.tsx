@@ -71,7 +71,7 @@ export const SIGNUP_PRIMARY =
  * brackets"). Forward is the accent pill drawn round; back is its outline.
  * What each one does is still said, in the tooltip and to a screen reader.
  */
-export const SIGNUP_ARROW = cn(SIGNUP_PRIMARY, "size-11 shrink-0 px-0");
+export const SIGNUP_ARROW = cn(SIGNUP_PRIMARY, "inline-flex size-11 shrink-0 items-center justify-center px-0");
 export const SIGNUP_BACK_ARROW =
   "flex size-11 shrink-0 items-center justify-center rounded-full text-foreground ring-1 ring-foreground/15 transition-colors duration-200 ease-out hover:bg-foreground/[0.04] focus-visible:ring-[3px] focus-visible:ring-indigo-500/30 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none dark:ring-white/15";
 

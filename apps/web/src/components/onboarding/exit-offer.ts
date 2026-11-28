@@ -52,7 +52,8 @@ export function shouldShowExitOffer(g: ExitOfferGate): boolean {
  * onto another element (or into an iframe, like Stripe's card field).
  */
 export function isExitIntent(e: { clientY: number; relatedTarget: unknown }): boolean {
-  return e.relatedTarget == null && e.clientY <= 0;
+  // Strictly above the window: an iframe edge at the top reports 0 too.
+  return e.relatedTarget == null && e.clientY < 0;
 }
 
 /**

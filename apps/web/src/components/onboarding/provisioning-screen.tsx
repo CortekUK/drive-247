@@ -365,7 +365,7 @@ export function ProvisioningScreen() {
               <footer className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-x-6 gap-y-3 pt-8 pb-[max(20px,env(safe-area-inset-bottom))] sm:pb-7 [@media(max-height:760px)]:pt-6 [@media(max-height:760px)]:pb-5">
                 <div
                   aria-hidden
-                  className="pointer-events-none absolute inset-y-0 left-1/2 -z-10 w-screen -translate-x-1/2 bg-linear-to-t from-white/90 from-50% to-transparent dark:from-[#0e0e14]/90"
+                  className="pointer-events-none absolute inset-y-0 -inset-x-6 -z-10 bg-linear-to-t from-white/90 from-50% to-transparent sm:-inset-x-10 lg:-inset-x-12 dark:from-[#0e0e14]/90"
                 />
                 {!callBooked ? (
                   <button type="button" onClick={enterPortal} className={SIGNUP_QUIET}>

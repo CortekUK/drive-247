@@ -97,6 +97,7 @@ export function SubscriptionActivatedDialog() {
   };
 
   if (!subscription) return null;
+  const trialing = subscription.status === "trialing";
 
   const amount = (() => {
     const minor = Number(subscription.amount ?? 0);
@@ -121,9 +122,11 @@ export function SubscriptionActivatedDialog() {
           <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950">
             <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <DialogTitle>Your subscription is active</DialogTitle>
+          <DialogTitle>{trialing ? "Your free trial is on" : "Your subscription is active"}</DialogTitle>
           <DialogDescription>
-            Your payment went through and your account is fully set up. There&rsquo;s nothing else you need to do.
+            {trialing
+              ? "Nothing has been charged. Your account is fully set up, and there’s nothing else you need to do."
+              : <>Your payment went through and your account is fully set up. There&rsquo;s nothing else you need to do.</>}
           </DialogDescription>
         </DialogHeader>
 
@@ -132,23 +135,30 @@ export function SubscriptionActivatedDialog() {
             <span className="text-muted-foreground">Plan</span>
             <span className="font-medium">{subscription.plan_name || "Subscription"}</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Amount</span>
-            <span className="font-medium">
-              {amount} / {subscription.interval || "month"}
-            </span>
-          </div>
+          {/* The stored amount is the list price; a signup discount (BF30)
+              lives only on Stripe, so during the trial no amount is shown
+              rather than a wrong one. */}
+          {!trialing && (
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Amount</span>
+              <span className="font-medium">
+                {amount} / {subscription.interval || "month"}
+              </span>
+            </div>
+          )}
           {renews && (
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Renews</span>
+              <span className="text-muted-foreground">{trialing ? "First payment" : "Renews"}</span>
               <span className="font-medium">{renews}</span>
             </div>
           )}
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Your receipt has been emailed to you. You can review invoices and payment details any time
-          under Settings &rsaquo; Subscription.
+          {trialing
+            ? "We’ll email you before your first payment. "
+            : "Your receipt has been emailed to you. "}
+          You can review invoices and payment details any time under Settings &rsaquo; Subscription.
         </p>
 
         <DialogFooter>

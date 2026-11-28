@@ -261,6 +261,10 @@ export function OnboardingScreen() {
       armed = true;
     }, 1500);
     const onOut = (e: MouseEvent) => {
+      // Typing the card: Stripe's fields are iframes, and moving into one
+      // fires a mouseout with no relatedTarget, which looked like leaving.
+      if (document.activeElement?.tagName === "IFRAME") return;
+      if (e.clientX < 0 || e.clientX > window.innerWidth) return;
       if (armed && isExitIntent(e)) showExitOffer("exit_intent");
     };
     document.addEventListener("mouseout", onOut);

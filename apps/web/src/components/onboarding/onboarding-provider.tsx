@@ -1768,6 +1768,11 @@ export function OnboardingProvider({
         }
         resumeHintRef.current = meta;
         setHasResumableSignup(true);
+        // The card step greets them by name ("Last step, Hamza"); the Google
+        // path never set the account, so it said just "Last step".
+        if (meta?.fullName && meta?.email) {
+          dispatch({ type: "setAccount", account: { fullName: meta.fullName, email: meta.email } });
+        }
 
         void reportRegistration("oauth");
 

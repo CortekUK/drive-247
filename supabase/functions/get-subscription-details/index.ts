@@ -44,6 +44,7 @@ Deno.serve(async (req) => {
     }
 
     let stripeSubscription = null;
+    let nextInvoice: { amount_due: number; currency: string; next_payment_attempt: number | null } | null = null;
     try {
       const mode = await getSubscriptionStripeMode(supabase, tenantId);
       // The Stripe subscription lives on the account recorded on the row
@@ -59,11 +60,26 @@ Deno.serve(async (req) => {
         subscription.stripe_subscription_id,
         { expand: ["default_payment_method", "latest_invoice"] }
       );
+      // The next bill as Stripe will charge it, discounts included. The row's
+      // `amount` is the list price, so the trial banner said $129 for a BF30
+      // signup whose first charge is $90.30 (feat-001 review 1).
+      try {
+        const upcoming = await stripe.invoices.retrieveUpcoming({
+          subscription: subscription.stripe_subscription_id,
+        });
+        nextInvoice = {
+          amount_due: upcoming.amount_due,
+          currency: upcoming.currency,
+          next_payment_attempt: upcoming.next_payment_attempt,
+        };
+      } catch (err) {
+        console.warn("No upcoming invoice:", err.message);
+      }
     } catch (err) {
       console.error("Error fetching from Stripe:", err.message);
     }
 
-    return jsonResponse({ subscription, stripeSubscription });
+    return jsonResponse({ subscription, stripeSubscription, nextInvoice });
   } catch (error) {
     console.error("Error getting subscription details:", error);
     return errorResponse(error.message || "Internal server error", 500);

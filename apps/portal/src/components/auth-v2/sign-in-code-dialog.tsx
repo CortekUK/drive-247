@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
-import { fetchAppUserResult } from "@/stores/auth-store";
+import { fetchAppUserResult, useAuthStore } from "@/stores/auth-store";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import { CodeInput } from "@/components/ui-v2/code-input";
@@ -145,6 +145,11 @@ export function SignInCodeDialog({
           return;
         }
         signedIn = profile.appUser;
+        // Hand the session to the login page now. It redirects on user +
+        // appUser from the store, which otherwise waited on the deferred
+        // auth listener; the first code sign-in tested closed this window
+        // and left the person on the login page.
+        useAuthStore.setState({ user: verified.user, appUser: profile.appUser, loading: false, initialized: true });
       }
       // Signed in: the login page takes it from here. The row names the person
       // and their company, as the password sign-in's does: Health Score counts

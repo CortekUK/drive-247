@@ -18,7 +18,10 @@
 
 import { useMemo } from "react";
 import { Gift } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
+import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { fingerprint, type AppBanner } from "../banner-types";
 
@@ -45,6 +48,22 @@ function day(iso: string | null | undefined): string | null {
 
 export function useTrialCountdownBanner(): AppBanner[] {
   const { subscription, isTrialing, trialDaysRemaining } = useTenantSubscription();
+  const { tenant } = useTenant();
+
+  // The first charge as Stripe will make it, discounts included (BF30 makes
+  // $129 into $90.30). The row's `amount` is only the list price.
+  const { data: nextInvoice } = useQuery({
+    queryKey: ["trial-next-invoice", tenant?.id, subscription?.stripe_subscription_id],
+    enabled: !!tenant?.id && isTrialing && !!subscription?.stripe_subscription_id,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("get-subscription-details", {
+        body: { tenantId: tenant!.id },
+      });
+      if (error) throw error;
+      return (data?.nextInvoice ?? null) as { amount_due: number; currency: string } | null;
+    },
+  });
 
   return useMemo(() => {
     if (!isTrialing || !subscription?.trial_end) return [];
@@ -52,7 +71,9 @@ export function useTrialCountdownBanner(): AppBanner[] {
     const left = trialDaysRemaining;
     const leftText = left <= 0 ? "ends today" : `${left} ${left === 1 ? "day" : "days"} left`;
     const endsOn = day(subscription.trial_end);
-    const price = money(subscription.amount, subscription.currency);
+    const price = nextInvoice
+      ? money(nextInvoice.amount_due, nextInvoice.currency)
+      : money(subscription.amount, subscription.currency);
     const cancelling =
       !!subscription.cancel_at && new Date(subscription.cancel_at).getTime() > Date.now();
 
@@ -82,5 +103,5 @@ export function useTrialCountdownBanner(): AppBanner[] {
         dismissal: { fingerprint: fingerprint("trial", subscription.trial_end.slice(0, 10), left) },
       },
     ];
-  }, [isTrialing, trialDaysRemaining, subscription?.trial_end, subscription?.amount, subscription?.currency, subscription?.cancel_at]);
+  }, [isTrialing, trialDaysRemaining, subscription?.trial_end, subscription?.amount, subscription?.currency, subscription?.cancel_at, nextInvoice]);
 }

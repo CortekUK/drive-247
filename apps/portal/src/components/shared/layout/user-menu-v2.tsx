@@ -234,7 +234,7 @@ export const UserMenuV2 = ({
             </Button>
           </DropdownMenuTrigger>
         )}
-        <DropdownMenuContent align="start" sideOffset={8} className="w-64 p-0 rounded-xl overflow-hidden">
+        <DropdownMenuContent align="start" sideOffset={8} className="w-64 p-0 rounded-xl overflow-hidden bg-popover before:hidden">
           {/* User info header */}
           <div className="p-2.5 pb-2">
             <div className="flex items-center gap-2.5">
