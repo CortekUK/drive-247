@@ -474,6 +474,10 @@ export function OnboardingScreen() {
             // The questions' screen: the whole viewport, scrolling as one page
             // when a screen is taller than the window (a phone, the card form).
             "fixed inset-0 z-[200] overflow-y-auto overscroll-contain bg-white text-foreground outline-none dark:bg-[#0e0e14]",
+            // A dropdown (Radix Select) locks scrolling while open; without these the
+            // layer lost its scrollbar and the centred screen jumped right (Hamza,
+            // 28 Nov). Keep the scrollbar space and the library's fixed-layer class.
+            "right-scroll-bar-position [scrollbar-gutter:stable]",
             "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-200 data-[state=open]:ease-out",
             "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-200 data-[state=closed]:ease-in",
             "motion-reduce:animate-none!",
