@@ -44,6 +44,12 @@ interface HeardAboutFieldsProps {
  * dropdown to be part of the UI everywhere, phones included.
  */
 
+/** Country names made once, not on every render (slow machines, 28 Nov). */
+const REGION_NAMES = typeof Intl !== "undefined" && "DisplayNames" in Intl ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
+function countryName(iso: string): string {
+  return REGION_NAMES?.of(iso) ?? iso;
+}
+
 export function HeardAboutFields({
   value,
   errors,
@@ -196,7 +202,7 @@ export function HeardAboutFields({
                       <SelectPrimitive.ItemText>
                         {c.iso} +{c.dial}
                       </SelectPrimitive.ItemText>
-                      <span className="text-muted-foreground">{new Intl.DisplayNames(["en"], { type: "region" }).of(c.iso)}</span>
+                      <span className="text-muted-foreground">{countryName(c.iso)}</span>
                       <SelectPrimitive.ItemIndicator className="absolute right-3 inline-flex items-center text-indigo-600 dark:text-indigo-300">
                         <Check className="size-4" aria-hidden />
                       </SelectPrimitive.ItemIndicator>
