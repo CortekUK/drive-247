@@ -70,20 +70,22 @@ has a person redo rows on a calculator and compare with the screen and the bill.
 A QA pass on something that already exists (no new feature) still gets a PRD section and a QA
 report; specs and evals are written where they are worth it.
 
-### Where work is tested: `ray1` and `ray2`
+### Where work is tested: `ray1`, `ray2` and `ray3`
 
-Besides `main` (production) and `staging`, there are two permanent personal branches. Each has
+Besides `main` (production) and `staging`, there are three permanent personal branches. Each has
 its own live sites, on the **staging database**, so a person tests on a real deployed site without
 waiting for a merge and without meeting someone else's unfinished work.
 
-| | `ray1` (Haris) | `ray2` (Hamza) |
-|---|---|---|
-| Landing page | `ray1.drive-247.com` | `ray2.drive-247.com` |
-| Super admin | `admin.ray1.drive-247.com` | `admin.ray2.drive-247.com` |
-| Portal | `northwind.portal.ray1.drive-247.com` | `northwind.portal.ray2.drive-247.com` |
-| Booking site | `northwind.ray1.drive-247.com` | `northwind.ray2.drive-247.com` |
+| | `ray1` (Haris) | `ray2` (Hamza) | `ray3` (Hamna) |
+|---|---|---|---|
+| Landing page | `ray1.drive-247.com` | `ray2.drive-247.com` | `ray3.drive-247.com` |
+| Super admin | `admin.ray1.drive-247.com` | `admin.ray2.drive-247.com` | `admin.ray3.drive-247.com` |
+| Portal | `northwind.portal.ray1.drive-247.com` | `northwind.portal.ray2.drive-247.com` | `northwind.portal.ray3.drive-247.com` |
+| Booking site | `northwind.ray1.drive-247.com` | `northwind.ray2.drive-247.com` | `northwind.ray3.drive-247.com` |
 
 Pushing to a ray branch deploys its sites in about five minutes. Log in with the staging accounts.
+
+New to the team? Read `docs/onboarding/` first (branches, how a feature is built, staying in sync). Each person's tasks are in `docs/team/<name>/`.
 
 The cycle:
 
@@ -103,7 +105,7 @@ Rules:
 
 - **While building, you may apply your own migration and deploy your own edge functions to
   STAGING.** Never to production: production only changes during a relay. Say it in the group
-  first, because the staging database is shared by `staging`, `ray1`, `ray2` and every local
+  first, because the staging database is shared by `staging`, `ray1`, `ray2`, `ray3` and every local
   machine. Until the relay, `npm run synced` will say the database or functions are DIFFERENT;
   that is expected and clears when the relay finishes.
 - One piece of work at a time on a ray branch. Whatever is on it goes out together.
@@ -130,7 +132,7 @@ stage fails.
    Project settings the feature depends on (a storage cap, a secret) are changed here too, on both.
 5. **Production code**: fast-forward `main` to `staging`, push, wait for the four production builds.
 6. **Prove it**: `npm run synced` must end with `ALL SYNCED <commit id>`. Report that line.
-7. Bring `ray1` and `ray2` level with `main` when the relayed work came from them. Go back to the
+7. Bring `ray1`, `ray2` and `ray3` level with `main` when the relayed work came from them. Go back to the
    branch you were on. Do not delete a feature branch unless Ghulam says so.
 
 Edge functions changed by the feature: deploy to production one at a time and verify each (see

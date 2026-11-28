@@ -55,7 +55,7 @@ machine does not show what a customer gets.
 
 | Part | Where | How much | When |
 |---|---|---|---|
-| **1. Full check** | The person's own live test site (`ray1` or `ray2`, see `CLAUDE.md`). Staging data. | Every item from the five sources | Before the pull request |
+| **1. Full check** | The person's own live test site (`ray1`, `ray2` or `ray3`, see `CLAUDE.md`). Staging data. | Every item from the five sources | Before the pull request |
 | **2. Staging look** | The staging site, after the work is merged there | Two or three items: it is there, it loads, the main path works | During the relay |
 | **3. Production check** | Live, on the **northwind** tenant | One or two real tests | Straight after the relay |
 
