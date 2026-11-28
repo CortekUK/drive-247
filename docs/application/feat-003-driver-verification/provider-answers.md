@@ -44,3 +44,32 @@ over sorted compact JSON, `X-Timestamp` within 300 s, retried twice (about 1 and
 such as `approve`, `decline_document_expired`, `decline_minimum_age`,
 `decline_face_match_low_similarity`, `decline_liveness_attack`, `review_face_match_borderline`;
 `/simulate/` to move a session; sandbox licences carry no state.
+
+## Decided by Ghulam, 28 Nov 2026 (after reading the points above)
+
+- **Assume and build.** Where RentID's documents leave a gap, the specs take the best assumption
+  below and the build goes ahead. Each assumption is one value in the price list or one line of
+  config, so it is changed in one place when RentID answers.
+- **Didit data in the EU (Ireland) is acceptable for now.** Data location is not a blocker.
+- **Accounts.** The Didit account is opened with Neema's Cortek Gmail, the same way the RentID
+  account was opened.
+- **Staging may be changed** for this feature: the migration and the new functions go onto staging.
+  It is shared and can be put back.
+- **Northwind on staging gets a Stripe test-mode subscription** on the UAE test account, for the
+  billing evals and the test clock.
+- The six choices in the specs are accepted as written: the renter's link is `/id/<token>`;
+  past due gets no premium checks; the licence check carries a state fee; licence status is
+  $2.99 + $0.50; "Save this email on the customer" is ticked by default; dates use UTC.
+
+## Assumptions taken (to replace when RentID confirms)
+
+| # | Gap | Assumed | Where it lives |
+|---|---|---|---|
+| A1 | Credits per licence status check | 1 credit = $2.99 (`provider_cost_cents = 299`) | `verification_services` row `licence_status` |
+| A2 | Credits per driving record | 1 credit = $2.99, plus the state fee | row `driving_record` (switched off) |
+| A3 | Criminal record rate (not credits) | $2.99, no state fee | row `criminal_record` (switched off) |
+| A4 | State fees | No fee rows until the PDF arrives; a charge in a state with no row is held, not guessed (spec 09.10) | `verification_state_fees` |
+| A5 | Licence status state coverage | Every state is tried; `STATE_NOT_SUPPORTED` marks it not covered and is not charged (spec 08.8) | `rentid.ts` |
+| A6 | One account for many companies | Allowed; Drive247 is the permissible-purpose user and keeps each company's consent record | spec 06.11 |
+| A7 | Async check accepted then `failed` | Not charged (only `complete` is charged) | spec 09.7 |
+| A8 | Forcing RentID outcomes in tests | Recorded answers fed to the result handler | spec 08 Proof |
