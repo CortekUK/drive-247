@@ -447,6 +447,20 @@ export function OnboardingScreen() {
   // typed on the pages before.
   const screenKey = exitOffer ? "offer" : step;
 
+  // The page behind the signup keeps its own scrollbar while the signup is open.
+  // A dropdown (Radix Select) hides it on open, the full-screen signup grew by
+  // its width and the screen jumped sideways (Hamza, 28 Nov). Hide the page's
+  // scrollbar for as long as the signup is open, so a dropdown changes nothing.
+  useEffect(() => {
+    if (!open) return;
+    const root = document.documentElement;
+    const before = root.style.overflow;
+    root.style.overflow = "hidden";
+    return () => {
+      root.style.overflow = before;
+    };
+  }, [open]);
+
   return (
     <DialogPrimitive.Root
       open={open}
@@ -474,10 +488,6 @@ export function OnboardingScreen() {
             // The questions' screen: the whole viewport, scrolling as one page
             // when a screen is taller than the window (a phone, the card form).
             "fixed inset-0 z-[200] overflow-y-auto overscroll-contain bg-white text-foreground outline-none dark:bg-[#0e0e14]",
-            // A dropdown (Radix Select) locks scrolling while open; without these the
-            // layer lost its scrollbar and the centred screen jumped right (Hamza,
-            // 28 Nov). Keep the scrollbar space and the library's fixed-layer class.
-            "right-scroll-bar-position [scrollbar-gutter:stable]",
             "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-200 data-[state=open]:ease-out",
             "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-200 data-[state=closed]:ease-in",
             "motion-reduce:animate-none!",

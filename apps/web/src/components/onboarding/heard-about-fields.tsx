@@ -94,7 +94,7 @@ export function HeardAboutFields({
                 position="popper"
                 side="bottom"
                 sideOffset={6}
-                className="z-[250] max-h-[var(--radix-select-content-available-height)] w-[var(--radix-select-trigger-width)] signup-pop overflow-hidden rounded-2xl border border-indigo-100 bg-white/95 p-1 text-[15px] text-zinc-900 shadow-[0_8px_24px_-12px_rgba(67,56,202,0.25)] backdrop-blur-md dark:border-white/10 dark:bg-[#17171f]/95 dark:text-zinc-100"
+                className="z-[250] max-h-[var(--radix-select-content-available-height)] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-indigo-100 bg-white p-1 text-[15px] text-zinc-900 shadow-[0_8px_24px_-12px_rgba(67,56,202,0.25)] dark:border-white/10 dark:bg-[#17171f] dark:text-zinc-100"
               >
                 <SelectPrimitive.Viewport>
                   {HEARD_ABOUT_OPTIONS.map((option) => (
@@ -184,7 +184,7 @@ export function HeardAboutFields({
                 side="bottom"
                 align="start"
                 sideOffset={6}
-                className="signup-pop z-[250] max-h-[var(--radix-select-content-available-height)] w-72 overflow-hidden rounded-2xl border border-indigo-100 bg-white/95 p-1 text-[15px] text-zinc-900 shadow-[0_8px_24px_-12px_rgba(67,56,202,0.25)] backdrop-blur-md dark:border-white/10 dark:bg-[#17171f]/95 dark:text-zinc-100"
+                className="z-[250] max-h-[var(--radix-select-content-available-height)] w-72 overflow-hidden rounded-2xl border border-indigo-100 bg-white p-1 text-[15px] text-zinc-900 shadow-[0_8px_24px_-12px_rgba(67,56,202,0.25)] dark:border-white/10 dark:bg-[#17171f] dark:text-zinc-100"
               >
                 <SelectPrimitive.Viewport>
                   {PHONE_COUNTRIES.map((c) => (
