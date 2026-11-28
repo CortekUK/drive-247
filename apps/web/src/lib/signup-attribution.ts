@@ -115,3 +115,38 @@ export function hasCompleteAttribution(
 ): boolean {
   return Boolean(a && typeof a.phone === "string" && a.phone.trim() !== "" && isValidPhone(a.phone));
 }
+
+/**
+ * Review 1 (Ghulam's video, V4): the phone field's country picker. USA first
+ * (the default), then the countries our operators sign up from. The stored
+ * value stays one string, "+<dial> <number>", which `isValidPhone` accepts.
+ */
+export interface PhoneCountry { iso: string; dial: string; flag: string; example: string }
+export const PHONE_COUNTRIES: readonly PhoneCountry[] = [
+  { iso: "US", dial: "1", flag: "🇺🇸", example: "(555) 123-4567" },
+  { iso: "CA", dial: "1", flag: "🇨🇦", example: "(555) 123-4567" },
+  { iso: "GB", dial: "44", flag: "🇬🇧", example: "7400 123456" },
+  { iso: "PK", dial: "92", flag: "🇵🇰", example: "301 2345678" },
+  { iso: "AE", dial: "971", flag: "🇦🇪", example: "50 123 4567" },
+  { iso: "IN", dial: "91", flag: "🇮🇳", example: "81234 56789" },
+  { iso: "AU", dial: "61", flag: "🇦🇺", example: "412 345 678" },
+  { iso: "MX", dial: "52", flag: "🇲🇽", example: "55 1234 5678" },
+];
+
+/** "+92 3012345678" -> Pakistan and "3012345678". No "+": USA and the text as typed. */
+export function splitPhone(raw: string, preferredIso?: string): { country: PhoneCountry; number: string } {
+  const typed = (raw ?? "").trim();
+  const m = typed.match(/^\+(\d{1,3})\s*(.*)$/);
+  if (m) {
+    const matches = PHONE_COUNTRIES.filter((c) => typed.startsWith(`+${c.dial}`)).sort((a, b) => b.dial.length - a.dial.length);
+    const best = matches.find((c) => c.iso === preferredIso) ?? matches[0];
+    if (best) return { country: best, number: typed.slice(best.dial.length + 1).trim() };
+  }
+  return { country: PHONE_COUNTRIES.find((c) => c.iso === preferredIso) ?? PHONE_COUNTRIES[0], number: typed };
+}
+
+/** The stored value: "+1 5551234567". An empty number stays empty, so "required" still works. */
+export function composePhone(country: PhoneCountry, number: string): string {
+  const n = number.trim();
+  return n ? `+${country.dial} ${n.replace(/^\+\d{1,3}\s*/, "")}` : "";
+}

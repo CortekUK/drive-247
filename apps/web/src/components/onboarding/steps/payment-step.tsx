@@ -45,7 +45,7 @@ import {
   type ApplePayTerms,
 } from "@/components/onboarding/apple-pay-terms";
 import { formatPlanPriceUsd, type SignupPlan, type SignupPlanId } from "@/lib/plans";
-import type { PromoOffer } from "@/lib/promo-offer";
+import { discountedPrice, type PromoOffer } from "@/lib/promo-offer";
 import {
   BLACK_FRIDAY_CODE,
   BLACK_FRIDAY_FINE_PRINT,
@@ -126,6 +126,44 @@ function billingTimeline(
     },
     { when: day(months), what: "Discount ends, full price every month", cents: full },
   ];
+}
+
+/**
+ * Review 1 (Ghulam's video, V12–V13): with a free trial, the same short
+ * timeline, starting from the trial. Today $0; the first payment on the day the
+ * trial ends; the discounted months (Black Friday included); then the full price.
+ * Every bill keeps the trial-end day, clamped to a short month's last day, the
+ * way Stripe bills.
+ */
+function trialTimeline(
+  plan: SignupPlan,
+  promo: PromoOffer | null | undefined,
+  discountedCents: number | null,
+  trialEnd: Date,
+  trialDays: number,
+): BillingStop[] {
+  const day = (n: number) => formatDay(addMonths(trialEnd, n).toISOString()) ?? "";
+  const full = plan.amountCents;
+  const today: BillingStop = { when: "Today", what: `${trialDays}-day free trial starts`, cents: 0 };
+  if (!promo || discountedCents === null) {
+    return [today, { when: day(0), what: "First payment, then every month on this date", cents: full }];
+  }
+  const label = promo.kind === "referral" && promo.referrerName ? `${promo.referrerName}'s referral` : promo.displayCode;
+  if (promo.duration === "forever") {
+    return [today, { when: day(0), what: `First payment, ${label} on every bill`, cents: discountedCents, wasCents: full }];
+  }
+  const months = promo.duration === "repeating" ? Math.max(1, promo.durationMonths ?? 1) : 1;
+  const stops: BillingStop[] = [today, { when: day(0), what: `First payment, with ${label}`, cents: discountedCents, wasCents: full }];
+  if (months > 1) {
+    stops.push({
+      when: day(1),
+      what: months === 2 ? "Second payment, discount still on" : `Payments 2 to ${months}, discount still on`,
+      cents: discountedCents,
+      wasCents: full,
+    });
+  }
+  stops.push({ when: day(months), what: "Discount ends, full price every month", cents: full });
+  return stops;
 }
 
 /** "$79", "$79.20" from cents. */
@@ -265,7 +303,14 @@ export function PaymentStep({
     [plan, promo, isTrial, trialDays, trialEndsAt, portalSlug],
   );
 
-  const timeline = billingTimeline(plan, promo, amountDueCents);
+  // Review 1 (V12–V13): a trial gets its own timeline, starting today at $0.
+  const trialEndDate = isTrial ? resolveTrialEnd(trialEndsAt, trialDays) : null;
+  const trialDiscountCents = promo
+    ? (bill?.discountedBillCents ?? Math.round(discountedPrice(plan.priceUsd, promo) * 100))
+    : null;
+  const timeline = isTrial && trialEndDate
+    ? trialTimeline(plan, promo, trialDiscountCents, trialEndDate, trialDays)
+    : billingTimeline(plan, promo, amountDueCents);
   // The server put BF30 on this subscription (Black Friday, lib/black-friday.ts).
   const blackFriday = promo?.displayCode === BLACK_FRIDAY_CODE;
   const { resolvedTheme } = useTheme();
@@ -604,17 +649,8 @@ export function PaymentStep({
         // charge. "No charge for 14 days" stays above it.
         <div className="mt-3 rounded-2xl bg-indigo-600/[0.06] px-4 py-3 dark:bg-indigo-400/[0.10]" data-testid="bf-offer">
           <p className="text-sm font-semibold text-foreground">{BLACK_FRIDAY_HEADLINE}</p>
-          <p className="mt-0.5 text-sm text-foreground">
-            <span className="text-muted-foreground line-through">
-              <span className="sr-only">Was </span>${plan.priceUsd}
-            </span>{" "}
-            {/* The server's figure (feat-001 spec 08.12); the preview only
-                covers an older deploy that does not send `bill`. */}
-            <span className="font-semibold">
-              {formatUsdCents(bill?.discountedBillCents ?? blackFridayCents(plan.amountCents))}/mo
-            </span>{" "}for{" "}
-            {BLACK_FRIDAY_MONTHS} months, then ${plan.priceUsd}.
-          </p>
+          {/* Review 1 (V13): the Black Friday prices are in the timeline below,
+              date by date; this box keeps only the offer's name and terms. */}
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{BLACK_FRIDAY_FINE_PRINT}</p>
         </div>
       )}
@@ -633,14 +669,11 @@ export function PaymentStep({
         <DiscountCodeFields busy={busy} applied={promo ?? null} onApply={onApplyPromo} />
       )}
 
-      {mode === "test" && (
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <ShieldCheck className="h-3.5 w-3.5" />
-          No real payment will be taken.
-        </p>
-      )}
+      {/* Review 1 (V13): "No real payment will be taken" removed; the TEST MODE
+          badge beside "Due today" already says it on test sites. */}
 
-      {isTrial ? null : (
+      {(
+      // Review 1 (V12): the timeline shows for a trial too.
       // What they pay and when, as a short timeline: today, the next charge,
       // and where the price settles once a code runs out.
       <div className="mt-4">
@@ -732,7 +765,9 @@ export function PaymentStep({
         <div className="mt-6">
           <ColumnButton form="signup-payment-form" busy={busy} disabled={!clientSecret}>
             {busy ? (
-              isTrial ? "Saving your card…" : "Processing payment…"
+              // Review 1 (V9): before a card is entered the step is only
+              // getting ready; it is not processing anything yet.
+              !clientSecret ? "Getting ready…" : isTrial ? "Saving your card…" : "Processing payment…"
             ) : (
               <>
                 {isTrial ? `Start my ${trialDays}-day free trial` : `Pay $${plan.priceUsd} and build my portal`}
@@ -1062,7 +1097,9 @@ function PaymentForm({
       */}
       <div aria-live="polite" className="mt-3 space-y-2">
         {submitting && (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          // Review 1 (V14): the loading state is on the button only; this line
+          // stays for screen readers but is not shown a second time.
+          <p className="sr-only">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             {awaitingBank
               ? "Waiting for your bank…"

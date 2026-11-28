@@ -69,7 +69,23 @@ const PLAN_COLUMNS = [
 /** `unknown` in, narrow types out — nothing here trusts the shape of the JSON. */
 function readString(row: Record<string, unknown>, key: string): string | null {
   const value = row[key];
-  return typeof value === "string" ? value : null;
+  return typeof value === "string" ? repairMojibake(value) : null;
+}
+
+/**
+ * Review 1 (Ghulam's video, V11): staging's plan rows hold "1â€“5 vehicles" —
+ * an en dash saved as UTF-8 and read back as Windows-1252. Repaired on the way
+ * out so the site always shows "1–5", whatever the row holds.
+ */
+export function repairMojibake(text: string): string {
+  return text
+    .replace(/â€“/g, "–")
+    .replace(/â€”/g, "—")
+    .replace(/â€™/g, "’")
+    .replace(/â€˜/g, "‘")
+    .replace(/â€œ/g, "“")
+    .replace(/â€\u009d|â€”/g, "”")
+    .replace(/Â·/g, "·");
 }
 
 function readNumber(row: Record<string, unknown>, key: string): number | null {

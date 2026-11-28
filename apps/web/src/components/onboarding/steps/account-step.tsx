@@ -1452,7 +1452,8 @@ export function AccountStep({
           <ColumnActions>
             {/* Greyed out until the Terms are ticked, as the arrow was. */}
             <ColumnButton busy={busy} disabled={!tenant.acceptedTerms}>
-              {busy ? "Sending your code…" : "Continue"}
+              {/* Review 1 (V8): no code is sent at signup any more. */}
+              {busy ? "Saving…" : "Continue"}
             </ColumnButton>
             <button
               type="button"

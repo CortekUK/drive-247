@@ -97,3 +97,17 @@
     animation: signup-fade 140ms ease-out both;
   }
 }
+
+/* Review 1 (Ghulam's video, V3/V6): the signup dropdowns open with a short
+   fade-and-drop instead of appearing at once. */
+@keyframes signup-pop {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.signup-pop {
+  transform-origin: top center;
+  animation: signup-pop 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .signup-pop { animation: none; }
+}

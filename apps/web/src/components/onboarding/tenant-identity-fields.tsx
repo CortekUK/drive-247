@@ -24,7 +24,7 @@
  */
 
 import * as React from "react";
-import { Check, Loader2, TriangleAlert } from "lucide-react";
+import { Check, Info, Loader2, TriangleAlert } from "lucide-react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -295,10 +295,31 @@ export function TenantIdentityFields({
           not `col-span-2`, which forced a second column into the one-column
           screens. */}
       <div className="col-span-full">
-        <Label htmlFor="signup-slug" className={SIGNUP_LABEL}>
-          Web address
-          <RequiredMark />
-        </Label>
+        <div className="flex items-center gap-1.5">
+          <Label htmlFor="signup-slug" className={SIGNUP_LABEL}>
+            Web address
+            <RequiredMark />
+          </Label>
+          {/* Review 1 (V7): an "i" that explains the address on hover, focus or
+              tap, instead of a line of text under the field. */}
+          <span className="group relative inline-flex">
+            <button
+              type="button"
+              aria-label="About your web address"
+              aria-describedby="signup-slug-info"
+              className="inline-flex size-5 items-center justify-center rounded-full text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-indigo-500 max-sm:size-7"
+            >
+              <Info className="size-3.5" aria-hidden="true" />
+            </button>
+            <span
+              id="signup-slug-info"
+              role="tooltip"
+              className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-60 -translate-x-1/2 rounded-lg bg-foreground px-3 py-2 text-[12px] leading-snug text-background opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 max-sm:left-0 max-sm:translate-x-0"
+            >
+              You can change this address later. You can also attach your own domain.
+            </span>
+          </span>
+        </div>
 
         {/*
           The suffix is rendered INSIDE the field rather than as a hint below it.
@@ -385,18 +406,7 @@ export function TenantIdentityFields({
               We couldn&apos;t check this address just now. You can carry on — we&apos;ll
               confirm it when we build your portal.
             </p>
-          ) : (
-            <p className="text-[13px] text-muted-foreground">
-              {/* The full sentence on a laptop; a phone gets the part that
-                  matters in one line, so the screen fits (2026-11-23). */}
-              <span className="max-sm:hidden">
-                This is your booking site. Your portal will be at{" "}
-                {value.slug || "your-address"}.portal.drive-247.com. It can&apos;t be
-                changed later.
-              </span>
-              <span className="sm:hidden">Your booking site. It can&apos;t be changed later.</span>
-            </p>
-          )}
+          ) : null /* Review 1 (V7): the explanation moved into the "i" above. */}
 
           {showSuggestions && (
             <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted-foreground">

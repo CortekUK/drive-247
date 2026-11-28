@@ -150,7 +150,7 @@ export function CityStateField({
           onInteractOutside={(e) => {
             if (e.target instanceof Node && boxRef.current?.contains(e.target)) e.preventDefault();
           }}
-          className="z-[250] max-h-[min(17rem,var(--radix-popper-available-height))] w-[var(--radix-popper-anchor-width)] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-1 text-[15px] text-zinc-900 shadow-lg shadow-indigo-950/10 dark:border-white/10 dark:bg-[#17171f] dark:text-zinc-100"
+          className="z-[250] max-h-[min(17rem,var(--radix-popper-available-height))] w-[var(--radix-popper-anchor-width)] signup-pop overflow-y-auto rounded-2xl border border-indigo-100 bg-white/95 p-1 text-[15px] text-zinc-900 shadow-[0_8px_24px_-12px_rgba(67,56,202,0.25)] backdrop-blur-md dark:border-white/10 dark:bg-[#17171f]/95 dark:text-zinc-100"
         >
           <ul role="listbox" id={listId} aria-label="Cities">
             {options.map((option, i) => (
