@@ -654,7 +654,7 @@ export function TodoCard() {
   );
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)]">
+    <div className="flex flex-col overflow-hidden rounded-2xl border border-[var(--pv-line)] bg-[var(--pv-paper)]" data-tour="dash-todo">
       <header className="flex items-center justify-between gap-3 px-6 pt-4">
         <Eyebrow>To do</Eyebrow>
         <span className="flex items-center gap-0.5">
@@ -666,7 +666,7 @@ export function TodoCard() {
       {/* On the card the add box is only a doorway (Sep 29 2026): it looks
           like the field, and clicking it opens the full To do dialog with the
           real add box focused. Adding and managing happen there. */}
-      <div className="px-4 pt-2.5">
+      <div className="px-4 pt-2.5" data-tour="dash-todo-add">
         <button
           type="button"
           onClick={() => {

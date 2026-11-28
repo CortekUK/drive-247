@@ -81,7 +81,7 @@ export function InviteLinkDialogV2({ open, onOpenChange }: { open: boolean; onOp
 
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent className={cn("gap-0 overflow-hidden p-0 sm:max-w-[600px]", PHONE_SCREEN_DIALOG)} style={FORM_DIALOG_WASH} showCloseButton={false}>
+      <DialogContent className={cn("gap-0 overflow-hidden p-0 sm:max-w-[600px]", PHONE_SCREEN_DIALOG)} style={FORM_DIALOG_WASH} showCloseButton={false} data-tour="invite-link-dialog">
         <DialogTitle className="sr-only">Customer registration link</DialogTitle>
         <DialogDescription className="sr-only">
           {link ? "Your registration link is ready" : "Make a link customers use to sign themselves up"}
@@ -144,7 +144,7 @@ export function InviteLinkDialogV2({ open, onOpenChange }: { open: boolean; onOp
               <Button variant="outline" className="h-10 rounded-full px-5" onClick={() => close(false)}>
                 Cancel
               </Button>
-              <Button className="h-10 rounded-full px-5" onClick={make} disabled={loading}>
+              <Button className="h-10 rounded-full px-5" onClick={make} disabled={loading} data-tour="invite-link-make">
                 {loading ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />}
                 {loading ? "Making it…" : "Make the link"}
               </Button>

@@ -38,6 +38,7 @@ import { skeletonRows } from '@/lib/skeleton-data';
 import { useSkeletonLoading } from '@/hooks/use-skeleton-loading';
 import { MoneyReceipt } from './_receipt';
 import { ProfitCalculator } from './_calculator';
+import { TabTourButton } from '@/components/onboarding/tab-tour-button';
 
 /**
  * Placeholder figures for the skeleton. The receipt and calculator render these
@@ -134,8 +135,9 @@ export function InsightsView() {
             What the business earned, what it cost to run, and what is still owed.
           </p>
         </div>
-        <div className="shrink-0">
+        <div className="flex shrink-0 items-center gap-2">
           <ViewSwitch value={view} onChange={setView} />
+          <TabTourButton tour="insights" />
         </div>
       </header>
 
@@ -199,7 +201,7 @@ export function InsightsView() {
              The page itself never scrolls at md+. Side by side (xl), each
              column may scroll on its own only as a last resort on a very short
              window; stacked (md–xl), the pair scrolls inside the frame. */
-          <div className="grid items-start gap-8 md:h-full md:overflow-y-auto xl:grid-cols-[minmax(0,1fr)_420px] xl:items-stretch xl:gap-12 xl:overflow-visible [&>*]:xl:h-full [&>*]:xl:overflow-y-auto">
+          <div data-tour="insights-view-numbers" className="grid items-start gap-8 md:h-full md:overflow-y-auto xl:grid-cols-[minmax(0,1fr)_420px] xl:items-stretch xl:gap-12 xl:overflow-visible [&>*]:xl:h-full [&>*]:xl:overflow-y-auto">
             <MoneyReceipt data={data} loading={false} currency={currency} />
             <ProfitCalculator
               key={`${months}-${isLoading ? 'skeleton' : 'loaded'}`}
@@ -210,21 +212,21 @@ export function InsightsView() {
           </div>
         ) : view === 'pnl' ? (
           /* One table, one row per car — scrolls inside its own frame. */
-          <div className="md:h-full">
+          <div data-tour="insights-view-pnl" className="md:h-full">
             <PnlTable data={loadedData} months={months} currency={currency} />
           </div>
         ) : view === 'analytics' ? (
-          <div className="md:h-full md:overflow-y-auto xl:overflow-visible">
+          <div data-tour="insights-view-analytics" className="md:h-full md:overflow-y-auto xl:overflow-visible">
             <AnalyticsGallery data={data} months={months} currency={currency} />
           </div>
         ) : view === 'reports' ? (
-          <div className="md:h-full md:overflow-y-auto">
+          <div data-tour="insights-view-reports" className="md:h-full md:overflow-y-auto">
             <ReportsView data={loadedData} months={months} currency={currency} />
           </div>
         ) : (
           /* The real figures only — never the skeleton's placeholders, which
              would otherwise be sent to Trax as if they were the business. */
-          <div className="md:h-full md:overflow-y-auto xl:overflow-visible">
+          <div data-tour="insights-view-trax" className="md:h-full md:overflow-y-auto xl:overflow-visible">
             <TraxSummaryView data={loadedData} months={months} currency={currency} />
           </div>
         )}

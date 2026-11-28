@@ -215,6 +215,8 @@ function DayColumn({
           // deterministic rather than dependent on what the week happens to
           // hold. One column is ~200px wide, well inside the spotlight budget.
           data-tour="availability-day"
+          // Today's column: in view on a phone, where the week scrolls sideways.
+          data-today={isToday ? '' : undefined}
           aria-label={`${format(day.date, 'EEEE d MMMM')} — ${label}. Edit this day.`}
           className={cn(
             'group relative flex min-w-0 flex-col bg-card text-left outline-none transition-colors max-lg:snap-start',
@@ -396,7 +398,7 @@ function DayColumn({
       {/* `gap-0` because PopoverContent is a flex column with a base `gap-4`,
           which would push 16px between the panel's own bordered sections; and
           `overflow-hidden` so those sections are clipped to its rounded edge. */}
-      <PopoverContent side="bottom" align="center" sideOffset={6} collisionPadding={16} className="w-[286px] gap-0 overflow-hidden p-0">
+      <PopoverContent data-tour="availability-day-editor" side="bottom" align="center" sideOffset={6} collisionPadding={16} className="w-[286px] gap-0 overflow-hidden p-0">
         <DayEditorPanel
           day={day}
           defaults={defaults}

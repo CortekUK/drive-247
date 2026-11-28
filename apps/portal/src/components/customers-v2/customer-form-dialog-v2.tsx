@@ -557,6 +557,7 @@ export function CustomerFormDialogV2({
         <DialogContent
           className={cn("gap-0 overflow-hidden p-0 sm:max-w-[720px]", PHONE_SCREEN_DIALOG)}
           style={FORM_DIALOG_WASH}
+          data-tour="add-customer-dialog"
           showCloseButton={false}
           // The ID check is waiting on the customer's phone: a stray click
           // outside must not throw the QR away. "Later" closes it.
@@ -672,7 +673,7 @@ export function CustomerFormDialogV2({
                   {screen.line}
                 </p>
 
-                <div className={cn("mt-5 grid grid-cols-2 gap-x-5 gap-y-1", screen.narrow ? "mx-auto w-full max-w-[420px]" : "w-full")}>
+                <div className={cn("mt-5 grid grid-cols-2 gap-x-5 gap-y-1", screen.narrow ? "mx-auto w-full max-w-[420px]" : "w-full")} data-tour="add-customer-fields">
                   {step === 0 && (
                     <>
                       <Cell label="Full name" required className="col-span-2" error={err("name")}>

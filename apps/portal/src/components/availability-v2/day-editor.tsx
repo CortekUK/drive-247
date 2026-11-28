@@ -93,7 +93,7 @@ export function DayEditorPanel({ day, defaults, onSet, onDone }: DayEditorPanelP
         </p>
       </div>
 
-      <div className="space-y-1 p-2">
+      <div data-tour="availability-day-modes" className="space-y-1 p-2">
         <ModeRow
           icon={<Repeat className="size-4" />}
           label="Follow the weekly default"

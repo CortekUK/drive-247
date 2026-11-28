@@ -1,382 +1,701 @@
 /**
- * The Vehicles tab tour — three stops on the list, then eight inside one car,
- * and a shorter half for the operator whose fleet is still empty.
+ * The Vehicles tab tour: eleven topics, in the order an operator meets them.
  *
- * THE SHAPE, and why it is this shape. The brief for these tours is explicit
- * that stopping at the "Add Vehicle" button would teach the easy half: what a
- * first-time operator cannot guess is not where the button is, it is that a
- * price sheet has three hire-length switches that quietly delist the car, that
- * weekend pricing exists at all, or that there is nothing here to publish. All
- * of that lives INSIDE the record, so the tour goes in — `routeFor` builds
- * `/vehicles/<uuid>?section=…` from an id read off the list the operator is
- * already looking at (`readSampleIds` in `./index`).
+ *   1 fleet       the list page: graph, card, search, filters, rows, statuses, export
+ *   2 add         the Add Vehicle form, opened by the tour itself
+ *   3 record      what opening a car gives you, and how it saves
+ *   4 photos      cover photo, adding, reordering, removing
+ *   5 prices      the three rates, which lengths are offered, deposit, mileage
+ *   6 surcharges  extras, weekends, holidays and single days
+ *   7 booking     why a car cannot be booked: pause, blocked periods
+ *   8 keys        pickup location, lockbox, keys and papers
+ *   9 upkeep      certificates, servicing and its history
+ *  10 site        what customers see, and why a car might be hidden
+ *  11 money       what it earned and cost, and retiring it
  *
- * Eleven steps, inside the ten-to-twelve the brief allows. Each one names a
- * thing and says in one sentence what it means; none of them explains how to
- * fill a form in. Pointing at doors, not walking through them.
+ * Topics 3 to 11 open a real car: the first one the page has drawn (see
+ * `readSampleIds`). With no car yet they show as locked in the menu.
  *
- * ---------------------------------------------------------------------------
- * TWO TOURS IN ONE LIST, because an empty fleet is the normal first day
- *
- * All eleven of those steps assume there is a car to open. A brand-new
- * operator has none — that is what new means — and they are the whole audience
- * for an onboarding tour. So the list below is really two lists: every step
- * that points at a row or lives inside a record carries `requires.record`, and
- * three steps written for the empty fleet carry `requires.noRecord`.
- * `stepAllowed` keeps exactly one half, from ids `launch()` reads off the DOM.
- *
- *   EMPTY fleet   5 steps — the fleet graph, why one real car comes first, what
- *                 a record holds, the Add button, and the teaching card's own
- *                 CTA with a pause on it so the operator goes and does the thing.
- *   WITH a car   11 steps — the list, then eight stops inside one vehicle.
- *
- * The `record` guard is NOT redundant with `routeFor` already returning null on
- * an empty fleet. It says the dependency out loud, it puts the decision in one
- * place, and it is the only thing that saves `vehicles.row` — that step has a
- * perfectly valid route and no way to know its anchor is never coming, so
- * without it the operator watches the full `ANCHOR_WAIT_MS` at a table that has
- * been replaced by an empty state, and then watches it skip.
- *
- * The empty half is the most action-oriented of the three tab tours on purpose.
- * Nothing can be rented until a vehicle exists, and adding one is the one thing
- * a first-day operator can do here without waiting on Stripe, on a customer, or
- * on anybody else. So it ends by pushing at the button rather than summarising.
- *
- * ---------------------------------------------------------------------------
- * THIS TAB SPANS TWO DESIGN GENERATIONS, and every anchor below depends on it
- *
- * The LIST (`/vehicles`) is the shared page that all 57 tenants load. Its v1
- * branch is shadcn Cards, a real `<table>` and the gradient stat tiles in
- * `components/vehicles/fleet-summary-cards.tsx`. Under the v2 chrome, which is
- * the only place a tour ever runs, the tiles are gone: the top of the page is
- * one graph and a featured card (`components/vehicles-v2/vehicles-overview.tsx`),
- * and `vehicles.fleet` points at that graph. The RECORD (`/vehicles/<id>`)
- * is v2 and canary-only: `components/vehicles-v2/`, nine sections rendered one
- * at a time from `?section=`, with the app sidebar replaced by that record's
- * own rail. So the list steps — the empty-fleet ones included, since the
- * teaching card that replaces the table is rendered by that same page — are
- * written against the list page's markup and the last eight against the v2
- * record tree, and the two share no conventions.
- *
- * ---------------------------------------------------------------------------
- * THE ANCHORS, and the fallback that makes the back half safe
- *
- * Every record step falls back to its own row in the vehicle rail —
- * `[data-sidebar="sidebar"] a[href*="section=rates"]` and friends. Those links
- * are generated by `sectionHref()` from `components/vehicles-v2/sections.ts`,
- * so they cannot be absent while a vehicle is open, they are drawn on first
- * paint rather than after a query, and they are small. That matters more than
- * it looks: once ONE step on a route times out waiting for an anchor, every
- * later step on that same route gets a 1.5s budget instead of 6s, and this
- * tour is eight steps on a single pathname. A fallback that resolves instantly
- * keeps one slow panel from starving the rest of the run.
- *
- * It is also correct by identity rather than merely present: each step falls
- * back to the rail row for ITS OWN section, so a step that resolves before the
- * panel has repainted still points at the right door. That is worth stating,
- * because it is the common case — a step changing only `?section=` polls for
- * its anchor the moment the push is issued, which is usually a beat before the
- * new panel renders.
- *
- * The EMPTY half anchors inside the teaching card
- * (`VehiclesTeachingEmptyState` in `components/empty-states/lean-empty-states`),
- * which REPLACES the table when the fleet is empty — the same moment those
- * steps run, and canary-only, which is also the only tenant the launch button
- * renders for. Two attributes reach it: `[data-tour="vehicles-empty-points"]`
- * on the payoff list and `[data-tour="vehicles-empty"]` on the card, which the
- * steps only ever use as a scope for its heading or its CTA. Never the card
- * itself — it runs the full content width at around 450px tall, which is past
- * the point where the spotlight degrades to a centred wash. Each of those steps
- * still falls through to `LIST_HEADING`, so losing the attribute costs nothing.
- *
- * The `?section=` values are a contract with `sections.ts` in two places at
- * once — the route AND the href fallback of the same step. Renaming a
- * `SectionId` breaks both together; there is no half-working state to notice.
- *
- * No step anchors a whole `<Panel>` or a whole `<Section>` card. The spotlight
- * degrades to a centred wash past roughly two thirds of the viewport, which
- * looks like it worked while teaching nothing — so the section anchors land on
- * the section's HEADING ROW (see the `tourId` prop on `Section` in
- * `components/vehicles-v2/kit.tsx`) and the rates step lands on the three
- * switches rather than the price grid above them.
- *
- * ---------------------------------------------------------------------------
- * WHAT IS DELIBERATELY LEFT OUT
- *
- *  - Mileage, Extras, Keys & documents, Money. Mileage and documents ride as
- *    one-line notes on the steps next to them; Extras and Money are readouts an
- *    operator finds on their own once they know the rail exists. Eleven steps
- *    is the budget, and depth here would cost the record steps that earn it.
- *  - The right-hand overview rail (`overview-rail.tsx`). It is `xl:flex`, so it
- *    is `display: none` below 1280px and `isVisible()` rejects it — a step
- *    anchored there would silently skip on a 13" laptop, and `requires.desktop`
- *    only excludes phones.
- *  - Owner, Health and INSHUR columns. Hidden for the canary by
- *    `lib/lean-areas.ts`, so copy naming them would be wrong on the very tenant
- *    this is built for.
- *  - The deposit field, which is fleet-wide and read-only when the tenant is on
- *    `deposit_mode = 'global'` — a sentence promising it can be set per car is
- *    false for some tenants.
+ * Every record anchor is a section heading in `components/vehicles-v2`. A
+ * section without its own `tourId` is marked from its title by `Section` in
+ * `kit.tsx` (`vsec-<title>`), so renaming a section heading means updating
+ * the selector here too.
  */
 
 import type { TourStep } from '@/lib/first-rental-tour';
-import { recordRoute, type TabTour } from './index';
+import { recordRoute, type TabTour, type TabTourTopic } from './index';
 
-/** The vehicle rail row for a section — the fallback under every record step. */
-const rail = (section: string) => `[data-sidebar="sidebar"] a[href*="section=${section}"]`;
-
-/**
- * The list page's own heading. Unconditional on `/vehicles`, and the last
- * resort under every step that lives there.
- *
- * Two selectors because the two chromes disagree: `data-slot="sidebar-inset"`
- * exists only on the v2 sidebar, while `main h1` resolves under either.
- */
+/** The list page's own heading: the last resort under every list step. */
 const LIST_HEADING = ['[data-slot="sidebar-inset"] h1', 'main h1'] as const;
+/** The record's section heading, on every section. */
+const PANEL = '[data-tour="vehicle-panel"]';
+/** A record section's row in the left rail (laptop). */
+const rail = (section: string) => `[data-sidebar="sidebar"] a[href*="section=${section}"]`;
+/** A section heading on the record, by its marker. */
+const sec = (id: string) => `[data-tour="${id}"]`;
+const at = (section: string): Pick<TourStep, 'route' | 'routeFor' | 'requires'> => ({
+  route: '/vehicles',
+  routeFor: (ctx) => recordRoute(ctx.sampleIds?.vehicleId, '/vehicles', `section=${section}`),
+  requires: { record: 'vehicleId' },
+});
 
-const STEPS: readonly TourStep[] = [
-  {
-    /**
-     * The top of the list: one graph, "Cars on rent".
-     *
-     * Do not delete this step now that the tiles it described are gone. It is
-     * the only step here that carries the outline, it opens the empty run as
-     * well as the full one, and without it a view-only manager on an empty
-     * fleet is left with exactly `MIN_TOUR_STOPS` anchored steps.
-     *
-     * The anchor is the graph's label and headline number (`HeroChart`'s
-     * `anchor` prop in `components/vehicles-v2/vehicles-overview.tsx`), not the
-     * row: the row runs the width of the content column, and the card needs
-     * somewhere clear of the spotlight to stand. It is drawn while the rentals
-     * load and if they fail, so it is on the page as early as the heading and
-     * never loses the race to it. Then the overview's root, then the v1 tiles
-     * this step used to name, then the heading.
-     *
-     * The body names the graph rather than saying "this number", so it still
-     * reads true when the filters are open, the graph is turned away, and the
-     * spotlight lands on the heading instead.
-     */
-    id: 'vehicles.fleet',
-    label: 'Your fleet',
-    title: 'How busy your fleet is',
-    body: 'The graph up top counts your cars out on rent. The big number is today; the line is how it moved over the period you pick, with the one before it dotted.',
-    route: '/vehicles',
-    anchors: [
-      '[data-tour="vehicles-chart"]',
-      '[data-tour="fleet-overview"]',
-      '[data-tour="fleet-stat-available"]',
-      '[data-tour="fleet-stat-unavailable"]',
-      ...LIST_HEADING,
-    ],
-    side: 'bottom',
-    showOutline: true,
-    notes: [
-      {
-        // What the tiles used to count now sits on each row. Anchored to the
-        // first row, so an empty fleet, whose table is replaced by the teaching
-        // card, is not sent looking for a column it cannot see.
-        text: 'Available, Rented, Paused and the rest are on every row of the list, under Status.',
-        anchors: ['[data-tour="vehicle-row"]'],
-      },
-    ],
-  },
-  // ── The empty fleet's own three steps ───────────────────────────────────
-  // They sit interleaved with the shared ones rather than in a block, because
-  // `buildTour` keeps the array's order and the empty run has to READ in order:
-  // the fleet graph, why a car comes first, what a record holds, the button, then
-  // the card's own CTA. Grouping them at the end would put "add your first car"
-  // before "here is what a car record even is".
-  {
-    id: 'vehicles.empty.first',
-    label: 'The first car',
-    title: 'Start with one real car',
-    body: 'Use the car you actually mean to put on the road, not a test one. What you put on it is what customers see and pay on your booking site.',
-    route: '/vehicles',
-    anchors: ['[data-tour="vehicles-empty"] h3', ...LIST_HEADING],
-    side: 'bottom',
-    requires: { noRecord: 'vehicleId' },
-  },
-  {
-    id: 'vehicles.empty.holds',
-    label: 'One record',
-    title: 'One car, everything about it',
-    body: 'Photos, three prices, the dates it cannot be booked, its papers and what it earns. A few fields create it; the rest you fill in on the record.',
-    route: '/vehicles',
-    anchors: ['[data-tour="vehicles-empty-points"]', ...LIST_HEADING],
-    side: 'bottom',
-    requires: { noRecord: 'vehicleId' },
-  },
-  {
-    id: 'vehicles.add',
-    label: 'Add a vehicle',
-    title: 'Add the car you really rent',
-    body: 'Plate, make, model — and at least one photo, which it will insist on. Everything else can be filled in on the record afterwards.',
-    route: '/vehicles',
-    anchors: ['[data-tour="add-vehicle"]', '[data-add-vehicle-trigger]'],
-    side: 'bottom',
-    requires: { tab: 'vehicles', edit: true },
-    // Clicking this opens the dialog. Stand aside rather than sitting on top
-    // of it.
-    pauseOnAnchorClick: true,
-  },
-  {
-    id: 'vehicles.empty.start',
-    label: 'Add your first',
-    title: 'Add your first car now',
-    body: 'Same form as the button above. Add one car and the rest of this tour unlocks: the launch button becomes See what is inside, and it goes in with you.',
-    route: '/vehicles',
-    // The teaching card's own CTA — the biggest thing on an empty page — then
-    // the header button, then the heading. The middle one is what this step
-    // lands on for anyone whose fleet is empty without that card being drawn.
-    anchors: ['[data-tour="vehicles-empty"] button', '[data-tour="add-vehicle"]', ...LIST_HEADING],
-    side: 'top',
-    // `edit` for the same reason `vehicles.add` carries it: never spotlight a
-    // mutation control for someone who is not allowed to use it. A view-only
-    // manager on an empty fleet keeps the three steps above this one.
-    requires: { noRecord: 'vehicleId', tab: 'vehicles', edit: true },
-    pauseOnAnchorClick: true,
-    // The unexplained failure a first-timer actually hits: the dialog's own
-    // submit handler refuses with a toast when no photo has been attached
-    // (`add-vehicle-dialog.tsx`), and no field on the form says so.
-    notes: [{ text: 'The form will not save until at least one photo of the car is attached.' }],
-  },
-  {
-    id: 'vehicles.row',
-    label: 'A vehicle',
-    title: 'Every row is a door',
-    body: 'Open a car and you get its own screen — photos, prices, papers, and what it has earned. Everything about one vehicle in one place.',
-    route: '/vehicles',
-    // All three are absent on an empty fleet — the table itself is replaced by
-    // the teaching card — so the guard below is the one that matters most in
-    // this file. Without it the route is valid, the step has no way to know its
-    // anchor is never coming, and the operator watches a six-second pause at a
-    // page that has nothing to point at.
-    anchors: ['[data-tour="vehicle-row"]', 'table tbody tr', 'table thead'],
-    side: 'bottom',
-    requires: { record: 'vehicleId' },
-  },
-  {
-    id: 'vehicles.record',
-    label: 'The record',
-    title: 'Nine places, one car',
-    body: 'While a car is open, this rail is its contents page. There is no Save button anywhere on it — what you type applies as you type it.',
-    route: '/vehicles',
-    routeFor: (ctx) => recordRoute(ctx.sampleIds?.vehicleId, '/vehicles'),
-    anchors: ['[data-sidebar="sidebar"] [data-sidebar="content"]', '[data-sidebar="sidebar"]'],
-    side: 'right',
-    // The rail is an off-canvas Sheet on a phone; there is nothing to point at
-    // until it is opened. And there is no rail at all without a car to open.
-    requires: { desktop: true, record: 'vehicleId' },
-  },
-  {
-    id: 'vehicles.photos',
-    label: 'Photos',
-    title: 'The first photo is the cover',
-    body: 'It is what customers see on your booking site, and how you will pick this car out everywhere in here. Any other photo can take its place.',
-    route: '/vehicles',
-    routeFor: (ctx) => recordRoute(ctx.sampleIds?.vehicleId, '/vehicles', 'section=vehicle'),
-    anchors: ['[data-tour="vehicle-photos"]', rail('vehicle')],
-    side: 'bottom',
-    requires: { record: 'vehicleId' },
-  },
-  {
-    id: 'vehicles.rates',
-    label: 'Rates',
-    title: 'Three prices, three hire lengths',
-    body: 'A day, a week, a month. The switches under them decide which a customer may ask for — turn all three off and the car leaves your booking site.',
-    route: '/vehicles',
-    routeFor: (ctx) => recordRoute(ctx.sampleIds?.vehicleId, '/vehicles', 'section=rates'),
-    anchors: ['[data-tour="vehicle-hire-lengths"]', rail('rates')],
-    side: 'top',
-    requires: { record: 'vehicleId' },
-    // Mileage sits in the same section and does not need a step of its own,
-    // but an empty box meaning "unlimited" is the opposite of what every other
-    // form in the product means, so it is worth the line.
-    notes: [{ text: 'An empty mileage box below means unlimited, not zero.' }],
-  },
-  {
-    id: 'vehicles.weekends',
-    label: 'Weekend pricing',
-    title: 'Weekends can cost more',
-    body: 'Your fleet sets one weekend rule in Settings. This car only decides whether it takes part, or names its own number. Holidays work the same way.',
-    route: '/vehicles',
-    routeFor: (ctx) => recordRoute(ctx.sampleIds?.vehicleId, '/vehicles', 'section=addons'),
-    anchors: ['[data-tour="vehicle-weekends"]', rail('addons')],
-    side: 'bottom',
-    requires: { record: 'vehicleId' },
-  },
-  {
-    id: 'vehicles.availability',
-    label: 'Availability',
-    title: 'Why a car cannot be booked',
-    body: 'Every reason is listed here with the lever that clears it. Pausing takes the car off your site; blocked periods take out dates and leave the rest.',
-    route: '/vehicles',
-    routeFor: (ctx) => recordRoute(ctx.sampleIds?.vehicleId, '/vehicles', 'section=availability'),
-    anchors: ['[data-tour="vehicle-blockers"]', rail('availability')],
-    side: 'bottom',
-    requires: { record: 'vehicleId' },
-  },
-  {
-    id: 'vehicles.lockbox',
-    label: 'Handover',
-    title: 'Keys without meeting anyone',
-    body: 'Set a code and where the box is hidden, and the customer is sent both at pickup. Leave it off and the keys change hands in person.',
-    route: '/vehicles',
-    routeFor: (ctx) => recordRoute(ctx.sampleIds?.vehicleId, '/vehicles', 'section=pickup'),
-    anchors: ['[data-tour="vehicle-lockbox"]', rail('pickup')],
-    side: 'top',
-    requires: { record: 'vehicleId' },
-    // The silent failure worth one line: with the fleet-wide switch off,
-    // nothing is ever sent no matter what is typed on the car.
-    notes: [{ text: 'Lockbox handover is switched on for the whole fleet in Settings, under Rentals.' }],
-  },
-  {
-    id: 'vehicles.upkeep',
-    label: 'Upkeep',
-    title: 'Papers, and the odometer',
-    body: 'An expired inspection takes the car off your site on its own. An expired warranty only costs you money. Both are dated here.',
-    route: '/vehicles',
-    routeFor: (ctx) => recordRoute(ctx.sampleIds?.vehicleId, '/vehicles', 'section=upkeep'),
-    anchors: ['[data-tour="vehicle-certificates"]', rail('upkeep')],
-    side: 'bottom',
-    requires: { record: 'vehicleId' },
-    // Documents get covered without spending a step. Anchored, so a rail that
-    // no longer carries the row drops the line instead of lying about it.
-    notes: [
-      {
-        text: 'The PDFs themselves are filed next door, under Keys and documents.',
-        anchors: [rail('keys')],
-      },
-    ],
-  },
-  {
-    id: 'vehicles.listing',
-    label: 'Listing',
-    title: 'There is nothing to publish',
-    body: 'Your booking site reads this record as it stands, so a price you change is a price a customer sees. This page is exactly what they get.',
-    route: '/vehicles',
-    routeFor: (ctx) => recordRoute(ctx.sampleIds?.vehicleId, '/vehicles', 'section=listing'),
-    anchors: ['[data-tour="vehicle-listing"]', rail('listing')],
-    side: 'top',
-    requires: { record: 'vehicleId' },
-  },
-];
+const ADD_DIALOG = '[data-tour="add-vehicle-dialog"]';
+const OPEN_ADD = {
+  trigger: ['[data-tour="add-vehicle"] button', '[data-tour="vehicles-empty"] button'],
+  dialog: ADD_DIALOG,
+} as const;
+const NEEDS_CAR = { record: 'vehicleId' } as const;
+const NEEDS_CAR_TEXT = 'Add your first car to open this topic.';
+
+const fleet: TabTourTopic = {
+  id: 'vehicles.fleet',
+  title: 'Your fleet at a glance',
+  summary: 'The list page: the graph, finding a car, and what each status means.',
+  steps: [
+    {
+      id: 'vehicles.fleet.chart',
+      label: 'Cars on rent',
+      title: 'How busy your fleet is',
+      body: 'This graph counts your cars out on rent. The big number is today, and the line shows the period you pick, with the one before it dotted.',
+      route: '/vehicles',
+      anchors: ['[data-tour="vehicles-chart"]', '[data-tour="fleet-overview"]', ...LIST_HEADING],
+      side: 'bottom',
+      requires: { record: 'vehicleId' },
+    },
+    {
+      id: 'vehicles.fleet.card',
+      label: 'The card',
+      title: 'One idea at a time',
+      body: 'The card beside the graph points you to one place worth a look for your fleet. Open takes you straight there.',
+      route: '/vehicles',
+      anchors: ['[data-tour="vehicles-featured"]'],
+      side: 'bottom',
+      requires: { record: 'vehicleId' },
+    },
+    {
+      id: 'vehicles.fleet.search',
+      label: 'Search',
+      title: 'Find a car fast',
+      body: 'I search this list by plate, make, model and colour as you type. Clear the box to see every car again.',
+      route: '/vehicles',
+      anchors: ['input[aria-label="Search vehicles…"]', 'button[aria-label="Search this page"]'],
+      mobileAnchors: ['[data-mobile-tab-bar] button[aria-label="Search"]', 'button[aria-label="Search this page"]'],
+      mobileBody: 'Search is at the bottom. Here it finds cars by plate, make, model or colour, and the filter button beside the box narrows by status, make, year and profit.',
+      side: 'bottom',
+      requires: { record: 'vehicleId' },
+    },
+    {
+      id: 'vehicles.fleet.filters',
+      label: 'Filters',
+      title: 'Narrow it down',
+      body: 'Filters turn the graph over to show status, make, year and profit. The graph then counts only the cars you filtered to.',
+      route: '/vehicles',
+      anchors: ['button[aria-label="Show filters"]', 'button[aria-label="Hide filters"]'],
+      side: 'bottom',
+      // On a phone the filter button only shows once search is open; the search step covers it.
+      requires: { record: 'vehicleId', desktop: true },
+    },
+    {
+      id: 'vehicles.fleet.row',
+      label: 'A car',
+      title: 'Each row is one car',
+      body: 'Hover the plate to see its cover photo, and click anywhere on the row to open the car. Newest cars come first.',
+      route: '/vehicles',
+      anchors: ['[data-tour="vehicle-row"]'],
+      side: 'bottom',
+      requires: { record: 'vehicleId' },
+    },
+    {
+      id: 'vehicles.fleet.status',
+      label: 'Status',
+      title: 'What the status means',
+      body: 'Available can be booked, Rented is out now, Paused is off your site by choice, and Unavailable has every hire length switched off. Disposed cars are retired.',
+      route: '/vehicles',
+      anchors: ['[data-tour="vehicle-row"]'],
+      side: 'bottom',
+      requires: { record: 'vehicleId' },
+      notes: [{ text: 'An Unavailable car is greyed out and its name is struck through.' }],
+    },
+    {
+      id: 'vehicles.fleet.export',
+      label: 'Export',
+      title: 'Take the list with you',
+      body: 'This downloads the list as a spreadsheet, with any search or filters you have on.',
+      route: '/vehicles',
+      anchors: ['button[aria-label="Export CSV"]'],
+      side: 'bottom',
+      requires: { record: 'vehicleId' },
+    },
+    // An empty fleet: the page is one teaching card, so the topic teaches from it.
+    {
+      id: 'vehicles.fleet.empty-first',
+      label: 'The first car',
+      title: 'Start with one real car',
+      body: 'Use the car you actually mean to rent, not a test one. What you put on it is what customers see and pay on your booking site.',
+      route: '/vehicles',
+      anchors: ['[data-tour="vehicles-empty"] h3', ...LIST_HEADING],
+      side: 'bottom',
+      requires: { noRecord: 'vehicleId' },
+    },
+    {
+      id: 'vehicles.fleet.empty-holds',
+      label: 'One record',
+      title: 'One car, everything about it',
+      body: 'Photos, prices, the dates it cannot be booked, its papers and what it earns. A few answers create it, and the rest waits on its record.',
+      route: '/vehicles',
+      anchors: ['[data-tour="vehicles-empty-points"]', '[data-tour="vehicles-empty"]', ...LIST_HEADING],
+      side: 'bottom',
+      requires: { noRecord: 'vehicleId' },
+    },
+    {
+      id: 'vehicles.fleet.empty-later',
+      label: 'When it fills',
+      title: 'What this page becomes',
+      body: 'Once you have cars, this page shows how many are out on rent, a search, filters and one row per car. I will walk you through it then.',
+      route: '/vehicles',
+      anchors: ['[data-tour="vehicles-empty"]', ...LIST_HEADING],
+      side: 'bottom',
+      requires: { noRecord: 'vehicleId' },
+    },
+  ],
+};
+
+const add: TabTourTopic = {
+  id: 'vehicles.add',
+  title: 'Adding a car',
+  summary: 'The Add Vehicle form, screen by screen. I open it for you.',
+  steps: [
+    {
+      id: 'vehicles.add.button',
+      label: 'Add Vehicle',
+      title: 'Adding starts here',
+      body: 'Add Vehicle opens a short form with one question per screen. I will open it now so you can see it.',
+      route: '/vehicles',
+      anchors: ['[data-tour="add-vehicle"]', '[data-tour="vehicles-empty"] button'],
+      side: 'bottom',
+      requires: { tab: 'vehicles', edit: true },
+    },
+    {
+      id: 'vehicles.add.basics',
+      label: 'The car',
+      title: 'The basics first',
+      body: 'Make, model, year and colour. I use them to look up what cars like this rent for, and suggest a price later in the form.',
+      route: '/vehicles',
+      anchors: ['[data-tour="add-vehicle-fields"]', ADD_DIALOG],
+      side: 'top',
+      opens: OPEN_ADD,
+      requires: { tab: 'vehicles', edit: true },
+    },
+    {
+      id: 'vehicles.add.dots',
+      label: 'Screens',
+      title: 'Eleven short screens',
+      body: 'These dots are the screens. Next checks the one you are on before moving, and Back keeps everything you typed.',
+      route: '/vehicles',
+      anchors: [`${ADD_DIALOG} ol[aria-label^="Step "]`, ADD_DIALOG],
+      side: 'top',
+      opens: OPEN_ADD,
+      requires: { tab: 'vehicles', edit: true },
+    },
+    {
+      id: 'vehicles.add.middle',
+      label: 'What it asks',
+      title: 'What the next screens ask',
+      body: 'Plate and VIN, how you got it, your three rates, mileage, which hire lengths you offer, due dates, paperwork, keys, and a line for your booking site.',
+      route: '/vehicles',
+      anchors: [`${ADD_DIALOG} h3`, ADD_DIALOG],
+      side: 'bottom',
+      opens: OPEN_ADD,
+      requires: { tab: 'vehicles', edit: true },
+      notes: [{ text: 'A screen only needs its required fields to move on. Anything else can wait for the car’s record.' }],
+    },
+    {
+      id: 'vehicles.add.photos',
+      label: 'Photos',
+      title: 'Photos come last',
+      body: 'The form will not save without at least one photo. The first one becomes the cover on your booking site.',
+      route: '/vehicles',
+      anchors: [`${ADD_DIALOG} ol[aria-label^="Step "]`, ADD_DIALOG],
+      side: 'top',
+      opens: OPEN_ADD,
+      requires: { tab: 'vehicles', edit: true },
+    },
+    {
+      id: 'vehicles.add.done',
+      label: 'Added',
+      title: 'When it is in',
+      body: 'I tell you if anything still stops it being rented, like a missing price. Open it to finish, or add the next car straight away.',
+      route: '/vehicles',
+      anchors: [ADD_DIALOG],
+      side: 'center',
+      opens: OPEN_ADD,
+      requires: { tab: 'vehicles', edit: true },
+    },
+  ],
+};
+
+const record: TabTourTopic = {
+  id: 'vehicles.record',
+  title: "The car's record",
+  summary: 'Opening a car: its sections, how it saves, and what it is doing.',
+  requires: NEEDS_CAR,
+  unavailableText: NEEDS_CAR_TEXT,
+  steps: [
+    {
+      id: 'vehicles.record.sections',
+      label: 'Sections',
+      title: 'Everything about one car',
+      body: 'A car has nine sections, in the order you set one up: the car, its prices, how it runs, then its listing and its money.',
+      ...at('vehicle'),
+      anchors: ['[data-sidebar="sidebar"] [data-sidebar="content"]', rail('vehicle')],
+      mobileAnchors: ['[data-record-dock]'],
+      mobileBody: 'A car has nine sections. The button in the middle of this bar lists them all and shows which one you are on.',
+      side: 'right',
+    },
+    {
+      id: 'vehicles.record.saves',
+      label: 'Saving',
+      title: 'There is no Save button',
+      body: 'What you change is saved as you type or pick it. Each section says what it is for right under its name.',
+      ...at('vehicle'),
+      anchors: [PANEL],
+      side: 'bottom',
+    },
+    {
+      id: 'vehicles.record.overview',
+      label: 'Overview',
+      title: 'What it is doing now',
+      body: 'Overview shows the car at a glance: whether it is on hire, anything that needs your attention, and its key numbers. Activity and Timeline show what has happened to it.',
+      ...at('vehicle'),
+      // A wide screen shows it as a column; narrower ones put it on the bar at the bottom.
+      anchors: ['aside[aria-label="Timeline & vehicle overview"]', '[data-record-dock] button[aria-label="Overview"]'],
+      side: 'left',
+    },
+    {
+      id: 'vehicles.record.details',
+      label: 'The car',
+      title: 'What the car is',
+      body: 'Make, model, year, colour, plate and VIN. The plate is how I tell your cars apart everywhere in the portal.',
+      ...at('vehicle'),
+      anchors: [sec('vsec-the-car'), PANEL],
+      side: 'top',
+    },
+    {
+      id: 'vehicles.record.description',
+      label: 'Description',
+      title: 'A line for customers',
+      body: 'This text sits under the photos on your booking site. Say what makes the car nice to drive.',
+      ...at('vehicle'),
+      anchors: [sec('vsec-description'), PANEL],
+      side: 'top',
+    },
+    {
+      id: 'vehicles.record.back',
+      label: 'Back',
+      title: 'Back to the list',
+      body: 'All vehicles takes you back to the list. The address keeps the section you are on, so a saved link opens the car right here.',
+      ...at('vehicle'),
+      anchors: ['[data-sidebar="sidebar"] a[href="/vehicles"]', '[data-record-dock] a[aria-label="All vehicles"]'],
+      mobileAnchors: ['[data-record-dock] a[aria-label="All vehicles"]'],
+      mobileBody: 'The arrow on the left of this bar takes you back to all your cars. The address keeps the section you are on, so a saved link opens the car right here.',
+      side: 'right',
+    },
+  ],
+};
+
+const photos: TabTourTopic = {
+  id: 'vehicles.photos',
+  title: 'Photos',
+  summary: 'The cover photo, adding more, and taking one off.',
+  requires: NEEDS_CAR,
+  unavailableText: NEEDS_CAR_TEXT,
+  steps: [
+    {
+      id: 'vehicles.photos.cover',
+      label: 'Cover',
+      title: 'The first photo is the cover',
+      body: 'It is what customers see first on your booking site, and how you spot this car everywhere in here.',
+      ...at('vehicle'),
+      anchors: [sec('vehicle-photos'), PANEL],
+      side: 'bottom',
+    },
+    {
+      id: 'vehicles.photos.add',
+      label: 'Add photo',
+      title: 'Add as many as you like',
+      body: 'Add photo takes JPG, PNG or WebP, several at once. A listing without photos gets far fewer bookings.',
+      ...at('vehicle'),
+      anchors: [`${sec('vehicle-photos')} button`, sec('vehicle-photos'), PANEL],
+      side: 'bottom',
+      requires: { record: 'vehicleId', tab: 'vehicles', edit: true },
+    },
+    {
+      id: 'vehicles.photos.make-cover',
+      label: 'Make cover',
+      title: 'Pick a different cover',
+      body: 'Every other photo has a Cover button under it. Press it and that photo moves to the front, on your site too.',
+      ...at('vehicle'),
+      anchors: [sec('vehicle-photos')],
+      side: 'bottom',
+    },
+    {
+      id: 'vehicles.photos.remove',
+      label: 'Remove',
+      title: 'Taking one off',
+      body: 'The bin under a photo removes it straight away. If you remove the cover, the next photo takes its place.',
+      ...at('vehicle'),
+      anchors: [sec('vehicle-photos')],
+      side: 'bottom',
+    },
+  ],
+};
+
+const prices: TabTourTopic = {
+  id: 'vehicles.prices',
+  title: 'Prices',
+  summary: 'Daily, weekly and monthly rates, the deposit, and mileage.',
+  requires: NEEDS_CAR,
+  unavailableText: NEEDS_CAR_TEXT,
+  steps: [
+    {
+      id: 'vehicles.prices.rates',
+      label: 'Rates',
+      title: 'Three rates',
+      body: 'A daily rate for hires under 7 days, a weekly rate and a monthly rate. How long the hire is decides which one a booking uses.',
+      ...at('rates'),
+      anchors: [sec('vsec-rates'), PANEL],
+      side: 'bottom',
+    },
+    {
+      id: 'vehicles.prices.lengths',
+      label: 'Hire lengths',
+      title: 'Which lengths you offer',
+      body: 'These switches decide whether customers can book this car by the day, week or month. Turn all three off and the car leaves your site.',
+      ...at('rates'),
+      anchors: [sec('vehicle-hire-lengths'), PANEL],
+      side: 'top',
+    },
+    {
+      id: 'vehicles.prices.deposit',
+      label: 'Deposit',
+      title: 'The deposit',
+      body: 'This amount is held on the customer’s card when they book. It is a hold, not a charge.',
+      ...at('rates'),
+      anchors: [sec('vsec-rates'), PANEL],
+      side: 'bottom',
+      notes: [{ text: 'If your fleet uses one deposit for every car, it is set in Settings instead.' }],
+    },
+    {
+      id: 'vehicles.prices.mileage',
+      label: 'Mileage',
+      title: 'How far they can drive',
+      body: 'Set what is included per daily, weekly and monthly hire, and what each extra mile costs. An empty box means unlimited, not zero.',
+      ...at('rates'),
+      anchors: [sec('vsec-mileage'), PANEL],
+      side: 'top',
+    },
+    {
+      id: 'vehicles.prices.unlimited',
+      label: 'Unlimited upgrade',
+      title: 'Sell unlimited as an extra',
+      body: 'Offer unlimited mileage lets a customer pay to drop the limit at checkout. You set its price per hire length.',
+      ...at('rates'),
+      anchors: [sec('vsec-mileage'), PANEL],
+      side: 'top',
+    },
+  ],
+};
+
+const surcharges: TabTourTopic = {
+  id: 'vehicles.surcharges',
+  title: 'Weekends and holidays',
+  summary: 'Extras, weekend and holiday surcharges, and one-off day prices.',
+  requires: NEEDS_CAR,
+  unavailableText: NEEDS_CAR_TEXT,
+  steps: [
+    {
+      id: 'vehicles.surcharges.extras',
+      label: 'Extras',
+      title: 'Extras with this car',
+      body: 'Things a customer can add, like a child seat. Switch one on to offer it with this car, and set its price here.',
+      ...at('addons'),
+      anchors: [sec('vsec-extras'), PANEL],
+      side: 'bottom',
+    },
+    {
+      id: 'vehicles.surcharges.weekends',
+      label: 'Weekends',
+      title: 'Weekends can cost more',
+      body: 'The weekend surcharge is set once for the fleet in Settings. This car follows it, opts out, or uses its own percentage or fixed price.',
+      ...at('addons'),
+      anchors: [sec('vehicle-weekends'), PANEL],
+      side: 'bottom',
+    },
+    {
+      id: 'vehicles.surcharges.holidays',
+      label: 'Holidays',
+      title: 'Holidays work the same way',
+      body: 'Holiday periods are set for the fleet in Settings. For each one, this car follows the rule, opts out, or has its own price.',
+      ...at('addons'),
+      anchors: [sec('vsec-holidays'), PANEL],
+      side: 'top',
+    },
+    {
+      id: 'vehicles.surcharges.days',
+      label: 'Single days',
+      title: 'A price for one day',
+      body: 'Set a price on a single date, like a big local event. It wins over the base rate and over both surcharges.',
+      ...at('addons'),
+      anchors: [sec('vsec-individual-days'), PANEL],
+      side: 'top',
+      notes: [{ text: 'Surcharges apply to daily hires only, under 7 days.' }],
+    },
+  ],
+};
+
+const booking: TabTourTopic = {
+  id: 'vehicles.booking',
+  title: 'When a car can be booked',
+  summary: 'What stops a booking, pausing a car, and blocking dates.',
+  requires: NEEDS_CAR,
+  unavailableText: NEEDS_CAR_TEXT,
+  steps: [
+    {
+      id: 'vehicles.booking.blockers',
+      label: 'Bookable',
+      title: 'Bookable, or not',
+      body: 'This says whether customers can book the car right now. If they cannot, it lists every reason in the way.',
+      ...at('availability'),
+      anchors: [sec('vehicle-blockers'), PANEL],
+      side: 'bottom',
+    },
+    {
+      id: 'vehicles.booking.pause',
+      label: 'Pause',
+      title: 'Pause it',
+      body: 'Pausing takes the car off your booking site without deleting anything. A rental already under way carries on.',
+      ...at('availability'),
+      anchors: [sec('vsec-pause'), PANEL],
+      side: 'top',
+    },
+    {
+      id: 'vehicles.booking.blocked',
+      label: 'Blocked periods',
+      title: 'Block out some dates',
+      body: 'Block dates when the car is away, like a service. It stays on your site, and customers just cannot pick those days.',
+      ...at('availability'),
+      anchors: [sec('vsec-blocked-periods'), PANEL],
+      side: 'top',
+    },
+    {
+      id: 'vehicles.booking.elsewhere',
+      label: 'Availability tab',
+      title: 'The whole fleet at once',
+      body: 'Your opening hours, and the dates the whole fleet is closed, are in the Availability tab.',
+      ...at('availability'),
+      anchors: ['[data-sidebar="sidebar"] [data-tour="nav-/blocked-dates"]', sec('vsec-blocked-periods')],
+      mobileAnchors: [sec('vsec-blocked-periods')],
+      side: 'right',
+    },
+  ],
+};
+
+const keys: TabTourTopic = {
+  id: 'vehicles.keys',
+  title: 'Keys and lockbox',
+  summary: 'Where it is picked up, lockbox handover, keys and papers.',
+  requires: NEEDS_CAR,
+  unavailableText: NEEDS_CAR_TEXT,
+  steps: [
+    {
+      id: 'vehicles.keys.location',
+      label: 'Pickup',
+      title: 'Where it is collected',
+      body: 'Pick the location this car lives at. Your locations are set up in Settings, under Locations.',
+      ...at('pickup'),
+      anchors: [sec('vsec-pickup-location'), PANEL],
+      side: 'bottom',
+    },
+    {
+      id: 'vehicles.keys.lockbox',
+      label: 'Lockbox',
+      title: 'Keys without meeting',
+      body: 'Give the lockbox code and where to find the box. I send both to the customer at pickup, by email or text.',
+      ...at('pickup'),
+      anchors: [sec('vehicle-lockbox'), PANEL],
+      side: 'top',
+      notes: [{ text: 'Lockbox handover is switched on for the whole fleet in Settings, under Rentals.' }],
+    },
+    {
+      id: 'vehicles.keys.security',
+      label: 'Keys',
+      title: 'Keys and security',
+      body: 'Note the spare key and who holds it, and whether a tracker or immobiliser is fitted. None of this is shown to customers.',
+      ...at('keys'),
+      anchors: [sec('vsec-keys-security'), PANEL],
+      side: 'bottom',
+    },
+    {
+      id: 'vehicles.keys.documents',
+      label: 'Documents',
+      title: 'Its papers, in one place',
+      body: 'Upload the title, insurance certificate, purchase invoice or inspection reports. Download or remove them here any time.',
+      ...at('keys'),
+      anchors: [sec('vsec-documents'), PANEL],
+      side: 'top',
+    },
+  ],
+};
+
+const upkeep: TabTourTopic = {
+  id: 'vehicles.upkeep',
+  title: 'Upkeep',
+  summary: 'Inspection and registration dates, servicing and its costs.',
+  requires: NEEDS_CAR,
+  unavailableText: NEEDS_CAR_TEXT,
+  steps: [
+    {
+      id: 'vehicles.upkeep.certificates',
+      label: 'Certificates',
+      title: 'Dates that matter',
+      body: 'Inspection, registration and warranty dates. An expired inspection or registration takes the car off your site on its own.',
+      ...at('upkeep'),
+      anchors: [sec('vehicle-certificates'), PANEL],
+      side: 'bottom',
+      notes: [{ text: 'I remind you before the inspection or registration is due.' }],
+    },
+    {
+      id: 'vehicles.upkeep.servicing',
+      label: 'Servicing',
+      title: 'When it needs a service',
+      body: 'Keep the odometer up to date and I work out how far it is until the next service.',
+      ...at('upkeep'),
+      anchors: [sec('vsec-servicing'), PANEL],
+      side: 'top',
+    },
+    {
+      id: 'vehicles.upkeep.plan',
+      label: 'Service plan',
+      title: 'A prepaid service plan',
+      body: 'If this car’s servicing is prepaid on a plan, switch it on here, so your team knows the service is already covered.',
+      ...at('upkeep'),
+      anchors: [sec('vsec-servicing'), PANEL],
+      side: 'top',
+    },
+    {
+      id: 'vehicles.upkeep.history',
+      label: 'History',
+      title: 'Every service logged',
+      body: 'Log each service with the work done, what it cost and the odometer. The cost goes straight onto this car’s money, so you see what it really earns.',
+      ...at('upkeep'),
+      anchors: [sec('vsec-service-history'), PANEL],
+      side: 'top',
+    },
+  ],
+};
+
+const site: TabTourTopic = {
+  id: 'vehicles.site',
+  title: 'On your booking site',
+  summary: 'What customers see, and why a car might be hidden.',
+  requires: NEEDS_CAR,
+  unavailableText: NEEDS_CAR_TEXT,
+  steps: [
+    {
+      id: 'vehicles.site.listing',
+      label: 'Listing',
+      title: 'Nothing to publish',
+      body: 'This is exactly what customers see, as of now. Change a price and the site shows the new price straight away.',
+      ...at('listing'),
+      anchors: [sec('vehicle-listing'), PANEL],
+      side: 'bottom',
+    },
+    {
+      id: 'vehicles.site.built-from',
+      label: 'Built from',
+      title: 'Built from the other sections',
+      body: 'The photos and description come from Vehicle, the prices and mileage from Rates, and the extras from Extras. Fix things there.',
+      ...at('listing'),
+      anchors: [sec('vehicle-listing'), PANEL],
+      side: 'bottom',
+    },
+    {
+      id: 'vehicles.site.hidden',
+      label: 'Hidden',
+      title: 'When customers cannot see it',
+      body: 'If the car is off your site, I list why here: paused, no hire length on, an expired date. Each reason links to its fix.',
+      ...at('listing'),
+      anchors: [sec('vsec-why-customers-can-t-see-it'), sec('vehicle-listing')],
+      side: 'bottom',
+    },
+    {
+      id: 'vehicles.site.switch',
+      label: 'Website',
+      title: 'See it for yourself',
+      body: 'The Website switch at the top of the menu takes you to your booking site, where this car is listed.',
+      // The record's own rail replaces the menu, so this step stands on the list.
+      route: '/vehicles',
+      requires: { record: 'vehicleId' },
+      anchors: ['[data-tour="website-switch"]'],
+      mobileAnchors: ['button[aria-label="Open menu"]'],
+      mobileBody: 'Your booking site is one tap away: open the menu and use the Website switch at the top.',
+      side: 'right',
+    },
+  ],
+};
+
+const money: TabTourTopic = {
+  id: 'vehicles.money',
+  title: 'What it earns',
+  summary: 'Its rentals, what it cost, and retiring a car.',
+  requires: NEEDS_CAR,
+  unavailableText: NEEDS_CAR_TEXT,
+  steps: [
+    {
+      id: 'vehicles.money.rentals',
+      label: 'Rentals',
+      title: 'Every hire it has been on',
+      body: 'All of this car’s rentals, newest first. Open one to see the booking.',
+      ...at('money'),
+      anchors: [sec('vsec-rentals'), PANEL],
+      side: 'bottom',
+    },
+    {
+      id: 'vehicles.money.cost',
+      label: 'Cost',
+      title: 'What it cost you',
+      body: 'How you got it, the price or finance, and services. I set this against what it brought in to show whether the car is ahead.',
+      ...at('money'),
+      anchors: [sec('vsec-what-it-cost'), PANEL],
+      side: 'top',
+    },
+    {
+      id: 'vehicles.money.ledger',
+      label: 'Ledger',
+      title: 'Where the money went',
+      body: 'Every amount in and out for this car, straight from its ledger, so you can see where each number came from.',
+      ...at('money'),
+      anchors: [sec('vsec-where-it-came-from-and-went'), sec('vsec-what-it-cost')],
+      side: 'top',
+    },
+    {
+      id: 'vehicles.money.retire',
+      label: 'Retire',
+      title: 'When a car leaves the fleet',
+      body: 'Sold it? Retire this vehicle records the sale and takes it off the fleet. It leaves your site and takes no bookings, but nothing is deleted.',
+      ...at('money'),
+      anchors: ['[data-tour="vehicle-retire"]', sec('vsec-retire-this-vehicle'), sec('vsec-retired'), PANEL],
+      side: 'top',
+      notes: [{ text: 'A car out on hire cannot be retired until that rental is closed.' }],
+    },
+  ],
+};
 
 export const VEHICLES_TAB_TOUR: TabTour = {
   id: 'vehicles',
   label: 'Vehicles',
   homeRoute: '/vehicles',
-  // Said when fewer than `MIN_TOUR_STOPS` anchored steps survive.
-  //
-  // An empty fleet is NO LONGER that case, which is the point of this change:
-  // it now has three steps of its own and runs five in total. Nor is a
-  // view-only manager, who keeps the fleet graph and both empty-fleet teaching
-  // steps once the two add steps are dropped — three, which clears the floor.
-  //
-  // So this is close to unreachable, and the honest remaining cause is access
-  // to `/vehicles` itself. It is worded for that rather than telling someone to
-  // add a car they may not be permitted to add.
   emptyMessage:
-    'There is not enough of this tab open to you to walk through. A head admin can widen your access to Vehicles, and the tour will have more to show.',
-  steps: STEPS,
+    'There is not enough of this tab open to you to walk through. A head admin can widen your access to Vehicles.',
+  topics: [fleet, add, record, photos, prices, surcharges, booking, keys, upkeep, site, money],
 };

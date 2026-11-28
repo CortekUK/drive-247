@@ -134,6 +134,10 @@ export const inputCls =
 export const textareaCls =
   "flex min-h-16 w-full resize-none rounded-2xl border border-transparent bg-input/50 px-3.5 py-3 text-sm outline-none transition-[color,box-shadow,background-color] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60";
 
+/** Tour anchor from a title: "Blocked with you" is `csec-blocked-with-you`. */
+const tourSlug = (prefix: string, title?: string) =>
+  title ? `${prefix}-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}` : undefined;
+
 export function Surface({ className, children }: { className?: string; children: React.ReactNode }) {
   return <div className={cn(cardCls, "p-6", className)}>{children}</div>;
 }
@@ -154,7 +158,7 @@ export function Section({
   return (
     <Surface className={className}>
       {(title || right) && (
-        <div className="mb-5 flex items-start gap-4">
+        <div className="mb-5 flex items-start gap-4" data-tour={tourSlug("csec", title)}>
           <div className="min-w-0 flex-1">
             {title && <h3 className="font-heading text-sm font-semibold">{title}</h3>}
             {description && (
@@ -186,7 +190,7 @@ export function DangerSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-4xl bg-destructive/[0.04] p-6 ring-1 ring-destructive/15">
+    <div className="rounded-4xl bg-destructive/[0.04] p-6 ring-1 ring-destructive/15" data-tour={tourSlug("csec", title)}>
       <h3 className="font-heading text-sm font-semibold text-destructive">{title}</h3>
       {description && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>}
       <div className="mt-5">{children}</div>
@@ -217,7 +221,7 @@ export function Panel({
     // A fixed title above a scroll box left only ~400px for the card, which
     // read as a card cut off halfway with dead space under it.
     <div className="flex h-full min-h-0 w-full max-w-3xl flex-col max-md:h-auto">
-      <div className="flex shrink-0 items-start gap-4">
+      <div className="flex shrink-0 items-start gap-4" data-tour={tourSlug("cpanel", title)}>
         <div className="min-w-0 flex-1">
           {/* The section's own name: the same once loaded, so a skeleton keeps it. */}
           <h2 className="font-heading text-2xl font-medium tracking-tight" data-skeleton-keep>{title}</h2>

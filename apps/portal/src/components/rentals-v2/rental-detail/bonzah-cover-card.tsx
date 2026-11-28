@@ -167,7 +167,7 @@ export function BonzahCoverCard({
       </div>
 
       {/* The policy at a glance — four facts, one row. */}
-      <div className={cn(insetCls, "mt-4 grid grid-cols-2 gap-y-3 px-5 py-4 lg:grid-cols-4")}>
+      <div data-tour="rental-bonzah-facts" className={cn(insetCls, "mt-4 grid grid-cols-2 gap-y-3 px-5 py-4 lg:grid-cols-4")}>
         <Fact label="Policy">{hasPolicy ? <span className="font-mono text-[13px]">{policyNo ?? "—"}</span> : "Not bought yet"}</Fact>
         <Fact label="Covers">
           {fmtDate(policy?.trip_start_date ?? rentalStart)} → {fmtDate(policy?.trip_end_date ?? rentalEnd)}
@@ -185,7 +185,7 @@ export function BonzahCoverCard({
       </div>
 
       {/* The cover — a tile each: what it is, what it pays for, what it costs. */}
-      <div className="mt-3 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+      <div data-tour="rental-bonzah-covers" className="mt-3 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         {COVERS.map((c) => {
           const on = sel.has(c.key);
           const wasOn = onPolicy.has(c.key);

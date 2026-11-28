@@ -251,7 +251,7 @@ export function StagePayments({ detail, refetch }: StageProps) {
       title="Payments"
       description="What is owed, what arrived, and what stands behind it."
       action={
-        <span className="inline-flex items-center gap-4">
+        <span data-tour="rental-payment-actions" className="inline-flex items-center gap-4">
           <StageAction
             icon={CreditCard}
             label="Take a payment"
@@ -260,6 +260,7 @@ export function StagePayments({ detail, refetch }: StageProps) {
           />
           <StageAction icon={Plus} label="Add a charge" onClick={() => setRequest({ kind: "fine" })} />
           {showCancel && (
+            <span data-tour="rental-cancel" className="inline-flex">
             <StageAction
               icon={Ban}
               label="Cancel rental"
@@ -270,6 +271,7 @@ export function StagePayments({ detail, refetch }: StageProps) {
                   : null
               }
             />
+            </span>
           )}
         </span>
       }
@@ -300,7 +302,7 @@ export function StagePayments({ detail, refetch }: StageProps) {
             </p>
             <span className="flex-1" />
             {/* Apart on purpose: a hold is not money in. */}
-            <div className="flex items-center gap-3 rounded-3xl bg-muted/40 px-4 py-2.5 ring-1 ring-foreground/5">
+            <div data-tour="rental-deposit" className="flex items-center gap-3 rounded-3xl bg-muted/40 px-4 py-2.5 ring-1 ring-foreground/5">
               <Lock className="size-4 text-muted-foreground" />
               <div className="min-w-0">
                 <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Deposit</p>

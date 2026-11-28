@@ -201,7 +201,7 @@ export function SectionVerification({ c, onJump, canEdit, drift }: SectionProps 
           )}
         </div>
 
-        <div className="mt-6">
+        <div className="mt-6" data-tour="customer-verification-stages">
           <Timeline
             steps={[
               {

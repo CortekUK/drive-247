@@ -42,8 +42,10 @@
  * The depth lives in the TAB TOURS (`lib/tab-tours/*`), launched from a button
  * on each tab. Anything you are tempted to add here belongs there.
  *
- * Still skippable at every step, still replayable from the user menu, still NO
- * VIDEOS inside it — videos live in the setup checklist and the empty states.
+ * Required once for every staff member of a company created after go-live
+ * (no close, no Skip, no Esc; see REQUIRED_QUICK_TOUR_SINCE), optional for
+ * everyone else. Replayable from the Help menu, and a replay can be closed.
+ * No videos inside it: videos live in the setup checklist and the empty states.
  *
  * ---------------------------------------------------------------------------
  * WHY THE LOGIC IS IN A .ts FILE AND NOT IN THE COMPONENT
@@ -67,6 +69,8 @@
  *    written on every step change and cleared on finish, skip or dismiss.
  */
 
+import { noteTourWrite } from '@/lib/tour-sync';
+
 /**
  * Bump when the STEPS change in a way that makes re-showing the tour the right
  * call. The version is part of the storage key, so bumping it re-arms the tour
@@ -87,6 +91,22 @@
  * matches on the `d247.tour.` namespace, so it clears every version at once.
  */
 export const FIRST_RENTAL_TOUR_VERSION = 4;
+
+/**
+ * Companies created on or after this moment get the quick tour as a REQUIRED
+ * first step: no close button, no Skip, no Esc, only Back and Next, and the
+ * last card is the way out. Companies that existed before keep the old
+ * behaviour (offered once, closable). Every staff member of a new company
+ * takes it once, on their first visit. A replay from Help is always closable.
+ */
+export const REQUIRED_QUICK_TOUR_SINCE = '2026-11-27T00:00:00Z';
+
+/** Is a company created at `createdAt` one that must take the quick tour? */
+export function isRequiredTourCompany(createdAt: string | null | undefined): boolean {
+  if (!createdAt) return false;
+  const t = Date.parse(createdAt);
+  return Number.isFinite(t) && t >= Date.parse(REQUIRED_QUICK_TOUR_SINCE);
+}
 
 /** Every key this module writes starts with this. */
 const KEY_PREFIX = 'd247.tour.first-rental';
@@ -258,7 +278,7 @@ export interface TourBuildContext {
 
 /** A button on a tour card that DOES something, and ends the tour. */
 export interface TourAction {
-  id: 'connect-stripe' | 'book-call';
+  id: 'connect-stripe' | 'book-call' | 'next-topic';
   label: string;
 }
 
@@ -343,6 +363,26 @@ export interface TourStep {
   bodyFor?: (ctx: TourBuildContext) => string;
   /** Buttons on the card. Each one ends the tour and then does its thing. */
   actionsFor?: (ctx: TourBuildContext) => readonly TourAction[];
+  /**
+   * On a phone, point here instead (the bottom tab bar, the menu button),
+   * because the sidebar these steps point at is hidden there. Applied by
+   * `buildTour`; wins over `centerOnMobile`.
+   */
+  mobileAnchors?: readonly string[];
+  /** `span` on a phone, with `mobileAnchors`. */
+  mobileSpan?: readonly string[];
+  /** The words on a phone, where they name a different control. */
+  mobileBody?: string;
+  /** The last card's "every tab has its own tour" box. */
+  tabTourHint?: boolean;
+  /**
+   * The step lives inside a dialog. Before its anchor is looked for, the
+   * dialog is opened by clicking the first visible `trigger`, unless an
+   * element matching `dialog` is already on screen. Tab tours only.
+   */
+  opens?: { trigger: readonly string[]; dialog: string };
+  /** Close any open dialog before this step shows (a step back out of one). */
+  closesDialogs?: boolean;
 }
 
 /**
@@ -378,6 +418,10 @@ const WEBSITE_SWITCH = '[data-tour="website-switch"]';
 
 /** Trax's Help button in the v2 top bar. */
 const TRAX_HELP = '[data-tour="trax-help"]';
+
+/** The phone's bottom tab bar and its menu button (the sidebar is a sheet there). */
+const TAB_BAR = (href: string) => `[data-mobile-tab-bar] a[href="${href}"]`;
+const PHONE_MENU = 'button[aria-label="Open menu"]';
 
 /**
  * Every stop in the middle of the tour shares these: it lives on the
@@ -422,6 +466,8 @@ export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
     body: 'Your cars live in Vehicles and the people who rent them in Customers. Before anyone drives, I check their licence and that their face matches it.',
     anchors: [nav('customers'), nav('vehicles')],
     span: [nav('vehicles')],
+    mobileAnchors: [TAB_BAR('/vehicles'), TAB_BAR('/customers')],
+    mobileSpan: [TAB_BAR('/customers')],
   },
   {
     ...STOP,
@@ -433,6 +479,8 @@ export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
     // "Money & paperwork" block of the rail, as one.
     anchors: [nav('agreements'), nav('finances'), nav('payments')],
     span: [nav('finances'), nav('payments'), nav('insurances')],
+    mobileAnchors: [PHONE_MENU],
+    mobileBody: 'Each rental gets an agreement signed online and, if you like, Bonzah insurance priced for its dates. Every payment, deposit and refund is kept in Finances. All three are in this menu.',
   },
 
   // ── 2. Put together ────────────────────────────────────────────────────
@@ -443,6 +491,8 @@ export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
     title: 'Put together, that is a rental',
     body: 'Pick the car and the customer, and the driver check, agreement, insurance and payment follow in one flow. New Rental on the Rentals page starts one.',
     anchors: [nav('rentals')],
+    mobileAnchors: [TAB_BAR('/rentals/new')],
+    mobileBody: 'Pick the car and the customer, and the driver check, agreement, insurance and payment follow in one flow. This button starts one. Your rentals are listed in the menu.',
   },
 
   // ── 3. Where customers find you ────────────────────────────────────────
@@ -453,6 +503,8 @@ export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
     title: 'Your booking site is already live',
     body: 'Your cars appear on it as you add them, and customers book and pay there. This switch opens the Website side, where you change its pages, words, photos and colours yourself.',
     anchors: [WEBSITE_SWITCH],
+    mobileAnchors: [PHONE_MENU],
+    mobileBody: 'Your cars appear on it as you add them, and customers book and pay there. The Portal and Website switch at the top of this menu opens the Website side, where you change its pages, words, photos and colours yourself.',
     detail: (ctx) => (ctx.bookingUrl ? ctx.bookingUrl.replace(/^https?:\/\//, '') : null),
   },
 
@@ -487,7 +539,8 @@ export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
     route: null,
     anchors: [],
     side: 'center',
-    notes: [{ text: 'Every tab has its own tour for the detail, on the button at the top of that tab.' }],
+    // The handover to the tab tours, drawn as its own box on the card.
+    tabTourHint: true,
   },
 ];
 
@@ -585,7 +638,15 @@ export function buildTour(ctx: TourBuildContext, steps: readonly TourStep[] = FI
     let step = raw;
     // A sidebar stop on a phone: the rail is an off-canvas sheet there, so
     // draw the card centred rather than wait for a row that is never shown.
-    if (ctx.isMobile && step.centerOnMobile) {
+    if (ctx.isMobile && step.mobileAnchors) {
+      step = {
+        ...step,
+        anchors: step.mobileAnchors,
+        span: step.mobileSpan ?? [],
+        body: step.mobileBody ?? step.body,
+        side: 'top',
+      };
+    } else if (ctx.isMobile && step.centerOnMobile) {
       step = { ...step, anchors: [], side: 'center' };
     }
     // Resolve a record-scoped route into a real path, and drop the step if the
@@ -758,6 +819,11 @@ export interface TourGateInput {
   wizardPending: boolean;
   /** This user has already been through it (or skipped it). */
   alreadySeen: boolean;
+  /**
+   * The saved tour state has come back from the database (or the wait for it
+   * ran out). Absent means not tracked, which counts as ready.
+   */
+  syncReady?: boolean;
 }
 
 /**
@@ -783,7 +849,8 @@ export function shouldAutostartTour(input: TourGateInput): boolean {
     input.authReady &&
     !input.blockingGateOpen &&
     !input.wizardPending &&
-    !input.alreadySeen
+    !input.alreadySeen &&
+    input.syncReady !== false
   );
 }
 
@@ -825,6 +892,7 @@ export function markTourSeen(
   if (!storage) return;
   try {
     storage.setItem(tourSeenKey(appUserId), new Date().toISOString());
+    noteTourWrite(tourSeenKey(appUserId));
   } catch {
     // Storage full or blocked. The tour still runs this once; the only loss is
     // that it may offer itself again next load. Never worth throwing for.
@@ -855,6 +923,8 @@ export interface TourProgress {
   status: TourProgressStatus;
   updatedAt: string;
   prompts: number;
+  /** A required run: it comes back on its own, and it is never dropped. */
+  required?: boolean;
 }
 
 export const MAX_RESUME_PROMPTS = 3;
@@ -870,7 +940,8 @@ function isProgress(value: unknown): value is TourProgress {
     v.stepId.length > 0 &&
     (v.status === 'active' || v.status === 'paused') &&
     typeof v.updatedAt === 'string' &&
-    typeof v.prompts === 'number'
+    typeof v.prompts === 'number' &&
+    (v.required === undefined || typeof v.required === 'boolean')
   );
 }
 
@@ -897,7 +968,7 @@ export function readTourProgress(
 /** Save progress. Never throws; a failed write just means no resume offer. */
 export function writeTourProgress(
   appUserId: string | null | undefined,
-  progress: { stepId: string; status: TourProgressStatus; prompts?: number },
+  progress: { stepId: string; status: TourProgressStatus; prompts?: number; required?: boolean },
   storage: Pick<Storage, 'setItem'> | null = safeStorage(),
 ): void {
   if (!storage) return;
@@ -907,9 +978,11 @@ export function writeTourProgress(
     status: progress.status,
     updatedAt: new Date().toISOString(),
     prompts: progress.prompts ?? 0,
+    ...(progress.required ? { required: true } : {}),
   };
   try {
     storage.setItem(tourProgressKey(appUserId), JSON.stringify(record));
+    noteTourWrite(tourProgressKey(appUserId));
   } catch {
     // Storage full or blocked. The tour keeps running in memory.
   }
@@ -922,6 +995,7 @@ export function clearTourProgress(
   if (!storage) return;
   try {
     storage.removeItem(tourProgressKey(appUserId));
+    noteTourWrite(tourProgressKey(appUserId));
   } catch {
     // Nothing to do; the record simply survives until the next clear.
   }
@@ -975,6 +1049,8 @@ export function decideResume(
     index = steps.findIndex((s) => after.includes(s.id));
     if (index === -1) return { kind: 'none' };
   }
+  // A required run is not offered, it comes back: on any page, at its card.
+  if (progress.required) return { kind: 'resume', index };
   if (progress.status === 'active' && stepIsOnRoute(steps[index], pathname)) {
     return { kind: 'resume', index };
   }
@@ -991,3 +1067,14 @@ export function decideResume(
  * ancestor that could hold the state.
  */
 export const REPLAY_TOUR_EVENT = 'replay-first-rental-tour';
+
+/**
+ * What a replay can ask for. Both optional: a plain replay (from Help) starts
+ * at the first card and can be closed.
+ */
+export interface ReplayTourDetail {
+  /** Run it as a new company meets it: required, no way out but the last card. */
+  required?: boolean;
+  /** Start on this card instead of the first. */
+  stepId?: string;
+}

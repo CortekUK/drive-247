@@ -86,20 +86,22 @@ export function SectionRentals({ c, onJump, currency }: SectionProps) {
             />
           </div>
 
-          <Segmented
-            value={view}
-            onChange={setView}
-            options={[
-              { value: "booking", label: "By booking" },
-              { value: "car", label: "By car" },
-            ]}
-          />
+          <div data-tour="customer-rentals-view">
+            <Segmented
+              value={view}
+              onChange={setView}
+              options={[
+                { value: "booking", label: "By booking" },
+                { value: "car", label: "By car" },
+              ]}
+            />
+          </div>
 
           {view === "booking" ? (
             <Section>
               <div className={listCls}>
                 {c.rentals.map((r) => (
-                  <div key={r.id} className="flex items-center gap-4 px-5 py-4 max-lg:flex-wrap max-lg:gap-x-3 max-lg:gap-y-3 max-sm:px-4">
+                  <div key={r.id} data-tour="customer-rental-row" className="flex items-center gap-4 px-5 py-4 max-lg:flex-wrap max-lg:gap-x-3 max-lg:gap-y-3 max-sm:px-4">
                     <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-card ring-1 ring-foreground/5">
                       <Car className="size-4 text-muted-foreground" />
                     </span>

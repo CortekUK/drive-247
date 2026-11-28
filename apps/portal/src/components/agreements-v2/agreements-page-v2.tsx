@@ -74,6 +74,7 @@ import {
 import { SendAgreementDialogV2 } from "@/components/agreements-v2/send-agreement-dialog-v2";
 import { AgreementTemplatesDialogV2 } from "@/components/agreements-v2/templates-dialog-v2";
 import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { TabTourButton } from "@/components/onboarding/tab-tour-button";
 import { skeletonRows } from "@/lib/skeleton-data";
 import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 
@@ -372,8 +373,10 @@ export function AgreementsPageV2() {
           </p>
         </div>
         <div className={`flex items-center gap-2 ${HEADER_ACTIONS_V2}`}>
+          <TabTourButton tour="agreements" />
           {canSend && !teachEmpty && (
             <Button
+              data-tour="agreements-send"
               onClick={() => setSendOpen(true)}
               className={`flex-1 bg-gradient-primary text-primary-foreground transition-all duration-200 hover:opacity-90 sm:flex-none ${HEADER_PRIMARY_V2}`}
             >
@@ -425,10 +428,13 @@ export function AgreementsPageV2() {
         {!isLoading && error && !(allRows?.length) ? (
           <SettingsLoadError thing="your agreements" error={error} onRetry={refetch} />
         ) : noAgreements ? (
-          <AgreementsTeachingEmptyState
-            onSendAgreement={canSend ? () => setSendOpen(true) : undefined}
-            onCreateTemplate={canCreateTemplate ? openTemplateCreate : undefined}
-          />
+          // The tour reads this marker to tell an empty tab from a full one.
+          <div data-tour="agreements-empty">
+            <AgreementsTeachingEmptyState
+              onSendAgreement={canSend ? () => setSendOpen(true) : undefined}
+              onCreateTemplate={canCreateTemplate ? openTemplateCreate : undefined}
+            />
+          </div>
         ) : visibleRows.length === 0 ? (
           <div className={SURFACE}>
             <SettingsNoMatch query={search} noun="agreements" filtersActive={activeCount > 0} onClear={clearFilters} />
