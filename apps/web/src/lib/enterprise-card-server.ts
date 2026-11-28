@@ -19,6 +19,27 @@ export interface EnterpriseCard {
 
 const FETCH_TIMEOUT_MS = 3000;
 
+/**
+ * The card as the admin_settings migration seeds it (20261017150000). Shown when
+ * the database has no settings row at all, which is the case on staging: the
+ * card belongs on the grid (Ghulam, review 1, V1), and an empty settings table
+ * is not "switched off". A row with is_visible false still hides it.
+ */
+export const DEFAULT_ENTERPRISE_CARD: EnterpriseCard = {
+  name: "Enterprise",
+  fleetBand: "40+ vehicles",
+  priceLabel: "Let's talk",
+  tagline: "For large and multi-location fleets that need custom terms.",
+  ctaLabel: "Contact us",
+  ctaHref: "/strategy-call",
+  bullets: [
+    "Sized for fleets of 40+ vehicles",
+    "Custom pricing and contract terms",
+    "Hands-on onboarding and data migration",
+    "Priority support with a named contact",
+  ],
+};
+
 /** Only a site path, an https link or a mailto reaches an href. */
 function safeHref(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -38,7 +59,9 @@ export async function fetchEnterpriseCard(): Promise<EnterpriseCard | null> {
     });
     if (!res.ok) return null;
     const raw: unknown = await res.json();
-    if (typeof raw !== "object" || raw === null) return null;
+    // No settings row (staging): the default card, not nothing.
+    if (raw === null) return DEFAULT_ENTERPRISE_CARD;
+    if (typeof raw !== "object") return null;
     const r = raw as Record<string, unknown>;
     if (r.is_visible === false) return null;
     const str = (k: string): string => (typeof r[k] === "string" ? (r[k] as string).trim() : "");
