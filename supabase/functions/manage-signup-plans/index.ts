@@ -21,7 +21,7 @@ import {
   getSignupStripeMode,
   getOrCreateSignupProduct,
 } from "../_shared/signup-stripe.ts";
-import { MAX_TRIAL_DAYS } from "../_shared/signup-trial.ts";
+import { MAX_SIGNUP_PLAN_TRIAL_DAYS } from "../_shared/signup-trial.ts";
 
 const LOG = "[manage-signup-plans]";
 
@@ -449,10 +449,12 @@ Deno.serve(async (req) => {
         if (loaded.err) return loaded.err;
 
         const days = Number(body.trial_days);
-        if (!Number.isInteger(days) || days < 0 || days > MAX_TRIAL_DAYS) {
+        if (!Number.isInteger(days) || days < 0 || days > MAX_SIGNUP_PLAN_TRIAL_DAYS) {
           return fail(
             "VALIDATION_FAILED",
-            `Trial must be a whole number of days from 0 to ${MAX_TRIAL_DAYS}.`,
+            days >= 30
+              ? "A signup trial must be under 30 days (1 to 29)."
+              : `Trial must be a whole number of days from 0 to ${MAX_SIGNUP_PLAN_TRIAL_DAYS}.`,
             400,
             { field: "trial_days" },
           );

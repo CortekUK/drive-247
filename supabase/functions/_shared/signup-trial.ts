@@ -22,6 +22,12 @@
 /** The longest trial the admin page may set. Matches the DB CHECKs. */
 export const MAX_TRIAL_DAYS = 90;
 
+/**
+ * Review 1 (Ghulam, 28 Nov 2026): a signup PLAN's trial is under 30 days. A
+ * trial of 30+ days would give a "3 months" promo code a 4th discounted bill.
+ */
+export const MAX_SIGNUP_PLAN_TRIAL_DAYS = 29;
+
 /** 0 for anything that is not a whole number of days in range. */
 export function normaliseTrialDays(value: unknown): number {
   const n = Number(value);

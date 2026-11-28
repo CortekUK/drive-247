@@ -95,17 +95,39 @@ export async function passwordSignIn(email, password) {
 }
 
 /**
- * Put a known signup code on a user, the way `signup-otp.ts` stores it.
- * The hash is sha256(`${code}:${pepper}`). Staging has no SIGNUP_OTP_PEPPER of
- * its own, so the pepper is the service-role key; if that changes, the
- * right-code checks fail with "OTP_INVALID" and this helper needs the pepper.
+ * The pepper the deployed functions really use (`signup-otp.ts`): SIGNUP_OTP_PEPPER
+ * if staging has one, otherwise the runtime SUPABASE_SERVICE_ROLE_KEY.
+ *
+ * Review 1 (03.4): the runtime key is the new-style `sb_secret_…` key, NOT the
+ * legacy service-role JWT in .staging-credentials.local, so a hash made with the
+ * file's key could never match and the right code was refused. The key is found
+ * here through the Management API (the same SUPABASE_ACCESS_TOKEN the kit's
+ * sql() needs): the API key whose sha256 equals the runtime secret's digest.
  */
+let pepperCache = null;
+async function runtimePepper() {
+  if (pepperCache) return pepperCache;
+  const ref = STAGING_URL.replace(/^https:\/\//, "").split(".")[0];
+  const headers = { Authorization: `Bearer ${process.env.SUPABASE_ACCESS_TOKEN}`, "User-Agent": "Mozilla/5.0 drive247-eval" };
+  const secrets = await (await fetch(`https://api.supabase.com/v1/projects/${ref}/secrets`, { headers })).json();
+  if (secrets.some((s) => s.name === "SIGNUP_OTP_PEPPER")) {
+    throw new Error("Staging now has SIGNUP_OTP_PEPPER: put its value in .staging-credentials.local as STAGING_SIGNUP_OTP_PEPPER");
+  }
+  const digest = secrets.find((s) => s.name === "SUPABASE_SERVICE_ROLE_KEY")?.value;
+  const keys = await (await fetch(`https://api.supabase.com/v1/projects/${ref}/api-keys?reveal=true`, { headers })).json();
+  const key = keys.find((k) => k.api_key && createHash("sha256").update(k.api_key).digest("hex") === digest)?.api_key;
+  pepperCache = credential("STAGING_SIGNUP_OTP_PEPPER") || key || SERVICE;
+  return pepperCache;
+}
+
+/** Put a known signup code on a user, the way `signup-otp.ts` stores it: sha256(`${code}:${pepper}`). */
 export async function plantCode(userId, code, { minutesAgo = 0, attempts = 0 } = {}) {
   const user = await getUser(userId);
   const meta = user?.app_metadata?.d247_signup || {};
   const sentAt = Date.now() - minutesAgo * 60_000;
+  const pepper = await runtimePepper();
   const otp = {
-    hash: createHash("sha256").update(`${code}:${SERVICE}`).digest("hex"),
+    hash: createHash("sha256").update(`${code}:${pepper}`).digest("hex"),
     expiresAt: new Date(sentAt + 30 * 60_000).toISOString(),
     attempts,
     sentAt: new Date(sentAt).toISOString(),

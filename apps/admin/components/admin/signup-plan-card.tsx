@@ -94,7 +94,12 @@ export const MAX_VEHICLES_MAX = 10000;
 export const BULLETS_MIN = 1;
 export const BULLETS_MAX = 8;
 export const BULLET_MAX = 120;
-export const TRIAL_DAYS_MAX = 90;
+/**
+ * Review 1 (Ghulam, 28 Nov 2026): a signup trial is under 30 days. A trial of
+ * 30 days or more would give a "3 months" promo code a 4th discounted bill.
+ * The server refuses it too (manage-signup-plans, MAX_SIGNUP_PLAN_TRIAL_DAYS).
+ */
+export const TRIAL_DAYS_MAX = 29;
 /** What the switch fills in when a trial is first turned on. */
 export const TRIAL_DAYS_DEFAULT = 5;
 const PRICE_MIN_CENTS = 50;
@@ -135,13 +140,13 @@ export function parsePriceToCents(input: string): PriceParse {
 
 export type TrialParse = { ok: true; days: number } | { ok: false; error: string };
 
-/** The trial length field: a whole number of days, 1–30. */
+/** The trial length field: a whole number of days, 1–29 (under 30). */
 export function parseTrialDays(input: string): TrialParse {
   const trimmed = input.trim();
   if (!/^\d+$/.test(trimmed)) return { ok: false, error: 'Use a whole number of days.' };
   const days = Number(trimmed);
   if (days < 1 || days > TRIAL_DAYS_MAX) {
-    return { ok: false, error: `A trial must be 1–${TRIAL_DAYS_MAX} days.` };
+    return { ok: false, error: days >= 30 ? 'A signup trial must be under 30 days (1 to 29).' : `A trial must be 1–${TRIAL_DAYS_MAX} days.` };
   }
   return { ok: true, days };
 }

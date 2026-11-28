@@ -40,6 +40,10 @@ landing in the portal is spec 02.
 - 01.12 The leave-offer shows at most once per signup.
 - 01.13 The stand-in is never written to localStorage, logged, or sent anywhere except
   `signup-begin`. It is forgotten when the signup finishes or the tab closes.
+- 01.14 The "finish later" email link goes back to the site the signup started on, from the fixed
+  list in `_shared/drive247-sites.ts` (review 1, answer 2.7): www, staging, ray1, ray2, ray3 or
+  `http://localhost:4003`. Any other address gets `https://www.drive-247.com`, as before. The email
+  carries our name, so the link can never point anywhere else.
 
 ## Worked examples
 
@@ -82,6 +86,7 @@ No card is charged during a trial (spec 08).
 |---|---|
 | 01.2, 01.3, 01.4, 01.5, 01.6, 01.10 | `evals/01-signup-steps.mjs` (calls the functions on staging, once deployed) and, before that, `supabase/functions/_tests/signup-begin-3step_test.ts` (the real `signup-begin` in Deno, no network) |
 | 01.13 | `evals/01-signup-steps.mjs` (reads the source for storage writes) |
+| 01.14 | `evals/02-sites.test.ts` (Vitest: each of our sites, an unknown site, and the real link builder) and the QA report (a link sent from ray2 opens ray2) |
 | 01.1, 01.7, 01.8, 01.9, 01.11, 01.12 | QA report (a flow through screens, on real phones) |
 
 ## Not in this spec

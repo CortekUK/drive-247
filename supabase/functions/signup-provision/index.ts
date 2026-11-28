@@ -33,6 +33,7 @@ import { extractBrandColorsFromText, buildTenantPalette } from "../_shared/brand
 import { readBrandColor, readSiteTheme } from "../_shared/signup-look.ts";
 import { fetchSignupPlan } from "../_shared/signup-plans.ts";
 import { portalBaseUrl } from "../_shared/subscription-link.ts";
+import { portalUrlForSignup } from "../_shared/drive247-sites.ts";
 import {
   getOrCreateSignupPrice,
   getSignupStripeClient,
@@ -1021,7 +1022,10 @@ Deno.serve(async (req) => {
     // The portal origin for this environment (PORTAL_ROOT_DOMAIN, default the
     // production portal), the same helper payment links use. feat-001 finding:
     // a hard-coded production domain sent staging signups to the live portal.
-    const portalUrl = portalBaseUrl(slug);
+    // Review 1 (2.2): the portal of the site this signup came from (ray2 ->
+    // portal.ray2.drive-247.com), picked from the fixed list in
+    // _shared/drive247-sites.ts only; anything else is PORTAL_ROOT_DOMAIN as before.
+    const portalUrl = portalUrlForSignup(req.headers.get("origin"), slug, portalBaseUrl);
     const bookingUrl = `https://${slug}.drive-247.com`;
     const isProduction = mode === "live";
 

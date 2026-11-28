@@ -65,6 +65,7 @@ import {
   isFinishLaterTokenShape,
   mintFinishLaterToken,
 } from "../_shared/signup-finish-later.ts";
+import { finishLaterSiteFor } from "../_shared/drive247-sites.ts";
 
 const LOG = "[signup-finish-later]";
 const HOUR_MS = 60 * 60 * 1000;
@@ -188,7 +189,7 @@ async function send(
 
   const { subject, html } = buildFinishLaterEmail({
     fullName: meta.fullName,
-    link: buildFinishLaterLink(token, code),
+    link: buildFinishLaterLink(token, code, finishLaterSiteFor(req.headers.get("origin"))),
     offer,
   });
   const sent = await sendResendEmail(

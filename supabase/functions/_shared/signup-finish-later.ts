@@ -20,6 +20,7 @@
 // =============================================================================
 
 import { escapeHtml, renderDrive247Email } from "./drive247-email.ts";
+import { DEFAULT_SITE_URL } from "./drive247-sites.ts";
 
 /** How long a link keeps working. The owner asked for at least 7 days. */
 export const FINISH_LATER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -52,7 +53,7 @@ export const FINISH_LATER_CODE = "WELCOME20";
 
 export const FINISH_LATER_SUBJECT = "Finish setting up your Drive247 account";
 
-const SITE = "https://www.drive-247.com";
+const SITE = DEFAULT_SITE_URL;
 
 function base64Url(bytes: Uint8Array): string {
   let bin = "";
@@ -118,8 +119,10 @@ export function finishLaterSignupState(meta: { status?: string; tenantId?: strin
 }
 
 /** The link in the email. `code` is only ever the exit offer's. */
-export function buildFinishLaterLink(token: string, code: string | null = FINISH_LATER_CODE): string {
-  const url = new URL(SITE);
+export function buildFinishLaterLink(token: string, code: string | null = FINISH_LATER_CODE, siteUrl: string = SITE): string {
+  // Review 1 (2.7): the site the signup started on, from the fixed list only
+  // (finishLaterSiteFor); this email carries our name, so never anything else.
+  const url = new URL(siteUrl);
   url.searchParams.set("signup", "finish");
   url.searchParams.set("t", token);
   if (code === FINISH_LATER_CODE) url.searchParams.set("code", code);

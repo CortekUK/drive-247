@@ -3,6 +3,7 @@
 //   promoBillCents(priceCents, type, value)          -> one discounted bill, whole cents
 //   discountedBillDates(signupISO, trialDays, months) -> the dates of the bills that get the discount
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import * as rules from "../../../../supabase/functions/_shared/platform-promo-rules";
 import { blackFridayCents } from "../../../../apps/web/src/lib/black-friday";
 import { discountedPrice } from "../../../../apps/web/src/lib/promo-offer";
@@ -46,10 +47,7 @@ describe("08 prices, trials and promo codes", () => {
     expect(need("discountedBillDates")("2026-11-26", 14, 3)).toEqual(["2026-12-10", "2027-01-10", "2027-02-10"]);
   });
 
-  // Row 9: 30-day trial, signup 26 Nov 2026.
-  it("08.13 #9 30-day trial: exactly 3 paid bills are discounted, from 26 Dec", () => {
-    expect(need("discountedBillDates")("2026-11-26", 30, 3)).toEqual(["2026-12-26", "2027-01-26", "2027-02-26"]);
-  });
+  // Row 9 (30-day trial) was withdrawn in review 1: a signup trial is under 30 days (08.19).
 
   it("08.5 #no-trial no trial: the first 3 bills from signup", () => {
     expect(need("discountedBillDates")("2026-11-26", 0, 3)).toEqual(["2026-11-26", "2026-12-26", "2027-01-26"]);
@@ -57,10 +55,9 @@ describe("08 prices, trials and promo codes", () => {
 
   // Rows 13-16: the edges of the date math, each with its 4th (full price) bill.
   it.each([
-    [13, "2026-11-26", 60, ["2027-01-25", "2027-02-25", "2027-03-25"], "2027-04-25"],
+    // Rows 13, 15 and 16 (trials of 30+ days) were withdrawn in review 1 (08.19).
     [14, "2027-01-31", 0, ["2027-01-31", "2027-02-28", "2027-03-31"], "2027-04-30"],
-    [15, "2028-01-30", 30, ["2028-02-29", "2028-03-29", "2028-04-29"], "2028-05-29"],
-    [16, "2026-11-26", 90, ["2027-02-24", "2027-03-24", "2027-04-24"], "2027-05-24"],
+    [19, "2028-01-31", 29, ["2028-02-29", "2028-03-29", "2028-04-29"], "2028-05-29"],
   ])("08.13 #%i signup %s, %i-day trial: 3 discounted bills, then full price", (_row, signup, trial, discounted, fourth) => {
     expect(need("discountedBillDates")(signup, trial, 3)).toEqual(discounted);
     expect(need("paidBillDates")(signup, trial, 4)[3]).toBe(fourth);
@@ -70,9 +67,13 @@ describe("08 prices, trials and promo codes", () => {
     expect(need("paidBillDates")("2027-01-31", 0, 4)).toEqual(["2027-01-31", "2027-02-28", "2027-03-31", "2027-04-30"]);
   });
 
-  it("08.13 #all every trial from 0 to 90 days gets exactly 3 discounted bills", () => {
-    for (const signup of ["2026-11-26", "2027-01-31", "2028-02-29", "2026-12-31"]) {
-      for (let trial = 0; trial <= 90; trial++) {
+  // 08.17, decided in review 1: every allowed trial (0 to 29 days), on every signup day of
+  // two whole years (a leap year included), gets exactly 3 discounted bills.
+  it("08.13 #all every trial from 0 to 29 days, every signup day, gets exactly 3 discounted bills", () => {
+    const days: string[] = [];
+    for (let t = Date.UTC(2027, 0, 1); t < Date.UTC(2029, 0, 1); t += 86_400_000) days.push(new Date(t).toISOString().slice(0, 10));
+    for (const signup of days) {
+      for (let trial = 0; trial <= 29; trial++) {
         const got = need("discountedBillDates")(signup, trial, 3);
         expect(got, `${signup} + ${trial} days`).toEqual(need("paidBillDates")(signup, trial, 3));
       }
@@ -135,5 +136,16 @@ describe("08 prices, trials and promo codes", () => {
     [11, "BF30\n", "BF30"],
   ])("08.7 #%i %j is read as %s", (_row, typed, expected) => {
     expect(rules.normalizePromoCode(typed)).toBe(expected);
+  });
+
+  // 08.19 (row 20): the Signup Plans form refuses a trial of 30 days or more.
+  // The form's own parser lives in a React file the test runner cannot load, so its
+  // rule is read from the source; the function's refusal is proved on staging (.mjs).
+  it("08.19 #20 the form's limit is 29 days and 30 gets the review-1 message", () => {
+    const src = readFileSync(new URL("../../../../apps/admin/components/admin/signup-plan-card.tsx", import.meta.url), "utf8");
+    expect(src).toMatch(/export const TRIAL_DAYS_MAX = 29;/);
+    expect(src).toContain("A signup trial must be under 30 days (1 to 29).");
+    const trial = readFileSync(new URL("../../../../supabase/functions/_shared/signup-trial.ts", import.meta.url), "utf8");
+    expect(trial).toMatch(/export const MAX_SIGNUP_PLAN_TRIAL_DAYS = 29;/);
   });
 });

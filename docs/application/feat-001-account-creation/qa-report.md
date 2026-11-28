@@ -1,42 +1,25 @@
 # QA report · feat-001 · Account creation and the account
 
-**Checked by:** Hamza · **Status:** 0 of 52 checked · **Evals:** 55/57 proved (`evals/RESULTS.md`; 09.4 waits for the migration on staging, 08.13 for Ghulam's answer on trials of 60+ days)
+**Checked by:** Hamza · **Status:** 0 of 58 checked · **Evals:** see `evals/RESULTS.md` (the functions and the migration are on staging since 27 Nov; review 1 fixed 03.4 and narrowed 08.13)
 
 | Part | Where | Checked |
 |---|---|---|
-| 1. Full check | `ray2` (and `localhost` for the server-side items, until the deploy) | 0 of 52 |
+| 1. Full check | `ray2` only, never localhost | 0 of 58 |
 | 2. Staging look | https://staging.drive-247.com, https://northwind.portal.staging.drive-247.com | 0 of 2 |
-| 3. Production check | northwind, live | 0 of 2 |
+| 3. Production check | northwind, live, no new company | 0 of 2 |
 
 ## Where each item is checked
 
-Every item says **Where**:
+Every item is checked on the `ray2` sites (review 1, 3.1): https://ray2.drive-247.com, https://northwind.portal.ray2.drive-247.com, https://admin.ray2.drive-247.com. **phone** means a real iPhone and a real Android phone, on ray2.
 
-- **ray2**: works on the `ray2` sites now. https://ray2.drive-247.com, https://northwind.portal.ray2.drive-247.com, https://admin.ray2.drive-247.com
-- **local**: needs the new edge functions, which are not on staging until Ghulam deploys them at the relay. Check it on `localhost` with the local runner (setup below), then **again on ray2 after the deploy**: the item then has two ticks.
-- **phone**: on a real iPhone and a real Android phone, on `ray2`.
-
-This differs from the usual rule (never on localhost) on purpose: the server half of this feature cannot reach `ray2` without a staging deploy, which is Ghulam's step. Every "local" item is re-done on `ray2` after the deploy.
+Each tick says what you saw, in your own words. A money item has three numbers written down: yours (calculator), the landing page's and the card step's. Anything that does not match is not ticked: write what you saw, fix it, check again.
 
 ### Logins and test addresses
 
-- Signups: `hamza.shafique12123+N@gmail.com`, with N counting up (1, 2, 3 are used). Codes and links arrive in that Gmail inbox; on localhost they are printed in the runner window instead.
-- Portal and admin: the staging accounts in `.staging-credentials.local`.
+- Signups: `hamza.shafique12123+N@gmail.com`, with N counting up. Codes and links arrive in that Gmail inbox.
+- Portal: the staging accounts in `.staging-credentials.local`. Super admin: your own staging super admin in `.staging-admin-hamza.local` (the shared one does not work, 28 Nov).
 - Stripe test cards (any future date, any CVC, any postcode): `4242 4242 4242 4242` passes; `4000 0000 0000 0002` is declined; `4000 0025 0000 3155` asks for 3-D Secure.
-
-### Local setup (for "local" items)
-
-1. A terminal in the repo: `deno run -A --no-lock scripts/dev-account-functions.ts`. Keep it open: every email is printed here with its `>>> CODE` and `>>> LINK`, instead of being sent.
-2. Add `NEXT_PUBLIC_SIGNUP_FUNCTIONS_URL=http://127.0.0.1:54399` to `apps/web/.env.local` (signup) or `apps/portal/.env.local` (portal), then `npm run dev:web` (http://localhost:4003) or `npm run dev:portal` (http://northwind.portal.localhost:4002). One server at a time.
-3. For signup, open `http://localhost:4003/?mock=off` once, so the real functions are used, not the built-in mock.
-4. Helpers, in a second terminal (needs `SUPABASE_ACCESS_TOKEN` set):
-   - `node scripts/dev-account-tools.mjs status <email>`: what the account still owes, and its sign-in methods
-   - `node scripts/dev-account-tools.mjs code <email>`: a code for "Email me a sign-in code"
-   - `node scripts/dev-account-tools.mjs age <email> <hours>`: pretend it signed up that many hours ago
-   - `node scripts/dev-account-tools.mjs owe <email>`: owe the code and password again
-   - `node scripts/dev-account-tools.mjs delete <email>`: remove a test signup
-5. The card step cannot take a payment locally (no Stripe key on this machine): it shows "Signup is temporarily unavailable". Card items are on ray2.
-6. When done: remove the two `.env.local` lines and stop the runner (Ctrl+C).
+- Helpers (need `SUPABASE_ACCESS_TOKEN`): `node scripts/dev-account-tools.mjs status|code|age|owe|delete <email>`.
 
 ---
 
@@ -129,23 +112,21 @@ This differs from the usual rule (never on localhost) on purpose: the server hal
 
 #### 10. No code and no password during signup
 
-- **Where:** local, then ray2 after the deploy
+- **Where:** ray2
 - **Why by hand:** PRD story 1, spec 01.1 (the flow through screens)
 - **Do:** Sign up with a new `+N` address: About you → Business → Continue.
 - **You should see:** Straight to "Last step, <name>" (the card step). No "Check your inbox" and no "Pick a password" screen.
-- **How to be sure:** `node scripts/dev-account-tools.mjs status <email>` shows `email_owed: 'true'` and `password_owed: 'true'`. On ray2 **before** the deploy you will still see the old code and password screens: that is the old server, not this feature.
-- [ ] Checked locally
-- [ ] Checked on ray2 after the deploy
+- **How to be sure:** `node scripts/dev-account-tools.mjs status <email>` shows `email_owed: 'true'` and `password_owed: 'true'`.
+- [ ] Checked
 
 #### 11. The code email is sent at signup
 
-- **Where:** local, then ray2 after the deploy
+- **Where:** ray2
 - **Why by hand:** not covered by an eval: the email is built but never received in an eval
-- **Do:** After item 10, look at the runner window (local) or your Gmail (ray2).
+- **Do:** After item 10, look at your Gmail.
 - **You should see:** "<6 digits> is your Drive247 verification code", to the address you typed.
 - **How to be sure:** The portal's verify window later accepts this exact code (item 24).
-- [ ] Checked locally
-- [ ] Checked on ray2 after the deploy
+- [ ] Checked
 
 #### 12. The leave offer shows once
 
@@ -176,23 +157,21 @@ This differs from the usual rule (never on localhost) on purpose: the server hal
 
 #### 15. Signing up again with the same email
 
-- **Where:** local, then ray2 after the deploy
+- **Where:** ray2
 - **Why by hand:** PRD story 5, found while testing (27 Nov)
 - **Do:** Sign out (private window), sign up again with the same `+N` address, through Business.
 - **You should see:** "Welcome back. You already started signing up with this email. Enter your password, or if you haven't chosen one yet, tap "Forgot password?" and we'll email you a code."
 - **How to be sure:** Item 16 gets you in without ever having chosen a password.
-- [ ] Checked locally
-- [ ] Checked on ray2 after the deploy
+- [ ] Checked
 
 #### 16. "Forgot password?" from signup gets a 3-step signup back in
 
-- **Where:** local, then ray2 after the deploy
+- **Where:** ray2
 - **Why by hand:** found while testing (27 Nov); spec 05.6
 - **Do:** On "Welcome back": "Forgot password?" → "Send reset code" → enter the code (runner window or Gmail) and a new password twice → sign in with it.
 - **You should see:** "Password updated. Sign in with your new password to carry on." Then the card step.
 - **How to be sure:** `status <email>` shows both `email_owed` and `password_owed` as `'false'`. After the portal is built, no verify window appears.
-- [ ] Checked locally
-- [ ] Checked on ray2 after the deploy
+- [ ] Checked
 
 #### 17. "You already have a portal"
 
@@ -279,7 +258,7 @@ This differs from the usual rule (never on localhost) on purpose: the server hal
 
 #### 26. BF30 stops after 3 paid bills (math)
 
-- **Where:** ray2 after the deploy
+- **Where:** ray2
 - **Why by hand:** spec 08.16, money math rows 3 and 5
 - **Do:** After item 23 with Growth + BF30, open the subscription in Stripe's test dashboard.
 - **You should see:** The coupon lasts for 3 paid bills after the trial: <trial end>, +1 month, +2 months at $160.30, then $229.
@@ -299,67 +278,61 @@ This differs from the usual rule (never on localhost) on purpose: the server hal
 
 #### 28. The verify window after the tour
 
-- **Where:** local, then ray2 after the deploy
+- **Where:** ray2
 - **Why by hand:** PRD story 7, spec 03 (keyboard, autofill)
 - **Do:** Sign in to the portal as a 3-step signup that still owes the code (item 10's account, or `owe <email>`). Close the quick tour.
 - **You should see:** "Check your email. We sent a 6-digit code to <email>. 3 days left to finish this." Six boxes, "Verify", "Send a new code", "Wrong email?", "Not now".
 - **How to be sure:** The window waits until the tour is closed; it never covers it.
-- [ ] Checked locally
-- [ ] Checked on ray2 after the deploy
+- [ ] Checked
 
 #### 29. Right code, then choose a password
 
-- **Where:** local, then ray2 after the deploy
+- **Where:** ray2
 - **Why by hand:** PRD story 7
 - **Do:** Type the code (runner window or Gmail). Then a password of 8+ characters with a letter and a number, twice.
 - **You should see:** "Choose a password", then the window closes and you stay signed in.
 - **How to be sure:** Sign out and sign in with the new password on another browser.
-- [ ] Checked locally
-- [ ] Checked on ray2 after the deploy
+- [ ] Checked
 
 #### 30. Wrong codes and the 5-try limit
 
-- **Where:** local, then ray2 after the deploy
+- **Where:** ray2
 - **Why by hand:** PRD story 8
 - **Do:** Type `000000` five times.
 - **You should see:** "That code is not right. 4 tries left." … "1 try left", then "Too many tries. Ask for a new code."
 - **How to be sure:** The right code is now refused too, until "Send a new code".
-- [ ] Checked locally
-- [ ] Checked on ray2 after the deploy
+- [ ] Checked
 
 #### 31. Send a new code
 
-- **Where:** local, then ray2 after the deploy
+- **Where:** ray2
 - **Why by hand:** PRD story 9
 - **Do:** Tap "Send a new code" twice in a row.
 - **You should see:** A new code arrives; the second tap asks you to wait (60 seconds).
 - **How to be sure:** The old code is refused; the new one works.
-- [ ] Checked locally
-- [ ] Checked on ray2 after the deploy
+- [ ] Checked
 
 #### 32. "Wrong email?" corrects the address
 
-- **Where:** local, then ray2 after the deploy
+- **Where:** ray2
 - **Why by hand:** PRD story 10, one of Ghulam's two "must solve" cases
 - **Do:** Tap "Wrong email?", type a new `+N` address, send. Then try the northwind staff email.
 - **You should see:** A code goes to the new address and the window now names it. The staff email is refused: "That email already has a Drive247 account."
 - **How to be sure:** After finishing, you sign in with the corrected email; the old one no longer works.
-- [ ] Checked locally
-- [ ] Checked on ray2 after the deploy
+- [ ] Checked
 
 #### 33. "Not now", the reminder, and the 3-day block
 
-- **Where:** local, then ray2 after the deploy
+- **Where:** ray2
 - **Why by hand:** PRD story 11, spec 04 (the clock is moved on a test account)
 - **Do:** 1. Tap "Not now", reload: it comes back. 2. `age <email> 49` → reload. 3. `age <email> 70` → reload. 4. `age <email> 72` → reload.
 - **You should see:** 1: the window again. 2: "2 days left". 3: "2 hours left" and "Not now" still there. 4: no "Not now", no ✕, Escape does nothing.
 - **How to be sure:** In 4, Subscription and Settings pages still open, so a payment link is never blocked.
-- [ ] Checked locally
-- [ ] Checked on ray2 after the deploy
+- [ ] Checked
 
 #### 34. Locked out: "Email me a sign-in code"
 
-- **Where:** ray2 (the sign-in); the window after it: local, then ray2 after the deploy
+- **Where:** ray2
 - **Why by hand:** PRD story 12, Ghulam's other "must solve" case; spec 05.1
 - **Do:** On https://northwind.portal.ray2.drive-247.com/login tap "Email me a sign-in code", enter your email, type the code from Gmail.
 - **You should see:** Signed in to the portal. For an account that still owes a password, the window from item 28 follows.
@@ -435,37 +408,33 @@ This differs from the usual rule (never on localhost) on purpose: the server hal
 
 #### 42. Sign-in methods shows how you sign in
 
-- **Where:** local, then ray2 after the deploy
+- **Where:** ray2
 - **Why by hand:** spec 07.1
 - **Do:** Profile → "Sign-in methods".
 - **You should see:** "Email and password: Set" (or "No password yet") and "Google: Not connected" (or "Connected (<email>)").
-- **How to be sure:** On ray2 before the deploy it says "We couldn't load your sign-in methods just now": that is the missing function, not this screen.
-- [ ] Checked locally
-- [ ] Checked on ray2 after the deploy
+- [ ] Checked
 
 #### 43. Disconnect Google needs a password first
 
-- **Where:** local, then ray2 after the deploy
+- **Where:** ray2
 - **Why by hand:** PRD stories 19 and 22, spec 07.6
 - **Do:** As a Google-only account (no password), tap "Disconnect".
 - **You should see:** "Set a password first.", and the password panel opens.
 - **How to be sure:** `status <email>` still lists the Google sign-in.
-- [ ] Checked locally
-- [ ] Checked on ray2 after the deploy
+- [ ] Checked
 
 #### 44. A Google-only account sets a password
 
-- **Where:** local, then ray2 after the deploy
+- **Where:** ray2
 - **Why by hand:** PRD story 18, spec 07.2
 - **Do:** Sign-in methods → "Set a password" → new password → code.
 - **You should see:** "Email and password: Set".
 - **How to be sure:** Sign in with that password; Google still works too.
-- [ ] Checked locally
-- [ ] Checked on ray2 after the deploy
+- [ ] Checked
 
 #### 45. Connect Google with the same email
 
-- **Where:** ray2 after the deploy, and after Ghulam turns on Google and "manual linking" in Supabase Auth
+- **Where:** ray2, and after Ghulam turns on Google and "manual linking" in Supabase Auth
 - **Why by hand:** PRD story 20, spec 07.3 (Google's own page)
 - **Do:** Sign-in methods → "Connect Google" → pick the Google account with the same email.
 - **You should see:** Back in the portal: "Google connected".
@@ -483,13 +452,12 @@ This differs from the usual rule (never on localhost) on purpose: the server hal
 
 #### 47. Changing email with Google connected
 
-- **Where:** local, then ray2 after the deploy
+- **Where:** ray2
 - **Why by hand:** PRD story 23, spec 07.9
 - **Do:** With Google connected and a password set, change the email (item 39).
 - **You should see:** "You now sign in with <new>. Google was disconnected because your email changed…"
 - **How to be sure:** With Google and **no** password, the change is refused: "Set a password first".
-- [ ] Checked locally
-- [ ] Checked on ray2 after the deploy
+- [ ] Checked
 
 ### G. Other people, Super admin
 
@@ -504,11 +472,62 @@ This differs from the usual rule (never on localhost) on purpose: the server hal
 
 #### 49. Signups list in Super admin
 
-- **Where:** ray2 (step names); the "email confirmed / password set" line: local, then ray2 after the migration
+- **Where:** ray2 (step names); and the "email confirmed / password set" line
 - **Why by hand:** spec 09.5, Ghulam's section 4 "what gets recorded"
 - **Do:** https://admin.ray2.drive-247.com → Retention → Signups. Find each `+N` you used today.
-- **You should see:** "stopped at about you / at the business / at the card" and "At the card step, no card yet". After the migration: "Email confirmed, password set" or "No password yet · N days left" (amber), "… · 3-day point passed" (red).
+- **You should see:** "stopped at about you / at the business / at the card" and "At the card step, no card yet". "Email confirmed, password set" or "No password yet · N days left" (amber), "… · 3-day point passed" (red).
 - **How to be sure:** Older rows read "at the email code (old signup)" / "at the password (old signup)".
+- [ ] Checked
+
+### I. From review 1 (28 Nov)
+
+#### 53. A ray2 signup lands on the ray2 portal
+
+- **Where:** ray2
+- **Why by hand:** review 1 answer 2.2, spec 02.7
+- **Do:** Sign up on https://ray2.drive-247.com with a new `+N` address and pay with `4242 4242 4242 4242`.
+- **You should see:** You land on `https://<your-slug>.portal.ray2.drive-247.com`, not `portal.drive-247.com` and not localhost. The welcome email's "Open your portal" goes there too.
+- **How to be sure:** Read the address bar and hover the email's button.
+- [ ] Checked
+
+#### 54. After paying you come back to ray2, not localhost
+
+- **Where:** ray2
+- **Why by hand:** review 1 answer 2.1 (redirect URLs on staging)
+- **Do:** The same signup as item 53, through Stripe's card page.
+- **You should see:** After paying you return to a ray2 address. Never `localhost:3000`.
+- [ ] Checked
+
+#### 55. "Finish later" from ray2 opens ray2
+
+- **Where:** ray2 (phone)
+- **Why by hand:** review 1 answer 2.7, spec 01.14
+- **Do:** On a phone, reach the card step on ray2 and tap "Email me a link to finish later". Open the email.
+- **You should see:** The link starts `https://ray2.drive-247.com/?signup=finish`, not www. It opens the card step, signed in.
+- [ ] Checked
+
+#### 56. The three Google buttons on ray2
+
+- **Where:** ray2
+- **Why by hand:** review 1 answer 2.3 (after the staging Google client and the two Vercel flags)
+- **Do:** 1. Signup: "Continue with Google". 2. Portal login: "Sign in with Google". 3. Portal profile → Sign-in methods: "Connect Google" with the same Gmail.
+- **You should see:** All three work. A Google account with a different email is refused with the PRD's message.
+- [ ] Checked
+
+#### 57. The 3-day block screen is never a dead end (phone)
+
+- **Where:** phone (ray2)
+- **Why by hand:** review 1 answer 2.4, Ghulam's condition
+- **Do:** `node scripts/dev-account-tools.mjs age <email> 73` on a test account that still owes its code; sign in to the portal on a phone.
+- **You should see:** The window cannot be closed and always shows **"Send a new code"** and **"Wrong email?"**, on a 360-wide screen too, also right after a wrong code and while the 60-second wait counts down.
+- [ ] Checked
+
+#### 58. Super admin refuses a trial of 30 days or more
+
+- **Where:** ray2 (https://admin.ray2.drive-247.com → Signup Plans)
+- **Why by hand:** review 1 answer 2.5, spec 08.19
+- **Do:** On any plan, Free trial: type 30, then 45, then 29. Put it back to 14 afterwards.
+- **You should see:** 30 and 45: "A signup trial must be under 30 days (1 to 29)." and Save stays off. 29 is accepted.
 - [ ] Checked
 
 ### H. Phones and emails as received
@@ -517,7 +536,7 @@ This differs from the usual rule (never on localhost) on purpose: the server hal
 
 - **Where:** phone (ray2): iPhone Safari and Chrome, Android Chrome
 - **Why by hand:** Ghulam's section 5, not covered by an eval
-- **Do:** Go through items 1–25 and 28–44 on each phone, small (360 wide) and large (430 wide) if you have them.
+- **Do:** Go through items 1–25, 28–44 and 53–58 on each phone, small (360 wide) and large (430 wide) if you have them.
 - **You should see:** Nothing cut off, no sideways scroll, the main button reachable, the keyboard never covers the field or the button, numbers keyboard for codes and phone, email keyboard for email.
 - **How to be sure:** Known small things on the signup screens (for Ghulam, 27 Nov): colour dots 24×24, terms box 16×16, "Sign in" link 20 px tall.
 - [ ] Checked
@@ -564,9 +583,8 @@ This differs from the usual rule (never on localhost) on purpose: the server hal
 - **You should see:** The code arrives and signs you in.
 - [ ] Checked
 
-#### P2. A real signup reaches the card step, without paying
+#### P2. The northwind profile shows Sign-in methods
 
-- **Do:** https://www.drive-247.com/?signup=start with a new `+N` address, to the card step. Do not pay. Delete the test signup in Super admin afterwards.
-- **You should see:** 3 steps, the right prices, and no code or password screen.
+- **Do:** Signed in as your northwind staff account on https://northwind.portal.drive-247.com, open the profile.
+- **You should see:** "Sign-in methods" with Email and password ✓, and Google as Connect or Connected. No new company is created and nothing is paid (review 1: no real signup on production).
 - [ ] Checked
-- [ ] Test signup deleted

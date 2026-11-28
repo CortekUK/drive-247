@@ -21,6 +21,13 @@ password.
   straight on to the portal.
 - 02.6 If making the link fails, the person is sent to `{portalUrl}/login?email=…` and can use the
   sign-in code (spec 05).
+- 02.7 The new company's portal is on the site the signup came from, picked from the fixed list in
+  `_shared/drive247-sites.ts` (review 1, answer 2.2): drive-247.com or www → `{slug}.portal.drive-247.com`;
+  staging → `{slug}.portal.staging.drive-247.com`; ray1, ray2, ray3 → `{slug}.portal.rayN.drive-247.com`;
+  `http://localhost:4003` → `http://{slug}.portal.localhost:4002`.
+- 02.8 A signup from any other address (not on the list, or the right host on the wrong scheme) gets
+  the portal from `PORTAL_ROOT_DOMAIN`, as before review 1. An address the browser sends is never
+  used unless it is on the list.
 
 ## Worked examples
 
@@ -50,6 +57,7 @@ returned to the session that owns the company.
 | Statement | Proved by |
 |---|---|
 | 02.1, 02.3 | `evals/02-landing-in-the-portal.mjs` |
+| 02.7, 02.8 | `evals/02-sites.test.ts` (Vitest, the fixed list itself) and the QA report (a signup on ray2 lands on portal.ray2) |
 | 02.2, 02.4, 02.5, 02.6 | QA report (crosses two sites in a browser) |
 
 ## Not in this spec
