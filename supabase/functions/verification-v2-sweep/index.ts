@@ -105,5 +105,16 @@ Deno.serve(async (req) => {
     .is("sent_at", null).lt("attempts", 12).or("last_error.is.null,last_error.neq.state_fee_unknown").limit(100);
   for (const ch of unsent ?? []) await safe(async () => { if (await sendCharge(sb, ch.id)) done.chargesSent++; });
 
+  // 5. Photos of customers who were deleted (spec 12.5).
+  await safe(async () => {
+    const { data: orphans } = await sb.rpc("verification_v2_orphan_photos", { p_limit: 200 });
+    const paths = (orphans ?? []) as string[];
+    if (paths.length) {
+      const { error } = await sb.storage.from("verification-documents").remove(paths);
+      if (error) throw new Error(error.message);
+      (done as Record<string, number>).photosRemoved = paths.length;
+    }
+  });
+
   return new Response(JSON.stringify(done), { status: 200, headers: { "Content-Type": "application/json" } });
 });

@@ -257,6 +257,26 @@ $function$;
 revoke all on function public.verification_v2_set_customer_status(uuid, uuid, public.verification_status_v2) from public, anon, authenticated;
 grant execute on function public.verification_v2_set_customer_status(uuid, uuid, public.verification_status_v2) to service_role;
 
+-- ── Photos of deleted customers (spec 12.5) ─────────────────────────────────
+-- Storage files cannot be deleted from SQL, so this lists them and the sweep removes them through the
+-- storage API. Paths are <tenant id>/<customer id>/<session id>/<name>.
+create or replace function public.verification_v2_orphan_photos(p_limit integer default 200)
+returns setof text
+language sql
+stable
+security definer
+set search_path to 'public', 'storage'
+as $function$
+  select o.name from storage.objects o
+   where o.bucket_id = 'verification-documents'
+     and split_part(o.name, '/', 2) ~ '^[0-9a-f-]{36}$'
+     and not exists (select 1 from public.customers c where c.id = split_part(o.name, '/', 2)::uuid)
+   limit greatest(1, least(p_limit, 1000));
+$function$;
+
+revoke all on function public.verification_v2_orphan_photos(integer) from public, anon, authenticated;
+grant execute on function public.verification_v2_orphan_photos(integer) to service_role;
+
 -- ── Private photo storage (spec 12.2) ────────────────────────────────────────
 insert into storage.buckets (id, name, public)
 values ('verification-documents', 'verification-documents', false)

@@ -95,8 +95,10 @@ point a result at another company (07.8). Photos never stay on Didit's links.
 
 | Statement | Proved by |
 |---|---|
-| 07.1 to 07.4, 07.6 to 07.11, 07.19, 07.21 to 07.30 | `evals/07-standard-check.mjs` (Didit sandbox, `sandbox_scenario` and `/simulate/`) |
-| 07.12 to 07.18, 07.20, 07.23, 07.31 (rules) | `evals/07-standard-check.test.ts` (Vitest on `rules.ts`, the examples above and a learner's permit, a passport, an unknown subtype) |
+| 07.1 to 07.3, 07.6 to 07.11, 07.23, 07.24, 07.26, 07.29, 07.30 | `evals/07-standard-check.mjs` (staging and Didit's sandbox) |
+| 07.12 to 07.18, 07.20 to 07.25, 07.28 (stripping), 07.31 | `evals/07-standard-check.test.ts` and `evals/07-didit-decisions.test.ts` (Vitest on `rules.ts` and `standard.ts`, with decisions in Didit's documented v3 shape) |
+| 07.19, 07.21, 07.25, 07.27, 07.28 end to end | QA report: a real licence through Didit's sandbox page on a phone. Didit's sandbox `simulate` call changes only the status and returns no licence data, so no script can produce these. |
+| 07.4 | Not provable by a script: Didit's sandbox cannot be made to answer 429. The retry is read in the code (`didit.ts` `call()`); the QA report notes it. |
 | 07.5 | `evals/12-safety.mjs` |
 
 ## Not in this spec

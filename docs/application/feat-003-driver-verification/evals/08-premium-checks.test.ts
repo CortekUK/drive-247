@@ -45,3 +45,26 @@ describe("08 driving record and criminal record answers (switched off; mapped fo
     expect(premiumLine("criminal_record", { outcome: "clear" }).result).toBe("pass");
   });
 });
+
+// ── what RentID is sent (spec 08.5, 08.6) ──
+import { requestBody } from "../../../../supabase/functions/_shared/verification/rentid";
+
+describe("08 what RentID is sent", () => {
+  const subject = { first_name: "Marcus", last_name: "Hill", dob: "1990-05-12", licence_number: "12345678", licence_state: "tx" };
+  it("08.5 the licence check gets only name, licence number, state, date of birth and our webhook", () => {
+    expect(requestBody("licence_status", subject, "https://x.test/hook/1", "chk")).toEqual({
+      first_name: "Marcus", last_name: "Hill", driver_license_number: "12345678", driver_license_state: "TX", dob: "19900512", webhook_url: "https://x.test/hook/1",
+    });
+  });
+  it("08.6 nothing else is sent: no email, phone, address or company", () => {
+    const sent = JSON.stringify(requestBody("licence_status", { ...subject, email: "a@b.c", phone: "1", company: "X" } as never, "https://x.test/h", "chk"));
+    expect(sent).not.toMatch(/email|phone|address|company/);
+  });
+  it("08.5 a missing licence number or state is refused before calling RentID", () => {
+    expect(requestBody("licence_status", { ...subject, licence_number: null }, "u", "c")).toEqual({ missing: "licence number" });
+    expect(requestBody("licence_status", { ...subject, licence_state: "Texas" }, "u", "c")).toEqual({ missing: "licence state" });
+  });
+  it("08.20 the criminal record takes a reference id and no webhook", () => {
+    expect(requestBody("criminal_record", subject, "u", "chk-1")).toEqual({ first_name: "Marcus", last_name: "Hill", dob: "19900512", reference_id: "chk-1" });
+  });
+});
