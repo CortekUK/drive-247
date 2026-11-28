@@ -79,7 +79,7 @@ such as `approve`, `decline_document_expired`, `decline_minimum_age`,
 - Sandbox application under Neema's Cortek Gmail. Workflow **Basic KYC** (`d11038b4-602c-45ef-a280-8d9e353e3824`),
   published: ID verification (passport and driver's licence), passive liveness, face match, device and IP. $0.33 per
   completed session live, free in the sandbox.
-- Staging secrets set: `DIDIT_WEBHOOK_SECRET`, `DIDIT_WORKFLOW_ID`. `DIDIT_API_KEY` still to come.
+- Staging secrets set: `DIDIT_API_KEY`, `DIDIT_WEBHOOK_SECRET`, `DIDIT_WORKFLOW_ID`. The webhook destination points at staging `verification-v2-didit-webhook` (v3, status.updated + data.updated). Create and delete session tested in the sandbox: 201 and 200; `session_expiration_time: 86400` is honoured.
 - Didit's own integration notes, which correct spec 07.6 and 07.10: check freshness against the **signed body
   `timestamp`**, never the `X-Timestamp` header; de-duplicate on `event_id`; canonicalise as
   shortenFloats → sortKeys → `JSON.stringify`. Balance: `GET /v3/billing/balance/`. Webhook destinations can be
