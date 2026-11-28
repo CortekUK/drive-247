@@ -56,6 +56,39 @@ export function siteForOrigin(origin: string | null | undefined): Drive247Site |
  * `https://{slug}.portal.ray2.drive-247.com` for a ray2 signup, and so on.
  * Not one of our sites: `fallback(slug)`, which is today's PORTAL_ROOT_DOMAIN.
  */
+/**
+ * The portal address for someone coming BACK to a signup that was already
+ * provisioned (a second tab, a retry, a returning Google user). The site they
+ * are on now wins over the address saved on the first run: a business set up
+ * from ray3 and reopened from ray2 belongs on the ray2 portal, both sharing
+ * the staging database. Only when the request is not from one of our sites
+ * does the saved address (or the default) stand.
+ */
+export function portalUrlForReturn(
+  origin: string | null | undefined,
+  slug: string,
+  saved: string | null | undefined,
+  fallback: (slug: string) => string,
+): string {
+  const site = siteForOrigin(origin);
+  if (site) return `${site.protocol}://${slug}.${site.portalRoot}`;
+  return saved ?? fallback(slug);
+}
+
+/**
+ * A sign-in link saved on the first run lands on the portal address of THAT
+ * run. When the address has changed, the link would sign them in somewhere
+ * else, so it is dropped and they sign in on the new portal instead.
+ */
+export function signInUrlFor(
+  savedSignInUrl: string | null | undefined,
+  savedPortalUrl: string | null | undefined,
+  portalUrl: string,
+): string | null {
+  if (!savedSignInUrl) return null;
+  return savedPortalUrl && savedPortalUrl !== portalUrl ? null : savedSignInUrl;
+}
+
 export function portalUrlForSignup(
   origin: string | null | undefined,
   slug: string,

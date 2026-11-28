@@ -33,7 +33,7 @@ import { extractBrandColorsFromText, buildTenantPalette } from "../_shared/brand
 import { readBrandColor, readSiteTheme } from "../_shared/signup-look.ts";
 import { fetchSignupPlan } from "../_shared/signup-plans.ts";
 import { portalBaseUrl } from "../_shared/subscription-link.ts";
-import { portalUrlForSignup } from "../_shared/drive247-sites.ts";
+import { portalUrlForReturn, portalUrlForSignup, signInUrlFor } from "../_shared/drive247-sites.ts";
 import {
   getOrCreateSignupPrice,
   getSignupStripeClient,
@@ -355,14 +355,20 @@ Deno.serve(async (req) => {
         // The row may have been written by an older deploy of this function,
         // before it set portal_experience. See ensureV2Experience.
         await ensureV2Experience(supabase, existingTenant.id, LOG, meta?.business?.brandColor);
+        // The site they came back on, not the one it was first set up from
+        // (a ray3 business reopened on ray2 went to the ray3 portal).
+        const returnPortalUrl = portalUrlForReturn(
+          req.headers.get("origin"), existingTenant.slug, meta.portalUrl,
+          (s) => `https://${s}.portal.drive-247.com`,
+        );
         return jsonResponse({
           success: true,
           tenantId: existingTenant.id,
           slug: existingTenant.slug,
           companyName: existingTenant.company_name ?? meta.business?.companyName ?? "",
-          portalUrl: meta.portalUrl ?? `https://${existingTenant.slug}.portal.drive-247.com`,
+          portalUrl: returnPortalUrl,
           bookingUrl: meta.bookingUrl ?? `https://${existingTenant.slug}.drive-247.com`,
-          portalSignInUrl: meta.portalSignInUrl ?? null,
+          portalSignInUrl: signInUrlFor(meta.portalSignInUrl, meta.portalUrl, returnPortalUrl),
           contentSeeded: meta.contentSeeded !== false,
           milestones: meta.milestones ?? [],
           // Already counted on the run that created the account.
@@ -505,7 +511,7 @@ Deno.serve(async (req) => {
           // Same reason as the idempotency hit above: this tenant was INSERTED by
           // whichever build died mid-run, which may not have set the column.
           await ensureV2Experience(supabase, pendingId, LOG, meta?.business?.brandColor);
-          const portalUrl = meta.portalUrl ?? portalBaseUrl(pendingTenant.slug);
+          const portalUrl = portalUrlForReturn(req.headers.get("origin"), pendingTenant.slug, meta.portalUrl, portalBaseUrl);
           const bookingUrl = meta.bookingUrl ?? `https://${pendingTenant.slug}.drive-247.com`;
           meta = await writeSignupMeta(supabase, authUserId, {
             status: "provisioned",

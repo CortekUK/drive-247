@@ -27,6 +27,7 @@ import {
   type SignupMetadata,
 } from "../_shared/signup-state.ts";
 import { isSecured } from "../_shared/signup-trial.ts";
+import { portalUrlForReturn, signInUrlFor } from "../_shared/drive247-sites.ts";
 
 const LOG = "[signup-resume]";
 
@@ -56,16 +57,18 @@ function businessDto(meta: SignupMetadata) {
   };
 }
 
-function provisionedResult(meta: SignupMetadata) {
+function provisionedResult(meta: SignupMetadata, origin: string | null) {
   if (!meta.tenantId || !meta.slug) return null;
+  // The site they are on now, not the one the business was first set up from.
+  const portalUrl = portalUrlForReturn(origin, meta.slug, meta.portalUrl, (s) => `https://${s}.portal.drive-247.com`);
   return {
     success: true as const,
     tenantId: meta.tenantId,
     slug: meta.slug,
     companyName: meta.business?.companyName ?? "",
-    portalUrl: meta.portalUrl ?? `https://${meta.slug}.portal.drive-247.com`,
+    portalUrl,
     bookingUrl: meta.bookingUrl ?? `https://${meta.slug}.drive-247.com`,
-    portalSignInUrl: meta.portalSignInUrl ?? null,
+    portalSignInUrl: signInUrlFor(meta.portalSignInUrl, meta.portalUrl, portalUrl),
     contentSeeded: meta.contentSeeded !== false,
     milestones: meta.milestones ?? [],
   };
@@ -122,7 +125,7 @@ Deno.serve(async (req) => {
           resumeStep: "done",
           business: businessDto(meta),
           milestones: meta.milestones ?? [],
-          result: provisionedResult(meta),
+          result: provisionedResult(meta, req.headers.get("origin")),
           lastError: null,
         },
       });

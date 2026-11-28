@@ -1795,6 +1795,13 @@ export function OnboardingProvider({
            * the business before pressing the button but not the city still
            * sees it once.
            */
+          // This Google account already has a business that is set up: open it.
+          // Asking for a business name here threw the answer away (found on
+          // ray2, 28 Nov), as one account has one business.
+          if (meta?.status === "provisioned" && meta.tenantId) {
+            await resolveResume(stateRef.current.planId ?? pending.planId);
+            return;
+          }
           const cityStateKnown = Boolean(typedCityState || normalizeCityState(meta?.cityState));
           if (!pending.values.companyName.trim() || !pending.values.slug.trim() || !cityStateKnown) {
             setAccountMode("tenant");
