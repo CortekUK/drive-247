@@ -1035,7 +1035,6 @@ export function AccountStep({
             autoFocusCompanyName
             askCityState
             cityStateRef={cityStateRef}
-            askLook
           />
         </div>
 
@@ -1445,7 +1444,6 @@ export function AccountStep({
               autoFocusCompanyName
               askCityState
               cityStateRef={cityStateRef}
-              askLook
             />
           </div>
 

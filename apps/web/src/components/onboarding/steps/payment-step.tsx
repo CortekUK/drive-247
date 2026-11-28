@@ -454,8 +454,25 @@ export function PaymentStep({
           borderBottom: `1px solid ${dark ? "#f87171" : "#dc2626"}`,
           boxShadow: "none",
         },
-        ".Tab": { border: `1px solid ${dark ? "#3f3f46" : "#e4e4e7"}`, boxShadow: "none" },
-        ".Tab--selected": { border: `1px solid ${brand}`, color: brand },
+        // Review 1 (Ghulam): Card, Apple Pay and Google Pay as three calm,
+        // minimal tabs: rounded, hairline border, a soft indigo tint when chosen.
+        ".Tab": {
+          border: `1px solid ${dark ? "rgba(255,255,255,0.10)" : "rgba(24,24,27,0.08)"}`,
+          borderRadius: "12px",
+          backgroundColor: dark ? "rgba(255,255,255,0.03)" : "#fafafa",
+          boxShadow: "none",
+          padding: "10px 12px",
+        },
+        ".Tab:hover": { backgroundColor: dark ? "rgba(255,255,255,0.06)" : "#f4f4f5" },
+        ".Tab--selected": {
+          border: `1px solid ${brand}`,
+          backgroundColor: dark ? "rgba(99,102,241,0.12)" : "rgba(79,70,229,0.05)",
+          color: brand,
+          boxShadow: "none",
+        },
+        ".TabLabel": { fontWeight: "500", fontSize: "13px" },
+        ".TabIcon": { color: dark ? "#a1a1aa" : "#71717a" },
+        ".TabIcon--selected": { color: brand },
       },
     };
   }, [resolvedTheme]);
@@ -837,7 +854,11 @@ function PaymentForm({
        * card-only (`payment_method_types: ["card"]`), and Link reached the form
        * as card autofill, which this option controls.
        */
-      wallets: { link: "never" as const },
+      wallets: { link: "never" as const, applePay: "auto" as const, googlePay: "auto" as const },
+      // Review 1 (Ghulam): always this order. Stripe shows Apple Pay only on
+      // Apple devices with a card in Wallet (Safari, and Chrome on iPhone), and
+      // Google Pay only in a browser with a card in Google Pay; Card is always there.
+      paymentMethodOrder: ["card", "apple_pay", "google_pay"],
       ...(applePayTerms ? { applePay: applePayTerms } : {}),
     }),
     [applePayTerms],
