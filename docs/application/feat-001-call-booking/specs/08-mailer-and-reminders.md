@@ -35,7 +35,7 @@ two reminders. What each email says is spec 07.
 **Sending**
 
 - 08.9 The mailer claims pending rows one batch at a time with `for update skip locked`, marks them `sending`, and only then sends. Two runs at once never send the same row.
-- 08.10 A sent row becomes `sent` with `sent_at`. A failed send becomes `pending` again with `attempts` up by one and the error; after 5 attempts it is `failed`.
+- 08.10 A sent row becomes `sent` with `sent_at`. A failed send becomes `pending` again with `attempts` up by one and the error, when that run ends, so it is tried again on the next run and not straight away; after 5 attempts it is `failed`.
 - 08.11 A row left in `sending` for more than 10 minutes is taken as pending again.
 - 08.12 When `ONBOARDING_CALL_ONLY_TO` is set (a comma list of addresses), any other recipient is recorded as `skipped` with `Not on the test list`. It is set on staging and not on production, so tests never email a real company.
 - 08.13 `dry_run: true` lists what is due and pending, and sends and changes nothing.

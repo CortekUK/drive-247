@@ -114,6 +114,8 @@ Deno.serve(async (req) => {
     let failed = 0;
     const finish = (id: string, patch: Record<string, unknown>) =>
       supabase.from("onboarding_call_emails").update(patch).eq("id", id);
+    // A failed row stays "sending" until this run ends, so it is tried again on the next run, not straight away.
+    const retryLater: Array<{ id: string; patch: Record<string, unknown> }> = [];
 
     for (let round = 0; round < 10; round++) {
       const { data: rows, error } = await supabase.rpc("onboarding_call_claim_emails", { p_limit: 20 });
@@ -170,16 +172,17 @@ Deno.serve(async (req) => {
           sent++;
         } else {
           const attempts = row.attempts + 1;
-          await finish(row.id, {
-            status: attempts >= MAX_ATTEMPTS ? "failed" : "pending",
-            attempts,
-            error: String(result.error ?? "Send failed").slice(0, 500),
+          retryLater.push({
+            id: row.id,
+            patch: { status: attempts >= MAX_ATTEMPTS ? "failed" : "pending", attempts, error: String(result.error ?? "Send failed").slice(0, 500) },
           });
           failed++;
           console.error(`${LOG} send failed`, row.kind, row.id, result.error);
         }
       }
     }
+
+    for (const r of retryLater) await finish(r.id, r.patch);
 
     return jsonResponse({ queued, sent, skipped, failed });
   } catch (e) {

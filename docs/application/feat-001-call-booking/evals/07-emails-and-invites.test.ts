@@ -134,7 +134,7 @@ describe("07 the emails and the invites", () => {
   it("07.13 #1 no email has an emoji or a long dash", () => {
     for (const k of kinds) {
       const { subject, html } = build(k, { old_starts_at: "2026-12-07T14:00:00Z", reason: "x", actor: "admin" });
-      expect(subject + html, k).not.toMatch(/[–—]/);
+      expect(subject + html, k).not.toMatch(/[\u2013\u2014]/);
       expect(subject + html, k).not.toMatch(/\p{Extended_Pictographic}/u);
     }
   });

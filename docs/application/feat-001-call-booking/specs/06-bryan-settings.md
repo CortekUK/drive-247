@@ -15,7 +15,7 @@ happens when a change would hit calls already booked.
 - 06.4 A blocked period is sent as a date, a from time, a to time (in Bryan's zone) and a label, and stored as two instants. "Thursday 3 December 2026, 14:00 to 16:00" in New York is stored as 19:00 to 21:00 UTC.
 - 06.5 A blocked period whose to time is not after its from time is refused with `A blocked time must end after it starts`.
 - 06.6 A zone, a window or a number out of range is refused as in spec 01 (01.3 to 01.5), and nothing is saved.
-- 06.7 Before saving, the function lists every live future booking that would no longer pass spec 02's check under the new settings, ignoring notice and ignoring itself: a new day off, shorter hours, a new blocked period, a longer call that now runs past the window.
+- 06.7 Before saving, the function lists every live future booking that would no longer pass spec 02's check under the new settings, ignoring notice and ignoring itself: a new day off, shorter hours, a new blocked period, or a zone in which it falls outside the hours. A longer call length is not a clash, because a booked call keeps its own end (06.13).
 - 06.8 If that list is not empty and the call did not say what to do with each one, nothing is saved and the list is returned (`saved: false`, `clashes`).
 - 06.9 What to do is given per booking: `keep` or `cancel`. A clash with no choice, or a choice for a booking that is not a clash, is refused with `Choose what to do with each booked call`.
 - 06.10 With a choice for every clash, the settings are saved, every `cancel` booking is cancelled by `admin` with the reason `Bryan is no longer available at this time.` and its emails are queued (as spec 05.10), and every `keep` booking stays as it is.

@@ -58,8 +58,25 @@ let pgClient = null;
 async function sqlDirect(query) {
   const pass = credential("STAGING_DB_PASS");
   if (!pass) throw new Error("Set SUPABASE_ACCESS_TOKEN (or STAGING_DB_PASS) to run SQL in an eval.");
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await sqlDirectOnce(query, pass);
+    } catch (e) {
+      // A dropped connection is not an answer: reconnect and try again. A SQL error is.
+      const dropped = /ECONNRESET|Connection terminated|not queryable|ETIMEDOUT|EPIPE/i.test(String(e?.message || e));
+      if (!dropped || attempt >= 4) throw e;
+      pgClient = null;
+      await new Promise((r) => setTimeout(r, 1500 * attempt));
+    }
+  }
+}
+
+async function sqlDirectOnce(query, pass) {
   if (!pgClient) {
     const { default: pg } = await import("pg");
+    // A plain date stays the text it is (the Management API does the same).
+    pg.types.setTypeParser(1082, (v) => v);
+    pg.types.setTypeParser(1182, pg.types.getTypeParser(1009));
     pgClient = new pg.Client({
       host: credential("STAGING_POOLER_HOST") || "aws-1-eu-west-2.pooler.supabase.com",
       port: 5432,
@@ -68,6 +85,8 @@ async function sqlDirect(query) {
       database: "postgres",
       ssl: { rejectUnauthorized: false },
     });
+    // Without a listener a dropped connection crashes the eval before its clean-up runs.
+    pgClient.on("error", () => { pgClient = null; });
     await pgClient.connect();
   }
   try {
@@ -76,7 +95,9 @@ async function sqlDirect(query) {
     // The same shape as the Management API: rows of plain JSON values.
     return JSON.parse(JSON.stringify(last?.rows ?? []));
   } catch (e) {
-    throw new Error(`SQL failed: ${String(e?.message || e).slice(0, 400)}`);
+    const msg = String(e?.message || e);
+    if (/ECONNRESET|Connection terminated|not queryable|ETIMEDOUT|EPIPE/i.test(msg)) throw e;
+    throw new Error(`SQL failed: ${msg.slice(0, 400)}`);
   }
 }
 
@@ -174,6 +195,24 @@ export function statement(id, text, check) {
   statements.push({ id, text, check });
 }
 
+let cleaningUp = null;
+async function runCleanups() {
+  let cleaned = true;
+  for (const undo of cleanups.splice(0).reverse()) {
+    try { await undo(); } catch (e) { cleaned = false; console.error(`  clean-up failed: ${e?.message || e}`); }
+  }
+  return cleaned;
+}
+// A crash still removes what the eval made, then exits as a failure.
+for (const ev of ["uncaughtException", "unhandledRejection"]) {
+  process.on(ev, async (e) => {
+    console.error(`  CRASH  ${e?.stack || e}`);
+    cleaningUp ??= runCleanups();
+    await cleaningUp;
+    process.exit(1);
+  });
+}
+
 /** Remove what the eval created. Runs at the end, pass or fail, newest first. */
 export function cleanup(undo) {
   cleanups.push(undo);
@@ -196,10 +235,8 @@ export async function run(metaUrl) {
   } catch (e) {
     results.push({ id: "00.0", text: "The eval could start", pass: false, why: String(e?.message || e) });
   }
-  let cleaned = true;
-  for (const undo of cleanups.reverse()) {
-    try { await undo(); } catch (e) { cleaned = false; console.error(`  clean-up failed: ${e?.message || e}`); }
-  }
+  cleaningUp ??= runCleanups();
+  const cleaned = await cleaningUp;
   for (const r of results) {
     console.log(`  ${r.pass ? "pass" : "FAIL"}  ${r.id}  ${r.text}`);
     if (!r.pass) console.log(`        ${r.why}`);
