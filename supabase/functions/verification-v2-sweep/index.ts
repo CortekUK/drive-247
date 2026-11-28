@@ -9,6 +9,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { sendCharge } from "../_shared/verification/billing.ts";
+import { getSubscriptionStripeClientForAccount } from "../_shared/subscription-stripe.ts";
 import { deleteSession, getDecision } from "../_shared/verification/didit.ts";
 import { pollPremium, startPremiumChecks } from "../_shared/verification/premium.ts";
 import { isConfigured as rentidConfigured } from "../_shared/verification/rentid.ts";
@@ -26,6 +27,23 @@ Deno.serve(async (req) => {
   const given = req.headers.get("x-sweep-secret") ?? "";
   const allowed = (!!key && token === key) || (sweepSecret.length >= 32 && given === sweepSecret);
   if (!allowed) return new Response("forbidden", { status: 403 });
+
+  // Staging-only test hook for evals/10 (an eval must remove what it creates): undo one TEST charge.
+  // Refused unless this is the staging project, the charge was sent in Stripe test mode, and the caller
+  // holds the sweep secret (checked above). Never touches a live charge.
+  const body = await req.json().catch(() => ({}));
+  if (typeof body?.undoTestCharge === "string") {
+    if (!(Deno.env.get("SUPABASE_URL") ?? "").includes("csjouxrkblpsoihyejel")) return new Response("staging only", { status: 403 });
+    const { data: ch } = await sb.from("verification_charges").select("id, stripe_invoice_item_id, stripe_account, stripe_mode").eq("id", body.undoTestCharge).maybeSingle();
+    if (!ch) return new Response(JSON.stringify({ undone: false }), { status: 200 });
+    if (ch.stripe_invoice_item_id) {
+      if (ch.stripe_mode !== "test") return new Response("not a test charge", { status: 403 });
+      const stripe = getSubscriptionStripeClientForAccount(ch.stripe_account === "uae" ? "uae" : "uk", "test");
+      await stripe.invoiceItems.del(ch.stripe_invoice_item_id).catch((e: unknown) => console.error("[sweep] undo", String(e)));
+    }
+    await sb.from("verification_charges").delete().eq("id", ch.id);
+    return new Response(JSON.stringify({ undone: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
   const done = { expired: 0, decisions: 0, premiumStarted: 0, premiumPolled: 0, premiumGivenUp: 0, chargesSent: 0, errors: 0 };
   const safe = async (fn: () => Promise<void>) => { try { await fn(); } catch (e) { done.errors++; console.error("[sweep]", String(e)); } };
 
