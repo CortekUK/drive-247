@@ -18,7 +18,17 @@ Everything Haris has been asked to do on Drive247, in order. One file per task, 
 
 | Day | Task | File | State |
 |---|---|---|---|
-| Thu 26 Nov 2026 | Renter driver verification | No written brief | In progress. Due by end of day Saturday 28 Nov 2026. |
+| Sat 28 Nov 2026 | Driver verification, part 1: verify from the Customers tab, all checks, premium charges | [2026-11-28-saturday-driver-verification-part-1.md](2026-11-28-saturday-driver-verification-part-1.md) | Brief written 28 Nov. First asked on Thu 26 Nov without a brief. Due date to be set by Ghulam (the old one was end of day Sat 28 Nov). |
+
+## Decisions already made for his tasks
+
+| Date | Decision |
+|---|---|
+| 28 Nov | Add customer no longer verifies. Verify is its own button on the row and the customer page. |
+| 28 Nov | The standard check is free and runs on Didit. Premium checks run on RentID and cost the company our cost plus $0.50, added to the next subscription bill. |
+| 28 Nov | Only Drive247, Didit and RentID checks are live. The rest show as "Coming soon". |
+
+The full list (D1 to D20) is in the task file. The research is in `docs/research/driver-verification-module.md`.
 
 ## Open
 
